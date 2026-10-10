@@ -51,6 +51,12 @@
 	// Viewer accounts browse a read-only library; admin controls stay hidden.
 	const isAdminUser = $derived(data.user?.role === 'admin');
 
+	function clearInsightScope() {
+		const url = new URL(page.url.href);
+		url.searchParams.delete('insightId');
+		goto(url.pathname + url.search, { reset: false });
+	}
+
 	const SCROLL_KEY = 'cinephage:library:movies:scrollY';
 
 	beforeNavigate(({ to, shallow, type }) => {
@@ -813,6 +819,23 @@
 
 	<!-- Main Content -->
 	<main class="w-full px-4 py-8 lg:px-8">
+		{#if data.insightContext}
+			<div
+				class="mb-4 alert flex items-center justify-between gap-2 border border-info/20 bg-info/10 py-2 text-sm"
+			>
+				<span>
+					{m.library_movies_insightScope({
+						count: data.total,
+						rawCount: data.insightContext.rawItemCount,
+						title: data.insightContext.title
+					})}
+				</span>
+				<button class="btn gap-1 btn-ghost btn-xs" onclick={clearInsightScope}>
+					<X class="h-3 w-3" />
+					{m.action_clear()}
+				</button>
+			</div>
+		{/if}
 		{#if data.error}
 			<div role="alert" class="alert alert-error">
 				<svg

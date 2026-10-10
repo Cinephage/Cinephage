@@ -36,7 +36,8 @@ export class UnplayedRule implements StorageInsightRule {
 			.select({
 				id: storageItems.id,
 				title: storageItems.title,
-				tmdbId: storageItems.tmdbId
+				tmdbId: storageItems.tmdbId,
+				itemType: storageItems.itemType
 			})
 			.from(storageItems)
 			.innerJoin(
@@ -59,13 +60,34 @@ export class UnplayedRule implements StorageInsightRule {
 
 		if (unplayedItems.length === 0) return [];
 
+		// Items are stored per-episode for TV, so the raw row count reads as
+		// "456 items" even when that's really a handful of shows with many
+		// unplayed episodes each. Break it down by distinct title so the
+		// summary matches what the detail list actually shows (one row per
+		// movie/series, not per episode).
+		const movieTmdbIds = new Set<number>();
+		const seriesTmdbIds = new Set<number>();
+		for (const item of unplayedItems) {
+			if (item.tmdbId == null) continue;
+			if (item.itemType === 'movie') movieTmdbIds.add(item.tmdbId);
+			else seriesTmdbIds.add(item.tmdbId);
+		}
+		const breakdownParts: string[] = [];
+		if (movieTmdbIds.size > 0) {
+			breakdownParts.push(`${movieTmdbIds.size} Movie${movieTmdbIds.size === 1 ? '' : 's'}`);
+		}
+		if (seriesTmdbIds.size > 0) {
+			breakdownParts.push(`${seriesTmdbIds.size} Series`);
+		}
+		const breakdown = breakdownParts.length > 0 ? ` (${breakdownParts.join(', ')})` : '';
+
 		return [
 			{
 				type: this.type,
 				severity: 'warning',
 				scope: 'global',
 				title: `Unplayed items`,
-				summary: `${unplayedItems.length} item${unplayedItems.length === 1 ? ' has' : 's have'} been in your library for over ${UNPLAYED_THRESHOLD_DAYS} days without being played on any media server.`,
+				summary: `${unplayedItems.length} item${unplayedItems.length === 1 ? '' : 's'}${breakdown} ${unplayedItems.length === 1 ? 'has' : 'have'} been in your library for over ${UNPLAYED_THRESHOLD_DAYS} days without being played on any media server.`,
 				details: {
 					itemIds: unplayedItems.map((i) => i.id),
 					thresholdDays: UNPLAYED_THRESHOLD_DAYS

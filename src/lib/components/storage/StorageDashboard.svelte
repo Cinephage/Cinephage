@@ -280,12 +280,12 @@
 			: healthStatus === 'warning'
 				? 'bg-warning/10 text-warning'
 				: 'bg-error/10 text-error'}
-		label="Health"
+		label="Health Insights"
 		value={healthLabel}
 		context={insights.length > 0
 			? `${insights.length} insight${insights.length === 1 ? '' : 's'}`
 			: 'No issues'}
-		href={`${baseUrl}`}
+		href={`${baseUrl}/insights`}
 		statusDot={healthStatus}
 	/>
 	<StorageTile

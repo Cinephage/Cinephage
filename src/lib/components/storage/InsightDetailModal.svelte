@@ -1,7 +1,15 @@
 <script lang="ts">
-	import { AlertTriangle, XCircle, File, Folder, Film, Monitor, Tv } from '@lucide/svelte';
+	import { AlertTriangle, X, File, Folder, Film, Monitor, Tv, Info } from '@lucide/svelte';
 	import { ModalWrapper } from '#lib/components/ui/modal/index.js';
-	import { severityBadgeClass, insightTypeLabel, dismissInsight, formatBytes } from './utils.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import {
+		severityBadgeClass,
+		insightTypeLabel,
+		dismissInsight,
+		formatBytes,
+		badgeToneColor,
+		getInsightFooterLink
+	} from './utils.js';
 	import { getInsightItems } from '#lib/api/storage.js';
 	import { resolvePath } from '#lib/utils/routing.js';
 	import type { InsightItem as ApiInsightItem } from '#lib/api/storage.js';
@@ -69,17 +77,6 @@
 		}
 	}
 
-	function badgeToneColor(tone: string): string {
-		switch (tone) {
-			case 'critical':
-				return 'border-error/30 bg-error/10 text-error';
-			case 'warn':
-				return 'border-warning/30 bg-warning/10 text-warning';
-			default:
-				return 'border-info/30 bg-info/10 text-info';
-		}
-	}
-
 	let pageButtons = $derived.by(() => {
 		const buttons: (number | '...')[] = [];
 		if (totalPages <= 7) {
@@ -95,6 +92,19 @@
 		}
 		return buttons;
 	});
+
+	// Shown above the item list for insight types that have no per-item
+	// library row to act on, so the row's "Search to add" link (or whatever
+	// remediation exists) isn't the only clue to what's going on.
+	const INSIGHT_GUIDANCE: Record<string, string> = {
+		'untracked-by-cinephage':
+			'These titles exist on your media server but aren\'t in your Cinephage library yet. Use "Search to add" on a row to find and add it, or ignore this insight if you don\'t want Cinephage managing them.'
+	};
+	const guidanceText = $derived(insight ? (INSIGHT_GUIDANCE[insight.insightType] ?? null) : null);
+
+	const footerLink = $derived(
+		insight ? getInsightFooterLink(insight.insightType, insight.id) : null
+	);
 </script>
 
 <ModalWrapper {open} {onClose} maxWidth="4xl" flexContent labelledBy="insight-detail-title">
@@ -120,8 +130,12 @@
 					<p class="mt-0.5 text-sm text-base-content/70">{insight.summary}</p>
 				{/if}
 			</div>
-			<button class="btn btn-circle btn-ghost btn-sm" onclick={onClose}>
-				<XCircle class="h-5 w-5" />
+			<button
+				class="btn btn-circle btn-ghost btn-sm"
+				onclick={onClose}
+				aria-label={m.action_close()}
+			>
+				<X class="h-4 w-4" />
 			</button>
 		</div>
 
@@ -141,6 +155,14 @@
 					No items found
 				</div>
 			{:else}
+				{#if guidanceText}
+					<div
+						class="mb-3 flex gap-2 rounded-lg border border-info/20 bg-info/10 p-3 text-sm text-base-content/80"
+					>
+						<Info class="h-4 w-4 shrink-0 text-info" />
+						<p>{guidanceText}</p>
+					</div>
+				{/if}
 				<div class="space-y-1">
 					{#each items as item (item.id)}
 						<div
@@ -180,7 +202,7 @@
 										class="btn gap-1 btn-ghost btn-xs"
 										onclick={onClose}
 									>
-										Open
+										{item.href.startsWith('/discover') ? 'Search to add' : 'Open'}
 									</a>
 								{/if}
 							</div>
@@ -230,24 +252,12 @@
 		</div>
 
 		<div class="flex items-center justify-between border-t border-base-300 px-6 py-3">
-			{#if insight}
-				{@const links: Record<string, string> = {
-					'orphaned-files': '/library/unmatched',
-					'untracked-by-cinephage': '/settings/monitoring/status/media',
-					'missing-from-media-server': '/settings/monitoring/status/media',
-					'unplayed': '/settings/monitoring/status/media',
-				'duplicate-items': '/library/movies',
-				'filename-duplicates': '/library/movies',
-				'quality-below-cutoff': '/library/movies',
-					'broken-paths': '/settings/monitoring/status/folders',
-					'health-issues': '/settings/monitoring/status/folders'
-				}}
-				{@const footerLink = links[insight.insightType] ?? '/settings/monitoring/status/insights'}
+			{#if insight && footerLink}
 				<a href={resolvePath(footerLink)} class="link text-sm link-hover">
 					View all in {insightTypeLabel(insight.insightType)}
 				</a>
 			{/if}
-			<div class="flex items-center gap-2">
+			<div class="ml-auto flex items-center gap-2">
 				{#if onDismissed}
 					<button class="btn btn-ghost btn-sm" onclick={handleDismiss} disabled={dismissing}>
 						{#if dismissing}

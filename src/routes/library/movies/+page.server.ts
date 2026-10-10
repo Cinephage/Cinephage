@@ -5,7 +5,8 @@ import {
 	rootFolders,
 	libraries,
 	scoringProfiles,
-	downloadQueue
+	downloadQueue,
+	storageInsights
 } from '#lib/server/db/schema.js';
 import { eq, and, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
@@ -16,6 +17,8 @@ import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
 import { getLanguageSettingsService } from '#lib/server/subtitles/services/LanguageSettingsService.js';
 import { requireAdminPage } from '#lib/server/auth/authorization.js';
 import { createChildLogger } from '#lib/logging/index.js';
+import { getInsightItemResolver } from '#lib/server/storage/insights/items/registry.js';
+import type { InsightType } from '#lib/server/storage/insights/types.js';
 
 const logger = createChildLogger({ module: 'LibraryMoviesListPage', logDomain: 'scans' });
 
@@ -29,6 +32,7 @@ export const load: PageServerLoad = async ({ url }) => {
 	const videoCodec = url.searchParams.get('videoCodec') || 'all';
 	const hdrFormat = url.searchParams.get('hdrFormat') || 'all';
 	const requestedLibraryScope = url.searchParams.get('library')?.trim() || '';
+	const insightId = url.searchParams.get('insightId');
 
 	try {
 		const availableLibraries = await getLibraryEntityService().listLibraries({
@@ -286,6 +290,29 @@ export const load: PageServerLoad = async ({ url }) => {
 			);
 		}
 
+		// Scope to a single storage insight's items ("View all in X" from the
+		// insight modal). Reuses the same per-type resolver the modal itself
+		// calls, so the filtered list is exactly what the insight reported.
+		let insightContext: { id: string; title: string; rawItemCount: number } | null = null;
+		if (insightId) {
+			const insight = db
+				.select()
+				.from(storageInsights)
+				.where(eq(storageInsights.id, insightId))
+				.get();
+			if (insight) {
+				const resolver = getInsightItemResolver(insight.insightType as InsightType);
+				const { items } = await resolver({ db, insight, page: 1, limit: 500 });
+				const insightMovieIds = new Set(
+					items
+						.map((item) => item.href?.match(/^\/library\/movie\/(.+)$/)?.[1])
+						.filter((id): id is string => Boolean(id))
+				);
+				filteredMovies = filteredMovies.filter((m) => insightMovieIds.has(m.id));
+				insightContext = { id: insight.id, title: insight.title, rawItemCount: insight.itemCount };
+			}
+		}
+
 		// Apply sorting
 		const [sortField, sortDir] = sort.split('-') as [string, 'asc' | 'desc'];
 		filteredMovies.sort((a, b) => {
@@ -337,6 +364,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			totalUnfiltered: moviesInSelectedLibrary.length,
 			downloadingMovieIds: [...downloadingMovieIds],
 			preferOriginalTitleDefault,
+			insightContext,
 			filters: {
 				sort,
 				library: selectedLibrary?.slug ?? '',

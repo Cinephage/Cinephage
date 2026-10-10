@@ -80,6 +80,59 @@ describe('missingFromMediaServerResolver', () => {
 		expect(result.total).toBe(3);
 	});
 
+	it('groups multiple missing episodes of the same series into one row', async () => {
+		await testDb.db.insert(storageItems).values([
+			createStorageItem({
+				id: 'ep-1',
+				tmdbId: 300,
+				itemType: 'episode',
+				title: 'S01E01',
+				seriesName: 'Grouped Show',
+				sourceSystem: 'local',
+				seasonNumber: 1,
+				episodeNumber: 1
+			}),
+			createStorageItem({
+				id: 'ep-2',
+				tmdbId: 300,
+				itemType: 'episode',
+				title: 'S01E02',
+				seriesName: 'Grouped Show',
+				sourceSystem: 'local',
+				seasonNumber: 1,
+				episodeNumber: 2
+			})
+		]);
+
+		const result = await missingFromMediaServerResolver({
+			db: testDb.db as any,
+			page: 1,
+			limit: 50,
+			insight: {
+				id: 'test',
+				insightType: 'missing-from-media-server',
+				severity: 'info',
+				scope: 'global',
+				scopeId: null,
+				title: 'Missing',
+				summary: null,
+				detailsJson: null,
+				reclaimableBytes: null,
+				itemCount: 2,
+				firstDetectedAt: '',
+				lastDetectedAt: '',
+				dismissedAt: null,
+				dismissedBy: null
+			}
+		});
+
+		expect(result.total).toBe(1);
+		expect(result.items).toHaveLength(1);
+		expect(result.items[0].title).toBe('Grouped Show');
+		expect(result.items[0].kind).toBe('series');
+		expect(result.items[0].badges?.[0].label).toBe('2 episodes missing');
+	});
+
 	it('returns empty when none', async () => {
 		const result = await missingFromMediaServerResolver({
 			db: testDb.db as any,

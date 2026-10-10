@@ -1,30 +1,15 @@
 import { storageItems, movies, series } from '#lib/server/db/schema.js';
-import { and, count, eq, notInArray, inArray } from 'drizzle-orm';
+import { and, eq, notInArray, inArray } from 'drizzle-orm';
 import type { InsightItemResolver } from './types.js';
 
 export const untrackedByCinephageResolver: InsightItemResolver = async ({ db, page, limit }) => {
-	const total =
-		db
-			.select({ count: count() })
-			.from(storageItems)
-			.where(
-				and(
-					eq(storageItems.sourceSystem, 'server'),
-					notInArray(storageItems.itemType, ['series', 'season'])
-				)
-			)
-			.get()?.count ?? 0;
-	if (total === 0) return { items: [], total: 0 };
-
 	const rows = db
 		.select({
 			id: storageItems.id,
 			title: storageItems.title,
 			tmdbId: storageItems.tmdbId,
 			itemType: storageItems.itemType,
-			seriesName: storageItems.seriesName,
-			seasonNumber: storageItems.seasonNumber,
-			episodeNumber: storageItems.episodeNumber
+			seriesName: storageItems.seriesName
 		})
 		.from(storageItems)
 		.where(
@@ -33,14 +18,46 @@ export const untrackedByCinephageResolver: InsightItemResolver = async ({ db, pa
 				notInArray(storageItems.itemType, ['series', 'season'])
 			)
 		)
-		.limit(limit)
-		.offset((page - 1) * limit)
 		.all();
 
-	const movieTmdbIds = rows.filter((r) => r.itemType === 'movie' && r.tmdbId).map((r) => r.tmdbId!);
-	const seriesTmdbIds = rows
-		.filter((r) => r.itemType !== 'movie' && r.tmdbId)
-		.map((r) => r.tmdbId!);
+	if (rows.length === 0) return { items: [], total: 0 };
+
+	// storage_items tracks TV content per-episode, so group by the parent
+	// movie/series before paginating - otherwise a show with many untracked
+	// episodes shows once per episode.
+	type Group = {
+		key: string;
+		title: string;
+		isMovie: boolean;
+		tmdbId: number | null;
+		count: number;
+	};
+	const groups = new Map<string, Group>();
+	for (const row of rows) {
+		const isMovie = row.itemType === 'movie';
+		const key = row.tmdbId != null ? `${isMovie ? 'm' : 's'}-${row.tmdbId}` : `row-${row.id}`;
+		const existing = groups.get(key);
+		if (existing) {
+			existing.count++;
+		} else {
+			groups.set(key, {
+				key,
+				title: isMovie ? row.title : (row.seriesName ?? row.title),
+				isMovie,
+				tmdbId: row.tmdbId,
+				count: 1
+			});
+		}
+	}
+
+	const groupedList = [...groups.values()];
+	const total = groupedList.length;
+	const sliceStart = (page - 1) * limit;
+	const sliced = groupedList.slice(sliceStart, sliceStart + limit);
+
+	const movieTmdbIds = sliced.filter((g) => g.isMovie && g.tmdbId != null).map((g) => g.tmdbId!);
+	const seriesTmdbIds = sliced.filter((g) => !g.isMovie && g.tmdbId != null).map((g) => g.tmdbId!);
+
 	const movieMap = new Map<number, string>();
 	const seriesMap = new Map<number, string>();
 	if (movieTmdbIds.length > 0) {
@@ -61,24 +78,36 @@ export const untrackedByCinephageResolver: InsightItemResolver = async ({ db, pa
 	}
 
 	return {
-		items: rows.map((row) => {
-			const isEpisode = row.itemType !== 'movie';
-			const seasonLabel = `S${String(row.seasonNumber ?? 0).padStart(2, '0')}`;
-			const episodeLabel = `E${String(row.episodeNumber ?? 0).padStart(2, '0')}`;
-			const episodeTitle = isEpisode ? `${seasonLabel}${episodeLabel} · ${row.title}` : row.title;
+		items: sliced.map((g) => {
+			// These items are, by definition, not in Cinephage's library (that's
+			// what "untracked" means) - movieMap/seriesMap only ever match on
+			// the rare case where both sides happen to reference the same
+			// tmdbId but it wasn't caught by reconciliation yet. There is no
+			// library page to "Open" to, so the remediation action is instead a
+			// pre-filled Discover search, letting the user add the title in one
+			// click rather than leaving the row with nothing actionable.
+			const libraryHref = g.tmdbId
+				? g.isMovie
+					? movieMap.has(g.tmdbId)
+						? `/library/movie/${movieMap.get(g.tmdbId)}`
+						: undefined
+					: seriesMap.has(g.tmdbId)
+						? `/library/tv/${seriesMap.get(g.tmdbId)}`
+						: undefined
+				: undefined;
+			const href = libraryHref ?? `/discover?q=${encodeURIComponent(g.title)}`;
+
 			return {
-				id: `ut-${row.id}`,
-				kind: isEpisode ? ('episode' as const) : ('movie' as const),
-				title: isEpisode ? episodeTitle : row.title,
-				subtitle: isEpisode ? (row.seriesName ?? row.title) : undefined,
-				badges: [{ label: 'Not tracked', tone: 'info' as const }],
-				href: row.tmdbId
-					? movieMap.has(row.tmdbId)
-						? `/library/movie/${movieMap.get(row.tmdbId)}`
-						: seriesMap.has(row.tmdbId)
-							? `/library/tv/${seriesMap.get(row.tmdbId)}`
-							: undefined
-					: undefined
+				id: `ut-${g.key}`,
+				kind: (g.isMovie ? 'movie' : 'series') as 'movie' | 'series',
+				title: g.title,
+				badges: [
+					{
+						label: !g.isMovie && g.count > 1 ? `${g.count} episodes untracked` : 'Not tracked',
+						tone: 'info' as const
+					}
+				],
+				href
 			};
 		}),
 		total

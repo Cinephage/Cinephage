@@ -108,6 +108,68 @@ describe('unplayedResolver', () => {
 		expect(result.total).toBe(5);
 	});
 
+	it('groups multiple unplayed episodes of the same series into one row', async () => {
+		// storage_items tracks TV content per-episode, so three unplayed
+		// episodes of the same show must not render as three separate rows.
+		await testDb.db.insert(storageItems).values([
+			createStorageItem({
+				id: 'ep-1',
+				tmdbId: 200,
+				itemType: 'episode',
+				title: 'S01E01',
+				seriesName: 'Grouped Show',
+				seasonNumber: 1,
+				episodeNumber: 1
+			}),
+			createStorageItem({
+				id: 'ep-2',
+				tmdbId: 200,
+				itemType: 'episode',
+				title: 'S01E02',
+				seriesName: 'Grouped Show',
+				seasonNumber: 1,
+				episodeNumber: 2
+			}),
+			createStorageItem({
+				id: 'ep-3',
+				tmdbId: 200,
+				itemType: 'episode',
+				title: 'S01E03',
+				seriesName: 'Grouped Show',
+				seasonNumber: 1,
+				episodeNumber: 3
+			})
+		]);
+
+		const result = await unplayedResolver({
+			db: testDb.db as any,
+			page: 1,
+			limit: 50,
+			insight: {
+				id: 'test',
+				insightType: 'unplayed',
+				severity: 'warning',
+				scope: 'global',
+				scopeId: null,
+				title: 'Unplayed',
+				summary: null,
+				detailsJson: JSON.stringify({ itemIds: ['ep-1', 'ep-2', 'ep-3'], thresholdDays: 30 }),
+				reclaimableBytes: null,
+				itemCount: 3,
+				firstDetectedAt: '',
+				lastDetectedAt: '',
+				dismissedAt: null,
+				dismissedBy: null
+			}
+		});
+
+		expect(result.total).toBe(1);
+		expect(result.items).toHaveLength(1);
+		expect(result.items[0].title).toBe('Grouped Show');
+		expect(result.items[0].kind).toBe('series');
+		expect(result.items[0].badges?.[0].label).toBe('3 unplayed episodes');
+	});
+
 	it('returns empty when no itemIds', async () => {
 		const result = await unplayedResolver({
 			db: testDb.db as any,

@@ -14,7 +14,12 @@
 	<title>{m.status_insights_title()}</title>
 </svelte:head>
 
-<SettingsPage title={m.status_insights_title()} subtitle={m.status_insights_subtitle()}>
+<SettingsPage
+	title={m.status_insights_title()}
+	subtitle={m.status_insights_subtitle()}
+	backHref="/settings/monitoring/status"
+	backLabel={m.nav_storageMaintenance()}
+>
 	<SettingsSection title="Active">
 		<InsightsPanel insights={activeInsights} />
 	</SettingsSection>

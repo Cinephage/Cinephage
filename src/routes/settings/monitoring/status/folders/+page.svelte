@@ -1,11 +1,12 @@
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
+	import { page } from '$app/state';
 	import { SettingsPage } from '#lib/components/ui/settings/index.js';
 	import RootFolderOverview from '#lib/components/storage/RootFolderOverview.svelte';
 	import { RootFolderModal } from '#lib/components/rootFolders/index.js';
 	import { validateRootFolder, updateRootFolder } from '#lib/api/settings.js';
 	import { scanLibrary } from '#lib/api/library.js';
-	import { refreshAll } from '$app/navigation';
+	import { goto, refreshAll } from '$app/navigation';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import type {
 		RootFolder,
@@ -38,6 +39,18 @@
 		editingFolder = null;
 		folderSaveError = null;
 	}
+
+	// Deep-link from the Health insight's "Open" action: auto-open the
+	// specific folder's edit modal instead of landing on the unfiltered
+	// list and leaving the user to find it themselves.
+	$effect(() => {
+		const folderId = page.url.searchParams.get('folderId');
+		if (!folderId) return;
+		openEditFolder(folderId);
+		const url = new URL(page.url.href);
+		url.searchParams.delete('folderId');
+		goto(url.pathname + url.search, { replace: true, reset: false });
+	});
 
 	async function handleValidatePath(
 		path: string,
@@ -87,7 +100,12 @@
 	<title>{m.status_folders_title()}</title>
 </svelte:head>
 
-<SettingsPage title={m.status_folders_title()} subtitle={m.status_folders_subtitle()}>
+<SettingsPage
+	title={m.status_folders_title()}
+	subtitle={m.status_folders_subtitle()}
+	backHref="/settings/monitoring/status"
+	backLabel={m.nav_storageMaintenance()}
+>
 	<RootFolderOverview
 		rootFolders={data.storage.rootFolderBreakdown}
 		onEditRootFolder={openEditFolder}

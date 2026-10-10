@@ -25,7 +25,12 @@
 	<title>{m.status_libraries_title()}</title>
 </svelte:head>
 
-<SettingsPage title={m.status_libraries_title()} subtitle={m.status_libraries_subtitle()}>
+<SettingsPage
+	title={m.status_libraries_title()}
+	subtitle={m.status_libraries_subtitle()}
+	backHref="/settings/monitoring/status"
+	backLabel={m.nav_storageMaintenance()}
+>
 	<LibraryOverview libraries={data.storage.libraryBreakdown} onEditLibrary={openEditLibrary} />
 </SettingsPage>
 

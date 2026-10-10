@@ -1,31 +1,15 @@
-import { storageItems, movies, series, episodeFiles } from '#lib/server/db/schema.js';
-import { eq, notInArray, and, count, inArray } from 'drizzle-orm';
+import { storageItems, movies, series } from '#lib/server/db/schema.js';
+import { eq, notInArray, and, inArray } from 'drizzle-orm';
 import type { InsightItemResolver } from './types.js';
 
 export const missingFromMediaServerResolver: InsightItemResolver = async ({ db, page, limit }) => {
-	const total =
-		db
-			.select({ count: count() })
-			.from(storageItems)
-			.where(
-				and(
-					eq(storageItems.sourceSystem, 'local'),
-					notInArray(storageItems.itemType, ['series', 'season'])
-				)
-			)
-			.get()?.count ?? 0;
-	if (total === 0) return { items: [], total: 0 };
-
 	const rows = db
 		.select({
 			id: storageItems.id,
 			title: storageItems.title,
 			tmdbId: storageItems.tmdbId,
 			itemType: storageItems.itemType,
-			seriesName: storageItems.seriesName,
-			seasonNumber: storageItems.seasonNumber,
-			episodeNumber: storageItems.episodeNumber,
-			episodeFileId: storageItems.episodeFileId
+			seriesName: storageItems.seriesName
 		})
 		.from(storageItems)
 		.where(
@@ -34,25 +18,46 @@ export const missingFromMediaServerResolver: InsightItemResolver = async ({ db, 
 				notInArray(storageItems.itemType, ['series', 'season'])
 			)
 		)
-		.limit(limit)
-		.offset((page - 1) * limit)
 		.all();
 
-	const episodeFileIds = rows.filter((r) => r.episodeFileId).map((r) => r.episodeFileId!);
-	const episodePathMap = new Map<string, string>();
-	if (episodeFileIds.length > 0) {
-		const efr = db
-			.select({ id: episodeFiles.id, relativePath: episodeFiles.relativePath })
-			.from(episodeFiles)
-			.where(inArray(episodeFiles.id, episodeFileIds))
-			.all();
-		for (const r of efr) episodePathMap.set(r.id, r.relativePath);
+	if (rows.length === 0) return { items: [], total: 0 };
+
+	// storage_items tracks TV content per-episode, so group by the parent
+	// movie/series before paginating - otherwise a show missing many
+	// episodes from the media server shows once per episode.
+	type Group = {
+		key: string;
+		title: string;
+		isMovie: boolean;
+		tmdbId: number | null;
+		count: number;
+	};
+	const groups = new Map<string, Group>();
+	for (const row of rows) {
+		const isMovie = row.itemType === 'movie';
+		const key = row.tmdbId != null ? `${isMovie ? 'm' : 's'}-${row.tmdbId}` : `row-${row.id}`;
+		const existing = groups.get(key);
+		if (existing) {
+			existing.count++;
+		} else {
+			groups.set(key, {
+				key,
+				title: isMovie ? row.title : (row.seriesName ?? row.title),
+				isMovie,
+				tmdbId: row.tmdbId,
+				count: 1
+			});
+		}
 	}
 
-	const movieTmdbIds = rows.filter((r) => r.itemType === 'movie' && r.tmdbId).map((r) => r.tmdbId!);
-	const seriesTmdbIds = rows
-		.filter((r) => r.itemType !== 'movie' && r.tmdbId)
-		.map((r) => r.tmdbId!);
+	const groupedList = [...groups.values()];
+	const total = groupedList.length;
+	const sliceStart = (page - 1) * limit;
+	const sliced = groupedList.slice(sliceStart, sliceStart + limit);
+
+	const movieTmdbIds = sliced.filter((g) => g.isMovie && g.tmdbId != null).map((g) => g.tmdbId!);
+	const seriesTmdbIds = sliced.filter((g) => !g.isMovie && g.tmdbId != null).map((g) => g.tmdbId!);
+
 	const movieMap = new Map<number, string>();
 	const seriesMap = new Map<number, string>();
 	if (movieTmdbIds.length > 0) {
@@ -72,50 +77,27 @@ export const missingFromMediaServerResolver: InsightItemResolver = async ({ db, 
 		for (const r of sr) seriesMap.set(r.tmdbId, r.id);
 	}
 
-	function buildItem(
-		row: (typeof rows)[number],
-		movieMap: Map<number, string>,
-		seriesMap: Map<number, string>
-	) {
-		const href = row.tmdbId
-			? movieMap.has(row.tmdbId)
-				? `/library/movie/${movieMap.get(row.tmdbId)}`
-				: seriesMap.has(row.tmdbId)
-					? `/library/tv/${seriesMap.get(row.tmdbId)}`
-					: undefined
-			: undefined;
-
-		if (row.itemType === 'movie') {
-			return {
-				id: `mm-${row.id}`,
-				kind: 'movie' as const,
-				title: row.title,
-				badges: [{ label: 'Missing from server', tone: 'info' as const }],
-				href
-			};
-		}
-
-		const seasonLabel = `S${String(row.seasonNumber ?? 0).padStart(2, '0')}`;
-		const episodeLabel = `E${String(row.episodeNumber ?? 0).padStart(2, '0')}`;
-		const seriesTitle = row.seriesName || row.title;
-
-		const epPath = row.episodeFileId ? episodePathMap.get(row.episodeFileId) : null;
-		const epFromPath = epPath
-			? (epPath.split('/').pop() ?? epPath)
-			: `${seasonLabel}${episodeLabel}`;
-
-		return {
-			id: `mm-${row.id}`,
-			kind: 'episode' as const,
-			title: epFromPath,
-			subtitle: seriesTitle,
-			badges: [{ label: 'Missing from server', tone: 'info' as const }],
-			href
-		};
-	}
-
 	return {
-		items: rows.map((row) => buildItem(row, movieMap, seriesMap)),
+		items: sliced.map((g) => ({
+			id: `mm-${g.key}`,
+			kind: (g.isMovie ? 'movie' : 'series') as 'movie' | 'series',
+			title: g.title,
+			badges: [
+				{
+					label: !g.isMovie && g.count > 1 ? `${g.count} episodes missing` : 'Missing from server',
+					tone: 'info' as const
+				}
+			],
+			href: g.tmdbId
+				? g.isMovie
+					? movieMap.has(g.tmdbId)
+						? `/library/movie/${movieMap.get(g.tmdbId)}`
+						: undefined
+					: seriesMap.has(g.tmdbId)
+						? `/library/tv/${seriesMap.get(g.tmdbId)}`
+						: undefined
+				: undefined
+		})),
 		total
 	};
 };
