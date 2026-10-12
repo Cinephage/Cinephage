@@ -1,6 +1,7 @@
 import { storageItems, movies, series } from '#lib/server/db/schema.js';
 import { and, eq, notInArray, inArray } from 'drizzle-orm';
 import type { InsightItemResolver } from './types.js';
+import { untrackedGroupKey } from '../untracked-grouping.js';
 
 export const untrackedByCinephageResolver: InsightItemResolver = async ({ db, page, limit }) => {
 	const rows = db
@@ -35,7 +36,7 @@ export const untrackedByCinephageResolver: InsightItemResolver = async ({ db, pa
 	const groups = new Map<string, Group>();
 	for (const row of rows) {
 		const isMovie = row.itemType === 'movie';
-		const key = row.tmdbId != null ? `${isMovie ? 'm' : 's'}-${row.tmdbId}` : `row-${row.id}`;
+		const key = untrackedGroupKey(row);
 		const existing = groups.get(key);
 		if (existing) {
 			existing.count++;

@@ -1,6 +1,7 @@
 import { and, eq, notInArray } from 'drizzle-orm';
 import { storageItems } from '#lib/server/db/schema.js';
 import type { StorageInsightRule, RuleContext, InsightFinding } from '../types.js';
+import { untrackedGroupKey } from '../untracked-grouping.js';
 
 /**
  * Items in storage_items with sourceSystem='server' — present on a media
@@ -14,7 +15,12 @@ export class UntrackedByCinephageRule implements StorageInsightRule {
 
 	async evaluate(ctx: RuleContext): Promise<InsightFinding[]> {
 		const serverOnlyRows = ctx.db
-			.select({ tmdbId: storageItems.tmdbId, itemType: storageItems.itemType })
+			.select({
+				id: storageItems.id,
+				tmdbId: storageItems.tmdbId,
+				itemType: storageItems.itemType,
+				seriesName: storageItems.seriesName
+			})
 			.from(storageItems)
 			.where(
 				and(
@@ -29,20 +35,22 @@ export class UntrackedByCinephageRule implements StorageInsightRule {
 		// storage_items tracks TV content per-episode, so the raw row count
 		// reads as a much bigger number than the distinct shows/movies it
 		// actually affects. Break it down to match the grouped detail list
-		// (untrackedByCinephageResolver).
-		const movieTmdbIds = new Set<number>();
-		const seriesTmdbIds = new Set<number>();
+		// (untrackedByCinephageResolver) - same grouping key, so every row
+		// (including ones without a resolved tmdbId) counts toward the
+		// breakdown exactly once per distinct group.
+		const movieGroups = new Set<string>();
+		const seriesGroups = new Set<string>();
 		for (const row of serverOnlyRows) {
-			if (row.tmdbId == null) continue;
-			if (row.itemType === 'movie') movieTmdbIds.add(row.tmdbId);
-			else seriesTmdbIds.add(row.tmdbId);
+			const key = untrackedGroupKey(row);
+			if (row.itemType === 'movie') movieGroups.add(key);
+			else seriesGroups.add(key);
 		}
 		const breakdownParts: string[] = [];
-		if (movieTmdbIds.size > 0) {
-			breakdownParts.push(`${movieTmdbIds.size} Movie${movieTmdbIds.size === 1 ? '' : 's'}`);
+		if (movieGroups.size > 0) {
+			breakdownParts.push(`${movieGroups.size} Movie${movieGroups.size === 1 ? '' : 's'}`);
 		}
-		if (seriesTmdbIds.size > 0) {
-			breakdownParts.push(`${seriesTmdbIds.size} Series`);
+		if (seriesGroups.size > 0) {
+			breakdownParts.push(`${seriesGroups.size} Series`);
 		}
 		const breakdown = breakdownParts.length > 0 ? ` (${breakdownParts.join(', ')})` : '';
 
