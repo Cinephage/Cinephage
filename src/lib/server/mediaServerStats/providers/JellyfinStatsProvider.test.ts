@@ -539,6 +539,42 @@ describe('JellyfinStatsProvider', () => {
 		expect(episode!.tmdbId).toBe(1396); // Inherited from parent series
 	});
 
+	it('overrides a per-episode ProviderIds.Tmdb with the parent series tmdbId (#601)', async () => {
+		// Some Jellyfin/Emby TMDB plugin versions DO populate ProviderIds.Tmdb
+		// on episode items, but with the episode's own standalone TMDB id,
+		// not the show's id. Local reconciliation keys episodes by SERIES
+		// tmdbId + season + episode, so the raw per-episode id must never be
+		// trusted - every episode has to inherit the parent series' tmdbId.
+		const seriesItem = makeJellyfinItem({
+			Id: 'series-jf-2',
+			Name: 'Lanterns',
+			Type: 'Series',
+			ProviderIds: { Tmdb: '247718' }
+		});
+		const episodeItem = makeJellyfinItem({
+			Id: 'episode-jf-2',
+			Name: 'Episode One',
+			Type: 'Episode',
+			SeriesName: 'Lanterns',
+			SeriesId: 'series-jf-2',
+			ParentIndexNumber: 1,
+			IndexNumber: 1,
+			ProviderIds: { Tmdb: '5812394' } // the episode's OWN tmdb id, not the series'
+		});
+
+		mockFetch.mockResolvedValueOnce(mockAdminResponse());
+		mockFetch.mockResolvedValueOnce(
+			mockFetchResponse({ TotalRecordCount: 2, Items: [seriesItem, episodeItem] })
+		);
+
+		const provider = new JellyfinStatsProvider(mockConfig);
+		const result = await provider.fetchAllItems();
+
+		const episode = result.items.find((i) => i.itemType === 'episode');
+		expect(episode).toBeDefined();
+		expect(episode!.tmdbId).toBe(247718);
+	});
+
 	it('should leave episode tmdbId null when no matching series is found', async () => {
 		const orphanEpisode = makeJellyfinItem({
 			Id: 'episode-orphan',
