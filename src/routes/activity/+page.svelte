@@ -20,6 +20,7 @@
 		refreshQueue,
 		relinkOrphans
 	} from '#lib/api/downloads.js';
+	import { deleteMovie as deleteMovieApi } from '#lib/api/library.js';
 	import { layoutState, deriveMobileSseStatus } from '#lib/layout.svelte.js';
 	import ActivityTable from '#lib/components/activity/ActivityTable.svelte';
 	import ActivityDetailModal from '#lib/components/activity/ActivityDetailModal.svelte';
@@ -27,7 +28,7 @@
 	import ActiveFilters from '#lib/components/activity/ActiveFilters.svelte';
 	import QueueStatsCards from '#lib/components/activity/QueueStatsCards.svelte';
 	import LibraryImportJobsCard from '#lib/components/activity/LibraryImportJobsCard.svelte';
-	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
+	import { ConfirmationModal, DeleteConfirmationModal } from '#lib/components/ui/modal/index.js';
 	import {
 		isActiveActivity,
 		type UnifiedActivity,
@@ -95,7 +96,6 @@
 	let deleteSelectedLoading = $state(false);
 	let historyConfirmOpen = $state(false);
 	let historyConfirmAction = $state<HistoryConfirmAction | null>(null);
-	let historyConfirmRemoveFromClient = $state(false);
 	let activeConfirmOpen = $state(false);
 	let activeConfirmAction = $state<ActiveBulkAction | null>(null);
 	let activeBulkLoading = $state(false);
@@ -1065,11 +1065,6 @@
 		return queueStats.failedCount > 0;
 	});
 
-	const historyConfirmFailedClientCount = $derived.by((): number => {
-		if (historyConfirmAction === 'delete_selected') return selectedHistoryFailedQueueIds.length;
-		return queueStats.failedCount;
-	});
-
 	function openHistoryConfirm(action: HistoryConfirmAction): void {
 		if (!canManageHistory) return;
 		if (action === 'purge_all' && (settingsLoading || purgeAllLoading)) return;
@@ -1077,7 +1072,6 @@
 		if (action === 'delete_selected' && (deleteSelectedLoading || selectedHistoryIds.size === 0))
 			return;
 
-		historyConfirmRemoveFromClient = false;
 		historyConfirmAction = action;
 		historyConfirmOpen = true;
 	}
@@ -1086,30 +1080,31 @@
 		if (historyConfirmLoading) return;
 		historyConfirmOpen = false;
 		historyConfirmAction = null;
-		historyConfirmRemoveFromClient = false;
 	}
 
-	async function handleHistoryConfirm(): Promise<void> {
+	async function handleHistoryConfirm(options: { deleteFiles: boolean }): Promise<void> {
 		if (!historyConfirmAction || historyConfirmLoading) return;
 
-		const removeFromClient = historyConfirmRemoveFromClient;
+		// Client removal follows file deletion: the client is the only path
+		// that deletes files, so keeping files means leaving the client alone.
+		const { deleteFiles } = options;
+		const removeFromClient = deleteFiles;
 
 		if (historyConfirmAction === 'purge_all') {
-			await purgeHistory('all', { removeFromClient });
+			await purgeHistory('all', { removeFromClient, deleteFiles });
 		} else if (historyConfirmAction === 'purge_older_than_retention') {
-			await purgeHistory('older_than_retention', { removeFromClient });
+			await purgeHistory('older_than_retention', { removeFromClient, deleteFiles });
 		} else {
-			await deleteSelectedHistory({ removeFromClient });
+			await deleteSelectedHistory({ removeFromClient, deleteFiles });
 		}
 
 		historyConfirmOpen = false;
 		historyConfirmAction = null;
-		historyConfirmRemoveFromClient = false;
 	}
 
 	async function purgeHistory(
 		action: 'older_than_retention' | 'all',
-		options: { removeFromClient?: boolean } = {}
+		options: { removeFromClient?: boolean; deleteFiles?: boolean } = {}
 	): Promise<void> {
 		if (!canManageHistory) return;
 		if (action === 'older_than_retention' && purgeOlderLoading) return;
@@ -1124,7 +1119,10 @@
 		try {
 			let payload;
 			try {
-				payload = await purgeHistoryApi(action, { removeFromClient: options.removeFromClient });
+				payload = await purgeHistoryApi(action, {
+					removeFromClient: options.removeFromClient,
+					deleteFiles: options.deleteFiles
+				});
 			} catch (error) {
 				if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
 					canManageHistory = false;
@@ -1163,7 +1161,7 @@
 	}
 
 	async function deleteSelectedHistory(
-		options: { removeFromClient?: boolean } = {}
+		options: { removeFromClient?: boolean; deleteFiles?: boolean } = {}
 	): Promise<void> {
 		if (!canManageHistory || deleteSelectedLoading || selectedHistoryIds.size === 0) return;
 
@@ -1173,7 +1171,10 @@
 		if (options.removeFromClient && selectedHistoryFailedQueueIds.length > 0) {
 			for (const queueId of selectedHistoryFailedQueueIds) {
 				try {
-					await removeQueueItemApi(queueId, { removeFromClient: true });
+					await removeQueueItemApi(queueId, {
+						removeFromClient: true,
+						deleteFiles: options.deleteFiles ?? false
+					});
 				} catch (_err) {
 					// Best-effort; proceed with history deletion regardless
 				}
@@ -1475,14 +1476,14 @@
 			refresh?: boolean;
 			closeDetailModal?: boolean;
 			removeFromClient?: boolean;
-			deleteFiles?: boolean;
-		} = {}
+			deleteFiles: boolean;
+		}
 	): Promise<void> {
 		const {
 			refresh = true,
 			closeDetailModal = true,
 			removeFromClient = true,
-			deleteFiles = false
+			deleteFiles
 		} = options;
 		await removeQueueItemApi(id, { removeFromClient, deleteFiles });
 
@@ -1528,9 +1529,28 @@
 
 	async function handleRemove(
 		id: string,
-		options?: { deleteFiles?: boolean; blocklist?: boolean }
+		options: { deleteFiles: boolean; removeFromLibrary: boolean }
 	) {
-		await removeQueueItem(id, { deleteFiles: options?.deleteFiles });
+		// Client removal follows file deletion: files can only be deleted via
+		// the client, and dropping the entry without files is local-only (#579).
+		if (options.removeFromLibrary) {
+			// The library box is only offered for movie activities, so a miss
+			// here means stale state — fail rather than half-remove.
+			const activity = activities.find((a) => a.queueItemId === id);
+			if (activity?.mediaType !== 'movie' || !activity.mediaId) {
+				throw new Error(m.activity_detail_failedToRemove());
+			}
+			// The library endpoint handles files, client entry, queue record,
+			// and the library row in one call.
+			await deleteMovieApi(activity.mediaId, options.deleteFiles, true);
+			await refreshActivityData({ force: true });
+			closeModal();
+			return;
+		}
+		await removeQueueItem(id, {
+			deleteFiles: options.deleteFiles,
+			removeFromClient: options.deleteFiles
+		});
 	}
 
 	async function handleRetry(id: string) {
@@ -1822,35 +1842,18 @@
 	{/if}
 </div>
 
-<ConfirmationModal
+<DeleteConfirmationModal
 	open={historyConfirmOpen}
 	title={historyConfirmTitle}
-	message={historyConfirmMessage}
+	description={historyConfirmMessage}
 	confirmLabel={historyConfirmLabel}
-	confirmVariant="error"
+	allowRemoveFromLibrary={false}
+	hasFiles={historyConfirmHasFailedItems}
+	hasActiveDownload={historyConfirmHasFailedItems}
 	loading={historyConfirmLoading}
-	onConfirm={handleHistoryConfirm}
+	onConfirm={(deleteFiles) => void handleHistoryConfirm({ deleteFiles })}
 	onCancel={closeHistoryConfirm}
->
-	{#if historyConfirmHasFailedItems}
-		<label class="mt-2 flex cursor-pointer items-start gap-2 text-sm">
-			<input
-				type="checkbox"
-				class="checkbox mt-0.5 checkbox-sm checkbox-primary"
-				bind:checked={historyConfirmRemoveFromClient}
-				disabled={historyConfirmLoading}
-			/>
-			<span>
-				{m.activity_history_alsoRemoveFromClient()}
-				<span class="text-base-content/60">
-					({m.activity_history_alsoRemoveFromClientHint({
-						count: historyConfirmFailedClientCount
-					})})
-				</span>
-			</span>
-		</label>
-	{/if}
-</ConfirmationModal>
+/>
 
 <ConfirmationModal
 	open={activeConfirmOpen}

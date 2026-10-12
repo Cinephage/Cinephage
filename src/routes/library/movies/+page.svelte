@@ -1100,7 +1100,7 @@
 	open={isDeleteModalOpen && pendingDeleteMovieId !== null}
 	title={m.library_movies_deleteMovieTitle()}
 	itemName={pendingDeleteMovieTitle}
-	hasFiles={pendingDeleteMovieHasFiles}
+	hasFiles={pendingDeleteMovieHasFiles || pendingDeleteMovieHasActiveDownload}
 	hasActiveDownload={pendingDeleteMovieHasActiveDownload}
 	loading={bulkLoading && currentBulkAction === 'delete'}
 	onConfirm={handleDeleteConfirm}

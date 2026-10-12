@@ -2074,7 +2074,7 @@
 	open={isDeleteModalOpen}
 	title={m.library_tvDetail_deleteSeriesTitle()}
 	itemName={series.title}
-	hasFiles={(series.episodeFileCount ?? 0) > 0}
+	hasFiles={(series.episodeFileCount ?? 0) > 0 || queueItems.length > 0}
 	hasActiveDownload={queueItems.length > 0}
 	loading={isDeleting}
 	onConfirm={performDelete}

@@ -38,6 +38,7 @@ import { getLibraryScheduler } from '#lib/server/library/library-scheduler.js';
 import { isLikelyAnimeMedia } from '#lib/shared/anime-classification.js';
 import { seriesUpdateSchema } from '#lib/validation/schemas.js';
 import { acquisitionService } from '#lib/server/acquisition/AcquisitionService.js';
+import { upsertQueueTombstoneFromQueueItem } from '#lib/server/downloadClients/monitoring/QueueTombstoneService.js';
 import { tmdb } from '#lib/server/tmdb.js';
 import { getMetadataProviderConfig } from '#lib/server/metadata/provider-settings.js';
 import { resolveMissingAnimeProviderRefs } from '#lib/server/metadata/provider-ref-resolver.js';
@@ -843,8 +844,20 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 		// Get all episode files for this series
 		const files = await db.select().from(episodeFiles).where(eq(episodeFiles.seriesId, params.id));
 
-		// Only require files if not removing from library entirely
-		if (files.length === 0 && !removeFromLibrary) {
+		// Only require files if not removing from library entirely. An active
+		// download counts: its files live in the client, not in episodeFiles yet.
+		const hasActiveDownloads =
+			deleteFiles &&
+			!removeFromLibrary &&
+			files.length === 0 &&
+			(
+				await db
+					.select({ id: downloadQueue.id })
+					.from(downloadQueue)
+					.where(eq(downloadQueue.seriesId, params.id))
+					.limit(1)
+			).length > 0;
+		if (files.length === 0 && !removeFromLibrary && !hasActiveDownloads) {
 			return Response.json(
 				{ success: false, error: 'Series has no files to delete' },
 				{ status: 400 }
@@ -873,15 +886,19 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 			await db.delete(episodeFiles).where(eq(episodeFiles.seriesId, params.id));
 		}
 
-		if (removeFromLibrary) {
-			// Cancel active downloads from client before removing
+		// Drop client entries when deleting files — a copy seeding in the
+		// client must go with the files. A queue row whose client entry was
+		// removed is dropped with it (tombstoned); other queue tracking is
+		// only dropped when removing from the library.
+		if (deleteFiles || removeFromLibrary) {
 			const activeQueueItems = await db
 				.select()
 				.from(downloadQueue)
 				.where(eq(downloadQueue.seriesId, params.id));
 
 			for (const queueItem of activeQueueItems) {
-				if (queueItem.downloadClientId) {
+				let clientEntryRemoved = false;
+				if (deleteFiles && queueItem.downloadClientId) {
 					try {
 						const isTorrent = queueItem.protocol === 'torrent';
 						const clientDownloadId = isTorrent
@@ -893,6 +910,7 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 							);
 							if (clientInstance) {
 								await clientInstance.removeDownload(clientDownloadId, true);
+								clientEntryRemoved = true;
 							}
 						}
 					} catch (err) {
@@ -905,11 +923,31 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 						);
 					}
 				}
-				// Delete queue record
-				acquisitionService.cancelByQueueId(queueItem.id, 'media removed from library');
-				await db.delete(downloadQueue).where(eq(downloadQueue.id, queueItem.id));
+				if (removeFromLibrary || clientEntryRemoved) {
+					if (clientEntryRemoved && !removeFromLibrary) {
+						try {
+							await upsertQueueTombstoneFromQueueItem(queueItem, 'library_files_deleted');
+						} catch (tombstoneError) {
+							logger.warn(
+								{
+									queueItemId: queueItem.id,
+									error: tombstoneError instanceof Error ? tombstoneError.message : 'Unknown'
+								},
+								'[API] Failed to upsert queue tombstone'
+							);
+						}
+					}
+					// Delete queue record
+					acquisitionService.cancelByQueueId(
+						queueItem.id,
+						removeFromLibrary ? 'media removed from library' : 'media files deleted'
+					);
+					await db.delete(downloadQueue).where(eq(downloadQueue.id, queueItem.id));
+				}
 			}
+		}
 
+		if (removeFromLibrary) {
 			// Preserve activity audit trail after media row is deleted (FKs become null on delete)
 			await db
 				.update(downloadHistory)

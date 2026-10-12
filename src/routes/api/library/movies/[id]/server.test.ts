@@ -2,8 +2,21 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../../../test/db-helper';
 import { api } from '../../../../../test/api-helper';
 import { languageProfiles, libraries, movies, rootFolders } from '#lib/server/db/schema.js';
+import { downloadQueue, downloadClients } from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
+
+const clientMocks = vi.hoisted(() => ({
+	removeDownload: vi.fn().mockResolvedValue(undefined),
+	getClientInstance: vi.fn()
+}));
+clientMocks.getClientInstance.mockResolvedValue({ removeDownload: clientMocks.removeDownload });
+
+vi.mock('#lib/server/downloadClients/DownloadClientManager.js', () => ({
+	getDownloadClientManager: () => ({
+		getClientInstance: clientMocks.getClientInstance
+	})
+}));
 
 vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
@@ -28,7 +41,7 @@ vi.mock('#lib/server/subtitles/services/SubtitleImportService.js', () => ({
 	searchSubtitlesForMediaBatch: vi.fn().mockResolvedValue(undefined)
 }));
 
-const { GET, PATCH } = await import('./+server');
+const { GET, PATCH, DELETE } = await import('./+server');
 const { eq } = await import('drizzle-orm');
 const { LanguageSettingsService } =
 	await import('#lib/server/subtitles/services/LanguageSettingsService.js');
@@ -95,10 +108,15 @@ async function resetTables(): Promise<void> {
 		'libraries',
 		'root_folders',
 		'language_profiles',
-		'language_settings'
+		'language_settings',
+		'download_queue',
+		'download_clients'
 	]) {
 		testDb.sqlite.prepare(`DELETE FROM ${table}`).run();
 	}
+	clientMocks.removeDownload.mockClear();
+	clientMocks.getClientInstance.mockClear();
+	clientMocks.getClientInstance.mockResolvedValue({ removeDownload: clientMocks.removeDownload });
 }
 
 beforeEach(resetTables);
@@ -228,5 +246,113 @@ describe('PATCH /api/library/movies/[id] — languageProfileId', () => {
 			.where(eq(movies.id, movieId))
 			.get();
 		expect(row?.languageProfileId).toBe(LANGUAGE_PROFILE_ID);
+	});
+});
+
+/**
+ * Seed a downloading movie: no imported files, one active queue item.
+ * Returns { movieId, queueId }.
+ */
+async function seedDownloadingMovie(): Promise<{ movieId: string; queueId: string }> {
+	await testDb.db
+		.insert(rootFolders)
+		.values({ id: 'rf-del-movie', name: 'Movies', path: '/media/movies', mediaType: 'movie' })
+		.run();
+	await testDb.db
+		.insert(libraries)
+		.values({
+			id: 'lib-del-movie',
+			name: 'Movies Library',
+			slug: 'movies-library-del',
+			mediaType: 'movie'
+		})
+		.run();
+	await testDb.db
+		.insert(movies)
+		.values({
+			id: 'movie-del-1',
+			tmdbId: 9002,
+			title: 'Downloading Movie',
+			path: '',
+			rootFolderId: 'rf-del-movie',
+			libraryId: 'lib-del-movie'
+		})
+		.run();
+	await testDb.db
+		.insert(downloadClients)
+		.values({
+			id: 'dc-del-1',
+			name: 'Test Client',
+			implementation: 'qbittorrent',
+			host: 'localhost',
+			port: 8080
+		})
+		.run();
+	await testDb.db
+		.insert(downloadQueue)
+		.values({
+			id: 'queue-del-1',
+			downloadClientId: 'dc-del-1',
+			downloadId: 'client-download-1',
+			title: 'Downloading.Movie.2024.1080p',
+			protocol: 'torrent',
+			movieId: 'movie-del-1',
+			status: 'downloading'
+		})
+		.run();
+	return { movieId: 'movie-del-1', queueId: 'queue-del-1' };
+}
+
+async function movieRow(id: string) {
+	return testDb.db.select().from(movies).where(eq(movies.id, id)).get();
+}
+
+async function queueRow(id: string) {
+	return testDb.db.select().from(downloadQueue).where(eq(downloadQueue.id, id)).get();
+}
+
+describe('DELETE /api/library/movies/[id] — active downloads', () => {
+	it('deletes files of a downloading movie without requiring library removal', async () => {
+		const { movieId } = await seedDownloadingMovie();
+
+		const { status } = await api.delete(DELETE, undefined, {
+			params: { id: movieId },
+			url: `http://localhost/api/library/movies/${movieId}?deleteFiles=true`
+		});
+
+		expect(status).toBe(200);
+		expect(clientMocks.removeDownload).toHaveBeenCalledWith('client-download-1', true);
+		// Movie row stays, but the queue row whose client entry was removed
+		// is dropped with it (tombstoned) instead of churning in recovery.
+		expect(await movieRow(movieId)).toBeTruthy();
+		expect(await queueRow('queue-del-1')).toBeFalsy();
+	});
+
+	it('keeps seeding when only removing from the library', async () => {
+		const { movieId } = await seedDownloadingMovie();
+
+		const { status } = await api.delete(DELETE, undefined, {
+			params: { id: movieId },
+			url: `http://localhost/api/library/movies/${movieId}?removeFromLibrary=true`
+		});
+
+		expect(status).toBe(200);
+		expect(clientMocks.removeDownload).not.toHaveBeenCalled();
+		expect(await movieRow(movieId)).toBeFalsy();
+		expect(await queueRow('queue-del-1')).toBeFalsy();
+	});
+
+	it('drops everything when deleting files and library together', async () => {
+		const { movieId } = await seedDownloadingMovie();
+
+		const { status } = await api.delete(DELETE, undefined, {
+			params: { id: movieId },
+			url: `http://localhost/api/library/movies/${movieId}?deleteFiles=true&removeFromLibrary=true`
+		});
+
+		expect(status).toBe(200);
+		expect(clientMocks.removeDownload).toHaveBeenCalledWith('client-download-1', true);
+		expect(await movieRow(movieId)).toBeFalsy();
+		expect(await queueRow('queue-del-1')).toBeFalsy();
 	});
 });

@@ -1679,7 +1679,7 @@
 	open={isDeleteModalOpen}
 	title={m.library_movieDetail_deleteMovieTitle()}
 	itemName={movie.title}
-	hasFiles={movie.hasFile === true}
+	hasFiles={movie.hasFile === true || (queueItem !== null && queueItem !== undefined)}
 	hasActiveDownload={queueItem !== null && queueItem !== undefined}
 	loading={isDeleting}
 	onConfirm={performDelete}

@@ -918,7 +918,7 @@
 	open={isDeleteModalOpen && pendingDeleteSeriesId !== null}
 	title={m.library_tv_deleteSeriesTitle()}
 	itemName={pendingDeleteSeriesTitle}
-	hasFiles={pendingDeleteSeriesHasFiles}
+	hasFiles={pendingDeleteSeriesHasFiles || pendingDeleteSeriesHasActiveDownload}
 	hasActiveDownload={pendingDeleteSeriesHasActiveDownload}
 	loading={bulkLoading && currentBulkAction === 'delete'}
 	onConfirm={handleDeleteConfirm}

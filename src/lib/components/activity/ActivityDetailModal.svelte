@@ -19,7 +19,7 @@
 	} from '@lucide/svelte';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { createFocusTrap, lockBodyScroll } from '#lib/utils/focus.js';
-	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
+	import { DeleteConfirmationModal } from '#lib/components/ui/modal/index.js';
 	import {
 		statusConfig,
 		getStatusLabel,
@@ -36,7 +36,7 @@
 		onResume?: (id: string) => Promise<void>;
 		onRemove?: (
 			id: string,
-			options?: { deleteFiles?: boolean; blocklist?: boolean }
+			options: { deleteFiles: boolean; removeFromLibrary: boolean }
 		) => Promise<void>;
 		onRetry?: (id: string) => Promise<void>;
 	}
@@ -89,12 +89,16 @@
 		removeConfirmOpen = false;
 	}
 
-	async function handleRemove() {
+	async function handleRemove(deleteFiles: boolean, removeFromLibrary: boolean) {
 		if (!activity?.queueItemId || !onRemove) return;
 		actionLoading = true;
 		try {
-			await onRemove(activity.queueItemId, { deleteFiles: true });
-			toasts.success(m.activity_detail_downloadRemoved());
+			await onRemove(activity.queueItemId, { deleteFiles, removeFromLibrary });
+			toasts.success(
+				removeFromLibrary
+					? m.toast_library_movieDetail_movieRemoved()
+					: m.activity_detail_downloadRemoved()
+			);
 			removeConfirmOpen = false;
 			onClose();
 		} catch (error) {
@@ -474,12 +478,13 @@
 	</div>
 {/if}
 
-<ConfirmationModal
+<DeleteConfirmationModal
 	open={removeConfirmOpen}
 	title={m.activity_detail_removeConfirmTitle()}
-	message={m.activity_detail_removeFromClientWarning()}
-	confirmLabel={m.activity_detail_removeAndDeleteFiles()}
-	confirmVariant="error"
+	itemName={activity?.releaseTitle || activity?.mediaTitle || ''}
+	allowRemoveFromLibrary={activity?.mediaType === 'movie' && !!activity?.mediaId}
+	hasFiles
+	defaultDeleteFiles
 	loading={actionLoading}
 	onConfirm={handleRemove}
 	onCancel={cancelRemove}

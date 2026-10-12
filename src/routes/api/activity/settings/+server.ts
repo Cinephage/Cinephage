@@ -17,7 +17,8 @@ const updateRetentionSchema = z.object({
 
 const purgeSchema = z.object({
 	action: z.enum(['older_than_retention', 'all']),
-	removeFromClient: z.boolean().optional().default(false)
+	removeFromClient: z.boolean().optional().default(false),
+	deleteFiles: z.boolean().optional().default(false)
 });
 
 /**
@@ -109,10 +110,10 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	try {
-		const { action, removeFromClient } = parsed.data;
+		const { action, removeFromClient, deleteFiles } = parsed.data;
 
 		if (action === 'all') {
-			const result = await activityService.purgeAllHistory({ removeFromClient });
+			const result = await activityService.purgeAllHistory({ removeFromClient, deleteFiles });
 			activityStreamEvents.emitRefresh({
 				action: 'purge_all',
 				timestamp: new Date().toISOString()
@@ -125,7 +126,10 @@ export const POST: RequestHandler = async (event) => {
 		}
 
 		const retentionDays = await activityService.getRetentionDays();
-		const result = await activityService.purgeHistoryOlderThan(retentionDays, { removeFromClient });
+		const result = await activityService.purgeHistoryOlderThan(retentionDays, {
+			removeFromClient,
+			deleteFiles
+		});
 		activityStreamEvents.emitRefresh({
 			action: 'purge_older_than_retention',
 			timestamp: new Date().toISOString()

@@ -611,7 +611,7 @@ export class ActivityService {
 
 	async purgeHistoryOlderThan(
 		retentionDays: number,
-		options: { removeFromClient?: boolean } = {}
+		options: { removeFromClient?: boolean; deleteFiles?: boolean } = {}
 	): Promise<PurgeHistoryResult> {
 		const normalizedRetentionDays = parseRetentionDays(retentionDays);
 		const cutoffDate = new Date();
@@ -664,7 +664,7 @@ export class ActivityService {
 						);
 						if (clientInstance) {
 							try {
-								await clientInstance.removeDownload(clientDownloadId, false);
+								await clientInstance.removeDownload(clientDownloadId, options.deleteFiles ?? false);
 							} catch (removeErr) {
 								logger.warn(
 									{
@@ -694,7 +694,9 @@ export class ActivityService {
 		};
 	}
 
-	async purgeAllHistory(options: { removeFromClient?: boolean } = {}): Promise<PurgeHistoryResult> {
+	async purgeAllHistory(
+		options: { removeFromClient?: boolean; deleteFiles?: boolean } = {}
+	): Promise<PurgeHistoryResult> {
 		// Fetch failed queue items before purging so we can tombstone and delete them
 		const failedQueueItems = await db
 			.select()
@@ -734,7 +736,7 @@ export class ActivityService {
 						);
 						if (clientInstance) {
 							try {
-								await clientInstance.removeDownload(clientDownloadId, false);
+								await clientInstance.removeDownload(clientDownloadId, options.deleteFiles ?? false);
 							} catch (removeErr) {
 								logger.warn(
 									{

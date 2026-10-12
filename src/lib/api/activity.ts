@@ -36,10 +36,11 @@ export async function setRetentionDays(retentionDays: number) {
 
 export async function purgeHistory(
 	action: 'older_than_retention' | 'all',
-	options?: { removeFromClient?: boolean }
+	options?: { removeFromClient?: boolean; deleteFiles?: boolean }
 ) {
 	return apiPost('/api/activity/settings', {
 		action,
-		removeFromClient: options?.removeFromClient ?? false
+		removeFromClient: options?.removeFromClient ?? false,
+		deleteFiles: options?.deleteFiles ?? false
 	});
 }

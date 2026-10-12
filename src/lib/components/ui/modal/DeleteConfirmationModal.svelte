@@ -1,14 +1,17 @@
 <script lang="ts">
-	import { X, Loader2, AlertTriangle, Trash2, Download } from '@lucide/svelte';
+	import { X, Loader2, AlertTriangle, Trash2 } from '@lucide/svelte';
 	import ModalWrapper from './ModalWrapper.svelte';
 	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
 		open: boolean;
 		title?: string;
-		itemName: string;
+		itemName?: string;
+		description?: string;
+		confirmLabel?: string;
 		allowRemoveFromLibrary?: boolean;
 		hasFiles?: boolean;
+		defaultDeleteFiles?: boolean;
 		hasActiveDownload?: boolean;
 		loading?: boolean;
 		onConfirm: (deleteFiles: boolean, removeFromLibrary: boolean) => void;
@@ -18,15 +21,20 @@
 	let {
 		open,
 		title = 'Delete',
-		itemName,
+		itemName = '',
+		description,
+		confirmLabel: confirmLabelProp,
 		allowRemoveFromLibrary = true,
 		hasFiles = true,
+		defaultDeleteFiles = false,
 		hasActiveDownload = false,
 		loading = false,
 		onConfirm,
 		onCancel
 	}: Props = $props();
 
+	// Initialized from defaultDeleteFiles by the reset effect below
+	// (all callers start closed).
 	let deleteFiles = $state(false);
 	let removeFromLibrary = $state(false);
 
@@ -40,6 +48,7 @@
 	});
 
 	const confirmLabel = $derived.by(() => {
+		if (confirmLabelProp) return confirmLabelProp;
 		switch (actionMode) {
 			case 'remove_and_delete':
 				return m.ui_deleteModal_removeAndDeleteFiles();
@@ -53,10 +62,12 @@
 	});
 
 	// Reset state when modal closes
+	let initialized = $state(false);
 	$effect(() => {
-		if (!open) {
-			deleteFiles = false;
+		if (!open || !initialized) {
+			deleteFiles = defaultDeleteFiles;
 			removeFromLibrary = false;
+			initialized = true;
 		}
 	});
 
@@ -77,7 +88,7 @@
 	}
 
 	function handleClose() {
-		deleteFiles = false;
+		deleteFiles = defaultDeleteFiles;
 		removeFromLibrary = false;
 		onCancel();
 	}
@@ -97,7 +108,9 @@
 	</div>
 
 	<p class="py-2">
-		{#if actionMode === 'remove_and_delete'}
+		{#if description}
+			{description}
+		{:else if actionMode === 'remove_and_delete'}
 			{m.ui_deleteModal_confirmRemoveAndDelete_prefix()} <strong>{itemName}</strong>
 			{m.ui_deleteModal_confirmRemoveAndDelete_suffix()}
 		{:else if actionMode === 'remove_only'}
@@ -141,31 +154,23 @@
 		</label>
 	{/if}
 
-	{#if hasActiveDownload && (actionMode === 'remove_only' || actionMode === 'remove_and_delete')}
+	{#if deleteFiles && hasActiveDownload}
 		<div class="mt-3 alert alert-warning">
-			<Download class="h-4 w-4" />
-			<span class="text-sm">{m.ui_deleteModal_activeDownloadWarning()} </span>
+			<AlertTriangle class="h-4 w-4" />
+			<span class="text-sm"
+				>{m.ui_deleteModal_warningDeleteFiles()}
+				{m.ui_deleteModal_activeDownloadWarning()}</span
+			>
 		</div>
-	{/if}
-
-	{#if actionMode === 'remove_and_delete'}
-		<div class="mt-3 alert alert-error">
+	{:else if actionMode === 'remove_and_delete'}
+		<div class="mt-3 alert alert-warning">
 			<Trash2 class="h-4 w-4" />
 			<span class="text-sm">{m.ui_deleteModal_warningRemoveAndDelete()}</span>
-		</div>
-	{:else if actionMode === 'remove_only'}
-		<div class="mt-3 alert alert-error">
-			<Trash2 class="h-4 w-4" />
-			<span class="text-sm">{m.ui_deleteModal_warningRemoveOnly()}</span>
 		</div>
 	{:else if actionMode === 'delete_files'}
 		<div class="mt-3 alert alert-warning">
 			<AlertTriangle class="h-4 w-4" />
 			<span class="text-sm">{m.ui_deleteModal_warningDeleteFiles()}</span>
-		</div>
-	{:else}
-		<div class="mt-3 alert alert-info">
-			<span class="text-sm">{m.ui_deleteModal_warningUnmatch()}</span>
 		</div>
 	{/if}
 

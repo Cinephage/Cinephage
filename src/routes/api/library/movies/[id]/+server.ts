@@ -24,6 +24,7 @@ import { tmdb } from '#lib/server/tmdb.js';
 import { movieUpdateSchema } from '#lib/validation/schemas.js';
 import { parseBody } from '#lib/server/api/validate.js';
 import { acquisitionService } from '#lib/server/acquisition/AcquisitionService.js';
+import { upsertQueueTombstoneFromQueueItem } from '#lib/server/downloadClients/monitoring/QueueTombstoneService.js';
 import {
 	validateRootFolder,
 	getAnimeSubtypeEnforcement
@@ -712,8 +713,20 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 		// Get all files for this movie
 		const files = await db.select().from(movieFiles).where(eq(movieFiles.movieId, params.id));
 
-		// Only require files if not removing from library entirely
-		if (files.length === 0 && !removeFromLibrary) {
+		// Only require files if not removing from library entirely. An active
+		// download counts: its files live in the client, not in movieFiles yet.
+		const hasActiveDownloads =
+			deleteFiles &&
+			!removeFromLibrary &&
+			files.length === 0 &&
+			(
+				await db
+					.select({ id: downloadQueue.id })
+					.from(downloadQueue)
+					.where(eq(downloadQueue.movieId, params.id))
+					.limit(1)
+			).length > 0;
+		if (files.length === 0 && !removeFromLibrary && !hasActiveDownloads) {
 			return Response.json(
 				{ success: false, error: 'Movie has no files to delete' },
 				{ status: 400 }
@@ -739,15 +752,19 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 			await db.delete(movieFiles).where(eq(movieFiles.movieId, params.id));
 		}
 
-		if (removeFromLibrary) {
-			// Cancel active downloads from client before removing
+		// Drop client entries when deleting files — a copy seeding in the
+		// client must go with the files. A queue row whose client entry was
+		// removed is dropped with it (tombstoned); other queue tracking is
+		// only dropped when removing from the library.
+		if (deleteFiles || removeFromLibrary) {
 			const activeQueueItems = await db
 				.select()
 				.from(downloadQueue)
 				.where(eq(downloadQueue.movieId, params.id));
 
 			for (const queueItem of activeQueueItems) {
-				if (queueItem.downloadClientId) {
+				let clientEntryRemoved = false;
+				if (deleteFiles && queueItem.downloadClientId) {
 					try {
 						const isTorrent = queueItem.protocol === 'torrent';
 						const clientDownloadId = isTorrent
@@ -759,6 +776,7 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 							);
 							if (clientInstance) {
 								await clientInstance.removeDownload(clientDownloadId, true);
+								clientEntryRemoved = true;
 							}
 						}
 					} catch (err) {
@@ -771,12 +789,34 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 						);
 					}
 				}
-				// Delete queue record — cancel the acquisition intent first so the
-				// slot is released rather than leaking until restart.
-				acquisitionService.cancelByQueueId(queueItem.id, 'media removed from library');
-				await db.delete(downloadQueue).where(eq(downloadQueue.id, queueItem.id));
+				if (removeFromLibrary || clientEntryRemoved) {
+					// Delete queue record — cancel the acquisition intent first so the
+					// slot is released rather than leaking until restart. A removed
+					// client entry is tombstoned so the monitor treats the
+					// disappearance as intentional, not a failure to recover.
+					if (clientEntryRemoved && !removeFromLibrary) {
+						try {
+							await upsertQueueTombstoneFromQueueItem(queueItem, 'library_files_deleted');
+						} catch (tombstoneError) {
+							logger.warn(
+								{
+									queueItemId: queueItem.id,
+									error: tombstoneError instanceof Error ? tombstoneError.message : 'Unknown'
+								},
+								'[API] Failed to upsert queue tombstone'
+							);
+						}
+					}
+					acquisitionService.cancelByQueueId(
+						queueItem.id,
+						removeFromLibrary ? 'media removed from library' : 'media files deleted'
+					);
+					await db.delete(downloadQueue).where(eq(downloadQueue.id, queueItem.id));
+				}
 			}
+		}
 
+		if (removeFromLibrary) {
 			// Preserve activity audit trail after media row is deleted (FKs become null on delete)
 			await db
 				.update(downloadHistory)
