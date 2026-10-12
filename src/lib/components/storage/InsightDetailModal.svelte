@@ -34,6 +34,19 @@
 
 	let dismissing = $state(false);
 
+	// The passed-in insight's summary/itemCount are a snapshot from whenever
+	// the dashboard list was last fetched, which can drift from the live
+	// resolver total shown below (reconcile/sync ran since). The items
+	// endpoint re-syncs the stored insight when it detects that drift and
+	// hands back the corrected copy - prefer it over the prop once we have it.
+	let displaySummary = $state<string | null>(null);
+
+	$effect(() => {
+		if (open && insight) {
+			displaySummary = insight.summary;
+		}
+	});
+
 	async function fetchItems() {
 		if (!insight) return;
 		loading = true;
@@ -44,6 +57,9 @@
 				items = res.data.items;
 				total = res.data.pagination.total;
 				totalPages = res.data.pagination.totalPages;
+				if (res.meta?.insight) {
+					displaySummary = res.meta.insight.summary;
+				}
 			} else {
 				error = res.error ?? 'Failed to load items';
 			}
@@ -126,8 +142,8 @@
 				<h3 id="insight-detail-title" class="mt-1 text-lg font-bold text-base-content">
 					{insight?.title ?? ''}
 				</h3>
-				{#if insight?.summary}
-					<p class="mt-0.5 text-sm text-base-content/70">{insight.summary}</p>
+				{#if displaySummary}
+					<p class="mt-0.5 text-sm text-base-content/70">{displaySummary}</p>
 				{/if}
 			</div>
 			<button
