@@ -5,6 +5,7 @@
 	import { Loader2, Minus } from '@lucide/svelte';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { createProgressiveRenderer } from '#lib/utils/progressive-render.svelte.js';
+	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
 	import ActivityTableHeader from './ActivityTableHeader.svelte';
 	import ActivityRow from './ActivityRow.svelte';
 	import ActivityMobileCard from './ActivityMobileCard.svelte';
@@ -17,7 +18,7 @@
 		onRowClick?: (activity: UnifiedActivity) => void;
 		onPause?: (id: string) => Promise<void>;
 		onResume?: (id: string) => Promise<void>;
-		onRemove?: (id: string) => Promise<void>;
+		onRemove?: (id: string, options?: { deleteFiles?: boolean }) => Promise<void>;
 		onRetry?: (id: string) => Promise<void>;
 		compact?: boolean;
 		selectionMode?: boolean;
@@ -76,6 +77,12 @@
 	let failedReasonExpandedRows = new SvelteSet<string>();
 	let queueActionLoadingRows = new SvelteSet<string>();
 
+	// Inline remove (mobile cards) uses the same delete-files confirmation as
+	// the detail modal so both layouts share one codepath (#579).
+	let pendingRemoveActivity = $state<UnifiedActivity | null>(null);
+	let removeConfirmOpen = $state(false);
+	let removeConfirmLoading = $state(false);
+
 	const selectableIds = $derived.by(() =>
 		selectionMode
 			? activities.filter((activity) => isSelectable(activity)).map((activity) => activity.id)
@@ -111,14 +118,17 @@
 		if (!activity.queueItemId) return;
 		if (queueActionLoadingRows.has(activity.id)) return;
 
+		// Route inline remove through the shared delete-files confirmation
+		// so mobile cards match the detail modal (both delete from disk).
+		if (action === 'remove') {
+			if (!onRemove) return;
+			pendingRemoveActivity = activity;
+			removeConfirmOpen = true;
+			return;
+		}
+
 		const handler =
-			action === 'pause'
-				? onPause
-				: action === 'resume'
-					? onResume
-					: action === 'remove'
-						? onRemove
-						: onRetry;
+			action === 'pause' ? onPause : action === 'resume' ? onResume : onRetry;
 		if (!handler) return;
 
 		queueActionLoadingRows.add(activity.id);
@@ -126,7 +136,6 @@
 			await handler(activity.queueItemId);
 			if (action === 'pause') toasts.success(m.activity_detail_downloadPaused());
 			if (action === 'resume') toasts.success(m.activity_detail_downloadResumed());
-			if (action === 'remove') toasts.success(m.activity_detail_downloadRemoved());
 			if (action === 'retry') {
 				toasts.success(
 					activity.status === 'failed' && isImportFailedActivity(activity)
@@ -159,6 +168,33 @@
 			return;
 		}
 		onToggleSelectionAll?.(selectableIds, selected);
+	}
+
+	function cancelInlineRemove(): void {
+		if (removeConfirmLoading) return;
+		removeConfirmOpen = false;
+		pendingRemoveActivity = null;
+	}
+
+	async function confirmInlineRemove(): Promise<void> {
+		const activity = pendingRemoveActivity;
+		if (!activity?.queueItemId || !onRemove || removeConfirmLoading) return;
+		removeConfirmLoading = true;
+		queueActionLoadingRows.add(activity.id);
+		try {
+			// Single codepath for all active removals: always delete files (#579).
+			await onRemove(activity.queueItemId, { deleteFiles: true });
+			toasts.success(m.activity_detail_downloadRemoved());
+			removeConfirmOpen = false;
+			pendingRemoveActivity = null;
+		} catch (error) {
+			const message =
+				error instanceof Error ? error.message : m.activity_table_failedToAction({ action: 'remove' });
+			toasts.error(message);
+		} finally {
+			queueActionLoadingRows.delete(activity.id);
+			removeConfirmLoading = false;
+		}
 	}
 </script>
 
@@ -237,3 +273,14 @@
 		</div>
 	{/if}
 {/if}
+
+<ConfirmationModal
+	open={removeConfirmOpen}
+	title={m.activity_detail_removeConfirmTitle()}
+	message={m.activity_detail_removeFromClientWarning()}
+	confirmLabel={m.activity_detail_removeAndDeleteFiles()}
+	confirmVariant="error"
+	loading={removeConfirmLoading}
+	onConfirm={() => void confirmInlineRemove()}
+	onCancel={cancelInlineRemove}
+/>

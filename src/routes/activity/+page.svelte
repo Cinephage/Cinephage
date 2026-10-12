@@ -1173,7 +1173,7 @@
 		if (options.removeFromClient && selectedHistoryFailedQueueIds.length > 0) {
 			for (const queueId of selectedHistoryFailedQueueIds) {
 				try {
-					await removeQueueItemApi(queueId, { removeFromClient: true });
+					await removeQueueItemApi(queueId, { removeFromClient: true, deleteFiles: true });
 				} catch (_err) {
 					// Best-effort; proceed with history deletion regardless
 				}
@@ -1482,7 +1482,7 @@
 			refresh = true,
 			closeDetailModal = true,
 			removeFromClient = true,
-			deleteFiles = false
+			deleteFiles = true
 		} = options;
 		await removeQueueItemApi(id, { removeFromClient, deleteFiles });
 
@@ -1530,7 +1530,10 @@
 		id: string,
 		options?: { deleteFiles?: boolean; blocklist?: boolean }
 	) {
-		await removeQueueItem(id, { deleteFiles: options?.deleteFiles });
+		// All active-download removals delete files by default (#579).
+		// Callers that explicitly pass deleteFiles:false (none currently)
+		// can still opt out; missing options means delete.
+		await removeQueueItem(id, { deleteFiles: options?.deleteFiles ?? true });
 	}
 
 	async function handleRetry(id: string) {
