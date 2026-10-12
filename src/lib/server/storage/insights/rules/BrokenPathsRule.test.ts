@@ -158,6 +158,11 @@ describe('BrokenPathsRule', () => {
 		expect(findings).toHaveLength(1);
 		expect(findings[0].itemCount).toBe(1);
 		expect(findings[0].severity).toBe('critical');
+		// itemType must travel with each broken item - movie and series tmdbIds
+		// are independent namespaces, so the resolver needs this to pick the
+		// right library page instead of guessing from tmdbId alone (#601).
+		const detailItems = (findings[0].details as { items: Array<{ itemType: string }> }).items;
+		expect(detailItems[0].itemType).toBe('movie');
 	});
 
 	it('returns zero findings when all movie paths exist', async () => {
@@ -265,6 +270,8 @@ describe('BrokenPathsRule', () => {
 		expect(findings).toHaveLength(1);
 		expect(findings[0].itemCount).toBe(1);
 		expect(findings[0].severity).toBe('critical');
+		const detailItems = (findings[0].details as { items: Array<{ itemType: string }> }).items;
+		expect(detailItems[0].itemType).toBe('episode');
 	});
 
 	it('returns zero findings when no file-backed items exist', async () => {

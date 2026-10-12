@@ -13,46 +13,65 @@ export const qualityBelowCutoffResolver: InsightItemResolver = async ({
 		return { items: [], total: 0 };
 	}
 
-	type Item = { tmdbId: number; title: string; currentResolution: string; minResolution: string };
+	type Item = {
+		tmdbId: number;
+		title: string;
+		itemType: 'movie' | 'episode';
+		currentResolution: string;
+		minResolution: string;
+	};
 	const items: Item[] = rawDetails.items;
 	const total = items.length;
 	const sliceStart = (page - 1) * limit;
 	const sliced = items.slice(sliceStart, sliceStart + limit);
 
-	const tmdbIds = sliced.map((i) => i.tmdbId).filter(Boolean);
+	// Movie and series tmdbIds are independent namespaces - a movie and an
+	// unrelated show can share the same numeric id, so the href must be
+	// looked up in the map matching this item's own itemType, never by
+	// probing one map then falling back to the other.
+	const movieTmdbIds = sliced
+		.filter((i) => i.itemType === 'movie' && i.tmdbId)
+		.map((i) => i.tmdbId);
+	const seriesTmdbIds = sliced
+		.filter((i) => i.itemType === 'episode' && i.tmdbId)
+		.map((i) => i.tmdbId);
 	const movieMap = new Map<number, string>();
 	const seriesMap = new Map<number, string>();
 
-	if (tmdbIds.length > 0) {
+	if (movieTmdbIds.length > 0) {
 		const movieRows = db
 			.select({ id: movies.id, tmdbId: movies.tmdbId })
 			.from(movies)
-			.where(inArray(movies.tmdbId, tmdbIds))
+			.where(inArray(movies.tmdbId, movieTmdbIds))
 			.all();
 		for (const r of movieRows) movieMap.set(r.tmdbId, r.id);
-
+	}
+	if (seriesTmdbIds.length > 0) {
 		const seriesRows = db
 			.select({ id: series.id, tmdbId: series.tmdbId })
 			.from(series)
-			.where(inArray(series.tmdbId, tmdbIds))
+			.where(inArray(series.tmdbId, seriesTmdbIds))
 			.all();
 		for (const r of seriesRows) seriesMap.set(r.tmdbId, r.id);
 	}
 
 	return {
 		items: sliced.map((item) => ({
-			id: `q-${item.tmdbId}`,
-			kind: (movieMap.has(item.tmdbId) ? 'movie' : 'series') as 'movie' | 'series',
+			id: `q-${item.itemType}-${item.tmdbId}`,
+			kind: item.itemType,
 			title: item.title,
 			badges: [
 				{ label: item.currentResolution, tone: 'warn' as const },
 				{ label: `target: ${item.minResolution}`, tone: 'info' as const }
 			],
-			href: movieMap.has(item.tmdbId)
-				? `/library/movie/${movieMap.get(item.tmdbId)}`
-				: seriesMap.has(item.tmdbId)
-					? `/library/tv/${seriesMap.get(item.tmdbId)}`
-					: undefined
+			href:
+				item.itemType === 'movie'
+					? movieMap.has(item.tmdbId)
+						? `/library/movie/${movieMap.get(item.tmdbId)}`
+						: undefined
+					: seriesMap.has(item.tmdbId)
+						? `/library/tv/${seriesMap.get(item.tmdbId)}`
+						: undefined
 		})),
 		total
 	};
