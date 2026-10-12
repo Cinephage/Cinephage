@@ -205,6 +205,84 @@ describe('ReconciliationService', () => {
 		expect(links[0].storageItemId).toBe(items[0].id);
 	});
 
+	it('matches a local movie to a server item with no tmdbId via imdbId fallback (#601)', async () => {
+		await testDb.db.insert(movies).values(
+			createMovie({
+				id: 'movie-imdb',
+				tmdbId: 600,
+				imdbId: 'tt1234567',
+				title: 'Unresolved On Server'
+			})
+		);
+		await testDb.db.insert(movieFiles).values(
+			createMovieFile({
+				id: 'mf-imdb',
+				movieId: 'movie-imdb'
+			}) as typeof movieFiles.$inferInsert
+		);
+		// Server synced the file but its metadata agent couldn't resolve TMDB;
+		// it still carries the same IMDB id as the local movie.
+		await testDb.db.insert(mediaServerSyncedItems).values(
+			createMediaServerItem({
+				id: 'msi-imdb',
+				serverId: 'srv-1',
+				serverItemId: 'jf-imdb',
+				tmdbId: null,
+				imdbId: 'tt1234567',
+				title: 'Unresolved On Server',
+				itemType: 'movie'
+			})
+		);
+
+		const service = getReconciliationService();
+		await service.reconcile();
+
+		const items = await testDb.db.select().from(storageItems);
+		expect(items).toHaveLength(1);
+		expect(items[0].sourceSystem).toBe('both');
+		expect(items[0].tmdbId).toBe(600);
+
+		const links = await testDb.db.select().from(storageItemServerLinks);
+		expect(links).toHaveLength(1);
+		expect(links[0].storageItemId).toBe(items[0].id);
+		expect(links[0].syncedItemId).toBe('msi-imdb');
+	});
+
+	it('does not match via imdbId fallback when the local movie has no imdbId', async () => {
+		await testDb.db.insert(movies).values(
+			createMovie({
+				id: 'movie-no-imdb',
+				tmdbId: 601,
+				imdbId: null,
+				title: 'No Imdb Local'
+			})
+		);
+		await testDb.db.insert(movieFiles).values(
+			createMovieFile({
+				id: 'mf-no-imdb',
+				movieId: 'movie-no-imdb'
+			}) as typeof movieFiles.$inferInsert
+		);
+		await testDb.db.insert(mediaServerSyncedItems).values(
+			createMediaServerItem({
+				id: 'msi-no-imdb',
+				serverId: 'srv-1',
+				serverItemId: 'jf-no-imdb',
+				tmdbId: null,
+				imdbId: 'tt9999999',
+				title: 'Unrelated Server Item',
+				itemType: 'movie'
+			})
+		);
+
+		const service = getReconciliationService();
+		await service.reconcile();
+
+		const items = await testDb.db.select().from(storageItems);
+		expect(items).toHaveLength(1);
+		expect(items[0].sourceSystem).toBe('local');
+	});
+
 	it('is idempotent - running twice produces same row count and same IDs', async () => {
 		await testDb.db
 			.insert(movies)

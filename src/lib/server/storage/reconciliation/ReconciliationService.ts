@@ -45,6 +45,15 @@ type SourceRow = {
 	episodeFileId: string | null;
 	rootFolderId: string | null;
 	libraryId: string | null;
+	/**
+	 * Movie rows only (null for episodes). Used as a fallback match key for
+	 * media-server sync rows whose own TMDB resolution failed but which
+	 * still carry an IMDB id - see unmatchedServerMoviesByImdbId in
+	 * reconcile(). Without this, a movie present on both sides falsely
+	 * reports as "missing from your media server" whenever the server's
+	 * metadata agent couldn't resolve TMDB for it (GitHub #601).
+	 */
+	imdbId: string | null;
 };
 
 const CHUNK_SIZE = 500;
@@ -284,6 +293,7 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 
 			let localRows: SourceRow[];
 			let serverItemRows: Array<typeof mediaServerSyncedItems.$inferSelect>;
+			let unmatchedServerMovieRows: Array<typeof mediaServerSyncedItems.$inferSelect>;
 			let existingItems: Array<{
 				id: string;
 				itemType: string;
@@ -321,35 +331,39 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 					.select({ id: storageItems.id })
 					.from(storageItems)
 					.where(eq(storageItems.rootFolderId, scope.rootFolderId));
-				[serverItemRows, existingItems, existingLinks] = await Promise.all([
-					this.loadServerItemsForTmdbIds(folderTmdbIds),
-					db
-						.select(existingItemsSelect)
-						.from(storageItems)
-						.where(eq(storageItems.rootFolderId, scope.rootFolderId)),
-					db
-						.select({
-							storageItemId: storageItemServerLinks.storageItemId,
-							serverId: storageItemServerLinks.serverId,
-							syncedItemId: storageItemServerLinks.syncedItemId
-						})
-						.from(storageItemServerLinks)
-						.where(inArray(storageItemServerLinks.storageItemId, folderLinkSubquery))
-				]);
+				[serverItemRows, unmatchedServerMovieRows, existingItems, existingLinks] =
+					await Promise.all([
+						this.loadServerItemsForTmdbIds(folderTmdbIds),
+						this.loadUnmatchedServerMovieItems(),
+						db
+							.select(existingItemsSelect)
+							.from(storageItems)
+							.where(eq(storageItems.rootFolderId, scope.rootFolderId)),
+						db
+							.select({
+								storageItemId: storageItemServerLinks.storageItemId,
+								serverId: storageItemServerLinks.serverId,
+								syncedItemId: storageItemServerLinks.syncedItemId
+							})
+							.from(storageItemServerLinks)
+							.where(inArray(storageItemServerLinks.storageItemId, folderLinkSubquery))
+					]);
 			} else {
 				// Full run: load everything in parallel.
-				[localRows, serverItemRows, existingItems, existingLinks] = await Promise.all([
-					this.loadLocalRows(),
-					this.loadServerItems(),
-					db.select(existingItemsSelect).from(storageItems),
-					db
-						.select({
-							storageItemId: storageItemServerLinks.storageItemId,
-							serverId: storageItemServerLinks.serverId,
-							syncedItemId: storageItemServerLinks.syncedItemId
-						})
-						.from(storageItemServerLinks)
-				]);
+				[localRows, serverItemRows, unmatchedServerMovieRows, existingItems, existingLinks] =
+					await Promise.all([
+						this.loadLocalRows(),
+						this.loadServerItems(),
+						this.loadUnmatchedServerMovieItems(),
+						db.select(existingItemsSelect).from(storageItems),
+						db
+							.select({
+								storageItemId: storageItemServerLinks.storageItemId,
+								serverId: storageItemServerLinks.serverId,
+								syncedItemId: storageItemServerLinks.syncedItemId
+							})
+							.from(storageItemServerLinks)
+					]);
 			}
 
 			// ---- Build all read-only maps before touching the DB ----
@@ -437,6 +451,26 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 				}
 			}
 
+			// Fallback coverage for movies whose server-side TMDB resolution
+			// failed: match by IMDB id instead so a movie present on both
+			// sides doesn't falsely report as "missing from your media
+			// server" just because the server's metadata agent couldn't
+			// resolve TMDB for it (#601). Keyed by lowercased IMDB id.
+			const unmatchedServerMoviesByImdbId = new Map<
+				string,
+				Array<typeof mediaServerSyncedItems.$inferSelect>
+			>();
+			for (const s of unmatchedServerMovieRows) {
+				if (!s.imdbId) continue;
+				const key = s.imdbId.toLowerCase();
+				const arr = unmatchedServerMoviesByImdbId.get(key);
+				if (arr) {
+					arr.push(s);
+				} else {
+					unmatchedServerMoviesByImdbId.set(key, [s]);
+				}
+			}
+
 			// Existing rows indexed by logical key (full row for change-detection)
 			const existingByKey = new Map<string, (typeof existingItems)[number]>();
 			for (const item of existingItems) {
@@ -477,6 +511,12 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 							// sibling episode number, so this episode is satisfied too.
 							if (serverItems.length === 0 && localRow?.episodeFileId) {
 								serverItems = serverItemsByFile.get(localRow.episodeFileId) ?? [];
+							}
+							// Fall back to IMDB-id matching for movies whose server
+							// counterpart has no TMDB id (see unmatchedServerMoviesByImdbId).
+							if (serverItems.length === 0 && localRow?.itemType === 'movie' && localRow.imdbId) {
+								serverItems =
+									unmatchedServerMoviesByImdbId.get(localRow.imdbId.toLowerCase()) ?? [];
 							}
 							const existing = existingByKey.get(key);
 
@@ -696,6 +736,7 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 					movieId: movies.id,
 					movieFileId: movieFiles.id,
 					tmdbId: movies.tmdbId,
+					imdbId: movies.imdbId,
 					title: movies.title,
 					year: movies.year,
 					libraryId: movies.libraryId,
@@ -768,6 +809,7 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 			.map((r) => ({
 				itemType: 'movie' as const,
 				tmdbId: r.tmdbId,
+				imdbId: r.imdbId ?? null,
 				title: r.title,
 				year: r.year ?? null,
 				seasonNumber: null,
@@ -791,6 +833,7 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 					epRows.push({
 						itemType: 'episode' as const,
 						tmdbId: r.tmdbId,
+						imdbId: null,
 						title: r.title,
 						year: r.year ?? null,
 						seasonNumber: ep.seasonNumber,
@@ -818,6 +861,7 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 				epRows.push({
 					itemType: 'episode' as const,
 					tmdbId: r.tmdbId,
+					imdbId: null,
 					title: r.title,
 					year: r.year ?? null,
 					seasonNumber: r.seasonNumber,
@@ -838,6 +882,24 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 			.select()
 			.from(mediaServerSyncedItems)
 			.where(sql`${mediaServerSyncedItems.tmdbId} IS NOT NULL`);
+	}
+
+	/**
+	 * Movie rows that the media server synced but whose TMDB resolution
+	 * failed (so they're excluded from loadServerItems's primary key-based
+	 * matching). These still carry an IMDB id in many cases, which lets us
+	 * avoid falsely reporting a movie as "missing from your media server"
+	 * when it's genuinely present there under unresolved metadata (#601).
+	 */
+	private async loadUnmatchedServerMovieItems(): Promise<
+		Array<typeof mediaServerSyncedItems.$inferSelect>
+	> {
+		return db
+			.select()
+			.from(mediaServerSyncedItems)
+			.where(
+				sql`${mediaServerSyncedItems.itemType} = 'movie' AND ${mediaServerSyncedItems.tmdbId} IS NULL AND ${mediaServerSyncedItems.imdbId} IS NOT NULL`
+			);
 	}
 
 	private async loadServerItemsForTmdbIds(
