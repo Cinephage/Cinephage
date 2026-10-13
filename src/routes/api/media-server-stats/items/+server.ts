@@ -1,7 +1,7 @@
 import type { RequestHandler } from './$types';
 import { db } from '#lib/server/db/index.js';
 import { mediaBrowserServers, mediaServerSyncedItems } from '#lib/server/db/schema.js';
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { AggregatedMediaItem } from '#lib/server/mediaServerStats/types.js';
 
 const VALID_SORT_FIELDS = ['playCount', 'fileSize', 'title', 'lastPlayedDate'] as const;
@@ -23,7 +23,12 @@ export const GET: RequestHandler = async ({ url }) => {
 	const page = Math.max(1, parseInt(pageParam, 10) || 1);
 	const limit = Math.min(100, Math.max(1, parseInt(limitParam, 10) || 25));
 
-	const conditions = [];
+	// A disabled server's synced data is kept (not deleted) so re-enabling and
+	// re-syncing is cheap, but it must stop counting toward this aggregate.
+	const servers = await db.select().from(mediaBrowserServers);
+	const enabledServerIds = servers.filter((s) => s.enabled).map((s) => s.id);
+
+	const conditions = [inArray(mediaServerSyncedItems.serverId, enabledServerIds)];
 	if (typeParam && VALID_ITEM_TYPES.includes(typeParam as (typeof VALID_ITEM_TYPES)[number])) {
 		conditions.push(
 			eq(mediaServerSyncedItems.itemType, typeParam as (typeof VALID_ITEM_TYPES)[number])
@@ -31,14 +36,11 @@ export const GET: RequestHandler = async ({ url }) => {
 	}
 
 	const MAX_RAW_ITEMS = 5000;
-	const [allItems, servers] = await Promise.all([
-		db
-			.select()
-			.from(mediaServerSyncedItems)
-			.where(conditions.length > 0 ? conditions[0] : undefined)
-			.limit(MAX_RAW_ITEMS),
-		db.select().from(mediaBrowserServers)
-	]);
+	const allItems = await db
+		.select()
+		.from(mediaServerSyncedItems)
+		.where(and(...conditions))
+		.limit(MAX_RAW_ITEMS);
 
 	const serverById = new Map(
 		servers.map((server) => [server.id, { name: server.name, serverType: server.serverType }])

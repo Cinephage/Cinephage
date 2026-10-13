@@ -1,9 +1,10 @@
 import type { PageServerLoad } from './$types';
-import { sql, eq } from 'drizzle-orm';
+import { and, sql, eq, inArray } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
 import {
 	episodeFiles,
 	libraries,
+	mediaBrowserServers,
 	mediaServerSyncedItems,
 	movieFiles,
 	movies,
@@ -69,6 +70,11 @@ export const load: PageServerLoad = async ({ url, parent }) => {
 	const hasPlaysFilter = url.searchParams.get('hasPlays') || 'all';
 	const insightId = url.searchParams.get('insightId');
 
+	// A disabled server's synced data is kept (not deleted) so re-enabling and
+	// re-syncing is cheap, but its play stats must stop counting here.
+	const mediaServers = await db.select().from(mediaBrowserServers);
+	const enabledServerIds = mediaServers.filter((s) => s.enabled).map((s) => s.id);
+
 	const [libraryRows, rootFolderRows, movieRows, seriesRows, efRows, playStatsRows] =
 		await Promise.all([
 			db.select().from(libraries),
@@ -126,7 +132,12 @@ export const load: PageServerLoad = async ({ url, parent }) => {
 					playedPercentage: sql<number | null>`MAX(${mediaServerSyncedItems.playedPercentage})`
 				})
 				.from(mediaServerSyncedItems)
-				.where(sql`${mediaServerSyncedItems.tmdbId} IS NOT NULL`)
+				.where(
+					and(
+						sql`${mediaServerSyncedItems.tmdbId} IS NOT NULL`,
+						inArray(mediaServerSyncedItems.serverId, enabledServerIds)
+					)
+				)
 				.groupBy(mediaServerSyncedItems.tmdbId)
 		]);
 
