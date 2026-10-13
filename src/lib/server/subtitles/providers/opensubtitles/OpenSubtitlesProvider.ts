@@ -40,6 +40,24 @@ import {
 const API_BASE_URL = 'https://api.opensubtitles.com/api/v1';
 const DEFAULT_USER_AGENT = 'Cinephage v1.0';
 
+/**
+ * Normalize the `base_url` returned by POST /login. For VIP accounts the API
+ * redirects clients to a dedicated host, but returns it as a bare hostname
+ * (e.g. "vip-api.opensubtitles.com") rather than a full URL - no scheme, no
+ * /api/v1 path. Used as-is, that breaks every subsequent request ("Failed to
+ * parse URL from vip-api.opensubtitles.com/...").
+ */
+function normalizeApiBaseUrl(rawBaseUrl: string): string {
+	let url = rawBaseUrl.trim().replace(/\/+$/, '');
+	if (!/^https?:\/\//i.test(url)) {
+		url = `https://${url}`;
+	}
+	if (!url.endsWith('/api/v1')) {
+		url = `${url}/api/v1`;
+	}
+	return url;
+}
+
 export class OpenSubtitlesProvider extends BaseSubtitleProvider {
 	// Parses hearing_impaired and moviehash_match per result.
 	protected override _capabilities: ProviderCapabilities = {
@@ -281,7 +299,7 @@ export class OpenSubtitlesProvider extends BaseSubtitleProvider {
 
 			const data: OpenSubtitlesAuthResponse = await response.json();
 			this.token = data.token;
-			this.baseUrl = data.base_url || API_BASE_URL;
+			this.baseUrl = data.base_url ? normalizeApiBaseUrl(data.base_url) : API_BASE_URL;
 			// Token is valid for 24 hours, refresh at 23 hours
 			this.tokenExpiry = new Date(Date.now() + 23 * 60 * 60 * 1000);
 

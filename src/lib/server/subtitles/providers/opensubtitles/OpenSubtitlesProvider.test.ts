@@ -193,6 +193,40 @@ describe('OpenSubtitlesProvider - authentication (Bug #180)', () => {
 		expect(downloadCall!.headers['Authorization']).toBe('Bearer jwt-token-456');
 	});
 
+	it('normalizes a VIP base_url returned as a bare hostname', async () => {
+		// OpenSubtitles.com returns base_url as a bare hostname for VIP
+		// accounts (e.g. "vip-api.opensubtitles.com") instead of a full URL -
+		// no scheme, no /api/v1 path. Used as-is this breaks every request
+		// after login with "Failed to parse URL from vip-api.opensubtitles.com/...".
+		const config = makeConfig({ username: 'vip-user', password: 'pass' });
+		const provider = new OpenSubtitlesProvider(config);
+
+		const fetchCalls: { url: string }[] = [];
+
+		vi.spyOn(provider, 'fetchWithTimeout').mockImplementation(async (url: string) => {
+			fetchCalls.push({ url });
+
+			if (url.includes('/login')) {
+				return {
+					ok: true,
+					json: async () => ({
+						token: 'vip-token',
+						base_url: 'vip-api.opensubtitles.com',
+						user: { allowed_downloads: 1000, vip: true }
+					})
+				} as Response;
+			}
+
+			return { ok: true, json: async () => SEARCH_RESPONSE } as Response;
+		});
+
+		await provider.search({ title: 'Inception', year: 2010, languages: ['en'] });
+
+		const searchCall = fetchCalls.find((c) => c.url.includes('query='));
+		expect(searchCall).toBeDefined();
+		expect(searchCall!.url.startsWith('https://vip-api.opensubtitles.com/api/v1/')).toBe(true);
+	});
+
 	it('should cache token and not re-authenticate on repeated calls', async () => {
 		const config = makeConfig({ username: 'user', password: 'pass' });
 		const provider = new OpenSubtitlesProvider(config);
