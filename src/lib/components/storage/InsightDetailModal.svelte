@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { AlertTriangle, X, File, Folder, Film, Monitor, Tv, Info, Search } from '@lucide/svelte';
 	import { ModalWrapper } from '#lib/components/ui/modal/index.js';
 	import * as m from '#lib/paraglide/messages.js';
@@ -91,7 +92,12 @@
 			page = 1;
 			expandedItemId = null;
 			expandedGroupKey = null;
-			fetchItems();
+			// fetchItems() reads `page` before its first await, so a tracked
+			// call here makes THIS effect re-run on every page change (it
+			// reads `page` as a dependency) - immediately resetting back to
+			// page 1 right after Prev/Next sets it. untrack() keeps this
+			// effect scoped to "insight changed", not "page changed".
+			untrack(() => fetchItems());
 		}
 	});
 
