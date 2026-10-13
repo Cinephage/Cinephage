@@ -29,6 +29,7 @@ import {
 	user
 } from '#lib/server/db/schema.js';
 import { RootFolderConflictError } from '#lib/errors/index.js';
+import { setSidecarSettings } from '#lib/server/library/sidecar/sidecarSettings.js';
 
 const mocks = vi.hoisted(() => ({
 	getTVShow: vi.fn(),
@@ -46,8 +47,14 @@ const mocks = vi.hoisted(() => ({
 	previewSeries: vi.fn(),
 	executeRenames: vi.fn(),
 	getClientInstance: vi.fn(),
-	cancelByQueueId: vi.fn()
+	cancelByQueueId: vi.fn(),
+	writeFile: vi.fn()
 }));
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('node:fs/promises')>();
+	return { ...actual, writeFile: mocks.writeFile };
+});
 
 vi.mock('#lib/server/library/naming/RenamePreviewService.js', () => ({
 	RenamePreviewService: class {
@@ -231,6 +238,10 @@ beforeEach(() => {
 		results: [],
 		warnings: []
 	});
+	mocks.writeFile.mockResolvedValue(undefined);
+	// The settings table isn't cleared by clearTestDb - reset explicitly so a
+	// sidecar-enabling test doesn't leak into the next one.
+	setSidecarSettings({ enabled: false });
 });
 
 describe('MediaMatcherService acceptMatch root folder conflict guard (bug #488)', () => {
@@ -443,6 +454,101 @@ describe('MediaMatcherService acceptMatch root folder conflict guard (bug #488)'
 			.from(episodes)
 			.where(and(eq(episodes.seriesId, created.id), eq(episodes.episodeNumber, 1)));
 		expect(epRows).toHaveLength(1);
+	});
+});
+
+describe('sidecar files on manual match', () => {
+	// Artwork download is skipped in these tests
+	// (includeArtwork: false) to keep them network-free.
+	it('writes a movie .nfo when a manual match completes and sidecars are enabled', async () => {
+		setSidecarSettings({ enabled: true, includeArtwork: false });
+
+		await insertRootFolder('rf-m', '/mnt/movies-m', 'movie');
+		await insertUnmatchedFile({
+			id: 'uf-sidecar-movie',
+			path: '/mnt/movies-m/Movie (2010)/movie.mkv',
+			rootFolderId: 'rf-m',
+			mediaType: 'movie'
+		});
+		mocks.getMovie.mockResolvedValue({
+			id: 3001,
+			title: 'Movie (2010)',
+			release_date: '2010-05-01'
+		});
+
+		await mediaMatcherService.acceptMatch('uf-sidecar-movie', 3001, 'movie');
+
+		const nfoCall = mocks.writeFile.mock.calls.find((call) =>
+			String(call[0]).endsWith('movie.nfo')
+		);
+		expect(nfoCall).toBeDefined();
+		expect(nfoCall![0]).toBe('/mnt/movies-m/Movie (2010)/movie.nfo');
+		expect(String(nfoCall![1])).toContain('<title>Movie (2010)</title>');
+	});
+
+	it('does not write a .nfo when sidecars are disabled', async () => {
+		setSidecarSettings({ enabled: false });
+
+		await insertRootFolder('rf-m2', '/mnt/movies-m2', 'movie');
+		await insertUnmatchedFile({
+			id: 'uf-sidecar-movie-off',
+			path: '/mnt/movies-m2/Movie (2011)/movie.mkv',
+			rootFolderId: 'rf-m2',
+			mediaType: 'movie'
+		});
+		mocks.getMovie.mockResolvedValue({
+			id: 3002,
+			title: 'Movie (2011)',
+			release_date: '2011-05-01'
+		});
+
+		await mediaMatcherService.acceptMatch('uf-sidecar-movie-off', 3002, 'movie');
+
+		expect(mocks.writeFile).not.toHaveBeenCalled();
+	});
+
+	it('writes episode and tvshow .nfo files when a manual TV match completes', async () => {
+		setSidecarSettings({ enabled: true, includeArtwork: false });
+
+		await insertRootFolder('rf-t', '/mnt/tv-t', 'tv');
+		await insertUnmatchedFile({
+			id: 'uf-sidecar-tv',
+			path: '/mnt/tv-t/Show (2021)/Season 1/ep1.mkv',
+			rootFolderId: 'rf-t',
+			mediaType: 'tv',
+			parsedSeason: 1,
+			parsedEpisode: 1
+		});
+		mocks.getTVShow.mockResolvedValue({
+			id: 4001,
+			name: 'Show (2021)',
+			first_air_date: '2021-01-01',
+			seasons: [{ season_number: 1, name: 'Season 1', episode_count: 1 }]
+		});
+		mocks.getSeason.mockResolvedValue({
+			episodes: [
+				{
+					id: 111,
+					season_number: 1,
+					episode_number: 1,
+					name: 'Pilot',
+					overview: '',
+					air_date: '2021-01-01',
+					runtime: 45
+				}
+			]
+		});
+
+		await mediaMatcherService.acceptMatch('uf-sidecar-tv', 4001, 'tv');
+
+		const writtenPaths = mocks.writeFile.mock.calls.map((call) => String(call[0]));
+		expect(writtenPaths).toContain('/mnt/tv-t/Show (2021)/Season 1/ep1.nfo');
+		expect(writtenPaths).toContain('/mnt/tv-t/Show (2021)/tvshow.nfo');
+
+		const episodeNfoCall = mocks.writeFile.mock.calls.find(
+			(call) => String(call[0]) === '/mnt/tv-t/Show (2021)/Season 1/ep1.nfo'
+		);
+		expect(String(episodeNfoCall![1])).toContain('<showtitle>Show (2021)</showtitle>');
 	});
 });
 
