@@ -368,9 +368,44 @@
 {/if}
 
 <!-- MAIN BODY: Lists + Insights sidebar -->
-<div class="mt-4 grid gap-4 lg:grid-cols-3">
-	<!-- LEFT (2/3): Top Played + Largest Files -->
-	<div class="space-y-4 lg:col-span-2">
+<div
+	class="mt-4 grid gap-4 lg:grid-cols-3 lg:[grid-template-areas:'main_main_insights'_'main_main_disk']"
+>
+	<!-- Priority Insights: first in DOM so it leads on mobile (stacked, single
+	column); grid-area placement overrides this back to the sidebar on lg+. -->
+	<div class="space-y-2 lg:[grid-area:insights]">
+		<h3 class="text-sm font-semibold text-base-content/70">Priority Insights</h3>
+		{#if topInsights.length === 0}
+			<div
+				class="flex items-center gap-2 rounded-lg border border-success/20 bg-success/5 p-3 text-sm text-base-content/60"
+			>
+				<CheckCircle class="h-4 w-4 shrink-0 text-success" />
+				<span>Everything looks healthy</span>
+			</div>
+		{:else}
+			{#each topInsights as insight (insight.id)}
+				<button
+					type="button"
+					onclick={() => onOpenInsight?.(insight)}
+					class="flex w-full items-center gap-2.5 rounded-lg border border-base-300 bg-base-200/50 p-2.5 text-left transition-colors hover:bg-base-300/50"
+				>
+					<span
+						class={`inline-block h-2 w-2 shrink-0 rounded-full ${severityDot(insight.severity)}`}
+					></span>
+					<span class="min-w-0 flex-1 truncate text-sm text-base-content">{insight.title}</span>
+					{#if insight.itemCount > 1}
+						<span class="shrink-0 text-xs font-medium text-base-content/50"
+							>{insight.itemCount}</span
+						>
+					{/if}
+					<ChevronRight class="h-3.5 w-3.5 shrink-0 text-base-content/30" />
+				</button>
+			{/each}
+		{/if}
+	</div>
+
+	<!-- Most Played + Largest Files -->
+	<div class="space-y-4 lg:[grid-area:main]">
 		<!-- Top Played Items -->
 		{#if topItems.length > 0}
 			<div class="card bg-base-200">
@@ -434,92 +469,57 @@
 		</div>
 	</div>
 
-	<!-- RIGHT (1/3): Priority Insights + Per-Folder Disk -->
-	<div class="space-y-4">
-		<!-- Priority Insights -->
-		<div class="space-y-2">
-			<h3 class="text-sm font-semibold text-base-content/70">Priority Insights</h3>
-			{#if topInsights.length === 0}
-				<div
-					class="flex items-center gap-2 rounded-lg border border-success/20 bg-success/5 p-3 text-sm text-base-content/60"
-				>
-					<CheckCircle class="h-4 w-4 shrink-0 text-success" />
-					<span>Everything looks healthy</span>
-				</div>
-			{:else}
-				{#each topInsights as insight (insight.id)}
-					<button
-						type="button"
-						onclick={() => onOpenInsight?.(insight)}
-						class="flex w-full items-center gap-2.5 rounded-lg border border-base-300 bg-base-200/50 p-2.5 text-left transition-colors hover:bg-base-300/50"
-					>
-						<span
-							class={`inline-block h-2 w-2 shrink-0 rounded-full ${severityDot(insight.severity)}`}
-						></span>
-						<span class="min-w-0 flex-1 truncate text-sm text-base-content">{insight.title}</span>
-						{#if insight.itemCount > 1}
-							<span class="shrink-0 text-xs font-medium text-base-content/50"
-								>{insight.itemCount}</span
-							>
-						{/if}
-						<ChevronRight class="h-3.5 w-3.5 shrink-0 text-base-content/30" />
-					</button>
-				{/each}
-			{/if}
-		</div>
-
-		<!-- Per-Folder Disk Usage -->
-		{#if rootFolderBreakdown.length > 0}
-			<div class="space-y-2">
-				<h3 class="text-sm font-semibold text-base-content/70">Disk Usage</h3>
-				<div class="card space-y-3 bg-base-200 p-3">
-					{#each rootFolderBreakdown as folder (folder.id)}
-						<!-- usedBytes is a real per-folder SUM(file sizes) (same source
-						RootFolderOverview.svelte uses) - totalSpaceBytes/freeSpaceBytes
-						are disk-level statfs() stats that were never wired up to refresh
-						after folder creation, so using them here as "used" showed stale,
-						identical-across-folders numbers. -->
-						{@const total = folder.usedBytes + (folder.freeSpaceBytes ?? 0)}
-						<div>
-							<div class="mb-1 flex items-center justify-between text-xs">
-								<span class="truncate text-base-content/70">{folder.name}</span>
-								<span class="shrink-0 text-base-content/50">
-									{total > 0 ? `${Math.round((folder.usedBytes / total) * 100)}%` : '?'}
-								</span>
-							</div>
-							{#if folder.freeSpaceBytes !== null && folder.freeSpaceBytes !== undefined && total > 0}
-								<div class="flex h-2 overflow-hidden rounded-full bg-base-300/60">
-									<div
-										class="h-full bg-primary"
-										style="width: {(folder.usedBytes / total) * 100}%"
-										title={`Used: ${formatBytes(folder.usedBytes)}`}
-										role="img"
-										aria-label={`${folder.name}: ${formatBytes(folder.usedBytes)} used of ${formatBytes(total)}`}
-									></div>
-									<div
-										class="h-full bg-success/30"
-										style="width: {(folder.freeSpaceBytes / total) * 100}%"
-										title={`Free: ${formatBytes(folder.freeSpaceBytes)}`}
-										role="img"
-										aria-label={`${formatBytes(folder.freeSpaceBytes)} free`}
-									></div>
-								</div>
-								<div class="mt-0.5 flex justify-between text-xs text-base-content/40">
-									<span>{formatBytes(folder.usedBytes)} used</span>
-									<span>{formatBytes(folder.freeSpaceBytes)} free</span>
-								</div>
-							{:else}
-								<div class="flex h-2 items-center rounded-full bg-base-300/40">
-									<span class="w-full text-center text-xs text-base-content/30">No disk data</span>
-								</div>
-							{/if}
+	<!-- Per-Folder Disk Usage -->
+	{#if rootFolderBreakdown.length > 0}
+		<div class="space-y-2 lg:[grid-area:disk]">
+			<h3 class="text-sm font-semibold text-base-content/70">Disk Usage</h3>
+			<div class="card space-y-3 bg-base-200 p-3">
+				{#each rootFolderBreakdown as folder (folder.id)}
+					<!-- usedBytes is a real per-folder SUM(file sizes) (same source
+					RootFolderOverview.svelte uses) - totalSpaceBytes/freeSpaceBytes
+					are disk-level statfs() stats that were never wired up to refresh
+					after folder creation, so using them here as "used" showed stale,
+					identical-across-folders numbers. -->
+					{@const total = folder.usedBytes + (folder.freeSpaceBytes ?? 0)}
+					<div>
+						<div class="mb-1 flex items-center justify-between gap-2 text-xs">
+							<span class="min-w-0 flex-1 truncate text-base-content/70">{folder.name}</span>
+							<span class="shrink-0 text-base-content/50">
+								{total > 0 ? `${Math.round((folder.usedBytes / total) * 100)}%` : '?'}
+							</span>
 						</div>
-					{/each}
-				</div>
-				<a href={`${baseUrl}/folders`} class="btn w-full gap-1 btn-ghost btn-xs">
-					Manage folders <ChevronRight class="h-3 w-3" />
-				</a>
+						{#if folder.freeSpaceBytes !== null && folder.freeSpaceBytes !== undefined && total > 0}
+							<div class="flex h-2 overflow-hidden rounded-full bg-base-300/60">
+								<div
+									class="h-full bg-primary"
+									style="width: {(folder.usedBytes / total) * 100}%"
+									title={`Used: ${formatBytes(folder.usedBytes)}`}
+									role="img"
+									aria-label={`${folder.name}: ${formatBytes(folder.usedBytes)} used of ${formatBytes(total)}`}
+								></div>
+								<div
+									class="h-full bg-success/30"
+									style="width: {(folder.freeSpaceBytes / total) * 100}%"
+									title={`Free: ${formatBytes(folder.freeSpaceBytes)}`}
+									role="img"
+									aria-label={`${formatBytes(folder.freeSpaceBytes)} free`}
+								></div>
+							</div>
+							<div class="mt-0.5 flex justify-between text-xs text-base-content/40">
+								<span>{formatBytes(folder.usedBytes)} used</span>
+								<span>{formatBytes(folder.freeSpaceBytes)} free</span>
+							</div>
+						{:else}
+							<div class="flex h-2 items-center rounded-full bg-base-300/40">
+								<span class="w-full text-center text-xs text-base-content/30">No disk data</span>
+							</div>
+						{/if}
+					</div>
+				{/each}
 			</div>
-		{/if}
-	</div>
+			<a href={`${baseUrl}/folders`} class="btn w-full gap-1 btn-ghost btn-xs">
+				Manage folders <ChevronRight class="h-3 w-3" />
+			</a>
+		</div>
+	{/if}
 </div>
