@@ -688,6 +688,22 @@ describe('ReleaseParser', () => {
 			expect(extractResolution('SD')?.resolution).toBe('480p');
 		});
 
+		it('should prefer an explicit resolution over a UHD/4K marketing alias in the same title', () => {
+			// A 1080p encode sourced from UHD/4K media - the title states
+			// both, but the explicit "1080p" is what the release actually is.
+			expect(
+				extractResolution('A Bronx Tale 1993 1080p UHD BluRay FLAC 2.0 DV HDR x265-PTer')
+					?.resolution
+			).toBe('1080p');
+			expect(extractResolution('Movie.2021.720p.UHD.BluRay.x264-GROUP')?.resolution).toBe('720p');
+			expect(extractResolution('Movie.2021.4K.1080p.BluRay.x264-GROUP')?.resolution).toBe('1080p');
+
+			// Alias-only titles (no explicit numeric resolution) must still
+			// resolve to 2160p.
+			expect(extractResolution('Movie 2021 UHD BluRay REMUX')?.resolution).toBe('2160p');
+			expect(extractResolution('Movie 2021 4K BluRay REMUX')?.resolution).toBe('2160p');
+		});
+
 		it('should detect all source variants', () => {
 			expect(extractSource('REMUX')?.source).toBe('remux');
 			expect(extractSource('BluRay')?.source).toBe('bluray');
