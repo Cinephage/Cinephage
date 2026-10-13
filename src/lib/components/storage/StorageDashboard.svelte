@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { SvelteSet } from 'svelte/reactivity';
 	import {
 		HardDrive,
 		ShieldCheck,
@@ -8,6 +9,7 @@
 		RefreshCw,
 		CheckCircle,
 		ChevronRight,
+		ChevronDown,
 		TrendingUp,
 		Database
 	} from '@lucide/svelte';
@@ -155,6 +157,56 @@
 
 	function mediaTitle(item: MediaListItem): string {
 		return item.seriesName ?? item.title;
+	}
+
+	// Long titles are truncated with an ellipsis by default (keeps rows
+	// aligned), but truncation alone can hide which title a row actually is.
+	// Clicking a title toggles it to wrap and show the full text instead.
+	// Keyed per-list so the same index in Most Played and Largest Files
+	// expand independently.
+	const expandedTopTitles = new SvelteSet<number>();
+	const expandedLargestTitles = new SvelteSet<number>();
+
+	function toggleExpanded(set: SvelteSet<number>, index: number): void {
+		if (set.has(index)) {
+			set.delete(index);
+		} else {
+			set.add(index);
+		}
+	}
+
+	// Whether a title is actually clipped by `truncate` can only be known by
+	// measuring the rendered DOM (scrollWidth vs clientWidth) - CSS alone
+	// can't tell us this. Used to only show the click-to-expand affordance
+	// (pointer cursor + chevron) on rows that are genuinely cut off, so a
+	// short title that already fits doesn't look clickable for no reason.
+	const truncatedTopTitles = new SvelteSet<number>();
+	const truncatedLargestTitles = new SvelteSet<number>();
+
+	function watchTruncation(
+		node: HTMLElement,
+		params: { expanded: boolean; onChange: (truncated: boolean) => void }
+	) {
+		function measure() {
+			// Can't measure overflow while wrapped (expanded) - the text no
+			// longer clips, so scrollWidth never exceeds clientWidth. Keep
+			// whatever truncation state was last measured while collapsed.
+			if (params.expanded) return;
+			params.onChange(node.scrollWidth > node.clientWidth + 1);
+		}
+		const resizeObserver = new ResizeObserver(measure);
+		resizeObserver.observe(node);
+		// Layout isn't settled until after the initial paint.
+		requestAnimationFrame(measure);
+		return {
+			update(newParams: typeof params) {
+				params = newParams;
+				measure();
+			},
+			destroy() {
+				resizeObserver.disconnect();
+			}
+		};
 	}
 
 	const baseUrl = '/settings/monitoring/status';
@@ -372,8 +424,11 @@
 	class="mt-4 grid gap-4 lg:grid-cols-3 lg:[grid-template-areas:'main_main_insights'_'main_main_disk']"
 >
 	<!-- Priority Insights: first in DOM so it leads on mobile (stacked, single
-	column); grid-area placement overrides this back to the sidebar on lg+. -->
-	<div class="space-y-2 lg:[grid-area:insights]">
+	column); grid-area placement overrides this back to the sidebar on lg+.
+	min-w-0 overrides the grid item's default min-width:auto, which otherwise
+	lets a long nowrap string deep inside (e.g. a long media title) force this
+	whole column wider than the viewport instead of letting truncate clip it. -->
+	<div class="min-w-0 space-y-2 lg:[grid-area:insights]">
 		<h3 class="text-sm font-semibold text-base-content/70">Priority Insights</h3>
 		{#if topInsights.length === 0}
 			<div
@@ -405,7 +460,7 @@
 	</div>
 
 	<!-- Most Played + Largest Files -->
-	<div class="space-y-4 lg:[grid-area:main]">
+	<div class="min-w-0 space-y-4 lg:[grid-area:main]">
 		<!-- Top Played Items -->
 		{#if topItems.length > 0}
 			<div class="card bg-base-200">
@@ -415,12 +470,60 @@
 				</div>
 				<div class="divide-y divide-base-300">
 					{#each topItems as item, i (i)}
+						{@const isExpanded = expandedTopTitles.has(i)}
+						{@const isTruncated = truncatedTopTitles.has(i)}
 						<div class="flex items-center gap-3 p-2.5">
 							<span class="w-5 shrink-0 text-center text-sm font-bold text-base-content/30"
 								>{i + 1}</span
 							>
 							<div class="min-w-0 flex-1">
-								<div class="truncate text-sm font-medium text-base-content">{mediaTitle(item)}</div>
+								<div class="flex items-center gap-1">
+									{#if isTruncated}
+										<div
+											role="button"
+											tabindex="0"
+											use:watchTruncation={{
+												expanded: isExpanded,
+												onChange: (t) => {
+													if (t) truncatedTopTitles.add(i);
+													else truncatedTopTitles.delete(i);
+												}
+											}}
+											class="min-w-0 flex-1 cursor-pointer text-sm font-medium text-base-content {isExpanded
+												? 'wrap-break-word'
+												: 'truncate'}"
+											onclick={() => toggleExpanded(expandedTopTitles, i)}
+											onkeydown={(e) => {
+												if (e.key === 'Enter' || e.key === ' ') {
+													e.preventDefault();
+													toggleExpanded(expandedTopTitles, i);
+												}
+											}}
+											aria-expanded={isExpanded}
+											title={isExpanded ? 'Click to collapse' : 'Click to show full title'}
+										>
+											{mediaTitle(item)}
+										</div>
+										<ChevronDown
+											class="h-3 w-3 shrink-0 text-base-content/40 transition-transform {isExpanded
+												? 'rotate-180'
+												: ''}"
+										/>
+									{:else}
+										<div
+											use:watchTruncation={{
+												expanded: isExpanded,
+												onChange: (t) => {
+													if (t) truncatedTopTitles.add(i);
+													else truncatedTopTitles.delete(i);
+												}
+											}}
+											class="min-w-0 flex-1 truncate text-sm font-medium text-base-content"
+										>
+											{mediaTitle(item)}
+										</div>
+									{/if}
+								</div>
 								<div class="text-xs text-base-content/50">
 									{item.playCount} play{item.playCount === 1 ? '' : 's'}
 								</div>
@@ -441,12 +544,60 @@
 				</div>
 				<div class="divide-y divide-base-300">
 					{#each largestItems as item, i (i)}
+						{@const isExpanded = expandedLargestTitles.has(i)}
+						{@const isTruncated = truncatedLargestTitles.has(i)}
 						<div class="flex items-center gap-3 p-2.5">
 							<span class="w-5 shrink-0 text-center text-sm font-bold text-base-content/30"
 								>{i + 1}</span
 							>
 							<div class="min-w-0 flex-1">
-								<div class="truncate text-sm font-medium text-base-content">{mediaTitle(item)}</div>
+								<div class="flex items-center gap-1">
+									{#if isTruncated}
+										<div
+											role="button"
+											tabindex="0"
+											use:watchTruncation={{
+												expanded: isExpanded,
+												onChange: (t) => {
+													if (t) truncatedLargestTitles.add(i);
+													else truncatedLargestTitles.delete(i);
+												}
+											}}
+											class="min-w-0 flex-1 cursor-pointer text-sm font-medium text-base-content {isExpanded
+												? 'wrap-break-word'
+												: 'truncate'}"
+											onclick={() => toggleExpanded(expandedLargestTitles, i)}
+											onkeydown={(e) => {
+												if (e.key === 'Enter' || e.key === ' ') {
+													e.preventDefault();
+													toggleExpanded(expandedLargestTitles, i);
+												}
+											}}
+											aria-expanded={isExpanded}
+											title={isExpanded ? 'Click to collapse' : 'Click to show full title'}
+										>
+											{mediaTitle(item)}
+										</div>
+										<ChevronDown
+											class="h-3 w-3 shrink-0 text-base-content/40 transition-transform {isExpanded
+												? 'rotate-180'
+												: ''}"
+										/>
+									{:else}
+										<div
+											use:watchTruncation={{
+												expanded: isExpanded,
+												onChange: (t) => {
+													if (t) truncatedLargestTitles.add(i);
+													else truncatedLargestTitles.delete(i);
+												}
+											}}
+											class="min-w-0 flex-1 truncate text-sm font-medium text-base-content"
+										>
+											{mediaTitle(item)}
+										</div>
+									{/if}
+								</div>
 								<div class="text-xs text-base-content/50">
 									{item.videoCodec?.toUpperCase() ?? '?'} &middot; {heightToRes(item.height)}
 								</div>
@@ -471,7 +622,7 @@
 
 	<!-- Per-Folder Disk Usage -->
 	{#if rootFolderBreakdown.length > 0}
-		<div class="space-y-2 lg:[grid-area:disk]">
+		<div class="min-w-0 space-y-2 lg:[grid-area:disk]">
 			<h3 class="text-sm font-semibold text-base-content/70">Disk Usage</h3>
 			<div class="card space-y-3 bg-base-200 p-3">
 				{#each rootFolderBreakdown as folder (folder.id)}
