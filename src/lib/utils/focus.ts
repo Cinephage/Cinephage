@@ -87,21 +87,46 @@ export function createFocusTrap(container: HTMLElement): () => void {
  * Uses overflow:hidden on <html> rather than position:fixed on <body> so that
  * DaisyUI drawer-side's position:sticky keeps its scroll reference and the
  * sidebar does not jump to the top when the modal opens.
+ *
+ * Reference-counted: when two modals are stacked (e.g. a list modal handing
+ * off to a detail modal in the same reactive flush), each one's ModalWrapper
+ * calls this independently. A plain "snapshot original style, then restore
+ * it" implementation breaks here - whichever call runs second captures
+ * 'hidden' (set by the first) as its "original" value, so unlocking it
+ * restores to 'hidden' instead of the page's real default, leaving the page
+ * permanently unscrollable until a hard refresh. The counter ensures only
+ * the first lock call captures the true original style and only the last
+ * unlock call restores it.
  */
+let lockCount = 0;
+let originalOverflow = '';
+let originalPaddingRight = '';
+
 export function lockBodyScroll(): () => void {
 	const html = document.documentElement;
-	const scrollbarWidth = window.innerWidth - html.clientWidth;
-	const originalOverflow = html.style.overflow;
-	const originalPaddingRight = html.style.paddingRight;
 
-	html.style.overflow = 'hidden';
-	// Compensate for scrollbar disappearance to prevent layout shift
-	if (scrollbarWidth > 0) {
-		html.style.paddingRight = `${scrollbarWidth}px`;
+	if (lockCount === 0) {
+		const scrollbarWidth = window.innerWidth - html.clientWidth;
+		originalOverflow = html.style.overflow;
+		originalPaddingRight = html.style.paddingRight;
+
+		html.style.overflow = 'hidden';
+		// Compensate for scrollbar disappearance to prevent layout shift
+		if (scrollbarWidth > 0) {
+			html.style.paddingRight = `${scrollbarWidth}px`;
+		}
 	}
+	lockCount++;
 
+	let released = false;
 	return () => {
-		html.style.overflow = originalOverflow;
-		html.style.paddingRight = originalPaddingRight;
+		if (released) return;
+		released = true;
+		lockCount--;
+		if (lockCount <= 0) {
+			lockCount = 0;
+			html.style.overflow = originalOverflow;
+			html.style.paddingRight = originalPaddingRight;
+		}
 	};
 }

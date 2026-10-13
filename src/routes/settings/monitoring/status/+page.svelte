@@ -377,6 +377,6 @@
 <InsightDetailModal
 	open={selectedInsight !== null}
 	insight={selectedInsight}
-	onClose={() => (selectedInsight = null)}
+	onClose={closeInsightsModal}
 	onDismissed={() => void refreshAll()}
 />
