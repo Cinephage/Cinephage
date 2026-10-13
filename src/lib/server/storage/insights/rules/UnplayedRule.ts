@@ -1,4 +1,4 @@
-import { and, count, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
 	mediaBrowserServers,
 	mediaServerSyncedItems,
@@ -20,13 +20,17 @@ export class UnplayedRule implements StorageInsightRule {
 	readonly type = 'unplayed' as const;
 
 	async evaluate(ctx: RuleContext): Promise<InsightFinding[]> {
-		const serverCount =
-			ctx.db
-				.select({ count: count() })
-				.from(mediaBrowserServers)
-				.where(eq(mediaBrowserServers.enabled, true))
-				.get()?.count ?? 0;
-		if (serverCount === 0) return [];
+		// A disabled server's synced data is kept (not deleted) so re-enabling
+		// and re-syncing is cheap, but its play stats must stop counting here -
+		// an item that's only "played" according to a now-disabled server
+		// should still be flagged as unplayed.
+		const enabledServerIds = ctx.db
+			.select({ id: mediaBrowserServers.id })
+			.from(mediaBrowserServers)
+			.where(eq(mediaBrowserServers.enabled, true))
+			.all()
+			.map((r) => r.id);
+		if (enabledServerIds.length === 0) return [];
 
 		const thresholdDate = new Date(ctx.now);
 		thresholdDate.setDate(thresholdDate.getDate() - UNPLAYED_THRESHOLD_DAYS);
@@ -48,7 +52,12 @@ export class UnplayedRule implements StorageInsightRule {
 				mediaServerSyncedItems,
 				sql`${storageItemServerLinks.syncedItemId} = ${mediaServerSyncedItems.id}`
 			)
-			.where(sql`${storageItems.firstSeenAt} < ${thresholdIso}`)
+			.where(
+				and(
+					sql`${storageItems.firstSeenAt} < ${thresholdIso}`,
+					inArray(mediaServerSyncedItems.serverId, enabledServerIds)
+				)
+			)
 			.groupBy(storageItems.id)
 			.having(
 				and(

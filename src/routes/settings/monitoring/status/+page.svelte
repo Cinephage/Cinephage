@@ -157,11 +157,13 @@
 				{/if}
 			</button>
 			{#if data.servers?.length > 0}
+				{@const enabledServerCount = data.servers.filter((s) => s.enabled).length}
 				<button
 					type="button"
 					class="btn gap-2 btn-outline btn-sm"
 					onclick={() => void triggerServerSync()}
-					disabled={isSyncing}
+					disabled={isSyncing || enabledServerCount === 0}
+					title={enabledServerCount === 0 ? 'No enabled media servers to sync' : undefined}
 				>
 					<RefreshCw class="h-4 w-4 {isSyncing ? 'animate-spin' : ''}" />
 					{isSyncing ? 'Syncing...' : 'Sync Servers'}

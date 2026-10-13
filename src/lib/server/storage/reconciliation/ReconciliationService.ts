@@ -6,6 +6,7 @@ import { db } from '#lib/server/db/index.js';
 import {
 	episodeFiles,
 	episodes,
+	mediaBrowserServers,
 	mediaServerSyncedItems,
 	movies,
 	movieFiles,
@@ -691,6 +692,28 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 				}
 			}
 
+			// Drop any storage_item_server_links left over from a server that's
+			// since been disabled. The "Upsert server links" loop above only
+			// inserts/updates links for servers the (enabled-filtered) loaders
+			// above returned - it never deletes a link whose server dropped out,
+			// so without this a disabled server's links would linger as orphans
+			// and keep being counted by anything that joins through them
+			// (e.g. UnplayedRule's play-count aggregation).
+			const disabledServerRows = await db
+				.select({ id: mediaBrowserServers.id })
+				.from(mediaBrowserServers)
+				.where(eq(mediaBrowserServers.enabled, false));
+			if (disabledServerRows.length > 0) {
+				db.delete(storageItemServerLinks)
+					.where(
+						inArray(
+							storageItemServerLinks.serverId,
+							disabledServerRows.map((r) => r.id)
+						)
+					)
+					.run();
+			}
+
 			const result: ReconcileResult = {
 				itemsUpserted: itemsInserted + itemsUpdated,
 				itemsInserted,
@@ -877,11 +900,33 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 		return [...movieRows, ...epRows];
 	}
 
+	/**
+	 * A disabled media server's synced data is kept (not deleted) so
+	 * re-enabling and re-syncing is cheap, but it must stop counting toward
+	 * Storage Maintenance while disabled. Every loader below scopes to this
+	 * set so a disabled server's rows are invisible to reconciliation without
+	 * touching the underlying media_server_synced_items rows at all.
+	 */
+	private async getEnabledServerIds(): Promise<string[]> {
+		const rows = await db
+			.select({ id: mediaBrowserServers.id })
+			.from(mediaBrowserServers)
+			.where(eq(mediaBrowserServers.enabled, true));
+		return rows.map((r) => r.id);
+	}
+
 	private async loadServerItems(): Promise<Array<typeof mediaServerSyncedItems.$inferSelect>> {
+		const enabledServerIds = await this.getEnabledServerIds();
+		if (enabledServerIds.length === 0) return [];
 		return db
 			.select()
 			.from(mediaServerSyncedItems)
-			.where(sql`${mediaServerSyncedItems.tmdbId} IS NOT NULL`);
+			.where(
+				and(
+					sql`${mediaServerSyncedItems.tmdbId} IS NOT NULL`,
+					inArray(mediaServerSyncedItems.serverId, enabledServerIds)
+				)
+			);
 	}
 
 	/**
@@ -894,11 +939,16 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 	private async loadUnmatchedServerMovieItems(): Promise<
 		Array<typeof mediaServerSyncedItems.$inferSelect>
 	> {
+		const enabledServerIds = await this.getEnabledServerIds();
+		if (enabledServerIds.length === 0) return [];
 		return db
 			.select()
 			.from(mediaServerSyncedItems)
 			.where(
-				sql`${mediaServerSyncedItems.itemType} = 'movie' AND ${mediaServerSyncedItems.tmdbId} IS NULL AND ${mediaServerSyncedItems.imdbId} IS NOT NULL`
+				and(
+					sql`${mediaServerSyncedItems.itemType} = 'movie' AND ${mediaServerSyncedItems.tmdbId} IS NULL AND ${mediaServerSyncedItems.imdbId} IS NOT NULL`,
+					inArray(mediaServerSyncedItems.serverId, enabledServerIds)
+				)
 			);
 	}
 
@@ -906,13 +956,20 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 		tmdbIds: number[]
 	): Promise<Array<typeof mediaServerSyncedItems.$inferSelect>> {
 		if (tmdbIds.length === 0) return [];
+		const enabledServerIds = await this.getEnabledServerIds();
+		if (enabledServerIds.length === 0) return [];
 		const results: Array<typeof mediaServerSyncedItems.$inferSelect> = [];
 		for (let i = 0; i < tmdbIds.length; i += CHUNK_SIZE) {
 			const batch = tmdbIds.slice(i, i + CHUNK_SIZE);
 			const rows = await db
 				.select()
 				.from(mediaServerSyncedItems)
-				.where(inArray(mediaServerSyncedItems.tmdbId, batch));
+				.where(
+					and(
+						inArray(mediaServerSyncedItems.tmdbId, batch),
+						inArray(mediaServerSyncedItems.serverId, enabledServerIds)
+					)
+				);
 			results.push(...rows);
 		}
 		return results;

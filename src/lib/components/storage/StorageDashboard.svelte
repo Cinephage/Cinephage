@@ -155,6 +155,18 @@
 
 	const topInsights = $derived(insights.slice(0, 5));
 
+	// The Sync Status tile must show the most recent media-server SYNC time,
+	// not the library disk SCAN time (storage.health.lastScan is a different,
+	// unrelated background job) - derive it from serverStatuses, which is
+	// already filtered to enabled servers only.
+	const lastServerSyncAt = $derived.by(() => {
+		const timestamps = serverStatuses
+			.map((s) => s.lastSyncAt)
+			.filter((t): t is string => t !== null);
+		if (timestamps.length === 0) return null;
+		return timestamps.reduce((latest, t) => (t > latest ? t : latest));
+	});
+
 	function mediaTitle(item: MediaListItem): string {
 		return item.seriesName ?? item.title;
 	}
@@ -351,46 +363,24 @@
 	<StorageTile
 		icon={BarChart3}
 		iconClass="bg-accent/10 text-accent"
-		label="Media Quality"
-		value={mediaServerStats.uniqueItems > 0 ? `${mediaServerStats.uniqueItems} items` : 'No data'}
-		context={mediaServerStats.totalPlays > 0
+		label="Playback"
+		value={mediaServerStats.totalPlays > 0
 			? `${mediaServerStats.totalPlays} total plays`
+			: serverStatuses.length === 0
+				? 'No media server'
+				: 'No play data'}
+		context={mediaServerStats.uniqueItems > 0
+			? `${mediaServerStats.uniqueItems} items tracked`
 			: belowCutoffCount > 0
 				? `${belowCutoffCount} below cutoff`
-				: 'No play data'}
+				: 'No quality data'}
 		href={`${baseUrl}/media`}
-		miniSegments={resolutionSegments.length > 0
-			? [
-					{
-						value: mediaServerStats.resolutionBreakdown.find((r) => r.label === '4K')?.count ?? 0,
-						colorClass: 'bg-accent'
-					},
-					{
-						value:
-							mediaServerStats.resolutionBreakdown.find((r) => r.label === '1080p')?.count ?? 0,
-						colorClass: 'bg-accent/70'
-					},
-					{
-						value: mediaServerStats.resolutionBreakdown.find((r) => r.label === '720p')?.count ?? 0,
-						colorClass: 'bg-accent/40'
-					},
-					{
-						value:
-							mediaServerStats.resolutionBreakdown.find(
-								(r) => r.label === '480p' || r.label === 'SD'
-							)?.count ?? 0,
-						colorClass: 'bg-accent/20'
-					}
-				].filter((s) => s.value > 0)
-			: undefined}
 	/>
 	<StorageTile
 		icon={RefreshCw}
 		iconClass="bg-info/10 text-info"
 		label="Sync Status"
-		value={storage.health.lastScan
-			? formatTimestamp(storage.health.lastScan.completedAt ?? storage.health.lastScan.startedAt)
-			: 'Never'}
+		value={lastServerSyncAt ? formatTimestamp(lastServerSyncAt) : 'Never'}
 		context={serverStatuses.length > 0
 			? `${serverStatuses.length} server${serverStatuses.length === 1 ? '' : 's'} \u00B7 ${serverStatuses.filter((s) => s.lastSyncStatus === 'completed').length} synced`
 			: 'No servers'}
@@ -462,12 +452,12 @@
 	<!-- Most Played + Largest Files -->
 	<div class="min-w-0 space-y-4 lg:[grid-area:main]">
 		<!-- Top Played Items -->
-		{#if topItems.length > 0}
-			<div class="card bg-base-200">
-				<div class="flex items-center gap-2 border-b border-base-300 p-3">
-					<TrendingUp class="h-4 w-4 text-primary" />
-					<h3 class="text-sm font-semibold text-base-content/70">Most Played</h3>
-				</div>
+		<div class="card bg-base-200">
+			<div class="flex items-center gap-2 border-b border-base-300 p-3">
+				<TrendingUp class="h-4 w-4 text-primary" />
+				<h3 class="text-sm font-semibold text-base-content/70">Most Played</h3>
+			</div>
+			{#if topItems.length > 0}
 				<div class="divide-y divide-base-300">
 					{#each topItems as item, i (i)}
 						{@const isExpanded = expandedTopTitles.has(i)}
@@ -532,8 +522,25 @@
 						</div>
 					{/each}
 				</div>
-			</div>
-		{/if}
+			{:else if serverStatuses.length === 0}
+				<div class="flex flex-col items-center gap-1 px-4 py-6 text-center">
+					<p class="text-sm text-base-content/60">No media server connected.</p>
+					<p class="text-xs text-base-content/40">
+						Play counts come from your media server - <a
+							href="/settings/integrations/media-browsers"
+							class="link">connect and enable one</a
+						> to see your most played titles here.
+					</p>
+				</div>
+			{:else}
+				<div class="flex flex-col items-center gap-1 px-4 py-6 text-center">
+					<p class="text-sm text-base-content/60">No play data yet.</p>
+					<p class="text-xs text-base-content/40">
+						This updates once your media server reports watch history.
+					</p>
+				</div>
+			{/if}
+		</div>
 
 		<!-- Largest Files -->
 		{#if largestItems.length > 0}
