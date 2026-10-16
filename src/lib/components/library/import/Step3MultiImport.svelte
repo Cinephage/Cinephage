@@ -34,6 +34,7 @@
 		skippedGroupCount = 0,
 		executingImport = false,
 		canImport = (_group: DetectionGroup) => false,
+		getGroupActionLabel = (_group: DetectionGroup) => null as 'link' | 'enroll' | null,
 		getEffectiveMediaType = (_group: DetectionGroup) => 'movie' as MediaType,
 		getGroupEpisodeInfo = (_group: DetectionGroup) =>
 			null as { season: number; episode: number; title?: string } | null,
@@ -65,6 +66,7 @@
 		skippedGroupCount: number;
 		executingImport: boolean;
 		canImport: (group: DetectionGroup) => boolean;
+		getGroupActionLabel: (group: DetectionGroup) => 'link' | 'enroll' | null;
 		getEffectiveMediaType: (group: DetectionGroup) => MediaType;
 		getGroupEpisodeInfo: (group: DetectionGroup) => {
 			season: number;
@@ -205,6 +207,15 @@
 													<span class="text-success">{m.library_import_ready()}</span>
 												{:else}
 													<span class="text-warning">{m.library_import_needsInput()}</span>
+												{/if}
+												{#if getGroupActionLabel(group) === 'link'}
+													<span class="badge badge-sm badge-info"
+														>{m.activity_unmatched_linkNow()}</span
+													>
+												{:else if getGroupActionLabel(group) === 'enroll'}
+													<span class="badge badge-outline badge-sm"
+														>{m.activity_unmatched_enrollAction()}</span
+													>
 												{/if}
 											</div>
 										</div>
@@ -360,6 +371,15 @@
 															<span class="text-success">{m.library_import_ready()}</span>
 														{:else}
 															<span class="text-warning">{m.library_import_needsInput()}</span>
+														{/if}
+														{#if getGroupActionLabel(group) === 'link'}
+															<span class="badge badge-sm badge-info"
+																>{m.activity_unmatched_linkNow()}</span
+															>
+														{:else if getGroupActionLabel(group) === 'enroll'}
+															<span class="badge badge-outline badge-sm"
+																>{m.activity_unmatched_enrollAction()}</span
+															>
 														{/if}
 														{#if episodeInfo}
 															<span class="badge badge-outline font-mono badge-xs badge-primary">

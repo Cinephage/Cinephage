@@ -10,7 +10,7 @@ import {
 	rootFolders,
 	subtitles
 } from '#lib/server/db/schema.js';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull, not } from 'drizzle-orm';
 import { mediaInfoService } from '#lib/server/library/index.js';
 import { getLanguageProfileService } from '#lib/server/subtitles/services/LanguageProfileService.js';
 import { searchSubtitlesForNewMedia } from '#lib/server/subtitles/services/SubtitleImportService.js';
@@ -712,8 +712,23 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 		// Get all files for this movie
 		const files = await db.select().from(movieFiles).where(eq(movieFiles.movieId, params.id));
 
-		// Only require files if not removing from library entirely
-		if (files.length === 0 && !removeFromLibrary) {
+		// Unmatch also releases client-side tracking from unmatched flows
+		// (null indexer, non-debrid) so the torrent resurfaces in Unmatched.
+		// Real grabs and the client itself are never touched.
+		const releasableQueueItems = await db
+			.select({ id: downloadQueue.id })
+			.from(downloadQueue)
+			.where(
+				and(
+					eq(downloadQueue.movieId, params.id),
+					isNull(downloadQueue.indexerId),
+					not(eq(downloadQueue.protocol, 'debrid'))
+				)
+			);
+
+		// Only require files if not removing from library entirely and there
+		// is no client tracking to release back to Unmatched.
+		if (files.length === 0 && !removeFromLibrary && releasableQueueItems.length === 0) {
 			return Response.json(
 				{ success: false, error: 'Movie has no files to delete' },
 				{ status: 400 }
@@ -799,6 +814,13 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 				.update(movies)
 				.set({ hasFile: false, lastSearchTime: null })
 				.where(eq(movies.id, params.id));
+
+			// Release unmatched-flow tracking so the torrent returns to the
+			// Unmatched tab. Client downloads are never touched.
+			for (const item of releasableQueueItems) {
+				acquisitionService.cancelByQueueId(item.id, 'files unmatched from library');
+				await db.delete(downloadQueue).where(eq(downloadQueue.id, item.id));
+			}
 			libraryMediaEvents.emitMovieUpdated(params.id);
 
 			// Note: Movie metadata is kept - it will show as "missing"

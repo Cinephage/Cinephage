@@ -8,7 +8,7 @@ import { libraryJobService } from '#lib/server/library/jobs/LibraryJobService.js
 import { requireAdminPage } from '#lib/server/auth/authorization.js';
 import { z } from 'zod';
 
-type ActivityTab = 'active' | 'history';
+type ActivityTab = 'active' | 'history' | 'unmatched';
 const ACTIVE_TAB_STATUSES: NonNullable<ActivityFilters['status']>[] = [
 	'all',
 	'downloading',
@@ -39,7 +39,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	requireAdminPage(locals);
 	const tabParam = url.searchParams.get('tab');
 	const explicitTab: ActivityTab | null =
-		tabParam === 'active' || tabParam === 'history' ? tabParam : null;
+		tabParam === 'active' || tabParam === 'history' || tabParam === 'unmatched' ? tabParam : null;
 
 	// Parse all filter parameters
 	const rawStatus = url.searchParams.get('status') || 'all';
@@ -98,6 +98,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	// Fetch filter options and activity data in parallel — call the service directly
 	// instead of routing through an internal HTTP fetch
+	// The unmatched tab fetches live client state on demand client-side;
+	// server-render it empty so page loads never block on client timeouts.
 	const [indexerRows, clientRows, activityResult, cardStats, importBatches] = await Promise.all([
 		db
 			.select({ id: indexers.id, name: indexers.name })
@@ -109,9 +111,16 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			.from(downloadClients)
 			.where(eq(downloadClients.enabled, true))
 			.orderBy(downloadClients.name),
-		activityService
-			.getActivities(filters, { field: 'time', direction: 'desc' }, { limit: 50, offset: 0 }, tab)
-			.catch(() => null),
+		tab === 'unmatched'
+			? Promise.resolve(null)
+			: activityService
+					.getActivities(
+						filters,
+						{ field: 'time', direction: 'desc' },
+						{ limit: 50, offset: 0 },
+						tab
+					)
+					.catch(() => null),
 		activityService.getQueueCardStats().catch(() => null),
 		(async () => libraryJobService.summarizeManualImportBatches())().catch(() => [])
 	]);

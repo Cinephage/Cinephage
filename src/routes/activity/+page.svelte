@@ -18,10 +18,12 @@
 		removeQueueItem as removeQueueItemApi,
 		retryQueueItem as retryQueueItemApi,
 		refreshQueue,
-		relinkOrphans
+		relinkOrphans,
+		getUnmatched
 	} from '#lib/api/downloads.js';
 	import { layoutState, deriveMobileSseStatus } from '#lib/layout.svelte.js';
 	import ActivityTable from '#lib/components/activity/ActivityTable.svelte';
+	import ActivityUnmatchedCard from '#lib/components/activity/ActivityUnmatchedCard.svelte';
 	import ActivityDetailModal from '#lib/components/activity/ActivityDetailModal.svelte';
 	import ActivityFilters from '#lib/components/activity/ActivityFilters.svelte';
 	import ActiveFilters from '#lib/components/activity/ActiveFilters.svelte';
@@ -69,7 +71,7 @@
 	// Initialize directly from server data so the first render already has correct content.
 	// The $effect below re-syncs on subsequent data changes (navigation / tab switch).
 	function getInitialTab(): ActivityTab {
-		return data.tab === 'active' ? 'active' : 'history';
+		return data.tab === 'active' ? 'active' : data.tab === 'unmatched' ? 'unmatched' : 'history';
 	}
 
 	function getInitialFilters(): FiltersType {
@@ -106,6 +108,7 @@
 	let filters = $state<FiltersType>(createDefaultFilters());
 	let activeTabFilters = $state<FiltersType>(createDefaultFilters());
 	let historyTabFilters = $state<FiltersType>(createDefaultFilters());
+	let unmatchedTabFilters = $state<FiltersType>(createDefaultFilters());
 	let activityTab = $state<ActivityTab>('history');
 
 	// Sort state
@@ -122,14 +125,34 @@
 	let refreshDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 	let queueStats = $state<QueueCardStats>(createDefaultQueueCardStats());
+	let unmatchedCount = $state<number | null>(null);
+
+	// Unmatched total for the stat card. Deliberately lightweight (limit 1:
+	// items discarded, suggestions computed for one row at most) and silent —
+	// a dead client must never break the cards. Refreshed on mount and
+	// whenever returning to the active tab.
+	async function refreshUnmatchedCount(): Promise<void> {
+		try {
+			const res = await getUnmatched({ page: 1, limit: 1 });
+			unmatchedCount = res.total;
+		} catch {
+			unmatchedCount = null;
+		}
+	}
 
 	function getFiltersForTab(tab: ActivityTab): FiltersType {
-		return tab === 'active' ? activeTabFilters : historyTabFilters;
+		if (tab === 'active') return activeTabFilters;
+		if (tab === 'unmatched') return unmatchedTabFilters;
+		return historyTabFilters;
 	}
 
 	function setFiltersForTab(tab: ActivityTab, nextFilters: FiltersType): void {
 		if (tab === 'active') {
 			activeTabFilters = { ...nextFilters };
+			return;
+		}
+		if (tab === 'unmatched') {
+			unmatchedTabFilters = { ...nextFilters };
 			return;
 		}
 		historyTabFilters = { ...nextFilters };
@@ -853,6 +876,7 @@
 		if (activityTab === 'history') {
 			void loadHistorySettings();
 		}
+		void refreshUnmatchedCount();
 
 		const handleFocus = () => {
 			if (!sse.isConnected) {
@@ -1366,6 +1390,20 @@
 	async function switchTab(tab: ActivityTab): Promise<void> {
 		if (tab === activityTab) return;
 
+		// The unmatched tab fetches live client state itself; keep it out
+		// of the queue/history fetch pipeline entirely.
+		if (tab === 'unmatched') {
+			activityTab = 'unmatched';
+			setFiltersForTab('unmatched', getFiltersForTab('unmatched'));
+			syncActivityUrl(getFiltersForTab('unmatched'), 'unmatched');
+			return;
+		}
+
+		// Returning to the active tab re-syncs the unmatched card count.
+		if (tab === 'active') {
+			void refreshUnmatchedCount();
+		}
+
 		const tabFilters = normalizeFiltersForTab(getFiltersForTab(tab), tab);
 		try {
 			await fetchActivityData(tabFilters, tab, { updateUrl: true });
@@ -1567,258 +1605,277 @@
 		>
 			{m.activity_tabHistory()}
 		</button>
+		<button
+			class="tab {activityTab === 'unmatched' ? 'tab-active' : ''}"
+			onclick={() => switchTab('unmatched')}
+		>
+			{m.activity_tabUnmatched()}
+		</button>
 	</div>
 
-	{#if activityTab === 'active'}
+	{#if activityTab === 'active' || activityTab === 'unmatched'}
 		<QueueStatsCards
 			stats={queueStats}
 			activeFilter={(filters.status ?? 'all') as QueueCardStatusFilter}
 			onFilterSelect={applyQueueCardFilter}
+			{unmatchedCount}
+			unmatchedActive={activityTab === 'unmatched'}
+			onUnmatchedSelect={() => switchTab('unmatched')}
 		/>
+	{/if}
+	{#if activityTab === 'active'}
 		<LibraryImportJobsCard batches={data.importBatches} />
 	{/if}
 
-	<!-- Unified Toolbar -->
-	<ActivityFilters
-		{filters}
-		filterOptions={data.filterOptions}
-		statusContext={activityTab}
-		onFiltersChange={applyFilters}
-		onClearFilters={clearAllFilters}
-		showActiveFilters={true}
-		showHistoryControls={canManageHistory && activityTab === 'history'}
-	>
-		{#snippet activeFiltersContent()}
-			<ActiveFilters
-				{filters}
-				downloadClients={data.filterOptions.downloadClients}
-				onFilterRemove={removeFilter}
-				onClearAll={clearAllFilters}
-			/>
-			{#if activityTab === 'active'}
-				<div class="mt-3 flex flex-wrap items-center gap-2">
+	{#if activityTab === 'unmatched'}
+		<ActivityUnmatchedCard downloadClients={data.filterOptions.downloadClients} />
+	{:else}
+		<!-- Unified Toolbar -->
+		<ActivityFilters
+			{filters}
+			filterOptions={data.filterOptions}
+			statusContext={activityTab}
+			onFiltersChange={applyFilters}
+			onClearFilters={clearAllFilters}
+			showActiveFilters={true}
+			showHistoryControls={canManageHistory && activityTab === 'history'}
+		>
+			{#snippet activeFiltersContent()}
+				<ActiveFilters
+					{filters}
+					downloadClients={data.filterOptions.downloadClients}
+					onFilterRemove={removeFilter}
+					onClearAll={clearAllFilters}
+				/>
+				{#if activityTab === 'active'}
+					<div class="mt-3 flex flex-wrap items-center gap-2">
+						<span class="text-sm font-bold tracking-wide text-base-content/70"
+							>{m.activity_queue_bulkActionsHeading()}</span
+						>
+						<div class="divider m-0 divider-horizontal h-6"></div>
+						<button class="btn btn-ghost btn-xs" onclick={toggleActiveSelectionMode}>
+							{activeSelectionMode
+								? m.activity_queue_exitSelection()
+								: m.activity_queue_selectRows()}
+						</button>
+
+						{#if activeSelectionMode}
+							<span class="text-xs text-base-content/60"
+								>{m.common_selected({ count: selectedActiveIds.size })}</span
+							>
+							<button
+								class="btn btn-ghost btn-xs"
+								onclick={() =>
+									handleToggleActiveSelectionAll(selectableActiveIds, !allActiveSelectableSelected)}
+								disabled={activeBulkLoading || selectableActiveIds.length === 0}
+							>
+								{allActiveSelectableSelected
+									? m.activity_queue_deselectAllCount({ count: selectableActiveIds.length })
+									: m.activity_queue_selectAllCount({ count: selectableActiveIds.length })}
+							</button>
+							<button
+								class="btn btn-xs"
+								onclick={() => openActiveConfirm('pause')}
+								disabled={activeBulkLoading || selectedPausableQueueIds.length === 0}
+							>
+								{m.activity_queue_pauseCount({ count: selectedPausableQueueIds.length })}
+							</button>
+							<button
+								class="btn btn-xs"
+								onclick={() => openActiveConfirm('resume')}
+								disabled={activeBulkLoading || selectedPausedQueueIds.length === 0}
+							>
+								{m.activity_queue_resumeCount({ count: selectedPausedQueueIds.length })}
+							</button>
+							<button
+								class="btn btn-error btn-xs"
+								onclick={() => openActiveConfirm('cancel')}
+								disabled={activeBulkLoading || selectedCancelableQueueIds.length === 0}
+							>
+								{m.activity_queue_cancelCount({ count: selectedCancelableQueueIds.length })}
+							</button>
+							<div class="ml-auto"></div>
+							<button
+								class="btn btn-ghost btn-xs"
+								onclick={() => {
+									selectedActiveIds.clear();
+								}}
+								disabled={activeBulkLoading || selectedActiveIds.size === 0}
+							>
+								{m.activity_queue_clearSelection()}
+							</button>
+						{:else}
+							<span class="text-xs text-base-content/60">
+								{m.activity_queue_bulkHint()}
+							</span>
+							<div class="ml-auto"></div>
+							<div class="divider m-0 divider-horizontal h-6"></div>
+							<button
+								class="btn btn-ghost btn-xs"
+								onclick={handleRefreshQueue}
+								disabled={refreshQueueLoading}
+							>
+								{#if refreshQueueLoading}
+									<Loader2 class="h-3 w-3 animate-spin" />
+								{/if}
+								{m.activity_queue_refresh()}
+							</button>
+							<button
+								class="btn btn-ghost btn-xs"
+								onclick={handleRelinkOrphans}
+								disabled={relinkOrphansLoading}
+							>
+								{#if relinkOrphansLoading}
+									<Loader2 class="h-3 w-3 animate-spin" />
+								{/if}
+								{m.activity_queue_relinkOrphans()}
+							</button>
+						{/if}
+					</div>
+				{/if}
+			{/snippet}
+
+			{#snippet historyControlsContent()}
+				<div class="flex flex-wrap items-center gap-2">
 					<span class="text-sm font-bold tracking-wide text-base-content/70"
-						>{m.activity_queue_bulkActionsHeading()}</span
+						>{m.activity_history_management()}</span
 					>
 					<div class="divider m-0 divider-horizontal h-6"></div>
-					<button class="btn btn-ghost btn-xs" onclick={toggleActiveSelectionMode}>
-						{activeSelectionMode ? m.activity_queue_exitSelection() : m.activity_queue_selectRows()}
-					</button>
-
-					{#if activeSelectionMode}
-						<span class="text-xs text-base-content/60"
-							>{m.common_selected({ count: selectedActiveIds.size })}</span
+					<label class="flex items-center gap-2 text-sm">
+						<span class="text-base-content/70">{m.activity_history_retention()}</span>
+						<select
+							class="select-bordered select select-xs"
+							bind:value={retentionDays}
+							disabled={settingsLoading}
 						>
+							<option value={7}>{m.activity_history_days7()}</option>
+							<option value={14}>{m.activity_history_days14()}</option>
+							<option value={30}>{m.activity_history_days30()}</option>
+							<option value={60}>{m.activity_history_days60()}</option>
+							<option value={90}>{m.activity_history_days90()}</option>
+						</select>
+					</label>
+					<div class="divider m-0 divider-horizontal h-6"></div>
+					<button
+						class="btn btn-xs"
+						onclick={saveRetention}
+						disabled={settingsLoading || saveRetentionLoading}
+					>
+						{#if saveRetentionLoading}
+							<Loader2 class="h-3 w-3 animate-spin" />
+						{/if}
+						{m.action_save()}
+					</button>
+					<button
+						class="btn btn-xs"
+						onclick={() => openHistoryConfirm('purge_older_than_retention')}
+						disabled={settingsLoading || purgeOlderLoading}
+					>
+						{#if purgeOlderLoading}
+							<Loader2 class="h-3 w-3 animate-spin" />
+						{/if}
+						{m.activity_history_purgeOlder()}
+					</button>
+					<button class="btn btn-ghost btn-xs" onclick={toggleSelectionMode}>
+						{selectionMode ? m.activity_history_exitSelection() : m.activity_history_selectRows()}
+					</button>
+					{#if selectionMode}
 						<button
 							class="btn btn-ghost btn-xs"
 							onclick={() =>
-								handleToggleActiveSelectionAll(selectableActiveIds, !allActiveSelectableSelected)}
-							disabled={activeBulkLoading || selectableActiveIds.length === 0}
+								handleToggleSelectionAll(selectableHistoryIds, !allHistorySelectableSelected)}
+							disabled={deleteSelectedLoading || selectableHistoryIds.length === 0}
 						>
-							{allActiveSelectableSelected
-								? m.activity_queue_deselectAllCount({ count: selectableActiveIds.length })
-								: m.activity_queue_selectAllCount({ count: selectableActiveIds.length })}
-						</button>
-						<button
-							class="btn btn-xs"
-							onclick={() => openActiveConfirm('pause')}
-							disabled={activeBulkLoading || selectedPausableQueueIds.length === 0}
-						>
-							{m.activity_queue_pauseCount({ count: selectedPausableQueueIds.length })}
-						</button>
-						<button
-							class="btn btn-xs"
-							onclick={() => openActiveConfirm('resume')}
-							disabled={activeBulkLoading || selectedPausedQueueIds.length === 0}
-						>
-							{m.activity_queue_resumeCount({ count: selectedPausedQueueIds.length })}
+							{allHistorySelectableSelected
+								? m.activity_history_deselectAllCount({ count: selectableHistoryIds.length })
+								: m.activity_history_selectAllCount({ count: selectableHistoryIds.length })}
 						</button>
 						<button
 							class="btn btn-error btn-xs"
-							onclick={() => openActiveConfirm('cancel')}
-							disabled={activeBulkLoading || selectedCancelableQueueIds.length === 0}
+							onclick={() => openHistoryConfirm('delete_selected')}
+							disabled={deleteSelectedLoading || selectedHistoryIds.size === 0}
 						>
-							{m.activity_queue_cancelCount({ count: selectedCancelableQueueIds.length })}
-						</button>
-						<div class="ml-auto"></div>
-						<button
-							class="btn btn-ghost btn-xs"
-							onclick={() => {
-								selectedActiveIds.clear();
-							}}
-							disabled={activeBulkLoading || selectedActiveIds.size === 0}
-						>
-							{m.activity_queue_clearSelection()}
-						</button>
-					{:else}
-						<span class="text-xs text-base-content/60">
-							{m.activity_queue_bulkHint()}
-						</span>
-						<div class="ml-auto"></div>
-						<div class="divider m-0 divider-horizontal h-6"></div>
-						<button
-							class="btn btn-ghost btn-xs"
-							onclick={handleRefreshQueue}
-							disabled={refreshQueueLoading}
-						>
-							{#if refreshQueueLoading}
+							{#if deleteSelectedLoading}
 								<Loader2 class="h-3 w-3 animate-spin" />
 							{/if}
-							{m.activity_queue_refresh()}
+							{m.activity_history_deleteSelectedCount({ count: selectedHistoryIds.size })}
 						</button>
-						<button
-							class="btn btn-ghost btn-xs"
-							onclick={handleRelinkOrphans}
-							disabled={relinkOrphansLoading}
-						>
-							{#if relinkOrphansLoading}
-								<Loader2 class="h-3 w-3 animate-spin" />
-							{/if}
-							{m.activity_queue_relinkOrphans()}
-						</button>
+						{#if selectedHistoryFailedQueueIds.length > 0}
+							<div class="divider m-0 divider-horizontal h-6"></div>
+							<button
+								class="btn btn-warning btn-xs"
+								onclick={() => openActiveConfirm('retry_failed')}
+								disabled={activeBulkLoading}
+							>
+								{m.activity_queue_retryFailedCount({ count: selectedHistoryFailedQueueIds.length })}
+							</button>
+							<button
+								class="btn btn-error btn-xs"
+								onclick={() => openActiveConfirm('remove_failed')}
+								disabled={activeBulkLoading}
+							>
+								{m.activity_queue_removeFailedCount({
+									count: selectedHistoryFailedQueueIds.length
+								})}
+							</button>
+						{/if}
 					{/if}
-				</div>
-			{/if}
-		{/snippet}
-
-		{#snippet historyControlsContent()}
-			<div class="flex flex-wrap items-center gap-2">
-				<span class="text-sm font-bold tracking-wide text-base-content/70"
-					>{m.activity_history_management()}</span
-				>
-				<div class="divider m-0 divider-horizontal h-6"></div>
-				<label class="flex items-center gap-2 text-sm">
-					<span class="text-base-content/70">{m.activity_history_retention()}</span>
-					<select
-						class="select-bordered select select-xs"
-						bind:value={retentionDays}
-						disabled={settingsLoading}
-					>
-						<option value={7}>{m.activity_history_days7()}</option>
-						<option value={14}>{m.activity_history_days14()}</option>
-						<option value={30}>{m.activity_history_days30()}</option>
-						<option value={60}>{m.activity_history_days60()}</option>
-						<option value={90}>{m.activity_history_days90()}</option>
-					</select>
-				</label>
-				<div class="divider m-0 divider-horizontal h-6"></div>
-				<button
-					class="btn btn-xs"
-					onclick={saveRetention}
-					disabled={settingsLoading || saveRetentionLoading}
-				>
-					{#if saveRetentionLoading}
-						<Loader2 class="h-3 w-3 animate-spin" />
-					{/if}
-					{m.action_save()}
-				</button>
-				<button
-					class="btn btn-xs"
-					onclick={() => openHistoryConfirm('purge_older_than_retention')}
-					disabled={settingsLoading || purgeOlderLoading}
-				>
-					{#if purgeOlderLoading}
-						<Loader2 class="h-3 w-3 animate-spin" />
-					{/if}
-					{m.activity_history_purgeOlder()}
-				</button>
-				<button class="btn btn-ghost btn-xs" onclick={toggleSelectionMode}>
-					{selectionMode ? m.activity_history_exitSelection() : m.activity_history_selectRows()}
-				</button>
-				{#if selectionMode}
-					<button
-						class="btn btn-ghost btn-xs"
-						onclick={() =>
-							handleToggleSelectionAll(selectableHistoryIds, !allHistorySelectableSelected)}
-						disabled={deleteSelectedLoading || selectableHistoryIds.length === 0}
-					>
-						{allHistorySelectableSelected
-							? m.activity_history_deselectAllCount({ count: selectableHistoryIds.length })
-							: m.activity_history_selectAllCount({ count: selectableHistoryIds.length })}
-					</button>
+					<div class="ml-auto"></div>
 					<button
 						class="btn btn-error btn-xs"
-						onclick={() => openHistoryConfirm('delete_selected')}
-						disabled={deleteSelectedLoading || selectedHistoryIds.size === 0}
+						onclick={() => openHistoryConfirm('purge_all')}
+						disabled={settingsLoading || purgeAllLoading}
 					>
-						{#if deleteSelectedLoading}
+						{#if purgeAllLoading}
 							<Loader2 class="h-3 w-3 animate-spin" />
 						{/if}
-						{m.activity_history_deleteSelectedCount({ count: selectedHistoryIds.size })}
+						{m.activity_history_purgeAll()}
 					</button>
-					{#if selectedHistoryFailedQueueIds.length > 0}
-						<div class="divider m-0 divider-horizontal h-6"></div>
-						<button
-							class="btn btn-warning btn-xs"
-							onclick={() => openActiveConfirm('retry_failed')}
-							disabled={activeBulkLoading}
-						>
-							{m.activity_queue_retryFailedCount({ count: selectedHistoryFailedQueueIds.length })}
-						</button>
-						<button
-							class="btn btn-error btn-xs"
-							onclick={() => openActiveConfirm('remove_failed')}
-							disabled={activeBulkLoading}
-						>
-							{m.activity_queue_removeFailedCount({ count: selectedHistoryFailedQueueIds.length })}
-						</button>
-					{/if}
-				{/if}
-				<div class="ml-auto"></div>
-				<button
-					class="btn btn-error btn-xs"
-					onclick={() => openHistoryConfirm('purge_all')}
-					disabled={settingsLoading || purgeAllLoading}
-				>
-					{#if purgeAllLoading}
-						<Loader2 class="h-3 w-3 animate-spin" />
-					{/if}
-					{m.activity_history_purgeAll()}
-				</button>
-			</div>
-		{/snippet}
-	</ActivityFilters>
+				</div>
+			{/snippet}
+		</ActivityFilters>
 
-	<!-- Activity Stats -->
-	<div class="flex items-center gap-4 text-sm text-base-content/70">
-		<span>{countLabel}</span>
-		{#if hasDownloading}
-			<span class="badge gap-1 badge-info">
-				<Loader2 class="h-3 w-3 animate-spin" />
-				{m.activity_downloadingCount({ count: downloadingCount })}
-			</span>
-		{/if}
-	</div>
-
-	<!-- Activity Table -->
-	{#if isLoading && filteredActivities.length === 0}
-		<div class="flex items-center justify-center py-12">
-			<Loader2 class="h-8 w-8 animate-spin" />
+		<!-- Activity Stats -->
+		<div class="flex items-center gap-4 text-sm text-base-content/70">
+			<span>{countLabel}</span>
+			{#if hasDownloading}
+				<span class="badge gap-1 badge-info">
+					<Loader2 class="h-3 w-3 animate-spin" />
+					{m.activity_downloadingCount({ count: downloadingCount })}
+				</span>
+			{/if}
 		</div>
-	{:else}
-		<ActivityTable
-			activities={filteredActivities}
-			{sortField}
-			{sortDirection}
-			selectionMode={activityTab === 'history' ? selectionMode : activeSelectionMode}
-			selectedIds={activityTab === 'history' ? selectedHistoryIds : selectedActiveIds}
-			isSelectable={activityTab === 'history' ? isHistoryActivity : isActiveQueueActivity}
-			onSort={handleSort}
-			onRowClick={openDetailModal}
-			onPause={handlePause}
-			onResume={handleResume}
-			onRemove={handleRemove}
-			onRetry={handleRetry}
-			onToggleSelection={activityTab === 'history'
-				? handleToggleSelection
-				: handleToggleActiveSelection}
-			onToggleSelectionAll={activityTab === 'history'
-				? handleToggleSelectionAll
-				: handleToggleActiveSelectionAll}
-			{hasMore}
-			{isLoadingMore}
-			onLoadMore={loadMore}
-		/>
+
+		<!-- Activity Table -->
+		{#if isLoading && filteredActivities.length === 0}
+			<div class="flex items-center justify-center py-12">
+				<Loader2 class="h-8 w-8 animate-spin" />
+			</div>
+		{:else}
+			<ActivityTable
+				activities={filteredActivities}
+				{sortField}
+				{sortDirection}
+				selectionMode={activityTab === 'history' ? selectionMode : activeSelectionMode}
+				selectedIds={activityTab === 'history' ? selectedHistoryIds : selectedActiveIds}
+				isSelectable={activityTab === 'history' ? isHistoryActivity : isActiveQueueActivity}
+				onSort={handleSort}
+				onRowClick={openDetailModal}
+				onPause={handlePause}
+				onResume={handleResume}
+				onRemove={handleRemove}
+				onRetry={handleRetry}
+				onToggleSelection={activityTab === 'history'
+					? handleToggleSelection
+					: handleToggleActiveSelection}
+				onToggleSelectionAll={activityTab === 'history'
+					? handleToggleSelectionAll
+					: handleToggleActiveSelectionAll}
+				{hasMore}
+				{isLoadingMore}
+				onLoadMore={loadMore}
+			/>
+		{/if}
 	{/if}
 </div>
 

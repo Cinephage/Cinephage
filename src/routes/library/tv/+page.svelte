@@ -362,7 +362,11 @@
 								s.id === seriesId ? { ...s, episodeFileCount: 0, percentComplete: 0 } : s
 							)
 						};
-						toasts.success(m.toast_library_tv_filesDeleted({ title: show.title }));
+						toasts.success(
+							deleteFiles
+								? m.toast_library_tv_filesDeleted({ title: show.title })
+								: m.toast_library_tv_unmatched({ title: show.title })
+						);
 					}
 					isDeleteModalOpen = false;
 					pendingDeleteSeriesId = null;

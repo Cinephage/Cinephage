@@ -441,7 +441,11 @@
 								m2.id === movieId ? { ...m2, hasFile: false, files: [] } : m2
 							)
 						};
-						toasts.success(m.toast_library_movies_filesDeleted({ title: movie.title }));
+						toasts.success(
+							deleteFiles
+								? m.toast_library_movies_filesDeleted({ title: movie.title })
+								: m.toast_library_movies_unmatched({ title: movie.title })
+						);
 					}
 					isDeleteModalOpen = false;
 					pendingDeleteMovieId = null;

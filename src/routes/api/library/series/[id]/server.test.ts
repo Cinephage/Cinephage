@@ -1,7 +1,15 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../../../test/db-helper';
 import { api } from '../../../../../test/api-helper';
-import { languageProfiles, libraries, rootFolders, series } from '#lib/server/db/schema.js';
+import {
+	downloadClients,
+	downloadQueue,
+	episodeFiles,
+	languageProfiles,
+	libraries,
+	rootFolders,
+	series
+} from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 
@@ -27,7 +35,7 @@ vi.mock('#lib/server/subtitles/services/SubtitleImportService.js', () => ({
 	searchSubtitlesForMediaBatch: vi.fn().mockResolvedValue(undefined)
 }));
 
-const { GET, PATCH } = await import('./+server');
+const { GET, PATCH, DELETE } = await import('./+server');
 const { eq } = await import('drizzle-orm');
 const { LanguageSettingsService } =
 	await import('#lib/server/subtitles/services/LanguageSettingsService.js');
@@ -90,10 +98,51 @@ async function resetTables(): Promise<void> {
 		'libraries',
 		'root_folders',
 		'language_profiles',
-		'language_settings'
+		'language_settings',
+		'download_queue',
+		'download_clients'
 	]) {
 		testDb.sqlite.prepare(`DELETE FROM ${table}`).run();
 	}
+}
+
+async function seedClient(): Promise<string> {
+	await testDb.db
+		.insert(downloadClients)
+		.values({
+			id: 'client-api-1',
+			name: 'qbit',
+			implementation: 'qbittorrent',
+			enabled: true,
+			host: 'localhost',
+			port: 8080,
+			useSsl: false,
+			movieCategory: 'movies',
+			tvCategory: 'tv'
+		})
+		.run();
+	return 'client-api-1';
+}
+
+async function seedQueueRow(
+	seriesId: string,
+	overrides: { indexerId?: string | null; protocol?: string } = {}
+): Promise<string> {
+	const id = `queue-${Math.random().toString(36).slice(2)}`;
+	await testDb.db
+		.insert(downloadQueue)
+		.values({
+			id,
+			downloadClientId: 'client-api-1',
+			downloadId: `hash-${id}`,
+			title: 'Some.Show.S01E01.1080p.WEB-DL',
+			seriesId,
+			indexerId: overrides.indexerId ?? null,
+			protocol: overrides.protocol ?? 'torrent',
+			status: 'seeding'
+		})
+		.run();
+	return id;
 }
 
 beforeEach(resetTables);
@@ -205,5 +254,80 @@ describe('PATCH /api/library/series/[id] — languageProfileId', () => {
 			.where(eq(series.id, seriesId))
 			.get();
 		expect(row?.languageProfileId).toBe(LANGUAGE_PROFILE_ID);
+	});
+});
+
+describe('DELETE /api/library/series/[id] — unmatch releases client tracking', () => {
+	it('file-less unmatch releases indexer-less rows back to Unmatched', async () => {
+		const seriesId = await seedSeries();
+		await seedClient();
+		const queueId = await seedQueueRow(seriesId);
+
+		const { status, data } = await api.delete(DELETE, undefined, {
+			params: { id: seriesId }
+		});
+
+		expect(status).toBe(200);
+		expect(data).toEqual(expect.objectContaining({ success: true }));
+		expect(
+			await testDb.db.select().from(downloadQueue).where(eq(downloadQueue.id, queueId))
+		).toHaveLength(0);
+		expect(await testDb.db.select().from(series).where(eq(series.id, seriesId))).toHaveLength(1);
+	});
+
+	it('still 400s when there is nothing to unmatch or release', async () => {
+		const seriesId = await seedSeries();
+
+		const { status, data } = await api.delete(DELETE, undefined, {
+			params: { id: seriesId }
+		});
+
+		expect(status).toBe(400);
+		expect(data).toEqual(expect.objectContaining({ success: false }));
+	});
+
+	it('preserves real grabs and debrid rows', async () => {
+		const seriesId = await seedSeries();
+		await seedClient();
+		const grabId = await seedQueueRow(seriesId, { indexerId: 'indexer-1' });
+		const debridId = await seedQueueRow(seriesId, { protocol: 'debrid' });
+
+		const { status } = await api.delete(DELETE, undefined, {
+			params: { id: seriesId }
+		});
+
+		expect(status).toBe(400);
+		for (const id of [grabId, debridId]) {
+			expect(
+				await testDb.db.select().from(downloadQueue).where(eq(downloadQueue.id, id))
+			).toHaveLength(1);
+		}
+	});
+
+	it('unmatch with files dissociates them and releases tracking', async () => {
+		const seriesId = await seedSeries();
+		await seedClient();
+		await testDb.db
+			.insert(episodeFiles)
+			.values({
+				id: 'efile-api-1',
+				seriesId,
+				seasonNumber: 1,
+				relativePath: 'Season 01/Api Series S01E01.mkv',
+				size: 1000
+			})
+			.run();
+		const queueId = await seedQueueRow(seriesId);
+
+		const { status, data } = await api.delete(DELETE, undefined, {
+			params: { id: seriesId }
+		});
+
+		expect(status).toBe(200);
+		expect(data).toEqual(expect.objectContaining({ success: true }));
+		expect(await testDb.db.select().from(episodeFiles)).toHaveLength(0);
+		expect(
+			await testDb.db.select().from(downloadQueue).where(eq(downloadQueue.id, queueId))
+		).toHaveLength(0);
 	});
 });

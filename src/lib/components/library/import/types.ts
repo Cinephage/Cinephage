@@ -8,6 +8,8 @@ export interface MatchResult {
 	isAnime?: boolean;
 	confidence: number;
 	inLibrary: boolean;
+	/** True when the library holds at least one file for this match. */
+	hasFile?: boolean;
 	libraryId?: string;
 	rootFolderId?: string | null;
 	rootFolderPath?: string | null;

@@ -655,7 +655,11 @@
 					// Navigate to library since the movie no longer exists
 					goto(resolvePath('/library/movies'));
 				} else {
-					toasts.success(m.toast_library_movieDetail_movieFilesDeleted());
+					toasts.success(
+						deleteFiles
+							? m.toast_library_movieDetail_movieFilesDeleted()
+							: m.toast_library_movieDetail_movieUnmatched()
+					);
 					movie.files = [];
 					movie.hasFile = false;
 					queueItemState = null;

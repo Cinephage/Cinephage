@@ -8,7 +8,7 @@
 import type { ActivityFilters as FiltersType } from '#lib/types/activity.js';
 
 // ── Tab type ──────────────────────────────────────────────────────────
-export type ActivityTab = 'active' | 'history';
+export type ActivityTab = 'active' | 'history' | 'unmatched';
 
 // ── Confirmation / bulk action types ──────────────────────────────────
 export type HistoryConfirmAction = 'purge_older_than_retention' | 'purge_all' | 'delete_selected';

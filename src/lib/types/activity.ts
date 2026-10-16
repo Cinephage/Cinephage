@@ -24,8 +24,24 @@ export type ActivityStatus =
 
 /**
  * Where an activity row originated from.
+ *
+ * 'client' is reserved for live download-client state with no queue row
+ * (the Unmatched tab's rows). The feed does not produce it yet — the member
+ * exists so the future unified table has an origin slot to branch on, and
+ * every existing `===` check keeps compiling unchanged.
+ *
+ * Bridge contract toward unification (no runtime code yet): a unified
+ * unmatched row would map releaseTitle=name, size, protocol='torrent',
+ * downloadClientId/Name straight across; downloadProgress=progress*100;
+ * timeline=[] (no events yet); media fields, queueItemId and historyId null until
+ * linked; client 'error'→'failed'. Deliberately deferred: renaming the
+ * unmatched API fields to match (filed contract churn for speculative
+ * gain), toolbar-driven server filtering (these rows come from live client
+ * polling, not the activity queries), and fabricating full UnifiedActivity
+ * rows (would lie about mediaId/timeline). Remaining migration work, in
+ * order: table row branch on source, toolbar scope option, feed scope.
  */
-export type ActivitySource = 'queue' | 'download_history' | 'monitoring' | 'task';
+export type ActivitySource = 'queue' | 'download_history' | 'monitoring' | 'task' | 'client';
 
 /**
  * Human-readable labels for monitoring task types.
