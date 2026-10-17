@@ -10,6 +10,7 @@ import { EventEmitter } from 'events';
 import { randomUUID } from 'node:crypto';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { readdir, stat } from 'fs/promises';
+import type { Dirent } from 'node:fs';
 import { db } from '#lib/server/db/index.js';
 import {
 	downloadQueue,
@@ -30,6 +31,7 @@ import { mapClientPathToLocal } from './PathMapping';
 import { resolveInfoHash } from '../utils/hashUtils';
 import { ReleaseParser } from '#lib/server/indexers/parser/ReleaseParser.js';
 import { isPathInsideManagedRoot } from '#lib/server/filesystem/path-guard.js';
+import { isVideoFile } from '#lib/config/constants.js';
 import {
 	cleanupExpiredQueueTombstones,
 	extendQueueTombstonesFromDownloads,
@@ -125,6 +127,10 @@ const COMPLETED_GRACE_PERIOD_MS = 300_000; // 5 minutes
 const MISSING_GRACE_PERIOD_MS = 30_000; // 30 seconds
 const TORRENT_MISSING_GRACE_PERIOD_MS = 180_000; // 3 minutes
 const TORRENT_MAGNET_METADATA_GRACE_PERIOD_MS = 600_000; // 10 minutes
+
+/** Bounds for the unmatched content scan; an unfinished scan counts as acceptable. */
+const MAX_CONTENT_SCAN_ENTRIES = 5_000;
+const MAX_CONTENT_SCAN_DEPTH = 6;
 
 /**
  * Terminal statuses - items that are completely done and hidden from queue UI.
@@ -3852,6 +3858,74 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 	}
 
 	/**
+	 * Whether this torrent's content is something Cinephage can import: a
+	 * video file, or a folder holding at least one. Single non-video files
+	 * (.exe, .iso, .rar …) and folders with no video are refused so they
+	 * never reach the Unmatched view or the import flow. The path is
+	 * stat()'d rather than read by name: a folder called
+	 * `Movie.2026.1080p` is not an extension.
+	 *
+	 * shortcut: an unreadable path, a path not yet on disk, or a scan cut
+	 * short by the bounds counts as acceptable — never hide a download on a
+	 * guess. Upgrade to the client's file list if a bounded tree walk proves
+	 * too slow on network mounts.
+	 */
+	private async isAcceptableContent(
+		client: DownloadClient,
+		download: DownloadInfo
+	): Promise<boolean> {
+		const clientDownloadPath = getDownloadContentPath(download, 'torrent');
+		if (!clientDownloadPath) return true;
+		const localPath = mapClientPathToLocal(
+			clientDownloadPath,
+			client.downloadPathLocal,
+			client.downloadPathRemote ?? null,
+			client.tempPathLocal,
+			client.tempPathRemote
+		);
+		if (!localPath) return true;
+		try {
+			const stats = await stat(localPath);
+			if (!stats.isDirectory()) return isVideoFile(localPath);
+			return await this.folderHasVideo(localPath, 0, { left: MAX_CONTENT_SCAN_ENTRIES });
+		} catch {
+			// Not on disk yet (still downloading): the wizard and the import
+			// pipeline decide once the files exist.
+			return true;
+		}
+	}
+
+	/**
+	 * True when the tree holds an importable video, or when the walk ran out
+	 * of budget or depth (see the shortcut note above). Symlinks are skipped:
+	 * they are not directories, which also stops cycles.
+	 */
+	private async folderHasVideo(
+		dir: string,
+		depth: number,
+		budget: { left: number }
+	): Promise<boolean> {
+		if (depth > MAX_CONTENT_SCAN_DEPTH || budget.left <= 0) return true;
+
+		let entries: Dirent[];
+		try {
+			entries = await readdir(dir, { withFileTypes: true });
+		} catch {
+			return true;
+		}
+		budget.left -= entries.length;
+
+		for (const entry of entries) {
+			if (entry.isFile() && isVideoFile(entry.name)) return true;
+		}
+		for (const entry of entries) {
+			if (!entry.isDirectory()) continue;
+			if (await this.folderHasVideo(join(dir, entry.name), depth + 1, budget)) return true;
+		}
+		return false;
+	}
+
+	/**
 	 * List downloads present in clients under a Cinephage-managed label with
 	 * no corresponding download_queue row ("unmatched"). Read-only: listing
 	 * never mutates anything. Monitor-only — matching and importing live in
@@ -3890,6 +3964,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 				// Only downloads in Cinephage-managed categories. No progress
 				// gate: still-downloading items list as live statuses.
 				if (!this.isManagedCategory(client, download)) continue;
+				if (!(await this.isAcceptableContent(client, download))) continue;
 
 				unmatched.push({ client, download });
 			}
@@ -4199,6 +4274,10 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 				result.skipped.push({ hash: pair.hash, reason: 'foreign_category' });
 				continue;
 			}
+			if (!(await this.isAcceptableContent(client, download))) {
+				result.skipped.push({ hash: pair.hash, reason: 'unsupported_filetype' });
+				continue;
+			}
 
 			// Attaching records a fully-seeding torrent: partial content
 			// cannot back a seeding-imported marker.
@@ -4330,6 +4409,10 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			const { client, download } = found;
 			if (!this.isManagedCategory(client, download)) {
 				result.skipped.push({ hash: pair.hash, reason: 'foreign_category' });
+				continue;
+			}
+			if (!(await this.isAcceptableContent(client, download))) {
+				result.skipped.push({ hash: pair.hash, reason: 'unsupported_filetype' });
 				continue;
 			}
 

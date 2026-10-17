@@ -10,6 +10,9 @@
 
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { createTestDb, destroyTestDb, clearTestDb } from '../../../../test/db-helper';
 import {
@@ -36,6 +39,8 @@ vi.mock('#lib/server/db/index.js', () => ({
 }));
 
 const getDownloads = vi.fn();
+/** Mutable so path-specific tests can point the client at a temp dir. */
+const clientPaths = { local: '/downloads', remote: '/remote/downloads' };
 vi.mock('../DownloadClientManager', () => ({
 	getDownloadClientManager: () => ({
 		getEnabledClients: () =>
@@ -46,8 +51,8 @@ vi.mock('../DownloadClientManager', () => ({
 						name: 'qbit',
 						movieCategory: 'movies',
 						tvCategory: 'tv',
-						downloadPathLocal: '/downloads',
-						downloadPathRemote: '/remote/downloads'
+						downloadPathLocal: clientPaths.local,
+						downloadPathRemote: clientPaths.remote
 					},
 					instance: { getDownloads }
 				}
@@ -72,6 +77,7 @@ const MOVIE_ID = randomUUID();
 const SERIES_ID = randomUUID();
 const HASH_A = 'a'.repeat(40);
 const HASH_B = 'b'.repeat(40);
+const HASH_C = 'c'.repeat(40);
 
 function makeDownload(overrides: Partial<DownloadInfo> = {}): DownloadInfo {
 	return {
@@ -127,6 +133,8 @@ beforeEach(async () => {
 	// clearTestDb does not cover downloadHistory.
 	testDb.db.delete(downloadHistory).run();
 	getDownloads.mockReset();
+	clientPaths.local = '/downloads';
+	clientPaths.remote = '/remote/downloads';
 	vi.mocked(addMovieToLibrary).mockReset();
 	vi.mocked(addMovieToLibrary).mockImplementation(async (input) => {
 		await testDb.db.insert(movies).values({
@@ -268,6 +276,32 @@ describe('listUnmatchedDownloads', () => {
 		const page2 = await getDownloadMonitor().listUnmatchedDownloads({ page: 2, limit: 1 });
 		expect(page2.items).toHaveLength(1);
 		expect(page2.items[0].hash).not.toBe(page1.items[0].hash);
+	});
+
+	it('excludes single files and folders Cinephage cannot import', async () => {
+		const root = await mkdtemp(join(tmpdir(), 'unmatched-list-'));
+		// Video nested one folder deep: proves the walk recurses.
+		const goodFolder = join(root, 'Movie.2026.1080p');
+		await mkdir(join(goodFolder, 'Extras'), { recursive: true });
+		await writeFile(join(goodFolder, 'Extras', 'feature.mkv'), 'x');
+		const junkFolder = join(root, 'Junk.Release');
+		await mkdir(junkFolder, { recursive: true });
+		await writeFile(join(junkFolder, 'readme.txt'), 'x');
+		const exe = join(root, 'not-a-video.exe');
+		await writeFile(exe, 'x');
+		clientPaths.local = root;
+		clientPaths.remote = root;
+		getDownloads.mockResolvedValue([
+			makeDownload({ hash: HASH_A, name: 'Bad.Release', contentPath: exe }),
+			makeDownload({ hash: HASH_B, name: 'Movie.2026.1080p', contentPath: goodFolder }),
+			makeDownload({ hash: HASH_C, name: 'Junk.Release', contentPath: junkFolder })
+		]);
+
+		const res = await getDownloadMonitor().listUnmatchedDownloads();
+
+		expect(res.items.map((item) => item.hash)).toEqual([HASH_B]);
+		expect(res.total).toBe(1);
+		await rm(root, { recursive: true, force: true });
 	});
 });
 describe('resolveUnmatchedEntries', () => {
@@ -430,6 +464,31 @@ describe('trackUnmatchedDownloads', () => {
 		expect(result.tracked).toHaveLength(0);
 		expect(result.skipped).toEqual([{ hash: HASH_A, reason: 'incomplete' }]);
 		expect(await testDb.db.select().from(downloadQueue)).toHaveLength(0);
+	});
+
+	it('refuses content Cinephage cannot import, on both link and enroll', async () => {
+		const root = await mkdtemp(join(tmpdir(), 'unmatched-bad-'));
+		const exe = join(root, 'setup.exe');
+		await writeFile(exe, 'x');
+		clientPaths.local = root;
+		clientPaths.remote = root;
+		getDownloads.mockResolvedValue([makeDownload({ contentPath: exe })]);
+		await seedMovie();
+		await seedMovieFile();
+
+		const tracked = await getDownloadMonitor().trackUnmatchedDownloads([
+			{ hash: HASH_A, mediaType: 'movie', tmdbId: 42 }
+		]);
+		expect(tracked.skipped).toEqual([{ hash: HASH_A, reason: 'unsupported_filetype' }]);
+
+		const enrolled = await getDownloadMonitor().enrollUnmatchedDownloads([
+			{ hash: HASH_A, mediaType: 'movie', tmdbId: 42, rootFolderId: 'rf-1' }
+		]);
+		expect(enrolled.skipped).toEqual([{ hash: HASH_A, reason: 'unsupported_filetype' }]);
+
+		expect(await testDb.db.select().from(downloadQueue)).toHaveLength(0);
+		expect(await testDb.db.select().from(downloadHistory)).toHaveLength(0);
+		await rm(root, { recursive: true, force: true });
 	});
 });
 
