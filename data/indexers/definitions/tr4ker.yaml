@@ -1,0 +1,192 @@
+---
+# TR4KER — French semi-private tracker (native Torznab API)
+# Source port of Jackett's tr4ker.yml to Cinephage Cardigann schema.
+# Torznab endpoint: GET /api/torznab/all?apikey=...&t=search|movie|tvsearch|music|book
+# Cinephage's .Query.Type is basic/movie/tv/music/book, so `t` is remapped below.
+# Response parsing guarded by definitions/tr4ker.test.ts.
+id: tr4ker
+name: TR4KER
+description: TR4KER is a FRENCH Semi-Private Torrent Tracker for MOVIES / TV / GENERAL
+language: fr-FR
+type: semi-private
+encoding: UTF-8
+protocol: torrent
+# Site rate limit: 60 requests/minute
+requestdelay: 1
+
+links:
+  - https://tr4ker.net/
+
+caps:
+  categorymappings:
+    # from https://tr4ker.net/api/torznab?t=caps&apikey=YOUR-API-KEY
+    - { id: 1000, cat: Console, desc: 'PC Games' }
+    - { id: 1010, cat: Console/XBox, desc: 'Xbox' }
+    - { id: 1020, cat: Console/Wii, desc: 'Nintendo' }
+    - { id: 1030, cat: Console/PS4, desc: 'PlayStation' }
+    - { id: 2000, cat: Movies, desc: 'Movies' }
+    - { id: 2010, cat: Movies/Foreign, desc: 'Films Foreign' }
+    - { id: 2040, cat: Movies/HD, desc: 'Movies/HD' }
+    - { id: 3000, cat: Audio, desc: 'Audio' }
+    - { id: 3010, cat: Audio/MP3, desc: 'Audio/MP3' }
+    - { id: 3030, cat: Audio/Audiobook, desc: 'Audiobook' }
+    - { id: 3040, cat: Audio/Lossless, desc: 'Audio/Lossless' }
+    - { id: 4000, cat: PC/0day, desc: 'PC' }
+    - { id: 4030, cat: PC/Mac, desc: 'PC/Mac' }
+    - { id: 4070, cat: PC/Mobile-Android, desc: 'PC/Android' }
+    - { id: 5000, cat: TV, desc: 'TV' }
+    - { id: 5040, cat: TV/HD, desc: 'TV/HD' }
+    - { id: 5060, cat: TV/Sport, desc: 'TV/Sport' }
+    - { id: 5070, cat: TV/Anime, desc: 'TV/Anime' }
+    - { id: 6000, cat: XXX, desc: 'XXX' }
+    - { id: 7000, cat: Books, desc: 'Books' }
+    - { id: 7010, cat: Books/Mags, desc: 'Books/Mags' }
+    - { id: 7020, cat: Books/EBook, desc: 'Books/eBook' }
+    - { id: 7030, cat: Books/Comics, desc: 'Books/Comics' }
+    - { id: 8000, cat: Other, desc: 'Other' }
+    - { id: 8010, cat: Other/Misc, desc: 'Other/Misc' }
+
+  modes:
+    search: [q]
+    tv-search: [q, season, ep, imdbid, tvdbid]
+    movie-search: [q, imdbid, tmdbid]
+    music-search: [q]
+    book-search: [q]
+  allowrawsearch: true
+
+settings:
+  - name: apikey
+    type: password
+    label: API Key
+    required: true
+  - name: info_key
+    type: info
+    label: About your API key
+    default: 'You can find or generate a new API Key on the TR4KER Paramètres page (https://tr4ker.net/mon-compte/parametres), in the "Clé API" section.'
+  - name: multilang
+    type: checkbox
+    label: Replace MULTi by another language in release name
+    default: false
+  - name: multilanguage
+    type: select
+    label: Replace MULTi by this language
+    default: FRENCH
+    options:
+      FRENCH: FRENCH
+      MULTi.FRENCH: MULTi.FRENCH
+      ENGLISH: ENGLISH
+      MULTi.ENGLISH: MULTi.ENGLISH
+      VOSTFR: VOSTFR
+      MULTi.VOSTFR: MULTi.VOSTFR
+  - name: vostfr
+    type: checkbox
+    label: Replace VOSTFR and SUBFRENCH with ENGLISH
+    default: false
+  - name: info_3x
+    type: info
+    label: Including 3X
+    default: 'To see 3X torrents, open your TR4KER Paramètres page (https://tr4ker.net/mon-compte/parametres) and flick the "Contenu adulte (+18)" switch.'
+
+login:
+  # returns "401 Unauthorized, check your credentials" if apikey is invalid
+  path: api/torznab
+  method: get
+  inputs:
+    apikey: '{{ .Config.apikey }}'
+    t: search
+    limit: '1'
+
+search:
+  paths:
+    - path: api/torznab/all
+      method: get
+      response:
+        type: xml
+
+  inputs:
+    apikey: '{{ .Config.apikey }}'
+    t: '{{ if eq .Query.Type "tv" }}tvsearch{{ end }}{{ if eq .Query.Type "movie" }}movie{{ end }}{{ if eq .Query.Type "music" }}music{{ end }}{{ if eq .Query.Type "book" }}book{{ end }}{{ if eq .Query.Type "basic" }}search{{ end }}'
+    q: '{{ .Keywords }}'
+    cat: '{{ .Categories }}'
+    # season/ep are not sent (disabled upstream in Jackett too); the SxxEyy
+    # token is already part of .Keywords.
+    imdbid: '{{ .Query.IMDBID }}'
+    tmdbid: '{{ .Query.TMDBID }}'
+    tvdbid: '{{ .Query.TVDBID }}'
+    limit: '100'
+
+  rows:
+    selector: rss channel item
+
+  fields:
+    category:
+      selector: "torznab|attr[name='category']"
+      attribute: value
+      optional: true
+    # Jackett chains title_phase1/2 via .Result.*, which XML rows don't expose
+    # here; the same rewrites are done with config-gated re_replace instead.
+    title:
+      selector: title
+      filters:
+        # vostfr: VOSTFR / SUBFRENCH -> ENGLISH
+        - name: re_replace
+          args:
+            ['(?i)\b(vostfr|subfrench)\b', '{{ if .Config.vostfr }}ENGLISH{{ else }}$1{{ end }}']
+        # multilang: MULTi -> chosen language, unless a language tag already follows
+        - name: re_replace
+          args:
+            - '(?i)\b(MULTI(?!.*(?:FRENCH|ENGLISH|VOSTFR|VF2|VFF|VFQ|VOQ|VFI|VOF)))\b'
+            - '{{ if .Config.multilang }}{{ .Config.multilanguage }}{{ else }}$1{{ end }}'
+    details:
+      selector: comments
+      optional: true
+      filters:
+        - name: replace
+          args: ['/torrents/', '/torrent/']
+    download:
+      selector: enclosure
+      attribute: url
+    imdbid:
+      selector: "torznab|attr[name='imdbid']"
+      attribute: value
+      optional: true
+    tmdbid:
+      selector: "torznab|attr[name='tmdbid']"
+      attribute: value
+      optional: true
+    tvdbid:
+      selector: "torznab|attr[name='tvdbid']"
+      attribute: value
+      optional: true
+    date:
+      # Tue, 02 Jun 2026 19:24:18 +0000
+      selector: pubDate
+      filters:
+        - name: dateparse
+          args: 'ddd, DD MMM YYYY HH:mm:ss ZZ'
+    size:
+      selector: "torznab|attr[name='size']"
+      attribute: value
+    seeders:
+      selector: "torznab|attr[name='seeders']"
+      attribute: value
+      optional: true
+    leechers:
+      selector: "torznab|attr[name='peers']"
+      attribute: value
+      optional: true
+    grabs:
+      selector: "torznab|attr[name='grabs']"
+      attribute: value
+      optional: true
+    downloadvolumefactor:
+      selector: "torznab|attr[name='downloadvolumefactor']"
+      attribute: value
+      optional: true
+    uploadvolumefactor:
+      selector: "torznab|attr[name='uploadvolumefactor']"
+      attribute: value
+      optional: true
+    minimumratio:
+      text: '0.51'
+# torznab xml
