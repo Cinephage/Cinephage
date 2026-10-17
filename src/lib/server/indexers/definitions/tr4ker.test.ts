@@ -5,6 +5,7 @@ import { SelectorEngine } from '../engine/SelectorEngine.js';
 import { TemplateEngine } from '../engine/TemplateEngine.js';
 import { ResponseParser } from '../runtime/ResponseParser.js';
 import { YamlDefinitionLoader } from '../loader/YamlDefinitionLoader.js';
+import { resolveCategoryId } from '../schema/yamlDefinition.js';
 import type { SearchCriteria } from '../types/search.js';
 
 const definitionPath = resolve('data/indexers/definitions/tr4ker.yaml');
@@ -95,6 +96,33 @@ describe('TR4KER definition', () => {
 			context
 		);
 		expect(vostfr.releases[0].title).toBe('Some.Show.S01E01.ENGLISH.1080p.WEB-DL.x264-GROUP');
+	});
+
+	it('uses the feed guid so the API key in the download URL is never exposed', async () => {
+		const definition = await loadDefinition();
+		const parser = buildParser(definition);
+
+		const result = parser.parse(
+			tr4kerXml('Some.Movie.2026.MULTi.1080p.WEB-DL.x264-GROUP'),
+			definition.search.paths?.[0],
+			context
+		);
+
+		expect(result.releases[0].guid).toBe('https://tr4ker.net/torrents/abc123');
+		expect(result.releases[0].guid).not.toContain('apikey');
+	});
+
+	it('has no login block, so searches do not trigger a login probe', async () => {
+		const definition = await loadDefinition();
+		expect(definition.login).toBeUndefined();
+	});
+
+	it('maps every category to a known newznab category', async () => {
+		const definition = await loadDefinition();
+		const unknown = (definition.caps.categorymappings ?? []).filter(
+			(m) => !String(m.cat).startsWith('Other') && resolveCategoryId(String(m.cat)) === 8000
+		);
+		expect(unknown).toEqual([]);
 	});
 
 	it.each([
