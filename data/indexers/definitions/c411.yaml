@@ -22,7 +22,7 @@ caps:
     # from https://c411.org/api/torznab?apikey=YOUR-API-KEY&t=caps
     - { id: 1000, cat: Console, desc: 'Jeux Vidéo & Emulation & VR' }
     - { id: 1030, cat: Console/Wii, desc: 'Nintendo' }
-    - { id: 1040, cat: Console/XBox, desc: 'Microsoft' }
+    - { id: 1040, cat: Console/Xbox, desc: 'Microsoft' }
     - { id: 1080, cat: Console/PS4, desc: 'Sony' }
     - { id: 1090, cat: Console/Other, desc: 'Jeux Autre & ROM/ISO' }
     - { id: 2000, cat: Movies, desc: 'Films & Vidéos' }
@@ -108,14 +108,9 @@ settings:
     label: Including 3X
     default: 'To see 3X torrents, open your C411 Paramètres page (https://c411.org/user/settings) and tick the "Afficher le contenu XXX" checkbox.'
 
-login:
-  # returns "401 Unauthorized, check your credentials" if apikey is invalid
-  path: api/torznab
-  method: get
-  inputs:
-    apikey: '{{ .Config.apikey }}'
-    t: search
-    limit: '1'
+# No login block: the API key is sent on every Torznab request. A login:
+# block would add an un-rate-limited probe before each search, since the
+# stateless API returns no cookies to reuse.
 
 search:
   paths:
@@ -157,6 +152,11 @@ search:
           args:
             - '(?i)\b(MULTI(?!.*(?:FRENCH|ENGLISH|VOSTFR|VF2|VFF|VFQ|VOQ|VFI|VOF)))\b'
             - '{{ if .Config.multilang }}{{ .Config.multilanguage }}{{ else }}$1{{ end }}'
+    # Without a guid, the parser falls back to the download URL, which
+    # carries ?apikey= and is not redacted in /api/search.
+    guid:
+      selector: guid
+      optional: true
     details:
       selector: link
     download:
