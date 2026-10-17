@@ -30,6 +30,13 @@ export interface ProductionCompany {
 	origin_country: string;
 }
 
+/** TV network subset used by the discover network filter. */
+export interface TmdbNetwork {
+	id: number;
+	name: string;
+	logo_path: string | null;
+}
+
 export interface ProductionCountry {
 	iso_3166_1: string;
 	name: string;

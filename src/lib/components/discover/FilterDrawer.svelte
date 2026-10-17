@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { fade, fly } from 'svelte/transition';
 	import FilterPanel from './FilterPanel.svelte';
-	import type { WatchProvider } from '#lib/types/tmdb.js';
+	import type { TmdbNetwork, WatchProvider } from '#lib/types/tmdb.js';
 	import * as m from '#lib/paraglide/messages.js';
 
 	let {
@@ -10,6 +10,8 @@
 		sortBy,
 		selectedProviders,
 		providers,
+		networks = [],
+		selectedNetworks = [],
 		genres,
 		selectedGenres,
 		selectedLanguage,
@@ -23,9 +25,9 @@
 		languages = [],
 		onKeywordAdd,
 		onKeywordRemove,
-		onTypeChange,
 		onSortChange,
 		onProviderToggle,
+		onNetworkToggle,
 		onGenreToggle,
 		onLanguageChange,
 		onYearChange,
@@ -39,6 +41,8 @@
 		sortBy: string;
 		selectedProviders: number[];
 		providers: WatchProvider[];
+		networks: TmdbNetwork[];
+		selectedNetworks: number[];
 		genres: { id: number; name: string }[];
 		selectedGenres: number[];
 		selectedLanguage: string;
@@ -52,9 +56,9 @@
 		languages: { code: string; name: string }[];
 		onKeywordAdd: (keyword: { id: number; name: string }, exclude: boolean) => void;
 		onKeywordRemove: (keywordId: number, exclude: boolean) => void;
-		onTypeChange: (type: string) => void;
 		onSortChange: (sort: string) => void;
 		onProviderToggle: (id: number) => void;
+		onNetworkToggle: (id: number) => void;
 		onGenreToggle: (id: number) => void;
 		onLanguageChange: (language: string) => void;
 		onYearChange: (min: string, max: string) => void;
@@ -122,6 +126,8 @@
 				{sortBy}
 				{selectedProviders}
 				{providers}
+				{networks}
+				{selectedNetworks}
 				{genres}
 				{selectedGenres}
 				{selectedLanguage}
@@ -135,9 +141,9 @@
 				{languages}
 				{onKeywordAdd}
 				{onKeywordRemove}
-				{onTypeChange}
 				{onSortChange}
 				{onProviderToggle}
+				{onNetworkToggle}
 				{onGenreToggle}
 				{onLanguageChange}
 				{onYearChange}

@@ -8,17 +8,32 @@
 	import { getTmdb } from '#lib/api/discover.js';
 	import * as m from '#lib/paraglide/messages.js';
 
-	let { title, items, link, endpoint, cardSnippet, onAddToLibrary, itemClass, excludeInLibrary } =
-		$props<{
-			title: string;
-			items: T[];
-			link?: string;
-			endpoint?: string;
-			cardSnippet?: Snippet<[T]>;
-			onAddToLibrary?: (item: T) => void;
-			itemClass?: string;
-			excludeInLibrary?: boolean;
-		}>();
+	let {
+		title,
+		items,
+		link,
+		endpoint,
+		cardSnippet,
+		onAddToLibrary,
+		itemClass,
+		excludeInLibrary,
+		selectable = false,
+		isSelected,
+		onToggleSelect
+	} = $props<{
+		title: string;
+		items: T[];
+		link?: string;
+		endpoint?: string;
+		cardSnippet?: Snippet<[T]>;
+		onAddToLibrary?: (item: T) => void;
+		itemClass?: string;
+		excludeInLibrary?: boolean;
+		/** Multi-select mode pass-through for the default MediaCard rendering. */
+		selectable?: boolean;
+		isSelected?: (item: T) => boolean;
+		onToggleSelect?: (item: T) => void;
+	}>();
 
 	const resolvedItemClass = $derived(
 		itemClass ?? 'w-[calc((100%-2*0.75rem)/3)] sm:w-36 md:w-40 lg:w-44'
@@ -183,6 +198,9 @@
 						<MediaCard
 							item={item as unknown as TmdbMediaItem}
 							onAddToLibrary={onAddToLibrary as ((item: TmdbMediaItem) => void) | undefined}
+							{selectable}
+							selected={isSelected?.(item) ?? false}
+							onToggleSelect={onToggleSelect ? () => onToggleSelect(item) : undefined}
 						/>
 					{/if}
 				</div>

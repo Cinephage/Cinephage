@@ -11,6 +11,7 @@ export interface DiscoverParams {
 	topRated: string | null;
 	withWatchProviders: string;
 	watchRegion: string;
+	withNetworks: string;
 	withGenres: string;
 	withKeywords: string;
 	withoutKeywords: string;
@@ -35,6 +36,7 @@ export function parseDiscoverParams(searchParams: URLSearchParams): DiscoverPara
 		topRated: searchParams.get('top_rated'),
 		withWatchProviders: searchParams.get('with_watch_providers') || '',
 		watchRegion: searchParams.get('watch_region') || '',
+		withNetworks: searchParams.get('with_networks') || '',
 		withGenres: searchParams.get('with_genres') || '',
 		withKeywords: searchParams.get('with_keywords') || '',
 		withoutKeywords: searchParams.get('without_keywords') || '',
@@ -58,6 +60,7 @@ export function isDefaultView(searchParams: URLSearchParams, params: DiscoverPar
 		!searchParams.has('now_playing') &&
 		(!searchParams.has('type') || searchParams.get('type') === 'all') &&
 		!searchParams.has('with_watch_providers') &&
+		!searchParams.has('with_networks') &&
 		!searchParams.has('with_genres') &&
 		!searchParams.has('with_keywords') &&
 		!searchParams.has('without_keywords') &&
@@ -77,6 +80,7 @@ export function hasActiveDiscoverFilters(
 		| 'type'
 		| 'sortBy'
 		| 'withWatchProviders'
+		| 'withNetworks'
 		| 'withGenres'
 		| 'withKeywords'
 		| 'withoutKeywords'
@@ -91,6 +95,7 @@ export function hasActiveDiscoverFilters(
 		params.type !== 'all' ||
 		params.sortBy !== 'popularity.desc' ||
 		!!params.withWatchProviders ||
+		!!params.withNetworks ||
 		!!params.withGenres ||
 		!!params.withKeywords ||
 		!!params.withoutKeywords ||

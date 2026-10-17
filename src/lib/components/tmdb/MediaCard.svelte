@@ -30,9 +30,19 @@
 	interface Props {
 		item: MediaItemWithLibraryStatus;
 		onAddToLibrary?: (item: MediaItemWithLibraryStatus) => void;
+		/** Multi-select mode: clicking toggles selection instead of navigating. */
+		selectable?: boolean;
+		selected?: boolean;
+		onToggleSelect?: () => void;
 	}
 
-	let { item, onAddToLibrary }: Props = $props();
+	let {
+		item,
+		onAddToLibrary,
+		selectable = false,
+		selected = false,
+		onToggleSelect
+	}: Props = $props();
 
 	function getBadgeClass(item: TmdbMediaItem): string {
 		const label = getMediaTypeLabel(item);
@@ -61,6 +71,32 @@
 	// Open request (pending or approved) — server-annotated badge state.
 	const requestedOpen = $derived(item.requested === 'pending' || item.requested === 'approved');
 
+	// Only addable, not-yet-in-library movies/series take part in multi-select;
+	// everything else keeps its normal navigation behavior.
+	const canSelect = $derived(
+		selectable && !inLibrary && (typeLabel === 'Movie' || typeLabel === 'TV')
+	);
+	const showQuickAdd = $derived(!selectable && !inLibrary && !!onAddToLibrary);
+
+	function handleCardClick(e: MouseEvent) {
+		if (canSelect) {
+			e.preventDefault();
+			onToggleSelect?.();
+		}
+	}
+
+	function handleSelectClick(e: MouseEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		onToggleSelect?.();
+	}
+
+	function handleQuickAdd(e: MouseEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		onAddToLibrary?.(item);
+	}
+
 	const releaseLine = $derived.by(() => {
 		const enriched = item as MediaItemWithLibraryStatus;
 		const rec = item as unknown as Record<string, unknown>;
@@ -83,8 +119,13 @@
 </script>
 
 <a
-	href={resolvePath(link)}
-	class="group relative block aspect-2/3 w-full overflow-hidden rounded-lg bg-base-300 shadow-sm transition-all hover:shadow-md hover:ring-2 hover:ring-primary/50"
+	href={canSelect ? undefined : resolvePath(link)}
+	onclick={handleCardClick}
+	class="group relative block aspect-2/3 w-full overflow-hidden rounded-lg bg-base-300 shadow-sm transition-all {canSelect
+		? 'cursor-pointer'
+		: ''} {canSelect && selected
+		? 'ring-2 ring-primary ring-offset-2 ring-offset-base-100'
+		: 'hover:shadow-md hover:ring-2 hover:ring-primary/50'}"
 >
 	<TmdbImage
 		path={poster}
@@ -93,72 +134,83 @@
 		class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
 	/>
 
-	<!-- Library Status Badge (top-left) -->
-	{#if inLibrary}
-		<div class="absolute top-2 left-2 z-10">
-			{#if hasFile}
-				<!-- Available: Green checkmark -->
+	<!-- Selection checkbox (top-left, above the status badges) -->
+	{#if canSelect}
+		<div class="absolute top-2 left-2 z-20">
+			<button
+				type="button"
+				class="flex h-6 w-6 items-center justify-center rounded-md border-2 bg-base-100/90 shadow-sm transition-colors {selected
+					? 'border-primary bg-primary'
+					: 'border-base-content/30 hover:border-primary'}"
+				aria-pressed={selected}
+				aria-label={m.discover_select()}
+				onclick={handleSelectClick}
+			>
+				{#if selected}
+					<Check class="h-4 w-4 text-primary-content" strokeWidth={3} />
+				{/if}
+			</button>
+		</div>
+	{/if}
+
+	<!-- Status column (top-left): library + request badges -->
+	{#if inLibrary || requestedOpen}
+		<div
+			class="absolute left-2 z-10 flex flex-col items-start gap-1 {canSelect ? 'top-10' : 'top-2'}"
+		>
+			{#if inLibrary}
 				<div
-					class="flex h-6 w-6 items-center justify-center rounded-full bg-success/90 text-success-content shadow-md backdrop-blur-sm"
-					title={m.tmdb_availableInLibrary()}
+					class="flex h-6 w-6 items-center justify-center rounded-full shadow-md backdrop-blur-sm {hasFile
+						? 'bg-success/90 text-success-content'
+						: 'bg-warning/90 text-warning-content'}"
+					title={hasFile ? m.tmdb_availableInLibrary() : m.tmdb_monitoredNotDownloaded()}
 				>
-					<Check class="h-4 w-4" strokeWidth={3} />
+					{#if hasFile}
+						<Check class="h-4 w-4" strokeWidth={3} />
+					{:else}
+						<Clock class="h-4 w-4" strokeWidth={2.5} />
+					{/if}
 				</div>
-			{:else}
-				<!-- Monitored but missing: Yellow clock -->
+			{/if}
+
+			{#if requestedOpen}
 				<div
-					class="flex h-6 w-6 items-center justify-center rounded-full bg-warning/90 text-warning-content shadow-md backdrop-blur-sm"
-					title={m.tmdb_monitoredNotDownloaded()}
+					class="flex h-6 w-6 items-center justify-center rounded-full bg-secondary/90 text-secondary-content shadow-md backdrop-blur-sm"
+					title={m.requests_requested()}
 				>
-					<Clock class="h-4 w-4" strokeWidth={2.5} />
+					<Clapperboard class="h-3.5 w-3.5" strokeWidth={2.5} />
 				</div>
 			{/if}
 		</div>
 	{/if}
 
-	<!-- Request Badge (below the library badge): an open request exists -->
-	{#if requestedOpen}
-		<div class="absolute left-2 z-10 {inLibrary ? 'top-10' : 'top-2'}">
-			<div
-				class="flex h-6 w-6 items-center justify-center rounded-full bg-secondary/90 text-secondary-content shadow-md backdrop-blur-sm"
-				title={m.requests_requested()}
-			>
-				<Clapperboard class="h-3.5 w-3.5" strokeWidth={2.5} />
-			</div>
-		</div>
-	{/if}
-
-	<!-- Media Type Badge (top-right) -->
-	{#if typeLabel}
-		<div class="absolute top-2 right-2 z-10">
-			<span
-				class="badge border-none badge-sm font-semibold shadow-sm backdrop-blur-sm {badgeClass}"
-			>
-				{typeLabel}
-			</span>
-		</div>
-	{/if}
-
-	<!-- Hover Overlay -->
-	<div
-		class="absolute inset-0 flex flex-col justify-end bg-linear-to-t from-black/90 via-black/20 to-transparent p-3 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-	>
-		<!-- Quick Add Button (top-right corner when not in library) -->
-		{#if !inLibrary && onAddToLibrary}
+	<!-- Top-right row: quick add (hover) + media type badge — siblings, so they never overlap -->
+	<div class="absolute top-2 right-2 z-10 flex items-center gap-1">
+		{#if showQuickAdd}
 			<button
 				type="button"
-				class="absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-content shadow-lg transition-transform hover:scale-110 active:scale-95"
+				class="pointer-events-none flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-content opacity-0 shadow-lg transition-all group-hover:pointer-events-auto group-hover:opacity-100 hover:scale-110 focus-visible:pointer-events-auto focus-visible:opacity-100 active:scale-95"
 				title={m.tmdb_addToLibrary()}
-				onclick={(e) => {
-					e.preventDefault();
-					e.stopPropagation();
-					onAddToLibrary(item);
-				}}
+				aria-label={m.tmdb_addToLibrary()}
+				onclick={handleQuickAdd}
 			>
 				<Plus class="h-5 w-5" strokeWidth={2.5} />
 			</button>
 		{/if}
 
+		{#if typeLabel}
+			<span
+				class="badge border-none badge-sm font-semibold shadow-sm backdrop-blur-sm {badgeClass}"
+			>
+				{typeLabel}
+			</span>
+		{/if}
+	</div>
+
+	<!-- Hover Overlay -->
+	<div
+		class="absolute inset-0 flex flex-col justify-end bg-linear-to-t from-black/90 via-black/20 to-transparent p-3 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+	>
 		<div
 			class="translate-y-4 transform transition-transform duration-300 group-hover:translate-y-0"
 		>

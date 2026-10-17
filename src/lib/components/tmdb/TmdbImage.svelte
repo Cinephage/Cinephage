@@ -8,8 +8,15 @@
 		path,
 		size = 'w500',
 		alt,
+		fit = 'cover',
 		class: className = ''
-	}: { path: string | null; size?: string; alt: string; class?: string } = $props();
+	}: {
+		path: string | null;
+		size?: string;
+		alt: string;
+		fit?: 'cover' | 'contain';
+		class?: string;
+	} = $props();
 
 	// Use native lazy loading - much more efficient than JS IntersectionObserver
 	// The browser handles this with a single optimized observer internally
@@ -55,9 +62,9 @@
 			{alt}
 			loading="lazy"
 			decoding="async"
-			class="h-full w-full object-cover transition-opacity duration-200 {loaded
-				? 'opacity-100'
-				: 'opacity-0'}"
+			class="h-full w-full {fit === 'contain'
+				? 'object-contain'
+				: 'object-cover'} transition-opacity duration-200 {loaded ? 'opacity-100' : 'opacity-0'}"
 		/>
 		{#if !loaded}
 			<div class="absolute inset-0 animate-pulse bg-base-300"></div>

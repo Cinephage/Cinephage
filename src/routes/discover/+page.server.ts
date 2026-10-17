@@ -33,6 +33,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		topRated,
 		withWatchProviders,
 		watchRegion,
+		withNetworks,
 		withGenres,
 		withOriginalLanguage: urlOriginalLanguage,
 		minDate,
@@ -78,6 +79,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			viewType: 'not_configured' as const,
 			tmdbConfigured: false,
 			providers: [],
+			networks: [],
 			genres: [],
 			certifications: [],
 			languages: [],
@@ -99,18 +101,25 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	try {
 		const systemRegion = await tmdb.getRegion();
-		const [providersData, movieGenresData, tvGenresData, movieCertifications, languagesData] =
-			await Promise.all([
-				tmdb.getWatchProviders('movie', watchRegion || systemRegion) as Promise<{
-					results: WatchProvider[];
-				} | null>,
-				tmdb.fetch('/genre/movie/list') as Promise<{
-					genres: { id: number; name: string }[];
-				} | null>,
-				tmdb.fetch('/genre/tv/list') as Promise<{ genres: { id: number; name: string }[] } | null>,
-				tmdb.getCertifications('movie') as Promise<TmdbCertificationsResponse>,
-				tmdb.getLanguages().catch(() => [] as { iso_639_1: string; english_name: string }[])
-			]);
+		const [
+			providersData,
+			movieGenresData,
+			tvGenresData,
+			movieCertifications,
+			languagesData,
+			networks
+		] = await Promise.all([
+			tmdb.getWatchProviders('movie', watchRegion || systemRegion) as Promise<{
+				results: WatchProvider[];
+			} | null>,
+			tmdb.fetch('/genre/movie/list') as Promise<{
+				genres: { id: number; name: string }[];
+			} | null>,
+			tmdb.fetch('/genre/tv/list') as Promise<{ genres: { id: number; name: string }[] } | null>,
+			tmdb.getCertifications('movie') as Promise<TmdbCertificationsResponse>,
+			tmdb.getLanguages().catch(() => [] as { iso_639_1: string; english_name: string }[]),
+			tmdb.getNetworks().catch(() => [])
+		]);
 
 		const languages = languagesData
 			? languagesData
@@ -175,6 +184,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			type,
 			sortBy,
 			withWatchProviders,
+			withNetworks,
 			withGenres,
 			withKeywords,
 			withoutKeywords,
@@ -210,6 +220,7 @@ export const load: PageServerLoad = async ({ url }) => {
 					total_results: trendingResults.total_results
 				},
 				providers,
+				networks,
 				genres,
 				certifications: usCertifications,
 				languages,
@@ -226,7 +237,9 @@ export const load: PageServerLoad = async ({ url }) => {
 			};
 		}
 
-		if (topRated === 'true' && !certification && !originFilterActive) {
+		// Curated rows cannot express filters, so top_rated yields to the grid
+		// whenever any discover filter is active (same rule as trending).
+		if (topRated === 'true' && !trendingHasActiveFilters && !originFilterActive) {
 			let endpoint: string;
 			if (type === 'movie') {
 				endpoint = `/movie/top_rated?page=${page}`;
@@ -302,6 +315,7 @@ export const load: PageServerLoad = async ({ url }) => {
 					total_results: topRatedResults.total_results
 				},
 				providers,
+				networks,
 				genres,
 				certifications: usCertifications,
 				languages,
@@ -338,6 +352,7 @@ export const load: PageServerLoad = async ({ url }) => {
 					total_results: nowPlayingResults.total_results
 				},
 				providers,
+				networks,
 				genres,
 				certifications: usCertifications,
 				languages,
@@ -422,6 +437,7 @@ export const load: PageServerLoad = async ({ url }) => {
 					nowPlaying: enrichedNowPlaying
 				},
 				providers,
+				networks,
 				genres,
 				certifications: usCertifications,
 				languages,
@@ -445,6 +461,7 @@ export const load: PageServerLoad = async ({ url }) => {
 				trending,
 				withWatchProviders,
 				watchRegion,
+				withNetworks,
 				withGenres,
 				withKeywords,
 				withoutKeywords,
@@ -469,6 +486,7 @@ export const load: PageServerLoad = async ({ url }) => {
 				results: enrichedResults,
 				pagination,
 				providers,
+				networks,
 				genres,
 				certifications: usCertifications,
 				languages,
@@ -491,6 +509,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			tmdbConfigured: true,
 			error: 'Failed to load content',
 			providers: [],
+			networks: [],
 			genres: [],
 			certifications: [],
 			languages: [],
