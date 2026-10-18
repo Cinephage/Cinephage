@@ -1,6 +1,7 @@
-import { cp, mkdir, rename, rm, stat } from 'node:fs/promises';
+import { cp, rename, rm, stat } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { resolvePathWithinRoot } from './delete-helpers.js';
+import { ensureMediaDirectory } from './mkdir-helpers.js';
 
 export type DirectoryMoveMode = 'noop' | 'rename' | 'copy-delete';
 
@@ -46,7 +47,7 @@ export async function moveDirectoryWithinRoots(
 		throw new Error(`Destination path already exists: ${destPath}`);
 	}
 
-	await mkdir(dirname(destPath), { recursive: true });
+	await ensureMediaDirectory(dirname(destPath));
 
 	try {
 		await rename(sourcePath, destPath);

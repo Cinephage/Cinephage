@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { moveFile, fileExists, deletePhysicalFile } from './FileTransfer';
+import { moveFile, fileExists, deletePhysicalFile, applyFilePermissions } from './FileTransfer';
 import { mkdtemp, writeFile, rm, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -227,5 +227,60 @@ describe('deletePhysicalFile', () => {
 
 		await expect(deletePhysicalFile(missing, false, tmpDir)).resolves.toBeUndefined();
 		await expect(deletePhysicalFile(missing, true, tmpDir)).resolves.toBeUndefined();
+	});
+});
+
+describe('applyFilePermissions', () => {
+	let tmpDir: string;
+	let originalUmask: number;
+
+	beforeEach(async () => {
+		tmpDir = await mkdtemp(join(tmpdir(), 'cinephage-permissions-test-'));
+		// Simulate the container entrypoint's restrictive umask (issue #617):
+		// without a default, a freshly copied media file lands at 0600.
+		originalUmask = process.umask(0o077);
+	});
+
+	afterEach(async () => {
+		process.umask(originalUmask);
+		await rm(tmpDir, { recursive: true, force: true });
+	});
+
+	it('defaults a freshly transferred file to 0644 when no permission option is configured', async () => {
+		const src = join(tmpDir, 'source.mkv');
+		const dst = join(tmpDir, 'dest.mkv');
+		await writeFile(src, 'content');
+		await writeFile(dst, 'content');
+
+		await applyFilePermissions(dst, src, false, '');
+
+		const info = await stat(dst);
+		expect(info.mode & 0o777).toBe(0o644);
+	});
+
+	it('still honors an explicit chmodFile override', async () => {
+		const src = join(tmpDir, 'source.mkv');
+		const dst = join(tmpDir, 'dest.mkv');
+		await writeFile(src, 'content');
+		await writeFile(dst, 'content');
+
+		await applyFilePermissions(dst, src, false, '600');
+
+		const info = await stat(dst);
+		expect(info.mode & 0o777).toBe(0o600);
+	});
+
+	it('still honors preservePermissions (copies the source file mode)', async () => {
+		const src = join(tmpDir, 'source.mkv');
+		const dst = join(tmpDir, 'dest.mkv');
+		await writeFile(src, 'content');
+		await writeFile(dst, 'content');
+		const { chmod } = await import('node:fs/promises');
+		await chmod(src, 0o640);
+
+		await applyFilePermissions(dst, src, true, '');
+
+		const info = await stat(dst);
+		expect(info.mode & 0o777).toBe(0o640);
 	});
 });

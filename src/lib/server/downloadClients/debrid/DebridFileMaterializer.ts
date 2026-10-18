@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
-import { lstat, mkdir, realpath, rename, rm } from 'node:fs/promises';
+import { lstat, realpath, rename, rm } from 'node:fs/promises';
+import { ensureMediaDirectory } from '#lib/server/filesystem/mkdir-helpers.js';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
@@ -101,7 +102,7 @@ export class DebridFileMaterializer {
 	}
 
 	private async preflight(rootPath: string, directory: string, finalPath: string): Promise<void> {
-		await mkdir(directory, { recursive: true });
+		await ensureMediaDirectory(directory);
 		const directoryStat = await lstat(directory);
 		if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
 			throw new Error('Materialization destination parent is a symlink or is unsafe');
