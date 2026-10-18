@@ -90,6 +90,14 @@ const disableSecureCookies = process.env.BETTER_AUTH_DISABLE_SECURE_COOKIES === 
 const useSecureCookies = !disableSecureCookies && getBaseURL().startsWith('https://');
 
 /**
+ * better-auth's `advanced.cookiePrefix` below, exported so the LAN-HTTP
+ * cookie rewriting in session-helpers.ts can build/match the exact cookie
+ * names better-auth generates (`${cookiePrefix}.session_token`, etc.)
+ * without hardcoding the literal string in a second place.
+ */
+export const AUTH_COOKIE_PREFIX = 'cinephage';
+
+/**
  * Better Auth configuration for Cinephage
  * Username-based authentication with no email required
  */
@@ -456,7 +464,7 @@ export const auth = betterAuth({
 		// cookies and silently logged everyone out. The Secure ATTRIBUTE below
 		// still adapts per scheme; only the name is now stable. Existing https
 		// deployments are logged out once by this rename.
-		cookiePrefix: 'cinephage',
+		cookiePrefix: AUTH_COOKIE_PREFIX,
 
 		useSecureCookies: useSecureCookies,
 
