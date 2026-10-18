@@ -330,10 +330,40 @@ export const DELETE: RequestHandler = async ({ params, url, locals }) => {
 			}
 		}
 
-		// Add to blocklist if requested
-		// Note: Blocklist table not yet implemented - would store infoHash to prevent re-downloading
-		if (addToBlocklist && queueItem.infoHash) {
-			logger.warn({ infoHash: queueItem.infoHash }, 'Blocklist not yet implemented');
+		// Add to blocklist if requested. Not gated on infoHash - usenet queue
+		// items never have one, and the blocklist service matches on title/
+		// indexer/quality/size too (see BlocklistService.addToBlocklist).
+		if (addToBlocklist) {
+			try {
+				const { blocklistService } =
+					await import('#lib/server/monitoring/specifications/BlocklistSpecification.js');
+				await blocklistService.addToBlocklist(
+					{
+						title: queueItem.title,
+						infoHash: queueItem.infoHash ?? undefined,
+						indexerId: queueItem.indexerId ?? undefined,
+						quality: queueItem.quality ?? undefined,
+						size: queueItem.size ?? undefined,
+						protocol: queueItem.protocol
+					},
+					{
+						movieId: queueItem.movieId ?? undefined,
+						seriesId: queueItem.seriesId ?? undefined,
+						episodeIds: queueItem.episodeIds ?? undefined,
+						reason: 'manual',
+						message: 'Manually blocklisted from the queue/history'
+					}
+				);
+			} catch (blocklistError) {
+				logger.warn(
+					{
+						queueId: queueItem.id,
+						title: queueItem.title,
+						error: blocklistError instanceof Error ? blocklistError.message : String(blocklistError)
+					},
+					'Failed to add release to blocklist'
+				);
+			}
 		}
 
 		// Add/refresh a suppression tombstone when local state is removed without confirmed

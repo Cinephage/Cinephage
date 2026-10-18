@@ -131,7 +131,8 @@ export type ActivityEventType =
 	| 'imported' // Import completed
 	| 'failed' // Operation failed
 	| 'rejected' // Release rejected
-	| 'removed'; // Removed from queue
+	| 'removed' // Removed from queue
+	| 'blocklisted'; // Release added to the blocklist
 
 /**
  * Timeline event within an activity
@@ -199,6 +200,8 @@ export interface UnifiedActivity {
 	// Links
 	queueItemId?: string; // Link to current queue item if downloading
 	downloadHistoryId?: string; // Link to download history record
+	/** Whether this release currently has an active blocklist entry. */
+	isBlocklisted?: boolean;
 	monitoringHistoryId?: string; // Link to monitoring history record
 	importedPath?: string; // Path where file was imported
 	/** How the file reached importedPath (hardlink/copy/move/symlink). */
