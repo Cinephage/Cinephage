@@ -794,5 +794,67 @@ describe('NamingService', () => {
 			};
 			expect(service.generateMovieFolderName(info)).toBe('Movies/The Dark Knight (2008)');
 		});
+
+		it('strips a leading dot-ellipsis from a movie folder name so it is not hidden on Linux', () => {
+			const service = new NamingService({ movieFolderFormat: '{Title} ({Year})' });
+			const info: MediaNamingInfo = {
+				title: '...And Justice for All',
+				year: 1979,
+				tmdbId: 17443
+			};
+			const result = service.generateMovieFolderName(info);
+			expect(result.startsWith('.')).toBe(false);
+			expect(result).toBe('And Justice for All (1979)');
+		});
+
+		it('strips a leading dot-ellipsis from a movie file name', () => {
+			const service = new NamingService({ movieFileFormat: '{Title} ({Year})' });
+			const info: MediaNamingInfo = {
+				title: '...And Justice for All',
+				year: 1979,
+				tmdbId: 17443,
+				originalExtension: '.mkv'
+			};
+			const result = service.generateMovieFileName(info);
+			expect(result.startsWith('.')).toBe(false);
+			expect(result).toBe('And Justice for All (1979).mkv');
+		});
+
+		it('strips a leading dot-ellipsis from a series folder name', () => {
+			const service = new NamingService({ seriesFolderFormat: '{Title} ({Year})' });
+			const info: MediaNamingInfo = {
+				title: '...Baby One More Time',
+				year: 2024,
+				tvdbId: 1
+			};
+			const result = service.generateSeriesFolderName(info);
+			expect(result.startsWith('.')).toBe(false);
+			expect(result).toBe('Baby One More Time (2024)');
+		});
+
+		it('strips a leading dot-ellipsis from an episode file name', () => {
+			const service = new NamingService({
+				episodeFileFormat: '{Title} - S{Season:00}E{Episode:00}'
+			});
+			const info: MediaNamingInfo = {
+				title: '...Baby One More Time',
+				seasonNumber: 1,
+				episodeNumbers: [1],
+				originalExtension: '.mkv'
+			};
+			const result = service.generateEpisodeFileName(info);
+			expect(result.startsWith('.')).toBe(false);
+			expect(result).toBe('Baby One More Time - S01E01.mkv');
+		});
+
+		it('still allows an internal dot (e.g. "Mr. Robot") to survive untouched', () => {
+			const service = new NamingService({ movieFolderFormat: '{Title} ({Year})' });
+			const info: MediaNamingInfo = {
+				title: 'Mr. Robot',
+				year: 2015,
+				tmdbId: 1
+			};
+			expect(service.generateMovieFolderName(info)).toBe('Mr. Robot (2015)');
+		});
 	});
 });
