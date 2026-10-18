@@ -1,10 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
 	stripSecureFromSetCookie,
 	stripSecureCookiesForLocalHttp,
-	rewriteCookieHeaderForLocalHttp
+	rewriteCookieHeaderForLocalHttp,
+	setAuthenticatedLocals
 } from './session-helpers.js';
 import type { Handle } from '@sveltejs/kit/hooks';
+import type { AuthSessionRecord, AuthSessionUser } from './auth.js';
 
 type RequestEvent = Parameters<Handle>[0]['event'];
 
@@ -154,5 +156,55 @@ describe('rewriteCookieHeaderForLocalHttp', () => {
 		const result = rewriteCookieHeaderForLocalHttp(event, headers);
 
 		expect(result).toBe(headers);
+	});
+});
+
+describe('setAuthenticatedLocals', () => {
+	function makeLocalsEvent(): Parameters<Handle>[0]['event'] & {
+		locals: Record<string, unknown>;
+	} {
+		return {
+			locals: {},
+			cookies: {
+				get: vi.fn().mockReturnValue(undefined),
+				set: vi.fn()
+			}
+		} as unknown as Parameters<Handle>[0]['event'] & { locals: Record<string, unknown> };
+	}
+
+	function makeSession(language = 'en'): {
+		user: AuthSessionUser;
+		session: AuthSessionRecord;
+	} {
+		return {
+			user: { id: 'user-1', language } as unknown as AuthSessionUser,
+			session: { id: 'session-1' } as unknown as AuthSessionRecord
+		};
+	}
+
+	// Issue #624: a non-browser, API-key-authenticated client (Seerr,
+	// Qui, other *arr-compat clients) has no use for browser interface
+	// cookies, and seeding the theme cookie in particular is fire-and-forget
+	// work that calls cookies.set() after an async DB lookup - landing after
+	// the response was already sent crashed the whole process. Skipping
+	// cookie-seeding entirely for API-key sessions removes the race.
+	it('never touches cookies for an API-key-authenticated session', () => {
+		const event = makeLocalsEvent();
+
+		setAuthenticatedLocals(event, makeSession(), 'some-api-key');
+
+		expect(event.cookies.set).not.toHaveBeenCalled();
+	});
+
+	it('still seeds the locale cookie for a real browser (cookie) session', () => {
+		const event = makeLocalsEvent();
+
+		setAuthenticatedLocals(event, makeSession('en'), null);
+
+		expect(event.cookies.set).toHaveBeenCalledWith(
+			'PARAGLIDE_LOCALE',
+			'en',
+			expect.objectContaining({ path: '/' })
+		);
 	});
 });
