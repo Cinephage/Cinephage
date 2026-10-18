@@ -2,7 +2,12 @@ import type { Handle } from '@sveltejs/kit/hooks';
 import { randomUUID } from 'node:crypto';
 import { cookieName, locales } from '#lib/paraglide/runtime.js';
 import { isLocalNetworkOrigin } from '#lib/server/utils/origin.js';
+import { AUTH_COOKIE_PREFIX } from './auth.js';
 import type { AuthSessionRecord, AuthSessionUser } from './auth.js';
+
+/** Prefixes browsers require the `Secure` attribute for - see stripSecureCookiePrefix below. */
+const SECURE_COOKIE_PREFIX = '__Secure-';
+const HOST_COOKIE_PREFIX = '__Host-';
 
 function createSupportId(): string {
 	return randomUUID().split('-')[0] ?? randomUUID();
@@ -138,17 +143,46 @@ function clearAuthenticatedLocals(event: Parameters<Handle>[0]['event']): void {
 }
 
 /**
- * Remove the `Secure` attribute from a single Set-Cookie header value.
- * Case-insensitive on the attribute name; leaves every other attribute
- * (HttpOnly, SameSite, Path, Max-Age, …) untouched. Pure/no I/O so it's
- * directly unit-testable - see stripSecureCookiesForLocalHttp for why this
- * exists.
+ * Remove the `__Secure-`/`__Host-` prefix from a cookie name, if present.
+ * Mirrors better-auth's own (unexported) stripSecureCookiePrefix.
+ */
+function stripSecureCookiePrefix(cookieName: string): string {
+	if (cookieName.startsWith(SECURE_COOKIE_PREFIX)) {
+		return cookieName.slice(SECURE_COOKIE_PREFIX.length);
+	}
+	if (cookieName.startsWith(HOST_COOKIE_PREFIX)) {
+		return cookieName.slice(HOST_COOKIE_PREFIX.length);
+	}
+	return cookieName;
+}
+
+/**
+ * Remove the `Secure` attribute AND the `__Secure-`/`__Host-` name prefix
+ * from a single Set-Cookie header value. Case-insensitive on the attribute
+ * name; leaves every other attribute (HttpOnly, SameSite, Path, Max-Age, …)
+ * untouched.
+ *
+ * Both have to go together: browsers reject any Set-Cookie whose NAME starts
+ * with `__Secure-`/`__Host-` unless the `Secure` ATTRIBUTE is also present
+ * (https://developer.mozilla.org/.../Set-Cookie#__secure-_and_host-_prefixes).
+ * Stripping only the attribute (as this used to do) left a cookie name the
+ * browser silently refuses to store over plain HTTP - the password verifies,
+ * but no cookie sticks and the user bounces back to the login page
+ * (GitHub issue #615, a follow-on from #596's original Secure-attribute fix).
+ *
+ * Pure/no I/O so it's directly unit-testable - see stripSecureCookiesForLocalHttp
+ * for why this exists.
  */
 function stripSecureFromSetCookie(value: string): string {
-	return value
-		.split(';')
-		.filter((part) => part.trim().toLowerCase() !== 'secure')
-		.join(';');
+	const parts = value.split(';').filter((part) => part.trim().toLowerCase() !== 'secure');
+	const [nameValue, ...attributes] = parts;
+	const eqIndex = nameValue.indexOf('=');
+	if (eqIndex === -1) {
+		return parts.join(';');
+	}
+	const name = nameValue.slice(0, eqIndex);
+	const rest = nameValue.slice(eqIndex);
+	return [`${stripSecureCookiePrefix(name)}${rest}`, ...attributes].join(';');
 }
 
 /**
@@ -176,20 +210,25 @@ function stripSecureFromSetCookie(value: string): string {
  *    *does* forward from a private-IP Host but terminates TLS is still
  *    respected and keeps Secure cookies.
  */
+function isConfidentlyLocalHttp(event: Parameters<Handle>[0]['event']): boolean {
+	const forwardedProto = event.request.headers.get('x-forwarded-proto');
+	if (forwardedProto?.toLowerCase() === 'https') {
+		return false;
+	}
+	return isLocalNetworkOrigin(event.url.origin);
+}
+
 function stripSecureCookiesForLocalHttp(
 	event: Parameters<Handle>[0]['event'],
 	response: Response
 ): Response {
-	const forwardedProto = event.request.headers.get('x-forwarded-proto');
-	if (forwardedProto?.toLowerCase() === 'https') {
-		return response;
-	}
-	if (!isLocalNetworkOrigin(event.url.origin)) {
+	if (!isConfidentlyLocalHttp(event)) {
 		return response;
 	}
 
 	const setCookies = response.headers.getSetCookie();
-	if (setCookies.length === 0 || !setCookies.some((c) => /;\s*secure/i.test(c))) {
+	const needsRewrite = (c: string) => /;\s*secure/i.test(c) || /^(__Secure-|__Host-)/.test(c);
+	if (setCookies.length === 0 || !setCookies.some(needsRewrite)) {
 		return response;
 	}
 
@@ -201,10 +240,67 @@ function stripSecureCookiesForLocalHttp(
 	return rewritten;
 }
 
+/**
+ * The flip side of stripSecureCookiesForLocalHttp: once a LAN browser has a
+ * plain-named cookie (e.g. `cinephage.session_token`, no `__Secure-` prefix),
+ * every later request from it sends that plain name back. But better-auth's
+ * own cookie names are still built from the single global `useSecureCookies`
+ * flag (see auth.ts), so auth.api.getSession() looks for the PREFIXED name
+ * (`__Secure-cinephage.session_token`) and never finds it - the session
+ * silently fails to restore and the user bounces back to the login page
+ * (GitHub issue #615).
+ *
+ * For confidently-LAN-HTTP requests only, duplicate every incoming
+ * `${AUTH_COOKIE_PREFIX}.*`-named cookie under its `__Secure-`-prefixed name
+ * (if that name isn't already present) before handing the headers to
+ * better-auth, so its lookup by the prefixed name succeeds. Returns a new
+ * Headers instance; the input is left untouched.
+ */
+function rewriteCookieHeaderForLocalHttp(
+	event: Parameters<Handle>[0]['event'],
+	headers: Headers
+): Headers {
+	if (!isConfidentlyLocalHttp(event)) {
+		return headers;
+	}
+
+	const cookieHeader = headers.get('cookie');
+	if (!cookieHeader) {
+		return headers;
+	}
+
+	const plainPrefix = `${AUTH_COOKIE_PREFIX}.`;
+	const securedPrefix = `${SECURE_COOKIE_PREFIX}${AUTH_COOKIE_PREFIX}.`;
+	const pairs = cookieHeader
+		.split(';')
+		.map((pair) => pair.trim())
+		.filter(Boolean);
+	const names = new Set(pairs.map((pair) => pair.slice(0, pair.indexOf('='))));
+
+	const additions: string[] = [];
+	for (const pair of pairs) {
+		const eqIndex = pair.indexOf('=');
+		if (eqIndex === -1) continue;
+		const name = pair.slice(0, eqIndex);
+		if (name.startsWith(plainPrefix) && !names.has(`${SECURE_COOKIE_PREFIX}${name}`)) {
+			additions.push(`${securedPrefix}${name.slice(plainPrefix.length)}${pair.slice(eqIndex)}`);
+		}
+	}
+
+	if (additions.length === 0) {
+		return headers;
+	}
+
+	const rewritten = new Headers(headers);
+	rewritten.set('cookie', [...pairs, ...additions].join('; '));
+	return rewritten;
+}
+
 export {
 	createSupportId,
 	setAuthenticatedLocals,
 	clearAuthenticatedLocals,
 	stripSecureFromSetCookie,
-	stripSecureCookiesForLocalHttp
+	stripSecureCookiesForLocalHttp,
+	rewriteCookieHeaderForLocalHttp
 };
