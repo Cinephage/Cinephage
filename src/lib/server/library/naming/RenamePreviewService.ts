@@ -29,7 +29,8 @@ import { libraryOperationLock } from '../library-operation-lock.js';
 import { diskScanService } from '../disk-scan.js';
 import { moveFile, fileExists } from '#lib/server/downloadClients/import/FileTransfer.js';
 import { ReleaseParser } from '#lib/server/indexers/parser/ReleaseParser.js';
-import { rename, stat, readdir, rmdir, mkdir } from 'node:fs/promises';
+import { rename, stat, readdir, rmdir } from 'node:fs/promises';
+import { ensureMediaDirectory } from '#lib/server/filesystem/mkdir-helpers.js';
 import { chooseBestParsedRelease, resolveAudioLanguages } from './preview-metadata';
 import { extractLanguageCodes, resolveLocalizedTitles } from './localization';
 import {
@@ -1097,7 +1098,7 @@ export class RenamePreviewService {
 			// The target parent may not exist yet (e.g. letter-bucket naming like
 			// "T/Title (2026) [tmdbid-x]") and rename() does not create intermediate
 			// directories — create the parent chain before the move.
-			await mkdir(dirname(actualNewFolder), { recursive: true });
+			await ensureMediaDirectory(dirname(actualNewFolder));
 
 			// Atomically rename the folder on disk.
 			await rename(actualOldFolder, actualNewFolder);
