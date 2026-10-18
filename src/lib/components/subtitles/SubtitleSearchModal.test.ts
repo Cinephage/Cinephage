@@ -217,7 +217,10 @@ describe('SubtitleSearchModal', () => {
 		renderModal();
 
 		await screen.findAllByRole('button', { name: /^download$/i });
-		// The seeded languages are echoed in the filter summary.
-		await waitFor(() => expect(screen.getByText(/Languages: French, English/)).toBeTruthy());
+		// The seeded languages are reflected as selected (primary) pills.
+		await waitFor(() => {
+			expect(screen.getByRole('button', { name: 'French' }).className).toContain('btn-primary');
+			expect(screen.getByRole('button', { name: 'English' }).className).toContain('btn-primary');
+		});
 	});
 });
