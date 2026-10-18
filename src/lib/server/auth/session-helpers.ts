@@ -119,20 +119,28 @@ function setAuthenticatedLocals(
 	event.locals.apiKey = apiKey;
 	event.locals.apiKeyPermissions = apiKeyPermissions;
 
-	// Seed the interface-locale cookie from the saved account preference on
-	// browsers that don't have one yet, so the user's language follows them
-	// across devices. Paraglide still owns locale negotiation once set.
-	const savedLocale = session.user.language;
-	if (savedLocale && locales.includes(savedLocale as never) && !event.cookies.get(cookieName)) {
-		event.cookies.set(cookieName, savedLocale, {
-			path: '/',
-			sameSite: 'lax',
-			maxAge: 60 * 60 * 24 * 365
-		});
+	// Interface cookies (locale, theme) are meaningless to a non-browser,
+	// API-key-authenticated client (Seerr/Qui/other *arr clients bridged via
+	// the Sonarr/Radarr-compat API); skip seeding them entirely in that case.
+	if (!apiKey) {
+		// Seed the interface-locale cookie from the saved account preference on
+		// browsers that don't have one yet, so the user's language follows them
+		// across devices. Paraglide still owns locale negotiation once set.
+		const savedLocale = session.user.language;
+		if (savedLocale && locales.includes(savedLocale as never) && !event.cookies.get(cookieName)) {
+			event.cookies.set(cookieName, savedLocale, {
+				path: '/',
+				sameSite: 'lax',
+				maxAge: 60 * 60 * 24 * 365
+			});
+		}
+
+		// Defense in depth: never let a rejection here (expected or not)
+		// escape as an unhandled rejection and take the process down.
+		seedThemeCookie(event).catch(() => {});
 	}
 
-	void seedThemeCookie(event);
-	void touchLastActive(event);
+	touchLastActive(event).catch(() => {});
 }
 
 function clearAuthenticatedLocals(event: Parameters<Handle>[0]['event']): void {
