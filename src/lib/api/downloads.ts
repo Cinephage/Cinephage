@@ -76,6 +76,17 @@ export async function retryQueueItem(id: string): Promise<ApiResponse<RetryQueue
 	return apiPost<RetryQueueResponse>(`/api/queue/${id}/retry`);
 }
 
+/**
+ * Blocklist the release behind a download history record. Works even when
+ * the item no longer has a live queue row (the usual case for a failed
+ * item viewed in Activity > History).
+ */
+export async function blocklistHistoryItem(
+	historyId: string
+): Promise<ApiResponse<{ blocklistId: string }>> {
+	return apiPost<{ blocklistId: string }>(`/api/queue/history/${historyId}/blocklist`);
+}
+
 export async function refreshQueue(): Promise<ApiResponse> {
 	return apiPost('/api/queue/refresh');
 }

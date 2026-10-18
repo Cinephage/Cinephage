@@ -18,7 +18,8 @@
 		removeQueueItem as removeQueueItemApi,
 		retryQueueItem as retryQueueItemApi,
 		refreshQueue,
-		relinkOrphans
+		relinkOrphans,
+		blocklistHistoryItem as blocklistHistoryItemApi
 	} from '#lib/api/downloads.js';
 	import { layoutState, deriveMobileSseStatus } from '#lib/layout.svelte.js';
 	import ActivityTable from '#lib/components/activity/ActivityTable.svelte';
@@ -1476,15 +1477,17 @@
 			closeDetailModal?: boolean;
 			removeFromClient?: boolean;
 			deleteFiles?: boolean;
+			blocklist?: boolean;
 		} = {}
 	): Promise<void> {
 		const {
 			refresh = true,
 			closeDetailModal = true,
 			removeFromClient = true,
-			deleteFiles = false
+			deleteFiles = false,
+			blocklist = false
 		} = options;
-		await removeQueueItemApi(id, { removeFromClient, deleteFiles });
+		await removeQueueItemApi(id, { removeFromClient, deleteFiles, blocklist });
 
 		if (refresh) {
 			await refreshActivityData({ force: true });
@@ -1530,11 +1533,19 @@
 		id: string,
 		options?: { deleteFiles?: boolean; blocklist?: boolean }
 	) {
-		await removeQueueItem(id, { deleteFiles: options?.deleteFiles });
+		await removeQueueItem(id, {
+			deleteFiles: options?.deleteFiles,
+			blocklist: options?.blocklist
+		});
 	}
 
 	async function handleRetry(id: string) {
 		await retryQueueItem(id);
+	}
+
+	async function handleBlocklistHistory(historyId: string) {
+		await blocklistHistoryItemApi(historyId);
+		await refreshActivityData({ force: true });
 	}
 </script>
 
@@ -1874,5 +1885,6 @@
 		onResume={handleResume}
 		onRemove={handleRemove}
 		onRetry={handleRetry}
+		onBlocklistHistory={handleBlocklistHistory}
 	/>
 {/if}

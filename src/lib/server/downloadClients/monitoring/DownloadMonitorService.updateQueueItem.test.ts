@@ -18,7 +18,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vites
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { createTestDb, destroyTestDb, clearTestDb } from '../../../../test/db-helper';
-import { downloadClients, downloadQueue } from '#lib/server/db/schema.js';
+import { downloadClients, downloadQueue, blocklist } from '#lib/server/db/schema.js';
 import type { DownloadClient } from '#lib/types/downloadClient.js';
 import type { DownloadInfo } from '../core/interfaces';
 
@@ -234,5 +234,70 @@ describe('updateQueueItem stalled clock across failed recovery', () => {
 		const updated = await getRow(row.id);
 		expect(updated?.status).toBe('downloading');
 		expect(updated?.stalledSince).toBeNull();
+	});
+});
+
+describe('updateQueueItem auto-blocklists on the generic failed transition (issue #618)', () => {
+	it('blocklists a usenet download the client reports as errored', async () => {
+		const row = await insertQueueRow({
+			protocol: 'usenet',
+			status: 'downloading',
+			title: 'Some.Usenet.Release.2024'
+		});
+
+		await callUpdateQueueItem(
+			row,
+			makeDownload({ status: 'error', errorMessage: 'PAR2 repair failed' })
+		);
+
+		const updated = await getRow(row.id);
+		expect(updated?.status).toBe('failed');
+
+		const entries = await testDb.db
+			.select()
+			.from(blocklist)
+			.where(eq(blocklist.title, 'Some.Usenet.Release.2024'));
+		expect(entries).toHaveLength(1);
+		expect(entries[0].reason).toBe('download_failed');
+		expect(entries[0].protocol).toBe('usenet');
+	});
+
+	it('blocklists a torrent download the client reports as errored', async () => {
+		const row = await insertQueueRow({
+			protocol: 'torrent',
+			status: 'downloading',
+			title: 'Some.Torrent.Release.2024',
+			infoHash: 'abc123'
+		});
+
+		await callUpdateQueueItem(
+			row,
+			makeDownload({ status: 'error', errorMessage: 'Tracker banned' })
+		);
+
+		const entries = await testDb.db
+			.select()
+			.from(blocklist)
+			.where(eq(blocklist.title, 'Some.Torrent.Release.2024'));
+		expect(entries).toHaveLength(1);
+		expect(entries[0].infoHash).toBe('abc123');
+	});
+
+	it('does not blocklist a transition that stays non-failed', async () => {
+		const row = await insertQueueRow({
+			status: 'downloading',
+			title: 'Still.Downloading.2024'
+		});
+
+		await callUpdateQueueItem(
+			row,
+			makeDownload({ status: 'downloading', progress: 0.5, downloadSpeed: 100_000 })
+		);
+
+		const entries = await testDb.db
+			.select()
+			.from(blocklist)
+			.where(eq(blocklist.title, 'Still.Downloading.2024'));
+		expect(entries).toHaveLength(0);
 	});
 });

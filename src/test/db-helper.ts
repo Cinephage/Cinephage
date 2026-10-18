@@ -34,6 +34,7 @@ const CORE_TABLES = [
 	'scoringProfiles',
 	'customFormats',
 	'blockedMedia',
+	'blocklist',
 	'downloadClients',
 	'movies',
 	'movieFiles',
