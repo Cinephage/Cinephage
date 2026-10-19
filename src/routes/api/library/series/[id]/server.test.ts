@@ -126,7 +126,12 @@ async function seedClient(): Promise<string> {
 
 async function seedQueueRow(
 	seriesId: string,
-	overrides: { indexerId?: string | null; protocol?: string } = {}
+	overrides: {
+		indexerId?: string | null;
+		protocol?: string;
+		origin?: string | null;
+		status?: string;
+	} = {}
 ): Promise<string> {
 	const id = `queue-${Math.random().toString(36).slice(2)}`;
 	await testDb.db
@@ -139,7 +144,13 @@ async function seedQueueRow(
 			seriesId,
 			indexerId: overrides.indexerId ?? null,
 			protocol: overrides.protocol ?? 'torrent',
-			status: 'seeding'
+			// Default to a real Unmatched-tab row - only rows stamped with
+			// `origin` are releasable on unmatch (see issue: indexerId being
+			// null is NOT unique to this flow, arr_push grabs leave it null
+			// too - tests that want to assert a *non*-releasable row must
+			// pass `origin: null` explicitly).
+			origin: overrides.origin === undefined ? 'unmatched_track' : overrides.origin,
+			status: overrides.status ?? 'seeding'
 		})
 		.run();
 	return id;
@@ -289,8 +300,8 @@ describe('DELETE /api/library/series/[id] — unmatch releases client tracking',
 	it('preserves real grabs and debrid rows', async () => {
 		const seriesId = await seedSeries();
 		await seedClient();
-		const grabId = await seedQueueRow(seriesId, { indexerId: 'indexer-1' });
-		const debridId = await seedQueueRow(seriesId, { protocol: 'debrid' });
+		const grabId = await seedQueueRow(seriesId, { indexerId: 'indexer-1', origin: null });
+		const debridId = await seedQueueRow(seriesId, { protocol: 'debrid', origin: null });
 
 		const { status } = await api.delete(DELETE, undefined, {
 			params: { id: seriesId }
@@ -302,6 +313,45 @@ describe('DELETE /api/library/series/[id] — unmatch releases client tracking',
 				await testDb.db.select().from(downloadQueue).where(eq(downloadQueue.id, id))
 			).toHaveLength(1);
 		}
+	});
+
+	// GitHub issue: unmatch used to infer "came from the Unmatched tab" from
+	// indexerId being null, which also matches a legitimate arr_push-pushed
+	// grab (releasePush.ts never sets indexerId either) - a row with no
+	// `origin` stamp must never be released, even with indexerId null.
+	it('preserves a legitimate arr_push-shaped row (indexerId null, no origin)', async () => {
+		const seriesId = await seedSeries();
+		await seedClient();
+		const pushedId = await seedQueueRow(seriesId, { indexerId: null, origin: null });
+
+		const { status } = await api.delete(DELETE, undefined, {
+			params: { id: seriesId }
+		});
+
+		expect(status).toBe(400);
+		expect(
+			await testDb.db.select().from(downloadQueue).where(eq(downloadQueue.id, pushedId))
+		).toHaveLength(1);
+	});
+
+	// Deleting a row that's actively importing out from under ImportService
+	// (which holds an in-memory snapshot and never re-queries it) let the
+	// import complete anyway and silently resurrect state on a series the
+	// user just unmatched - importing/postprocessing rows must be left
+	// alone instead of cancelled+deleted.
+	it('leaves an actively-importing unmatched-flow row alone', async () => {
+		const seriesId = await seedSeries();
+		await seedClient();
+		const importingId = await seedQueueRow(seriesId, { status: 'importing' });
+
+		const { status } = await api.delete(DELETE, undefined, {
+			params: { id: seriesId }
+		});
+
+		expect(status).toBe(200);
+		expect(
+			await testDb.db.select().from(downloadQueue).where(eq(downloadQueue.id, importingId))
+		).toHaveLength(1);
 	});
 
 	it('unmatch with files dissociates them and releases tracking', async () => {

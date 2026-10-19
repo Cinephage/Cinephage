@@ -1446,7 +1446,15 @@ export const downloadQueue = sqliteTable(
 		// Set when markFailed() is called due to exhausted import attempts.
 		// Prevents the polling loop from treating the download client's
 		// persistent 'completed' status as a client-side recovery.
-		importFailed: integer('import_failed', { mode: 'boolean' }).notNull().default(false)
+		importFailed: integer('import_failed', { mode: 'boolean' }).notNull().default(false),
+
+		// Set only for rows created by the Unmatched-tab track/enroll flow
+		// ('unmatched_track' | 'unmatched_enroll'). Left null for every other
+		// insert path (normal grabs, arr_push, overrides) - this is the only
+		// reliable signal that a row came from that flow; indexerId being
+		// null is NOT unique to it (arr_push pushes never set indexerId
+		// either). See AcquisitionService.releaseUnmatchedQueueItems.
+		origin: text('origin')
 	},
 	(table) => [
 		index('idx_download_queue_status').on(table.status),

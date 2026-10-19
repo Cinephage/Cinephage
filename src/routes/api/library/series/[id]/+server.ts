@@ -12,7 +12,7 @@ import {
 	rootFolders,
 	subtitles
 } from '#lib/server/db/schema.js';
-import { and, eq, inArray, isNull, not } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { deleteDirectoryWithinRoot } from '#lib/server/filesystem/delete-helpers.js';
 import { todayDateString } from '#lib/utils/format.js';
 import { getLanguageProfileService } from '#lib/server/subtitles/services/LanguageProfileService.js';
@@ -843,23 +843,23 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 		// Get all episode files for this series
 		const files = await db.select().from(episodeFiles).where(eq(episodeFiles.seriesId, params.id));
 
-		// Unmatch also releases client-side tracking from unmatched flows
-		// (null indexer, non-debrid) so the torrent resurfaces in Unmatched.
-		// Real grabs and the client itself are never touched.
-		const releasableQueueItems = await db
-			.select({ id: downloadQueue.id })
-			.from(downloadQueue)
-			.where(
-				and(
-					eq(downloadQueue.seriesId, params.id),
-					isNull(downloadQueue.indexerId),
-					not(eq(downloadQueue.protocol, 'debrid'))
-				)
-			);
+		// Unmatch also releases client-side tracking from the Unmatched-tab
+		// track/enroll flow so the torrent resurfaces in Unmatched. Real
+		// grabs (including arr_push-pushed ones) and the client itself are
+		// never touched - only rows explicitly stamped with `origin` qualify.
+		const unmatchedRelease = acquisitionService.releaseUnmatchedQueueItems(
+			{ seriesId: params.id },
+			'files unmatched from library'
+		);
 
 		// Only require files if not removing from library entirely and there
 		// is no client tracking to release back to Unmatched.
-		if (files.length === 0 && !removeFromLibrary && releasableQueueItems.length === 0) {
+		if (
+			files.length === 0 &&
+			!removeFromLibrary &&
+			unmatchedRelease.released === 0 &&
+			unmatchedRelease.heldBack === 0
+		) {
 			return Response.json(
 				{ success: false, error: 'Series has no files to delete' },
 				{ status: 400 }
@@ -954,12 +954,7 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 			// Update series episode file count
 			await db.update(series).set({ episodeFileCount: 0 }).where(eq(series.id, params.id));
 
-			// Release unmatched-flow tracking so the torrent returns to the
-			// Unmatched tab. Client downloads are never touched.
-			for (const item of releasableQueueItems) {
-				acquisitionService.cancelByQueueId(item.id, 'files unmatched from library');
-				await db.delete(downloadQueue).where(eq(downloadQueue.id, item.id));
-			}
+			// Unmatched-flow queue rows were already released above.
 			libraryMediaEvents.emitSeriesUpdated(params.id);
 
 			// Note: Series, season, and episode metadata is kept - episodes will show as "missing"

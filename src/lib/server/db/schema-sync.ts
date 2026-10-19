@@ -176,8 +176,11 @@ import {
  *   treating those episodes as monitored regardless of the season's real state; this both
  *   fixes existing data and pairs with the specification now failing closed instead
  * Version 164: Add `transferMode` column to `download_queue` and `download_history`.
+ * Version 165: Add `origin` column to `download_queue` (marks Unmatched-tab
+ *   track/enroll rows so unmatching a movie/series can't mistake a legitimate
+ *   arr_push-pushed grab for one of its own rows).
  */
-export const CURRENT_SCHEMA_VERSION = 164;
+export const CURRENT_SCHEMA_VERSION = 165;
 
 export const SYSTEM_LIBRARY_SEEDS = [
 	{

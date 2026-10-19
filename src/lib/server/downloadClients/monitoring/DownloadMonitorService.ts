@@ -4133,6 +4133,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 		status: QueueStatus;
 		importedAt?: string | null;
 		errorMessage?: string | null;
+		origin: 'unmatched_track' | 'unmatched_enroll';
 	}): Promise<string> {
 		const { client, download } = input;
 		const now = new Date().toISOString();
@@ -4181,7 +4182,8 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			errorMessage: input.errorMessage ?? null,
 			addedAt: now,
 			isAutomatic: false,
-			isUpgrade: false
+			isUpgrade: false,
+			origin: input.origin
 		});
 
 		return id;
@@ -4302,7 +4304,8 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 				seriesId: media.seriesId,
 				seasonNumber: pair.seasonNumber,
 				status: 'seeding-imported',
-				importedAt: now
+				importedAt: now,
+				origin: 'unmatched_track'
 			});
 			const linkedItem = await this.getQueueItem(queueId);
 			if (linkedItem) {
@@ -4490,7 +4493,8 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 				errorMessage:
 					status === 'failed'
 						? (download.errorMessage ?? 'Reported as error by download client')
-						: null
+						: null,
+				origin: 'unmatched_enroll'
 			});
 			const enrolledItem = await this.getQueueItem(queueId);
 			if (enrolledItem) {

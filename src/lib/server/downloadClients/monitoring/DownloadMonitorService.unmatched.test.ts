@@ -370,6 +370,9 @@ describe('trackUnmatchedDownloads', () => {
 		expect(row.status).toBe('seeding-imported');
 		expect(row.movieId).toBe(MOVIE_ID);
 		expect(row.importedAt).not.toBeNull();
+		// Stamped so an unmatch later knows this row came from the
+		// Unmatched tab, not a real grab (see AcquisitionService.releaseUnmatchedQueueItems).
+		expect(row.origin).toBe('unmatched_track');
 
 		const history = await testDb.db
 			.select()
@@ -511,6 +514,7 @@ describe('enrollUnmatchedDownloads', () => {
 		expect(row.status).toBe('downloading');
 		expect(row.movieId).toBe(MOVIE_ID);
 		expect(row.importedAt).toBeNull();
+		expect(row.origin).toBe('unmatched_enroll');
 
 		const history = await testDb.db
 			.select()
