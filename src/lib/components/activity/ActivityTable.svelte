@@ -5,6 +5,7 @@
 	import { Loader2, Minus } from '@lucide/svelte';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { createProgressiveRenderer } from '#lib/utils/progressive-render.svelte.js';
+	import RemoveDownloadConfirmModal from './RemoveDownloadConfirmModal.svelte';
 	import ActivityTableHeader from './ActivityTableHeader.svelte';
 	import ActivityRow from './ActivityRow.svelte';
 	import ActivityMobileCard from './ActivityMobileCard.svelte';
@@ -17,7 +18,10 @@
 		onRowClick?: (activity: UnifiedActivity) => void;
 		onPause?: (id: string) => Promise<void>;
 		onResume?: (id: string) => Promise<void>;
-		onRemove?: (id: string) => Promise<void>;
+		onRemove?: (
+			id: string,
+			options?: { deleteFiles?: boolean; blocklist?: boolean }
+		) => Promise<void>;
 		onRetry?: (id: string) => Promise<void>;
 		compact?: boolean;
 		selectionMode?: boolean;
@@ -104,6 +108,11 @@
 		}
 	}
 
+	// Remove needs a confirmation step first (parity with the detail modal's
+	// remove flow) rather than running immediately like pause/resume/retry -
+	// see requestRemove/confirmRemove/cancelRemoveConfirm below.
+	let removeConfirmActivity = $state<UnifiedActivity | null>(null);
+
 	async function runQueueAction(
 		activity: UnifiedActivity,
 		action: 'pause' | 'resume' | 'remove' | 'retry'
@@ -111,14 +120,13 @@
 		if (!activity.queueItemId) return;
 		if (queueActionLoadingRows.has(activity.id)) return;
 
-		const handler =
-			action === 'pause'
-				? onPause
-				: action === 'resume'
-					? onResume
-					: action === 'remove'
-						? onRemove
-						: onRetry;
+		if (action === 'remove') {
+			if (!onRemove) return;
+			removeConfirmActivity = activity;
+			return;
+		}
+
+		const handler = action === 'pause' ? onPause : action === 'resume' ? onResume : onRetry;
 		if (!handler) return;
 
 		queueActionLoadingRows.add(activity.id);
@@ -126,7 +134,6 @@
 			await handler(activity.queueItemId);
 			if (action === 'pause') toasts.success(m.activity_detail_downloadPaused());
 			if (action === 'resume') toasts.success(m.activity_detail_downloadResumed());
-			if (action === 'remove') toasts.success(m.activity_detail_downloadRemoved());
 			if (action === 'retry') {
 				toasts.success(
 					activity.status === 'failed' && isImportFailedActivity(activity)
@@ -137,6 +144,34 @@
 		} catch (error) {
 			const message =
 				error instanceof Error ? error.message : m.activity_table_failedToAction({ action });
+			toasts.error(message);
+		} finally {
+			queueActionLoadingRows.delete(activity.id);
+		}
+	}
+
+	function cancelRemoveConfirm(): void {
+		if (removeConfirmActivity && queueActionLoadingRows.has(removeConfirmActivity.id)) return;
+		removeConfirmActivity = null;
+	}
+
+	async function confirmRemove(options: { blocklist: boolean }): Promise<void> {
+		const activity = removeConfirmActivity;
+		if (!activity?.queueItemId || !onRemove) return;
+
+		queueActionLoadingRows.add(activity.id);
+		try {
+			// Removing a download - whether mid-download or failed - implies the
+			// user wants it fully gone, partial/completed files included, so no
+			// orphaned data survives on disk (Issue #579).
+			await onRemove(activity.queueItemId, { deleteFiles: true, blocklist: options.blocklist });
+			toasts.success(m.activity_detail_downloadRemoved());
+			removeConfirmActivity = null;
+		} catch (error) {
+			const message =
+				error instanceof Error
+					? error.message
+					: m.activity_table_failedToAction({ action: 'remove' });
 			toasts.error(message);
 		} finally {
 			queueActionLoadingRows.delete(activity.id);
@@ -237,3 +272,11 @@
 		</div>
 	{/if}
 {/if}
+
+<RemoveDownloadConfirmModal
+	open={removeConfirmActivity !== null}
+	isBlocklisted={removeConfirmActivity?.isBlocklisted}
+	loading={removeConfirmActivity ? queueActionLoadingRows.has(removeConfirmActivity.id) : false}
+	onConfirm={confirmRemove}
+	onCancel={cancelRemoveConfirm}
+/>

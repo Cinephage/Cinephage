@@ -20,7 +20,7 @@
 	} from '@lucide/svelte';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { createFocusTrap, lockBodyScroll } from '#lib/utils/focus.js';
-	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
+	import RemoveDownloadConfirmModal from './RemoveDownloadConfirmModal.svelte';
 	import {
 		statusConfig,
 		getStatusLabel,
@@ -49,7 +49,6 @@
 	let activeTab = $state<'overview'>('overview');
 	let actionLoading = $state(false);
 	let removeConfirmOpen = $state(false);
-	let blocklistOnRemove = $state(false);
 	let blocklisting = $state(false);
 	let modalRef = $state<HTMLElement | null>(null);
 	let contentRef = $state<HTMLElement | null>(null);
@@ -86,7 +85,6 @@
 
 	function requestRemove() {
 		if (!activity?.queueItemId || !onRemove || actionLoading) return;
-		blocklistOnRemove = false;
 		removeConfirmOpen = true;
 	}
 
@@ -95,11 +93,11 @@
 		removeConfirmOpen = false;
 	}
 
-	async function handleRemove() {
+	async function handleRemove(options: { blocklist: boolean }) {
 		if (!activity?.queueItemId || !onRemove) return;
 		actionLoading = true;
 		try {
-			await onRemove(activity.queueItemId, { deleteFiles: true, blocklist: blocklistOnRemove });
+			await onRemove(activity.queueItemId, { deleteFiles: true, blocklist: options.blocklist });
 			toasts.success(m.activity_detail_downloadRemoved());
 			removeConfirmOpen = false;
 			onClose();
@@ -518,20 +516,10 @@
 	</div>
 {/if}
 
-<ConfirmationModal
+<RemoveDownloadConfirmModal
 	open={removeConfirmOpen}
-	title={m.activity_detail_removeConfirmTitle()}
-	message={m.activity_detail_removeFromClientWarning()}
-	confirmLabel={m.activity_detail_removeAndDeleteFiles()}
-	confirmVariant="error"
+	isBlocklisted={activity?.isBlocklisted}
 	loading={actionLoading}
 	onConfirm={handleRemove}
 	onCancel={cancelRemove}
->
-	{#if !activity?.isBlocklisted}
-		<label class="label cursor-pointer justify-start gap-2 py-1">
-			<input type="checkbox" class="checkbox checkbox-sm" bind:checked={blocklistOnRemove} />
-			<span class="label-text text-sm">{m.activity_detail_alsoBlocklist()}</span>
-		</label>
-	{/if}
-</ConfirmationModal>
+/>

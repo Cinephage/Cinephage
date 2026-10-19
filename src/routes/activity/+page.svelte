@@ -99,6 +99,7 @@
 	let historyConfirmRemoveFromClient = $state(false);
 	let activeConfirmOpen = $state(false);
 	let activeConfirmAction = $state<ActiveBulkAction | null>(null);
+	let activeConfirmBlocklist = $state(false);
 	let activeBulkLoading = $state(false);
 	let refreshQueueLoading = $state(false);
 	let relinkOrphansLoading = $state(false);
@@ -1174,7 +1175,7 @@
 		if (options.removeFromClient && selectedHistoryFailedQueueIds.length > 0) {
 			for (const queueId of selectedHistoryFailedQueueIds) {
 				try {
-					await removeQueueItemApi(queueId, { removeFromClient: true });
+					await removeQueueItemApi(queueId, { removeFromClient: true, deleteFiles: true });
 				} catch (_err) {
 					// Best-effort; proceed with history deletion regardless
 				}
@@ -1248,6 +1249,7 @@
 		if (getActiveBulkActionQueueIds(action).length === 0) return;
 
 		activeConfirmAction = action;
+		activeConfirmBlocklist = false;
 		activeConfirmOpen = true;
 	}
 
@@ -1257,15 +1259,22 @@
 		activeConfirmAction = null;
 	}
 
+	const activeConfirmSupportsBlocklist = $derived(
+		activeConfirmAction === 'cancel' || activeConfirmAction === 'remove_failed'
+	);
+
 	async function handleActiveConfirm(): Promise<void> {
 		if (!activeConfirmAction || activeBulkLoading) return;
 
-		await executeActiveBulkAction(activeConfirmAction);
+		await executeActiveBulkAction(activeConfirmAction, activeConfirmBlocklist);
 		activeConfirmOpen = false;
 		activeConfirmAction = null;
 	}
 
-	async function executeActiveBulkAction(action: ActiveBulkAction): Promise<void> {
+	async function executeActiveBulkAction(
+		action: ActiveBulkAction,
+		blocklist = false
+	): Promise<void> {
 		const queueIds = getActiveBulkActionQueueIds(action);
 		if (queueIds.length === 0) return;
 
@@ -1289,7 +1298,8 @@
 									refresh: false,
 									closeDetailModal: false,
 									removeFromClient: true,
-									deleteFiles: true
+									deleteFiles: true,
+									blocklist
 								});
 
 		for (const queueId of queueIds) {
@@ -1872,7 +1882,14 @@
 	loading={activeBulkLoading}
 	onConfirm={handleActiveConfirm}
 	onCancel={closeActiveConfirm}
-/>
+>
+	{#if activeConfirmSupportsBlocklist}
+		<label class="label cursor-pointer justify-start gap-2 py-1">
+			<input type="checkbox" class="checkbox checkbox-sm" bind:checked={activeConfirmBlocklist} />
+			<span class="label-text text-sm">{m.activity_detail_alsoBlocklist()}</span>
+		</label>
+	{/if}
+</ConfirmationModal>
 
 <!-- Detail Modal -->
 
