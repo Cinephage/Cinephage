@@ -22,7 +22,8 @@ import {
 	movies,
 	movieFiles,
 	series,
-	episodeFiles
+	episodeFiles,
+	episodes
 } from '#lib/server/db/schema.js';
 import type { DownloadInfo } from '../core/interfaces';
 
@@ -418,6 +419,65 @@ describe('trackUnmatchedDownloads', () => {
 		expect(row.seriesId).toBe(seriesId);
 		expect(row.seasonNumber).toBe(1);
 		expect(row.movieId).toBeNull();
+	});
+
+	it('tracks a specific episode when the season has files for some but not all episodes', async () => {
+		getDownloads.mockResolvedValue([
+			makeDownload({
+				name: 'Test.Show.S01E02.1080p.WEB-DL-GROUP',
+				category: 'tv',
+				contentPath: '/remote/downloads/complete/tv/Test.Show.S01E02.1080p.WEB-DL-GROUP.mkv'
+			})
+		]);
+		const seriesId = randomUUID();
+		await testDb.db.insert(series).values({
+			id: seriesId,
+			tmdbId: 1399,
+			title: 'Test Show',
+			year: 2008,
+			path: 'Test Show (2008)'
+		});
+		// Season has files for episodes 1 and 3, but not 2.
+		await testDb.db.insert(episodes).values([
+			{ id: randomUUID(), seriesId, seasonNumber: 1, episodeNumber: 1, hasFile: true },
+			{ id: randomUUID(), seriesId, seasonNumber: 1, episodeNumber: 2, hasFile: false },
+			{ id: randomUUID(), seriesId, seasonNumber: 1, episodeNumber: 3, hasFile: true }
+		]);
+		await testDb.db.insert(episodeFiles).values([
+			{
+				id: randomUUID(),
+				seriesId,
+				seasonNumber: 1,
+				relativePath: 'Season 01/Test Show S01E01.mkv',
+				size: 5_000_000_000
+			},
+			{
+				id: randomUUID(),
+				seriesId,
+				seasonNumber: 1,
+				relativePath: 'Season 01/Test Show S01E03.mkv',
+				size: 5_000_000_000
+			}
+		]);
+
+		// Requesting episode 2 (no file) must be rejected even though the
+		// season as a whole clearly has files.
+		const missing = await getDownloadMonitor().trackUnmatchedDownloads([
+			{ hash: HASH_A, mediaType: 'tv', tmdbId: 1399, seasonNumber: 1, episodeNumber: 2 }
+		]);
+		expect(missing.tracked).toHaveLength(0);
+		expect(missing.skipped).toEqual([{ hash: HASH_A, reason: 'no_library_file' }]);
+
+		// Requesting episode 1 (has a file) must succeed.
+		const present = await getDownloadMonitor().trackUnmatchedDownloads([
+			{ hash: HASH_A, mediaType: 'tv', tmdbId: 1399, seasonNumber: 1, episodeNumber: 1 }
+		]);
+		expect(present.tracked).toHaveLength(1);
+		const [row] = await testDb.db
+			.select()
+			.from(downloadQueue)
+			.where(eq(downloadQueue.downloadId, HASH_A));
+		expect(row.seasonNumber).toBe(1);
 	});
 
 	it('is idempotent and validates pairs', async () => {

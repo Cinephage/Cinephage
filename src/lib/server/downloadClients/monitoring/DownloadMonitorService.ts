@@ -4235,6 +4235,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			mediaType: 'movie' | 'tv';
 			tmdbId: number;
 			seasonNumber?: number | null;
+			episodeNumber?: number | null;
 		}[]
 	): Promise<{
 		tracked: { hash: string; queueId: string }[];
@@ -4272,6 +4273,9 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 
 			// Never record a seeding-imported row for media with no library
 			// file: without bytes on disk the history marker would be false.
+			// For TV, check the specific episode when we know which one this
+			// torrent covers - a file for some other episode in the series (or
+			// even the same season) doesn't mean this episode is on disk.
 			const hasLibraryFile =
 				media.movieId != null
 					? (
@@ -4281,13 +4285,27 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 								.where(eq(movieFiles.movieId, media.movieId))
 								.limit(1)
 						).length > 0
-					: (
-							await db
-								.select({ id: episodeFiles.id })
-								.from(episodeFiles)
-								.where(eq(episodeFiles.seriesId, media.seriesId as string))
-								.limit(1)
-						).length > 0;
+					: pair.seasonNumber != null && pair.episodeNumber != null
+						? (
+								await db
+									.select({ hasFile: episodes.hasFile })
+									.from(episodes)
+									.where(
+										and(
+											eq(episodes.seriesId, media.seriesId as string),
+											eq(episodes.seasonNumber, pair.seasonNumber),
+											eq(episodes.episodeNumber, pair.episodeNumber)
+										)
+									)
+									.limit(1)
+							).at(0)?.hasFile === true
+						: (
+								await db
+									.select({ id: episodeFiles.id })
+									.from(episodeFiles)
+									.where(eq(episodeFiles.seriesId, media.seriesId as string))
+									.limit(1)
+							).length > 0;
 			if (!hasLibraryFile) {
 				result.skipped.push({ hash: pair.hash, reason: 'no_library_file' });
 				continue;

@@ -2346,13 +2346,17 @@
 		const state = groupReviewState[groupId];
 		const match = state?.selectedMatch;
 		if (!origin || !match) return;
+		const group = detectionGroups.find((item) => item.id === groupId);
+		const isSingleEpisode =
+			state.selectedMediaType === 'tv' && (!group || group.detectedFileCount <= 1);
 		try {
 			const tracked = await trackUnmatched([
 				{
 					hash: origin.hash,
 					mediaType: state.selectedMediaType,
 					tmdbId: match.tmdbId,
-					seasonNumber: state.selectedMediaType === 'tv' ? state.seasonNumber : null
+					seasonNumber: state.selectedMediaType === 'tv' ? state.seasonNumber : null,
+					episodeNumber: isSingleEpisode ? state.episodeNumber : null
 				}
 			]);
 			if (tracked.skipped.length > 0) {
@@ -2384,6 +2388,7 @@
 					mediaType: selectedMediaType,
 					tmdbId: selectedMatch.tmdbId,
 					seasonNumber: selectedMediaType === 'tv' ? seasonNumber : null,
+					episodeNumber: selectedMediaType === 'tv' && !isBatchTvImport ? episodeNumber : null,
 					rootFolderId: selectedMatch.inLibrary ? null : selectedRootFolder || null
 				}
 			]);
@@ -2415,7 +2420,8 @@
 					hash: origin.hash,
 					mediaType: selectedMediaType,
 					tmdbId: selectedMatch.tmdbId,
-					seasonNumber: selectedMediaType === 'tv' ? seasonNumber : null
+					seasonNumber: selectedMediaType === 'tv' ? seasonNumber : null,
+					episodeNumber: selectedMediaType === 'tv' && !isBatchTvImport ? episodeNumber : null
 				}
 			]);
 			if (result.tracked > 0) {
@@ -2715,6 +2721,8 @@
 		const match = state?.selectedMatch;
 		if (!origin || !match) return false;
 		const seasonNumber = state.selectedMediaType === 'tv' ? state.seasonNumber : null;
+		const episodeNumber =
+			state.selectedMediaType === 'tv' && group.detectedFileCount <= 1 ? state.episodeNumber : null;
 		const action = resolveUnmatchedGroupAction(group.id);
 		if (!action) return false;
 		try {
@@ -2724,7 +2732,8 @@
 						hash: origin.hash,
 						mediaType: state.selectedMediaType,
 						tmdbId: match.tmdbId,
-						seasonNumber
+						seasonNumber,
+						episodeNumber
 					}
 				]);
 				if (result.tracked === 0) {
@@ -2754,6 +2763,7 @@
 						mediaType: state.selectedMediaType,
 						tmdbId: match.tmdbId,
 						seasonNumber,
+						episodeNumber,
 						rootFolderId
 					}
 				]);

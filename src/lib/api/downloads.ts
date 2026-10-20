@@ -164,7 +164,13 @@ export interface TrackUnmatchedResponse {
 }
 
 export function trackUnmatched(
-	pairs: { hash: string; mediaType: 'movie' | 'tv'; tmdbId: number; seasonNumber?: number | null }[]
+	pairs: {
+		hash: string;
+		mediaType: 'movie' | 'tv';
+		tmdbId: number;
+		seasonNumber?: number | null;
+		episodeNumber?: number | null;
+	}[]
 ): Promise<ApiResponse<TrackUnmatchedResponse>> {
 	return apiPost<TrackUnmatchedResponse>('/api/queue/unmatched/track', { pairs });
 }
@@ -181,6 +187,7 @@ export function enrollUnmatched(
 		mediaType: 'movie' | 'tv';
 		tmdbId: number;
 		seasonNumber?: number | null;
+		episodeNumber?: number | null;
 		rootFolderId?: string | null;
 	}[]
 ): Promise<ApiResponse<EnrollUnmatchedResponse>> {

@@ -13,7 +13,8 @@ const unmatchedPairFields = {
 	hash: z.string().min(1),
 	mediaType: z.enum(['movie', 'tv']),
 	tmdbId: z.number().int().positive(),
-	seasonNumber: z.number().int().min(0).max(99).nullish()
+	seasonNumber: z.number().int().min(0).max(99).nullish(),
+	episodeNumber: z.number().int().min(0).max(999).nullish()
 };
 
 export const trackBodySchema = z.object({
