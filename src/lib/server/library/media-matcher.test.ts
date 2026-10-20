@@ -1268,3 +1268,181 @@ describe('MediaMatcherService rematchMovie / rematchSeries (Change Match feature
 		expect(mocks.reorganizeFolder).not.toHaveBeenCalled();
 	});
 });
+
+describe('duplicate-file replacement on deliberate (re-)match (issue #627)', () => {
+	it('retires the old movie file (single-quality) when a deliberate match links a differently-named file', async () => {
+		await insertRootFolder('rf-627a', '/mnt/movies-627a', 'movie');
+		await testDb.db.insert(movies).values({
+			id: 'm627a',
+			tmdbId: 6271,
+			title: 'Movie X (2020)',
+			path: 'Movie X (2020)',
+			rootFolderId: 'rf-627a',
+			libraryId: 'lib-1',
+			hasFile: true
+		});
+		await testDb.db.insert(movieFiles).values({
+			id: 'mf627a-old',
+			movieId: 'm627a',
+			relativePath: 'Movie X (2020) (Bluray-2160p-HDR10 DTS-X-7.1 x265).mkv',
+			size: 1000,
+			quality: { resolution: '2160p' }
+		});
+		await insertUnmatchedFile({
+			id: 'uf627a',
+			path: '/mnt/movies-627a/Movie X (2020)/Movie X (2020) (Bluray-2160p-x265 DTS7.1).mkv',
+			rootFolderId: 'rf-627a',
+			mediaType: 'movie'
+		});
+		mocks.getMovie.mockResolvedValue({
+			id: 6271,
+			title: 'Movie X (2020)',
+			release_date: '2020-01-01'
+		});
+
+		await mediaMatcherService.acceptMatch('uf627a', 6271, 'movie', { allowReplace: true });
+
+		const files = await testDb.db.select().from(movieFiles).where(eq(movieFiles.movieId, 'm627a'));
+		expect(files).toHaveLength(1);
+		expect(files[0].relativePath).toBe('Movie X (2020) (Bluray-2160p-x265 DTS7.1).mkv');
+	});
+
+	it('does not retire a different resolution bucket in multi-quality mode', async () => {
+		await insertRootFolder('rf-627b', '/mnt/movies-627b', 'movie');
+		await testDb.db.insert(movies).values({
+			id: 'm627b',
+			tmdbId: 6272,
+			title: 'Movie Y (2021)',
+			path: 'Movie Y (2021)',
+			rootFolderId: 'rf-627b',
+			libraryId: 'lib-1',
+			hasFile: true,
+			desiredQualities: ['2160p', '1080p']
+		});
+		await testDb.db.insert(movieFiles).values({
+			id: 'mf627b-1080p',
+			movieId: 'm627b',
+			relativePath: 'Movie Y (2021) (Bluray-1080p-x264).mkv',
+			size: 500,
+			quality: { resolution: '1080p' }
+		});
+		await insertUnmatchedFile({
+			id: 'uf627b',
+			path: '/mnt/movies-627b/Movie Y (2021)/Movie Y (2021) (Bluray-2160p-x265).mkv',
+			rootFolderId: 'rf-627b',
+			mediaType: 'movie'
+		});
+		mocks.getMovie.mockResolvedValue({
+			id: 6272,
+			title: 'Movie Y (2021)',
+			release_date: '2021-01-01'
+		});
+
+		await mediaMatcherService.acceptMatch('uf627b', 6272, 'movie', { allowReplace: true });
+
+		const files = await testDb.db.select().from(movieFiles).where(eq(movieFiles.movieId, 'm627b'));
+		expect(files).toHaveLength(2);
+	});
+
+	it('leaves the old movie file alone when the match is not deliberate (allowReplace defaults to false)', async () => {
+		await insertRootFolder('rf-627c', '/mnt/movies-627c', 'movie');
+		await testDb.db.insert(movies).values({
+			id: 'm627c',
+			tmdbId: 6273,
+			title: 'Movie Z (2019)',
+			path: 'Movie Z (2019)',
+			rootFolderId: 'rf-627c',
+			libraryId: 'lib-1',
+			hasFile: true
+		});
+		await testDb.db.insert(movieFiles).values({
+			id: 'mf627c-old',
+			movieId: 'm627c',
+			relativePath: 'Movie Z (2019) (Bluray-2160p-HDR10 DTS-X-7.1 x265).mkv',
+			size: 1000,
+			quality: { resolution: '2160p' }
+		});
+		await insertUnmatchedFile({
+			id: 'uf627c',
+			path: '/mnt/movies-627c/Movie Z (2019)/Movie Z (2019) (Bluray-2160p-x265 DTS7.1).mkv',
+			rootFolderId: 'rf-627c',
+			mediaType: 'movie'
+		});
+		mocks.getMovie.mockResolvedValue({
+			id: 6273,
+			title: 'Movie Z (2019)',
+			release_date: '2019-01-01'
+		});
+
+		await mediaMatcherService.acceptMatch('uf627c', 6273, 'movie');
+
+		const files = await testDb.db.select().from(movieFiles).where(eq(movieFiles.movieId, 'm627c'));
+		expect(files).toHaveLength(2);
+	});
+
+	it('retires the old episode file when a deliberate match covers the same episode under a new name', async () => {
+		await insertRootFolder('rf-627d', '/mnt/tv-627d', 'tv');
+		await testDb.db.insert(series).values({
+			id: 's627d',
+			tmdbId: 6274,
+			title: 'Show X (2020)',
+			path: 'Show X (2020)',
+			rootFolderId: 'rf-627d',
+			libraryId: 'lib-1'
+		});
+		await testDb.db.insert(seasons).values({
+			seriesId: 's627d',
+			seasonNumber: 1
+		});
+		const [ep1] = await testDb.db
+			.insert(episodes)
+			.values({
+				seriesId: 's627d',
+				seasonNumber: 1,
+				episodeNumber: 1,
+				hasFile: true
+			})
+			.returning();
+		await testDb.db.insert(episodeFiles).values({
+			id: 'ef627d-old',
+			seriesId: 's627d',
+			seasonNumber: 1,
+			episodeIds: [ep1.id],
+			relativePath: 'Season 1/Show X - S01E01 - Old Name.mkv',
+			size: 500
+		});
+		await insertUnmatchedFile({
+			id: 'uf627d',
+			path: '/mnt/tv-627d/Show X (2020)/Season 1/Show X - S01E01 - New Name.mkv',
+			rootFolderId: 'rf-627d',
+			mediaType: 'tv',
+			parsedSeason: 1,
+			parsedEpisode: 1
+		});
+		mocks.getTVShow.mockResolvedValue({
+			id: 6274,
+			name: 'Show X (2020)',
+			first_air_date: '2020-01-01',
+			seasons: [{ season_number: 1, name: 'Season 1', episode_count: 1 }]
+		});
+		mocks.getSeason.mockResolvedValue({
+			episodes: [
+				{
+					id: 1,
+					season_number: 1,
+					episode_number: 1,
+					name: 'Pilot',
+					overview: '',
+					air_date: '2020-01-01',
+					runtime: 45
+				}
+			]
+		});
+
+		await mediaMatcherService.acceptMatch('uf627d', 6274, 'tv', { allowReplace: true });
+
+		const files = await testDb.db.select().from(episodeFiles).where(eq(episodeFiles.seriesId, 's627d'));
+		expect(files).toHaveLength(1);
+		expect(files[0].relativePath).toBe('Season 1/Show X - S01E01 - New Name.mkv');
+	});
+});
