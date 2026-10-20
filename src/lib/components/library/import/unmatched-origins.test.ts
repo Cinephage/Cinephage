@@ -31,4 +31,29 @@ describe('findUnmatchedOrigin', () => {
 			findUnmatchedOrigin(group({ sourcePath: '/other', selectedFilePath: '/elsewhere' }), byPath)
 		).toBeNull();
 	});
+
+	it('matches a detected file inside a folder-based item (issue #629)', () => {
+		const byPath = new Map([
+			['/downloads/Example.Movie.2024.1080p.WEB-DL-GROUP', ORIGIN]
+		]);
+		expect(
+			findUnmatchedOrigin(
+				group({
+					sourcePath: '/downloads/Example.Movie.2024.1080p.WEB-DL-GROUP/movie.mkv',
+					selectedFilePath: '/downloads/Example.Movie.2024.1080p.WEB-DL-GROUP/movie.mkv'
+				}),
+				byPath
+			)
+		).toBe(ORIGIN);
+	});
+
+	it('does not match a sibling path with a shared prefix', () => {
+		const byPath = new Map([['/data/incoming/a', ORIGIN]]);
+		expect(
+			findUnmatchedOrigin(
+				group({ sourcePath: '/data/incoming/ab/file.mkv', selectedFilePath: '/data/incoming/ab/file.mkv' }),
+				byPath
+			)
+		).toBeNull();
+	});
 });
