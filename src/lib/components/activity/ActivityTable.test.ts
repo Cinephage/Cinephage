@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/svelte';
 import ActivityTable from './ActivityTable.svelte';
 import type { UnifiedActivity } from '#lib/types/activity.js';
@@ -26,19 +26,17 @@ const activity: UnifiedActivity = {
 	queueItemId: 'queue-1'
 };
 
-describe('ActivityTable mobile inline remove (issue #579)', () => {
-	beforeAll(() => {
-		// ActivityTable picks the mobile-card layout off this media query.
-		window.matchMedia = vi.fn().mockReturnValue({
-			matches: true,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn()
-		});
-	});
-
+describe('ActivityTable inline remove (issue #579)', () => {
 	afterEach(() => {
 		cleanup();
 	});
+
+	// The unified table (desktop + mobile share one layout) keeps per-row quick
+	// actions inside the row's expand panel, so reaching "Remove" means opening
+	// the row first via its "Show timeline" chevron toggle.
+	async function expandRow(): Promise<void> {
+		await fireEvent.click(await screen.findByRole('button', { name: /show timeline/i }));
+	}
 
 	it('asks for confirmation before removing, with parity to the detail modal', async () => {
 		const onRemove = vi.fn().mockResolvedValue(undefined);
@@ -46,6 +44,7 @@ describe('ActivityTable mobile inline remove (issue #579)', () => {
 			props: { activities: [activity], onRemove }
 		});
 
+		await expandRow();
 		await fireEvent.click(await screen.findByRole('button', { name: /remove/i }));
 
 		const confirmation = await screen.findByRole('dialog', { name: /remove download/i });
@@ -65,6 +64,7 @@ describe('ActivityTable mobile inline remove (issue #579)', () => {
 			props: { activities: [activity], onRemove }
 		});
 
+		await expandRow();
 		await fireEvent.click(await screen.findByRole('button', { name: /remove/i }));
 		const confirmation = await screen.findByRole('dialog', { name: /remove download/i });
 		await fireEvent.click(within(confirmation).getByRole('button', { name: /cancel/i }));
