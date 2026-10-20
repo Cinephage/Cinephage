@@ -195,15 +195,74 @@
 	const resolutionOptions = ['4K', '2160p', '1080p', '720p', '480p', 'SD'];
 </script>
 
-<div class="rounded-xl border border-base-300 bg-base-200 p-4">
-	<div class="flex items-center justify-between gap-2">
-		<div class="flex items-center gap-2">
-			<Filter class="h-5 w-5" />
-			<span class="font-medium">{m.activity_filters_title()}</span>
-			{#if hasActiveFilters}
-				<span class="badge badge-sm badge-primary">{m.common_active()}</span>
+<div class="rounded-lg border border-base-content/12 bg-base-100 p-4 shadow-sm">
+	<div class="flex flex-wrap items-center justify-between gap-2">
+		<div class="flex flex-wrap items-center gap-2">
+			<div class="form-control min-w-50 flex-1 sm:max-w-64">
+				<div class="group relative">
+					<div class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2">
+						<Search
+							class="h-4 w-4 text-base-content/40 transition-colors group-focus-within:text-primary"
+						/>
+					</div>
+					<input
+						type="text"
+						placeholder={m.activity_filters_searchPlaceholder()}
+						class="input w-full rounded-full border-base-content/20 bg-base-200/60 pr-9 pl-10 transition-all duration-200 input-sm placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
+						value={searchValue}
+						oninput={(e) => onSearchInput(e.currentTarget.value)}
+					/>
+				</div>
+			</div>
+
+			<span class="h-4 w-px bg-base-content/15"></span>
+
+			<div class="join">
+				<button
+					class="btn join-item btn-sm {filters.mediaType === 'all' ? 'btn-primary' : 'btn-ghost'}"
+					onclick={() => updateFilter('mediaType', 'all')}
+				>
+					{m.common_all()}
+				</button>
+				<button
+					class="btn join-item btn-sm {filters.mediaType === 'movie' ? 'btn-primary' : 'btn-ghost'}"
+					onclick={() => updateFilter('mediaType', 'movie')}
+				>
+					{m.common_movies()}
+				</button>
+				<button
+					class="btn join-item btn-sm {filters.mediaType === 'tv' ? 'btn-primary' : 'btn-ghost'}"
+					onclick={() => updateFilter('mediaType', 'tv')}
+				>
+					{m.common_tvShows()}
+				</button>
+			</div>
+
+			{#if statusContext === 'history'}
+				<span class="h-4 w-px bg-base-content/15"></span>
+
+				<div class="join">
+					{#each datePresets as preset (preset.label)}
+						<button
+							class="btn join-item btn-sm {isDatePresetActive(preset.days)
+								? 'btn-primary'
+								: 'btn-ghost'}"
+							onclick={() => applyDatePreset(preset.days)}
+							title="Last {preset.days === 0 ? '24 hours' : preset.days + ' days'}"
+							aria-pressed={isDatePresetActive(preset.days)}
+						>
+							{preset.label}
+						</button>
+					{/each}
+					{#if filters.startDate || filters.endDate}
+						<button class="btn join-item btn-ghost btn-error btn-sm" onclick={clearDateRange}>
+							<X class="h-3 w-3" />
+						</button>
+					{/if}
+				</div>
 			{/if}
 		</div>
+
 		<div class="flex items-center gap-2">
 			{#if hasActiveFilters}
 				<button class="btn btn-ghost btn-xs" onclick={onClearFilters}>
@@ -212,10 +271,11 @@
 				</button>
 			{/if}
 			<button
-				class="btn gap-1 btn-sm"
+				class="btn gap-1.5 btn-ghost btn-sm"
 				onclick={() => (isExpanded = !isExpanded)}
 				aria-label={isExpanded ? 'Collapse filters' : 'Expand filters'}
 			>
+				<Filter class="h-4 w-4 text-base-content/50" />
 				{#if isExpanded}
 					<span>{m.activity_filters_lessFilters()}</span>
 					<ChevronUp class="h-4 w-4" />
@@ -227,70 +287,8 @@
 		</div>
 	</div>
 
-	<div class="mt-3 flex flex-wrap items-center gap-2">
-		<div class="form-control min-w-50 flex-1">
-			<div class="group relative">
-				<div class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2">
-					<Search
-						class="h-4 w-4 text-base-content/40 transition-colors group-focus-within:text-primary"
-					/>
-				</div>
-				<input
-					type="text"
-					placeholder={m.activity_filters_searchPlaceholder()}
-					class="input w-full rounded-full border-base-content/20 bg-base-200/60 pr-9 pl-10 transition-all duration-200 input-md placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
-					value={searchValue}
-					oninput={(e) => onSearchInput(e.currentTarget.value)}
-				/>
-			</div>
-		</div>
-
-		<div class="join">
-			<button
-				class="btn join-item btn-sm {filters.mediaType === 'all' ? 'btn-primary' : 'btn-ghost'}"
-				onclick={() => updateFilter('mediaType', 'all')}
-			>
-				{m.common_all()}
-			</button>
-			<button
-				class="btn join-item btn-sm {filters.mediaType === 'movie' ? 'btn-primary' : 'btn-ghost'}"
-				onclick={() => updateFilter('mediaType', 'movie')}
-			>
-				{m.common_movies()}
-			</button>
-			<button
-				class="btn join-item btn-sm {filters.mediaType === 'tv' ? 'btn-primary' : 'btn-ghost'}"
-				onclick={() => updateFilter('mediaType', 'tv')}
-			>
-				{m.common_tvShows()}
-			</button>
-		</div>
-
-		{#if statusContext === 'history'}
-			<div class="join">
-				{#each datePresets as preset (preset.label)}
-					<button
-						class="btn join-item btn-sm {isDatePresetActive(preset.days)
-							? 'btn-primary'
-							: 'btn-ghost'}"
-						onclick={() => applyDatePreset(preset.days)}
-						title="Last {preset.days === 0 ? '24 hours' : preset.days + ' days'}"
-						aria-pressed={isDatePresetActive(preset.days)}
-					>
-						{preset.label}
-					</button>
-				{/each}
-				{#if filters.startDate || filters.endDate}
-					<button class="btn join-item btn-ghost btn-error btn-sm" onclick={clearDateRange}>
-						<X class="h-3 w-3" />
-					</button>
-				{/if}
-			</div>
-		{/if}
-	</div>
-
 	{#if isExpanded}
-		<div class="mt-3 grid gap-4 border-t border-base-300 pt-4 md:grid-cols-2 lg:grid-cols-3">
+		<div class="mt-3 grid gap-4 border-t border-base-content/10 pt-4 md:grid-cols-2 lg:grid-cols-3">
 			<!-- Status -->
 			<div class="space-y-2">
 				<label class="flex items-center gap-2 text-sm font-medium">
@@ -466,7 +464,7 @@
 	{/if}
 
 	{#if showActiveFilters && activeFiltersContent}
-		<div class="mt-3 border-t border-base-300 pt-3">
+		<div class="mt-3 border-t border-base-content/10 pt-3">
 			{@render activeFiltersContent()}
 		</div>
 	{/if}

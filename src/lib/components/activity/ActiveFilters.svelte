@@ -105,7 +105,7 @@
 		{#each activeFilters as [key, value] (key)}
 			{#if key !== 'startDate' && key !== 'endDate'}
 				{@const Icon = getFilterIcon(key)}
-				<div class="badge gap-1 badge-primary">
+				<div class="badge gap-1 badge-sm badge-primary">
 					{#if Icon}
 						<Icon class="h-3 w-3" />
 					{/if}
@@ -122,7 +122,7 @@
 		{/each}
 
 		{#if hasDateRange}
-			<div class="badge gap-1 badge-primary">
+			<div class="badge gap-1 badge-sm badge-primary">
 				<Calendar class="h-3 w-3" />
 				<span>{dateRangeLabel()}</span>
 				<button

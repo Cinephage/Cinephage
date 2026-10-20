@@ -38,7 +38,23 @@
 		type ActivitySummary
 	} from '#lib/types/activity.js';
 	import type { ActivityStreamEvents } from '#lib/types/sse/events/activity-events.js';
-	import { Activity, Loader2 } from '@lucide/svelte';
+	import {
+		Loader2,
+		Download,
+		History,
+		Unlink,
+		Pause,
+		Play,
+		Ban,
+		X,
+		RefreshCw,
+		Link2,
+		Trash2,
+		RotateCcw,
+		Save,
+		CalendarX,
+		AlertTriangle
+	} from '@lucide/svelte';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { supportsQueuePauseResume } from '#lib/components/activity/activity-display-utils.js';
 	import {
@@ -80,13 +96,9 @@
 
 	let activities = $state<UnifiedActivity[]>([]);
 	let total = $state(0);
-	let hasMore = $state(false);
-	// Track how many items were loaded from the server (excluding SSE additions)
-	// so loadMore() uses the correct offset.
-	let loadedOffset = $state(0);
-	let selectionMode = $state(false);
+	let currentPage = $state(1);
+	const ACTIVITY_PAGE_SIZE = 50;
 	let selectedHistoryIds = new SvelteSet<string>();
-	let activeSelectionMode = $state(false);
 	let selectedActiveIds = new SvelteSet<string>();
 	let canManageHistory = $state(false);
 	let retentionDays = $state(90);
@@ -117,7 +129,7 @@
 
 	// Loading states
 	let isLoading = $state(false);
-	let isLoadingMore = $state(false);
+	let scrollY = $state(0);
 
 	let refreshInFlight = $state(false);
 	let lastActivityRefreshAt = 0;
@@ -162,13 +174,6 @@
 		return isActiveActivity(activity) && Boolean(activity.queueItemId);
 	}
 
-	function toggleSelectionMode(): void {
-		selectionMode = !selectionMode;
-		if (!selectionMode) {
-			selectedHistoryIds.clear();
-		}
-	}
-
 	function handleToggleSelection(activityId: string, selected: boolean): void {
 		if (selected) {
 			selectedHistoryIds.add(activityId);
@@ -187,13 +192,6 @@
 
 		for (const id of activityIds) {
 			selectedHistoryIds.delete(id);
-		}
-	}
-
-	function toggleActiveSelectionMode(): void {
-		activeSelectionMode = !activeSelectionMode;
-		if (!activeSelectionMode) {
-			selectedActiveIds.clear();
 		}
 	}
 
@@ -291,25 +289,6 @@
 		}
 		return ids;
 	});
-	const selectableHistoryIds = $derived.by(() =>
-		filteredActivities
-			.filter((activity) => isHistoryActivity(activity))
-			.map((activity) => activity.id)
-	);
-	const selectableActiveIds = $derived.by(() =>
-		filteredActivities
-			.filter((activity) => isActiveQueueActivity(activity))
-			.map((activity) => activity.id)
-	);
-	const allHistorySelectableSelected = $derived.by(
-		() =>
-			selectableHistoryIds.length > 0 &&
-			selectableHistoryIds.every((id) => selectedHistoryIds.has(id))
-	);
-	const allActiveSelectableSelected = $derived.by(
-		() =>
-			selectableActiveIds.length > 0 && selectableActiveIds.every((id) => selectedActiveIds.has(id))
-	);
 
 	function getActiveBulkActionQueueIds(action: ActiveBulkAction): string[] {
 		switch (action) {
@@ -345,31 +324,20 @@
 		window.history.replaceState(window.history.state, '', nextUrl);
 	}
 
-	function applyActivityResult(
-		payload: {
-			activities?: UnifiedActivity[];
-			total?: number;
-			hasMore?: boolean;
-			summary?: Partial<ActivitySummary> | null;
-			failedCount?: number;
-		},
-		options: { append?: boolean } = {}
-	): void {
-		const { append = false } = options;
-		const nextActivities = Array.isArray(payload.activities) ? payload.activities : [];
-
-		activities = append ? [...activities, ...nextActivities] : nextActivities;
-		loadedOffset = activities.length;
+	function applyActivityResult(payload: {
+		activities?: UnifiedActivity[];
+		total?: number;
+		summary?: Partial<ActivitySummary> | null;
+		failedCount?: number;
+	}): void {
+		activities = Array.isArray(payload.activities) ? payload.activities : [];
 		total = typeof payload.total === 'number' ? payload.total : total;
-		hasMore = typeof payload.hasMore === 'boolean' ? payload.hasMore : false;
-		if (!append) {
-			if (payload.summary != null) {
-				queueStats = parseQueueStats(payload.summary as Partial<ActivitySummary>);
-			} else if (typeof payload.failedCount === 'number') {
-				// History tab: summary is null, but failedCount is always returned.
-				// Update only failedCount so the "Clear All Failed" button stays accurate.
-				queueStats = { ...queueStats, failedCount: payload.failedCount };
-			}
+		if (payload.summary != null) {
+			queueStats = parseQueueStats(payload.summary as Partial<ActivitySummary>);
+		} else if (typeof payload.failedCount === 'number') {
+			// History tab: summary is null, but failedCount is always returned.
+			// Update only failedCount so the "Clear All Failed" button stays accurate.
+			queueStats = { ...queueStats, failedCount: payload.failedCount };
 		}
 	}
 
@@ -378,7 +346,6 @@
 		tab: ActivityTab,
 		options: {
 			offset?: number;
-			append?: boolean;
 			updateUrl?: boolean;
 			force?: boolean;
 			silent?: boolean;
@@ -387,27 +354,18 @@
 	): Promise<void> {
 		const {
 			offset = 0,
-			append = false,
 			updateUrl = false,
 			force = false,
 			silent = false,
-			limit = 50
+			limit = ACTIVITY_PAGE_SIZE
 		} = options;
 		const normalizedFilters = normalizeFiltersForTab(nextFilters, tab);
 		const requestToken = ++activityRequestToken;
-		const previousActivities = append ? activities : [...activities];
-		const previousHasMore = hasMore;
+		const previousActivities = [...activities];
+		const previousPage = currentPage;
 
-		if (!append) {
-			if (!silent) {
-				activities = [];
-				hasMore = false;
-			}
-		}
-
-		if (append) {
-			isLoadingMore = true;
-		} else if (!silent) {
+		if (!silent) {
+			activities = [];
 			isLoading = true;
 		}
 
@@ -422,7 +380,6 @@
 				error?: string;
 				activities?: UnifiedActivity[];
 				total?: number;
-				hasMore?: boolean;
 				summary?: Partial<ActivitySummary> | null;
 			};
 			if (requestToken !== activityRequestToken) return;
@@ -435,28 +392,40 @@
 			filters = normalizedFilters;
 			activityTab = tab;
 			setFiltersForTab(tab, normalizedFilters);
-			applyActivityResult(payload, { append });
+			applyActivityResult(payload);
+			currentPage = Math.floor(offset / limit) + 1;
 
-			if (!append && updateUrl) {
+			if (updateUrl) {
 				syncActivityUrl(normalizedFilters, tab);
 			}
 
-			if (!append && force) {
+			if (force) {
 				lastActivityRefreshAt = Date.now();
 			}
 		} catch (error) {
-			if (!append) {
-				activities = previousActivities ?? activities;
-				hasMore = previousHasMore;
-			}
+			activities = previousActivities;
+			currentPage = previousPage;
 			throw error;
 		} finally {
 			if (requestToken === activityRequestToken) {
 				isLoading = false;
-				isLoadingMore = false;
 			}
 		}
 	}
+
+	async function goToPage(page: number): Promise<void> {
+		if (page < 1 || page > totalPages || page === currentPage) return;
+		try {
+			await fetchActivityData(filters, activityTab, {
+				offset: (page - 1) * ACTIVITY_PAGE_SIZE,
+				limit: ACTIVITY_PAGE_SIZE
+			});
+		} catch (_error) {
+			toasts.error(m.toast_activity_failedToLoadMore());
+		}
+	}
+
+	const totalPages = $derived(Math.max(1, Math.ceil(total / ACTIVITY_PAGE_SIZE)));
 
 	// ── Derived sorted view (server handles filtering; client handles sort) ──
 	const filteredActivities = $derived.by(() => {
@@ -609,8 +578,7 @@
 		// Store unsorted master list; $derived filteredActivities handles sort
 		activities = data.activities;
 		total = data.total;
-		hasMore = data.hasMore;
-		loadedOffset = data.activities.length;
+		currentPage = 1;
 		if (data.cardStats) {
 			queueStats = data.cardStats as QueueCardStats;
 		} else {
@@ -629,10 +597,10 @@
 		// Only reconcile when selection mode is active to avoid unnecessary work
 		// Read activities to trigger on data changes, but untrack the mutations
 		const currentActivities = activities;
-		if (selectionMode && selectedHistoryIds.size > 0) {
+		if (selectedHistoryIds.size > 0) {
 			untrack(() => reconcileSelectedHistoryIds(currentActivities));
 		}
-		if (activeSelectionMode && selectedActiveIds.size > 0) {
+		if (selectedActiveIds.size > 0) {
 			untrack(() => reconcileSelectedActiveIds(currentActivities));
 		}
 	});
@@ -659,12 +627,10 @@
 	});
 
 	$effect(() => {
-		if (activityTab !== 'history' && (selectionMode || selectedHistoryIds.size > 0)) {
-			selectionMode = false;
+		if (activityTab !== 'history' && selectedHistoryIds.size > 0) {
 			selectedHistoryIds.clear();
 		}
-		if (activityTab !== 'active' && (activeSelectionMode || selectedActiveIds.size > 0)) {
-			activeSelectionMode = false;
+		if (activityTab !== 'active' && selectedActiveIds.size > 0) {
 			selectedActiveIds.clear();
 		}
 		if (
@@ -792,11 +758,14 @@
 
 		refreshInFlight = true;
 		try {
-			// For silent background refreshes, fetch enough items to cover what's
-			// already loaded so we never return fewer items than the user has,
-			// which would otherwise trigger repeated load-more fetches.
-			const silentLimit = silent ? Math.min(Math.max(50, loadedOffset), 500) : undefined;
-			await fetchActivityData(filters, activityTab, { force, silent, limit: silentLimit });
+			// Refresh re-fetches whichever page is currently on screen, so the
+			// user's position in the paginated list is preserved across refreshes.
+			await fetchActivityData(filters, activityTab, {
+				force,
+				silent,
+				offset: (currentPage - 1) * ACTIVITY_PAGE_SIZE,
+				limit: ACTIVITY_PAGE_SIZE
+			});
 		} finally {
 			refreshInFlight = false;
 			lastActivityRefreshAt = Date.now();
@@ -1262,11 +1231,10 @@
 	function openActiveConfirm(action: ActiveBulkAction): void {
 		if (activeBulkLoading) return;
 		if (action === 'pause' || action === 'resume' || action === 'cancel') {
-			if (activityTab !== 'active' || !activeSelectionMode) return;
+			if (activityTab !== 'active') return;
 		} else {
-			// retry_failed / remove_failed work from the History tab (selection mode)
-			if (activityTab === 'active' && !activeSelectionMode) return;
-			if (activityTab === 'history' && !selectionMode) return;
+			// retry_failed / remove_failed work from the History tab
+			if (activityTab !== 'active' && activityTab !== 'history') return;
 		}
 		if (getActiveBulkActionQueueIds(action).length === 0) return;
 
@@ -1444,17 +1412,6 @@
 		}
 	}
 
-	// Load more
-	async function loadMore() {
-		if (isLoadingMore || !hasMore) return;
-
-		try {
-			await fetchActivityData(filters, activityTab, { offset: loadedOffset, append: true });
-		} catch (_error) {
-			toasts.error(m.toast_activity_failedToLoadMore());
-		}
-	}
-
 	// Open detail modal
 	function openDetailModal(activity: UnifiedActivity) {
 		selectedActivity = activity;
@@ -1580,49 +1537,92 @@
 	<title>{m.activity_pageTitle()}</title>
 </svelte:head>
 
-<div class="space-y-6">
+<svelte:window
+	onscroll={() => {
+		scrollY = window.scrollY;
+	}}
+/>
+
+<!-- Scroll to top -->
+{#if scrollY > 300}
+	<button
+		class="btn fixed right-6 bottom-6 z-50 gap-1.5 opacity-80 shadow-lg transition-opacity btn-neutral btn-sm hover:opacity-100"
+		onclick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+		aria-label="Scroll to top"
+	>
+		<svg class="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"
+			><path d="M8 12V4M4 8l4-4 4 4" /></svg
+		>
+	</button>
+{/if}
+
+<div class="space-y-5">
 	<!-- Header -->
-	<div class="flex items-center justify-between">
-		<div>
-			<h1 class="flex items-center gap-2 text-2xl font-bold">
-				<Activity class="h-8 w-8" />
-				{m.activity_title()}
-			</h1>
-			<p class="text-base-content/70">{m.activity_subtitle()}</p>
-		</div>
+	<div>
+		<h1 class="text-2xl font-bold">{m.activity_title()}</h1>
+		<p class="mt-1 text-sm text-base-content/70">{m.activity_subtitle()}</p>
 	</div>
 
-	<div class="tabs-boxed tabs w-fit">
+	<!-- Always visible, above the tabs: Failed and Unmatched are shortcuts
+	     into the other two tabs, so this row reads as a permanent dashboard
+	     strip rather than something repeated per-tab - also leaves room to
+	     grow (e.g. sub-cards scoped to whichever tab is active) without
+	     fighting for space with the tab bar itself. -->
+	<QueueStatsCards
+		stats={queueStats}
+		activeFilter={(filters.status ?? 'all') as QueueCardStatusFilter}
+		onFilterSelect={applyQueueCardFilter}
+		{unmatchedCount}
+		unmatchedActive={activityTab === 'unmatched'}
+		onUnmatchedSelect={() => switchTab('unmatched')}
+	/>
+
+	<!-- Tabs -->
+	<div class="flex scrollbar-none overflow-x-auto border-b border-base-200">
 		<button
-			class="tab {activityTab === 'active' ? 'tab-active' : ''}"
+			class="flex shrink-0 items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors
+				{activityTab === 'active'
+				? 'border-primary text-primary'
+				: 'border-transparent text-base-content/60 hover:text-base-content'}"
 			onclick={() => switchTab('active')}
 		>
+			<Download class="h-4 w-4" />
 			{m.activity_tabActive()}
+			{#if queueStats.totalCount > 0}
+				<span class="badge badge-sm {activityTab === 'active' ? 'badge-primary' : 'badge-ghost'}">
+					{queueStats.totalCount}
+				</span>
+			{/if}
 		</button>
 		<button
-			class="tab {activityTab === 'history' ? 'tab-active' : ''}"
+			class="flex shrink-0 items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors
+				{activityTab === 'history'
+				? 'border-primary text-primary'
+				: 'border-transparent text-base-content/60 hover:text-base-content'}"
 			onclick={() => switchTab('history')}
 		>
+			<History class="h-4 w-4" />
 			{m.activity_tabHistory()}
 		</button>
 		<button
-			class="tab {activityTab === 'unmatched' ? 'tab-active' : ''}"
+			class="flex shrink-0 items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors
+				{activityTab === 'unmatched'
+				? 'border-primary text-primary'
+				: 'border-transparent text-base-content/60 hover:text-base-content'}"
 			onclick={() => switchTab('unmatched')}
 		>
+			<Unlink class="h-4 w-4" />
 			{m.activity_tabUnmatched()}
+			{#if unmatchedCount}
+				<span
+					class="badge badge-sm {activityTab === 'unmatched' ? 'badge-primary' : 'badge-ghost'}"
+				>
+					{unmatchedCount}
+				</span>
+			{/if}
 		</button>
 	</div>
 
-	{#if activityTab === 'active' || activityTab === 'unmatched'}
-		<QueueStatsCards
-			stats={queueStats}
-			activeFilter={(filters.status ?? 'all') as QueueCardStatusFilter}
-			onFilterSelect={applyQueueCardFilter}
-			{unmatchedCount}
-			unmatchedActive={activityTab === 'unmatched'}
-			onUnmatchedSelect={() => switchTab('unmatched')}
-		/>
-	{/if}
 	{#if activityTab === 'active'}
 		<LibraryImportJobsCard batches={data.importBatches} />
 	{/if}
@@ -1653,55 +1653,44 @@
 							>{m.activity_queue_bulkActionsHeading()}</span
 						>
 						<div class="divider m-0 divider-horizontal h-6"></div>
-						<button class="btn btn-ghost btn-xs" onclick={toggleActiveSelectionMode}>
-							{activeSelectionMode
-								? m.activity_queue_exitSelection()
-								: m.activity_queue_selectRows()}
-						</button>
 
-						{#if activeSelectionMode}
+						{#if selectedActiveIds.size > 0}
 							<span class="text-xs text-base-content/60"
 								>{m.common_selected({ count: selectedActiveIds.size })}</span
 							>
 							<button
-								class="btn btn-ghost btn-xs"
-								onclick={() =>
-									handleToggleActiveSelectionAll(selectableActiveIds, !allActiveSelectableSelected)}
-								disabled={activeBulkLoading || selectableActiveIds.length === 0}
-							>
-								{allActiveSelectableSelected
-									? m.activity_queue_deselectAllCount({ count: selectableActiveIds.length })
-									: m.activity_queue_selectAllCount({ count: selectableActiveIds.length })}
-							</button>
-							<button
-								class="btn btn-xs"
+								class="btn gap-1.5 btn-outline btn-sm"
 								onclick={() => openActiveConfirm('pause')}
 								disabled={activeBulkLoading || selectedPausableQueueIds.length === 0}
 							>
+								<Pause class="h-3.5 w-3.5" />
 								{m.activity_queue_pauseCount({ count: selectedPausableQueueIds.length })}
 							</button>
 							<button
-								class="btn btn-xs"
+								class="btn gap-1.5 btn-sm btn-success"
 								onclick={() => openActiveConfirm('resume')}
 								disabled={activeBulkLoading || selectedPausedQueueIds.length === 0}
 							>
+								<Play class="h-3.5 w-3.5" />
 								{m.activity_queue_resumeCount({ count: selectedPausedQueueIds.length })}
 							</button>
 							<button
-								class="btn btn-error btn-xs"
+								class="btn gap-1.5 btn-error btn-sm"
 								onclick={() => openActiveConfirm('cancel')}
 								disabled={activeBulkLoading || selectedCancelableQueueIds.length === 0}
 							>
+								<Ban class="h-3.5 w-3.5" />
 								{m.activity_queue_cancelCount({ count: selectedCancelableQueueIds.length })}
 							</button>
 							<div class="ml-auto"></div>
 							<button
-								class="btn btn-ghost btn-xs"
+								class="btn gap-1.5 btn-outline btn-sm"
 								onclick={() => {
 									selectedActiveIds.clear();
 								}}
 								disabled={activeBulkLoading || selectedActiveIds.size === 0}
 							>
+								<X class="h-3.5 w-3.5" />
 								{m.activity_queue_clearSelection()}
 							</button>
 						{:else}
@@ -1711,22 +1700,26 @@
 							<div class="ml-auto"></div>
 							<div class="divider m-0 divider-horizontal h-6"></div>
 							<button
-								class="btn btn-ghost btn-xs"
+								class="btn gap-1.5 btn-outline btn-sm"
 								onclick={handleRefreshQueue}
 								disabled={refreshQueueLoading}
 							>
 								{#if refreshQueueLoading}
-									<Loader2 class="h-3 w-3 animate-spin" />
+									<Loader2 class="h-3.5 w-3.5 animate-spin" />
+								{:else}
+									<RefreshCw class="h-3.5 w-3.5" />
 								{/if}
 								{m.activity_queue_refresh()}
 							</button>
 							<button
-								class="btn btn-ghost btn-xs"
+								class="btn gap-1.5 btn-outline btn-sm"
 								onclick={handleRelinkOrphans}
 								disabled={relinkOrphansLoading}
 							>
 								{#if relinkOrphansLoading}
-									<Loader2 class="h-3 w-3 animate-spin" />
+									<Loader2 class="h-3.5 w-3.5 animate-spin" />
+								{:else}
+									<Link2 class="h-3.5 w-3.5" />
 								{/if}
 								{m.activity_queue_relinkOrphans()}
 							</button>
@@ -1744,7 +1737,7 @@
 					<label class="flex items-center gap-2 text-sm">
 						<span class="text-base-content/70">{m.activity_history_retention()}</span>
 						<select
-							class="select-bordered select select-xs"
+							class="select border-base-content/20 bg-base-200 select-sm"
 							bind:value={retentionDays}
 							disabled={settingsLoading}
 						>
@@ -1755,79 +1748,87 @@
 							<option value={90}>{m.activity_history_days90()}</option>
 						</select>
 					</label>
-					<div class="divider m-0 divider-horizontal h-6"></div>
 					<button
-						class="btn btn-xs"
+						class="btn gap-1.5 btn-outline btn-sm"
 						onclick={saveRetention}
 						disabled={settingsLoading || saveRetentionLoading}
 					>
 						{#if saveRetentionLoading}
-							<Loader2 class="h-3 w-3 animate-spin" />
+							<Loader2 class="h-3.5 w-3.5 animate-spin" />
+						{:else}
+							<Save class="h-3.5 w-3.5" />
 						{/if}
 						{m.action_save()}
 					</button>
+					<div class="divider m-0 divider-horizontal h-6"></div>
 					<button
-						class="btn btn-xs"
+						class="btn gap-1.5 btn-outline btn-sm"
 						onclick={() => openHistoryConfirm('purge_older_than_retention')}
 						disabled={settingsLoading || purgeOlderLoading}
 					>
 						{#if purgeOlderLoading}
-							<Loader2 class="h-3 w-3 animate-spin" />
+							<Loader2 class="h-3.5 w-3.5 animate-spin" />
+						{:else}
+							<CalendarX class="h-3.5 w-3.5" />
 						{/if}
 						{m.activity_history_purgeOlder()}
 					</button>
-					<button class="btn btn-ghost btn-xs" onclick={toggleSelectionMode}>
-						{selectionMode ? m.activity_history_exitSelection() : m.activity_history_selectRows()}
-					</button>
-					{#if selectionMode}
-						<button
-							class="btn btn-ghost btn-xs"
-							onclick={() =>
-								handleToggleSelectionAll(selectableHistoryIds, !allHistorySelectableSelected)}
-							disabled={deleteSelectedLoading || selectableHistoryIds.length === 0}
+					{#if selectedHistoryIds.size > 0}
+						<div class="divider m-0 divider-horizontal h-6"></div>
+						<span class="text-xs text-base-content/60"
+							>{m.common_selected({ count: selectedHistoryIds.size })}</span
 						>
-							{allHistorySelectableSelected
-								? m.activity_history_deselectAllCount({ count: selectableHistoryIds.length })
-								: m.activity_history_selectAllCount({ count: selectableHistoryIds.length })}
-						</button>
 						<button
-							class="btn btn-error btn-xs"
+							class="btn gap-1.5 btn-error btn-sm"
 							onclick={() => openHistoryConfirm('delete_selected')}
 							disabled={deleteSelectedLoading || selectedHistoryIds.size === 0}
 						>
 							{#if deleteSelectedLoading}
-								<Loader2 class="h-3 w-3 animate-spin" />
+								<Loader2 class="h-3.5 w-3.5 animate-spin" />
+							{:else}
+								<Trash2 class="h-3.5 w-3.5" />
 							{/if}
 							{m.activity_history_deleteSelectedCount({ count: selectedHistoryIds.size })}
 						</button>
 						{#if selectedHistoryFailedQueueIds.length > 0}
-							<div class="divider m-0 divider-horizontal h-6"></div>
 							<button
-								class="btn btn-warning btn-xs"
+								class="btn gap-1.5 btn-sm btn-warning"
 								onclick={() => openActiveConfirm('retry_failed')}
 								disabled={activeBulkLoading}
 							>
+								<RotateCcw class="h-3.5 w-3.5" />
 								{m.activity_queue_retryFailedCount({ count: selectedHistoryFailedQueueIds.length })}
 							</button>
 							<button
-								class="btn btn-error btn-xs"
+								class="btn gap-1.5 btn-error btn-sm"
 								onclick={() => openActiveConfirm('remove_failed')}
 								disabled={activeBulkLoading}
 							>
+								<Trash2 class="h-3.5 w-3.5" />
 								{m.activity_queue_removeFailedCount({
 									count: selectedHistoryFailedQueueIds.length
 								})}
 							</button>
 						{/if}
+						<button
+							class="btn gap-1.5 btn-outline btn-sm"
+							onclick={() => selectedHistoryIds.clear()}
+							disabled={deleteSelectedLoading}
+						>
+							<X class="h-3.5 w-3.5" />
+							{m.activity_queue_clearSelection()}
+						</button>
 					{/if}
 					<div class="ml-auto"></div>
 					<button
-						class="btn btn-error btn-xs"
+						class="btn gap-1.5 btn-outline btn-error btn-sm"
 						onclick={() => openHistoryConfirm('purge_all')}
 						disabled={settingsLoading || purgeAllLoading}
 					>
 						{#if purgeAllLoading}
-							<Loader2 class="h-3 w-3 animate-spin" />
+							<Loader2 class="h-3.5 w-3.5 animate-spin" />
+						{:else}
+							<AlertTriangle class="h-3.5 w-3.5" />
 						{/if}
 						{m.activity_history_purgeAll()}
 					</button>
@@ -1856,7 +1857,6 @@
 				activities={filteredActivities}
 				{sortField}
 				{sortDirection}
-				selectionMode={activityTab === 'history' ? selectionMode : activeSelectionMode}
 				selectedIds={activityTab === 'history' ? selectedHistoryIds : selectedActiveIds}
 				isSelectable={activityTab === 'history' ? isHistoryActivity : isActiveQueueActivity}
 				onSort={handleSort}
@@ -1871,9 +1871,9 @@
 				onToggleSelectionAll={activityTab === 'history'
 					? handleToggleSelectionAll
 					: handleToggleActiveSelectionAll}
-				{hasMore}
-				{isLoadingMore}
-				onLoadMore={loadMore}
+				{currentPage}
+				{totalPages}
+				onPageChange={goToPage}
 			/>
 		{/if}
 	{/if}

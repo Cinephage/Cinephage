@@ -4,7 +4,6 @@
 
 	interface Props {
 		compact: boolean;
-		selectionMode: boolean;
 		sortField: string;
 		sortDirection: 'asc' | 'desc';
 		onSort?: (field: string) => void;
@@ -16,7 +15,6 @@
 
 	let {
 		compact,
-		selectionMode,
 		sortField,
 		sortDirection,
 		onSort,
@@ -48,26 +46,26 @@
 	}
 </script>
 
-<tr>
-	{#if selectionMode}
-		<th class="w-10">
-			{#if selectableCount > 0}
-				<input
-					bind:this={selectAllCheckbox}
-					type="checkbox"
-					class="checkbox checkbox-xs checkbox-primary"
-					checked={allSelectableSelected}
-					aria-label={m.activity_table_selectAllVisible()}
-					onclick={(e) => {
-						e.stopPropagation();
-						handleToggleAll();
-					}}
-				/>
-			{/if}
-		</th>
-	{/if}
-	<th class="w-10"></th>
-	<th class="cursor-pointer select-none hover:bg-base-200" onclick={() => handleSort('status')}>
+<tr
+	class="border-b border-base-content/10 bg-base-200 text-[11px] font-semibold tracking-widest text-base-content/50 uppercase"
+>
+	<th class="w-10 pr-0">
+		{#if selectableCount > 0}
+			<input
+				bind:this={selectAllCheckbox}
+				type="checkbox"
+				class="checkbox checkbox-xs checkbox-primary"
+				checked={allSelectableSelected}
+				aria-label={m.activity_table_selectAllVisible()}
+				onclick={(e) => {
+					e.stopPropagation();
+					handleToggleAll();
+				}}
+			/>
+		{/if}
+	</th>
+	<th class="w-8 pr-0"></th>
+	<th class="cursor-pointer select-none hover:bg-base-300/40" onclick={() => handleSort('status')}>
 		<span class="flex items-center gap-1">
 			{m.common_status()}
 			{#if onSort}
@@ -76,7 +74,7 @@
 			{/if}
 		</span>
 	</th>
-	<th class="cursor-pointer select-none hover:bg-base-200" onclick={() => handleSort('media')}>
+	<th class="cursor-pointer select-none hover:bg-base-300/40" onclick={() => handleSort('media')}>
 		<span class="flex items-center gap-1">
 			{m.activity_table_media()}
 			{#if onSort}
@@ -86,7 +84,10 @@
 		</span>
 	</th>
 	{#if !compact}
-		<th class="cursor-pointer select-none hover:bg-base-200" onclick={() => handleSort('release')}>
+		<th
+			class="cursor-pointer select-none hover:bg-base-300/40"
+			onclick={() => handleSort('release')}
+		>
 			<span class="flex items-center gap-1">
 				{m.activity_table_release()}
 				{#if onSort}
@@ -97,7 +98,7 @@
 		</th>
 		<th>{m.activity_table_quality()}</th>
 		<th>{m.activity_table_group()}</th>
-		<th class="cursor-pointer select-none hover:bg-base-200" onclick={() => handleSort('size')}>
+		<th class="cursor-pointer select-none hover:bg-base-300/40" onclick={() => handleSort('size')}>
 			<span class="flex items-center gap-1">
 				{m.common_size()}
 				{#if onSort}
@@ -109,7 +110,7 @@
 		<th>{m.activity_table_source()}</th>
 	{/if}
 	<th>Progress</th>
-	<th class="cursor-pointer select-none hover:bg-base-200" onclick={() => handleSort('time')}>
+	<th class="cursor-pointer select-none hover:bg-base-300/40" onclick={() => handleSort('time')}>
 		<span class="flex items-center gap-1">
 			Time
 			{#if onSort}

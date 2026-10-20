@@ -2,12 +2,10 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import * as m from '#lib/paraglide/messages.js';
 	import { isImportFailedActivity, type UnifiedActivity } from '#lib/types/activity.js';
-	import { Loader2, Minus } from '@lucide/svelte';
+	import { Minus } from '@lucide/svelte';
 	import { toasts } from '#lib/stores/toast.svelte.js';
-	import { createProgressiveRenderer } from '#lib/utils/progressive-render.svelte.js';
 	import ActivityTableHeader from './ActivityTableHeader.svelte';
 	import ActivityRow from './ActivityRow.svelte';
-	import ActivityMobileCard from './ActivityMobileCard.svelte';
 
 	interface Props {
 		activities: UnifiedActivity[];
@@ -20,14 +18,13 @@
 		onRemove?: (id: string) => Promise<void>;
 		onRetry?: (id: string) => Promise<void>;
 		compact?: boolean;
-		selectionMode?: boolean;
 		selectedIds?: Set<string>;
 		isSelectable?: (activity: UnifiedActivity) => boolean;
 		onToggleSelection?: (activityId: string, selected: boolean) => void;
 		onToggleSelectionAll?: (activityIds: string[], selected: boolean) => void;
-		hasMore?: boolean;
-		isLoadingMore?: boolean;
-		onLoadMore?: () => void;
+		currentPage?: number;
+		totalPages?: number;
+		onPageChange?: (page: number) => void;
 	}
 
 	let {
@@ -41,45 +38,20 @@
 		onRemove,
 		onRetry,
 		compact = false,
-		selectionMode = false,
 		selectedIds = new Set<string>(),
 		isSelectable = () => false,
 		onToggleSelection,
 		onToggleSelectionAll,
-		hasMore = false,
-		isLoadingMore = false,
-		onLoadMore
+		currentPage = 1,
+		totalPages = 1,
+		onPageChange
 	}: Props = $props();
 
-	const renderer = createProgressiveRenderer(() => activities, { batchSize: 24 });
-
-	$effect(() => {
-		if (!renderer.hasMore && hasMore && !isLoadingMore) {
-			onLoadMore?.();
-		}
-	});
-
-	let isMobile = $state(false);
-	$effect(() => {
-		if (typeof window === 'undefined') return;
-
-		const mq = window.matchMedia('(max-width: 1023px)');
-		isMobile = mq.matches;
-		const handler = (e: MediaQueryListEvent) => {
-			isMobile = e.matches;
-		};
-		mq.addEventListener('change', handler);
-		return () => mq.removeEventListener('change', handler);
-	});
-
 	let expandedRows = new SvelteSet<string>();
-	let failedReasonExpandedRows = new SvelteSet<string>();
 	let queueActionLoadingRows = new SvelteSet<string>();
 
 	const selectableIds = $derived.by(() =>
-		selectionMode
-			? activities.filter((activity) => isSelectable(activity)).map((activity) => activity.id)
-			: []
+		activities.filter((activity) => isSelectable(activity)).map((activity) => activity.id)
 	);
 	const allSelectableSelected = $derived.by(
 		() => selectableIds.length > 0 && selectableIds.every((id) => selectedIds.has(id))
@@ -93,14 +65,6 @@
 			expandedRows.delete(id);
 		} else {
 			expandedRows.add(id);
-		}
-	}
-
-	function toggleFailedReason(id: string) {
-		if (failedReasonExpandedRows.has(id)) {
-			failedReasonExpandedRows.delete(id);
-		} else {
-			failedReasonExpandedRows.add(id);
 		}
 	}
 
@@ -148,14 +112,14 @@
 	}
 
 	function toggleSelection(activity: UnifiedActivity, selected: boolean): void {
-		if (!selectionMode || !isSelectable(activity)) {
+		if (!isSelectable(activity)) {
 			return;
 		}
 		onToggleSelection?.(activity.id, selected);
 	}
 
 	function toggleSelectionAll(selected: boolean): void {
-		if (!selectionMode || selectableIds.length === 0) {
+		if (selectableIds.length === 0) {
 			return;
 		}
 		onToggleSelectionAll?.(selectableIds, selected);
@@ -168,40 +132,12 @@
 		<p class="text-lg font-medium">{m.activity_table_noActivity()}</p>
 		<p class="mt-1 text-sm">{m.activity_table_noActivityHint()}</p>
 	</div>
-{:else if isMobile}
-	<div class="space-y-3">
-		{#each renderer.visible as activity (activity.id)}
-			<ActivityMobileCard
-				{activity}
-				{compact}
-				{selectionMode}
-				isSelected={isRowSelected(activity.id)}
-				isSelectable={isSelectable(activity)}
-				isExpanded={expandedRows.has(activity.id)}
-				isFailedReasonExpanded={failedReasonExpandedRows.has(activity.id)}
-				isQueueActionLoading={queueActionLoadingRows.has(activity.id)}
-				onToggle={() => toggleRow(activity.id)}
-				onToggleFailedReason={() => toggleFailedReason(activity.id)}
-				onQueueAction={(action) => runQueueAction(activity, action)}
-				onToggleSelection={(selected) => toggleSelection(activity, selected)}
-			/>
-		{/each}
-	</div>
-
-	{#if renderer.hasMore || hasMore}
-		<div bind:this={renderer.sentinel} class="flex justify-center py-4">
-			{#if isLoadingMore}
-				<Loader2 class="h-5 w-5 animate-spin text-base-content/40" />
-			{/if}
-		</div>
-	{/if}
 {:else}
-	<div class="overflow-x-auto">
-		<table class="table table-sm">
+	<div class="overflow-x-auto rounded-lg border border-base-content/12 bg-base-100 shadow-sm">
+		<table class="table w-full table-sm">
 			<thead>
 				<ActivityTableHeader
 					{compact}
-					{selectionMode}
 					{sortField}
 					{sortDirection}
 					{onSort}
@@ -211,29 +147,47 @@
 					onToggleSelectionAll={toggleSelectionAll}
 				/>
 			</thead>
-			<tbody>
-				{#each renderer.visible as activity (activity.id)}
+			<tbody class="divide-y divide-base-content/8">
+				{#each activities as activity (activity.id)}
 					<ActivityRow
 						{activity}
 						{compact}
-						{selectionMode}
 						isSelected={isRowSelected(activity.id)}
 						isSelectable={isSelectable(activity)}
 						isExpanded={expandedRows.has(activity.id)}
+						isQueueActionLoading={queueActionLoadingRows.has(activity.id)}
 						onToggle={() => toggleRow(activity.id)}
 						{onRowClick}
 						onToggleSelection={(selected) => toggleSelection(activity, selected)}
+						onQueueAction={(action) => runQueueAction(activity, action)}
 					/>
 				{/each}
 			</tbody>
+			{#if totalPages > 1}
+				<tfoot>
+					<tr>
+						<td colspan={(compact ? 5 : 10) + 1} class="border-t border-base-content/8 py-2">
+							<div class="flex items-center justify-center gap-2">
+								<button
+									class="btn btn-ghost btn-xs"
+									disabled={currentPage <= 1}
+									onclick={() => onPageChange?.(currentPage - 1)}
+								>
+									{m.reports_pagination_prev()}
+								</button>
+								<span class="text-xs text-base-content/60">{currentPage} / {totalPages}</span>
+								<button
+									class="btn btn-ghost btn-xs"
+									disabled={currentPage >= totalPages}
+									onclick={() => onPageChange?.(currentPage + 1)}
+								>
+									{m.reports_pagination_next()}
+								</button>
+							</div>
+						</td>
+					</tr>
+				</tfoot>
+			{/if}
 		</table>
 	</div>
-
-	{#if renderer.hasMore || hasMore}
-		<div bind:this={renderer.sentinel} class="flex justify-center py-4">
-			{#if isLoadingMore}
-				<Loader2 class="h-5 w-5 animate-spin text-base-content/40" />
-			{/if}
-		</div>
-	{/if}
 {/if}
