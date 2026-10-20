@@ -224,6 +224,7 @@ export function getMobileCompactStatusLabel(
 	fallbackLabel: string
 ): string | undefined {
 	if (activity.status === 'search_error') return m.action_search();
+	if (activity.status === 'no_results') return m.status_noResults();
 
 	const tag = getActivityCategoryTag(activity);
 	if (tag?.label === m.activity_tag_download()) return getStatusLabel(activity, fallbackLabel);

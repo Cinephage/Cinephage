@@ -15,7 +15,8 @@ import {
 	createSupportId,
 	setAuthenticatedLocals,
 	clearAuthenticatedLocals,
-	stripSecureCookiesForLocalHttp
+	stripSecureCookiesForLocalHttp,
+	rewriteCookieHeaderForLocalHttp
 } from '#lib/server/auth/session-helpers.js';
 import { ensureServicesInitialized } from '#lib/server/services/initializer.js';
 import '#lib/server/services/shutdown.js';
@@ -305,7 +306,10 @@ const customHandler: Handle = async ({ event, resolve }) => {
 							// bridge ANY valid key — streaming-scoped included —
 							// into a full owner session here, bypassing the
 							// full-access gate above.
-							const cookieOnlyHeaders = new Headers(event.request.headers);
+							const cookieOnlyHeaders = rewriteCookieHeaderForLocalHttp(
+								event,
+								new Headers(event.request.headers)
+							);
 							cookieOnlyHeaders.delete('x-api-key');
 							session = await auth.api.getSession({
 								headers: cookieOnlyHeaders

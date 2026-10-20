@@ -1,14 +1,16 @@
 import type { PageServerLoad } from './$types';
-import { sql } from 'drizzle-orm';
+import { and, sql, eq, inArray } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
 import {
 	episodeFiles,
 	libraries,
+	mediaBrowserServers,
 	mediaServerSyncedItems,
 	movieFiles,
 	movies,
 	rootFolders,
-	series
+	series,
+	storageInsights
 } from '#lib/server/db/schema.js';
 import {
 	extractResolution,
@@ -18,6 +20,8 @@ import {
 	extractContainer
 } from '#lib/server/storage/reconciliation/matchers.js';
 import { aggregateMovieRows } from './aggregate-movies.js';
+import { getInsightItemResolver } from '#lib/server/storage/insights/items/registry.js';
+import type { InsightType } from '#lib/server/storage/insights/types.js';
 
 export type MediaExplorerItem = {
 	id: string;
@@ -64,6 +68,12 @@ export const load: PageServerLoad = async ({ url, parent }) => {
 	const audioCodecFilter = url.searchParams.get('audioCodec') || 'all';
 	const containerFilter = url.searchParams.get('container') || 'all';
 	const hasPlaysFilter = url.searchParams.get('hasPlays') || 'all';
+	const insightId = url.searchParams.get('insightId');
+
+	// A disabled server's synced data is kept (not deleted) so re-enabling and
+	// re-syncing is cheap, but its play stats must stop counting here.
+	const mediaServers = await db.select().from(mediaBrowserServers);
+	const enabledServerIds = mediaServers.filter((s) => s.enabled).map((s) => s.id);
 
 	const [libraryRows, rootFolderRows, movieRows, seriesRows, efRows, playStatsRows] =
 		await Promise.all([
@@ -122,7 +132,12 @@ export const load: PageServerLoad = async ({ url, parent }) => {
 					playedPercentage: sql<number | null>`MAX(${mediaServerSyncedItems.playedPercentage})`
 				})
 				.from(mediaServerSyncedItems)
-				.where(sql`${mediaServerSyncedItems.tmdbId} IS NOT NULL`)
+				.where(
+					and(
+						sql`${mediaServerSyncedItems.tmdbId} IS NOT NULL`,
+						inArray(mediaServerSyncedItems.serverId, enabledServerIds)
+					)
+				)
 				.groupBy(mediaServerSyncedItems.tmdbId)
 		]);
 
@@ -307,6 +322,34 @@ export const load: PageServerLoad = async ({ url, parent }) => {
 		filtered = filtered.filter((i) => i.playCount === 0);
 	}
 
+	// Scope to a single storage insight's items ("View all in X" from the
+	// insight modal). Reuses the same per-type resolver the modal itself
+	// calls, so the filtered list is exactly what the insight reported.
+	let insightContext: { id: string; title: string; rawItemCount: number } | null = null;
+	if (insightId) {
+		const insight = db
+			.select()
+			.from(storageInsights)
+			.where(eq(storageInsights.id, insightId))
+			.get();
+		if (insight) {
+			const resolver = getInsightItemResolver(insight.insightType as InsightType);
+			const { items } = await resolver({ db, insight, page: 1, limit: 500 });
+			const insightIds = new Set(
+				items
+					.map((item) => item.href?.match(/^\/library\/(?:movie|tv)\/(.+)$/)?.[1])
+					.filter((id): id is string => Boolean(id))
+			);
+			filtered = filtered.filter((i) => insightIds.has(i.id));
+			// Several insight types (e.g. unplayed) group multiple flagged rows
+			// (episodes) under one parent show, so the raw itemCount the insight
+			// reported can be much larger than the number of distinct
+			// shows/movies left after filtering - surfaced on the page so that
+			// isn't read as a data bug.
+			insightContext = { id: insight.id, title: insight.title, rawItemCount: insight.itemCount };
+		}
+	}
+
 	const [sortField, sortDir] = sort.split('-') as [string, string];
 	const mult = sortDir === 'desc' ? -1 : 1;
 
@@ -350,6 +393,7 @@ export const load: PageServerLoad = async ({ url, parent }) => {
 		allItemCount: allItems.length,
 		allMovieCount: allItems.filter((i) => i.mediaType === 'movie').length,
 		allSeriesCount: allItems.filter((i) => i.mediaType === 'tv').length,
+		insightContext,
 		filterOptions,
 		filters: {
 			sort,

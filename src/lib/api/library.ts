@@ -5,6 +5,7 @@ import type {
 	AddMovieRequest,
 	AddSeriesRequest,
 	BulkAddMoviesRequest,
+	BulkAddSeriesRequest,
 	UnmatchedSingleMatch,
 	ManualImportRequest,
 	SeriesUpdate
@@ -397,6 +398,13 @@ export interface BulkAddMoviesResponse {
 	skipped: number;
 	errors: Array<{ tmdbId: number; title?: string; error: string }>;
 	movies: Array<{ id: string; tmdbId: number; title: string }>;
+}
+
+export interface BulkAddSeriesResponse {
+	added: number;
+	skipped: number;
+	errors: Array<{ tmdbId: number; title?: string; error: string }>;
+	series: Array<{ id: string; tmdbId: number; title: string }>;
 }
 
 /** Episode file row nested in series detail episodes. */
@@ -802,6 +810,10 @@ export async function createSeries(payload: AddSeriesRequest) {
 
 export async function bulkAddMovies(payload: BulkAddMoviesRequest) {
 	return apiPost<BulkAddMoviesResponse>('/api/library/movies/bulk', payload);
+}
+
+export async function bulkAddSeries(payload: BulkAddSeriesRequest) {
+	return apiPost<BulkAddSeriesResponse>('/api/library/series/bulk', payload);
 }
 
 export async function getUnmatchedIssues() {

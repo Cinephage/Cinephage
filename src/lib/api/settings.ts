@@ -225,7 +225,8 @@ export type ReorganizeResponse = {
 
 // --- Scoring profiles -------------------------------------------------------
 
-export type ScoringProfileCategory = 'quality' | 'efficient' | 'micro' | 'streaming' | 'custom';
+export type ScoringProfileCategory =
+	'quality' | 'efficient' | 'micro' | 'streaming' | 'anime' | 'custom';
 
 /** Profile row as mapped by GET /api/scoring-profiles. */
 export type ScoringProfileSummary = {

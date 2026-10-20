@@ -66,7 +66,7 @@ export const healthIssuesResolver: InsightItemResolver = async ({ db, insight, p
 				title: row?.name ?? `Folder ${id}`,
 				subtitle: pathsById.get(id) ?? row?.path,
 				badges: [{ label: 'Action needed', tone }],
-				href: '/settings/monitoring/status/folders'
+				href: `/settings/monitoring/status/folders?folderId=${id}`
 			};
 		}),
 		total

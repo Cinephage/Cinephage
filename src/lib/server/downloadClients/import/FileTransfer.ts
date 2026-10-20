@@ -13,7 +13,6 @@
 
 import {
 	link,
-	mkdir,
 	stat,
 	statfs,
 	readdir,
@@ -27,6 +26,7 @@ import {
 	open,
 	chmod
 } from 'fs/promises';
+import { ensureMediaDirectory } from '#lib/server/filesystem/mkdir-helpers.js';
 import { createReadStream, createWriteStream } from 'fs';
 import { pipeline } from 'stream/promises';
 import { join, dirname, basename, extname, resolve } from 'path';
@@ -140,17 +140,12 @@ async function isSameFilesystem(path1: string, path2: string): Promise<boolean> 
 }
 
 /**
- * Ensure a directory exists, creating it if necessary
+ * Ensure a media directory exists, creating it (and any missing parents)
+ * with traversable permissions. See `ensureMediaDirectory` for why this
+ * can't just be a plain `mkdir`.
  */
 export async function ensureDirectory(dirPath: string): Promise<void> {
-	try {
-		await mkdir(dirPath, { recursive: true });
-	} catch (error) {
-		// Ignore if already exists
-		if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
-			throw error;
-		}
-	}
+	await ensureMediaDirectory(dirPath);
 }
 
 /**
@@ -834,9 +829,22 @@ export async function hasSufficientDiskSpace(
 	}
 }
 
+/** Default file mode applied when neither chmodFile nor preservePermissions is configured. */
+const DEFAULT_MEDIA_FILE_MODE = 0o644;
+
 /**
  * Applies file permissions to `destPath` after a transfer.
- * Priority: explicit `chmodFile` value > `preservePermissions` (copy from source) > no-op.
+ * Priority: explicit `chmodFile` value > `preservePermissions` (copy from source) > default 644.
+ *
+ * The default matters because of the container's umask: the entrypoint sets
+ * a process-wide `umask 077` to keep app-internal secrets private, but that
+ * also applies to a freshly copied/moved media file, which would otherwise
+ * land `0600` - unreadable by a media server running under a different UID
+ * (e.g. Plex). A hardlinked file shares the source's inode/mode already, so
+ * this intentionally still normalizes it to 644 for consistency across
+ * transfer modes rather than leaving it at whatever the source happened to
+ * have. See GitHub issue #617.
+ *
  * Never throws - logs a warning on failure so a permission error never blocks an import.
  */
 export async function applyFilePermissions(
@@ -851,6 +859,8 @@ export async function applyFilePermissions(
 		} else if (preservePermissions) {
 			const sourceStat = await stat(sourcePath);
 			await chmod(destPath, sourceStat.mode & 0o777);
+		} else {
+			await chmod(destPath, DEFAULT_MEDIA_FILE_MODE);
 		}
 	} catch (err) {
 		logger.warn(

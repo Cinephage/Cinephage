@@ -85,6 +85,45 @@ describe('MissingFromMediaServerRule', () => {
 		expect(findings[0].title).toContain('missing from');
 	});
 
+	it('summary breaks down the raw item count by movies vs series', async () => {
+		await testDb.db.insert(mediaBrowserServers).values({
+			id: 'srv-1',
+			name: 'Jellyfin',
+			serverType: 'jellyfin',
+			host: 'http://test',
+			apiKey: 'key',
+			enabled: true
+		});
+		await testDb.db.insert(storageItems).values([
+			createStorageItem({ sourceSystem: 'local', itemType: 'movie', tmdbId: 700 }),
+			createStorageItem({
+				sourceSystem: 'local',
+				itemType: 'episode',
+				tmdbId: 800,
+				seasonNumber: 1,
+				episodeNumber: 1
+			}),
+			createStorageItem({
+				sourceSystem: 'local',
+				itemType: 'episode',
+				tmdbId: 800,
+				seasonNumber: 1,
+				episodeNumber: 2
+			})
+		]);
+
+		const findings = await rule.evaluate({
+			db: testDb.db as RuleContext['db'],
+			now: '2026-07-01T00:00:00.000Z'
+		});
+
+		expect(findings).toHaveLength(1);
+		expect(findings[0].itemCount).toBe(3);
+		expect(findings[0].summary).toContain('3 items');
+		expect(findings[0].summary).toContain('1 Movie');
+		expect(findings[0].summary).toContain('1 Series');
+	});
+
 	it('returns zero findings when all items are on servers', async () => {
 		await testDb.db.insert(mediaBrowserServers).values({
 			id: 'srv-1',

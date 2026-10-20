@@ -13,9 +13,10 @@ import type {
 	Collection,
 	PersonDetails,
 	PersonCombinedCredits,
-	ReleaseDatesResponse
+	ReleaseDatesResponse,
+	TmdbNetwork
 } from '#lib/types/tmdb.js';
-import { TMDB } from '#lib/config/constants.js';
+import { DISCOVER_NETWORKS, TMDB } from '#lib/config/constants.js';
 import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
@@ -624,6 +625,28 @@ export const tmdb = {
 	 */
 	async getCertifications(mediaType: 'movie' | 'tv'): Promise<TmdbCertificationsResponse> {
 		return this.fetch(`/certification/${mediaType}/list`) as Promise<TmdbCertificationsResponse>;
+	},
+
+	/**
+	 * Curated popular networks for the discover network filter. TMDB has no
+	 * network list or search endpoint, so ids come from DISCOVER_NETWORKS while
+	 * names and logos are fetched live (cached like any other GET); the curated
+	 * name is only a fallback when /network/{id} fails.
+	 */
+	async getNetworks(): Promise<TmdbNetwork[]> {
+		return Promise.all(
+			DISCOVER_NETWORKS.map(async ({ id, name }) => {
+				try {
+					const data = (await this.fetch(`/network/${id}`)) as {
+						name?: string;
+						logo_path?: string | null;
+					} | null;
+					return { id, name: data?.name || name, logo_path: data?.logo_path ?? null };
+				} catch {
+					return { id, name, logo_path: null };
+				}
+			})
+		);
 	},
 
 	/**

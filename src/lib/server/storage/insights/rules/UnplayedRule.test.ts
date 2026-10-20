@@ -154,6 +154,67 @@ describe('UnplayedRule', () => {
 		expect(findings).toHaveLength(0);
 	});
 
+	it('summary breaks down the raw item count by movies vs series', async () => {
+		// 1 movie + 2 episodes of the same series = 3 raw rows, but the
+		// breakdown should read as "1 movie, 1 series" (distinct titles),
+		// matching what the grouped detail list (unplayedResolver) shows.
+		await testDb.db.insert(storageItems).values([
+			createStorageItem({
+				id: 'movie-1',
+				sourceSystem: 'both',
+				itemType: 'movie',
+				tmdbId: 500,
+				firstSeenAt: OLD_DATE
+			}),
+			createStorageItem({
+				id: 'ep-1',
+				sourceSystem: 'both',
+				itemType: 'episode',
+				tmdbId: 600,
+				seasonNumber: 1,
+				episodeNumber: 1,
+				firstSeenAt: OLD_DATE
+			}),
+			createStorageItem({
+				id: 'ep-2',
+				sourceSystem: 'both',
+				itemType: 'episode',
+				tmdbId: 600,
+				seasonNumber: 1,
+				episodeNumber: 2,
+				firstSeenAt: OLD_DATE
+			})
+		]);
+		await testDb.db
+			.insert(mediaServerSyncedItems)
+			.values([
+				createMediaServerItem({ id: 'msi-5', serverId: 'srv-1', tmdbId: 500, playCount: 0 }),
+				createMediaServerItem({ id: 'msi-6', serverId: 'srv-1', tmdbId: 600, playCount: 0 }),
+				createMediaServerItem({ id: 'msi-7', serverId: 'srv-1', tmdbId: 600, playCount: 0 })
+			]);
+		await testDb.db.insert(storageItemServerLinks).values([
+			{
+				storageItemId: 'movie-1',
+				serverId: 'srv-1',
+				syncedItemId: 'msi-5',
+				lastSeenAt: RECENT_DATE
+			},
+			{ storageItemId: 'ep-1', serverId: 'srv-1', syncedItemId: 'msi-6', lastSeenAt: RECENT_DATE },
+			{ storageItemId: 'ep-2', serverId: 'srv-1', syncedItemId: 'msi-7', lastSeenAt: RECENT_DATE }
+		]);
+
+		const findings = await rule.evaluate({
+			db: testDb.db as RuleContext['db'],
+			now: '2026-07-01T00:00:00.000Z'
+		});
+
+		expect(findings).toHaveLength(1);
+		expect(findings[0].itemCount).toBe(3);
+		expect(findings[0].summary).toContain('3 items');
+		expect(findings[0].summary).toContain('1 Movie');
+		expect(findings[0].summary).toContain('1 Series');
+	});
+
 	it('does not flag items with no server links', async () => {
 		await testDb.db.insert(storageItems).values(
 			createStorageItem({

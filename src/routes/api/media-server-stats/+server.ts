@@ -5,7 +5,7 @@ import {
 	mediaServerSyncedRuns,
 	mediaBrowserServers
 } from '#lib/server/db/schema.js';
-import { sql, desc, eq, and, or, isNull } from 'drizzle-orm';
+import { sql, desc, eq, and, or, isNull, inArray } from 'drizzle-orm';
 import type {
 	StatsSummary,
 	AggregatedMediaItem,
@@ -111,6 +111,14 @@ export const GET: RequestHandler = async () => {
 		ELSE 'SD'
 	END`;
 
+	// A disabled server's synced data is kept (not deleted) so re-enabling and
+	// re-syncing is cheap, but it must stop counting toward every aggregate
+	// stat below. inArray() with an empty array safely resolves to a `false`
+	// predicate (no special-casing needed if zero servers are enabled).
+	const servers = await db.select().from(mediaBrowserServers);
+	const enabledServerIds = servers.filter((s) => s.enabled).map((s) => s.id);
+	const enabledFilter = inArray(mediaServerSyncedItems.serverId, enabledServerIds);
+
 	const [
 		totalPlaysRow,
 		uniqueItemsRow,
@@ -121,30 +129,34 @@ export const GET: RequestHandler = async () => {
 		hdrRows,
 		audioCodecRows,
 		containerRows,
-		servers,
 		itemCountsByServerRows,
 		topPlayedKeys,
 		largestRawRows
 	] = await Promise.all([
 		db
 			.select({ total: sql<number>`coalesce(sum(${mediaServerSyncedItems.playCount}), 0)` })
-			.from(mediaServerSyncedItems),
+			.from(mediaServerSyncedItems)
+			.where(enabledFilter),
 		db
 			.select({
 				count: sql<number>`count(distinct coalesce(${mediaServerSyncedItems.tmdbId}, ${mediaServerSyncedItems.serverItemId}))`
 			})
-			.from(mediaServerSyncedItems),
+			.from(mediaServerSyncedItems)
+			.where(enabledFilter),
 		db
 			.select({
 				count: sql<number>`count(distinct ${mediaServerSyncedItems.serverId})`
 			})
-			.from(mediaServerSyncedItems),
+			.from(mediaServerSyncedItems)
+			.where(enabledFilter),
 		db
 			.select({ total: sql<number>`coalesce(sum(${mediaServerSyncedItems.fileSize}), 0)` })
-			.from(mediaServerSyncedItems),
+			.from(mediaServerSyncedItems)
+			.where(enabledFilter),
 		db
 			.select({ label: resolutionBucket.as('label'), count: sql<number>`count(*)` })
 			.from(mediaServerSyncedItems)
+			.where(enabledFilter)
 			.groupBy(resolutionBucket),
 		db
 			.select({
@@ -152,7 +164,7 @@ export const GET: RequestHandler = async () => {
 				count: sql<number>`count(*)`
 			})
 			.from(mediaServerSyncedItems)
-			.where(sql`${mediaServerSyncedItems.videoCodec} IS NOT NULL`)
+			.where(and(sql`${mediaServerSyncedItems.videoCodec} IS NOT NULL`, enabledFilter))
 			.groupBy(mediaServerSyncedItems.videoCodec)
 			.orderBy(sql`count(*) desc`),
 		db
@@ -162,6 +174,7 @@ export const GET: RequestHandler = async () => {
 				count: sql<number>`count(*)`
 			})
 			.from(mediaServerSyncedItems)
+			.where(enabledFilter)
 			.groupBy(mediaServerSyncedItems.isHDR, mediaServerSyncedItems.hdrFormat)
 			.orderBy(sql`count(*) desc`),
 		db
@@ -170,7 +183,7 @@ export const GET: RequestHandler = async () => {
 				count: sql<number>`count(*)`
 			})
 			.from(mediaServerSyncedItems)
-			.where(sql`${mediaServerSyncedItems.audioCodec} IS NOT NULL`)
+			.where(and(sql`${mediaServerSyncedItems.audioCodec} IS NOT NULL`, enabledFilter))
 			.groupBy(mediaServerSyncedItems.audioCodec)
 			.orderBy(sql`count(*) desc`),
 		db
@@ -179,14 +192,13 @@ export const GET: RequestHandler = async () => {
 				count: sql<number>`count(*)`
 			})
 			.from(mediaServerSyncedItems)
-			.where(sql`${mediaServerSyncedItems.containerFormat} IS NOT NULL`)
+			.where(and(sql`${mediaServerSyncedItems.containerFormat} IS NOT NULL`, enabledFilter))
 			.groupBy(mediaServerSyncedItems.containerFormat)
 			.orderBy(sql`count(*) desc`),
-		db.select().from(mediaBrowserServers),
 		db
 			.select({ serverId: mediaServerSyncedItems.serverId, count: sql<number>`count(*)` })
 			.from(mediaServerSyncedItems)
-			.where(sql`${mediaServerSyncedItems.serverId} IS NOT NULL`)
+			.where(and(sql`${mediaServerSyncedItems.serverId} IS NOT NULL`, enabledFilter))
 			.groupBy(mediaServerSyncedItems.serverId),
 		db
 			.select({
@@ -195,6 +207,7 @@ export const GET: RequestHandler = async () => {
 				title: mediaServerSyncedItems.title
 			})
 			.from(mediaServerSyncedItems)
+			.where(enabledFilter)
 			.groupBy(
 				mediaServerSyncedItems.tmdbId,
 				mediaServerSyncedItems.tvdbId,
@@ -205,7 +218,7 @@ export const GET: RequestHandler = async () => {
 		db
 			.select()
 			.from(mediaServerSyncedItems)
-			.where(sql`${mediaServerSyncedItems.fileSize} IS NOT NULL`)
+			.where(and(sql`${mediaServerSyncedItems.fileSize} IS NOT NULL`, enabledFilter))
 			.orderBy(desc(mediaServerSyncedItems.fileSize))
 			.limit(10)
 	]);
@@ -237,7 +250,7 @@ export const GET: RequestHandler = async () => {
 			? await db
 					.select()
 					.from(mediaServerSyncedItems)
-					.where(or(...topPlayedKeys.map(matchesIdentifyingKey)))
+					.where(and(or(...topPlayedKeys.map(matchesIdentifyingKey)), enabledFilter))
 			: [];
 
 	const largestKeys = largestRawRows.map((item) => ({
@@ -250,7 +263,7 @@ export const GET: RequestHandler = async () => {
 			? await db
 					.select()
 					.from(mediaServerSyncedItems)
-					.where(or(...largestKeys.map(matchesIdentifyingKey)))
+					.where(and(or(...largestKeys.map(matchesIdentifyingKey)), enabledFilter))
 			: [];
 
 	const resolutionBreakdown = resolutionRows

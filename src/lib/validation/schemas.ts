@@ -2013,6 +2013,37 @@ export const bulkAddMoviesSchema = z.object({
 });
 
 /**
+ * Schema for bulk adding TV series to the library. The series scope fields
+ * (monitorType/monitorSpecials/…) are shared across the whole selection,
+ * mirroring how the single add form's defaults would apply to each item.
+ */
+export const bulkAddSeriesSchema = z.object({
+	tmdbIds: z.array(z.number().int().positive()).min(1).max(50),
+	rootFolderId: z.string().min(1),
+	scoringProfileId: z.string().optional(),
+	monitored: z.boolean().default(true),
+	seriesType: z.enum(['standard', 'anime', 'daily']).default('standard'),
+	monitorType: z
+		.enum([
+			'all',
+			'future',
+			'missing',
+			'existing',
+			'firstSeason',
+			'lastSeason',
+			'recent',
+			'pilot',
+			'none'
+		])
+		.default('all'),
+	monitorNewItems: z.enum(['all', 'none']).default('all'),
+	monitorSpecials: z.boolean().default(false),
+	seasonFolder: z.boolean().default(true),
+	searchOnAdd: z.boolean().default(true),
+	wantsSubtitles: z.boolean().default(true)
+});
+
+/**
  * Schema for batch episode update
  */
 export const episodeBatchUpdateSchema = z.object({
@@ -2639,6 +2670,7 @@ export type ManualImportRequest = z.infer<typeof manualImportSchema>;
 export type AddMovieRequest = z.infer<typeof addMovieSchema>;
 export type AddSeriesRequest = z.infer<typeof addSeriesSchema>;
 export type BulkAddMoviesRequest = z.infer<typeof bulkAddMoviesSchema>;
+export type BulkAddSeriesRequest = z.infer<typeof bulkAddSeriesSchema>;
 
 // Library Classification & Delete Type Exports
 export type LibraryClassificationUpdate = z.infer<typeof libraryClassificationUpdateSchema>;

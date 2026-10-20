@@ -290,8 +290,11 @@ export class NamingService {
 		result = result.replace(/-{2,}/g, '-');
 		result = result.replace(/\s+-\s+-/g, ' -');
 
-		// Clean up trailing/leading dashes and spaces
-		result = result.replace(/^[\s-]+|[\s-]+$/g, '');
+		// Clean up trailing/leading dashes and spaces. Leading dots too - a
+		// segment starting with "." (e.g. a title literally beginning with an
+		// ellipsis, "...And Justice for All") makes that folder/file hidden on
+		// Linux/macOS, so media servers never see it (GitHub issue #616).
+		result = result.replace(/^[\s.-]+|[\s-]+$/g, '');
 
 		// Replace spaces if configured
 		if (this.config.replaceSpacesWith) {

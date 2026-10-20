@@ -205,6 +205,84 @@ describe('ReconciliationService', () => {
 		expect(links[0].storageItemId).toBe(items[0].id);
 	});
 
+	it('matches a local movie to a server item with no tmdbId via imdbId fallback (#601)', async () => {
+		await testDb.db.insert(movies).values(
+			createMovie({
+				id: 'movie-imdb',
+				tmdbId: 600,
+				imdbId: 'tt1234567',
+				title: 'Unresolved On Server'
+			})
+		);
+		await testDb.db.insert(movieFiles).values(
+			createMovieFile({
+				id: 'mf-imdb',
+				movieId: 'movie-imdb'
+			}) as typeof movieFiles.$inferInsert
+		);
+		// Server synced the file but its metadata agent couldn't resolve TMDB;
+		// it still carries the same IMDB id as the local movie.
+		await testDb.db.insert(mediaServerSyncedItems).values(
+			createMediaServerItem({
+				id: 'msi-imdb',
+				serverId: 'srv-1',
+				serverItemId: 'jf-imdb',
+				tmdbId: null,
+				imdbId: 'tt1234567',
+				title: 'Unresolved On Server',
+				itemType: 'movie'
+			})
+		);
+
+		const service = getReconciliationService();
+		await service.reconcile();
+
+		const items = await testDb.db.select().from(storageItems);
+		expect(items).toHaveLength(1);
+		expect(items[0].sourceSystem).toBe('both');
+		expect(items[0].tmdbId).toBe(600);
+
+		const links = await testDb.db.select().from(storageItemServerLinks);
+		expect(links).toHaveLength(1);
+		expect(links[0].storageItemId).toBe(items[0].id);
+		expect(links[0].syncedItemId).toBe('msi-imdb');
+	});
+
+	it('does not match via imdbId fallback when the local movie has no imdbId', async () => {
+		await testDb.db.insert(movies).values(
+			createMovie({
+				id: 'movie-no-imdb',
+				tmdbId: 601,
+				imdbId: null,
+				title: 'No Imdb Local'
+			})
+		);
+		await testDb.db.insert(movieFiles).values(
+			createMovieFile({
+				id: 'mf-no-imdb',
+				movieId: 'movie-no-imdb'
+			}) as typeof movieFiles.$inferInsert
+		);
+		await testDb.db.insert(mediaServerSyncedItems).values(
+			createMediaServerItem({
+				id: 'msi-no-imdb',
+				serverId: 'srv-1',
+				serverItemId: 'jf-no-imdb',
+				tmdbId: null,
+				imdbId: 'tt9999999',
+				title: 'Unrelated Server Item',
+				itemType: 'movie'
+			})
+		);
+
+		const service = getReconciliationService();
+		await service.reconcile();
+
+		const items = await testDb.db.select().from(storageItems);
+		expect(items).toHaveLength(1);
+		expect(items[0].sourceSystem).toBe('local');
+	});
+
 	it('is idempotent - running twice produces same row count and same IDs', async () => {
 		await testDb.db
 			.insert(movies)
@@ -546,5 +624,108 @@ describe('ReconciliationService', () => {
 		expect(links).toHaveLength(2);
 		const serverIds = links.map((l) => l.serverId).sort();
 		expect(serverIds).toEqual(['srv-1', 'srv-2']);
+	});
+
+	it('excludes a disabled server from matching - its data is kept, not discarded', async () => {
+		await testDb.db.insert(mediaBrowserServers).values({
+			id: 'srv-disabled',
+			name: 'Disabled Server',
+			serverType: 'emby',
+			host: 'http://test-disabled',
+			apiKey: 'key-disabled',
+			enabled: false
+		});
+		await testDb.db
+			.insert(movies)
+			.values(createMovie({ id: 'movie-dis', tmdbId: 910, title: 'Disabled Server Movie' }));
+		await testDb.db.insert(movieFiles).values(
+			createMovieFile({
+				id: 'mf-dis',
+				movieId: 'movie-dis'
+			}) as typeof movieFiles.$inferInsert
+		);
+		await testDb.db.insert(mediaServerSyncedItems).values(
+			createMediaServerItem({
+				id: 'msi-dis',
+				serverId: 'srv-disabled',
+				serverItemId: 'jf-dis',
+				tmdbId: 910,
+				itemType: 'movie'
+			})
+		);
+
+		const service = getReconciliationService();
+		await service.reconcile();
+
+		// The local movie row exists and is 'local', not 'both' - the
+		// disabled server's matching item is invisible to reconciliation.
+		const items = await testDb.db.select().from(storageItems).where(eq(storageItems.tmdbId, 910));
+		expect(items).toHaveLength(1);
+		expect(items[0].sourceSystem).toBe('local');
+
+		// No link to the disabled server - the raw media_server_synced_items
+		// row itself is untouched (kept, not discarded) for when it's
+		// re-enabled and re-synced.
+		expect(await testDb.db.select().from(storageItemServerLinks)).toHaveLength(0);
+		const syncedRows = await testDb.db
+			.select()
+			.from(mediaServerSyncedItems)
+			.where(eq(mediaServerSyncedItems.id, 'msi-dis'));
+		expect(syncedRows).toHaveLength(1);
+	});
+
+	it('removes a stale server link and flips sourceSystem back when a server is disabled after being matched', async () => {
+		await testDb.db.insert(mediaBrowserServers).values({
+			id: 'srv-toggle',
+			name: 'Toggle Server',
+			serverType: 'emby',
+			host: 'http://test-toggle',
+			apiKey: 'key-toggle',
+			enabled: true
+		});
+		await testDb.db
+			.insert(movies)
+			.values(createMovie({ id: 'movie-toggle', tmdbId: 920, title: 'Toggle Movie' }));
+		await testDb.db.insert(movieFiles).values(
+			createMovieFile({
+				id: 'mf-toggle',
+				movieId: 'movie-toggle'
+			}) as typeof movieFiles.$inferInsert
+		);
+		await testDb.db.insert(mediaServerSyncedItems).values(
+			createMediaServerItem({
+				id: 'msi-toggle',
+				serverId: 'srv-toggle',
+				serverItemId: 'jf-toggle',
+				tmdbId: 920,
+				itemType: 'movie'
+			})
+		);
+
+		const service = getReconciliationService();
+		await service.reconcile();
+
+		let items = await testDb.db.select().from(storageItems).where(eq(storageItems.tmdbId, 920));
+		expect(items[0].sourceSystem).toBe('both');
+		expect(await testDb.db.select().from(storageItemServerLinks)).toHaveLength(1);
+
+		// Disable the server (mirrors MediaBrowserManager.updateServer) and
+		// reconcile again.
+		await testDb.db
+			.update(mediaBrowserServers)
+			.set({ enabled: false })
+			.where(eq(mediaBrowserServers.id, 'srv-toggle'));
+		await service.reconcile();
+
+		items = await testDb.db.select().from(storageItems).where(eq(storageItems.tmdbId, 920));
+		expect(items).toHaveLength(1);
+		expect(items[0].sourceSystem).toBe('local');
+		expect(await testDb.db.select().from(storageItemServerLinks)).toHaveLength(0);
+		// The raw synced item is still there, ready for re-enable + re-sync.
+		const syncedRows = await testDb.db
+			.select()
+			.from(mediaServerSyncedItems)
+			.where(eq(mediaServerSyncedItems.id, 'msi-toggle'));
+		expect(syncedRows).toHaveLength(1);
 	});
 });

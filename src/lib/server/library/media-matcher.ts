@@ -6,6 +6,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { writeFile } from 'node:fs/promises';
 import { db } from '#lib/server/db/index.js';
 import { todayDateString } from '#lib/utils/format.js';
 import {
@@ -45,6 +46,23 @@ import { deleteAllSeasonsAndEpisodes } from '#lib/server/metadata/EpisodeGroupSe
 import { getDownloadClientManager } from '#lib/server/downloadClients/DownloadClientManager.js';
 import { acquisitionService } from '#lib/server/acquisition/AcquisitionService.js';
 import { RenamePreviewService } from './naming/RenamePreviewService.js';
+import { getSidecarSettings } from '#lib/server/library/sidecar/sidecarSettings.js';
+import {
+	buildMovieNfo,
+	buildSeriesNfo,
+	buildSeasonNfo,
+	buildEpisodeNfo,
+	nfoPathFor
+} from '#lib/server/library/sidecar/NfoGenerator.js';
+import {
+	downloadSidecarImage,
+	shouldWriteSidecar,
+	tmdbImageUrl,
+	movieArtworkPaths,
+	seriesArtworkPaths,
+	seasonArtworkPath,
+	folderOf
+} from '#lib/server/library/sidecar/SidecarImageService.js';
 
 /**
  * Default match confidence threshold (0.0 - 1.0)
@@ -1133,6 +1151,53 @@ export class MediaMatcherService {
 			})
 			.onConflictDoNothing();
 
+		// Optional sidecar files (.nfo + poster/fanart) - mirrors the
+		// automatic download-client import path in ImportService.ts.
+		// Never let a write failure here fail an otherwise-successful match.
+		const sidecarSettings = getSidecarSettings();
+		if (sidecarSettings.enabled) {
+			try {
+				const [movieRow] = await db.select().from(movies).where(eq(movies.id, movieId));
+				if (movieRow) {
+					const destPath = file.path;
+					const nfoPath = nfoPathFor(destPath);
+					if (await shouldWriteSidecar(nfoPath, sidecarSettings.overwriteExisting)) {
+						await writeFile(
+							nfoPath,
+							buildMovieNfo(
+								movieRow,
+								{ mediaInfo, quality: { codec: parsedQuality.codec ?? undefined } },
+								sidecarSettings.includeArtwork
+							),
+							'utf-8'
+						);
+					}
+
+					if (sidecarSettings.includeArtwork) {
+						const movieFolder = folderOf(destPath);
+						const { poster, fanart } = movieArtworkPaths(movieFolder);
+						await Promise.all([
+							downloadSidecarImage(
+								tmdbImageUrl(movieRow.posterPath),
+								poster,
+								sidecarSettings.overwriteExisting
+							),
+							downloadSidecarImage(
+								tmdbImageUrl(movieRow.backdropPath),
+								fanart,
+								sidecarSettings.overwriteExisting
+							)
+						]);
+					}
+				}
+			} catch (err) {
+				logger.warn(
+					{ movieId, err: err instanceof Error ? err.message : String(err) },
+					'[MediaMatcher] Failed to write sidecar files'
+				);
+			}
+		}
+
 		// Trigger subtitle search if enabled (after metadata is fetched)
 		this.triggerSubtitleSearch('movie', movieId).catch((err) => {
 			logger.warn(
@@ -1415,6 +1480,7 @@ export class MediaMatcherService {
 		// single-episode files have only one entry.
 		const episodeMonitored = (rootFolder.defaultMonitored ?? true) && seasonNumber !== 0;
 		const allEpisodeIds: string[] = [];
+		const matchingEpisodeRows: (typeof episodes.$inferSelect)[] = [];
 		let primaryEpisode: typeof episodes.$inferSelect | undefined;
 
 		for (const epNum of allEpisodeNumbers) {
@@ -1471,6 +1537,7 @@ export class MediaMatcherService {
 			}
 
 			allEpisodeIds.push(ep.id);
+			matchingEpisodeRows.push(ep);
 			if (epNum === episodeNumber) {
 				primaryEpisode = ep;
 			}
@@ -1518,6 +1585,100 @@ export class MediaMatcherService {
 				hdr: parsedQuality.hdr ?? undefined
 			}
 		});
+
+		// Optional sidecar files - mirrors the automatic download-client
+		// import path in ImportService.ts. TV has three independent levels (episode .nfo,
+		// show-level tvshow.nfo + artwork, season poster) - see the comment
+		// on the equivalent block in ImportService.ts for why.
+		const sidecarSettings = getSidecarSettings();
+		if (sidecarSettings.enabled) {
+			const seriesFolderAbsolute = join(rootFolder.path, seriesFolder);
+			const destPath = file.path;
+			const [seriesRow] = await db.select().from(series).where(eq(series.id, seriesId));
+
+			if (sidecarSettings.tvEpisodeLevel && seriesRow) {
+				try {
+					const nfoPath = nfoPathFor(destPath);
+					if (await shouldWriteSidecar(nfoPath, sidecarSettings.overwriteExisting)) {
+						await writeFile(
+							nfoPath,
+							buildEpisodeNfo(seriesRow, matchingEpisodeRows, {
+								mediaInfo,
+								quality: { codec: parsedQuality.codec ?? undefined }
+							}),
+							'utf-8'
+						);
+					}
+				} catch (err) {
+					logger.warn(
+						{ seriesId, err: err instanceof Error ? err.message : String(err) },
+						'[MediaMatcher] Failed to write episode NFO sidecar'
+					);
+				}
+			}
+
+			if (sidecarSettings.tvSeriesLevel && seriesRow) {
+				try {
+					const tvshowNfoPath = join(seriesFolderAbsolute, 'tvshow.nfo');
+					if (await shouldWriteSidecar(tvshowNfoPath, sidecarSettings.overwriteExisting)) {
+						await writeFile(
+							tvshowNfoPath,
+							buildSeriesNfo(seriesRow, sidecarSettings.includeArtwork),
+							'utf-8'
+						);
+					}
+
+					if (sidecarSettings.includeArtwork) {
+						const { poster, fanart } = seriesArtworkPaths(seriesFolderAbsolute);
+						await Promise.all([
+							downloadSidecarImage(
+								tmdbImageUrl(seriesRow.posterPath),
+								poster,
+								sidecarSettings.overwriteExisting
+							),
+							downloadSidecarImage(
+								tmdbImageUrl(seriesRow.backdropPath),
+								fanart,
+								sidecarSettings.overwriteExisting
+							)
+						]);
+					}
+				} catch (err) {
+					logger.warn(
+						{ seriesId, err: err instanceof Error ? err.message : String(err) },
+						'[MediaMatcher] Failed to write series-level sidecar files'
+					);
+				}
+			}
+
+			if (sidecarSettings.tvSeasonLevel) {
+				try {
+					if (season) {
+						const seasonNfoPath = join(folderOf(destPath), 'season.nfo');
+						if (await shouldWriteSidecar(seasonNfoPath, sidecarSettings.overwriteExisting)) {
+							await writeFile(seasonNfoPath, buildSeasonNfo(season), 'utf-8');
+						}
+
+						if (sidecarSettings.includeArtwork && season.posterPath) {
+							await downloadSidecarImage(
+								tmdbImageUrl(season.posterPath),
+								seasonArtworkPath(seriesFolderAbsolute, seasonNumber),
+								sidecarSettings.overwriteExisting
+							);
+						}
+					}
+				} catch (err) {
+					logger.warn(
+						{
+							seriesId,
+							seasonNumber,
+							err: err instanceof Error ? err.message : String(err)
+						},
+						'[MediaMatcher] Failed to write season-level sidecar files'
+					);
+				}
+			}
+		}
 
 		// Update series stats
 		await this.updateSeriesStats(seriesId);

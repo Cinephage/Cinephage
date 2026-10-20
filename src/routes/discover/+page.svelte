@@ -6,10 +6,12 @@
 	import { resolvePath } from '#lib/utils/routing.js';
 	import type { TmdbMediaItem } from '#lib/types/tmdb.js';
 	import { tick } from 'svelte';
-	import { SvelteSet } from 'svelte/reactivity';
+	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import MediaCard from '#lib/components/tmdb/MediaCard.svelte';
 	import FilterDrawer from '#lib/components/discover/FilterDrawer.svelte';
 	import SectionRow from '#lib/components/discover/SectionRow.svelte';
+	import SelectionActionBar from '#lib/components/discover/SelectionActionBar.svelte';
+	import BulkAddToLibraryModal from '#lib/components/discover/BulkAddToLibraryModal.svelte';
 	import AddToLibraryModal from '#lib/components/library/AddToLibraryModal.svelte';
 	import TmdbConfigRequired from '#lib/components/ui/TmdbConfigRequired.svelte';
 	import { UI } from '#lib/config/constants.js';
@@ -19,7 +21,12 @@
 		parseKeywordIds,
 		extractYear
 	} from '#lib/utils/discoverParams.js';
-	import { Search, Eye, EyeOff, X, Loader2, Bug } from '@lucide/svelte';
+	import {
+		discoverSelectionKey,
+		toDiscoverSelectionEntry,
+		type DiscoverSelectionEntry
+	} from '#lib/utils/discoverSelection.js';
+	import { Search, Eye, EyeOff, X, Loader2, Bug, CheckSquare, XSquare } from '@lucide/svelte';
 	import { getMediaTypeLabel } from '#lib/types/tmdb-guards.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { searchTmdb, getDiscover, getDiscoverUnfiltered } from '#lib/api/index.js';
@@ -215,6 +222,7 @@
 	let maxYear = $derived(extractYear(page.url.searchParams.get('primary_release_date.lte')));
 	let minRating = $derived(Number(page.url.searchParams.get('vote_average.gte')) || 0);
 	let selectedCertification = $derived(page.url.searchParams.get('certification') || '');
+	let selectedNetworks = $derived(parseProviderIds(page.url.searchParams.get('with_networks')));
 	let selectedKeywords = $derived(parseKeywordIds(page.url.searchParams.get('with_keywords')));
 	let selectedExcludedKeywords = $derived(
 		parseKeywordIds(page.url.searchParams.get('without_keywords'))
@@ -243,6 +251,7 @@
 			(type !== 'all' ||
 				sortBy !== 'popularity.desc' ||
 				selectedProviders.length > 0 ||
+				selectedNetworks.length > 0 ||
 				selectedGenres.length > 0 ||
 				selectedKeywords.length > 0 ||
 				selectedExcludedKeywords.length > 0 ||
@@ -251,6 +260,20 @@
 				!!maxYear ||
 				minRating > 0 ||
 				!!selectedCertification)
+	);
+
+	let hasActiveFilters = $derived(
+		type !== 'all' ||
+			selectedProviders.length > 0 ||
+			selectedNetworks.length > 0 ||
+			selectedGenres.length > 0 ||
+			selectedKeywords.length > 0 ||
+			selectedExcludedKeywords.length > 0 ||
+			!!selectedLanguage ||
+			!!minYear ||
+			!!maxYear ||
+			minRating > 0 ||
+			!!selectedCertification
 	);
 
 	function updateFilter(key: string, value: string | null) {
@@ -289,6 +312,34 @@
 		updateFilter('with_watch_providers', Array.from(current).join(','));
 	}
 
+	function toggleNetwork(networkId: number) {
+		const current = new SvelteSet(selectedNetworks);
+		if (current.has(networkId)) {
+			current.delete(networkId);
+		} else {
+			current.add(networkId);
+		}
+		updateFilter('with_networks', Array.from(current).join(','));
+	}
+
+	/**
+	 * Switching type drops filters the target type cannot express, rather than
+	 * leaving them to silently blank the results (a certification plus TV
+	 * returns nothing, and networks only exist for TV).
+	 */
+	function handleTypeChange(nextType: string) {
+		const url = new URL(page.url.href);
+		if (nextType === 'all') {
+			url.searchParams.delete('type');
+		} else {
+			url.searchParams.set('type', nextType);
+		}
+		if (nextType === 'tv') url.searchParams.delete('certification');
+		if (nextType === 'movie') url.searchParams.delete('with_networks');
+		url.searchParams.set('page', '1');
+		goto(resolvePath(url.pathname + url.search), { reset: false });
+	}
+
 	function toggleGenre(genreId: number) {
 		const current = new SvelteSet(selectedGenres);
 		if (current.has(genreId)) {
@@ -323,6 +374,91 @@
 	}
 
 	let isFilterOpen = $state(false);
+
+	// Multi-select ("add several items with the same settings")
+	let selectMode = $state(false);
+	let bulkModalOpen = $state(false);
+	/** Selected items keyed by `discoverSelectionKey` so dashboard duplicates collapse. */
+	const selection = new SvelteMap<string, DiscoverSelectionEntry>();
+
+	function toggleSelectMode() {
+		selectMode = !selectMode;
+		if (!selectMode) {
+			selection.clear();
+		}
+	}
+
+	function isItemSelected(item: unknown): boolean {
+		const key = discoverSelectionKey(item as TmdbMediaItem);
+		return key ? selection.has(key) : false;
+	}
+
+	/** Items already in the library keep their normal card behavior in select mode. */
+	function isSelectableItem(item: Record<string, unknown>): boolean {
+		if ('inLibrary' in item && item.inLibrary === true) return false;
+		return discoverSelectionKey(item as unknown as TmdbMediaItem) !== null;
+	}
+
+	function toggleItemSelect(item: unknown) {
+		const record = item as Record<string, unknown>;
+		const key = discoverSelectionKey(item as TmdbMediaItem);
+		if (!key || !isSelectableItem(record)) return;
+		if (selection.has(key)) {
+			selection.delete(key);
+			return;
+		}
+		const entry = toDiscoverSelectionEntry(item as TmdbMediaItem);
+		if (entry) selection.set(key, entry);
+	}
+
+	/** Items the "select all" action considers: whatever the current view shows. */
+	function selectablePool(): Array<Record<string, unknown> & { id: number }> {
+		if (isSearchMode) return searchResults;
+		return allResults as unknown as Array<Record<string, unknown> & { id: number }>;
+	}
+
+	const allVisibleSelected = $derived.by(() => {
+		const pool = selectablePool();
+		const keys = pool
+			.filter((item) => isSelectableItem(item))
+			.map((item) => discoverSelectionKey(item as unknown as TmdbMediaItem))
+			.filter((key): key is string => !!key);
+		return keys.length > 0 && keys.every((key) => selection.has(key));
+	});
+
+	function handleSelectAll() {
+		const pool = selectablePool();
+		if (allVisibleSelected) {
+			for (const item of pool) {
+				const key = discoverSelectionKey(item as unknown as TmdbMediaItem);
+				if (key) selection.delete(key);
+			}
+			return;
+		}
+		for (const item of pool) {
+			if (!isSelectableItem(item)) continue;
+			const key = discoverSelectionKey(item as unknown as TmdbMediaItem);
+			if (!key || selection.has(key)) continue;
+			const entry = toDiscoverSelectionEntry(item as unknown as TmdbMediaItem);
+			if (entry) selection.set(key, entry);
+		}
+	}
+
+	function clearSelection() {
+		selection.clear();
+	}
+
+	function handleBulkAddSuccess() {
+		selection.clear();
+		selectMode = false;
+		refreshAll();
+	}
+
+	function handleGlobalKeydown(e: KeyboardEvent) {
+		if (e.key === 'Escape' && selectMode && !bulkModalOpen) {
+			toggleSelectMode();
+		}
+	}
 
 	function resetFilters() {
 		goto(resolve('discover'));
@@ -523,6 +659,8 @@
 	<title>{m.discover_pageTitle()}</title>
 </svelte:head>
 
+<svelte:window onkeydown={handleGlobalKeydown} />
+
 <div class="min-h-screen bg-base-100 pb-20">
 	<!-- Header -->
 	<div
@@ -570,33 +708,22 @@
 			</div>
 
 			<div class="flex flex-1 items-center justify-end gap-3">
-				<!-- Active Filters Summary -->
-				{#if selectedProviders.length > 0 || type !== 'all' || selectedGenres.length > 0 || selectedLanguage || minYear || maxYear || minRating > 0 || selectedCertification}
-					<div class="hidden items-center gap-2 md:flex">
-						{#if type !== 'all'}
-							<div class="badge badge-sm badge-primary">
-								{type === 'tv' ? m.discover_filterBadgeTvShows() : m.discover_filterBadgeMovies()}
-							</div>
+				<!-- Multi-select toggle (admins only, matching the add action) -->
+				{#if isAdminUser}
+					<button
+						class="btn btn-circle btn-sm {selectMode
+							? 'btn-primary'
+							: 'border border-base-300 btn-ghost'}"
+						onclick={toggleSelectMode}
+						title={selectMode ? m.discover_exitSelectMode() : m.discover_selectMode()}
+						aria-pressed={selectMode}
+					>
+						{#if selectMode && allVisibleSelected}
+							<XSquare class="h-4 w-4" />
+						{:else}
+							<CheckSquare class="h-4 w-4" />
 						{/if}
-						{#if selectedGenres.length > 0}
-							<div class="badge badge-outline badge-sm">
-								{m.discover_filterBadgeGenres({ count: selectedGenres.length })}
-							</div>
-						{/if}
-						{#if selectedLanguage}
-							<div class="badge badge-outline badge-sm">
-								{m.discover_filterBadgeLanguage()}
-							</div>
-						{/if}
-						{#if selectedCertification}
-							<div class="badge badge-outline badge-sm">
-								{selectedCertification}
-							</div>
-						{/if}
-						<button class="btn btn-ghost text-error btn-xs" onclick={resetFilters}
-							>{m.action_clear()}</button
-						>
-					</div>
+					</button>
 				{/if}
 
 				<!-- Hide In Library Toggle -->
@@ -647,6 +774,67 @@
 					</svg>
 					{m.discover_filtersButton()}
 				</button>
+			</div>
+		</div>
+
+		<!-- Type tabs + active filter summary -->
+		<div
+			class="flex flex-wrap items-center justify-between gap-2 border-t border-base-200/50 px-4 py-2 lg:px-8"
+		>
+			<div class="join" role="group" aria-label={m.discover_filter_mediaType()}>
+				{#each [{ value: 'all', label: m.common_all() }, { value: 'movie', label: m.common_movies() }, { value: 'tv', label: m.common_tvShows() }] as tab (tab.value)}
+					<button
+						class="btn join-item btn-sm {type === tab.value
+							? 'btn-primary'
+							: 'border-base-300/60 bg-base-200/40 btn-outline'}"
+						aria-pressed={type === tab.value}
+						onclick={() => handleTypeChange(tab.value)}
+					>
+						{tab.label}
+					</button>
+				{/each}
+			</div>
+
+			<div class="hidden flex-wrap items-center justify-end gap-2 md:flex">
+				{#if selectedGenres.length > 0}
+					<div class="badge badge-outline badge-sm">
+						{m.discover_filterBadgeGenres({ count: selectedGenres.length })}
+					</div>
+				{/if}
+				{#if selectedNetworks.length > 0}
+					<div class="badge badge-outline badge-sm">
+						{m.discover_filterBadgeNetworks({ count: selectedNetworks.length })}
+					</div>
+				{/if}
+				{#if selectedProviders.length > 0}
+					<div class="badge badge-outline badge-sm">
+						{m.discover_filterBadgeProviders({ count: selectedProviders.length })}
+					</div>
+				{/if}
+				{#if selectedKeywords.length + selectedExcludedKeywords.length > 0}
+					<div class="badge badge-outline badge-sm">
+						{m.discover_filterBadgeKeywords({
+							count: selectedKeywords.length + selectedExcludedKeywords.length
+						})}
+					</div>
+				{/if}
+				{#if selectedLanguage}
+					<div class="badge badge-outline badge-sm">{m.discover_filterBadgeLanguage()}</div>
+				{/if}
+				{#if minYear || maxYear}
+					<div class="badge badge-outline badge-sm">{minYear || '…'} - {maxYear || '…'}</div>
+				{/if}
+				{#if minRating > 0}
+					<div class="badge badge-outline badge-sm">{minRating}+</div>
+				{/if}
+				{#if selectedCertification}
+					<div class="badge badge-outline badge-sm">{selectedCertification}</div>
+				{/if}
+				{#if hasActiveFilters}
+					<button class="btn btn-ghost text-error btn-xs" onclick={resetFilters}
+						>{m.action_clear()}</button
+					>
+				{/if}
 			</div>
 		</div>
 
@@ -730,7 +918,13 @@
 
 				<div class="grid grid-cols-3 gap-2 sm:gap-4 lg:grid-cols-9">
 					{#each searchResults as item (item.id + (item.media_type || ''))}
-						<MediaCard item={item as unknown as TmdbMediaItem} onAddToLibrary={addHandler} />
+						<MediaCard
+							item={item as unknown as TmdbMediaItem}
+							onAddToLibrary={addHandler}
+							selectable={selectMode}
+							selected={isItemSelected(item)}
+							onToggleSelect={() => toggleItemSelect(item)}
+						/>
 					{/each}
 				</div>
 
@@ -763,6 +957,9 @@
 					endpoint="movie/now_playing"
 					onAddToLibrary={addHandler}
 					{excludeInLibrary}
+					selectable={selectMode}
+					isSelected={isItemSelected}
+					onToggleSelect={toggleItemSelect}
 				/>
 				<SectionRow
 					title={m.discover_trendingThisWeek()}
@@ -771,6 +968,9 @@
 					endpoint="trending/all/week"
 					onAddToLibrary={addHandler}
 					{excludeInLibrary}
+					selectable={selectMode}
+					isSelected={isItemSelected}
+					onToggleSelect={toggleItemSelect}
 				/>
 				<SectionRow
 					title={m.discover_popularMovies()}
@@ -781,6 +981,9 @@
 					endpoint="movie/popular"
 					onAddToLibrary={addHandler}
 					{excludeInLibrary}
+					selectable={selectMode}
+					isSelected={isItemSelected}
+					onToggleSelect={toggleItemSelect}
 				/>
 				<SectionRow
 					title={m.discover_popularTvShows()}
@@ -791,6 +994,9 @@
 					endpoint="tv/popular"
 					onAddToLibrary={addHandler}
 					{excludeInLibrary}
+					selectable={selectMode}
+					isSelected={isItemSelected}
+					onToggleSelect={toggleItemSelect}
 				/>
 				<SectionRow
 					title={m.discover_topRatedMovies()}
@@ -801,6 +1007,9 @@
 					endpoint="movie/top_rated"
 					onAddToLibrary={addHandler}
 					{excludeInLibrary}
+					selectable={selectMode}
+					isSelected={isItemSelected}
+					onToggleSelect={toggleItemSelect}
 				/>
 				<SectionRow
 					title={m.discover_topRatedTvShows()}
@@ -811,6 +1020,9 @@
 					endpoint="tv/top_rated"
 					onAddToLibrary={addHandler}
 					{excludeInLibrary}
+					selectable={selectMode}
+					isSelected={isItemSelected}
+					onToggleSelect={toggleItemSelect}
 				/>
 			</div>
 		{:else if data.viewType === 'grid' && data.results}
@@ -835,7 +1047,13 @@
 
 				<div class="grid grid-cols-3 gap-2 sm:gap-4 lg:grid-cols-9">
 					{#each allResults as item (`${item.id}-${item.media_type ?? ''}`)}
-						<MediaCard {item} onAddToLibrary={addHandler} />
+						<MediaCard
+							{item}
+							onAddToLibrary={addHandler}
+							selectable={selectMode}
+							selected={isItemSelected(item)}
+							onToggleSelect={() => toggleItemSelect(item)}
+						/>
 					{/each}
 				</div>
 
@@ -915,10 +1133,12 @@
 		certifications={data.certifications}
 		{selectedCertification}
 		providers={data.providers}
+		networks={data.networks ?? []}
+		{selectedNetworks}
 		languages={data.languages ?? []}
-		onTypeChange={(t) => updateFilter('type', t)}
 		onSortChange={(s) => updateFilter('sort_by', s)}
 		onProviderToggle={toggleProvider}
+		onNetworkToggle={toggleNetwork}
 		onGenreToggle={toggleGenre}
 		onLanguageChange={(lang) => updateFilter('with_original_language', lang || null)}
 		onYearChange={updateYear}
@@ -943,6 +1163,23 @@
 			posterPath={selectedItem.posterPath}
 			onClose={() => (addModalOpen = false)}
 			onSuccess={handleAddSuccess}
+		/>
+	{/if}
+
+	<!-- Multi-select: floating bar + bulk add modal -->
+	{#if isAdminUser}
+		<SelectionActionBar
+			selectedCount={selection.size}
+			loading={false}
+			onSelectAll={handleSelectAll}
+			onAdd={() => (bulkModalOpen = true)}
+			onClear={clearSelection}
+		/>
+		<BulkAddToLibraryModal
+			open={bulkModalOpen}
+			items={Array.from(selection.values())}
+			onClose={() => (bulkModalOpen = false)}
+			onSuccess={handleBulkAddSuccess}
 		/>
 	{/if}
 </div>

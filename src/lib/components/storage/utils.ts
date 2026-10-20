@@ -69,6 +69,66 @@ export function insightTypeLabel(type: string): string {
 	return labels[type] ?? type;
 }
 
+/**
+ * Badge classes for a per-item insight badge's tone (InsightItemBadge.tone),
+ * shared by InsightDetailModal and the status page's own detail dialog so
+ * both surfaces render the resolver's actual data-point labels (e.g. "117
+ * unplayed episodes", "2x files") identically instead of one of them falling
+ * back to a bare count.
+ */
+export function badgeToneColor(tone: string): string {
+	switch (tone) {
+		case 'critical':
+			return 'border-error/30 bg-error/10 text-error';
+		case 'warn':
+			return 'border-warning/30 bg-warning/10 text-warning';
+		default:
+			return 'border-info/30 bg-info/10 text-info';
+	}
+}
+
+// Insight types whose items resolve to real library rows on one of these two
+// list pages. Both pages accept ?insightId=<id> and filter down to exactly
+// the items that insight's resolver returns.
+const FILTERABLE_INSIGHT_LINKS: Record<string, string> = {
+	'missing-from-media-server': '/settings/monitoring/status/media',
+	unplayed: '/settings/monitoring/status/media',
+	'duplicate-items': '/library/movies',
+	'filename-duplicates': '/library/movies',
+	'quality-below-cutoff': '/library/movies',
+	'redundant-quality-tiers': '/library/movies'
+};
+
+// Insight types whose items don't correspond to filterable rows on an
+// existing list page: orphaned-files' destination already IS the exact list
+// with nothing to filter, and broken-paths/health-issues point at the
+// (short, unfiltered) root folders list.
+const STATIC_INSIGHT_LINKS: Record<string, string> = {
+	'orphaned-files': '/library/unmatched',
+	'broken-paths': '/settings/monitoring/status/folders',
+	'health-issues': '/settings/monitoring/status/folders'
+};
+
+// untracked-by-cinephage has no destination at all: its items aren't in
+// Cinephage's library by definition, so no list page - filtered or not -
+// could ever show them. Each item's own "Search to add" link covers
+// remediation instead.
+const NO_FOOTER_LINK_INSIGHT_TYPES = new Set(['untracked-by-cinephage']);
+
+/**
+ * "View all in X" footer link target for an insight detail view, or null
+ * when no destination applies. Shared by InsightDetailModal and the status
+ * page's own detail dialog.
+ */
+export function getInsightFooterLink(insightType: string, insightId: string): string | null {
+	if (NO_FOOTER_LINK_INSIGHT_TYPES.has(insightType)) return null;
+	const filterableBase = FILTERABLE_INSIGHT_LINKS[insightType];
+	if (filterableBase) {
+		return `${filterableBase}?insightId=${insightId}`;
+	}
+	return STATIC_INSIGHT_LINKS[insightType] ?? '/settings/monitoring/status/insights';
+}
+
 export type LibraryBreakdownItem = {
 	id: string;
 	name: string;

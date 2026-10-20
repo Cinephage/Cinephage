@@ -64,6 +64,7 @@ export class BrokenPathsRule implements StorageInsightRule {
 			storageId: string;
 			title: string;
 			tmdbId: number | null;
+			itemType: 'movie' | 'episode';
 			fullPath: string;
 		}> = [];
 
@@ -76,7 +77,13 @@ export class BrokenPathsRule implements StorageInsightRule {
 			if (rootPath) {
 				const fullPath = join(rootPath, row.moviePath ?? '', row.relativePath ?? '');
 				if (!existsSync(fullPath)) {
-					broken.push({ storageId: row.storageId, title: row.title, tmdbId: row.tmdbId, fullPath });
+					broken.push({
+						storageId: row.storageId,
+						title: row.title,
+						tmdbId: row.tmdbId,
+						itemType: 'movie',
+						fullPath
+					});
 				}
 			}
 			if (++processed % YIELD_INTERVAL === 0) await yieldToEventLoop();
@@ -87,7 +94,13 @@ export class BrokenPathsRule implements StorageInsightRule {
 			if (rootPath) {
 				const fullPath = join(rootPath, row.seriesPath ?? '', row.relativePath ?? '');
 				if (!existsSync(fullPath)) {
-					broken.push({ storageId: row.storageId, title: row.title, tmdbId: row.tmdbId, fullPath });
+					broken.push({
+						storageId: row.storageId,
+						title: row.title,
+						tmdbId: row.tmdbId,
+						itemType: 'episode',
+						fullPath
+					});
 				}
 			}
 			if (++processed % YIELD_INTERVAL === 0) await yieldToEventLoop();
@@ -103,7 +116,12 @@ export class BrokenPathsRule implements StorageInsightRule {
 				title: `Broken file paths`,
 				summary: `${broken.length} item${broken.length === 1 ? "'s" : 's'} file${broken.length === 1 ? '' : 's'} no longer exist${broken.length === 1 ? 's' : ''} on disk. The DB record is stale — run a scan to clean up.`,
 				details: {
-					items: broken.map((b) => ({ storageId: b.storageId, title: b.title, tmdbId: b.tmdbId }))
+					items: broken.map((b) => ({
+						storageId: b.storageId,
+						title: b.title,
+						tmdbId: b.tmdbId,
+						itemType: b.itemType
+					}))
 				},
 				itemCount: broken.length
 			}

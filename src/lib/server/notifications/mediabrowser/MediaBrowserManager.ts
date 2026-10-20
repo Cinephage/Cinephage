@@ -263,6 +263,24 @@ class MediaBrowserManager {
 			.returning();
 
 		logger.info({ id, name: updated.name }, '[MediaBrowserManager] Updated server');
+
+		// A disabled server's synced data stays in the DB (so re-enabling and
+		// re-syncing is cheap) but must stop counting toward Storage
+		// Maintenance immediately, not whenever some unrelated scan/import
+		// happens to trigger the next reconcile. Lazy-import to avoid a
+		// circular dependency (mirrors ReconciliationService's own pattern
+		// for subscribing to its event sources).
+		if (input.enabled !== undefined && input.enabled !== existing.enabled) {
+			import('#lib/server/storage/reconciliation/ReconciliationService.js')
+				.then(({ getReconciliationService }) => getReconciliationService().reconcile())
+				.catch((e) => {
+					logger.warn(
+						{ id, error: e instanceof Error ? e.message : String(e) },
+						'[MediaBrowserManager] Failed to trigger reconcile after enabled toggle'
+					);
+				});
+		}
+
 		return toPublicInfo(updated);
 	}
 

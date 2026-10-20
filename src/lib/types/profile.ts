@@ -13,7 +13,7 @@ import type { Resolution } from '#lib/server/scoring/types.js';
 /**
  * Profile category for UI grouping and styling
  */
-type ProfileCategory = 'quality' | 'efficient' | 'micro' | 'streaming' | 'custom';
+type ProfileCategory = 'quality' | 'efficient' | 'micro' | 'streaming' | 'anime' | 'custom';
 
 /**
  * A single entry in the required formats list.

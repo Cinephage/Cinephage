@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { SvelteSet } from 'svelte/reactivity';
 	import {
 		HardDrive,
 		ShieldCheck,
@@ -8,6 +9,7 @@
 		RefreshCw,
 		CheckCircle,
 		ChevronRight,
+		ChevronDown,
 		TrendingUp,
 		Database
 	} from '@lucide/svelte';
@@ -153,8 +155,70 @@
 
 	const topInsights = $derived(insights.slice(0, 5));
 
+	// The Sync Status tile must show the most recent media-server SYNC time,
+	// not the library disk SCAN time (storage.health.lastScan is a different,
+	// unrelated background job) - derive it from serverStatuses, which is
+	// already filtered to enabled servers only.
+	const lastServerSyncAt = $derived.by(() => {
+		const timestamps = serverStatuses
+			.map((s) => s.lastSyncAt)
+			.filter((t): t is string => t !== null);
+		if (timestamps.length === 0) return null;
+		return timestamps.reduce((latest, t) => (t > latest ? t : latest));
+	});
+
 	function mediaTitle(item: MediaListItem): string {
 		return item.seriesName ?? item.title;
+	}
+
+	// Long titles are truncated with an ellipsis by default (keeps rows
+	// aligned), but truncation alone can hide which title a row actually is.
+	// Clicking a title toggles it to wrap and show the full text instead.
+	// Keyed per-list so the same index in Most Played and Largest Files
+	// expand independently.
+	const expandedTopTitles = new SvelteSet<number>();
+	const expandedLargestTitles = new SvelteSet<number>();
+
+	function toggleExpanded(set: SvelteSet<number>, index: number): void {
+		if (set.has(index)) {
+			set.delete(index);
+		} else {
+			set.add(index);
+		}
+	}
+
+	// Whether a title is actually clipped by `truncate` can only be known by
+	// measuring the rendered DOM (scrollWidth vs clientWidth) - CSS alone
+	// can't tell us this. Used to only show the click-to-expand affordance
+	// (pointer cursor + chevron) on rows that are genuinely cut off, so a
+	// short title that already fits doesn't look clickable for no reason.
+	const truncatedTopTitles = new SvelteSet<number>();
+	const truncatedLargestTitles = new SvelteSet<number>();
+
+	function watchTruncation(
+		node: HTMLElement,
+		params: { expanded: boolean; onChange: (truncated: boolean) => void }
+	) {
+		function measure() {
+			// Can't measure overflow while wrapped (expanded) - the text no
+			// longer clips, so scrollWidth never exceeds clientWidth. Keep
+			// whatever truncation state was last measured while collapsed.
+			if (params.expanded) return;
+			params.onChange(node.scrollWidth > node.clientWidth + 1);
+		}
+		const resizeObserver = new ResizeObserver(measure);
+		resizeObserver.observe(node);
+		// Layout isn't settled until after the initial paint.
+		requestAnimationFrame(measure);
+		return {
+			update(newParams: typeof params) {
+				params = newParams;
+				measure();
+			},
+			destroy() {
+				resizeObserver.disconnect();
+			}
+		};
 	}
 
 	const baseUrl = '/settings/monitoring/status';
@@ -280,12 +344,12 @@
 			: healthStatus === 'warning'
 				? 'bg-warning/10 text-warning'
 				: 'bg-error/10 text-error'}
-		label="Health"
+		label="Health Insights"
 		value={healthLabel}
 		context={insights.length > 0
 			? `${insights.length} insight${insights.length === 1 ? '' : 's'}`
 			: 'No issues'}
-		href={`${baseUrl}`}
+		href={`${baseUrl}/insights`}
 		statusDot={healthStatus}
 	/>
 	<StorageTile
@@ -299,46 +363,24 @@
 	<StorageTile
 		icon={BarChart3}
 		iconClass="bg-accent/10 text-accent"
-		label="Media Quality"
-		value={mediaServerStats.uniqueItems > 0 ? `${mediaServerStats.uniqueItems} items` : 'No data'}
-		context={mediaServerStats.totalPlays > 0
+		label="Playback"
+		value={mediaServerStats.totalPlays > 0
 			? `${mediaServerStats.totalPlays} total plays`
+			: serverStatuses.length === 0
+				? 'No media server'
+				: 'No play data'}
+		context={mediaServerStats.uniqueItems > 0
+			? `${mediaServerStats.uniqueItems} items tracked`
 			: belowCutoffCount > 0
 				? `${belowCutoffCount} below cutoff`
-				: 'No play data'}
+				: 'No quality data'}
 		href={`${baseUrl}/media`}
-		miniSegments={resolutionSegments.length > 0
-			? [
-					{
-						value: mediaServerStats.resolutionBreakdown.find((r) => r.label === '4K')?.count ?? 0,
-						colorClass: 'bg-accent'
-					},
-					{
-						value:
-							mediaServerStats.resolutionBreakdown.find((r) => r.label === '1080p')?.count ?? 0,
-						colorClass: 'bg-accent/70'
-					},
-					{
-						value: mediaServerStats.resolutionBreakdown.find((r) => r.label === '720p')?.count ?? 0,
-						colorClass: 'bg-accent/40'
-					},
-					{
-						value:
-							mediaServerStats.resolutionBreakdown.find(
-								(r) => r.label === '480p' || r.label === 'SD'
-							)?.count ?? 0,
-						colorClass: 'bg-accent/20'
-					}
-				].filter((s) => s.value > 0)
-			: undefined}
 	/>
 	<StorageTile
 		icon={RefreshCw}
 		iconClass="bg-info/10 text-info"
 		label="Sync Status"
-		value={storage.health.lastScan
-			? formatTimestamp(storage.health.lastScan.completedAt ?? storage.health.lastScan.startedAt)
-			: 'Never'}
+		value={lastServerSyncAt ? formatTimestamp(lastServerSyncAt) : 'Never'}
 		context={serverStatuses.length > 0
 			? `${serverStatuses.length} server${serverStatuses.length === 1 ? '' : 's'} \u00B7 ${serverStatuses.filter((s) => s.lastSyncStatus === 'completed').length} synced`
 			: 'No servers'}
@@ -368,24 +410,110 @@
 {/if}
 
 <!-- MAIN BODY: Lists + Insights sidebar -->
-<div class="mt-4 grid gap-4 lg:grid-cols-3">
-	<!-- LEFT (2/3): Top Played + Largest Files -->
-	<div class="space-y-4 lg:col-span-2">
+<div
+	class="mt-4 grid gap-4 lg:grid-cols-3 lg:[grid-template-areas:'main_main_insights'_'main_main_disk']"
+>
+	<!-- Priority Insights: first in DOM so it leads on mobile (stacked, single
+	column); grid-area placement overrides this back to the sidebar on lg+.
+	min-w-0 overrides the grid item's default min-width:auto, which otherwise
+	lets a long nowrap string deep inside (e.g. a long media title) force this
+	whole column wider than the viewport instead of letting truncate clip it. -->
+	<div class="min-w-0 space-y-2 lg:[grid-area:insights]">
+		<h3 class="text-sm font-semibold text-base-content/70">Priority Insights</h3>
+		{#if topInsights.length === 0}
+			<div
+				class="flex items-center gap-2 rounded-lg border border-success/20 bg-success/5 p-3 text-sm text-base-content/60"
+			>
+				<CheckCircle class="h-4 w-4 shrink-0 text-success" />
+				<span>Everything looks healthy</span>
+			</div>
+		{:else}
+			{#each topInsights as insight (insight.id)}
+				<button
+					type="button"
+					onclick={() => onOpenInsight?.(insight)}
+					class="flex w-full items-center gap-2.5 rounded-lg border border-base-300 bg-base-200/50 p-2.5 text-left transition-colors hover:bg-base-300/50"
+				>
+					<span
+						class={`inline-block h-2 w-2 shrink-0 rounded-full ${severityDot(insight.severity)}`}
+					></span>
+					<span class="min-w-0 flex-1 truncate text-sm text-base-content">{insight.title}</span>
+					{#if insight.itemCount > 1}
+						<span class="shrink-0 text-xs font-medium text-base-content/50"
+							>{insight.itemCount}</span
+						>
+					{/if}
+					<ChevronRight class="h-3.5 w-3.5 shrink-0 text-base-content/30" />
+				</button>
+			{/each}
+		{/if}
+	</div>
+
+	<!-- Most Played + Largest Files -->
+	<div class="min-w-0 space-y-4 lg:[grid-area:main]">
 		<!-- Top Played Items -->
-		{#if topItems.length > 0}
-			<div class="card bg-base-200">
-				<div class="flex items-center gap-2 border-b border-base-300 p-3">
-					<TrendingUp class="h-4 w-4 text-primary" />
-					<h3 class="text-sm font-semibold text-base-content/70">Most Played</h3>
-				</div>
+		<div class="card bg-base-200">
+			<div class="flex items-center gap-2 border-b border-base-300 p-3">
+				<TrendingUp class="h-4 w-4 text-primary" />
+				<h3 class="text-sm font-semibold text-base-content/70">Most Played</h3>
+			</div>
+			{#if topItems.length > 0}
 				<div class="divide-y divide-base-300">
 					{#each topItems as item, i (i)}
+						{@const isExpanded = expandedTopTitles.has(i)}
+						{@const isTruncated = truncatedTopTitles.has(i)}
 						<div class="flex items-center gap-3 p-2.5">
 							<span class="w-5 shrink-0 text-center text-sm font-bold text-base-content/30"
 								>{i + 1}</span
 							>
 							<div class="min-w-0 flex-1">
-								<div class="truncate text-sm font-medium text-base-content">{mediaTitle(item)}</div>
+								<div class="flex items-center gap-1">
+									{#if isTruncated}
+										<div
+											role="button"
+											tabindex="0"
+											use:watchTruncation={{
+												expanded: isExpanded,
+												onChange: (t) => {
+													if (t) truncatedTopTitles.add(i);
+													else truncatedTopTitles.delete(i);
+												}
+											}}
+											class="min-w-0 flex-1 cursor-pointer text-sm font-medium text-base-content {isExpanded
+												? 'wrap-break-word'
+												: 'truncate'}"
+											onclick={() => toggleExpanded(expandedTopTitles, i)}
+											onkeydown={(e) => {
+												if (e.key === 'Enter' || e.key === ' ') {
+													e.preventDefault();
+													toggleExpanded(expandedTopTitles, i);
+												}
+											}}
+											aria-expanded={isExpanded}
+											title={isExpanded ? 'Click to collapse' : 'Click to show full title'}
+										>
+											{mediaTitle(item)}
+										</div>
+										<ChevronDown
+											class="h-3 w-3 shrink-0 text-base-content/40 transition-transform {isExpanded
+												? 'rotate-180'
+												: ''}"
+										/>
+									{:else}
+										<div
+											use:watchTruncation={{
+												expanded: isExpanded,
+												onChange: (t) => {
+													if (t) truncatedTopTitles.add(i);
+													else truncatedTopTitles.delete(i);
+												}
+											}}
+											class="min-w-0 flex-1 truncate text-sm font-medium text-base-content"
+										>
+											{mediaTitle(item)}
+										</div>
+									{/if}
+								</div>
 								<div class="text-xs text-base-content/50">
 									{item.playCount} play{item.playCount === 1 ? '' : 's'}
 								</div>
@@ -394,8 +522,25 @@
 						</div>
 					{/each}
 				</div>
-			</div>
-		{/if}
+			{:else if serverStatuses.length === 0}
+				<div class="flex flex-col items-center gap-1 px-4 py-6 text-center">
+					<p class="text-sm text-base-content/60">No media server connected.</p>
+					<p class="text-xs text-base-content/40">
+						Play counts come from your media server - <a
+							href="/settings/integrations/media-browsers"
+							class="link">connect and enable one</a
+						> to see your most played titles here.
+					</p>
+				</div>
+			{:else}
+				<div class="flex flex-col items-center gap-1 px-4 py-6 text-center">
+					<p class="text-sm text-base-content/60">No play data yet.</p>
+					<p class="text-xs text-base-content/40">
+						This updates once your media server reports watch history.
+					</p>
+				</div>
+			{/if}
+		</div>
 
 		<!-- Largest Files -->
 		{#if largestItems.length > 0}
@@ -406,12 +551,60 @@
 				</div>
 				<div class="divide-y divide-base-300">
 					{#each largestItems as item, i (i)}
+						{@const isExpanded = expandedLargestTitles.has(i)}
+						{@const isTruncated = truncatedLargestTitles.has(i)}
 						<div class="flex items-center gap-3 p-2.5">
 							<span class="w-5 shrink-0 text-center text-sm font-bold text-base-content/30"
 								>{i + 1}</span
 							>
 							<div class="min-w-0 flex-1">
-								<div class="truncate text-sm font-medium text-base-content">{mediaTitle(item)}</div>
+								<div class="flex items-center gap-1">
+									{#if isTruncated}
+										<div
+											role="button"
+											tabindex="0"
+											use:watchTruncation={{
+												expanded: isExpanded,
+												onChange: (t) => {
+													if (t) truncatedLargestTitles.add(i);
+													else truncatedLargestTitles.delete(i);
+												}
+											}}
+											class="min-w-0 flex-1 cursor-pointer text-sm font-medium text-base-content {isExpanded
+												? 'wrap-break-word'
+												: 'truncate'}"
+											onclick={() => toggleExpanded(expandedLargestTitles, i)}
+											onkeydown={(e) => {
+												if (e.key === 'Enter' || e.key === ' ') {
+													e.preventDefault();
+													toggleExpanded(expandedLargestTitles, i);
+												}
+											}}
+											aria-expanded={isExpanded}
+											title={isExpanded ? 'Click to collapse' : 'Click to show full title'}
+										>
+											{mediaTitle(item)}
+										</div>
+										<ChevronDown
+											class="h-3 w-3 shrink-0 text-base-content/40 transition-transform {isExpanded
+												? 'rotate-180'
+												: ''}"
+										/>
+									{:else}
+										<div
+											use:watchTruncation={{
+												expanded: isExpanded,
+												onChange: (t) => {
+													if (t) truncatedLargestTitles.add(i);
+													else truncatedLargestTitles.delete(i);
+												}
+											}}
+											class="min-w-0 flex-1 truncate text-sm font-medium text-base-content"
+										>
+											{mediaTitle(item)}
+										</div>
+									{/if}
+								</div>
 								<div class="text-xs text-base-content/50">
 									{item.videoCodec?.toUpperCase() ?? '?'} &middot; {heightToRes(item.height)}
 								</div>
@@ -434,92 +627,57 @@
 		</div>
 	</div>
 
-	<!-- RIGHT (1/3): Priority Insights + Per-Folder Disk -->
-	<div class="space-y-4">
-		<!-- Priority Insights -->
-		<div class="space-y-2">
-			<h3 class="text-sm font-semibold text-base-content/70">Priority Insights</h3>
-			{#if topInsights.length === 0}
-				<div
-					class="flex items-center gap-2 rounded-lg border border-success/20 bg-success/5 p-3 text-sm text-base-content/60"
-				>
-					<CheckCircle class="h-4 w-4 shrink-0 text-success" />
-					<span>Everything looks healthy</span>
-				</div>
-			{:else}
-				{#each topInsights as insight (insight.id)}
-					<button
-						type="button"
-						onclick={() => onOpenInsight?.(insight)}
-						class="flex w-full items-center gap-2.5 rounded-lg border border-base-300 bg-base-200/50 p-2.5 text-left transition-colors hover:bg-base-300/50"
-					>
-						<span
-							class={`inline-block h-2 w-2 shrink-0 rounded-full ${severityDot(insight.severity)}`}
-						></span>
-						<span class="min-w-0 flex-1 truncate text-sm text-base-content">{insight.title}</span>
-						{#if insight.itemCount > 1}
-							<span class="shrink-0 text-xs font-medium text-base-content/50"
-								>{insight.itemCount}</span
-							>
-						{/if}
-						<ChevronRight class="h-3.5 w-3.5 shrink-0 text-base-content/30" />
-					</button>
-				{/each}
-			{/if}
-		</div>
-
-		<!-- Per-Folder Disk Usage -->
-		{#if rootFolderBreakdown.length > 0}
-			<div class="space-y-2">
-				<h3 class="text-sm font-semibold text-base-content/70">Disk Usage</h3>
-				<div class="card space-y-3 bg-base-200 p-3">
-					{#each rootFolderBreakdown as folder (folder.id)}
-						<!-- usedBytes is a real per-folder SUM(file sizes) (same source
-						RootFolderOverview.svelte uses) - totalSpaceBytes/freeSpaceBytes
-						are disk-level statfs() stats that were never wired up to refresh
-						after folder creation, so using them here as "used" showed stale,
-						identical-across-folders numbers. -->
-						{@const total = folder.usedBytes + (folder.freeSpaceBytes ?? 0)}
-						<div>
-							<div class="mb-1 flex items-center justify-between text-xs">
-								<span class="truncate text-base-content/70">{folder.name}</span>
-								<span class="shrink-0 text-base-content/50">
-									{total > 0 ? `${Math.round((folder.usedBytes / total) * 100)}%` : '?'}
-								</span>
-							</div>
-							{#if folder.freeSpaceBytes !== null && folder.freeSpaceBytes !== undefined && total > 0}
-								<div class="flex h-2 overflow-hidden rounded-full bg-base-300/60">
-									<div
-										class="h-full bg-primary"
-										style="width: {(folder.usedBytes / total) * 100}%"
-										title={`Used: ${formatBytes(folder.usedBytes)}`}
-										role="img"
-										aria-label={`${folder.name}: ${formatBytes(folder.usedBytes)} used of ${formatBytes(total)}`}
-									></div>
-									<div
-										class="h-full bg-success/30"
-										style="width: {(folder.freeSpaceBytes / total) * 100}%"
-										title={`Free: ${formatBytes(folder.freeSpaceBytes)}`}
-										role="img"
-										aria-label={`${formatBytes(folder.freeSpaceBytes)} free`}
-									></div>
-								</div>
-								<div class="mt-0.5 flex justify-between text-xs text-base-content/40">
-									<span>{formatBytes(folder.usedBytes)} used</span>
-									<span>{formatBytes(folder.freeSpaceBytes)} free</span>
-								</div>
-							{:else}
-								<div class="flex h-2 items-center rounded-full bg-base-300/40">
-									<span class="w-full text-center text-xs text-base-content/30">No disk data</span>
-								</div>
-							{/if}
+	<!-- Per-Folder Disk Usage -->
+	{#if rootFolderBreakdown.length > 0}
+		<div class="min-w-0 space-y-2 lg:[grid-area:disk]">
+			<h3 class="text-sm font-semibold text-base-content/70">Disk Usage</h3>
+			<div class="card space-y-3 bg-base-200 p-3">
+				{#each rootFolderBreakdown as folder (folder.id)}
+					<!-- usedBytes is a real per-folder SUM(file sizes) (same source
+					RootFolderOverview.svelte uses) - totalSpaceBytes/freeSpaceBytes
+					are disk-level statfs() stats that were never wired up to refresh
+					after folder creation, so using them here as "used" showed stale,
+					identical-across-folders numbers. -->
+					{@const total = folder.usedBytes + (folder.freeSpaceBytes ?? 0)}
+					<div>
+						<div class="mb-1 flex items-center justify-between gap-2 text-xs">
+							<span class="min-w-0 flex-1 truncate text-base-content/70">{folder.name}</span>
+							<span class="shrink-0 text-base-content/50">
+								{total > 0 ? `${Math.round((folder.usedBytes / total) * 100)}%` : '?'}
+							</span>
 						</div>
-					{/each}
-				</div>
-				<a href={`${baseUrl}/folders`} class="btn w-full gap-1 btn-ghost btn-xs">
-					Manage folders <ChevronRight class="h-3 w-3" />
-				</a>
+						{#if folder.freeSpaceBytes !== null && folder.freeSpaceBytes !== undefined && total > 0}
+							<div class="flex h-2 overflow-hidden rounded-full bg-base-300/60">
+								<div
+									class="h-full bg-primary"
+									style="width: {(folder.usedBytes / total) * 100}%"
+									title={`Used: ${formatBytes(folder.usedBytes)}`}
+									role="img"
+									aria-label={`${folder.name}: ${formatBytes(folder.usedBytes)} used of ${formatBytes(total)}`}
+								></div>
+								<div
+									class="h-full bg-success/30"
+									style="width: {(folder.freeSpaceBytes / total) * 100}%"
+									title={`Free: ${formatBytes(folder.freeSpaceBytes)}`}
+									role="img"
+									aria-label={`${formatBytes(folder.freeSpaceBytes)} free`}
+								></div>
+							</div>
+							<div class="mt-0.5 flex justify-between text-xs text-base-content/40">
+								<span>{formatBytes(folder.usedBytes)} used</span>
+								<span>{formatBytes(folder.freeSpaceBytes)} free</span>
+							</div>
+						{:else}
+							<div class="flex h-2 items-center rounded-full bg-base-300/40">
+								<span class="w-full text-center text-xs text-base-content/30">No disk data</span>
+							</div>
+						{/if}
+					</div>
+				{/each}
 			</div>
-		{/if}
-	</div>
+			<a href={`${baseUrl}/folders`} class="btn w-full gap-1 btn-ghost btn-xs">
+				Manage folders <ChevronRight class="h-3 w-3" />
+			</a>
+		</div>
+	{/if}
 </div>

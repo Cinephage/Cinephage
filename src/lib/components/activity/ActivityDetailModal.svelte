@@ -15,11 +15,12 @@
 		RotateCcw,
 		Trash2,
 		Info,
-		Folder
+		Folder,
+		Ban
 	} from '@lucide/svelte';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { createFocusTrap, lockBodyScroll } from '#lib/utils/focus.js';
-	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
+	import RemoveDownloadConfirmModal from './RemoveDownloadConfirmModal.svelte';
 	import {
 		statusConfig,
 		getStatusLabel,
@@ -39,13 +40,16 @@
 			options?: { deleteFiles?: boolean; blocklist?: boolean }
 		) => Promise<void>;
 		onRetry?: (id: string) => Promise<void>;
+		onBlocklistHistory?: (historyId: string) => Promise<void>;
 	}
 
-	let { open, activity, onClose, onPause, onResume, onRemove, onRetry }: Props = $props();
+	let { open, activity, onClose, onPause, onResume, onRemove, onRetry, onBlocklistHistory }: Props =
+		$props();
 
 	let activeTab = $state<'overview'>('overview');
 	let actionLoading = $state(false);
 	let removeConfirmOpen = $state(false);
+	let blocklisting = $state(false);
 	let modalRef = $state<HTMLElement | null>(null);
 	let contentRef = $state<HTMLElement | null>(null);
 	let cleanupFocusTrap: (() => void) | null = null;
@@ -89,11 +93,11 @@
 		removeConfirmOpen = false;
 	}
 
-	async function handleRemove() {
+	async function handleRemove(options: { blocklist: boolean }) {
 		if (!activity?.queueItemId || !onRemove) return;
 		actionLoading = true;
 		try {
-			await onRemove(activity.queueItemId, { deleteFiles: true });
+			await onRemove(activity.queueItemId, { deleteFiles: true, blocklist: options.blocklist });
 			toasts.success(m.activity_detail_downloadRemoved());
 			removeConfirmOpen = false;
 			onClose();
@@ -102,6 +106,21 @@
 			toasts.error(message);
 		} finally {
 			actionLoading = false;
+		}
+	}
+
+	async function handleBlocklistHistory() {
+		if (!activity?.downloadHistoryId || !onBlocklistHistory) return;
+		blocklisting = true;
+		try {
+			await onBlocklistHistory(activity.downloadHistoryId);
+			toasts.success(m.activity_detail_blocklisted());
+		} catch (error) {
+			const message =
+				error instanceof Error ? error.message : m.activity_detail_failedToBlocklist();
+			toasts.error(message);
+		} finally {
+			blocklisting = false;
 		}
 	}
 
@@ -323,6 +342,29 @@
 						</button>
 					</div>
 				{/if}
+
+				<!-- Blocklist action - independent of a live queue item (issue #618):
+				     a failed/rejected release should stay blocklistable from History
+				     even after its queue row is gone (recovered, retried, or removed). -->
+				{#if activity.downloadHistoryId && (activity.status === 'failed' || activity.status === 'rejected')}
+					<div class="mt-2 flex flex-wrap items-center gap-2">
+						{#if activity.isBlocklisted}
+							<span class="badge gap-1.5 badge-ghost">
+								<Ban class="h-3 w-3" />
+								{m.activity_detail_alreadyBlocklisted()}
+							</span>
+						{:else if onBlocklistHistory}
+							<button
+								class="btn btn-ghost btn-sm"
+								onclick={handleBlocklistHistory}
+								disabled={blocklisting}
+							>
+								<Ban class="h-4 w-4" />
+								{m.activity_detail_addToBlocklist()}
+							</button>
+						{/if}
+					</div>
+				{/if}
 			</div>
 
 			<!-- Tabs -->
@@ -474,12 +516,9 @@
 	</div>
 {/if}
 
-<ConfirmationModal
+<RemoveDownloadConfirmModal
 	open={removeConfirmOpen}
-	title={m.activity_detail_removeConfirmTitle()}
-	message={m.activity_detail_removeFromClientWarning()}
-	confirmLabel={m.activity_detail_removeAndDeleteFiles()}
-	confirmVariant="error"
+	isBlocklisted={activity?.isBlocklisted}
 	loading={actionLoading}
 	onConfirm={handleRemove}
 	onCancel={cancelRemove}

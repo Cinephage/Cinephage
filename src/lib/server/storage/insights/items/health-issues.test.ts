@@ -77,7 +77,7 @@ describe('healthIssuesResolver', () => {
 		expect(result.items).toHaveLength(2);
 		expect(result.total).toBe(2);
 		expect(result.items[0].kind).toBe('folder');
-		expect(result.items[0].href).toBe('/settings/monitoring/status/folders');
+		expect(result.items[0].href).toBe('/settings/monitoring/status/folders?folderId=hi-f1');
 	});
 
 	it('supports folderPaths', async () => {

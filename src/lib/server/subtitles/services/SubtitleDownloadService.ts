@@ -27,7 +27,8 @@ import {
 } from '#lib/server/db/schema.js';
 import { eq, and, inArray, isNull } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
-import { writeFile, mkdir, unlink, rename } from 'node:fs/promises';
+import { writeFile, unlink, rename } from 'node:fs/promises';
+import { ensureMediaDirectory } from '#lib/server/filesystem/mkdir-helpers.js';
 import { existsSync } from 'node:fs';
 import { dirname, join, basename, extname } from 'node:path';
 import { createChildLogger } from '#lib/logging/index.js';
@@ -373,7 +374,7 @@ export class SubtitleDownloadService {
 		);
 
 		// Ensure directory exists
-		await mkdir(options.mediaPath, { recursive: true });
+		await ensureMediaDirectory(options.mediaPath);
 
 		const finalPath = await resolveDestructivePathWithinBase(options.mediaPath, subtitleFileName);
 		if (!finalPath) {

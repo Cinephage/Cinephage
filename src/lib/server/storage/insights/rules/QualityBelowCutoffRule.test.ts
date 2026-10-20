@@ -72,6 +72,11 @@ describe('QualityBelowCutoffRule', () => {
 		expect(findings).toHaveLength(1);
 		expect(findings[0].itemCount).toBe(1);
 		expect(findings[0].severity).toBe('info');
+		// itemType must travel with each item - movie and series tmdbIds are
+		// independent namespaces, so the resolver needs this to pick the right
+		// library page instead of guessing from tmdbId alone (#601).
+		const items = (findings[0].details as { items: Array<{ itemType: string }> }).items;
+		expect(items[0].itemType).toBe('movie');
 	});
 
 	it('does not flag movies at or above cutoff', async () => {

@@ -1905,16 +1905,47 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 				const transitionedToFailed =
 					queueItem.status !== 'failed' && updatedItem.status === 'failed';
 				if (transitionedToFailed) {
-					await this.createFailedHistoryRecord(
-						updatedItem,
-						updatedItem.errorMessage ?? 'Download client reported an error'
-					);
+					const failureMessage = updatedItem.errorMessage ?? 'Download client reported an error';
+					await this.createFailedHistoryRecord(updatedItem, failureMessage);
 					// Terminal queue state must release the acquisition intent
 					// (slot + identity), or the target stays wedged until restart.
-					acquisitionService.failByQueueId(
-						updatedItem.id,
-						updatedItem.errorMessage ?? 'Download client reported an error'
-					);
+					acquisitionService.failByQueueId(updatedItem.id, failureMessage);
+
+					// Auto-blocklist the failed release so future searches don't
+					// re-grab it (issue #618).
+					try {
+						const blocklistHours = await this.getStalledBlocklistHours();
+						const { blocklistService } =
+							await import('#lib/server/monitoring/specifications/BlocklistSpecification.js');
+						await blocklistService.addToBlocklist(
+							{
+								title: updatedItem.title,
+								infoHash: updatedItem.infoHash ?? undefined,
+								indexerId: updatedItem.indexerId ?? undefined,
+								quality: updatedItem.quality ?? undefined,
+								size: updatedItem.size ?? undefined,
+								protocol: updatedItem.protocol
+							},
+							{
+								movieId: updatedItem.movieId ?? undefined,
+								seriesId: updatedItem.seriesId ?? undefined,
+								episodeIds: updatedItem.episodeIds ?? undefined,
+								reason: 'download_failed',
+								message: failureMessage,
+								expiresInHours: blocklistHours > 0 ? blocklistHours : undefined
+							}
+						);
+					} catch (blocklistError) {
+						logger.warn(
+							{
+								title: updatedItem.title,
+								error:
+									blocklistError instanceof Error ? blocklistError.message : String(blocklistError)
+							},
+							'Failed to add failed release to blocklist'
+						);
+					}
+
 					this.emit('queue:failed', updatedItem);
 					this.emitSSE('queue:failed', updatedItem);
 					return;

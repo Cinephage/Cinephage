@@ -100,7 +100,14 @@ export class QualityBelowCutoffRule implements StorageInsightRule {
 			.where(sql`${series.tmdbId} IS NOT NULL`)
 			.all();
 
-		const allRows = [...dedupedMovieRows, ...episodeRows];
+		// Movie and series tmdbIds are independent namespaces, so every row
+		// carries its own itemType rather than letting downstream consumers
+		// guess which table a tmdbId belongs to (a movie and an unrelated
+		// show can share the same numeric id).
+		const allRows = [
+			...dedupedMovieRows.map((r) => ({ ...r, itemType: 'movie' as const })),
+			...episodeRows.map((r) => ({ ...r, itemType: 'episode' as const }))
+		];
 
 		const belowCutoff = allRows.filter((row) => {
 			if (!row.minResolution) return false;
@@ -123,6 +130,7 @@ export class QualityBelowCutoffRule implements StorageInsightRule {
 					items: belowCutoff.map((r) => ({
 						tmdbId: r.tmdbId,
 						title: r.title,
+						itemType: r.itemType,
 						currentResolution: resolutionOf(r.quality),
 						minResolution: r.minResolution
 					}))
