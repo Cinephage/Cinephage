@@ -55,7 +55,7 @@ async function copyFileNoChmod(source: string, dest: string): Promise<void> {
  * Transfer mode for files (low-level operation)
  * Follows Radarr's TransferMode enum pattern
  */
-export type TransferMode = 'hardlink' | 'copy' | 'move' | 'symlink';
+export type TransferMode = 'hardlink' | 'copy' | 'move' | 'symlink' | 'skip-duplicate';
 
 /**
  * Import mode for deciding how to transfer files (high-level intent)

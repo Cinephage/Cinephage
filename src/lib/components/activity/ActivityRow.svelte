@@ -291,7 +291,9 @@
 										? m.activity_detail_transferModeCopy()
 										: activity.transferMode === 'move'
 											? m.activity_detail_transferModeMove()
-											: m.activity_detail_transferModeSymlink()}
+											: activity.transferMode === 'skip-duplicate'
+												? m.activity_detail_transferModeSkipDuplicate()
+												: m.activity_detail_transferModeSymlink()}
 							</span>
 						</div>
 					{/if}

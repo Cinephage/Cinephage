@@ -220,8 +220,8 @@ export interface UnifiedActivity {
 	isBlocklisted?: boolean;
 	monitoringHistoryId?: string; // Link to monitoring history record
 	importedPath?: string; // Path where file was imported
-	/** How the file reached importedPath (hardlink/copy/move/symlink). */
-	transferMode?: 'hardlink' | 'copy' | 'move' | 'symlink';
+	/** How the file reached importedPath (hardlink/copy/move/symlink/skip-duplicate). */
+	transferMode?: 'hardlink' | 'copy' | 'move' | 'symlink' | 'skip-duplicate';
 }
 
 /**
