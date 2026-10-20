@@ -33,6 +33,13 @@ export interface UnmatchedDownloadItem {
 		tmdbId: number;
 		title: string;
 	} | null;
+	suggestion: {
+		mediaType: 'movie' | 'tv';
+		tmdbId: number;
+		title: string;
+		year?: number;
+		confidence: number;
+	} | null;
 }
 
 /** Response of GET /api/queue/unmatched. */
@@ -125,11 +132,13 @@ export async function getUnmatched(params?: {
 	clientId?: string;
 	page?: number;
 	limit?: number;
+	search?: string;
 }): Promise<ApiResponse<QueueUnmatchedListResponse>> {
 	const query: Record<string, string> = {};
 	if (params?.clientId) query.clientId = params.clientId;
 	if (params?.page !== undefined) query.page = String(params.page);
 	if (params?.limit !== undefined) query.limit = String(params.limit);
+	if (params?.search) query.search = params.search;
 	return apiGet<QueueUnmatchedListResponse>(`/api/queue/unmatched${buildQuery(query)}`);
 }
 

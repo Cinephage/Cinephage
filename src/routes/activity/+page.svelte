@@ -96,7 +96,7 @@
 	let activities = $state<UnifiedActivity[]>([]);
 	let total = $state(0);
 	let currentPage = $state(1);
-	const ACTIVITY_PAGE_SIZE = 50;
+	const ACTIVITY_PAGE_SIZE = 25;
 	let selectedHistoryIds = new SvelteSet<string>();
 	let selectedActiveIds = new SvelteSet<string>();
 	let canManageHistory = $state(false);
@@ -418,7 +418,8 @@
 		try {
 			await fetchActivityData(filters, activityTab, {
 				offset: (page - 1) * ACTIVITY_PAGE_SIZE,
-				limit: ACTIVITY_PAGE_SIZE
+				limit: ACTIVITY_PAGE_SIZE,
+				silent: true
 			});
 		} catch (_error) {
 			toasts.error(m.toast_activity_failedToLoadMore());
