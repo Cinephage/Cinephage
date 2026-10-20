@@ -1178,7 +1178,12 @@ export class MediaMatcherService {
 		// no longer leaves both on disk (issue #627). Scan auto-match passes
 		// allowReplace=false and stays purely additive.
 		if (newFileId) {
-			await this.retireReplacedMovieFiles(movieId, newFileId, parsedQuality.resolution, allowReplace);
+			await this.retireReplacedMovieFiles(
+				movieId,
+				newFileId,
+				parsedQuality.resolution,
+				allowReplace
+			);
 		}
 
 		// Optional sidecar files (.nfo + poster/fanart) - mirrors the
@@ -1253,7 +1258,11 @@ export class MediaMatcherService {
 	): Promise<void> {
 		const currentFiles = await db.select().from(movieFiles).where(eq(movieFiles.movieId, movieId));
 		const [movieRow] = await db
-			.select({ path: movies.path, desiredQualities: movies.desiredQualities, scoringProfileId: movies.scoringProfileId })
+			.select({
+				path: movies.path,
+				desiredQualities: movies.desiredQualities,
+				scoringProfileId: movies.scoringProfileId
+			})
 			.from(movies)
 			.where(eq(movies.id, movieId));
 		if (!movieRow) return;
@@ -1317,7 +1326,10 @@ export class MediaMatcherService {
 			.select()
 			.from(episodeFiles)
 			.where(eq(episodeFiles.seriesId, seriesId));
-		const [seriesRow] = await db.select({ path: series.path }).from(series).where(eq(series.id, seriesId));
+		const [seriesRow] = await db
+			.select({ path: series.path })
+			.from(series)
+			.where(eq(series.id, seriesId));
 		if (!seriesRow) return;
 
 		const replaceIds = new Set(

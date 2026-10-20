@@ -1441,7 +1441,10 @@ describe('duplicate-file replacement on deliberate (re-)match (issue #627)', () 
 
 		await mediaMatcherService.acceptMatch('uf627d', 6274, 'tv', { allowReplace: true });
 
-		const files = await testDb.db.select().from(episodeFiles).where(eq(episodeFiles.seriesId, 's627d'));
+		const files = await testDb.db
+			.select()
+			.from(episodeFiles)
+			.where(eq(episodeFiles.seriesId, 's627d'));
 		expect(files).toHaveLength(1);
 		expect(files[0].relativePath).toBe('Season 1/Show X - S01E01 - New Name.mkv');
 	});

@@ -17,12 +17,7 @@ const MEDIA_INFO = {
 describe('contentAlreadyPresent', () => {
 	it('matches on infoHash alone, even with differing size/mediaInfo', () => {
 		expect(
-			contentAlreadyPresent(
-				{ infoHash: 'abc123', size: 1, mediaInfo: null },
-				'abc123',
-				999,
-				null
-			)
+			contentAlreadyPresent({ infoHash: 'abc123', size: 1, mediaInfo: null }, 'abc123', 999, null)
 		).toBe(true);
 	});
 
@@ -50,23 +45,18 @@ describe('contentAlreadyPresent', () => {
 
 	it('falls back to size + mediaInfo equality when no infoHash is available', () => {
 		expect(
-			contentAlreadyPresent(
-				{ infoHash: null, size: 100, mediaInfo: MEDIA_INFO },
-				null,
-				100,
-				{ ...MEDIA_INFO }
-			)
+			contentAlreadyPresent({ infoHash: null, size: 100, mediaInfo: MEDIA_INFO }, null, 100, {
+				...MEDIA_INFO
+			})
 		).toBe(true);
 	});
 
 	it('does not match when mediaInfo differs (e.g. a real upgrade)', () => {
 		expect(
-			contentAlreadyPresent(
-				{ infoHash: null, size: 100, mediaInfo: MEDIA_INFO },
-				null,
-				100,
-				{ ...MEDIA_INFO, videoCodec: 'avc' }
-			)
+			contentAlreadyPresent({ infoHash: null, size: 100, mediaInfo: MEDIA_INFO }, null, 100, {
+				...MEDIA_INFO,
+				videoCodec: 'avc'
+			})
 		).toBe(false);
 	});
 
@@ -86,31 +76,23 @@ describe('contentAlreadyPresent', () => {
 			contentAlreadyPresent({ infoHash: null, size: 100, mediaInfo: null }, null, 100, MEDIA_INFO)
 		).toBe(false);
 		expect(
-			contentAlreadyPresent(
-				{ infoHash: null, size: 100, mediaInfo: MEDIA_INFO },
-				null,
-				100,
-				null
-			)
+			contentAlreadyPresent({ infoHash: null, size: 100, mediaInfo: MEDIA_INFO }, null, 100, null)
 		).toBe(false);
 	});
 
 	it('treats array fields order-sensitively but value-equal arrays as equal', () => {
 		expect(
-			contentAlreadyPresent(
-				{ infoHash: null, size: 100, mediaInfo: MEDIA_INFO },
-				null,
-				100,
-				{ ...MEDIA_INFO, audioLanguages: ['eng'], subtitleLanguages: ['eng', 'spa'] }
-			)
+			contentAlreadyPresent({ infoHash: null, size: 100, mediaInfo: MEDIA_INFO }, null, 100, {
+				...MEDIA_INFO,
+				audioLanguages: ['eng'],
+				subtitleLanguages: ['eng', 'spa']
+			})
 		).toBe(true);
 		expect(
-			contentAlreadyPresent(
-				{ infoHash: null, size: 100, mediaInfo: MEDIA_INFO },
-				null,
-				100,
-				{ ...MEDIA_INFO, subtitleLanguages: ['spa', 'eng'] }
-			)
+			contentAlreadyPresent({ infoHash: null, size: 100, mediaInfo: MEDIA_INFO }, null, 100, {
+				...MEDIA_INFO,
+				subtitleLanguages: ['spa', 'eng']
+			})
 		).toBe(false);
 	});
 });
