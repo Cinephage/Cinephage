@@ -785,7 +785,11 @@
 					// Navigate to library since the series no longer exists
 					window.location.href = '/library/tv';
 				} else {
-					toasts.success(m.toast_library_tvDetail_seriesFilesDeleted());
+					toasts.success(
+						deleteFiles
+							? m.toast_library_tvDetail_seriesFilesDeleted()
+							: m.toast_library_tvDetail_seriesUnmatched()
+					);
 					const updatedSeasons = seasons.map((season) => ({
 						...season,
 						episodeFileCount: 0,

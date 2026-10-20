@@ -712,8 +712,23 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 		// Get all files for this movie
 		const files = await db.select().from(movieFiles).where(eq(movieFiles.movieId, params.id));
 
-		// Only require files if not removing from library entirely
-		if (files.length === 0 && !removeFromLibrary) {
+		// Unmatch also releases client-side tracking from the Unmatched-tab
+		// track/enroll flow so the torrent resurfaces in Unmatched. Real
+		// grabs (including arr_push-pushed ones) and the client itself are
+		// never touched - only rows explicitly stamped with `origin` qualify.
+		const unmatchedRelease = acquisitionService.releaseUnmatchedQueueItems(
+			{ movieId: params.id },
+			'files unmatched from library'
+		);
+
+		// Only require files if not removing from library entirely and there
+		// is no client tracking to release back to Unmatched.
+		if (
+			files.length === 0 &&
+			!removeFromLibrary &&
+			unmatchedRelease.released === 0 &&
+			unmatchedRelease.heldBack === 0
+		) {
 			return Response.json(
 				{ success: false, error: 'Movie has no files to delete' },
 				{ status: 400 }
@@ -799,6 +814,8 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 				.update(movies)
 				.set({ hasFile: false, lastSearchTime: null })
 				.where(eq(movies.id, params.id));
+
+			// Unmatched-flow queue rows were already released above.
 			libraryMediaEvents.emitMovieUpdated(params.id);
 
 			// Note: Movie metadata is kept - it will show as "missing"

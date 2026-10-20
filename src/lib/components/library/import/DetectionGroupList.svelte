@@ -38,6 +38,7 @@
 		canApplySelectedMatchToSeason = (_season: TvSeasonSection) => false,
 		getGroupEpisodeInfo = (_group: DetectionGroup) =>
 			null as { season: number; episode: number; title?: string } | null,
+		getGroupActionLabel = (_group: DetectionGroup) => null as 'link' | 'enroll' | null,
 		onSwitchGroup = (_id: string) => {},
 		onSkipGroup = (_id: string) => {},
 		onUnskipGroup = (_id: string) => {},
@@ -81,6 +82,7 @@
 			episode: number;
 			title?: string;
 		} | null;
+		getGroupActionLabel: (group: DetectionGroup) => 'link' | 'enroll' | null;
 		onSwitchGroup: (id: string) => void;
 		onSkipGroup: (id: string) => void;
 		onUnskipGroup: (id: string) => void;
@@ -296,6 +298,13 @@
 										{:else if skippedGroupIds.includes(group.id)}
 											<span class="badge badge-ghost badge-sm"
 												>{m.library_import_badgeSkipped()}</span
+											>
+										{:else if getGroupActionLabel(group) === 'link'}
+											<span class="badge badge-sm badge-info">{m.activity_unmatched_linkNow()}</span
+											>
+										{:else if getGroupActionLabel(group) === 'enroll'}
+											<span class="badge badge-outline badge-sm"
+												>{m.activity_unmatched_enrollAction()}</span
 											>
 										{/if}
 										{#if !importedGroupIds.includes(group.id) && skipActionsEnabled}
@@ -513,6 +522,14 @@
 												{:else if skippedGroupIds.includes(group.id)}
 													<span class="badge badge-ghost badge-sm"
 														>{m.library_import_badgeSkipped()}</span
+													>
+												{:else if getGroupActionLabel(group) === 'link'}
+													<span class="badge badge-sm badge-info"
+														>{m.activity_unmatched_linkNow()}</span
+													>
+												{:else if getGroupActionLabel(group) === 'enroll'}
+													<span class="badge badge-outline badge-sm"
+														>{m.activity_unmatched_enrollAction()}</span
 													>
 												{/if}
 												{#if !importedGroupIds.includes(group.id) && skipActionsEnabled}

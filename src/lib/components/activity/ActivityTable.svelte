@@ -2,20 +2,17 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import * as m from '#lib/paraglide/messages.js';
 	import { isImportFailedActivity, type UnifiedActivity } from '#lib/types/activity.js';
-	import { Loader2, Minus } from '@lucide/svelte';
+	import { Minus } from '@lucide/svelte';
 	import { toasts } from '#lib/stores/toast.svelte.js';
-	import { createProgressiveRenderer } from '#lib/utils/progressive-render.svelte.js';
 	import RemoveDownloadConfirmModal from './RemoveDownloadConfirmModal.svelte';
 	import ActivityTableHeader from './ActivityTableHeader.svelte';
 	import ActivityRow from './ActivityRow.svelte';
-	import ActivityMobileCard from './ActivityMobileCard.svelte';
 
 	interface Props {
 		activities: UnifiedActivity[];
 		sortField?: string;
 		sortDirection?: 'asc' | 'desc';
 		onSort?: (field: string) => void;
-		onRowClick?: (activity: UnifiedActivity) => void;
 		onPause?: (id: string) => Promise<void>;
 		onResume?: (id: string) => Promise<void>;
 		onRemove?: (
@@ -23,15 +20,15 @@
 			options?: { deleteFiles?: boolean; blocklist?: boolean }
 		) => Promise<void>;
 		onRetry?: (id: string) => Promise<void>;
-		compact?: boolean;
-		selectionMode?: boolean;
+		onBlocklistHistory?: (historyId: string) => Promise<void>;
+		showProgressDetail?: boolean;
 		selectedIds?: Set<string>;
 		isSelectable?: (activity: UnifiedActivity) => boolean;
 		onToggleSelection?: (activityId: string, selected: boolean) => void;
 		onToggleSelectionAll?: (activityIds: string[], selected: boolean) => void;
-		hasMore?: boolean;
-		isLoadingMore?: boolean;
-		onLoadMore?: () => void;
+		currentPage?: number;
+		totalPages?: number;
+		onPageChange?: (page: number) => void;
 	}
 
 	let {
@@ -39,51 +36,27 @@
 		sortField = 'time',
 		sortDirection = 'desc',
 		onSort,
-		onRowClick,
 		onPause,
 		onResume,
 		onRemove,
 		onRetry,
-		compact = false,
-		selectionMode = false,
+		onBlocklistHistory,
+		showProgressDetail = true,
 		selectedIds = new Set<string>(),
 		isSelectable = () => false,
 		onToggleSelection,
 		onToggleSelectionAll,
-		hasMore = false,
-		isLoadingMore = false,
-		onLoadMore
+		currentPage = 1,
+		totalPages = 1,
+		onPageChange
 	}: Props = $props();
 
-	const renderer = createProgressiveRenderer(() => activities, { batchSize: 24 });
-
-	$effect(() => {
-		if (!renderer.hasMore && hasMore && !isLoadingMore) {
-			onLoadMore?.();
-		}
-	});
-
-	let isMobile = $state(false);
-	$effect(() => {
-		if (typeof window === 'undefined') return;
-
-		const mq = window.matchMedia('(max-width: 1023px)');
-		isMobile = mq.matches;
-		const handler = (e: MediaQueryListEvent) => {
-			isMobile = e.matches;
-		};
-		mq.addEventListener('change', handler);
-		return () => mq.removeEventListener('change', handler);
-	});
-
-	let expandedRows = new SvelteSet<string>();
-	let failedReasonExpandedRows = new SvelteSet<string>();
+	let expandedId = $state<string | null>(null);
 	let queueActionLoadingRows = new SvelteSet<string>();
+	let blocklistLoadingRows = new SvelteSet<string>();
 
 	const selectableIds = $derived.by(() =>
-		selectionMode
-			? activities.filter((activity) => isSelectable(activity)).map((activity) => activity.id)
-			: []
+		activities.filter((activity) => isSelectable(activity)).map((activity) => activity.id)
 	);
 	const allSelectableSelected = $derived.by(
 		() => selectableIds.length > 0 && selectableIds.every((id) => selectedIds.has(id))
@@ -93,19 +66,7 @@
 	);
 
 	function toggleRow(id: string) {
-		if (expandedRows.has(id)) {
-			expandedRows.delete(id);
-		} else {
-			expandedRows.add(id);
-		}
-	}
-
-	function toggleFailedReason(id: string) {
-		if (failedReasonExpandedRows.has(id)) {
-			failedReasonExpandedRows.delete(id);
-		} else {
-			failedReasonExpandedRows.add(id);
-		}
+		expandedId = expandedId === id ? null : id;
 	}
 
 	// Remove needs a confirmation step first (parity with the detail modal's
@@ -150,6 +111,23 @@
 		}
 	}
 
+	async function runBlocklistHistory(activity: UnifiedActivity): Promise<void> {
+		if (!activity.downloadHistoryId || !onBlocklistHistory) return;
+		if (blocklistLoadingRows.has(activity.id)) return;
+
+		blocklistLoadingRows.add(activity.id);
+		try {
+			await onBlocklistHistory(activity.downloadHistoryId);
+			toasts.success(m.activity_detail_blocklisted());
+		} catch (error) {
+			const message =
+				error instanceof Error ? error.message : m.activity_detail_failedToBlocklist();
+			toasts.error(message);
+		} finally {
+			blocklistLoadingRows.delete(activity.id);
+		}
+	}
+
 	function cancelRemoveConfirm(): void {
 		if (removeConfirmActivity && queueActionLoadingRows.has(removeConfirmActivity.id)) return;
 		removeConfirmActivity = null;
@@ -183,14 +161,14 @@
 	}
 
 	function toggleSelection(activity: UnifiedActivity, selected: boolean): void {
-		if (!selectionMode || !isSelectable(activity)) {
+		if (!isSelectable(activity)) {
 			return;
 		}
 		onToggleSelection?.(activity.id, selected);
 	}
 
 	function toggleSelectionAll(selected: boolean): void {
-		if (!selectionMode || selectableIds.length === 0) {
+		if (selectableIds.length === 0) {
 			return;
 		}
 		onToggleSelectionAll?.(selectableIds, selected);
@@ -203,74 +181,67 @@
 		<p class="text-lg font-medium">{m.activity_table_noActivity()}</p>
 		<p class="mt-1 text-sm">{m.activity_table_noActivityHint()}</p>
 	</div>
-{:else if isMobile}
-	<div class="space-y-3">
-		{#each renderer.visible as activity (activity.id)}
-			<ActivityMobileCard
-				{activity}
-				{compact}
-				{selectionMode}
-				isSelected={isRowSelected(activity.id)}
-				isSelectable={isSelectable(activity)}
-				isExpanded={expandedRows.has(activity.id)}
-				isFailedReasonExpanded={failedReasonExpandedRows.has(activity.id)}
-				isQueueActionLoading={queueActionLoadingRows.has(activity.id)}
-				onToggle={() => toggleRow(activity.id)}
-				onToggleFailedReason={() => toggleFailedReason(activity.id)}
-				onQueueAction={(action) => runQueueAction(activity, action)}
-				onToggleSelection={(selected) => toggleSelection(activity, selected)}
-			/>
-		{/each}
-	</div>
-
-	{#if renderer.hasMore || hasMore}
-		<div bind:this={renderer.sentinel} class="flex justify-center py-4">
-			{#if isLoadingMore}
-				<Loader2 class="h-5 w-5 animate-spin text-base-content/40" />
-			{/if}
-		</div>
-	{/if}
 {:else}
-	<div class="overflow-x-auto">
-		<table class="table table-sm">
+	<div class="overflow-x-auto rounded-lg border border-base-content/12 bg-base-100 shadow-sm">
+		<table class="table w-full table-sm">
 			<thead>
 				<ActivityTableHeader
-					{compact}
-					{selectionMode}
 					{sortField}
 					{sortDirection}
 					{onSort}
+					{showProgressDetail}
 					{allSelectableSelected}
 					{someSelectableSelected}
 					selectableCount={selectableIds.length}
 					onToggleSelectionAll={toggleSelectionAll}
 				/>
 			</thead>
-			<tbody>
-				{#each renderer.visible as activity (activity.id)}
+			<tbody class="divide-y divide-base-content/8">
+				{#each activities as activity (activity.id)}
 					<ActivityRow
 						{activity}
-						{compact}
-						{selectionMode}
+						{showProgressDetail}
 						isSelected={isRowSelected(activity.id)}
 						isSelectable={isSelectable(activity)}
-						isExpanded={expandedRows.has(activity.id)}
+						isExpanded={expandedId === activity.id}
+						isQueueActionLoading={queueActionLoadingRows.has(activity.id)}
+						isBlocklistLoading={blocklistLoadingRows.has(activity.id)}
 						onToggle={() => toggleRow(activity.id)}
-						{onRowClick}
 						onToggleSelection={(selected) => toggleSelection(activity, selected)}
+						onQueueAction={(action) => runQueueAction(activity, action)}
+						onBlocklistHistory={onBlocklistHistory
+							? () => runBlocklistHistory(activity)
+							: undefined}
 					/>
 				{/each}
 			</tbody>
+			{#if totalPages > 1}
+				<tfoot>
+					<tr>
+						<td colspan={9} class="border-t border-base-content/8 py-2">
+							<div class="flex items-center justify-center gap-2">
+								<button
+									class="btn btn-ghost btn-xs"
+									disabled={currentPage <= 1}
+									onclick={() => onPageChange?.(currentPage - 1)}
+								>
+									{m.reports_pagination_prev()}
+								</button>
+								<span class="text-xs text-base-content/60">{currentPage} / {totalPages}</span>
+								<button
+									class="btn btn-ghost btn-xs"
+									disabled={currentPage >= totalPages}
+									onclick={() => onPageChange?.(currentPage + 1)}
+								>
+									{m.reports_pagination_next()}
+								</button>
+							</div>
+						</td>
+					</tr>
+				</tfoot>
+			{/if}
 		</table>
 	</div>
-
-	{#if renderer.hasMore || hasMore}
-		<div bind:this={renderer.sentinel} class="flex justify-center py-4">
-			{#if isLoadingMore}
-				<Loader2 class="h-5 w-5 animate-spin text-base-content/40" />
-			{/if}
-		</div>
-	{/if}
 {/if}
 
 <RemoveDownloadConfirmModal

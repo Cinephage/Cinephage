@@ -123,6 +123,34 @@ export function getCompactProgressLabel(activity: UnifiedActivity): string | nul
 }
 
 /**
+ * Mobile-width progress-cell text.
+ *
+ * `statusReason` is free-form text (not a fixed set of reason codes), so unlike
+ * `getMobileCompactStatusLabel` there's no small switch to hand-pick short copy
+ * from - truncating it further would just cut words mid-way. Instead, narrow
+ * widths fall back to the short status word alone (e.g. "No Results", "Paused");
+ * the full reason stays available in the row's expanded detail view.
+ */
+export function getMobileCompactProgressLabel(
+	activity: UnifiedActivity,
+	fallbackLabel: string
+): string | null {
+	if (!activity.statusReason) {
+		return null;
+	}
+
+	if (activity.status === 'failed') {
+		return m.status_error();
+	}
+
+	if (activity.status === 'search_error') {
+		return m.status_searchError();
+	}
+
+	return getStatusLabel(activity, fallbackLabel);
+}
+
+/**
  * Human-readable relative timestamp ("3m ago", "2d ago", etc.).
  *
  * Returns `'-'` when `dateStr` is null/undefined so callers don't need to
@@ -140,8 +168,7 @@ export function formatRelativeTime(dateStr: string | null | undefined): string {
 	if (minutes < 1) return m.activity_relativeTime_justNow();
 	if (minutes < 60) return m.activity_relativeTime_minutesAgo({ count: minutes });
 	if (hours < 24) return m.activity_relativeTime_hoursAgo({ count: hours });
-	if (days < 7) return m.activity_relativeTime_daysAgo({ count: days });
-	return date.toLocaleDateString(getLocale());
+	return m.activity_relativeTime_daysAgo({ count: days });
 }
 
 /**
@@ -205,7 +232,7 @@ const MEDIA_TASK_TYPES = new Set([
 	'new_episode'
 ]);
 
-export interface ActivityCategoryTag {
+interface ActivityCategoryTag {
 	label: string;
 	variant: string;
 }
@@ -232,7 +259,7 @@ export function getMobileCompactStatusLabel(
 	return getStatusLabel(activity, fallbackLabel);
 }
 
-export function getActivityCategoryTag(
+function getActivityCategoryTag(
 	activity: Pick<UnifiedActivity, 'taskType' | 'activitySource'>
 ): ActivityCategoryTag | null {
 	if (activity.taskType && SUBTITLE_TASK_TYPES.has(activity.taskType)) {

@@ -114,6 +114,7 @@ function createQueueRecord(
 		isUpgrade: false,
 		importFailed: false,
 		releaseGroup: null,
+		origin: null,
 		...overrides
 	};
 }

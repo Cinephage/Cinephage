@@ -1,5 +1,6 @@
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
+	import { Loader2 } from '@lucide/svelte';
 	import { MAX_BULK_IMPORT_JOBS } from '#lib/shared/bulk-import.js';
 	import { beforeNavigate, goto } from '$app/navigation';
 	import type { ReadonlyURLSearchParams } from '$app/state';
@@ -24,6 +25,9 @@
 		bulkImport,
 		getBulkImportProgress,
 		getLibraryJob,
+		resolveUnmatched,
+		trackUnmatched,
+		enrollUnmatched,
 		type BulkImportJob
 	} from '#lib/api/index.js';
 	import { searchTmdb as searchTmdbApi } from '#lib/api/index.js';
@@ -39,6 +43,7 @@
 		DetectionSection,
 		TvSeasonSection
 	} from '#lib/components/library/import/types.js';
+	import { findUnmatchedOrigin } from '#lib/components/library/import/unmatched-origins.js';
 	import type { ManualImportRequest } from '#lib/validation/schemas.js';
 	import { getFileManagementSettings } from '#lib/api/settings.js';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -152,6 +157,15 @@
 	let importedGroupLibraryIds = $state<Record<string, string>>({});
 	let skippedGroupIds = $state<string[]>([]);
 	let groupReviewState = $state<Record<string, GroupReviewState>>({});
+	// Unmatched-prefill (?unmatched=client:hash,…) bookkeeping: hash and
+	// client progress per detection group, plus where to return when done.
+	// Groups flagged inRoot live inside a managed root: the wizard cannot
+	// execute their import, so Step 3 offers monitor enroll instead.
+	let unmatchedOrigins = $state<
+		Record<string, { hash: string; progress: number; inRoot: boolean }>
+	>({});
+	let unmatchedPrefillDone = $state(false);
+	let unmatchedReturnUrl = $state<string | null>(null);
 	let detectedGroupQuery = $state('');
 	let detectedGroupFilter = $state<'all' | 'pending' | 'ready' | 'imported' | 'skipped'>('pending');
 	let detectedMediaFilter = $state<QueueMediaFilter>('all');
@@ -185,6 +199,9 @@
 	let executeError = $state<string | null>(null);
 	let bulkImportSummary = $state<{ importedGroups: number; failedGroups: number } | null>(null);
 	let bulkProgress = $state<{ completed: number; failed: number; total: number } | null>(null);
+	// Direct (non-job) completions folded into the next bulk summary.
+	let pendingDirectDone = $state(0);
+	let pendingDirectErrors = $state<string[]>([]);
 	let bulkCurrentGroup = $state<string | null>(null);
 	let backgroundImport = $state(false);
 	let backgroundJobPoll: ReturnType<typeof setInterval> | null = null;
@@ -254,6 +271,12 @@
 
 	const isActiveGroupImported = $derived.by(() =>
 		Boolean(activeGroup && importedGroupIds.includes(activeGroup.id))
+	);
+	const activeUnmatchedOrigin = $derived.by(() =>
+		activeGroup ? (unmatchedOrigins[activeGroup.id] ?? null) : null
+	);
+	const activeUnmatchedInRoot = $derived.by(
+		() => activeUnmatchedOrigin != null && activeUnmatchedOrigin.inRoot
 	);
 	const step2Ready = $derived(Boolean(activeGroup && selectedMatch && !isActiveGroupImported));
 	const destinationLibrariesForType = $derived(
@@ -511,6 +534,17 @@
 		if (preferredMediaType !== context.mediaType) {
 			preferredMediaType = context.mediaType;
 		}
+	});
+
+	$effect(() => {
+		if (unmatchedPrefillDone) return;
+		const raw = page.url.searchParams.get('unmatched');
+		if (!raw) return;
+		unmatchedPrefillDone = true;
+		void (async () => {
+			await loadRootFolders();
+			await prefillUnmatched(raw);
+		})();
 	});
 
 	$effect(() => {
@@ -1038,6 +1072,21 @@
 		persistActiveGroupState();
 		selectedGroupId = groupId;
 		loadGroupState(groupId);
+		maybeAutoSearchUnmatchedShell(groupId);
+	}
+
+	/**
+	 * Shell groups (unmatched in-root sources) arrive with no candidates:
+	 * run the prefilled clean-title search so the user reviews, not types.
+	 * Normal groups are untouched — their review UX stays as-is.
+	 */
+	function maybeAutoSearchUnmatchedShell(groupId: string) {
+		const origin = unmatchedOrigins[groupId];
+		if (!origin || !origin.inRoot) return;
+		const state = groupReviewState[groupId];
+		if (!state || state.selectedMatch) return;
+		if (!state.searchQuery.trim()) return;
+		void searchTmdb();
 	}
 
 	function markGroupImported(groupId: string) {
@@ -1073,6 +1122,14 @@
 			(group) => !importedGroupIds.includes(group.id) && !skippedGroupIds.includes(group.id)
 		);
 		if (!nextGroup) {
+			// Unmatched prefill ending here must leave the page: resetting
+			// with ?unmatched= still in the URL would re-resolve the just
+			// tracked torrents straight back into review.
+			if (unmatchedReturnUrl) {
+				bypassNavigationGuard = true;
+				void goto(unmatchedReturnUrl);
+				return;
+			}
 			resetWizard();
 			return;
 		}
@@ -1198,6 +1255,33 @@
 
 	function isGroupSkipped(groupId: string): boolean {
 		return skippedGroupIds.includes(groupId);
+	}
+
+	/**
+	 * Action badge for unmatched in-root groups: 'link' when the library
+	 * already holds the complete file (the bulk/single dispatch will track),
+	 * 'enroll' when it will enroll for monitor import, null otherwise
+	 * (normal groups stay unlabeled). Mirrors the dispatch rules so the
+	 * label never promises what the button won't do.
+	 */
+	/**
+	 * Single source of truth for what an unmatched in-root group will do:
+	 * 'link' when the library already holds the complete file, 'enroll'
+	 * when it will enroll for monitor import, null otherwise. The enroll
+	 * view, the bulk dispatcher and the row badges all read this — the
+	 * label never promises what the button won't do.
+	 */
+	function resolveUnmatchedGroupAction(groupId: string): 'link' | 'enroll' | null {
+		const origin = unmatchedOrigins[groupId];
+		if (!origin?.inRoot) return null;
+		const match = groupReviewState[groupId]?.selectedMatch;
+		if (!match) return null;
+		if (match.inLibrary && match.hasFile && origin.progress >= 1) return 'link';
+		return 'enroll';
+	}
+
+	function getUnmatchedGroupAction(group: DetectionGroup): 'link' | 'enroll' | null {
+		return resolveUnmatchedGroupAction(group.id);
 	}
 
 	function getGroupState(group: DetectionGroup): GroupReviewState {
@@ -1896,6 +1980,122 @@
 		step = 2;
 	}
 
+	/**
+	 * Unmatched prefill (?unmatched=clientId:hash,…): resolve client hashes
+	 * to local paths, detect the ones outside managed roots through the
+	 * normal pipeline, and synthesize shell groups for in-root sources the
+	 * wizard cannot execute (those enroll for monitor import instead).
+	 * Additive: normal entry (Step 1 browsing) is untouched.
+	 */
+	async function prefillUnmatched(raw: string) {
+		const entries = raw
+			.split(',')
+			.map((part) => part.trim())
+			.filter(Boolean)
+			.map((part) => {
+				const idx = part.indexOf(':');
+				if (idx <= 0) return null;
+				return { clientId: part.slice(0, idx), hash: part.slice(idx + 1) };
+			})
+			.filter((e): e is { clientId: string; hash: string } => Boolean(e?.clientId && e?.hash));
+		if (entries.length === 0) return;
+
+		unmatchedReturnUrl = resolvePath('/activity?tab=unmatched');
+		try {
+			const resolved = await resolveUnmatched(entries);
+			if (resolved.missing.length > 0) {
+				toasts.warning(`${resolved.missing.length} download(s) left the client and were skipped`);
+			}
+			if (resolved.alreadyTracked.length > 0) {
+				toasts.warning(
+					`${resolved.alreadyTracked.length} download(s) are already tracked — see the Queue tab`
+				);
+			}
+			const usable = resolved.resolved.filter((r) => r.localPath);
+			if (resolved.resolved.length - usable.length > 0) {
+				toasts.warning('Some downloads have no resolvable path and were skipped');
+			}
+			if (usable.length === 0) return;
+
+			const inRoot = usable.filter((r) => r.insideManagedRoot);
+			const normal = usable.filter((r) => !r.insideManagedRoot);
+			if (normal.length > 0) {
+				await runDetection(normal.map((r) => r.localPath as string));
+				const byPath = new Map(
+					normal.map((r) => [r.localPath as string, { hash: r.hash, progress: r.progress }])
+				);
+				for (const group of detectionGroups) {
+					const origin = findUnmatchedOrigin(group, byPath);
+					if (!origin) {
+						toasts.warning(
+							`"${group.displayName}" lost its download link — it will import untracked`
+						);
+						continue;
+					}
+					if (!unmatchedOrigins[group.id]) {
+						unmatchedOrigins = {
+							...unmatchedOrigins,
+							[group.id]: {
+								hash: origin.hash,
+								progress: origin.progress,
+								inRoot: false
+							}
+						};
+					}
+				}
+			}
+
+			for (const item of inRoot) {
+				const shell: DetectionGroup = {
+					id: `unmatched:${item.clientId}:${item.hash}`,
+					displayName: item.name,
+					sourceType: 'file',
+					sourcePath: item.localPath as string,
+					selectedFilePath: item.localPath as string,
+					fileName: item.name,
+					detectedFileCount: 1,
+					parsedTitle: item.searchHint,
+					inferredMediaType: 'movie',
+					matches: []
+				};
+				if (!detectionGroups.some((g) => g.id === shell.id)) {
+					const merged: DetectionGroup[] = [...detectionGroups, shell];
+					if (!detection) {
+						detection = {
+							...shell,
+							grouped: false,
+							totalGroups: merged.length,
+							selectedGroupId: shell.id,
+							groups: merged
+						};
+					} else {
+						detection = { ...detection, groups: merged, totalGroups: merged.length };
+					}
+					groupReviewState = {
+						...groupReviewState,
+						[shell.id]: createInitialGroupState(shell)
+					};
+				}
+				unmatchedOrigins = {
+					...unmatchedOrigins,
+					[shell.id]: { hash: item.hash, progress: item.progress, inRoot: true }
+				};
+			}
+
+			const firstPending =
+				detectionGroups.find((group) => {
+					const st = groupReviewState[group.id];
+					return st && !st.selectedMatch;
+				}) ?? detectionGroups[0];
+			if (firstPending) {
+				switchGroup(firstPending.id);
+				step = 2;
+			}
+		} catch (error) {
+			toasts.error(error instanceof Error ? error.message : 'Failed to load unmatched downloads');
+		}
+	}
+
 	async function runDetection(paths?: string[]) {
 		const mediaTypeHint = preferredMediaType !== 'auto' ? preferredMediaType : undefined;
 
@@ -2014,6 +2214,7 @@
 					isAnime,
 					confidence: 0,
 					inLibrary: Boolean(status?.inLibrary),
+					hasFile: Boolean(status?.hasFile),
 					libraryId: status?.libraryId as string | undefined
 				} satisfies MatchResult;
 			});
@@ -2116,6 +2317,9 @@
 		importedGroupLibraryIds = {};
 		skippedGroupIds = [];
 		groupReviewState = {};
+		unmatchedOrigins = {};
+		unmatchedReturnUrl = null;
+		unmatchedPrefillDone = false;
 		selectedRootFolder = '';
 		detectedGroupQuery = '';
 		detectedGroupFilter = 'pending';
@@ -2130,6 +2334,110 @@
 			tmdbSearchDebounce = null;
 		}
 		void browse(defaultImportFolder ?? '/');
+	}
+
+	/**
+	 * Record unmatched tracking for a group whose import just landed.
+	 * No-op for non-prefill groups. Failures stay visible: files in the
+	 * library, client row still unmatched.
+	 */
+	async function trackUnmatchedGroup(groupId: string) {
+		const origin = unmatchedOrigins[groupId];
+		const state = groupReviewState[groupId];
+		const match = state?.selectedMatch;
+		if (!origin || !match) return;
+		const group = detectionGroups.find((item) => item.id === groupId);
+		const isSingleEpisode =
+			state.selectedMediaType === 'tv' && (!group || group.detectedFileCount <= 1);
+		try {
+			const tracked = await trackUnmatched([
+				{
+					hash: origin.hash,
+					mediaType: state.selectedMediaType,
+					tmdbId: match.tmdbId,
+					seasonNumber: state.selectedMediaType === 'tv' ? state.seasonNumber : null,
+					episodeNumber: isSingleEpisode ? state.episodeNumber : null
+				}
+			]);
+			if (tracked.skipped.length > 0) {
+				toasts.warning(
+					`Imported but not tracked: ${tracked.skipped.map((s) => s.reason).join(', ')}`
+				);
+			}
+		} catch {
+			toasts.warning('Imported but not tracked — the download is still unmatched');
+		}
+	}
+
+	/**
+	 * Enroll the active unmatched in-root group for monitor-driven import
+	 * (or link it now when the library already holds the file and the
+	 * download is complete). Marks the group imported and moves on, like
+	 * the single-import flow.
+	 */
+	async function enrollUnmatchedFlow() {
+		if (!activeGroup || !selectedMatch || !selectedGroupId) return;
+		const origin = unmatchedOrigins[selectedGroupId];
+		if (!origin) return;
+		persistActiveGroupState();
+		executingImport = true;
+		try {
+			const result = await enrollUnmatched([
+				{
+					hash: origin.hash,
+					mediaType: selectedMediaType,
+					tmdbId: selectedMatch.tmdbId,
+					seasonNumber: selectedMediaType === 'tv' ? seasonNumber : null,
+					episodeNumber: selectedMediaType === 'tv' && !isBatchTvImport ? episodeNumber : null,
+					rootFolderId: selectedMatch.inLibrary ? null : selectedRootFolder || null
+				}
+			]);
+			if (result.enrolled > 0) {
+				toasts.success(m.activity_unmatched_enrolledToast());
+				markGroupImported(selectedGroupId);
+				continueWithNextDetected();
+			} else {
+				toasts.warning(
+					`Enroll skipped: ${result.skipped.map((s) => s.reason).join(', ') || 'unknown'}`
+				);
+			}
+		} catch (error) {
+			toasts.error(error instanceof Error ? error.message : 'Enroll failed');
+		} finally {
+			executingImport = false;
+		}
+	}
+
+	async function linkNowUnmatchedFlow() {
+		if (!activeGroup || !selectedMatch || !selectedGroupId) return;
+		const origin = unmatchedOrigins[selectedGroupId];
+		if (!origin) return;
+		persistActiveGroupState();
+		executingImport = true;
+		try {
+			const result = await trackUnmatched([
+				{
+					hash: origin.hash,
+					mediaType: selectedMediaType,
+					tmdbId: selectedMatch.tmdbId,
+					seasonNumber: selectedMediaType === 'tv' ? seasonNumber : null,
+					episodeNumber: selectedMediaType === 'tv' && !isBatchTvImport ? episodeNumber : null
+				}
+			]);
+			if (result.tracked > 0) {
+				toasts.success(m.activity_unmatched_attachedToast({ count: result.tracked }));
+				markGroupImported(selectedGroupId);
+				continueWithNextDetected();
+			} else {
+				toasts.warning(
+					`Link skipped: ${result.skipped.map((s) => s.reason).join(', ') || 'unknown'}`
+				);
+			}
+		} catch (error) {
+			toasts.error(error instanceof Error ? error.message : 'Link failed');
+		} finally {
+			executingImport = false;
+		}
 	}
 
 	async function executeImportFlow() {
@@ -2152,6 +2460,7 @@
 			bulkImportSummary = null;
 			if (selectedGroupId) {
 				markGroupImported(selectedGroupId);
+				await trackUnmatchedGroup(selectedGroupId);
 			}
 			if (isDirectLibraryImportContext && originLibraryLink) {
 				toasts.success(m.toast_library_import_importComplete());
@@ -2240,6 +2549,7 @@
 						toasts.success(m.toast_library_import_importComplete());
 						if (groupId && groupId === selectedGroupId) {
 							markGroupImported(groupId);
+							await trackUnmatchedGroup(groupId);
 							const libraryId = job.metadata?.result?.libraryId;
 							if (libraryId) {
 								importedGroupLibraryIds = { ...importedGroupLibraryIds, [groupId]: libraryId };
@@ -2275,6 +2585,7 @@
 		const groupId = groupIdMap[row.metadata?.groupName ?? ''];
 		if (!groupId) return;
 		markGroupImported(groupId);
+		void trackUnmatchedGroup(groupId);
 		const libraryId = row.metadata?.result?.libraryId;
 		if (libraryId) {
 			importedGroupLibraryIds = { ...importedGroupLibraryIds, [groupId]: libraryId };
@@ -2284,6 +2595,10 @@
 	/** Shared completion handling for both the SSE-driven (foreground) and
 	 * poll-driven (background) bulk import paths. */
 	function finalizeBulkOutcome(imported: number, failed: number, errors: string[]) {
+		imported += pendingDirectDone;
+		errors = [...pendingDirectErrors, ...errors];
+		pendingDirectDone = 0;
+		pendingDirectErrors = [];
 		executeResult = null;
 		bulkImportSummary = { importedGroups: imported, failedGroups: failed };
 
@@ -2391,6 +2706,93 @@
 		}, 1500);
 	}
 
+	/**
+	 * Bulk Step-3 dispatch for unmatched in-root groups: link when the
+	 * library already holds the complete file, enroll otherwise (with the
+	 * section destination for new matches). Returns true when the group is
+	 * handled; errors accumulate in `errors` for the summary.
+	 */
+	async function dispatchUnmatchedInRootBulk(
+		group: DetectionGroup,
+		errors: string[]
+	): Promise<boolean> {
+		const origin = unmatchedOrigins[group.id];
+		const state = groupReviewState[group.id];
+		const match = state?.selectedMatch;
+		if (!origin || !match) return false;
+		const seasonNumber = state.selectedMediaType === 'tv' ? state.seasonNumber : null;
+		const episodeNumber =
+			state.selectedMediaType === 'tv' && group.detectedFileCount <= 1 ? state.episodeNumber : null;
+		const action = resolveUnmatchedGroupAction(group.id);
+		if (!action) return false;
+		try {
+			if (action === 'link') {
+				const result = await trackUnmatched([
+					{
+						hash: origin.hash,
+						mediaType: state.selectedMediaType,
+						tmdbId: match.tmdbId,
+						seasonNumber,
+						episodeNumber
+					}
+				]);
+				if (result.tracked === 0) {
+					errors.push(
+						`${group.displayName}: ${result.skipped.map((s) => s.reason).join(', ') || 'skipped'}`
+					);
+					return false;
+				}
+			} else {
+				let rootFolderId: string | null = null;
+				if (!match.inLibrary) {
+					rootFolderId =
+						getBulkSectionDestinationForGroup(group.id) ??
+						getRecommendedDestinationLibraryId(
+							getAvailableDestinationLibrariesForType(state.selectedMediaType, match),
+							{ preferAnime: match.isAnime === true }
+						) ??
+						null;
+					if (!rootFolderId) {
+						errors.push(`${group.displayName}: no destination library`);
+						return false;
+					}
+				}
+				const result = await enrollUnmatched([
+					{
+						hash: origin.hash,
+						mediaType: state.selectedMediaType,
+						tmdbId: match.tmdbId,
+						seasonNumber,
+						episodeNumber,
+						rootFolderId
+					}
+				]);
+				if (result.enrolled === 0) {
+					errors.push(
+						`${group.displayName}: ${result.skipped.map((s) => s.reason).join(', ') || 'skipped'}`
+					);
+					return false;
+				}
+			}
+			markGroupImported(group.id);
+			return true;
+		} catch (error) {
+			errors.push(`${group.displayName}: ${error instanceof Error ? error.message : 'failed'}`);
+			return false;
+		}
+	}
+
+	function getBulkSectionDestinationForGroup(groupId: string): string | null {
+		for (const section of importSelectionSections) {
+			const inItems = section.items.some((g) => g.id === groupId);
+			const inSeasons = (section.seasonSections ?? []).some((s) =>
+				s.items.some((g) => g.id === groupId)
+			);
+			if (inItems || inSeasons) return bulkDestinationBySectionId[section.id] ?? null;
+		}
+		return null;
+	}
+
 	async function executeBulkImportFlow() {
 		if (selectedImportGroupCount === 0) {
 			toasts.warning(m.toast_library_import_noSelectedItems());
@@ -2406,11 +2808,19 @@
 
 		const jobs: BulkImportJob[] = [];
 		const groupIdMap: Record<string, string> = {};
+		let directDone = 0;
+		const directErrors: string[] = [];
 
 		for (const group of detectionGroups) {
 			if (importedGroupIds.includes(group.id)) continue;
 			if (skippedGroupIds.includes(group.id)) continue;
 			if (!canImportGroup(group)) continue;
+			// In-root unmatched sources cannot execute here (managed-root
+			// guard): link or enroll them directly instead of bulk jobs.
+			if (unmatchedOrigins[group.id]?.inRoot) {
+				if (await dispatchUnmatchedInRootBulk(group, directErrors)) directDone++;
+				continue;
+			}
 
 			try {
 				const payload = buildImportPayload(group);
@@ -2428,10 +2838,20 @@
 		}
 
 		if (jobs.length === 0) {
-			toasts.warning(m.toast_library_import_noSelectedItems());
+			if (directDone > 0) {
+				finalizeBulkOutcome(directDone, 0, directErrors);
+			} else {
+				toasts.warning(m.toast_library_import_noSelectedItems());
+			}
 			return;
 		}
 
+		pendingDirectDone = 0;
+		pendingDirectErrors = [];
+
+		// Note: direct dispatch above already marked its groups imported;
+		// those marks stand even if the bulk submit below aborts, since the
+		// link/enroll calls themselves succeeded.
 		if (jobs.length > MAX_BULK_IMPORT_JOBS) {
 			toasts.error(m.toast_library_import_tooManyItems());
 			return;
@@ -2444,6 +2864,8 @@
 		try {
 			const response = await bulkImport(jobs);
 			const data = response.data as { parentJobId: string; totalGroups: number };
+			pendingDirectDone = directDone;
+			pendingDirectErrors = directErrors;
 
 			if (backgroundImport) {
 				toasts.info(m.library_import_backgroundStarted());
@@ -2572,6 +2994,7 @@
 					{formatMediaTypeLabel}
 					{canImportGroup}
 					getGroupSelectedMatch={(group) => getGroupState(group).selectedMatch}
+					getGroupActionLabel={getUnmatchedGroupAction}
 					{hasUnknownSeasonItems}
 					{getSectionSeasonOverride}
 					{getSkippableSeasonGroups}
@@ -2657,6 +3080,7 @@
 			{skippedGroupCount}
 			{executingImport}
 			canImport={canImportGroup}
+			getGroupActionLabel={getUnmatchedGroupAction}
 			{getEffectiveMediaType}
 			{getGroupEpisodeInfo}
 			{lockedMediaType}
@@ -2702,7 +3126,87 @@
 		{/if}
 	{/if}
 
-	{#if step === 3 && !isMultiGroupReview && activeGroup && selectedMatch}
+	{#if step === 3 && activeUnmatchedInRoot && selectedMatch && !isMultiGroupReview}
+		{@const enrollMatch = selectedMatch}
+		{@const linkNow = activeGroup ? resolveUnmatchedGroupAction(activeGroup.id) === 'link' : false}
+		<div class="rounded-xl border border-base-300 bg-base-100 p-4 sm:p-5">
+			<h2 class="text-lg font-semibold">{m.activity_unmatched_enrollHeading()}</h2>
+			{#if linkNow}
+				<p class="mt-1 text-sm text-base-content/70">
+					{m.activity_unmatched_linkNowBody({
+						title: enrollMatch.title,
+						year: enrollMatch.year ?? '?'
+					})}
+				</p>
+			{:else if enrollMatch.inLibrary}
+				<p class="mt-1 text-sm text-base-content/70">
+					{m.activity_unmatched_enrollExistingBody()}
+				</p>
+			{:else}
+				<p class="mt-1 text-sm text-base-content/70">
+					{m.activity_unmatched_enrollBody({
+						title: enrollMatch.title,
+						year: enrollMatch.year ?? '?'
+					})}
+				</p>
+			{/if}
+			{#if selectedMediaType === 'tv'}
+				<p class="mt-1 text-sm text-base-content/70">
+					{m.activity_unmatched_enrollSeason({ season: seasonNumber })}
+				</p>
+			{/if}
+			{#if !enrollMatch.inLibrary}
+				{#if destinationLibrariesForType.length === 0 && !loadingRootFolders}
+					<div class="mt-3 alert text-sm alert-warning">
+						<span>
+							{m.activity_unmatched_noDestination({
+								type: selectedMediaType === 'tv' ? 'TV' : 'Movie'
+							})}
+							<a class="link" href="/settings/library/root-folders"
+								>{m.activity_unmatched_noDestinationLink()}</a
+							>
+						</span>
+					</div>
+				{:else}
+					<div class="mt-3">
+						<label class="mb-1 block text-sm font-medium" for="unmatched-enroll-root">
+							{m.activity_unmatched_enrollNewDest()}
+						</label>
+						<select
+							id="unmatched-enroll-root"
+							class="select-bordered select w-full select-sm"
+							bind:value={selectedRootFolder}
+							onchange={persistActiveGroupState}
+							disabled={loadingRootFolders}
+						>
+							{#each destinationLibrariesForType as lib (lib.id)}
+								<option value={lib.id}>
+									{lib.name}{lib.defaultRootFolderPath ? ` — ${lib.defaultRootFolderPath}` : ''}
+								</option>
+							{/each}
+						</select>
+					</div>
+				{/if}
+			{/if}
+			<div class="mt-4 flex justify-end gap-2">
+				<button class="btn btn-ghost btn-sm" disabled={executingImport} onclick={() => goToStep(2)}>
+					{m.action_back()}
+				</button>
+				<button
+					class="btn btn-primary btn-sm"
+					disabled={executingImport || (!linkNow && !enrollMatch.inLibrary && !selectedRootFolder)}
+					onclick={() => void (linkNow ? linkNowUnmatchedFlow() : enrollUnmatchedFlow())}
+				>
+					{#if executingImport}
+						<Loader2 class="h-4 w-4 animate-spin" />
+					{/if}
+					{linkNow ? m.activity_unmatched_linkNow() : m.activity_unmatched_enrollAction()}
+				</button>
+			</div>
+		</div>
+	{/if}
+
+	{#if step === 3 && !isMultiGroupReview && activeGroup && selectedMatch && !activeUnmatchedInRoot}
 		<Step3SingleImport
 			{activeGroup}
 			{selectedMatch}
@@ -2746,6 +3250,20 @@
 			onReset={resetWizard}
 			onContinueWithNext={continueWithNextDetected}
 		/>
+		{#if unmatchedReturnUrl}
+			{@const returnUrl = unmatchedReturnUrl}
+			<div class="mt-4 flex justify-end">
+				<button
+					class="btn btn-ghost btn-sm"
+					onclick={() => {
+						bypassNavigationGuard = true;
+						void goto(returnUrl);
+					}}
+				>
+					{m.activity_unmatched_backToActivity()}
+				</button>
+			</div>
+		{/if}
 	{/if}
 </div>
 

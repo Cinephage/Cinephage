@@ -17,6 +17,32 @@ export interface RelinkOrphansResponse {
 	details: string[];
 }
 
+/** One unmatched client download from GET /api/queue/unmatched. */
+export interface UnmatchedDownloadItem {
+	hash: string;
+	name: string;
+	size: number;
+	status: string;
+	progress: number;
+	category?: string;
+	savePath: string;
+	clientId: string;
+	clientName: string;
+	attachable: {
+		mediaType: 'movie' | 'tv';
+		tmdbId: number;
+		title: string;
+	} | null;
+}
+
+/** Response of GET /api/queue/unmatched. */
+export interface QueueUnmatchedListResponse {
+	items: UnmatchedDownloadItem[];
+	total: number;
+	page: number;
+	limit: number;
+}
+
 /** Response of POST /api/queue/clear-failed. */
 export interface ClearFailedResponse {
 	dryRun: boolean;
@@ -93,6 +119,79 @@ export async function refreshQueue(): Promise<ApiResponse> {
 
 export async function relinkOrphans(): Promise<ApiResponse<RelinkOrphansResponse>> {
 	return apiPost<RelinkOrphansResponse>('/api/queue/relink-orphans');
+}
+
+export async function getUnmatched(params?: {
+	clientId?: string;
+	page?: number;
+	limit?: number;
+}): Promise<ApiResponse<QueueUnmatchedListResponse>> {
+	const query: Record<string, string> = {};
+	if (params?.clientId) query.clientId = params.clientId;
+	if (params?.page !== undefined) query.page = String(params.page);
+	if (params?.limit !== undefined) query.limit = String(params.limit);
+	return apiGet<QueueUnmatchedListResponse>(`/api/queue/unmatched${buildQuery(query)}`);
+}
+
+export interface UnmatchedResolveResponse {
+	resolved: {
+		clientId: string;
+		hash: string;
+		name: string;
+		size: number;
+		progress: number;
+		localPath: string | null;
+		insideManagedRoot: boolean;
+		searchHint: string;
+	}[];
+	missing: { clientId: string; hash: string; reason: string }[];
+	alreadyTracked: { clientId: string; hash: string }[];
+}
+
+export async function resolveUnmatched(
+	entries: { clientId: string; hash: string }[]
+): Promise<ApiResponse<UnmatchedResolveResponse>> {
+	const query = entries.map((e) => `${e.clientId}:${e.hash}`).join(',');
+	return apiGet<UnmatchedResolveResponse>(
+		`/api/queue/unmatched/resolve${buildQuery({ entries: query })}`
+	);
+}
+
+export interface TrackUnmatchedResponse {
+	tracked: number;
+	skipped: { hash: string; reason: string }[];
+	details: { hash: string; queueId?: string; reason?: string }[];
+}
+
+export function trackUnmatched(
+	pairs: {
+		hash: string;
+		mediaType: 'movie' | 'tv';
+		tmdbId: number;
+		seasonNumber?: number | null;
+		episodeNumber?: number | null;
+	}[]
+): Promise<ApiResponse<TrackUnmatchedResponse>> {
+	return apiPost<TrackUnmatchedResponse>('/api/queue/unmatched/track', { pairs });
+}
+
+export interface EnrollUnmatchedResponse {
+	enrolled: number;
+	skipped: { hash: string; reason: string }[];
+	details: { hash: string; queueId?: string; reason?: string }[];
+}
+
+export function enrollUnmatched(
+	pairs: {
+		hash: string;
+		mediaType: 'movie' | 'tv';
+		tmdbId: number;
+		seasonNumber?: number | null;
+		episodeNumber?: number | null;
+		rootFolderId?: string | null;
+	}[]
+): Promise<ApiResponse<EnrollUnmatchedResponse>> {
+	return apiPost<EnrollUnmatchedResponse>('/api/queue/unmatched/enroll', { pairs });
 }
 
 export async function clearFailedQueue(): Promise<ApiResponse<ClearFailedResponse>> {
