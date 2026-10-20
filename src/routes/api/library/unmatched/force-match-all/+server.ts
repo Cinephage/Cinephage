@@ -54,10 +54,13 @@ export const POST: RequestHandler = async (event) => {
 					{ fileId: file.id, tmdbId: top.tmdbId, confidence: top.confidence },
 					'[ForceMatchAll] Force-matching file to top candidate'
 				);
+				// Deliberate action: retire a displaced old file instead of
+				// leaving a duplicate when the generated filename differs (#627).
 				await mediaMatcherService.acceptMatch(
 					file.id,
 					top.tmdbId,
-					file.mediaType as 'movie' | 'tv'
+					file.mediaType as 'movie' | 'tv',
+					{ allowReplace: true }
 				);
 				matched++;
 				matchLogger.info(

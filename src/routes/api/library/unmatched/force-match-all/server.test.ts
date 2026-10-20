@@ -134,7 +134,12 @@ describe('Force Match All API', () => {
 		const { data } = await postForceMatch({ minScore: 0.5 });
 		expect((data as any).data.eligible).toBe(1);
 		expect((data as any).data.matched).toBe(1);
-		expect(mockAcceptMatch).toHaveBeenCalledWith(expect.any(String), 400, 'movie');
+		// Force Match All is a deliberate action: it now opts into the
+		// replacement policy so a differently-named re-match doesn't leave a
+		// duplicate file behind (issue #627).
+		expect(mockAcceptMatch).toHaveBeenCalledWith(expect.any(String), 400, 'movie', {
+			allowReplace: true
+		});
 	});
 
 	it('happy path: two eligible files → acceptMatch called twice, matched: 2', async () => {

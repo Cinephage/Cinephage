@@ -47,6 +47,14 @@ import { getDownloadClientManager } from '#lib/server/downloadClients/DownloadCl
 import { acquisitionService } from '#lib/server/acquisition/AcquisitionService.js';
 import { RenamePreviewService } from './naming/RenamePreviewService.js';
 import { getSidecarSettings } from '#lib/server/library/sidecar/sidecarSettings.js';
+import { resolveMovieMultiQuality } from '#lib/server/quality/movie-buckets.js';
+import {
+	computeMovieReplacement,
+	computeEpisodeReplacement
+} from '#lib/server/downloadClients/import/replacement.js';
+import { deletePhysicalFile } from '#lib/server/downloadClients/import/FileTransfer.js';
+import { getFileManagementSettings } from '#lib/server/settings/file-management.js';
+import type { Resolution } from '#lib/server/indexers/parser/types.js';
 import {
 	buildMovieNfo,
 	buildSeriesNfo,
@@ -804,8 +812,10 @@ export class MediaMatcherService {
 	async acceptMatch(
 		unmatchedFileId: string,
 		tmdbId: number,
-		mediaType: 'movie' | 'tv'
+		mediaType: 'movie' | 'tv',
+		options?: { allowReplace?: boolean }
 	): Promise<void> {
+		const allowReplace = options?.allowReplace ?? false;
 		const [file] = await db
 			.select()
 			.from(unmatchedFiles)
@@ -918,9 +928,9 @@ export class MediaMatcherService {
 		const mediaInfo = await mediaInfoService.extractMediaInfo(file.path, { allowStrmProbe });
 
 		if (mediaType === 'movie') {
-			await this.createMovieEntry(file, tmdbId, rootFolder, mediaInfo);
+			await this.createMovieEntry(file, tmdbId, rootFolder, mediaInfo, allowReplace);
 		} else {
-			await this.createSeriesEntry(file, tmdbId, rootFolder, mediaInfo);
+			await this.createSeriesEntry(file, tmdbId, rootFolder, mediaInfo, allowReplace);
 		}
 
 		// Remove from unmatched
@@ -1014,7 +1024,8 @@ export class MediaMatcherService {
 		file: typeof unmatchedFiles.$inferSelect,
 		tmdbId: number,
 		rootFolder: typeof rootFolders.$inferSelect,
-		mediaInfo: Awaited<ReturnType<typeof mediaInfoService.extractMediaInfo>>
+		mediaInfo: Awaited<ReturnType<typeof mediaInfoService.extractMediaInfo>>,
+		allowReplace: boolean
 	): Promise<void> {
 		// Fetch movie details and external IDs from TMDB
 		const [tmdbMovie, externalIds] = await Promise.all([
@@ -1132,7 +1143,7 @@ export class MediaMatcherService {
 		const parsedQuality = parseRelease(parseableFilename || originalFilename);
 
 		// Create movie file entry with proper sceneName, releaseGroup, and quality data
-		await db
+		const [insertedFile] = await db
 			.insert(movieFiles)
 			.values({
 				movieId,
@@ -1149,7 +1160,26 @@ export class MediaMatcherService {
 					hdr: parsedQuality.hdr ?? undefined
 				}
 			})
-			.onConflictDoNothing();
+			.onConflictDoNothing()
+			.returning({ id: movieFiles.id });
+
+		let newFileId = insertedFile?.id;
+		if (!newFileId) {
+			const [raced] = await db
+				.select({ id: movieFiles.id })
+				.from(movieFiles)
+				.where(and(eq(movieFiles.movieId, movieId), eq(movieFiles.relativePath, fileName)))
+				.limit(1);
+			newFileId = raced?.id;
+		}
+
+		// Deliberate (manual-match) links apply the shared replacement policy:
+		// a re-match whose generated filename differs from the existing file's
+		// no longer leaves both on disk (issue #627). Scan auto-match passes
+		// allowReplace=false and stays purely additive.
+		if (newFileId) {
+			await this.retireReplacedMovieFiles(movieId, newFileId, parsedQuality.resolution, allowReplace);
+		}
 
 		// Optional sidecar files (.nfo + poster/fanart) - mirrors the
 		// automatic download-client import path in ImportService.ts.
@@ -1211,13 +1241,140 @@ export class MediaMatcherService {
 	}
 
 	/**
+	 * Retire movie files displaced by a deliberate (re-)match (issue #627).
+	 * `retire: allowReplace` makes computeMovieReplacement a no-op when the
+	 * match wasn't deliberate (scan auto-match), so this is always safe to call.
+	 */
+	private async retireReplacedMovieFiles(
+		movieId: string,
+		keepFileId: string,
+		newResolution: Resolution | null | undefined,
+		allowReplace: boolean
+	): Promise<void> {
+		const currentFiles = await db.select().from(movieFiles).where(eq(movieFiles.movieId, movieId));
+		const [movieRow] = await db
+			.select({ path: movies.path, desiredQualities: movies.desiredQualities, scoringProfileId: movies.scoringProfileId })
+			.from(movies)
+			.where(eq(movies.id, movieId));
+		if (!movieRow) return;
+
+		const { multiQuality } = await resolveMovieMultiQuality(
+			movieRow.desiredQualities,
+			movieRow.scoringProfileId
+		);
+		const replaceIds = new Set(
+			computeMovieReplacement({
+				existingFiles: currentFiles,
+				newResolution: newResolution ?? undefined,
+				multiQuality,
+				retire: allowReplace,
+				keepFileIds: [keepFileId]
+			})
+		);
+		if (replaceIds.size === 0) return;
+
+		const rootFolder = await this.getRootFolderForMovie(movieId);
+		if (!rootFolder) return;
+		const { recycleEnabled } = await getFileManagementSettings();
+
+		for (const oldFile of currentFiles) {
+			if (!replaceIds.has(oldFile.id)) continue;
+			const oldFilePath = join(rootFolder.path, movieRow.path, oldFile.relativePath);
+			try {
+				await deletePhysicalFile(oldFilePath, recycleEnabled, rootFolder.path);
+			} catch (err) {
+				logger.warn(
+					{ movieId, fileId: oldFile.id, err: err instanceof Error ? err.message : String(err) },
+					'[MediaMatcher] Failed to delete displaced movie file (issue #627)'
+				);
+				continue;
+			}
+			await db.delete(movieFiles).where(eq(movieFiles.id, oldFile.id));
+			logger.info(
+				{ movieId, fileId: oldFile.id, relativePath: oldFile.relativePath },
+				'[MediaMatcher] Retired displaced movie file after manual (re-)match'
+			);
+		}
+	}
+
+	/**
+	 * Retire episode files displaced by a deliberate (re-)match (issue #627),
+	 * following the same coverage rule ImportService uses: a multi-episode
+	 * pack only retires when the incoming file covers every episode it held.
+	 * No-op when `allowReplace` is false (scan auto-match stays additive -
+	 * computeEpisodeReplacement has no retire flag of its own to delegate to).
+	 */
+	private async retireReplacedEpisodeFiles(
+		seriesId: string,
+		incomingEpisodeIds: string[],
+		keepFileId: string | undefined,
+		rootFolder: typeof rootFolders.$inferSelect,
+		allowReplace: boolean
+	): Promise<void> {
+		if (!allowReplace || !keepFileId) return;
+
+		const currentFiles = await db
+			.select()
+			.from(episodeFiles)
+			.where(eq(episodeFiles.seriesId, seriesId));
+		const [seriesRow] = await db.select({ path: series.path }).from(series).where(eq(series.id, seriesId));
+		if (!seriesRow) return;
+
+		const replaceIds = new Set(
+			computeEpisodeReplacement({
+				existingFiles: currentFiles,
+				incomingEpisodeIds,
+				keepFileIds: [keepFileId],
+				retireStrmPlaceholders: true
+			})
+		);
+		if (replaceIds.size === 0) return;
+
+		const { recycleEnabled } = await getFileManagementSettings();
+		for (const oldFile of currentFiles) {
+			if (!replaceIds.has(oldFile.id)) continue;
+			const oldFilePath = join(rootFolder.path, seriesRow.path, oldFile.relativePath);
+			try {
+				await deletePhysicalFile(oldFilePath, recycleEnabled, rootFolder.path);
+			} catch (err) {
+				logger.warn(
+					{ seriesId, fileId: oldFile.id, err: err instanceof Error ? err.message : String(err) },
+					'[MediaMatcher] Failed to delete displaced episode file (issue #627)'
+				);
+				continue;
+			}
+			await db.delete(episodeFiles).where(eq(episodeFiles.id, oldFile.id));
+			logger.info(
+				{ seriesId, fileId: oldFile.id, relativePath: oldFile.relativePath },
+				'[MediaMatcher] Retired displaced episode file after manual (re-)match'
+			);
+		}
+	}
+
+	private async getRootFolderForMovie(
+		movieId: string
+	): Promise<typeof rootFolders.$inferSelect | undefined> {
+		const [movieRow] = await db
+			.select({ rootFolderId: movies.rootFolderId })
+			.from(movies)
+			.where(eq(movies.id, movieId));
+		if (!movieRow?.rootFolderId) return undefined;
+		const [rootFolder] = await db
+			.select()
+			.from(rootFolders)
+			.where(eq(rootFolders.id, movieRow.rootFolderId));
+		return rootFolder;
+	}
+
+	/**
 	 * Create a series/episode entry from an unmatched file
 	 */
 	private async createSeriesEntry(
 		file: typeof unmatchedFiles.$inferSelect,
 		tmdbId: number,
 		rootFolder: typeof rootFolders.$inferSelect,
-		mediaInfo: Awaited<ReturnType<typeof mediaInfoService.extractMediaInfo>>
+		mediaInfo: Awaited<ReturnType<typeof mediaInfoService.extractMediaInfo>>,
+		allowReplace: boolean
 	): Promise<void> {
 		// Fetch series details and external IDs from TMDB
 		const [tmdbSeries, externalIds] = await Promise.all([
@@ -1568,7 +1725,7 @@ export class MediaMatcherService {
 		const parsedQuality = parseRelease(parseableFilename || originalFilename);
 
 		// Create/update episode file entry with proper sceneName, releaseGroup, and quality data
-		await this.upsertEpisodeFileByPath({
+		const newEpisodeFileId = await this.upsertEpisodeFileByPath({
 			seriesId,
 			seasonNumber,
 			episodeIds: allEpisodeIds,
@@ -1585,6 +1742,16 @@ export class MediaMatcherService {
 				hdr: parsedQuality.hdr ?? undefined
 			}
 		});
+
+		// Deliberate (manual-match) links retire files displaced by the
+		// coverage rule (issue #627). Scan auto-match passes allowReplace=false.
+		await this.retireReplacedEpisodeFiles(
+			seriesId,
+			allEpisodeIds,
+			newEpisodeFileId,
+			rootFolder,
+			allowReplace
+		);
 
 		// Optional sidecar files - mirrors the automatic download-client
 		// import path in ImportService.ts. TV has three independent levels (episode .nfo,

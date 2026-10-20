@@ -423,7 +423,9 @@ export class UnmatchedFileService {
 				{ fileId: file.id, filePath: file.path, tmdbId },
 				'[UnmatchedFileService] Manual movie match started'
 			);
-			await mediaMatcherService.acceptMatch(file.id, tmdbId, 'movie');
+			// Deliberate manual match: retire a displaced old file instead of
+			// leaving a duplicate when the generated filename differs (#627).
+			await mediaMatcherService.acceptMatch(file.id, tmdbId, 'movie', { allowReplace: true });
 			matchLogger.info(
 				{ fileId: file.id, tmdbId },
 				'[UnmatchedFileService] Manual movie match successful'
@@ -473,7 +475,9 @@ export class UnmatchedFileService {
 				.set({ parsedSeason: season, parsedEpisode: episode })
 				.where(eq(unmatchedFiles.id, file.id));
 
-			await mediaMatcherService.acceptMatch(file.id, tmdbId, 'tv');
+			// Deliberate manual match: retire files the coverage rule says
+			// this one displaces, instead of leaving a duplicate (#627).
+			await mediaMatcherService.acceptMatch(file.id, tmdbId, 'tv', { allowReplace: true });
 			matchLogger.info(
 				{ fileId: file.id, tmdbId, season, episode },
 				'[UnmatchedFileService] Manual episode match successful'
