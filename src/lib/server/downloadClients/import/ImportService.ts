@@ -33,6 +33,7 @@ import { downloadMonitor } from '../monitoring/DownloadMonitorService';
 import { resolveMovieMultiQuality } from '#lib/server/quality/movie-buckets.js';
 import { computeMovieReplacement, computeEpisodeReplacement } from './replacement.js';
 import { normalizeFilename } from '#lib/server/library/duplicates/DuplicateDetectionService.js';
+import { contentAlreadyPresent } from '#lib/server/library/content-identity.js';
 import type { Resolution } from '#lib/server/indexers/parser/types.js';
 import {
 	transferFileWithMode,
@@ -1281,13 +1282,25 @@ export class ImportService extends EventEmitter {
 			return result;
 		}
 		const destFileName = await this.buildMovieFileName(movie, mainFile.path, queueItem, mediaInfo);
-		const destPath = join(movieFolder, destFileName);
+		let destPath = join(movieFolder, destFileName);
 
 		// Check for existing file (upgrade scenario)
 		const existingFiles = await db
 			.select()
 			.from(movieFiles)
 			.where(eq(movieFiles.movieId, movie.id));
+
+		// Content-identity guard (#598): the library may already have this
+		// exact content under a different path/name (e.g. a re-grab, or an
+		// unmatched download enrolled against a title it's already in).
+		// Skip the physical transfer entirely and point the record at the
+		// file that's already there instead of writing a duplicate.
+		const duplicateOf = existingFiles.find((file) =>
+			contentAlreadyPresent(file, queueItem.infoHash, mainFile.size, mediaInfo)
+		);
+		if (duplicateOf) {
+			destPath = join(movieFolder, duplicateOf.relativePath);
+		}
 
 		// Grab-time upgrade flag is advisory only; the actual replacement is
 		// recomputed from current state after the transfer (below).
@@ -1304,100 +1317,121 @@ export class ImportService extends EventEmitter {
 			);
 		}
 
-		// Check minimum free space on the destination before transferring
-		const minFreeGb = importOptions.minimumFreeSpaceGb ?? 0;
-		if (minFreeGb > 0) {
-			const hasSpace = await hasSufficientDiskSpace(rootFolder.path, minFreeGb);
-			if (!hasSpace) {
-				const msg = `Insufficient disk space on destination: less than ${minFreeGb} GB free`;
-				result.error = msg;
-				result.failureStage = 'disk_space';
-				result.failureReason = 'insufficient_disk_space';
-				worker.log('error', msg);
-				await downloadMonitor.markFailed(queueItem.id, msg);
+		let transferResult: TransferResult;
+		if (duplicateOf) {
+			logger.info(
+				{ movieId: movie.id, queueId: queueItem.id, existingFileId: duplicateOf.id },
+				'Skipping transfer - identical content already in the library (#598)'
+			);
+			worker.log('info', `Already in library as ${basename(destPath)} - skipping transfer`);
+			transferResult = {
+				success: true,
+				sourcePath: mainFile.path,
+				destPath,
+				mode: 'skip-duplicate',
+				sizeBytes: duplicateOf.size ?? mainFile.size
+			};
+			worker.fileProcessed(basename(mainFile.path), true);
+			worker.setDestinationPath(destPath);
+		} else {
+			// Check minimum free space on the destination before transferring
+			const minFreeGb = importOptions.minimumFreeSpaceGb ?? 0;
+			if (minFreeGb > 0) {
+				const hasSpace = await hasSufficientDiskSpace(rootFolder.path, minFreeGb);
+				if (!hasSpace) {
+					const msg = `Insufficient disk space on destination: less than ${minFreeGb} GB free`;
+					result.error = msg;
+					result.failureStage = 'disk_space';
+					result.failureReason = 'insufficient_disk_space';
+					worker.log('error', msg);
+					await downloadMonitor.markFailed(queueItem.id, msg);
+					return result;
+				}
+			}
+
+			// Transfer the file FIRST (keep old file until new one is successfully imported)
+			// Use ImportMode.Auto to decide based on canMoveFiles:
+			// - Seeding torrents (canMoveFiles=false): Use hardlink/copy to preserve source
+			// - Usenet/completed (canMoveFiles=true): Use move for efficiency
+			worker.log('info', `Transferring file to: ${destPath} (canMoveFiles=${canMoveFiles})`);
+			const preserveSymlinks = rootFolder.preserveSymlinks ?? false;
+			transferResult = await transferFileWithMode(mainFile.path, destPath, {
+				importMode: importOptions.effectiveImportMode ?? ImportMode.Auto,
+				canMoveFiles,
+				preserveSymlinks,
+				preferHardlink: importOptions.preferHardlink ?? true
+			});
+
+			if (!transferResult.success) {
+				result.failedFiles.push({
+					success: false,
+					sourcePath: mainFile.path,
+					error: transferResult.error
+				});
+				result.error = `Failed to transfer file: ${transferResult.error}`;
+				result.failureStage = 'transfer';
+				result.failureReason = 'transfer_failed';
+				worker.fileProcessed(basename(mainFile.path), false, transferResult.error);
+				await downloadMonitor.markFailed(queueItem.id, result.error);
 				return result;
 			}
-		}
 
-		// Transfer the file FIRST (keep old file until new one is successfully imported)
-		// Use ImportMode.Auto to decide based on canMoveFiles:
-		// - Seeding torrents (canMoveFiles=false): Use hardlink/copy to preserve source
-		// - Usenet/completed (canMoveFiles=true): Use move for efficiency
-		worker.log('info', `Transferring file to: ${destPath} (canMoveFiles=${canMoveFiles})`);
-		const preserveSymlinks = rootFolder.preserveSymlinks ?? false;
-		const transferResult = await transferFileWithMode(mainFile.path, destPath, {
-			importMode: importOptions.effectiveImportMode ?? ImportMode.Auto,
-			canMoveFiles,
-			preserveSymlinks,
-			preferHardlink: importOptions.preferHardlink ?? true
-		});
-
-		if (!transferResult.success) {
-			result.failedFiles.push({
-				success: false,
-				sourcePath: mainFile.path,
-				error: transferResult.error
-			});
-			result.error = `Failed to transfer file: ${transferResult.error}`;
-			result.failureStage = 'transfer';
-			result.failureReason = 'transfer_failed';
-			worker.fileProcessed(basename(mainFile.path), false, transferResult.error);
-			await downloadMonitor.markFailed(queueItem.id, result.error);
-			return result;
-		}
-
-		worker.fileTransferred(
-			basename(mainFile.path),
-			transferResult.mode === 'symlink'
-				? 'symlink'
-				: transferResult.mode === 'hardlink'
-					? 'hardlink'
-					: transferResult.mode === 'move'
-						? 'move'
-						: 'copy'
-		);
-		warnIfHardlinkFellBackToCopy(
-			worker,
-			transferResult,
-			importOptions.preferHardlink,
-			mainFile.path,
-			destPath
-		);
-		worker.setDestinationPath(destPath);
-
-		if (importOptions.deleteEmptyFolders && transferResult.mode === 'move') {
-			await removeEmptyDirectories(dirname(mainFile.path), downloadPath);
-		}
-
-		if (transferResult.mode !== 'symlink') {
-			await applyFilePermissions(
-				destPath,
+			worker.fileTransferred(
+				basename(mainFile.path),
+				transferResult.mode === 'symlink'
+					? 'symlink'
+					: transferResult.mode === 'hardlink'
+						? 'hardlink'
+						: transferResult.mode === 'move'
+							? 'move'
+							: 'copy'
+			);
+			warnIfHardlinkFellBackToCopy(
+				worker,
+				transferResult,
+				importOptions.preferHardlink,
 				mainFile.path,
-				importOptions.preservePermissions ?? false,
-				importOptions.chmodFile ?? ''
+				destPath
 			);
-		}
+			worker.setDestinationPath(destPath);
 
-		if (importOptions.extraFileExtensions?.length) {
-			await copyExtraFiles(
-				dirname(mainFile.path),
-				dirname(destPath),
-				importOptions.extraFileExtensions,
-				transferResult.mode === 'move',
-				{
-					preservePermissions: importOptions.preservePermissions ?? false,
-					chmodFile: importOptions.chmodFile ?? ''
-				}
-			);
+			if (importOptions.deleteEmptyFolders && transferResult.mode === 'move') {
+				await removeEmptyDirectories(dirname(mainFile.path), downloadPath);
+			}
+
+			if (transferResult.mode !== 'symlink') {
+				await applyFilePermissions(
+					destPath,
+					mainFile.path,
+					importOptions.preservePermissions ?? false,
+					importOptions.chmodFile ?? ''
+				);
+			}
+
+			if (importOptions.extraFileExtensions?.length) {
+				await copyExtraFiles(
+					dirname(mainFile.path),
+					dirname(destPath),
+					importOptions.extraFileExtensions,
+					transferResult.mode === 'move',
+					{
+						preservePermissions: importOptions.preservePermissions ?? false,
+						chmodFile: importOptions.chmodFile ?? ''
+					}
+				);
+			}
 		}
 
 		const importedMetadata = this.buildImportedMetadata(queueItem, mainFile.path, mediaInfo);
 
-		// Create or update file record (deduplication)
-		const relativePath = destFileName;
+		// Create or update file record (deduplication). A content-identity
+		// match reuses the existing row's path, not the freshly computed name.
+		const relativePath = duplicateOf ? duplicateOf.relativePath : destFileName;
 
 		// Check if a file record already exists for this path (prevent duplicates)
-		const existingFileRecord = existingFiles.filter((file) => file.relativePath === relativePath);
+		const existingFileRecord = duplicateOf
+			? [duplicateOf]
+			: existingFiles.filter((file) => file.relativePath === relativePath);
 
 		const fileData = {
 			movieId: movie.id,
@@ -2105,6 +2139,15 @@ export class ImportService extends EventEmitter {
 		// See importMovie: an unreadable file is a failed file, never an import.
 		const probeFailure = this.getMediaProbeFailure(videoFile.path, mediaInfo);
 		if (probeFailure) return probeFailure;
+
+		// Check for existing files covering these episodes (upgrade scenario).
+		// Hoisted ahead of the transfer so the content-identity guard (#598)
+		// below can decide whether to skip it before anything touches disk.
+		const existingFiles = await db
+			.select()
+			.from(episodeFiles)
+			.where(eq(episodeFiles.seriesId, seriesData.id));
+
 		const destFileName = await this.buildEpisodeFileName(
 			seriesData,
 			seasonNum,
@@ -2116,7 +2159,7 @@ export class ImportService extends EventEmitter {
 			firstEpisode?.airDate ?? undefined,
 			mediaInfo
 		);
-		const relativePath = this.buildEpisodeRelativePath(
+		let relativePath = this.buildEpisodeRelativePath(
 			seriesData.seasonFolder ?? true,
 			seasonNum,
 			destFileName,
@@ -2129,84 +2172,106 @@ export class ImportService extends EventEmitter {
 				imdbId: seriesData.imdbId ?? undefined
 			}
 		);
-		const destPath = join(seriesFolder, relativePath);
+		let destPath = join(seriesFolder, relativePath);
 
-		// Ensure season folder exists
-		await ensureDirectory(dirname(destPath));
+		// Content-identity guard (#598): see importMovie for the full
+		// rationale. Reuse the existing row's path instead of transferring
+		// a byte-identical duplicate.
+		const duplicateOf = existingFiles.find((file) =>
+			contentAlreadyPresent(file, queueItem.infoHash, videoFile.size, mediaInfo)
+		);
+		if (duplicateOf) {
+			relativePath = duplicateOf.relativePath;
+			destPath = join(seriesFolder, relativePath);
+		}
 
-		// Transfer file using mode based on seeding state
-		const preserveSymlinks = rootFolder.preserveSymlinks ?? false;
-		const transferResult = await transferFileWithMode(videoFile.path, destPath, {
-			importMode: importOptions?.effectiveImportMode ?? ImportMode.Auto,
-			canMoveFiles,
-			preserveSymlinks,
-			preferHardlink: importOptions?.preferHardlink ?? true
-		});
-
-		if (!transferResult.success) {
-			return {
-				success: false,
+		let transferResult: TransferResult;
+		if (duplicateOf) {
+			logger.info(
+				{ seriesId: seriesData.id, queueId: queueItem.id, existingFileId: duplicateOf.id },
+				'Skipping transfer - identical content already in the library (#598)'
+			);
+			worker.log('info', `Already in library as ${basename(destPath)} - skipping transfer`);
+			transferResult = {
+				success: true,
 				sourcePath: videoFile.path,
-				error: transferResult.error
-			};
-		}
-
-		worker.fileTransferred(
-			basename(videoFile.path),
-			transferResult.mode === 'symlink'
-				? 'symlink'
-				: transferResult.mode === 'hardlink'
-					? 'hardlink'
-					: transferResult.mode === 'move'
-						? 'move'
-						: 'copy'
-		);
-		warnIfHardlinkFellBackToCopy(
-			worker,
-			transferResult,
-			importOptions?.preferHardlink,
-			videoFile.path,
-			destPath
-		);
-
-		if (importOptions?.deleteEmptyFolders && transferResult.mode === 'move') {
-			const downloadPath = queueItem.outputPath ?? queueItem.clientDownloadPath ?? '';
-			if (downloadPath) {
-				await removeEmptyDirectories(dirname(videoFile.path), downloadPath);
-			}
-		}
-
-		if (transferResult.mode !== 'symlink') {
-			await applyFilePermissions(
 				destPath,
-				videoFile.path,
-				importOptions?.preservePermissions ?? false,
-				importOptions?.chmodFile ?? ''
-			);
-		}
+				mode: 'skip-duplicate',
+				sizeBytes: duplicateOf.size ?? videoFile.size
+			};
+			worker.fileProcessed(basename(videoFile.path), true);
+		} else {
+			// Ensure season folder exists
+			await ensureDirectory(dirname(destPath));
 
-		if (importOptions?.extraFileExtensions?.length) {
-			await copyExtraFiles(
-				dirname(videoFile.path),
-				dirname(destPath),
-				importOptions.extraFileExtensions,
-				transferResult.mode === 'move',
-				{
-					preservePermissions: importOptions?.preservePermissions ?? false,
-					chmodFile: importOptions?.chmodFile ?? ''
-				}
+			// Transfer file using mode based on seeding state
+			const preserveSymlinks = rootFolder.preserveSymlinks ?? false;
+			transferResult = await transferFileWithMode(videoFile.path, destPath, {
+				importMode: importOptions?.effectiveImportMode ?? ImportMode.Auto,
+				canMoveFiles,
+				preserveSymlinks,
+				preferHardlink: importOptions?.preferHardlink ?? true
+			});
+
+			if (!transferResult.success) {
+				return {
+					success: false,
+					sourcePath: videoFile.path,
+					error: transferResult.error
+				};
+			}
+
+			worker.fileTransferred(
+				basename(videoFile.path),
+				transferResult.mode === 'symlink'
+					? 'symlink'
+					: transferResult.mode === 'hardlink'
+						? 'hardlink'
+						: transferResult.mode === 'move'
+							? 'move'
+							: 'copy'
 			);
+			warnIfHardlinkFellBackToCopy(
+				worker,
+				transferResult,
+				importOptions?.preferHardlink,
+				videoFile.path,
+				destPath
+			);
+
+			if (importOptions?.deleteEmptyFolders && transferResult.mode === 'move') {
+				const downloadPath = queueItem.outputPath ?? queueItem.clientDownloadPath ?? '';
+				if (downloadPath) {
+					await removeEmptyDirectories(dirname(videoFile.path), downloadPath);
+				}
+			}
+
+			if (transferResult.mode !== 'symlink') {
+				await applyFilePermissions(
+					destPath,
+					videoFile.path,
+					importOptions?.preservePermissions ?? false,
+					importOptions?.chmodFile ?? ''
+				);
+			}
+
+			if (importOptions?.extraFileExtensions?.length) {
+				await copyExtraFiles(
+					dirname(videoFile.path),
+					dirname(destPath),
+					importOptions.extraFileExtensions,
+					transferResult.mode === 'move',
+					{
+						preservePermissions: importOptions?.preservePermissions ?? false,
+						chmodFile: importOptions?.chmodFile ?? ''
+					}
+				);
+			}
 		}
 
 		const importedMetadata = this.buildImportedMetadata(queueItem, videoFile.path, mediaInfo);
 
 		const episodeIds = matchingEpisodes.map((ep) => ep.id);
-
-		// Check for existing files covering these episodes (upgrade scenario)
-		const existingFiles = await db
-			.select()
-			.from(episodeFiles)
-			.where(eq(episodeFiles.seriesId, seriesData.id));
 
 		// Check for existing files covering these episodes (upgrade scenario).
 		// Coverage rule (acquisition redesign): a multi-episode file is only
