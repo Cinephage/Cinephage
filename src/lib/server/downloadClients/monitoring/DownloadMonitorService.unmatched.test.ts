@@ -73,6 +73,22 @@ vi.mock('#lib/server/library/add/add-series.js', () => ({
 	addSeriesToLibrary: vi.fn()
 }));
 
+// listUnmatchedDownloads now computes a TMDB suggestion per unattached page
+// item - without this mock every existing test here would make a
+// real network call. Defaults to "nothing found"; suggestion-specific tests
+// override the return value.
+const tmdbSearchMovies = vi.fn().mockResolvedValue({ results: [] });
+const tmdbSearchTv = vi.fn().mockResolvedValue({ results: [] });
+vi.mock('#lib/server/tmdb.js', () => ({
+	tmdb: {
+		searchMovies: (...args: unknown[]) => tmdbSearchMovies(...args),
+		searchTv: (...args: unknown[]) => tmdbSearchTv(...args),
+		getMovie: vi.fn(),
+		getTVShow: vi.fn(),
+		findByExternalId: vi.fn().mockResolvedValue({ movie_results: [], tv_results: [] })
+	}
+}));
+
 const CLIENT_ID = randomUUID();
 const MOVIE_ID = randomUUID();
 const SERIES_ID = randomUUID();
@@ -136,6 +152,8 @@ beforeEach(async () => {
 	getDownloads.mockReset();
 	clientPaths.local = '/downloads';
 	clientPaths.remote = '/remote/downloads';
+	tmdbSearchMovies.mockReset().mockResolvedValue({ results: [] });
+	tmdbSearchTv.mockReset().mockResolvedValue({ results: [] });
 	vi.mocked(addMovieToLibrary).mockReset();
 	vi.mocked(addMovieToLibrary).mockImplementation(async (input) => {
 		await testDb.db.insert(movies).values({
@@ -251,7 +269,10 @@ describe('listUnmatchedDownloads', () => {
 			tmdbId: 42,
 			title: 'Test Movie'
 		});
-		expect('suggestion' in result.items[0]).toBe(false);
+		// Suggestion is skipped (left null, not computed) for items that
+		// already have a confirmed infohash attach - a probabilistic guess
+		// next to a sure match would just be noise.
+		expect(result.items[0].suggestion).toBeNull();
 		expect('held' in result.items[0]).toBe(false);
 	});
 
@@ -303,6 +324,78 @@ describe('listUnmatchedDownloads', () => {
 		expect(res.items.map((item) => item.hash)).toEqual([HASH_B]);
 		expect(res.total).toBe(1);
 		await rm(root, { recursive: true, force: true });
+	});
+
+	it('attaches a TMDB suggestion for a well-formed release name', async () => {
+		getDownloads.mockResolvedValue([makeDownload()]);
+		tmdbSearchMovies.mockResolvedValue({
+			results: [
+				{ id: 42, title: 'Test Movie', release_date: '2026-01-01', original_title: 'Test Movie' }
+			]
+		});
+
+		const result = await getDownloadMonitor().listUnmatchedDownloads();
+
+		expect(result.items[0].suggestion).toMatchObject({
+			mediaType: 'movie',
+			tmdbId: 42,
+			title: 'Test Movie',
+			year: 2026
+		});
+		expect(result.items[0].suggestion?.confidence).toBeGreaterThan(0);
+	});
+
+	it('hits TMDB once for two items sharing a parsed title on one page', async () => {
+		getDownloads.mockResolvedValue([
+			makeDownload({ hash: HASH_A, name: 'Test.Movie.2026.1080p.WEB-DL-GROUP' }),
+			makeDownload({ hash: HASH_B, name: 'Test.Movie.2026.2160p.BluRay-OTHERGROUP' })
+		]);
+		tmdbSearchMovies.mockResolvedValue({
+			results: [{ id: 42, title: 'Test Movie', release_date: '2026-01-01' }]
+		});
+
+		const result = await getDownloadMonitor().listUnmatchedDownloads();
+
+		expect(result.items).toHaveLength(2);
+		expect(result.items.every((item) => item.suggestion?.tmdbId === 42)).toBe(true);
+		expect(tmdbSearchMovies).toHaveBeenCalledTimes(1);
+	});
+
+	it('yields suggestion: null for an unparseable name without throwing', async () => {
+		getDownloads.mockResolvedValue([makeDownload({ name: '....' })]);
+
+		const result = await getDownloadMonitor().listUnmatchedDownloads();
+
+		expect(result.items).toHaveLength(1);
+		expect(result.items[0].suggestion).toBeNull();
+		expect(tmdbSearchMovies).not.toHaveBeenCalled();
+	});
+
+	it('search filters before total/pagination, not just the current page (issue #628)', async () => {
+		const downloads = Array.from({ length: 30 }, (_, i) =>
+			makeDownload({
+				hash: `${i}`.padStart(40, '0'),
+				name:
+					i === 27
+						? 'Needle.In.A.Haystack.2026.1080p.WEB-DL-GROUP'
+						: `Filler.${i}.2026.1080p.WEB-DL-GROUP`
+			})
+		);
+		getDownloads.mockResolvedValue(downloads);
+
+		// Unfiltered: 30 items, "Needle" sits on page 2 (limit 25).
+		const unfiltered = await getDownloadMonitor().listUnmatchedDownloads({ limit: 25 });
+		expect(unfiltered.total).toBe(30);
+
+		// Searching for it must find it and report a correct, filtered total -
+		// not silently miss it because it wasn't on the already-loaded page 1.
+		const filtered = await getDownloadMonitor().listUnmatchedDownloads({
+			limit: 25,
+			search: 'needle'
+		});
+		expect(filtered.total).toBe(1);
+		expect(filtered.items).toHaveLength(1);
+		expect(filtered.items[0].name).toBe('Needle.In.A.Haystack.2026.1080p.WEB-DL-GROUP');
 	});
 });
 describe('resolveUnmatchedEntries', () => {

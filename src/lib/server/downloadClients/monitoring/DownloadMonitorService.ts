@@ -30,6 +30,10 @@ import { joinCategoryPath, sanitizeCategorySegment } from '../core/client-utils.
 import { mapClientPathToLocal } from './PathMapping';
 import { resolveInfoHash } from '../utils/hashUtils';
 import { ReleaseParser } from '#lib/server/indexers/parser/ReleaseParser.js';
+import {
+	findSuggestedMatches,
+	type SuggestedMatch
+} from '#lib/server/library/suggested-matches.js';
 import { isPathInsideManagedRoot } from '#lib/server/filesystem/path-guard.js';
 import { isVideoFile } from '#lib/config/constants.js';
 import {
@@ -493,6 +497,13 @@ export interface UnmatchedDownload {
 		mediaType: 'movie' | 'tv';
 		tmdbId: number;
 		title: string;
+	} | null;
+	suggestion: {
+		mediaType: 'movie' | 'tv';
+		tmdbId: number;
+		title: string;
+		year?: number;
+		confidence: number;
 	} | null;
 }
 
@@ -3966,9 +3977,11 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 		clientId?: string;
 		page?: number;
 		limit?: number;
+		search?: string;
 	}): Promise<{ items: UnmatchedDownload[]; total: number; page: number; limit: number }> {
 		const page = Math.max(1, Math.floor(options?.page ?? 1));
 		const limit = Math.min(100, Math.max(1, Math.floor(options?.limit ?? 25)));
+		const search = options?.search?.trim().toLowerCase() || '';
 
 		const { byClient: clientDownloads } = await this.fetchClientDownloadIndex(
 			'listing',
@@ -3996,6 +4009,10 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 				// gate: still-downloading items list as live statuses.
 				if (!this.isManagedCategory(client, download)) continue;
 				if (!(await this.isAcceptableContent(client, download))) continue;
+				// Filter before total/slice (issue #628): otherwise search only
+				// ever sees whatever page happened to already be loaded, and
+				// total/pagination stay keyed to the unfiltered count.
+				if (search && !download.name.toLowerCase().includes(search)) continue;
 
 				unmatched.push({ client, download });
 			}
@@ -4048,6 +4065,39 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			}
 		}
 
+		// TMDB suggestions, skipped for items that already have a confirmed
+		// infohash attach - a probabilistic guess next to a sure match is just
+		// noise. Cache keyed by title+year+mediaType so a page of items
+		// sharing a title (season packs, a show's episodes) hits TMDB once.
+		const suggestionCache = new Map<string, SuggestedMatch[]>();
+		const suggestions = new Map<string, UnmatchedDownload['suggestion']>();
+		for (const { download } of pageItems) {
+			const hashLower = download.hash.toLowerCase();
+			if (attachMap.has(hashLower)) continue;
+
+			const parsed = releaseParser.parse(download.name);
+			if (!parsed.cleanTitle) continue;
+			const mediaType: 'movie' | 'tv' = parsed.episode ? 'tv' : 'movie';
+
+			const matches = await findSuggestedMatches(
+				[parsed.cleanTitle],
+				parsed.year,
+				mediaType,
+				download.name,
+				suggestionCache
+			);
+			const top = matches[0];
+			if (!top) continue;
+
+			suggestions.set(hashLower, {
+				mediaType: top.mediaType,
+				tmdbId: top.tmdbId,
+				title: top.title,
+				year: top.year,
+				confidence: top.confidence
+			});
+		}
+
 		const items: UnmatchedDownload[] = pageItems.map(({ client, download }) => ({
 			hash: download.hash,
 			name: download.name,
@@ -4058,7 +4108,8 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			savePath: download.savePath,
 			clientId: client.id,
 			clientName: client.name,
-			attachable: attachMap.get(download.hash.toLowerCase()) ?? null
+			attachable: attachMap.get(download.hash.toLowerCase()) ?? null,
+			suggestion: suggestions.get(download.hash.toLowerCase()) ?? null
 		}));
 
 		return { items, total, page, limit };

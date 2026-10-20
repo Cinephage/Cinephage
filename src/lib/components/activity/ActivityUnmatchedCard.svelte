@@ -5,7 +5,12 @@
 	import { Loader2, RefreshCw, Search, Download, Link2, Unlink } from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
-	import { getUnmatched, trackUnmatched, type UnmatchedDownloadItem } from '#lib/api/downloads.js';
+	import {
+		getUnmatched,
+		trackUnmatched,
+		enrollUnmatched,
+		type UnmatchedDownloadItem
+	} from '#lib/api/downloads.js';
 	import { ApiError } from '#lib/api/client.js';
 	import { formatBytes } from '#lib/utils/format.js';
 
@@ -16,6 +21,9 @@
 	let { downloadClients = [] }: Props = $props();
 
 	const PAGE_LIMIT = 25;
+	// Suggestions at or above this confidence are trusted enough to
+	// pre-check for bulk confirm.
+	const SUGGESTION_AUTO_SELECT_THRESHOLD = 0.8;
 
 	let items = $state<UnmatchedDownloadItem[]>([]);
 	let total = $state(0);
@@ -25,14 +33,9 @@
 	let clientId = $state('');
 	let search = $state('');
 	let selected = new SvelteSet<string>();
+	let searchDebounce: ReturnType<typeof setTimeout> | undefined;
 
-	const filtered = $derived(
-		search.trim()
-			? items.filter((item) => item.name.toLowerCase().includes(search.trim().toLowerCase()))
-			: items
-	);
-
-	const selectableHashes = $derived(filtered.map((item) => item.hash));
+	const selectableHashes = $derived(items.map((item) => item.hash));
 	const allSelected = $derived(
 		selectableHashes.length > 0 && selectableHashes.every((h) => selected.has(h))
 	);
@@ -101,7 +104,8 @@
 			const res = await getUnmatched({
 				clientId: clientId || undefined,
 				page,
-				limit: PAGE_LIMIT
+				limit: PAGE_LIMIT,
+				search: search.trim() || undefined
 			});
 			items = res.items;
 			total = res.total;
@@ -111,6 +115,17 @@
 			const live = new Set(items.map((item) => item.hash));
 			for (const hash of [...selected]) {
 				if (!live.has(hash)) selected.delete(hash);
+			}
+			// Pre-check high-confidence suggestions so a bulk confirm is one
+			// click away - the user can always uncheck ones they don't want.
+			for (const item of items) {
+				if (
+					!item.attachable &&
+					item.suggestion &&
+					item.suggestion.confidence >= SUGGESTION_AUTO_SELECT_THRESHOLD
+				) {
+					selected.add(item.hash);
+				}
 			}
 		} catch (error) {
 			loadError =
@@ -122,6 +137,12 @@
 		} finally {
 			loading = false;
 		}
+	}
+
+	function onSearchInput(value: string) {
+		search = value;
+		clearTimeout(searchDebounce);
+		searchDebounce = setTimeout(() => void load(true), 300);
 	}
 
 	function toggleSelect(hash: string) {
@@ -143,7 +164,7 @@
 
 	function openWizardSelected() {
 		openWizardEntries(
-			filtered
+			items
 				.filter((item) => selected.has(item.hash))
 				.map((item) => ({ clientId: item.clientId, hash: item.hash }))
 		);
@@ -156,10 +177,18 @@
 	}
 
 	const selectedAttachable = $derived(
-		filtered.filter((item) => selected.has(item.hash) && item.attachable && item.progress >= 1)
+		items.filter((item) => selected.has(item.hash) && item.attachable && item.progress >= 1)
+	);
+
+	// Suggestion-confirmable: a probabilistic TMDB match, not an exact
+	// infohash hit - those go through attachItems/track instead, since
+	// "track" means the library already has this exact file.
+	const selectedSuggestable = $derived(
+		items.filter((item) => selected.has(item.hash) && !item.attachable && item.suggestion)
 	);
 
 	let attaching = $state(false);
+	let confirming = $state(false);
 
 	async function attachItems(itemsToAttach: UnmatchedDownloadItem[]) {
 		const pairs = itemsToAttach
@@ -189,6 +218,50 @@
 		}
 	}
 
+	/**
+	 * Confirm a TMDB suggestion directly, skipping the wizard - enrolls the
+	 * download against the suggested title so the monitor's import pipeline
+	 * picks it up. Only works one-click when the title is already in the
+	 * library (no destination to choose); a new-to-library suggestion comes
+	 * back skipped with a reason, and the row's "Open wizard" button is the
+	 * fallback for that case.
+	 */
+	async function confirmSuggestions(itemsToConfirm: UnmatchedDownloadItem[]) {
+		const pairs = itemsToConfirm
+			.filter((item) => item.suggestion)
+			.map((item) => ({
+				hash: item.hash,
+				mediaType: (item.suggestion as NonNullable<UnmatchedDownloadItem['suggestion']>).mediaType,
+				tmdbId: (item.suggestion as NonNullable<UnmatchedDownloadItem['suggestion']>).tmdbId,
+				rootFolderId: null
+			}));
+		if (pairs.length === 0 || confirming) return;
+		confirming = true;
+		try {
+			const result = await enrollUnmatched(pairs);
+			if (result.enrolled > 0) {
+				toasts.success(m.activity_unmatched_enrolledToast());
+			}
+			if (result.skipped.length > 0) {
+				toasts.warning(
+					`${result.skipped.length} skipped: ${result.skipped.map((s) => s.reason).join(', ')} - use "Import" instead`
+				);
+			}
+			for (const item of itemsToConfirm) selected.delete(item.hash);
+			await load(true);
+		} catch (error) {
+			toasts.error(
+				error instanceof ApiError
+					? error.message
+					: error instanceof Error
+						? error.message
+						: m.activity_unmatched_confirmFailed()
+			);
+		} finally {
+			confirming = false;
+		}
+	}
+
 	onMount(() => {
 		void load(true);
 	});
@@ -208,7 +281,8 @@
 						type="text"
 						placeholder={m.activity_unmatched_searchPlaceholder()}
 						class="input w-full rounded-full border-base-content/20 bg-base-200/60 pr-9 pl-10 transition-all duration-200 input-sm placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
-						bind:value={search}
+						value={search}
+						oninput={(e) => onSearchInput(e.currentTarget.value)}
 					/>
 				</div>
 			</div>
@@ -248,11 +322,11 @@
 		<div class="flex items-center justify-center py-12">
 			<Loader2 class="h-8 w-8 animate-spin" />
 		</div>
-	{:else if filtered.length === 0}
+	{:else if items.length === 0}
 		<div class="py-12 text-center text-base-content/60">
 			<Unlink class="mx-auto mb-4 h-12 w-12 opacity-40" />
 			<p class="text-lg font-medium">
-				{items.length === 0 ? m.activity_unmatched_empty() : m.activity_unmatched_noFilterResults()}
+				{search ? m.activity_unmatched_noFilterResults() : m.activity_unmatched_empty()}
 			</p>
 		</div>
 	{:else}
@@ -273,10 +347,22 @@
 							{m.activity_unmatched_attachSelected({ count: selectedAttachable.length })}
 						</button>
 					{/if}
+					{#if selectedSuggestable.length > 0}
+						<button
+							class="btn gap-1.5 btn-outline btn-sm"
+							disabled={confirming}
+							onclick={() => confirmSuggestions(selectedSuggestable)}
+							title="Link each selected download to its suggested match now - skips the import wizard. Only works for titles already in your library."
+						>
+							<Link2 class="h-3.5 w-3.5" />
+							{m.activity_unmatched_confirmSuggested({ count: selectedSuggestable.length })}
+						</button>
+					{/if}
 					<button
 						class="btn gap-1.5 btn-primary btn-sm"
 						disabled={selected.size === 0}
 						onclick={openWizardSelected}
+						title="Open the import wizard for each selected download to review or change its match"
 					>
 						<Download class="h-3.5 w-3.5" />
 						{m.activity_unmatched_importSelected({ count: selected.size })}
@@ -307,7 +393,7 @@
 					</tr>
 				</thead>
 				<tbody class="divide-y divide-base-content/8">
-					{#each filtered as item (item.hash)}
+					{#each items as item (item.hash)}
 						<tr
 							class="transition-colors {selected.has(item.hash)
 								? 'bg-primary/5'
@@ -340,6 +426,18 @@
 									<span class="text-xs text-base-content/60"
 										>{Math.round(item.progress * 100)}%</span
 									>
+									{#if !item.attachable && item.suggestion}
+										<span
+											class="badge gap-1 badge-outline badge-sm"
+											title={m.activity_unmatched_suggestionBadgeTitle({
+												confidence: Math.round(item.suggestion.confidence * 100)
+											})}
+										>
+											{item.suggestion.title}
+											{#if item.suggestion.year}({item.suggestion.year}){/if}
+											· {Math.round(item.suggestion.confidence * 100)}%
+										</span>
+									{/if}
 								</div>
 							</td>
 							<td class="hidden text-sm whitespace-nowrap sm:table-cell">
@@ -361,12 +459,23 @@
 											<Link2 class="h-3 w-3" />
 											{m.activity_unmatched_attach()}
 										</button>
+									{:else if item.suggestion}
+										<button
+											class="btn gap-1.5 border border-base-content/15 bg-base-100 btn-xs hover:bg-base-200"
+											onclick={() => confirmSuggestions([item])}
+											disabled={confirming}
+											aria-label={m.activity_unmatched_confirm()}
+											title={m.activity_unmatched_confirmTitle({ title: item.suggestion.title })}
+										>
+											<Link2 class="h-3 w-3" />
+											{m.activity_unmatched_confirm()}
+										</button>
 									{/if}
 									<button
 										class="btn gap-1.5 border border-base-content/15 bg-base-100 btn-xs hover:bg-base-200"
 										onclick={() => openWizardFor(item)}
 										aria-label={m.activity_unmatched_openImport()}
-										title={m.activity_unmatched_openImport()}
+										title={m.activity_unmatched_openImportTitle()}
 									>
 										<Download class="h-3 w-3" />
 										{m.activity_unmatched_openImport()}

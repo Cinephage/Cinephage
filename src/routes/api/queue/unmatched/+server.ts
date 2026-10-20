@@ -4,7 +4,9 @@
  * Lists downloads present in clients under a Cinephage-managed label with no
  * corresponding download_queue row. Read-only: listing never mutates anything.
  *
- * Query params: clientId?, page? (default 1), limit? (default 25, max 100).
+ * Query params: clientId?, page? (default 1), limit? (default 25, max 100),
+ * search? (case-insensitive contains on the release name, applied before
+ * total/pagination so results outside the current page are still found).
  */
 
 import { json } from '@sveltejs/kit';
@@ -29,10 +31,12 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
 	try {
 		const clientId = url.searchParams.get('clientId') ?? undefined;
+		const search = url.searchParams.get('search') ?? undefined;
 		const result = await downloadMonitor.listUnmatchedDownloads({
 			clientId,
 			page: toOptionalInt(url.searchParams.get('page')),
-			limit: toOptionalInt(url.searchParams.get('limit'))
+			limit: toOptionalInt(url.searchParams.get('limit')),
+			search
 		});
 
 		return json({ success: true, ...result });
