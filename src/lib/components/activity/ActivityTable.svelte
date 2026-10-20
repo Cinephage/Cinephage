@@ -13,7 +13,6 @@
 		sortField?: string;
 		sortDirection?: 'asc' | 'desc';
 		onSort?: (field: string) => void;
-		onRowClick?: (activity: UnifiedActivity) => void;
 		onPause?: (id: string) => Promise<void>;
 		onResume?: (id: string) => Promise<void>;
 		onRemove?: (
@@ -21,7 +20,8 @@
 			options?: { deleteFiles?: boolean; blocklist?: boolean }
 		) => Promise<void>;
 		onRetry?: (id: string) => Promise<void>;
-		compact?: boolean;
+		onBlocklistHistory?: (historyId: string) => Promise<void>;
+		showProgressDetail?: boolean;
 		selectedIds?: Set<string>;
 		isSelectable?: (activity: UnifiedActivity) => boolean;
 		onToggleSelection?: (activityId: string, selected: boolean) => void;
@@ -36,12 +36,12 @@
 		sortField = 'time',
 		sortDirection = 'desc',
 		onSort,
-		onRowClick,
 		onPause,
 		onResume,
 		onRemove,
 		onRetry,
-		compact = false,
+		onBlocklistHistory,
+		showProgressDetail = true,
 		selectedIds = new Set<string>(),
 		isSelectable = () => false,
 		onToggleSelection,
@@ -51,8 +51,9 @@
 		onPageChange
 	}: Props = $props();
 
-	let expandedRows = new SvelteSet<string>();
+	let expandedId = $state<string | null>(null);
 	let queueActionLoadingRows = new SvelteSet<string>();
+	let blocklistLoadingRows = new SvelteSet<string>();
 
 	const selectableIds = $derived.by(() =>
 		activities.filter((activity) => isSelectable(activity)).map((activity) => activity.id)
@@ -65,11 +66,7 @@
 	);
 
 	function toggleRow(id: string) {
-		if (expandedRows.has(id)) {
-			expandedRows.delete(id);
-		} else {
-			expandedRows.add(id);
-		}
+		expandedId = expandedId === id ? null : id;
 	}
 
 	// Remove needs a confirmation step first (parity with the detail modal's
@@ -111,6 +108,23 @@
 			toasts.error(message);
 		} finally {
 			queueActionLoadingRows.delete(activity.id);
+		}
+	}
+
+	async function runBlocklistHistory(activity: UnifiedActivity): Promise<void> {
+		if (!activity.downloadHistoryId || !onBlocklistHistory) return;
+		if (blocklistLoadingRows.has(activity.id)) return;
+
+		blocklistLoadingRows.add(activity.id);
+		try {
+			await onBlocklistHistory(activity.downloadHistoryId);
+			toasts.success(m.activity_detail_blocklisted());
+		} catch (error) {
+			const message =
+				error instanceof Error ? error.message : m.activity_detail_failedToBlocklist();
+			toasts.error(message);
+		} finally {
+			blocklistLoadingRows.delete(activity.id);
 		}
 	}
 
@@ -172,10 +186,10 @@
 		<table class="table w-full table-sm">
 			<thead>
 				<ActivityTableHeader
-					{compact}
 					{sortField}
 					{sortDirection}
 					{onSort}
+					{showProgressDetail}
 					{allSelectableSelected}
 					{someSelectableSelected}
 					selectableCount={selectableIds.length}
@@ -186,22 +200,25 @@
 				{#each activities as activity (activity.id)}
 					<ActivityRow
 						{activity}
-						{compact}
+						{showProgressDetail}
 						isSelected={isRowSelected(activity.id)}
 						isSelectable={isSelectable(activity)}
-						isExpanded={expandedRows.has(activity.id)}
+						isExpanded={expandedId === activity.id}
 						isQueueActionLoading={queueActionLoadingRows.has(activity.id)}
+						isBlocklistLoading={blocklistLoadingRows.has(activity.id)}
 						onToggle={() => toggleRow(activity.id)}
-						{onRowClick}
 						onToggleSelection={(selected) => toggleSelection(activity, selected)}
 						onQueueAction={(action) => runQueueAction(activity, action)}
+						onBlocklistHistory={onBlocklistHistory
+							? () => runBlocklistHistory(activity)
+							: undefined}
 					/>
 				{/each}
 			</tbody>
 			{#if totalPages > 1}
 				<tfoot>
 					<tr>
-						<td colspan={(compact ? 5 : 10) + 1} class="border-t border-base-content/8 py-2">
+						<td colspan={9} class="border-t border-base-content/8 py-2">
 							<div class="flex items-center justify-center gap-2">
 								<button
 									class="btn btn-ghost btn-xs"

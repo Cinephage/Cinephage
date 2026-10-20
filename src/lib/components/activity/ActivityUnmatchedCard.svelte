@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { Loader2, RefreshCw, Search, Filter, Download, Link2 } from '@lucide/svelte';
+	import { Loader2, RefreshCw, Search, Download, Link2, Unlink } from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { getUnmatched, trackUnmatched, type UnmatchedDownloadItem } from '#lib/api/downloads.js';
@@ -195,13 +195,9 @@
 </script>
 
 <div class="space-y-4">
-	<div class="rounded-xl border border-base-300 bg-base-200 p-4">
-		<div class="flex items-center gap-2">
-			<Filter class="h-5 w-5" />
-			<h2 class="text-lg font-bold">{m.activity_unmatched_title()}</h2>
-		</div>
-		<div class="mt-3 flex flex-wrap items-center gap-2">
-			<div class="form-control min-w-50 flex-1">
+	<div class="rounded-lg border border-base-content/12 bg-base-100 p-4 shadow-sm">
+		<div class="flex flex-wrap items-center gap-2">
+			<div class="form-control min-w-50 flex-1 sm:max-w-64">
 				<div class="group relative">
 					<div class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2">
 						<Search
@@ -211,14 +207,14 @@
 					<input
 						type="text"
 						placeholder={m.activity_unmatched_searchPlaceholder()}
-						class="input w-full rounded-full border-base-content/20 bg-base-200/60 pr-9 pl-10 transition-all duration-200 input-md placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
+						class="input w-full rounded-full border-base-content/20 bg-base-200/60 pr-9 pl-10 transition-all duration-200 input-sm placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
 						bind:value={search}
 					/>
 				</div>
 			</div>
 			{#if downloadClients.length > 0}
 				<select
-					class="select-bordered select select-sm"
+					class="select w-38 border-base-content/20 bg-base-200 select-sm sm:w-auto"
 					bind:value={clientId}
 					onchange={() => load(true)}
 					aria-label={m.activity_unmatched_clientFilter()}
@@ -229,11 +225,15 @@
 					{/each}
 				</select>
 			{/if}
-			<button class="btn btn-ghost btn-sm" onclick={() => load()} disabled={loading}>
+			<button
+				class="btn ml-auto gap-1.5 btn-outline btn-sm"
+				onclick={() => load()}
+				disabled={loading}
+			>
 				{#if loading}
-					<Loader2 class="h-4 w-4 animate-spin" />
+					<Loader2 class="h-3.5 w-3.5 animate-spin" />
 				{:else}
-					<RefreshCw class="h-4 w-4" />
+					<RefreshCw class="h-3.5 w-3.5" />
 				{/if}
 				{m.activity_unmatched_refresh()}
 			</button>
@@ -249,48 +249,81 @@
 			<Loader2 class="h-8 w-8 animate-spin" />
 		</div>
 	{:else if filtered.length === 0}
-		<div class="py-12 text-center text-base-content/70">
-			<p>
+		<div class="py-12 text-center text-base-content/60">
+			<Unlink class="mx-auto mb-4 h-12 w-12 opacity-40" />
+			<p class="text-lg font-medium">
 				{items.length === 0 ? m.activity_unmatched_empty() : m.activity_unmatched_noFilterResults()}
 			</p>
 		</div>
 	{:else}
-		<div class="text-sm text-base-content/70">
-			{m.activity_unmatched_count({ count: total })}
+		<div class="flex items-center gap-4 text-sm text-base-content/70">
+			<span>{m.activity_unmatched_count({ count: total })}</span>
+			{#if selected.size > 0}
+				<div class="ml-auto flex flex-wrap items-center gap-2">
+					<span class="text-xs text-base-content/60">
+						{m.common_selected({ count: selected.size })}
+					</span>
+					{#if selectedAttachable.length > 0}
+						<button
+							class="btn gap-1.5 btn-outline btn-sm"
+							disabled={attaching}
+							onclick={() => attachItems(selectedAttachable)}
+						>
+							<Link2 class="h-3.5 w-3.5" />
+							{m.activity_unmatched_attachSelected({ count: selectedAttachable.length })}
+						</button>
+					{/if}
+					<button
+						class="btn gap-1.5 btn-primary btn-sm"
+						disabled={selected.size === 0}
+						onclick={openWizardSelected}
+					>
+						<Download class="h-3.5 w-3.5" />
+						{m.activity_unmatched_importSelected({ count: selected.size })}
+					</button>
+				</div>
+			{/if}
 		</div>
-		<div class="overflow-x-auto">
-			<table class="table table-zebra table-sm">
+
+		<div class="overflow-x-auto rounded-lg border border-base-content/12 bg-base-100 shadow-sm">
+			<table class="table w-full table-sm">
 				<thead>
-					<tr>
-						<th>
+					<tr
+						class="border-b border-base-content/10 bg-base-200 text-[11px] font-semibold tracking-widest text-base-content/50 uppercase"
+					>
+						<th class="w-10 px-2">
 							<input
 								type="checkbox"
-								class="checkbox checkbox-sm"
+								class="checkbox checkbox-xs checkbox-primary"
 								checked={allSelected}
 								onchange={toggleSelectAll}
 								aria-label={m.activity_unmatched_selectAll()}
 							/>
 						</th>
 						<th>{m.activity_unmatched_colName()}</th>
-						<th>{m.activity_unmatched_colSize()}</th>
-						<th>{m.activity_unmatched_colClient()}</th>
+						<th class="hidden sm:table-cell">{m.activity_unmatched_colSize()}</th>
+						<th class="hidden sm:table-cell">{m.activity_unmatched_colClient()}</th>
 						<th><span class="sr-only">{m.activity_unmatched_openImport()}</span></th>
 					</tr>
 				</thead>
-				<tbody>
+				<tbody class="divide-y divide-base-content/8">
 					{#each filtered as item (item.hash)}
-						<tr>
-							<td>
+						<tr
+							class="transition-colors {selected.has(item.hash)
+								? 'bg-primary/5'
+								: 'hover:bg-base-200/50'}"
+						>
+							<td class="w-10 px-2">
 								<input
 									type="checkbox"
-									class="checkbox checkbox-sm"
+									class="checkbox checkbox-xs checkbox-primary"
 									checked={selected.has(item.hash)}
 									onchange={() => toggleSelect(item.hash)}
 									aria-label={item.name}
 								/>
 							</td>
 							<td>
-								<div class="max-w-md truncate font-medium" title={item.name}>{item.name}</div>
+								<div class="max-w-xs truncate font-medium" title={item.name}>{item.name}</div>
 								<div class="mt-1 flex flex-wrap items-center gap-2">
 									<span
 										class="font-mono text-xs text-base-content/50"
@@ -309,13 +342,15 @@
 									>
 								</div>
 							</td>
-							<td class="whitespace-nowrap">{formatBytes(item.size)}</td>
-							<td class="whitespace-nowrap">{item.clientName}</td>
+							<td class="hidden text-sm whitespace-nowrap sm:table-cell">
+								{formatBytes(item.size)}
+							</td>
+							<td class="hidden text-sm whitespace-nowrap sm:table-cell">{item.clientName}</td>
 							<td>
 								<div class="flex items-center gap-1">
 									{#if item.attachable && item.progress >= 1}
 										<button
-											class="btn btn-ghost btn-xs"
+											class="btn gap-1.5 border border-base-content/15 bg-base-100 btn-xs hover:bg-base-200"
 											onclick={() => attachItems([item])}
 											disabled={attaching}
 											aria-label={m.activity_unmatched_attach()}
@@ -328,7 +363,7 @@
 										</button>
 									{/if}
 									<button
-										class="btn btn-ghost btn-xs"
+										class="btn gap-1.5 border border-base-content/15 bg-base-100 btn-xs hover:bg-base-200"
 										onclick={() => openWizardFor(item)}
 										aria-label={m.activity_unmatched_openImport()}
 										title={m.activity_unmatched_openImport()}
@@ -341,59 +376,38 @@
 						</tr>
 					{/each}
 				</tbody>
+				{#if totalPages > 1}
+					<tfoot>
+						<tr>
+							<td colspan={5} class="border-t border-base-content/8 py-2">
+								<div class="flex items-center justify-center gap-2">
+									<button
+										class="btn btn-ghost btn-xs"
+										disabled={page <= 1 || loading}
+										onclick={() => {
+											page -= 1;
+											void load();
+										}}
+									>
+										{m.reports_pagination_prev()}
+									</button>
+									<span class="text-xs text-base-content/60">{page} / {totalPages}</span>
+									<button
+										class="btn btn-ghost btn-xs"
+										disabled={page >= totalPages || loading}
+										onclick={() => {
+											page += 1;
+											void load();
+										}}
+									>
+										{m.reports_pagination_next()}
+									</button>
+								</div>
+							</td>
+						</tr>
+					</tfoot>
+				{/if}
 			</table>
 		</div>
-
-		<div class="flex flex-wrap items-center gap-2">
-			<span class="text-xs text-base-content/60">
-				{m.common_selected({ count: selected.size })}
-			</span>
-			<div class="ml-auto flex items-center gap-2">
-				{#if selectedAttachable.length > 0}
-					<button
-						class="btn btn-ghost btn-sm"
-						disabled={attaching}
-						onclick={() => attachItems(selectedAttachable)}
-					>
-						<Link2 class="h-4 w-4" />
-						{m.activity_unmatched_attachSelected({ count: selectedAttachable.length })}
-					</button>
-				{/if}
-				<button
-					class="btn btn-primary btn-sm"
-					disabled={selected.size === 0}
-					onclick={openWizardSelected}
-				>
-					<Download class="h-4 w-4" />
-					{m.activity_unmatched_importSelected({ count: selected.size })}
-				</button>
-			</div>
-		</div>
-
-		{#if totalPages > 1}
-			<div class="flex items-center justify-center gap-2">
-				<button
-					class="btn btn-ghost btn-sm"
-					disabled={page <= 1 || loading}
-					onclick={() => {
-						page -= 1;
-						void load();
-					}}
-				>
-					{m.action_back()}
-				</button>
-				<span class="text-sm">{page} / {totalPages}</span>
-				<button
-					class="btn btn-ghost btn-sm"
-					disabled={page >= totalPages || loading}
-					onclick={() => {
-						page += 1;
-						void load();
-					}}
-				>
-					{m.action_next()}
-				</button>
-			</div>
-		{/if}
 	{/if}
 </div>

@@ -25,7 +25,6 @@
 	import { layoutState, deriveMobileSseStatus } from '#lib/layout.svelte.js';
 	import ActivityTable from '#lib/components/activity/ActivityTable.svelte';
 	import ActivityUnmatchedCard from '#lib/components/activity/ActivityUnmatchedCard.svelte';
-	import ActivityDetailModal from '#lib/components/activity/ActivityDetailModal.svelte';
 	import ActivityFilters from '#lib/components/activity/ActivityFilters.svelte';
 	import ActiveFilters from '#lib/components/activity/ActiveFilters.svelte';
 	import QueueStatsCards from '#lib/components/activity/QueueStatsCards.svelte';
@@ -71,7 +70,6 @@
 		normalizeFiltersForTab,
 		isHistoryActivity,
 		isQueueActivityId,
-		shouldSyncSelectedActivity,
 		normalizeActivityStatus,
 		normalizeActivity,
 		sortActivitiesList,
@@ -503,14 +501,6 @@
 
 		activities = activities.filter((activity) => !staleRowIds.has(activity.id));
 
-		if (
-			selectedActivity &&
-			selectedActivity.queueItemId === queueActivity.queueItemId &&
-			staleRowIds.has(selectedActivity.id)
-		) {
-			selectedActivity = queueActivity;
-		}
-
 		return staleRowIds.size;
 	}
 
@@ -527,23 +517,12 @@
 				const removed = activities[existingIndex];
 				activities = activities.filter((entry) => entry.id !== removed.id);
 				total = Math.max(0, total - 1);
-				if (selectedActivity && shouldSyncSelectedActivity(selectedActivity, normalized)) {
-					selectedActivity = null;
-					isModalOpen = false;
-				}
 				return;
 			}
 
 			const existing = activities[existingIndex];
 			Object.assign(existing, normalized);
 			const removedDuplicates = removeStaleQueueLinkedRows(existing);
-			if (
-				selectedActivity &&
-				selectedActivity !== existing &&
-				shouldSyncSelectedActivity(selectedActivity, existing)
-			) {
-				selectedActivity = existing;
-			}
 			if (removedDuplicates > 0) {
 				total = Math.max(0, total - removedDuplicates);
 			}
@@ -554,9 +533,6 @@
 
 		// New item: check if it belongs in the current tab scope at all
 		if (!inScope) {
-			if (selectedActivity && shouldSyncSelectedActivity(selectedActivity, normalized)) {
-				selectedActivity = { ...selectedActivity, ...normalized };
-			}
 			return;
 		}
 
@@ -565,10 +541,6 @@
 		const removedDuplicates = removeStaleQueueLinkedRows(normalized);
 		total = Math.max(0, total + 1 - removedDuplicates);
 	}
-
-	// Detail modal state
-	let selectedActivity = $state<UnifiedActivity | null>(null);
-	let isModalOpen = $state(false);
 
 	// Update activities when data changes (navigation / tab switch / filter change)
 	$effect(() => {
@@ -604,27 +576,6 @@
 		}
 		if (selectedActiveIds.size > 0) {
 			untrack(() => reconcileSelectedActiveIds(currentActivities));
-		}
-	});
-
-	$effect(() => {
-		const currentSelected = selectedActivity;
-		if (!isModalOpen || !currentSelected) return;
-
-		const linkedById = activities.find((activity) => activity.id === currentSelected.id);
-		const linkedByQueueId = currentSelected.queueItemId
-			? activities.filter((activity) => activity.queueItemId === currentSelected.queueItemId)
-			: [];
-		const preferredByQueueId =
-			linkedByQueueId.find((activity) => isQueueActivityId(activity.id)) || linkedByQueueId[0];
-		const linkedActivity = linkedById || preferredByQueueId;
-
-		if (
-			linkedActivity &&
-			linkedActivity !== currentSelected &&
-			shouldSyncSelectedActivity(currentSelected, linkedActivity)
-		) {
-			selectedActivity = linkedActivity;
 		}
 	});
 
@@ -667,32 +618,6 @@
 			activity.downloadProgress = update.progress;
 			if (update.status) {
 				activity.status = normalizeActivityStatus(update.status);
-			}
-		}
-
-		// Sync selected activity if affected
-		if (selectedActivity) {
-			const selUpdate = updates.get(selectedActivity.id);
-			const queueItemId = selectedActivity.queueItemId;
-			if (selUpdate) {
-				selectedActivity.downloadProgress = selUpdate.progress;
-				if (selUpdate.status) {
-					selectedActivity.status = normalizeActivityStatus(selUpdate.status);
-				}
-				selectedActivity = { ...selectedActivity };
-			} else if (queueItemId) {
-				// Check by queueItemId
-				for (const [id, upd] of updates) {
-					const qId = id.startsWith('queue-') ? id.slice('queue-'.length) : undefined;
-					if (qId === queueItemId) {
-						selectedActivity.downloadProgress = upd.progress;
-						if (upd.status) {
-							selectedActivity.status = normalizeActivityStatus(upd.status);
-						}
-						selectedActivity = { ...selectedActivity };
-						break;
-					}
-				}
 			}
 		}
 
@@ -780,7 +705,7 @@
 		try {
 			await refreshQueue();
 			toasts.success(m.toast_activity_refreshed());
-			await refreshActivityData({ force: true });
+			await refreshActivityData({ force: true, silent: true });
 		} catch {
 			toasts.error(m.toast_activity_failedToRefresh());
 		} finally {
@@ -803,7 +728,7 @@
 			} else {
 				toasts.info(m.toast_activity_relinkNone());
 			}
-			await refreshActivityData({ force: true });
+			await refreshActivityData({ force: true, silent: true });
 		} catch {
 			toasts.error(m.toast_activity_failedToRelink());
 		} finally {
@@ -1148,7 +1073,7 @@
 		}
 
 		try {
-			await refreshActivityData({ force: true });
+			await refreshActivityData({ force: true, silent: true });
 		} catch (_error) {
 			toasts.info(m.toast_activity_purgeCompleted());
 		} finally {
@@ -1222,7 +1147,7 @@
 		}
 
 		try {
-			await refreshActivityData({ force: true });
+			await refreshActivityData({ force: true, silent: true });
 		} catch (_error) {
 			toasts.info(m.toast_activity_deleteCompleted());
 		} finally {
@@ -1288,7 +1213,6 @@
 							(queueId: string) =>
 								removeQueueItem(queueId, {
 									refresh: false,
-									closeDetailModal: false,
 									removeFromClient: true,
 									deleteFiles: true,
 									blocklist
@@ -1312,7 +1236,7 @@
 				successCount > 0 &&
 				(action === 'retry_failed' || action === 'remove_failed' || action === 'cancel')
 			) {
-				await refreshActivityData({ force: true });
+				await refreshActivityData({ force: true, silent: true });
 			}
 		} catch (_error) {
 			toasts.info(m.toast_activity_queueActionCompleted());
@@ -1423,16 +1347,6 @@
 		}
 	}
 
-	// Open detail modal
-	function openDetailModal(activity: UnifiedActivity) {
-		selectedActivity = activity;
-		isModalOpen = true;
-	}
-
-	function closeModal() {
-		isModalOpen = false;
-	}
-
 	function applyQueueStatusLocally(id: string, status: ActivityStatus, statusReason?: string) {
 		let changed = false;
 		for (const activity of activities) {
@@ -1446,13 +1360,6 @@
 		}
 		if (changed) {
 			activities = activities;
-		}
-		if (selectedActivity?.queueItemId === id) {
-			selectedActivity.status = status;
-			if (statusReason !== undefined) {
-				selectedActivity.statusReason = statusReason;
-			}
-			selectedActivity = { ...selectedActivity };
 		}
 	}
 
@@ -1479,7 +1386,6 @@
 		id: string,
 		options: {
 			refresh?: boolean;
-			closeDetailModal?: boolean;
 			removeFromClient?: boolean;
 			deleteFiles?: boolean;
 			blocklist?: boolean;
@@ -1487,7 +1393,6 @@
 	): Promise<void> {
 		const {
 			refresh = true,
-			closeDetailModal = true,
 			removeFromClient = true,
 			deleteFiles = false,
 			blocklist = false
@@ -1495,10 +1400,7 @@
 		await removeQueueItemApi(id, { removeFromClient, deleteFiles, blocklist });
 
 		if (refresh) {
-			await refreshActivityData({ force: true });
-		}
-		if (closeDetailModal) {
-			closeModal();
+			await refreshActivityData({ force: true, silent: true });
 		}
 	}
 
@@ -1521,7 +1423,7 @@
 		}
 
 		if (refresh && retryMode !== 'import') {
-			await refreshActivityData({ force: true });
+			await refreshActivityData({ force: true, silent: true });
 		}
 	}
 
@@ -1550,7 +1452,7 @@
 
 	async function handleBlocklistHistory(historyId: string) {
 		await blocklistHistoryItemApi(historyId);
-		await refreshActivityData({ force: true });
+		await refreshActivityData({ force: true, silent: true });
 	}
 </script>
 
@@ -1598,10 +1500,12 @@
 		onUnmatchedSelect={() => switchTab('unmatched')}
 	/>
 
+	<LibraryImportJobsCard batches={data.importBatches} />
+
 	<!-- Tabs -->
 	<div class="flex scrollbar-none overflow-x-auto border-b border-base-200">
 		<button
-			class="flex shrink-0 items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors
+			class="flex shrink-0 cursor-pointer items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors
 				{activityTab === 'active'
 				? 'border-primary text-primary'
 				: 'border-transparent text-base-content/60 hover:text-base-content'}"
@@ -1616,7 +1520,7 @@
 			{/if}
 		</button>
 		<button
-			class="flex shrink-0 items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors
+			class="flex shrink-0 cursor-pointer items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors
 				{activityTab === 'history'
 				? 'border-primary text-primary'
 				: 'border-transparent text-base-content/60 hover:text-base-content'}"
@@ -1626,7 +1530,7 @@
 			{m.activity_tabHistory()}
 		</button>
 		<button
-			class="flex shrink-0 items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors
+			class="flex shrink-0 cursor-pointer items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors
 				{activityTab === 'unmatched'
 				? 'border-primary text-primary'
 				: 'border-transparent text-base-content/60 hover:text-base-content'}"
@@ -1644,10 +1548,6 @@
 		</button>
 	</div>
 
-	{#if activityTab === 'active'}
-		<LibraryImportJobsCard batches={data.importBatches} />
-	{/if}
-
 	{#if activityTab === 'unmatched'}
 		<ActivityUnmatchedCard downloadClients={data.filterOptions.downloadClients} />
 	{:else}
@@ -1657,7 +1557,6 @@
 			filterOptions={data.filterOptions}
 			statusContext={activityTab}
 			onFiltersChange={applyFilters}
-			onClearFilters={clearAllFilters}
 			showActiveFilters={true}
 			showHistoryControls={canManageHistory && activityTab === 'history'}
 		>
@@ -1881,11 +1780,12 @@
 				selectedIds={activityTab === 'history' ? selectedHistoryIds : selectedActiveIds}
 				isSelectable={activityTab === 'history' ? isHistoryActivity : isActiveQueueActivity}
 				onSort={handleSort}
-				onRowClick={openDetailModal}
 				onPause={handlePause}
 				onResume={handleResume}
 				onRemove={handleRemove}
 				onRetry={handleRetry}
+				onBlocklistHistory={handleBlocklistHistory}
+				showProgressDetail={activityTab !== 'history'}
 				onToggleSelection={activityTab === 'history'
 					? handleToggleSelection
 					: handleToggleActiveSelection}
@@ -1947,18 +1847,3 @@
 		</label>
 	{/if}
 </ConfirmationModal>
-
-<!-- Detail Modal -->
-
-{#if selectedActivity}
-	<ActivityDetailModal
-		open={isModalOpen}
-		activity={selectedActivity}
-		onClose={closeModal}
-		onPause={handlePause}
-		onResume={handleResume}
-		onRemove={handleRemove}
-		onRetry={handleRetry}
-		onBlocklistHistory={handleBlocklistHistory}
-	/>
-{/if}

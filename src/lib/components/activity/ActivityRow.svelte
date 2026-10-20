@@ -5,13 +5,24 @@
 		TASK_TYPE_LABELS,
 		type UnifiedActivity
 	} from '#lib/types/activity.js';
-	import { Clapperboard, Tv, ChevronRight, Pause, Play, RotateCcw, Trash2 } from '@lucide/svelte';
+	import {
+		Clapperboard,
+		Tv,
+		ChevronRight,
+		Pause,
+		Play,
+		RotateCcw,
+		Trash2,
+		Ban
+	} from '@lucide/svelte';
 	import { getMediaLink, canLinkToMedia } from '#lib/utils/media-link.js';
 	import { formatBytes } from '#lib/utils/format.js';
 	import {
 		statusConfig,
 		getCompactProgressLabel,
+		getMobileCompactProgressLabel,
 		getCompactStatusLabel,
+		getMobileCompactStatusLabel,
 		getStatusLabel,
 		getResolutionBadge,
 		supportsQueuePauseResume,
@@ -23,28 +34,30 @@
 
 	interface Props {
 		activity: UnifiedActivity;
-		compact: boolean;
+		showProgressDetail?: boolean;
 		isSelected: boolean;
 		isSelectable: boolean;
 		isExpanded: boolean;
 		isQueueActionLoading: boolean;
+		isBlocklistLoading: boolean;
 		onToggle: () => void;
-		onRowClick?: (activity: UnifiedActivity) => void;
 		onToggleSelection: (selected: boolean) => void;
 		onQueueAction: (action: 'pause' | 'resume' | 'remove' | 'retry') => Promise<void>;
+		onBlocklistHistory?: () => Promise<void>;
 	}
 
 	let {
 		activity,
-		compact,
+		showProgressDetail = true,
 		isSelected,
 		isSelectable,
 		isExpanded,
 		isQueueActionLoading,
+		isBlocklistLoading,
 		onToggle,
-		onRowClick,
 		onToggleSelection,
-		onQueueAction
+		onQueueAction,
+		onBlocklistHistory
 	}: Props = $props();
 
 	const protocolLabels: Record<string, string> = {
@@ -56,20 +69,24 @@
 	const config = $derived(statusConfig[activity.status] || statusConfig.no_results);
 
 	const compactLabel = $derived(getCompactStatusLabel(activity, config.label));
+	const mobileCompactLabel = $derived(getMobileCompactStatusLabel(activity, config.label));
 
-	const timelineColspan = $derived((compact ? 5 : 10) + 1);
+	const timelineColspan = 9;
 
 	const hasTimeline = $derived((activity.timeline?.length ?? 0) > 0);
+	const canBlocklist = $derived(
+		!!activity.downloadHistoryId && (activity.status === 'failed' || activity.status === 'rejected')
+	);
 	const hasExpandable = $derived(
-		hasTimeline || !!activity.queueItemId || !!activity.statusReason || !!activity.releaseTitle
+		hasTimeline ||
+			!!activity.queueItemId ||
+			!!activity.statusReason ||
+			!!activity.releaseTitle ||
+			canBlocklist
 	);
 
 	function handleRowClick() {
-		if (onRowClick) {
-			onRowClick(activity);
-		} else {
-			onToggle();
-		}
+		onToggle();
 	}
 
 	function handleCheckboxClick(e: MouseEvent) {
@@ -79,10 +96,14 @@
 </script>
 
 <tr
-	class="cursor-pointer transition-colors {isSelected ? 'bg-primary/5' : 'hover:bg-base-200/50'}"
+	class="cursor-pointer transition-colors {isSelected
+		? 'bg-primary/5'
+		: isExpanded
+			? 'bg-base-200/60'
+			: 'hover:bg-base-200/50'}"
 	onclick={handleRowClick}
 >
-	<td class="w-10 pr-0" onclick={(e) => e.stopPropagation()}>
+	<td class="w-10 px-2" onclick={(e) => e.stopPropagation()}>
 		<input
 			type="checkbox"
 			class="checkbox checkbox-xs checkbox-primary"
@@ -92,35 +113,24 @@
 			onclick={handleCheckboxClick}
 		/>
 	</td>
-	<td class="w-8 pr-0">
-		{#if hasExpandable}
-			<button
-				type="button"
-				class="btn btn-square btn-ghost btn-sm"
-				onclick={(e) => {
-					e.stopPropagation();
-					onToggle();
-				}}
-				aria-label={isExpanded ? m.activity_table_hideTimeline() : m.activity_table_showTimeline()}
-			>
+	<td class="px-2">
+		<div class="flex items-center gap-1">
+			{#if hasExpandable}
 				<ChevronRight
-					class="h-3.5 w-3.5 text-base-content/30 transition-transform {isExpanded
+					class="h-3.5 w-3.5 shrink-0 text-base-content/30 transition-transform {isExpanded
 						? 'rotate-90'
 						: ''}"
 				/>
-			</button>
-		{/if}
+			{/if}
+			<ActivityStatusPopover {activity} {compactLabel} {mobileCompactLabel} />
+		</div>
 	</td>
 
-	<td>
-		<ActivityStatusPopover {activity} {compactLabel} />
-	</td>
-
-	<td>
+	<td class="px-2">
 		{#if canLinkToMedia(activity)}
 			<a
 				href={getMediaLink(activity)}
-				class="flex items-center gap-2 hover:text-primary"
+				class="flex items-center gap-1.5 hover:text-primary"
 				onclick={(e) => e.stopPropagation()}
 			>
 				{#if activity.mediaType === 'movie'}
@@ -128,7 +138,7 @@
 				{:else}
 					<Tv class="h-4 w-4 shrink-0" />
 				{/if}
-				<span class="max-w-48 truncate" title={activity.mediaTitle}>
+				<span class="max-w-28 truncate sm:max-w-48" title={activity.mediaTitle}>
 					{activity.mediaTitle}
 					{#if activity.mediaYear}
 						<span class="text-base-content/60">({activity.mediaYear})</span>
@@ -136,13 +146,13 @@
 				</span>
 			</a>
 		{:else}
-			<div class="flex items-center gap-2">
+			<div class="flex items-center gap-1.5">
 				{#if activity.mediaType === 'movie'}
 					<Clapperboard class="h-4 w-4 shrink-0" />
 				{:else}
 					<Tv class="h-4 w-4 shrink-0" />
 				{/if}
-				<span class="max-w-48 truncate" title={activity.mediaTitle}>
+				<span class="max-w-28 truncate sm:max-w-48" title={activity.mediaTitle}>
 					{activity.mediaTitle}
 					{#if activity.mediaYear}
 						<span class="text-base-content/60">({activity.mediaYear})</span>
@@ -152,82 +162,83 @@
 		{/if}
 	</td>
 
-	{#if !compact}
-		<td>
-			<span class="block max-w-64 truncate text-sm" title={activity.releaseTitle || '-'}>
-				{activity.releaseTitle || '-'}
-			</span>
-		</td>
+	<td class="hidden lg:table-cell">
+		<span class="block max-w-64 truncate text-sm" title={activity.releaseTitle || '-'}>
+			{activity.releaseTitle || '-'}
+		</span>
+	</td>
 
-		<td>
-			{#if activity.quality}
-				<div class="flex flex-wrap gap-1">
-					{#if getResolutionBadge(activity)}
-						<span class="badge badge-outline badge-xs">{getResolutionBadge(activity)}</span>
-					{/if}
-					{#if activity.quality.source}
-						<span class="badge badge-outline badge-xs">{activity.quality.source}</span>
-					{/if}
-					{#if activity.quality.codec}
-						<span class="badge badge-outline badge-xs">{activity.quality.codec}</span>
-					{/if}
-					{#if activity.quality.hdr}
-						<span class="badge badge-outline badge-xs">{activity.quality.hdr}</span>
-					{/if}
-				</div>
-			{:else}
-				<span class="text-base-content/40">-</span>
-			{/if}
-		</td>
-
-		<td>
-			<span class="text-sm">{activity.releaseGroup || '-'}</span>
-		</td>
-
-		<td>
-			<span class="text-sm">{formatBytes(activity.size)}</span>
-		</td>
-
-		<td>
-			{#if activity.activitySource === 'monitoring' && activity.taskType}
-				{@const taskLabel = TASK_TYPE_LABELS[activity.taskType]}
-				<div class="text-sm">
-					<span class="text-base-content/70">{taskLabel ?? activity.taskType}</span>
-				</div>
-			{:else if activity.indexerName}
-				<div class="text-sm">
-					<span>{activity.indexerName}</span>
-					{#if activity.protocol}
-						<span class="text-base-content/50"
-							>({protocolLabels[activity.protocol] || activity.protocol})</span
-						>
-					{/if}
-				</div>
-			{:else}
-				<span class="text-base-content/40">-</span>
-			{/if}
-		</td>
-	{/if}
-
-	<td>
-		{#if activity.status === 'downloading' && activity.downloadProgress !== undefined}
-			<div class="flex items-center gap-2">
-				<progress class="progress w-16 progress-info" value={activity.downloadProgress} max="100"
-				></progress>
+	<td class="hidden lg:table-cell">
+		{#if activity.quality}
+			<div class="flex flex-wrap gap-1">
+				{#if getResolutionBadge(activity)}
+					<span class="badge badge-outline badge-xs">{getResolutionBadge(activity)}</span>
+				{/if}
+				{#if activity.quality.source}
+					<span class="badge badge-outline badge-xs">{activity.quality.source}</span>
+				{/if}
+				{#if activity.quality.codec}
+					<span class="badge badge-outline badge-xs">{activity.quality.codec}</span>
+				{/if}
+				{#if activity.quality.hdr}
+					<span class="badge badge-outline badge-xs">{activity.quality.hdr}</span>
+				{/if}
 			</div>
-		{:else if getCompactProgressLabel(activity)}
-			<span class="max-w-32 truncate text-sm text-base-content/60" title={activity.statusReason}>
-				{getCompactProgressLabel(activity)}
-			</span>
 		{:else}
-			<span class="text-sm">{getStatusLabel(activity, config.label)}</span>
+			<span class="text-base-content/40">-</span>
 		{/if}
 	</td>
 
-	<td>
-		<span class="text-sm" title={getDisplayTime(activity)}>
+	<td class="hidden lg:table-cell">
+		<span class="text-sm">{activity.releaseGroup || '-'}</span>
+	</td>
+
+	<td class="hidden lg:table-cell">
+		<span class="text-sm">{formatBytes(activity.size)}</span>
+	</td>
+
+	<td class="hidden lg:table-cell">
+		{#if activity.activitySource === 'monitoring' && activity.taskType}
+			{@const taskLabel = TASK_TYPE_LABELS[activity.taskType]}
+			<div class="text-sm">
+				<span class="text-base-content/70">{taskLabel ?? activity.taskType}</span>
+			</div>
+		{:else if activity.indexerName}
+			<div class="text-sm">
+				<span>{activity.indexerName}</span>
+				{#if activity.protocol}
+					<span class="text-base-content/50"
+						>({protocolLabels[activity.protocol] || activity.protocol})</span
+					>
+				{/if}
+			</div>
+		{:else}
+			<span class="text-base-content/40">-</span>
+		{/if}
+	</td>
+
+	<td class="px-2">
+		{#if showProgressDetail}
+			{#if activity.status === 'downloading' && activity.downloadProgress !== undefined}
+				<div class="flex items-center gap-2">
+					<progress
+						class="progress w-10 progress-info sm:w-16"
+						value={activity.downloadProgress}
+						max="100"
+					></progress>
+				</div>
+			{:else if getCompactProgressLabel(activity)}
+				<span class="max-w-32 truncate text-sm text-base-content/60" title={activity.statusReason}>
+					<span class="sm:hidden">{getMobileCompactProgressLabel(activity, config.label)}</span>
+					<span class="hidden sm:inline">{getCompactProgressLabel(activity)}</span>
+				</span>
+			{:else}
+				<span class="text-sm">{getStatusLabel(activity, config.label)}</span>
+			{/if}
+		{/if}
+		<div class="text-xs text-base-content/50" title={getDisplayTime(activity)}>
 			{formatRelativeTime(getDisplayTime(activity))}
-		</span>
+		</div>
 	</td>
 </tr>
 
@@ -285,49 +296,69 @@
 						</div>
 					{/if}
 
-					{#if activity.queueItemId}
-						<div class="ml-auto flex flex-wrap gap-2">
-							{#if supportsQueuePauseResume(activity) && (activity.status === 'downloading' || activity.status === 'seeding')}
+					{#if activity.queueItemId || canBlocklist}
+						<div class="ml-auto flex flex-wrap items-center gap-2">
+							{#if activity.queueItemId}
+								{#if supportsQueuePauseResume(activity) && (activity.status === 'downloading' || activity.status === 'seeding')}
+									<button
+										class="btn gap-1.5 border border-base-content/15 bg-base-100 btn-sm hover:bg-base-200"
+										onclick={() => onQueueAction('pause')}
+										disabled={isQueueActionLoading}
+									>
+										<Pause class="h-3.5 w-3.5" />
+										{m.action_pause()}
+									</button>
+								{:else if supportsQueuePauseResume(activity) && activity.status === 'paused'}
+									<button
+										class="btn gap-1.5 border border-base-content/15 bg-base-100 btn-sm hover:bg-base-200"
+										onclick={() => onQueueAction('resume')}
+										disabled={isQueueActionLoading}
+									>
+										<Play class="h-3.5 w-3.5" />
+										{m.action_resume()}
+									</button>
+								{/if}
+
+								{#if activity.status === 'failed'}
+									<button
+										class="btn gap-1.5 border border-base-content/15 bg-base-100 btn-sm hover:bg-base-200"
+										onclick={() => onQueueAction('retry')}
+										disabled={isQueueActionLoading}
+									>
+										<RotateCcw class="h-3.5 w-3.5" />
+										{isImportFailedActivity(activity)
+											? m.activity_detail_retryImport()
+											: m.common_retry()}
+									</button>
+								{/if}
+
 								<button
-									class="btn gap-1.5 border border-base-content/15 bg-base-100 btn-sm hover:bg-base-200"
-									onclick={() => onQueueAction('pause')}
+									class="btn gap-1.5 border border-error/30 bg-base-100 text-error btn-sm hover:bg-error/10"
+									onclick={() => onQueueAction('remove')}
 									disabled={isQueueActionLoading}
 								>
-									<Pause class="h-3.5 w-3.5" />
-									{m.action_pause()}
-								</button>
-							{:else if supportsQueuePauseResume(activity) && activity.status === 'paused'}
-								<button
-									class="btn gap-1.5 border border-base-content/15 bg-base-100 btn-sm hover:bg-base-200"
-									onclick={() => onQueueAction('resume')}
-									disabled={isQueueActionLoading}
-								>
-									<Play class="h-3.5 w-3.5" />
-									{m.action_resume()}
+									<Trash2 class="h-3.5 w-3.5" />
+									{m.action_remove()}
 								</button>
 							{/if}
 
-							{#if activity.status === 'failed'}
-								<button
-									class="btn gap-1.5 border border-base-content/15 bg-base-100 btn-sm hover:bg-base-200"
-									onclick={() => onQueueAction('retry')}
-									disabled={isQueueActionLoading}
-								>
-									<RotateCcw class="h-3.5 w-3.5" />
-									{isImportFailedActivity(activity)
-										? m.activity_detail_retryImport()
-										: m.common_retry()}
-								</button>
+							{#if canBlocklist}
+								{#if activity.isBlocklisted}
+									<span class="badge gap-1.5 badge-ghost">
+										<Ban class="h-3 w-3" />
+										{m.activity_detail_alreadyBlocklisted()}
+									</span>
+								{:else if onBlocklistHistory}
+									<button
+										class="btn gap-1.5 border border-base-content/15 bg-base-100 btn-sm hover:bg-base-200"
+										onclick={onBlocklistHistory}
+										disabled={isBlocklistLoading}
+									>
+										<Ban class="h-3.5 w-3.5" />
+										{m.activity_detail_addToBlocklist()}
+									</button>
+								{/if}
 							{/if}
-
-							<button
-								class="btn gap-1.5 border border-error/30 bg-base-100 text-error btn-sm hover:bg-error/10"
-								onclick={() => onQueueAction('remove')}
-								disabled={isQueueActionLoading}
-							>
-								<Trash2 class="h-3.5 w-3.5" />
-								{m.action_remove()}
-							</button>
 						</div>
 					{/if}
 				</div>
@@ -341,6 +372,62 @@
 						<span class="text-base-content/80">{activity.releaseTitle}</span>
 					</div>
 				{/if}
+
+				<!-- Narrow viewports hide the Quality/Group/Size/Source columns (see
+				     ActivityTableHeader); surface them here instead of losing them. -->
+				<div
+					class="mt-2 overflow-hidden rounded-lg border border-base-content/12 bg-base-100 shadow-sm lg:hidden"
+				>
+					<div
+						class="flex items-center justify-between border-b border-base-content/8 px-3 py-2 text-sm"
+					>
+						<span class="font-medium text-base-content/55">{m.activity_detail_mediaType()}</span>
+						<span class="badge badge-outline badge-sm capitalize">{activity.mediaType}</span>
+					</div>
+					{#if activity.quality}
+						<div
+							class="flex items-center justify-between border-b border-base-content/8 px-3 py-2 text-sm"
+						>
+							<span class="font-medium text-base-content/55">{m.activity_table_quality()}</span>
+							<div class="flex flex-wrap justify-end gap-1">
+								{#if getResolutionBadge(activity)}
+									<span class="badge badge-outline badge-xs">{getResolutionBadge(activity)}</span>
+								{/if}
+								{#if activity.quality.source}
+									<span class="badge badge-outline badge-xs">{activity.quality.source}</span>
+								{/if}
+								{#if activity.quality.codec}
+									<span class="badge badge-outline badge-xs">{activity.quality.codec}</span>
+								{/if}
+								{#if activity.quality.hdr}
+									<span class="badge badge-outline badge-xs">{activity.quality.hdr}</span>
+								{/if}
+							</div>
+						</div>
+					{/if}
+					<div
+						class="flex items-center justify-between border-b border-base-content/8 px-3 py-2 text-sm"
+					>
+						<span class="font-medium text-base-content/55">{m.common_size()}</span>
+						<span class="font-semibold">{formatBytes(activity.size)}</span>
+					</div>
+					<div
+						class="flex items-center justify-between border-b border-base-content/8 px-3 py-2 text-sm"
+					>
+						<span class="font-medium text-base-content/55">{m.activity_table_group()}</span>
+						<span class="text-base-content/70">{activity.releaseGroup || '-'}</span>
+					</div>
+					<div class="flex items-center justify-between px-3 py-2 text-sm">
+						<span class="font-medium text-base-content/55">{m.activity_table_source()}</span>
+						<span class="text-base-content/70"
+							>{activity.indexerName || '-'}{#if activity.protocol}
+								<span class="text-base-content/40"
+									>({protocolLabels[activity.protocol] || activity.protocol})</span
+								>
+							{/if}</span
+						>
+					</div>
+				</div>
 
 				{#if activity.importedPath}
 					<div

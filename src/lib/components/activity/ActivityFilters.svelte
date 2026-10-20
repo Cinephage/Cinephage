@@ -23,7 +23,6 @@
 		filterOptions: FilterOptions;
 		statusContext?: 'active' | 'history';
 		onFiltersChange: (filters: ActivityFilters) => void;
-		onClearFilters: () => void;
 		showActiveFilters?: boolean;
 		showHistoryControls?: boolean;
 		activeFiltersContent?: Snippet;
@@ -35,7 +34,6 @@
 		filterOptions,
 		statusContext = 'history',
 		onFiltersChange,
-		onClearFilters,
 		showActiveFilters = false,
 		showHistoryControls = false,
 		activeFiltersContent,
@@ -43,19 +41,6 @@
 	}: Props = $props();
 
 	let isExpanded = $state(false);
-	let hasActiveFilters = $derived(
-		filters.status !== 'all' ||
-			filters.mediaType !== 'all' ||
-			filters.protocol !== 'all' ||
-			filters.indexer ||
-			filters.releaseGroup ||
-			filters.resolution ||
-			filters.isUpgrade ||
-			filters.includeNoResults ||
-			filters.startDate ||
-			filters.endDate ||
-			filters.search
-	);
 
 	// ── Debounced text inputs ────────────────────────────────────────────
 	// Search and releaseGroup are text inputs that fire on every keystroke.
@@ -147,6 +132,19 @@
 		return filters.startDate === range.startDate && filters.endDate === range.endDate;
 	}
 
+	const activeDatePresetValue = $derived.by(() => {
+		const match = datePresets.find((preset) => isDatePresetActive(preset.days));
+		return match ? String(match.days) : '';
+	});
+
+	function handleDatePresetChange(value: string) {
+		if (value === '') {
+			clearDateRange();
+			return;
+		}
+		applyDatePreset(Number(value));
+	}
+
 	function clearDateRange() {
 		onFiltersChange({
 			...filters,
@@ -196,95 +194,78 @@
 </script>
 
 <div class="rounded-lg border border-base-content/12 bg-base-100 p-4 shadow-sm">
-	<div class="flex flex-wrap items-center justify-between gap-2">
-		<div class="flex flex-wrap items-center gap-2">
-			<div class="form-control min-w-50 flex-1 sm:max-w-64">
-				<div class="group relative">
-					<div class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2">
-						<Search
-							class="h-4 w-4 text-base-content/40 transition-colors group-focus-within:text-primary"
-						/>
-					</div>
-					<input
-						type="text"
-						placeholder={m.activity_filters_searchPlaceholder()}
-						class="input w-full rounded-full border-base-content/20 bg-base-200/60 pr-9 pl-10 transition-all duration-200 input-sm placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
-						value={searchValue}
-						oninput={(e) => onSearchInput(e.currentTarget.value)}
+	<div class="flex flex-wrap items-center gap-2">
+		<div class="form-control min-w-50 flex-1 sm:max-w-64">
+			<div class="group relative">
+				<div class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2">
+					<Search
+						class="h-4 w-4 text-base-content/40 transition-colors group-focus-within:text-primary"
 					/>
 				</div>
+				<input
+					type="text"
+					placeholder={m.activity_filters_searchPlaceholder()}
+					class="input w-full rounded-full border-base-content/20 bg-base-200/60 pr-9 pl-10 transition-all duration-200 input-sm placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
+					value={searchValue}
+					oninput={(e) => onSearchInput(e.currentTarget.value)}
+				/>
 			</div>
-
-			<span class="h-4 w-px bg-base-content/15"></span>
-
-			<div class="join">
-				<button
-					class="btn join-item btn-sm {filters.mediaType === 'all' ? 'btn-primary' : 'btn-ghost'}"
-					onclick={() => updateFilter('mediaType', 'all')}
-				>
-					{m.common_all()}
-				</button>
-				<button
-					class="btn join-item btn-sm {filters.mediaType === 'movie' ? 'btn-primary' : 'btn-ghost'}"
-					onclick={() => updateFilter('mediaType', 'movie')}
-				>
-					{m.common_movies()}
-				</button>
-				<button
-					class="btn join-item btn-sm {filters.mediaType === 'tv' ? 'btn-primary' : 'btn-ghost'}"
-					onclick={() => updateFilter('mediaType', 'tv')}
-				>
-					{m.common_tvShows()}
-				</button>
-			</div>
-
-			{#if statusContext === 'history'}
-				<span class="h-4 w-px bg-base-content/15"></span>
-
-				<div class="join">
-					{#each datePresets as preset (preset.label)}
-						<button
-							class="btn join-item btn-sm {isDatePresetActive(preset.days)
-								? 'btn-primary'
-								: 'btn-ghost'}"
-							onclick={() => applyDatePreset(preset.days)}
-							title="Last {preset.days === 0 ? '24 hours' : preset.days + ' days'}"
-							aria-pressed={isDatePresetActive(preset.days)}
-						>
-							{preset.label}
-						</button>
-					{/each}
-					{#if filters.startDate || filters.endDate}
-						<button class="btn join-item btn-ghost btn-error btn-sm" onclick={clearDateRange}>
-							<X class="h-3 w-3" />
-						</button>
-					{/if}
-				</div>
-			{/if}
 		</div>
 
-		<div class="flex items-center gap-2">
-			{#if hasActiveFilters}
-				<button class="btn btn-ghost btn-xs" onclick={onClearFilters}>
-					<X class="h-3 w-3" />
-					{m.action_clear()}
-				</button>
-			{/if}
+		<span class="h-4 w-px bg-base-content/15"></span>
+
+		<div class="join">
 			<button
-				class="btn gap-1.5 btn-ghost btn-sm"
-				onclick={() => (isExpanded = !isExpanded)}
-				aria-label={isExpanded ? 'Collapse filters' : 'Expand filters'}
+				class="btn join-item btn-sm {filters.mediaType === 'all' ? 'btn-primary' : 'btn-ghost'}"
+				onclick={() => updateFilter('mediaType', 'all')}
 			>
-				<Filter class="h-4 w-4 text-base-content/50" />
-				{#if isExpanded}
-					<span>{m.activity_filters_lessFilters()}</span>
-					<ChevronUp class="h-4 w-4" />
-				{:else}
-					<span>{m.activity_filters_moreFilters()}</span>
-					<ChevronDown class="h-4 w-4" />
-				{/if}
+				{m.common_all()}
+			</button>
+			<button
+				class="btn join-item btn-sm {filters.mediaType === 'movie' ? 'btn-primary' : 'btn-ghost'}"
+				onclick={() => updateFilter('mediaType', 'movie')}
+			>
+				{m.common_movies()}
+			</button>
+			<button
+				class="btn join-item btn-sm {filters.mediaType === 'tv' ? 'btn-primary' : 'btn-ghost'}"
+				onclick={() => updateFilter('mediaType', 'tv')}
+			>
+				{m.common_tvShows()}
 			</button>
 		</div>
+
+		{#if statusContext === 'history'}
+			<span class="h-4 w-px bg-base-content/15"></span>
+
+			<select
+				class="select w-28 border-base-content/20 bg-base-200 select-sm sm:w-auto"
+				onchange={(e) => handleDatePresetChange(e.currentTarget.value)}
+				aria-label="Date range"
+			>
+				<option value="" selected={activeDatePresetValue === ''}>All time</option>
+				{#each datePresets as preset (preset.label)}
+					<option value={preset.days} selected={activeDatePresetValue === String(preset.days)}>
+						{preset.label}
+					</option>
+				{/each}
+			</select>
+		{/if}
+
+		<button
+			class="btn ml-auto gap-1.5 btn-ghost btn-sm"
+			onclick={() => (isExpanded = !isExpanded)}
+			aria-label={isExpanded ? 'Collapse filters' : 'Expand filters'}
+		>
+			<Filter class="h-4 w-4 text-base-content/50" />
+			{#if isExpanded}
+				<span>{m.activity_filters_lessFilters()}</span>
+				<ChevronUp class="h-4 w-4" />
+			{:else}
+				<span>{m.activity_filters_moreFilters()}</span>
+				<ChevronDown class="h-4 w-4" />
+			{/if}
+		</button>
 	</div>
 
 	{#if isExpanded}
