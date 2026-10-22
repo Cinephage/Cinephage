@@ -73,15 +73,21 @@ export function rotateCredentials(): CredentialRotationResult {
 		sqlite.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`).get(name);
 
 	// Registry surfaces: decrypt (kid fallback inside decryptCredential), then
-	// re-encrypt. A row whose secret fails to decrypt keeps its old ciphertext.
+	// re-encrypt. A row whose secret fails to decrypt is left untouched and
+	// reported — never rewritten with the null the failed decrypt produced.
 	for (const spec of SECRET_FIELD_SPECS) {
 		if (!tableExists(spec.table)) continue;
 
 		const rows = sqlite.prepare(`SELECT * FROM "${spec.table}"`).all() as Array<
 			Record<string, unknown>
 		>;
+		// An empty table has no columns to build an UPDATE from. The old
+		// `rows[0] ?? { x: 1 }` fallback produced `SET "x" = ?`, which throws
+		// `no such column: x` and aborted the whole rotation on installs with an
+		// empty indexer_status / subtitle_providers table.
+		if (rows.length === 0) continue;
 		const update = sqlite.prepare(
-			`UPDATE "${spec.table}" SET ${Object.keys(rows[0] ?? { x: 1 })
+			`UPDATE "${spec.table}" SET ${Object.keys(rows[0])
 				.filter((key) => key !== spec.idColumn)
 				.map((key) => `"${key}" = ?`)
 				.join(', ')} WHERE "${spec.idColumn}" = ?`
@@ -89,13 +95,8 @@ export function rotateCredentials(): CredentialRotationResult {
 
 		for (const row of rows) {
 			const before = JSON.stringify(row);
-			decryptRecordSecrets(spec, row);
-			// Detect a failed decrypt: any secret column still holding an envelope.
-			let failed = false;
-			for (const value of Object.values(row)) {
-				if (typeof value === 'string' && value.includes('cphg1.')) failed = true;
-			}
-			if (failed) {
+			const failedFields = decryptRecordSecrets(spec, row);
+			if (failedFields.length > 0) {
 				result.failed++;
 				result.failedRefs.push(`${spec.table}:${String(row[spec.idColumn])}`);
 				continue;

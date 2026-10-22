@@ -9,7 +9,12 @@ import {
 	rootFolders
 } from '#lib/server/db/schema.js';
 import { eq, inArray } from 'drizzle-orm';
-import { deleteDirectoryWithinRoot } from '#lib/server/filesystem/delete-helpers.js';
+import { join } from 'node:path';
+import {
+	deleteDirectoryWithinRoot,
+	deleteFilesWithinRoot,
+	namesRootItself
+} from '#lib/server/filesystem/delete-helpers.js';
 import { deleteAllAlternateTitles } from '#lib/server/services/index.js';
 import { monitoringSearchService } from '#lib/server/monitoring/search/MonitoringSearchService.js';
 import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
@@ -184,9 +189,17 @@ export const DELETE: RequestHandler = async ({ request }) => {
 					continue;
 				}
 
-				// Delete files from disk if requested
+				// Delete files from disk if requested. A series tracked at the root
+				// itself only removes its own files, never the library root.
 				if (deleteFiles && seriesItem.rootFolderPath && seriesItem.path) {
-					await deleteDirectoryWithinRoot(seriesItem.rootFolderPath, seriesItem.path);
+					if (namesRootItself(seriesItem.rootFolderPath, seriesItem.path)) {
+						await deleteFilesWithinRoot(
+							seriesItem.rootFolderPath,
+							files.map((file) => join(seriesItem.path!, file.relativePath))
+						);
+					} else {
+						await deleteDirectoryWithinRoot(seriesItem.rootFolderPath, seriesItem.path);
+					}
 				}
 
 				// Delete all episode file records from database

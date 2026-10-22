@@ -18,7 +18,11 @@ import { monitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.
 import { monitoringSearchService } from '#lib/server/monitoring/search/MonitoringSearchService.js';
 import { getDownloadClientManager } from '#lib/server/downloadClients/DownloadClientManager.js';
 import { deleteAllAlternateTitles } from '#lib/server/services/index.js';
-import { deleteDirectoryWithinRoot } from '#lib/server/filesystem/delete-helpers.js';
+import {
+	deleteDirectoryWithinRoot,
+	deleteFilesWithinRoot,
+	namesRootItself
+} from '#lib/server/filesystem/delete-helpers.js';
 import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
 import { tmdb } from '#lib/server/tmdb.js';
 import { movieUpdateSchema } from '#lib/validation/schemas.js';
@@ -743,10 +747,24 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 			);
 		}
 
-		// Delete files from disk if requested
+		// Delete files from disk if requested. A movie whose tracked path IS the
+		// root folder (a loose file at the top of the library) must remove its
+		// own files, never the directory: that would take every other title in
+		// the root with it.
 		if (deleteFiles && movie.rootFolderPath && movie.path) {
-			const movieFolder = await deleteDirectoryWithinRoot(movie.rootFolderPath, movie.path);
-			logger.debug({ movieFolder }, '[API] Removed movie folder and all contents');
+			if (namesRootItself(movie.rootFolderPath, movie.path)) {
+				const removed = await deleteFilesWithinRoot(
+					movie.rootFolderPath,
+					files.map((file) => join(movie.path!, file.relativePath))
+				);
+				logger.debug(
+					{ count: removed.length },
+					'[API] Removed root-level movie files without deleting the library root'
+				);
+			} else {
+				const movieFolder = await deleteDirectoryWithinRoot(movie.rootFolderPath, movie.path);
+				logger.debug({ movieFolder }, '[API] Removed movie folder and all contents');
+			}
 		}
 
 		// Delete movie file records from database

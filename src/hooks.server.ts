@@ -244,6 +244,50 @@ const customHandler: Handle = async ({ event, resolve }) => {
 				routePath === AUTH_BASE_PATH || routePath.startsWith(`${AUTH_BASE_PATH}/`);
 
 			/**
+			 * Streaming-scoped keys must never authenticate the Better Auth
+			 * surface. The api-key plugin is configured with
+			 * enableSessionForAPIKeys, and its before-hook bridges ANY valid key
+			 * into the owner's session without inspecting permissions — so a
+			 * playback key (routinely embedded in .strm files, .m3u playlists and
+			 * proxy logs) could reach list-sessions, update-user and
+			 * api-key/create. The main gate below already refuses to bridge such
+			 * keys; /api/auth bypasses the main gate entirely, so refuse them here.
+			 */
+			const rejectStreamingKeyOnAuthRoute = async (): Promise<Response | null> => {
+				if (!isAuthRoute) return null;
+				const presented = event.request.headers.get('x-api-key');
+				if (!presented) return null;
+
+				const fullAccess = await auth.api
+					.verifyApiKey({
+						body: { key: presented, permissions: { default: ['*'] } }
+					})
+					.then((verify) => verify.valid)
+					.catch(() => false);
+				if (fullAccess) return null;
+
+				requestLogger.warn(
+					{ logDomain: 'auth', endpoint: pathname },
+					'[Auth] Rejected non-full-access API key on the auth surface'
+				);
+				return Response.json(
+					{
+						success: false,
+						error: 'Unauthorized',
+						code: 'UNAUTHORIZED'
+					},
+					{
+						status: 401,
+						headers: {
+							'x-correlation-id': correlationId,
+							'x-support-id': supportId,
+							...BASE_SECURITY_HEADERS
+						}
+					}
+				);
+			};
+
+			/**
 			 * Session resolution, API-key gates, setup/login redirects, rate
 			 * limiting, and legacy URL redirects for everything EXCEPT /api/auth.
 			 * Returns a Response when the request must not reach the endpoint,
@@ -612,6 +656,11 @@ const customHandler: Handle = async ({ event, resolve }) => {
 				const gateResponse = await applyRequestGates();
 				if (gateResponse) {
 					return gateResponse;
+				}
+			} else {
+				const authKeyResponse = await rejectStreamingKeyOnAuthRoute();
+				if (authKeyResponse) {
+					return authKeyResponse;
 				}
 			}
 

@@ -411,22 +411,42 @@ export const auth = betterAuth({
 					// session of the target, server-side, so the raw admin API
 					// cannot leave stale authenticated sessions behind. Self-service
 					// password changes (actor === owner) keep their sessions.
+					//
+					// The after-hook is shared with updateMany paths, where the
+					// adapter resolves the affected rows to a COUNT rather than a
+					// row object. `internalAdapter.updatePassword` uses
+					// updateManyWithHooks, so `account` is a number there and
+					// `account.userId` is undefined — the old guard silently skipped
+					// revocation for exactly the admin-reset case it was written for.
+					// Recover the target from the endpoint body instead.
+					const bodyUserId =
+						typeof (ctx as { body?: { userId?: unknown } } | undefined)?.body?.userId === 'string'
+							? (ctx as { body: { userId: string } }).body.userId
+							: null;
+					const affected = account as unknown;
+					const rowUserId =
+						typeof affected === 'object' && affected !== null && 'userId' in affected
+							? (affected as { userId?: unknown }).userId
+							: undefined;
+					const targetUserId =
+						typeof rowUserId === 'string' ? rowUserId : (bodyUserId ?? undefined);
+
 					const actor = ctx?.context?.session?.user;
-					if (typeof account?.userId === 'string' && (!actor || actor.id !== account.userId)) {
+					if (targetUserId && (!actor || actor.id !== targetUserId)) {
 						try {
 							const sqlite = getSharedSqliteConnection();
 							const result = sqlite
 								.prepare(`DELETE FROM session WHERE "userId" = ?`)
-								.run(account.userId);
+								.run(targetUserId);
 							if (result.changes > 0) {
 								logger.info(
-									{ userId: account.userId, revoked: result.changes, logDomain: 'auth' },
+									{ userId: targetUserId, revoked: result.changes, logDomain: 'auth' },
 									'[Auth] Admin password reset revoked target sessions'
 								);
 							}
 						} catch (error) {
 							logger.error(
-								{ err: error, userId: account.userId, logDomain: 'auth' },
+								{ err: error, userId: targetUserId, logDomain: 'auth' },
 								'[Auth] Failed to revoke sessions after admin password reset'
 							);
 						}

@@ -172,11 +172,23 @@ function isSensitiveObjectKey(key: string): boolean {
 	const lower = key.toLowerCase();
 	return SENSITIVE_OBJECT_KEYS.some((sensitiveKey) => {
 		const sensitiveLower = sensitiveKey.toLowerCase();
-		return (
-			lower === sensitiveLower ||
-			lower.endsWith(`_${sensitiveLower}`) ||
-			lower.endsWith(`-${sensitiveLower}`)
-		);
+		if (lower === sensitiveLower) return true;
+		if (lower.endsWith(`_${sensitiveLower}`) || lower.endsWith(`-${sensitiveLower}`)) return true;
+		// camelCase compounds: sessionToken, apiToken, accessToken,
+		// adminPassword, clientSecret. The exact/suffix match above misses
+		// these, which is how `sessionToken: session.token` reached the logs
+		// unredacted on every proxied playback segment.
+		if (lower.endsWith(sensitiveLower) && lower.length > sensitiveLower.length) {
+			// The suffix must start on a word boundary. In camelCase the
+			// distinguishing character is the FIRST character of the suffix in
+			// the original key: `sessionToken` ends in `Token`, `adminPassword`
+			// in `Password`.
+			const originalSuffixStart = key.charAt(key.length - sensitiveLower.length);
+			if (/[A-Z]/.test(originalSuffixStart)) return true;
+			const separator = lower.charAt(lower.length - sensitiveLower.length - 1);
+			if (separator === '_' || separator === '-') return true;
+		}
+		return false;
 	});
 }
 
@@ -199,8 +211,21 @@ function redactString(input: string): string {
 		(_match, prefix: string) => `${prefix}${REDACTED}`
 	);
 
+	// camelCase compounds: `sessionToken=...`, `apiToken: ...`. The `\b` below
+	// never matches inside a camelCase word, so a token logged as part of a
+	// prefixed identifier slipped through. Values stop at the characters that
+	// terminate a key/value pair, and the key itself may not start with `?`,
+	// `&`, or `/` so an already-handled query param is not re-matched.
 	redacted = redacted.replace(
-		new RegExp(`\\b(${queryKeyPattern})\\b\\s*[:=]\\s*([^\\s,;]+)`, 'gi'),
+		new RegExp(
+			`(^|[^?&/\\w-])([A-Za-z0-9_$-]*(?:${queryKeyPattern}))\\s*[:=]\\s*([^\\s,;&"']+)`,
+			'gi'
+		),
+		(_match, lead: string, key: string) => `${lead}${key}=${REDACTED}`
+	);
+
+	redacted = redacted.replace(
+		new RegExp(`\\b(${queryKeyPattern})\\b\\s*[:=]\\s*([^\\s,;&"']+)`, 'gi'),
 		(_match, key: string) => `${key}=${REDACTED}`
 	);
 
@@ -690,6 +715,9 @@ class PinoAppLogger implements AppLogger {
 }
 
 export const logger: AppLogger = new PinoAppLogger();
+
+/** Test-only access to the redaction predicates (see logging-redaction.test.ts). */
+export const __testing = { isSensitiveObjectKey, redactString };
 
 export function createChildLogger(baseContext: LogContext): AppLogger {
 	const pinoLogger = rootPinoLogger.child(sanitizeContext(baseContext));

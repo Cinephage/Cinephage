@@ -13,7 +13,11 @@ import {
 	subtitles
 } from '#lib/server/db/schema.js';
 import { and, eq, inArray } from 'drizzle-orm';
-import { deleteDirectoryWithinRoot } from '#lib/server/filesystem/delete-helpers.js';
+import {
+	deleteDirectoryWithinRoot,
+	deleteFilesWithinRoot,
+	namesRootItself
+} from '#lib/server/filesystem/delete-helpers.js';
 import { todayDateString } from '#lib/utils/format.js';
 import { getLanguageProfileService } from '#lib/server/subtitles/services/LanguageProfileService.js';
 import { searchSubtitlesForMediaBatch } from '#lib/server/subtitles/services/SubtitleImportService.js';
@@ -845,13 +849,26 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 			);
 		}
 
-		// Delete files from disk if requested
+		// Delete files from disk if requested. A series tracked at the root itself
+		// only removes its own files; deleting the directory would take the whole
+		// library with it.
 		if (deleteFiles && seriesItem.rootFolderPath && seriesItem.path) {
-			const seriesFolder = await deleteDirectoryWithinRoot(
-				seriesItem.rootFolderPath,
-				seriesItem.path
-			);
-			logger.debug({ seriesFolder }, '[API] Removed series folder and all contents');
+			if (namesRootItself(seriesItem.rootFolderPath, seriesItem.path)) {
+				await deleteFilesWithinRoot(
+					seriesItem.rootFolderPath,
+					files.map((file) => join(seriesItem.path!, file.relativePath))
+				);
+				logger.debug(
+					{ count: files.length },
+					'[API] Removed root-level series files without deleting the library root'
+				);
+			} else {
+				const seriesFolder = await deleteDirectoryWithinRoot(
+					seriesItem.rootFolderPath,
+					seriesItem.path
+				);
+				logger.debug({ seriesFolder }, '[API] Removed series folder and all contents');
+			}
 		}
 
 		// Delete all episode file records from database

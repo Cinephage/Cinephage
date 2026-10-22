@@ -75,16 +75,37 @@ export const SECRET_FIELD_SPECS: SecretFieldSpec[] = [
 		purpose: 'subtitle-provider',
 		table: 'subtitle_providers',
 		idColumn: 'id',
-		scalarFields: ['api_key', 'username', 'password']
+		scalarFields: ['api_key', 'username', 'password'],
+		// Provider-specific settings hold definition keys like `token` (assrt,
+		// betaseries) that never reach the promoted columns above.
+		jsonFields: [{ column: 'settings' }]
 	},
 	{
 		purpose: 'livetv-config',
 		table: 'livetv_accounts',
 		idColumn: 'id',
+		// Must be a superset of configCrypto.ts's LIVETV_EXTRA_SECRET_KEYS for
+		// every column: the runtime encrypts by key name without knowing which
+		// provider config it holds, and rotation only re-encrypts registered
+		// keys. A key encrypted at runtime but missing here would be decrypted
+		// and then written back as plaintext.
 		jsonFields: [
-			{ column: 'stalker_config' },
-			{ column: 'xstream_config' },
-			{ column: 'm3u_config', extraKeys: ['url', 'headers'] }
+			{
+				column: 'stalker_config',
+				extraKeys: ['url', 'headers', 'epgUrl', 'fileContent']
+			},
+			{
+				column: 'xstream_config',
+				extraKeys: ['url', 'headers', 'epgUrl', 'fileContent']
+			},
+			{
+				column: 'm3u_config',
+				// `url` and `headers` embed provider credentials; `epgUrl` is a
+				// third-party-controlled URL that routinely carries username/password
+				// query params; `fileContent` is an uploaded playlist full of
+				// credentialed channel URLs.
+				extraKeys: ['url', 'headers', 'epgUrl', 'fileContent']
+			}
 		]
 	},
 	{
@@ -189,9 +210,20 @@ function encryptJsonObject(
 	return out;
 }
 
-function decryptJsonValue(purpose: string, recordId: string, value: unknown): unknown {
+function decryptJsonValue(
+	purpose: string,
+	recordId: string,
+	value: unknown,
+	failed: string[],
+	path: string
+): unknown {
 	if (typeof value === 'string' && isEncryptedCredential(value)) {
 		const plaintext = decryptCredential(purpose, recordId, value);
+		if (plaintext === null) {
+			failed.push(path);
+			// Leave the original envelope so a rewrite cannot destroy it.
+			return value;
+		}
 		// Encrypted objects (e.g. m3u header maps) were stored stringified.
 		if (typeof plaintext === 'string' && plaintext.startsWith('{')) {
 			try {
@@ -204,7 +236,7 @@ function decryptJsonValue(purpose: string, recordId: string, value: unknown): un
 		return plaintext;
 	}
 	if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-		return decryptJsonObject(purpose, recordId, value as Record<string, unknown>);
+		return decryptJsonObject(purpose, recordId, value as Record<string, unknown>, failed, path);
 	}
 	return value;
 }
@@ -212,11 +244,14 @@ function decryptJsonValue(purpose: string, recordId: string, value: unknown): un
 function decryptJsonObject(
 	purpose: string,
 	recordId: string,
-	value: Record<string, unknown>
+	value: Record<string, unknown>,
+	failed: string[] = [],
+	prefix = ''
 ): Record<string, unknown> {
 	const out: Record<string, unknown> = {};
 	for (const [k, v] of Object.entries(value)) {
-		out[k] = decryptJsonValue(purpose, recordId, v);
+		const childPath = prefix ? `${prefix}.${k}` : k;
+		out[k] = decryptJsonValue(purpose, recordId, v, failed, childPath);
 	}
 	return out;
 }
@@ -276,16 +311,31 @@ export function encryptRecordSecrets(spec: SecretFieldSpec, row: Record<string, 
  * Decrypt every secret field of a row (mutates the row).
  * Non-enveloped values pass through untouched (plaintext tolerance for rows
  * that raced the migration or were restored by older tooling).
+ *
+ * Returns the secret fields whose envelope failed to decrypt. Callers that
+ * rewrite the row (rotation) MUST check this: a failed decrypt leaves `null`
+ * (or `''` for kv rows) in the column, so re-encrypting the row would persist
+ * the loss over the original ciphertext.
  */
-export function decryptRecordSecrets(spec: SecretFieldSpec, row: Record<string, unknown>): void {
+export function decryptRecordSecrets(
+	spec: SecretFieldSpec,
+	row: Record<string, unknown>
+): string[] {
 	const recordId = String(row[spec.idColumn] ?? '');
+	const failed: string[] = [];
 
 	for (const field of spec.scalarFields ?? []) {
 		for (const key of Object.keys(row)) {
 			if (!matchesField(field, key)) continue;
 			const value = row[key];
 			if (typeof value === 'string' && isEncryptedCredential(value)) {
-				row[key] = decryptCredential(spec.purpose, recordId, value);
+				const plaintext = decryptCredential(spec.purpose, recordId, value);
+				if (plaintext === null) {
+					// Keep the original ciphertext so the row is not destroyed.
+					failed.push(key);
+					continue;
+				}
+				row[key] = plaintext;
 			}
 		}
 	}
@@ -296,7 +346,7 @@ export function decryptRecordSecrets(spec: SecretFieldSpec, row: Record<string, 
 			const raw = row[key];
 			const json = parseJsonObject(raw) ?? tryParseJson(typeof raw === 'string' ? raw : '');
 			if (json) {
-				const walked = decryptJsonObject(spec.purpose, recordId, json);
+				const walked = decryptJsonObject(spec.purpose, recordId, json, failed, field.column);
 				row[key] = typeof raw === 'string' ? JSON.stringify(walked) : walked;
 			}
 		}
@@ -308,11 +358,15 @@ export function decryptRecordSecrets(spec: SecretFieldSpec, row: Record<string, 
 			const value = row['value'];
 			if (typeof value === 'string' && isEncryptedCredential(value)) {
 				const plaintext = decryptCredential(spec.purpose, key, value);
-				row['value'] = plaintext === null ? '' : plaintext;
+				if (plaintext === null) {
+					failed.push('value');
+				} else {
+					row['value'] = plaintext;
+				}
 			} else if (typeof value === 'string' && value) {
 				const asJson = tryParseJson(value);
 				if (asJson) {
-					const walked = decryptJsonObject(spec.purpose, key, asJson);
+					const walked = decryptJsonObject(spec.purpose, key, asJson, failed, 'value');
 					// Only replace when a secret actually decrypted inside.
 					if (JSON.stringify(walked) !== JSON.stringify(asJson)) {
 						row['value'] = JSON.stringify(walked);
@@ -321,6 +375,8 @@ export function decryptRecordSecrets(spec: SecretFieldSpec, row: Record<string, 
 			}
 		}
 	}
+
+	return failed;
 }
 
 function tryParseJson(value: string): Record<string, unknown> | null {

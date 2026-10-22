@@ -560,6 +560,107 @@ describe('real Better Auth instance — adversarial escalation matrix', () => {
 		return new Headers({ cookie: harness.cookieHeader(harness.extractCookies(signIn)) });
 	}
 
+	it('revokes the target sessions when an admin resets another user password', async () => {
+		// Regression: the revocation hook only handled the row-object shape.
+		// setUserPassword goes through internalAdapter.updatePassword, whose
+		// updateManyWithHooks after-hook receives a COUNT, so the old
+		// `typeof account.userId === 'string'` guard never fired and a stolen
+		// session survived the reset for its full lifetime.
+		const viewerId = db
+			.select()
+			.from(user)
+			.all()
+			.find((row) => row.username === 'testviewer')!.id;
+
+		// A session an attacker is holding.
+		const stolenSignIn = await harness.authRequest('/sign-in/username', {
+			method: 'POST',
+			body: JSON.stringify({ username: 'testviewer', password: 'viewer-password-123' })
+		});
+		expect(stolenSignIn.status).toBe(200);
+		expect(
+			db
+				.select()
+				.from(session)
+				.all()
+				.filter((s) => s.userId === viewerId).length
+		).toBeGreaterThan(0);
+
+		const adminSignIn = await harness.authRequest('/sign-in/username', {
+			method: 'POST',
+			body: JSON.stringify({ username: 'secondadmin', password: 'second-admin-password' })
+		});
+		expect(adminSignIn.status).toBe(200);
+		const adminHeaders = new Headers({
+			cookie: harness.cookieHeader(harness.extractCookies(adminSignIn))
+		});
+
+		await harness.withStore(
+			harness.makeEvent('POST', '/api/auth/admin/set-user-password').event,
+			() =>
+				harness.auth.api.setUserPassword({
+					body: { userId: viewerId, newPassword: 'remediated-password-123' },
+					headers: adminHeaders
+				})
+		);
+		// after-hooks are queued after the transaction commits.
+		await new Promise((resolve) => setTimeout(resolve, 50));
+
+		expect(
+			db
+				.select()
+				.from(session)
+				.all()
+				.filter((s) => s.userId === viewerId)
+		).toHaveLength(0);
+	});
+
+	it('keeps the owner sessions on a self-service password change', async () => {
+		// Counterpart to the reset test: a self-service change must not treat the
+		// owner as an attacker and evict the session making the request.
+		const viewerId = db
+			.select()
+			.from(user)
+			.all()
+			.find((row) => row.username === 'testviewer')!.id;
+
+		const signIn = await harness.authRequest('/sign-in/username', {
+			method: 'POST',
+			body: JSON.stringify({ username: 'testviewer', password: 'remediated-password-123' })
+		});
+		expect(signIn.status).toBe(200);
+		const headers = new Headers({ cookie: harness.cookieHeader(harness.extractCookies(signIn)) });
+
+		const change = await harness.authRequest('/change-password', {
+			method: 'POST',
+			headers,
+			body: JSON.stringify({
+				currentPassword: 'remediated-password-123',
+				newPassword: 'viewer-password-123',
+				revokeOtherSessions: true
+			})
+		});
+		expect(change.status).toBe(200);
+		await new Promise((resolve) => setTimeout(resolve, 50));
+
+		const remaining = db
+			.select()
+			.from(session)
+			.all()
+			.filter((s) => s.userId === viewerId);
+		expect(remaining.length).toBe(1);
+
+		// Restore the fixture password for any later test.
+		expect(
+			(
+				await harness.authRequest('/sign-in/username', {
+					method: 'POST',
+					body: JSON.stringify({ username: 'testviewer', password: 'viewer-password-123' })
+				})
+			).status
+		).toBe(200);
+	});
+
 	it('rejects self-promotion through the generic update-user route', async () => {
 		viewerHeaders = await viewerSignIn();
 		const response = await harness.authRequest('/update-user', {

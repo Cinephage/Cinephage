@@ -110,7 +110,12 @@ COPY --from=builder /app/build ./build
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/server.js ./server.js
 COPY --from=builder /app/scripts ./scripts
-COPY --from=builder /app/data ./bundled-data
+# Only the bundled read-only assets the entrypoint syncs. Copying all of
+# /app/data would ship a developer checkout's database, logs and backups if
+# the .dockerignore re-includes ever drift. Channel logos are fetched into
+# the config volume at runtime, so they are deliberately not bundled.
+COPY --from=builder /app/data/indexers ./bundled-data/indexers
+COPY --from=builder /app/data/external-lists ./bundled-data/external-lists
 # Camoufox shadow-unlock addon (loaded at runtime for Cloudflare Turnstile solving)
 COPY --from=builder /app/src/lib/server/captcha/browser/addon ./camoufox-addon
 COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/cinephage-entrypoint

@@ -24,6 +24,7 @@ import {
 } from '#lib/server/workers/index.js';
 import { getStalkerPortalManager } from './StalkerPortalManager';
 import { getLiveTvAccountManager } from '../LiveTvAccountManager';
+import { encryptLivetvConfig } from '../configCrypto.js';
 import { getLiveTvChannelService } from '../LiveTvChannelService';
 import { MacGenerator } from './MacGenerator';
 
@@ -370,7 +371,13 @@ export class PortalScannerService {
 		};
 		db.update(livetvAccounts)
 			.set({
-				stalkerConfig: updatedStalkerConfig
+				// account.stalkerConfig is already decrypted here (recordToAccount /
+				// createAccount); re-encrypt before persisting or the portal URL and
+				// MAC credentials are written back as plaintext.
+				stalkerConfig: encryptLivetvConfig(
+					account.id,
+					updatedStalkerConfig as unknown as Record<string, unknown>
+				) as unknown as typeof account.stalkerConfig
 			})
 			.where(eq(livetvAccounts.id, account.id))
 			.run();

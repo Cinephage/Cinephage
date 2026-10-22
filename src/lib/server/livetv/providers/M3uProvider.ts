@@ -31,6 +31,7 @@ import type {
 	M3uConfig
 } from '#lib/types/livetv.js';
 import { recordToAccount } from '../LiveTvAccountManager.js';
+import { encryptLivetvConfig } from '../configCrypto.js';
 import { resolveHttpUrl } from '../urlGuards.js';
 
 const gunzipAsync = promisify(gunzip);
@@ -231,7 +232,13 @@ export class M3uProvider implements LiveTvProvider {
 				await db
 					.update(livetvAccounts)
 					.set({
-						m3uConfig: nextConfig,
+						// `config` came from recordToAccount, which decrypts `url`,
+						// `headers` and other credential keys. Writing it back raw
+						// downgrades the row to plaintext on every playlist refresh.
+						m3uConfig: encryptLivetvConfig(
+							accountId,
+							nextConfig as unknown as Record<string, unknown>
+						) as unknown as M3uConfig,
 						updatedAt: now
 					})
 					.where(eq(livetvAccounts.id, accountId));
@@ -557,10 +564,13 @@ export class M3uProvider implements LiveTvProvider {
 					await db
 						.update(livetvAccounts)
 						.set({
-							m3uConfig: {
+							// `config` is decrypted at this point (recordToAccount);
+							// re-encrypt before persisting or the row downgrades to
+							// plaintext on every EPG sync.
+							m3uConfig: encryptLivetvConfig(account.id, {
 								...config,
 								epgUrl
-							},
+							} as unknown as Record<string, unknown>) as unknown as M3uConfig,
 							updatedAt: new Date().toISOString()
 						})
 						.where(eq(livetvAccounts.id, account.id));

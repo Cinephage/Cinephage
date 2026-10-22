@@ -2,7 +2,12 @@ import type { RequestHandler } from './$types.js';
 import { db } from '#lib/server/db/index.js';
 import { downloadHistory, movies, movieFiles, rootFolders } from '#lib/server/db/schema.js';
 import { eq, inArray } from 'drizzle-orm';
-import { deleteDirectoryWithinRoot } from '#lib/server/filesystem/delete-helpers.js';
+import { join } from 'node:path';
+import {
+	deleteDirectoryWithinRoot,
+	deleteFilesWithinRoot,
+	namesRootItself
+} from '#lib/server/filesystem/delete-helpers.js';
 import { deleteAllAlternateTitles } from '#lib/server/services/index.js';
 import { monitoringSearchService } from '#lib/server/monitoring/search/MonitoringSearchService.js';
 import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
@@ -164,9 +169,18 @@ export const DELETE: RequestHandler = async ({ request }) => {
 					continue;
 				}
 
-				// Delete files from disk if requested
+				// Delete files from disk if requested. A movie tracked at the root
+				// itself (a loose file at the top of the library) only removes its
+				// own files; deleting the directory would wipe every other title.
 				if (deleteFiles && movie.rootFolderPath && movie.path) {
-					await deleteDirectoryWithinRoot(movie.rootFolderPath, movie.path);
+					if (namesRootItself(movie.rootFolderPath, movie.path)) {
+						await deleteFilesWithinRoot(
+							movie.rootFolderPath,
+							files.map((file) => join(movie.path!, file.relativePath))
+						);
+					} else {
+						await deleteDirectoryWithinRoot(movie.rootFolderPath, movie.path);
+					}
 				}
 
 				// Delete movie file records from database

@@ -7,15 +7,28 @@ import {
 /**
  * At-rest encryption for LiveTV provider config JSONs (stalker/xstream/m3u).
  * Credential fields (username/password/token/authToken via the shared
- * predicate; m3u `url`/`headers` explicitly — URLs embed user:pass) are
- * enveloped per-field; everything else stays plaintext.
+ * predicate) are enveloped per-field; everything else stays plaintext.
+ *
+ * The extra keys MUST match the `extraKeys` declared for livetv_accounts in
+ * SECRET_FIELD_SPECS. If the runtime encrypts a field the registry does not
+ * know about, credential rotation decrypts and re-encrypts around it — the
+ * value survives, but backups and migrations treat it as non-secret and copy
+ * it out as plaintext.
  */
-
 const LIVETV_CONFIG_PURPOSE = 'livetv-config';
-const M3U_EXTRA_SECRET_KEYS = ['url', 'headers'];
+const LIVETV_EXTRA_SECRET_KEYS = [
+	// M3U: the playlist URL and headers embed provider credentials.
+	'url',
+	'headers',
+	// XMLTV/EPG URLs routinely carry username/password query params and are
+	// chosen by the playlist author, not the admin.
+	'epgUrl',
+	// An uploaded playlist's full text, full of credentialed channel URLs.
+	'fileContent'
+];
 
 function isLivetvSecretKey(key: string): boolean {
-	return isAtRestSecretKeyName(key) || M3U_EXTRA_SECRET_KEYS.includes(key);
+	return isAtRestSecretKeyName(key) || LIVETV_EXTRA_SECRET_KEYS.includes(key);
 }
 
 export function encryptLivetvConfig<T extends Record<string, unknown>>(
