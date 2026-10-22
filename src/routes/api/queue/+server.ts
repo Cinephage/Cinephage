@@ -114,7 +114,8 @@ export const GET: RequestHandler = async ({ url }) => {
 		indexerId: row.indexerId,
 		indexerName: row.indexerName,
 		downloadUrl: row.downloadUrl ? redactUrl(row.downloadUrl) : null,
-		magnetUrl: row.magnetUrl,
+		// A magnet's tr= parameters can carry tracker passkeys.
+		magnetUrl: row.magnetUrl ? redactUrl(row.magnetUrl) : null,
 		protocol: row.protocol,
 		movieId: row.movieId,
 		seriesId: row.seriesId,

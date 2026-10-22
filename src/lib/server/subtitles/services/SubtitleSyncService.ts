@@ -25,6 +25,7 @@ import {
 } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { createChildLogger } from '#lib/logging/index.js';
+import { checkDestinationWritable } from '#lib/server/filesystem/writable-guard.js';
 import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
 import { getMediaBrowserNotifier } from '#lib/server/notifications/mediabrowser/index.js';
 
@@ -202,6 +203,16 @@ export class SubtitleSyncService {
 
 		let subtitleHandle;
 		try {
+			// Read-only roots are catalogue-only; rewriting a sidecar there is
+			// the same violation as importing into it.
+			const writable = await checkDestinationWritable(subtitlePath);
+			if (!writable.writable) {
+				return {
+					success: false,
+					offsetMs: 0,
+					error: writable.reason ?? 'Root folder is read-only'
+				};
+			}
 			subtitleHandle = await openPathWithinBase(subtitleBasePath!, subtitlePath, 'r+');
 			// Read and shift subtitle through the opened handle, not the pathname.
 			const content = await subtitleHandle.readFile('utf-8');

@@ -1,6 +1,6 @@
 import { cp, rename, rm, stat } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { resolvePathWithinRoot } from './delete-helpers.js';
+import { assertNoSymlinkEscape, resolvePathWithinRoot } from './delete-helpers.js';
 import { ensureMediaDirectory } from './mkdir-helpers.js';
 
 export type DirectoryMoveMode = 'noop' | 'rename' | 'copy-delete';
@@ -34,6 +34,13 @@ export async function moveDirectoryWithinRoots(
 ): Promise<DirectoryMoveResult> {
 	const sourcePath = resolvePathWithinRoot(sourceRootPath, relativePath);
 	const destPath = resolvePathWithinRoot(destRootPath, relativePath);
+
+	// The string checks above cannot see through a symlinked path component:
+	// a DB path of `link/sub` with `link` pointing outside its root passes
+	// containment, and rename/cp+rm would then move (and delete) real content
+	// outside the managed roots. Canonicalise the existing parents first.
+	await assertNoSymlinkEscape(sourceRootPath, sourcePath);
+	await assertNoSymlinkEscape(destRootPath, dirname(destPath));
 
 	if (sourcePath === destPath) {
 		return { sourcePath, destPath, mode: 'noop' };

@@ -9,6 +9,21 @@
 const SENSITIVE_KEY_PATTERNS = ['key', 'password', 'secret', 'token', 'cookie'];
 
 /**
+ * Keys that are credentials but do not match a substring pattern above.
+ * SceneTime, for example, stores a `uid` and a `pass` hash; at-rest
+ * encryption already treats both as secrets (EXTRA_AT_REST_KEYS in
+ * crypto/secretFields.ts), so response redaction must too or the API hands
+ * them back in cleartext.
+ */
+const SENSITIVE_EXACT_KEYS = new Set(['pass', 'uid', 'pwd', 'username', 'user']);
+
+function isSensitiveSettingKey(key: string): boolean {
+	const lowerKey = key.toLowerCase();
+	if (SENSITIVE_EXACT_KEYS.has(lowerKey)) return true;
+	return SENSITIVE_KEY_PATTERNS.some((pattern) => lowerKey.includes(pattern));
+}
+
+/**
  * Redact sensitive values in a settings/config object.
  * Matches keys containing any of the sensitive patterns (case-insensitive).
  *
@@ -22,9 +37,7 @@ export function redactSettings(
 
 	return Object.fromEntries(
 		Object.entries(settings).map(([key, value]) => {
-			const lowerKey = key.toLowerCase();
-			const isSensitive = SENSITIVE_KEY_PATTERNS.some((pattern) => lowerKey.includes(pattern));
-			if (isSensitive) {
+			if (isSensitiveSettingKey(key)) {
 				return [key, value ? '[REDACTED]' : null];
 			}
 			return [key, value];

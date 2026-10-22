@@ -169,7 +169,20 @@ const SECRET_KEY_NAMES = new Set([
 	'proxy_password',
 	'headers',
 	'api_token',
-	'apitoken'
+	'apitoken',
+	// Credentials the shared name patterns miss. `pass` and `uid` are what
+	// SceneTime stores; `fileContent` is an uploaded M3U playlist whose channel
+	// URLs embed user:pass; `epgUrl` and `proxy_url` routinely carry
+	// credentials in their userinfo or query string.
+	//
+	// Plain `url`/`base_url` are deliberately NOT listed: they are ordinary
+	// connection settings needed to restore a config, and redacting every URL
+	// would make the unencrypted section unusable.
+	'pass',
+	'uid',
+	'filecontent',
+	'epgurl',
+	'proxy_url'
 ]);
 
 const TABLES: TableBackupConfig[] = [

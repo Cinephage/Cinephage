@@ -39,11 +39,20 @@ const INTERACTIVE_SEARCH_TIMEOUT_MS = (() => {
 /**
  * Redact sensitive URLs from release objects before returning in API responses.
  * This prevents API keys from being exposed to clients.
+ *
+ * `guid` is included because ResponseParser falls back to the download URL
+ * when a definition has no guid mapping — for a key-bearing download URL that
+ * made the credential part of an unredacted field. `magnetUrl` can carry
+ * tracker passkeys inside its `tr=` parameters.
  */
-function redactReleaseUrls<T extends { downloadUrl?: string | null }>(releases: T[]): T[] {
+function redactReleaseUrls<
+	T extends { downloadUrl?: string | null; guid?: string | null; magnetUrl?: string | null }
+>(releases: T[]): T[] {
 	return releases.map((release) => ({
 		...release,
-		downloadUrl: release.downloadUrl ? redactUrl(release.downloadUrl) : null
+		downloadUrl: release.downloadUrl ? redactUrl(release.downloadUrl) : null,
+		guid: release.guid ? redactUrl(release.guid) : null,
+		magnetUrl: release.magnetUrl ? redactUrl(release.magnetUrl) : null
 	}));
 }
 

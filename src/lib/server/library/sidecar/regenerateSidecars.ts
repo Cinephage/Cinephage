@@ -21,6 +21,7 @@ import {
 	rootFolders
 } from '#lib/server/db/schema.js';
 import { createChildLogger } from '#lib/logging/index.js';
+import { checkDestinationWritable } from '#lib/server/filesystem/writable-guard.js';
 import { getSidecarSettings } from './sidecarSettings.js';
 import {
 	buildMovieNfo,
@@ -55,6 +56,15 @@ export interface RegenerateSidecarsResult {
 const ARTWORK_DELAY_MS = 100;
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Read-only roots are catalogue-only mounts; writing NFO/artwork into one is
+ * the same violation as importing into it. Returns false when the destination
+ * must be skipped.
+ */
+async function destinationIsWritable(destPath: string): Promise<boolean> {
+	return (await checkDestinationWritable(destPath)).writable;
+}
+
 export async function regenerateSidecars(): Promise<RegenerateSidecarsResult> {
 	const settings = getSidecarSettings();
 	const result: RegenerateSidecarsResult = { total: 0, updated: 0, failed: 0, errors: [] };
@@ -76,6 +86,11 @@ export async function regenerateSidecars(): Promise<RegenerateSidecarsResult> {
 		}
 		try {
 			const destPath = join(rootFolderPath, movie.path, file.relativePath);
+			if (!(await destinationIsWritable(destPath))) {
+				result.failed++;
+				result.errors.push({ id: movie.id, title: movie.title, error: 'Root folder is read-only' });
+				continue;
+			}
 			await writeFile(
 				nfoPathFor(destPath),
 				buildMovieNfo(movie, file, settings.includeArtwork),
@@ -121,6 +136,15 @@ export async function regenerateSidecars(): Promise<RegenerateSidecarsResult> {
 			}
 			try {
 				const seriesFolder = join(rootFolderPath, seriesRow.path);
+				if (!(await destinationIsWritable(seriesFolder))) {
+					result.failed++;
+					result.errors.push({
+						id: seriesRow.id,
+						title: seriesRow.title,
+						error: 'Root folder is read-only'
+					});
+					continue;
+				}
 				await writeFile(
 					join(seriesFolder, 'tvshow.nfo'),
 					buildSeriesNfo(seriesRow, settings.includeArtwork),
@@ -189,7 +213,10 @@ export async function regenerateSidecars(): Promise<RegenerateSidecarsResult> {
 					)
 					.limit(1);
 
-				if (episodeFile) {
+				if (
+					episodeFile &&
+					(await destinationIsWritable(folderOf(join(seriesFolder, episodeFile.relativePath))))
+				) {
 					const seasonFolder = folderOf(join(seriesFolder, episodeFile.relativePath));
 					await writeFile(join(seasonFolder, 'season.nfo'), buildSeasonNfo(season), 'utf-8');
 				}
@@ -236,6 +263,15 @@ export async function regenerateSidecars(): Promise<RegenerateSidecarsResult> {
 				if (episodesInFile.length === 0) continue;
 
 				const destPath = join(rootFolderPath, seriesRow.path, file.relativePath);
+				if (!(await destinationIsWritable(destPath))) {
+					result.failed++;
+					result.errors.push({
+						id: file.id,
+						title: seriesRow.title,
+						error: 'Root folder is read-only'
+					});
+					continue;
+				}
 				await writeFile(
 					nfoPathFor(destPath),
 					buildEpisodeNfo(seriesRow, episodesInFile, file),

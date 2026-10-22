@@ -9,6 +9,7 @@
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { join, dirname, resolve, relative } from 'path';
 import { createChildLogger } from '#lib/logging/index.js';
+import { isRootFolderWritable } from '#lib/server/filesystem/writable-guard.js';
 import { todayDateString } from '#lib/utils/format.js';
 import { getOwnerStreamingApiKey } from '#lib/server/auth/index.js';
 import { db } from '#lib/server/db/index.js';
@@ -268,6 +269,9 @@ export class StrmService {
 
 		try {
 			let destinationPath: string;
+			// Captured in whichever branch builds the path, so the read-only guard
+			// below knows which root the destination belongs to.
+			let resolvedRootFolderId: string | undefined;
 
 			if (mediaType === 'movie' && movieId) {
 				// Get movie details for folder path
@@ -331,8 +335,18 @@ export class StrmService {
 					episode,
 					episodeRow?.title
 				);
+				resolvedRootFolderId = show.rootFolderId;
 			} else {
 				return { success: false, error: 'Invalid options for creating .strm file' };
+			}
+
+			// Read-only roots are catalogue-only (NZBDav/rclone mounts); a
+			// streaming grab must not drop a .strm placeholder into one.
+			if (!resolvedRootFolderId || !(await isRootFolderWritable(resolvedRootFolderId))) {
+				return {
+					success: false,
+					error: 'Cannot write .strm placeholder into a read-only root folder'
+				};
 			}
 
 			// Ensure directory exists
@@ -1162,6 +1176,9 @@ export class StrmService {
 
 		try {
 			let destinationPath: string;
+			// Captured in whichever branch builds the path, so the read-only guard
+			// below knows which root the destination belongs to.
+			let resolvedRootFolderId: string | undefined;
 
 			if (movieId) {
 				// Get movie details for folder path
@@ -1178,6 +1195,7 @@ export class StrmService {
 				}
 
 				destinationPath = await this.buildMovieStrmPath(movie.rootFolder.path, movie);
+				resolvedRootFolderId = movie.rootFolder.id;
 			} else if (seriesId && seasonNumber !== undefined && episodeId) {
 				// Get series and episode details
 				const show = await db.query.series.findFirst({
@@ -1207,8 +1225,17 @@ export class StrmService {
 					episodeRow.episodeNumber,
 					episodeRow.title
 				);
+				resolvedRootFolderId = show.rootFolder.id;
 			} else {
 				return { success: false, error: 'Invalid options for creating NZB .strm file' };
+			}
+
+			// Same read-only rule as the other .strm writers.
+			if (!resolvedRootFolderId || !(await isRootFolderWritable(resolvedRootFolderId))) {
+				return {
+					success: false,
+					error: 'Cannot write .strm placeholder into a read-only root folder'
+				};
 			}
 
 			// Ensure directory exists

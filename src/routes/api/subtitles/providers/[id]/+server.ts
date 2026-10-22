@@ -2,6 +2,7 @@ import type { RequestHandler } from './$types';
 import { getSubtitleProviderManager } from '#lib/server/subtitles/services/SubtitleProviderManager.js';
 import { subtitleProviderUpdateSchema } from '#lib/server/validation/schemas.js';
 import { parseBody, assertFound } from '#lib/server/api/validate.js';
+import { redactSubtitleProvider } from '#lib/server/subtitles/provider-redaction.js';
 
 /**
  * GET /api/subtitles/providers/:id
@@ -11,12 +12,10 @@ export const GET: RequestHandler = async ({ params }) => {
 	const manager = await getSubtitleProviderManager();
 	const provider = assertFound(await manager.getProvider(params.id), 'Provider', params.id);
 
-	// Redact sensitive fields
-	return Response.json({
-		...provider,
-		apiKey: provider.apiKey ? '[REDACTED]' : null,
-		password: provider.password ? '[REDACTED]' : null
-	});
+	// Redact sensitive fields. The row is decrypted by the manager, so the
+	// settings object (which holds keys like `token` for assrt/betaseries)
+	// must be redacted too, not just the promoted columns.
+	return Response.json(redactSubtitleProvider(provider));
 };
 
 /**
@@ -38,7 +37,8 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		requestsPerMinute: validated.requestsPerMinute
 	});
 
-	return Response.json({ success: true, provider: updated });
+	// The manager decrypts credentials before returning the row; never echo them.
+	return Response.json({ success: true, provider: redactSubtitleProvider(updated) });
 };
 
 /**

@@ -4,6 +4,7 @@ import { getSubtitleProviderFactory } from '#lib/server/subtitles/providers/Subt
 import { ensureProvidersRegistered } from '#lib/server/subtitles/providers/registry.js';
 import { subtitleProviderCreateSchema } from '#lib/server/validation/schemas.js';
 import { parseBody } from '#lib/server/api/validate.js';
+import { redactSubtitleProvider } from '#lib/server/subtitles/provider-redaction.js';
 
 /**
  * GET /api/subtitles/providers
@@ -17,28 +18,8 @@ export const GET: RequestHandler = async () => {
 	const manager = getSubtitleProviderManager();
 	const providers = await manager.getProviders();
 
-	// Redact sensitive fields
-	const redactedProviders = providers.map((provider) => ({
-		...provider,
-		apiKey: provider.apiKey ? '[REDACTED]' : null,
-		password: provider.password ? '[REDACTED]' : null,
-		settings: provider.settings
-			? Object.fromEntries(
-					Object.entries(provider.settings).map(([key, value]) => {
-						const lowerKey = key.toLowerCase();
-						if (
-							lowerKey.includes('key') ||
-							lowerKey.includes('password') ||
-							lowerKey.includes('secret') ||
-							lowerKey.includes('token')
-						) {
-							return [key, value ? '[REDACTED]' : null];
-						}
-						return [key, value];
-					})
-				)
-			: null
-	}));
+	// Redact sensitive fields (decrypted credentials + token-bearing settings)
+	const redactedProviders = providers.map((provider) => redactSubtitleProvider(provider));
 
 	return Response.json(redactedProviders);
 };
@@ -77,5 +58,6 @@ export const POST: RequestHandler = async ({ request }) => {
 		requestsPerMinute: validated.requestsPerMinute
 	});
 
-	return Response.json({ success: true, provider: created });
+	// The manager decrypts credentials before returning the row; never echo them.
+	return Response.json({ success: true, provider: redactSubtitleProvider(created) });
 };

@@ -8,6 +8,7 @@ import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path
 import { pipeline } from 'node:stream/promises';
 import type { EphemeralLink } from './debrid-adapter';
 import { redactDebridDiagnostic } from './diagnostics';
+import { checkDestinationWritable } from '#lib/server/filesystem/writable-guard.js';
 
 interface MaterializerAdapter {
 	resolveFreshLink(providerItemId: string, providerFileId: string): Promise<EphemeralLink>;
@@ -44,6 +45,14 @@ export class DebridFileMaterializer {
 	async materialize(input: MaterializeInput): Promise<DebridFileMaterializeReceipt> {
 		this.validatePlan(input.plan, input.rootPath);
 		const finalPath = resolve(input.plan.finalPath);
+
+		// Read-only roots are catalogue-only; debrid finalisation used to skip
+		// the guard the import path enforces.
+		const writable = await checkDestinationWritable(finalPath);
+		if (!writable.writable) {
+			throw new Error(writable.reason ?? 'Destination root folder is read-only');
+		}
+
 		const directory = dirname(finalPath);
 		await this.preflight(input.rootPath, directory, finalPath);
 		if (activeFinalPaths.has(finalPath)) {
