@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
 	autoSelectEpisodeGroup,
 	buildSeasonsAndEpisodesFromGroup,
-	buildEpisodeGroupInfoList
+	buildEpisodeGroupInfoList,
+	findPlanConflicts
 } from './EpisodeGroupService';
 import type { EpisodeGroup, EpisodeGroupSummary, EpisodeGroupsResponse } from '#lib/types/tmdb.js';
 
@@ -368,5 +369,82 @@ describe('buildEpisodeGroupInfoList', () => {
 		const response = makeResponse(12345, []);
 
 		expect(buildEpisodeGroupInfoList(response, null)).toEqual([]);
+	});
+});
+
+describe('autoSelectEpisodeGroup empty-group guard', () => {
+	it('skips an empty higher-priority group and selects a populated lower-priority one', () => {
+		const groups = [
+			makeSummary({ id: 'empty-t1', type: 1, episode_count: 0 }),
+			makeSummary({ id: 'full-t4', type: 4, episode_count: 657 })
+		];
+
+		expect(autoSelectEpisodeGroup(groups)?.id).toBe('full-t4');
+	});
+
+	it('returns null when every priority-type group has zero episodes', () => {
+		const groups = [
+			makeSummary({ id: 'empty-t1', type: 1, episode_count: 0 }),
+			makeSummary({ id: 'empty-t2', type: 2, episode_count: 0 })
+		];
+
+		expect(autoSelectEpisodeGroup(groups)).toBeNull();
+	});
+});
+
+describe('buildSeasonsAndEpisodesFromGroup specials collisions', () => {
+	it('shifts overlapping specials numbers to the next free slot instead of colliding', () => {
+		const group = makeEpisodeGroup({
+			groups: [
+				{
+					name: 'Specials A',
+					locked: true,
+					episodes: [
+						makeEpisode({ id: 1, season_number: 0, episode_number: 1, name: 'Special 1' }),
+						makeEpisode({ id: 2, season_number: 0, episode_number: 2, name: 'Special 2' })
+					]
+				},
+				{
+					name: 'Specials B',
+					locked: true,
+					episodes: [
+						makeEpisode({ id: 3, season_number: 0, episode_number: 1, name: 'B Special 1' }),
+						// A season episode listed among specials whose raw number
+						// collides with an existing specials number (Billy & Mandy's
+						// "Save Christmas" case) used to abort the whole insert.
+						makeEpisode({ id: 4, season_number: 5, episode_number: 1, name: 'Stray S5 ep' })
+					]
+				}
+			]
+		});
+
+		const { seasonValues, episodeValues } = buildSeasonsAndEpisodesFromGroup('series-1', group);
+
+		expect(seasonValues).toHaveLength(1);
+		expect(seasonValues[0]).toMatchObject({ seasonNumber: 0, episodeCount: 4 });
+		const numbers = episodeValues.map((e) => e.episodeNumber).sort((a, b) => (a ?? 0) - (b ?? 0));
+		expect(numbers).toEqual([1, 2, 3, 4]);
+		expect(findPlanConflicts(episodeValues)).toEqual([]);
+	});
+});
+
+describe('findPlanConflicts', () => {
+	it('detects duplicate season/episode keys', () => {
+		expect(
+			findPlanConflicts([
+				{ seasonNumber: 0, episodeNumber: 11 },
+				{ seasonNumber: 0, episodeNumber: 11 }
+			])
+		).toEqual(['0x11']);
+	});
+
+	it('returns empty for unique keys', () => {
+		expect(
+			findPlanConflicts([
+				{ seasonNumber: 1, episodeNumber: 1 },
+				{ seasonNumber: 1, episodeNumber: 2 },
+				{ seasonNumber: 2, episodeNumber: 1 }
+			])
+		).toEqual([]);
 	});
 });

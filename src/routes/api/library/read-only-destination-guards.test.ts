@@ -51,9 +51,14 @@ vi.mock('#lib/server/library/LibraryEntityService.js', () => ({
 vi.mock('#lib/server/library/LibraryMediaEvents.js', () => ({
 	libraryMediaEvents: { emitLibraryDataChanged: vi.fn() }
 }));
-vi.mock('#lib/server/metadata/EpisodeGroupService.js', () => ({
-	getEffectiveEpisodeGroup: vi.fn(),
-	buildSeasonsAndEpisodesFromGroup: vi.fn()
+// The read-only guard rejects the add before any episode planning runs, so
+// these only need to exist; mocking them keeps the test from depending on
+// the plan module's internal TMDB wiring.
+vi.mock('#lib/server/metadata/series-episode-plan.js', () => ({
+	resolveEpisodeGroupPlan: vi.fn(),
+	buildDefaultOrderingPlan: vi.fn(),
+	persistEpisodePlanIn: vi.fn(),
+	fetchValidatedGroupPlan: vi.fn()
 }));
 vi.mock('#lib/server/naming/NamingSettingsService.js', () => ({
 	namingSettingsService: {

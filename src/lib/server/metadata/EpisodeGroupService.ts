@@ -11,10 +11,6 @@ import { db } from '#lib/server/db/index.js';
 import { seasons, episodes } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 import type { EpisodeGroup, EpisodeGroupSummary, EpisodeGroupsResponse } from '#lib/types/tmdb.js';
-import { createChildLogger } from '#lib/logging/index.js';
-
-const logger = createChildLogger({ logDomain: 'system' as const });
-
 const AUTO_SELECTION_GROUP_TYPES = [1, 2, 4];
 
 export interface EpisodeGroupInfo {
@@ -49,8 +45,12 @@ export function autoSelectEpisodeGroup(groups: EpisodeGroupSummary[]): EpisodeGr
 	if (groups.length === 0) return null;
 
 	for (const type of AUTO_SELECTION_GROUP_TYPES) {
+		// A zero-episode group is an empty shell (abandoned community work —
+		// SpongeBob's "Production Order" and Ben 10's "Absolute Order" both sat
+		// at 0 episodes for years). Selecting one used to add the series with
+		// no seasons or episodes at all; type priority must not beat content.
 		const candidates = groups
-			.filter((g) => g.type === type)
+			.filter((g) => g.type === type && g.episode_count > 0)
 			.sort((a, b) => b.episode_count - a.episode_count);
 
 		if (candidates.length === 0) continue;
@@ -143,13 +143,25 @@ export function buildSeasonsAndEpisodesFromGroup(
 			episodeFileCount: 0
 		});
 
+		// Specials keep their TMDB episode numbers so scene-named files keep
+		// matching, but community groups merge several specials lists into one
+		// season and occasionally carry overlapping numbers (e.g. a season
+		// episode listed among specials). A collision would violate
+		// idx_episodes_unique_number and abort the whole episode insert, so
+		// colliding entries shift to the next free number instead.
+		const usedSpecialsNumbers = new Set<number>();
 		for (const g of specialsGroups) {
 			for (const ep of g.episodes) {
+				let episodeNumber = ep.episode_number;
+				while (usedSpecialsNumbers.has(episodeNumber)) {
+					episodeNumber += 1;
+				}
+				usedSpecialsNumbers.add(episodeNumber);
 				episodeValues.push({
 					seriesId,
 					tmdbId: ep.id,
 					seasonNumber: 0,
-					episodeNumber: ep.episode_number,
+					episodeNumber,
 					title: ep.name || '',
 					airDate: ep.air_date || null,
 					monitored: false,
@@ -163,41 +175,24 @@ export function buildSeasonsAndEpisodesFromGroup(
 }
 
 /**
- * Get the effective episode group for a series.
- * If the series has an episode_group_id set, fetch and return it.
- * Otherwise, auto-select from available groups.
- *
- * Returns { group, selectedGroupId } or { group: null } for default TMDB ordering.
+ * (season, episode) keys appearing more than once in a plan. Such a plan
+ * would violate idx_episodes_unique_number on insert; callers must treat
+ * any conflict as unusable group data and fall back to default ordering.
  */
-export async function getEffectiveEpisodeGroup(
-	tmdbId: number,
-	existingEpisodeGroupId: string | null | undefined
-): Promise<{ group: EpisodeGroup | null; selectedGroupId: string | null }> {
-	if (existingEpisodeGroupId) {
-		try {
-			const group = await tmdb.getEpisodeGroup(existingEpisodeGroupId);
-			return { group, selectedGroupId: existingEpisodeGroupId };
-		} catch {
-			logger.warn(
-				{ episodeGroupId: existingEpisodeGroupId },
-				'Stored episode group no longer available, re-selecting'
-			);
+export function findPlanConflicts(
+	episodeValues: Array<{ seasonNumber?: number | null; episodeNumber?: number | null }>
+): string[] {
+	const seen = new Set<string>();
+	const conflicts = new Set<string>();
+	for (const ep of episodeValues) {
+		const key = `${ep.seasonNumber}x${ep.episodeNumber}`;
+		if (seen.has(key)) {
+			conflicts.add(key);
+		} else {
+			seen.add(key);
 		}
 	}
-
-	try {
-		const groupsResponse = await tmdb.getEpisodeGroups(tmdbId);
-		const autoSelected = autoSelectEpisodeGroup(groupsResponse.results);
-
-		if (autoSelected) {
-			const group = await tmdb.getEpisodeGroup(autoSelected.id);
-			return { group, selectedGroupId: autoSelected.id };
-		}
-	} catch {
-		logger.warn({ tmdbId }, 'Failed to fetch episode groups, using default TMDB ordering');
-	}
-
-	return { group: null, selectedGroupId: null };
+	return [...conflicts];
 }
 
 /**

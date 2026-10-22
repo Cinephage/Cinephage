@@ -82,14 +82,16 @@ vi.mock('#lib/server/library/naming/localization.js', () => ({
 	resolveLocalizedTitlesForFormats: vi.fn(async () => ({}))
 }));
 
-vi.mock('#lib/server/metadata/EpisodeGroupService.js', () => ({
-	getEffectiveEpisodeGroup: vi.fn(async () => ({ group: null, selectedGroupId: null })),
-	buildSeasonsAndEpisodesFromGroup: vi.fn(() => ({ seasonValues: [], episodeValues: [] }))
-}));
-
+// No episode groups exist for this fixture, so the plan resolves to default
+// TMDB ordering. getEpisodeGroups must be mocked even for that case: leaving it
+// undefined makes resolveEpisodeGroupPlan throw a TypeError that its catch-all
+// swallows, so every test here would exercise the fallback path by accident
+// rather than by intent.
 const tmdbMock = vi.hoisted(() => ({
 	tmdb: {
-		getSeason: vi.fn()
+		getSeason: vi.fn(),
+		getEpisodeGroups: vi.fn(async () => ({ results: [] })),
+		getEpisodeGroup: vi.fn()
 	}
 }));
 vi.mock('#lib/server/tmdb.js', () => tmdbMock);

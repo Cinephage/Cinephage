@@ -28,10 +28,12 @@ import {
 	getAnimeSubtypeEnforcement
 } from '#lib/server/library/LibraryAddService.js';
 import {
-	deleteAllSeasonsAndEpisodes,
-	buildSeasonsAndEpisodesFromGroup,
-	getEffectiveEpisodeGroup
-} from '#lib/server/metadata/EpisodeGroupService.js';
+	buildDefaultOrderingPlan,
+	fetchValidatedGroupPlan,
+	persistEpisodePlanIn,
+	type SeriesEpisodePlan
+} from '#lib/server/metadata/series-episode-plan.js';
+import { error } from '@sveltejs/kit';
 import { mediaMoveService } from '#lib/server/library/MediaMoveService.js';
 import { getLibraryEntityService } from '#lib/server/library/LibraryEntityService.js';
 import { getLibraryScheduler } from '#lib/server/library/library-scheduler.js';
@@ -522,6 +524,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 		}
 
 		// Handle episode group change - requires full season/episode rebuild
+		let rebuildWarning: string | undefined;
 		if (episodeGroupId !== undefined) {
 			const currentGroupId = currentSeries?.episodeGroupId ?? null;
 			const newGroupId = episodeGroupId || null;
@@ -536,110 +539,77 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 					'Episode group changed, rebuilding seasons and episodes'
 				);
 
-				await db.update(series).set({ episodeGroupId: newGroupId }).where(eq(series.id, params.id));
+				// Resolve the new scheme BEFORE anything destructive. An explicit
+				// group choice fetches exactly that group: if TMDB cannot serve it,
+				// nothing is changed; if its data is unusable, the rebuild falls
+				// back to default TMDB ordering with a warning instead of writing
+				// a plan that would crash or come out empty.
+				const buildDefaultPlan = async (): Promise<SeriesEpisodePlan> => {
+					const tvDetails = await tmdb.getTVShow(currentSeries.tmdbId);
+					const monitorSpecials = currentSeries.monitorSpecials ?? false;
+					const built = await buildDefaultOrderingPlan({
+						seriesId: params.id,
+						seasonsSummary: tvDetails.seasons ?? [],
+						fetchSeason: (seasonNumber) => tmdb.getSeason(currentSeries.tmdbId, seasonNumber),
+						assignSeasonMonitored: (_seasonNumber, isSpecials) => !isSpecials || monitorSpecials,
+						assignEpisodeMonitored: ({ seasonMonitored }) => seasonMonitored,
+						paceMs: 50
+					});
+					if (built.failedSeasonNumbers.length > 0) {
+						logger.warn(
+							{ seriesId: params.id, failedSeasonNumbers: built.failedSeasonNumbers },
+							'[API] Some seasons had no fetchable episode list during episode group change'
+						);
+					}
+					return built.plan;
+				};
 
-				await deleteAllSeasonsAndEpisodes(params.id);
-
-				let episodeGroup = null;
+				let rebuildPlan: SeriesEpisodePlan;
+				let finalGroupId: string | null = newGroupId;
 				if (newGroupId) {
-					({ group: episodeGroup } = await getEffectiveEpisodeGroup(
-						currentSeries.tmdbId,
-						newGroupId
-					));
-				}
-
-				if (episodeGroup) {
-					const { seasonValues, episodeValues: groupEpisodeValues } =
-						buildSeasonsAndEpisodesFromGroup(params.id, episodeGroup);
-
-					if (seasonValues.length > 0) {
-						const monitorSpecials = currentSeries?.monitorSpecials ?? false;
-
-						if (monitorSpecials) {
-							for (const sv of seasonValues) {
-								if (sv.seasonNumber === 0) {
-									sv.monitored = true;
-								}
-							}
-							for (const ev of groupEpisodeValues) {
-								if (ev.seasonNumber === 0) {
-									ev.monitored = true;
-								}
-							}
-						}
-
-						const insertedSeasons = await db.insert(seasons).values(seasonValues).returning();
-						const seasonIdByNumber = new Map(insertedSeasons.map((s) => [s.seasonNumber, s.id]));
-
-						const enrichedEpisodes = groupEpisodeValues.map((ep) => ({
-							...ep,
-							seasonId: seasonIdByNumber.get(ep.seasonNumber!) ?? null
-						}));
-
-						if (enrichedEpisodes.length > 0) {
-							await db.insert(episodes).values(enrichedEpisodes);
-						}
+					const result = await fetchValidatedGroupPlan(params.id, newGroupId);
+					if (!result.ok && result.reason === 'fetch-failed') {
+						error(
+							502,
+							'The chosen episode group could not be fetched from TMDB; nothing was changed. Try again later.'
+						);
+					}
+					if (result.ok) {
+						rebuildPlan = result.plan;
+					} else {
+						logger.warn(
+							{ seriesId: params.id, groupId: newGroupId, reason: result.reason },
+							'[API] Chosen episode group is unusable; rebuilding with default TMDB ordering'
+						);
+						rebuildWarning =
+							'The chosen episode group was unusable, so seasons were rebuilt with default TMDB ordering instead.';
+						finalGroupId = null;
+						rebuildPlan = await buildDefaultPlan();
 					}
 				} else {
-					// Reverted to default TMDB ordering - trigger a full refresh via rescan
-					// The getEffectiveEpisodeGroup with null groupId fetches from raw TMDB
-					const tvDetails = await tmdb.getTVShow(currentSeries.tmdbId);
+					finalGroupId = null;
+					rebuildPlan = await buildDefaultPlan();
+				}
 
-					if (tvDetails.seasons) {
-						const monitorSpecials = currentSeries?.monitorSpecials ?? false;
-
-						for (const s of tvDetails.seasons) {
-							try {
-								const tmdbSeason = await tmdb.getSeason(currentSeries.tmdbId, s.season_number);
-
-								const isSpecials = s.season_number === 0;
-								const seasonMonitored = !isSpecials || monitorSpecials;
-
-								const [newSeason] = await db
-									.insert(seasons)
-									.values({
-										seriesId: params.id,
-										seasonNumber: s.season_number,
-										name: tmdbSeason.name || s.name,
-										overview: tmdbSeason.overview || s.overview,
-										posterPath: tmdbSeason.poster_path || s.poster_path,
-										airDate: tmdbSeason.air_date || s.air_date,
-										episodeCount: tmdbSeason.episodes?.length ?? s.episode_count ?? 0,
-										episodeFileCount: 0,
-										monitored: seasonMonitored
-									})
-									.returning();
-
-								if (tmdbSeason.episodes) {
-									const episodeValues = tmdbSeason.episodes.map((ep) => ({
-										seriesId: params.id,
-										seasonId: newSeason.id,
-										tmdbId: ep.id,
-										seasonNumber: ep.season_number,
-										episodeNumber: ep.episode_number,
-										title: ep.name,
-										overview: ep.overview,
-										airDate: ep.air_date,
-										runtime: ep.runtime,
-										monitored: seasonMonitored,
-										hasFile: false
-									}));
-
-									if (episodeValues.length > 0) {
-										await db.insert(episodes).values(episodeValues);
-									}
-								}
-
-								await new Promise((resolve) => setTimeout(resolve, 50));
-							} catch {
-								logger.warn(
-									{ seasonNumber: s.season_number },
-									'[API] Failed to fetch season during episode group revert'
-								);
-							}
-						}
+				// Respect monitorSpecials for season 0 rows (both plan flavors).
+				if (currentSeries.monitorSpecials) {
+					for (const sv of rebuildPlan.seasons) {
+						if (sv.seasonNumber === 0) sv.monitored = true;
+					}
+					for (const ev of rebuildPlan.episodes) {
+						if (ev.seasonNumber === 0) ev.monitored = true;
 					}
 				}
+
+				// Scheme switch and rebuild commit atomically: a failed rebuild
+				// no longer leaves the series wiped or half-populated.
+				db.transaction((tx) => {
+					tx.update(series)
+						.set({ episodeGroupId: finalGroupId })
+						.where(eq(series.id, params.id))
+						.run();
+					persistEpisodePlanIn(tx, params.id, rebuildPlan, { wipe: true });
+				});
 
 				// Update series stats after rebuild
 				const allEpisodes = await db
@@ -797,7 +767,8 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 			success: true,
 			moveQueued: Boolean(moveTask),
 			moveTaskId: moveTask?.taskId,
-			moveTaskHistoryId: moveTask?.historyId
+			moveTaskHistoryId: moveTask?.historyId,
+			rebuildWarning
 		});
 	} catch (error) {
 		logger.error('[API] Error updating series', error instanceof Error ? error : undefined);

@@ -707,6 +707,9 @@
 								};
 							} else if (eventType === 'complete' || eventData.type === 'complete') {
 								completed = true;
+								if (eventData.warning) {
+									toasts.warning(eventData.warning);
+								}
 							} else if (eventType === 'error' || eventData.type === 'error') {
 								toasts.error(eventData.message || m.toast_library_tvDetail_seriesRefreshFailed());
 							}
