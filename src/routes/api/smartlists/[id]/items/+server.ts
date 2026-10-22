@@ -18,8 +18,12 @@ export const GET: RequestHandler = async ({ params, url }) => {
 		return Response.json({ error: 'Smart list not found' }, { status: 404 });
 	}
 
-	const page = parseInt(url.searchParams.get('page') ?? '1', 10);
-	const limit = parseInt(url.searchParams.get('limit') ?? '50', 10);
+	const page = Math.max(parseInt(url.searchParams.get('page') ?? '1', 10) || 1, 1);
+	// Clamp: this was the only paginated endpoint with no ceiling at all.
+	const limit = Math.min(
+		Math.max(parseInt(url.searchParams.get('limit') ?? '50', 10) || 50, 1),
+		500
+	);
 	const inLibraryParam = url.searchParams.get('inLibrary');
 	const includeExcluded = url.searchParams.get('includeExcluded') === 'true';
 	const query = url.searchParams.get('q') ?? undefined;

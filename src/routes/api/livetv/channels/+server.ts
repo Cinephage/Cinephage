@@ -59,7 +59,9 @@ export const GET: RequestHandler = async ({ url }) => {
 	if (pageSizeParam) {
 		const pageSize = parseInt(pageSizeParam, 10);
 		if (!isNaN(pageSize) && pageSize > 0) {
-			options.pageSize = pageSize;
+			// Clamp: a caller-supplied page size of 10^8 materialises the whole
+			// channel table per request.
+			options.pageSize = Math.min(pageSize, 500);
 		}
 	}
 

@@ -26,6 +26,7 @@
 		RenameStreamEvent
 	} from '#lib/library/naming/types.js';
 	import { chunkFileIds } from '#lib/library/naming/batch-rename.js';
+	import { safeExternalUrl } from '#lib/shared/url-safety.js';
 
 	// State
 	let loading = $state(true);
@@ -47,7 +48,12 @@
 	let activeTab = $state<'willChange' | 'alreadyCorrect' | 'collisions' | 'errors'>('willChange');
 	let mediaTypeFilter = $state<'all' | 'movie' | 'tv'>('all');
 	const hasUnsavedDraft = $derived(page.url.searchParams.get('unsaved') === '1');
-	const returnTo = $derived(page.url.searchParams.get('returnTo') || '/settings/library/naming');
+	// returnTo comes from the URL and is bound straight into an href. Svelte
+	// does not filter schemes, so `?returnTo=javascript:...` would run script
+	// in this admin page when the back link is clicked.
+	const returnTo = $derived(
+		safeExternalUrl(page.url.searchParams.get('returnTo')) ?? '/settings/library/naming'
+	);
 
 	// Load preview on mount
 	let previousMediaTypeFilter = $state<'all' | 'movie' | 'tv' | null>(null);

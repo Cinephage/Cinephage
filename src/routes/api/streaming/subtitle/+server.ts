@@ -16,6 +16,7 @@ import { ensureVttFormat } from '#lib/server/streaming/utils/index.js';
 import {
 	resolveAndValidateUrl,
 	fetchWithTimeout,
+	UnsafeUrlError,
 	MAX_REDIRECTS
 } from '#lib/server/http/ssrf-protection.js';
 
@@ -183,6 +184,19 @@ export const GET: RequestHandler = async ({ url }) => {
 		});
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
+
+		// A URL rejected by the SSRF policy (initial target or a redirect hop)
+		// is a client error, not an upstream failure.
+		if (error instanceof UnsafeUrlError) {
+			logger.warn(
+				{ url: decodedUrl, reason: message, ...streamLog },
+				'Blocked unsafe subtitle URL'
+			);
+			return new Response(JSON.stringify({ error: 'URL not allowed', reason: message }), {
+				status: 403,
+				headers: { 'Content-Type': 'application/json' }
+			});
+		}
 
 		if (message.includes('abort')) {
 			return new Response(JSON.stringify({ error: 'Subtitle fetch timeout' }), {

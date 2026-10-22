@@ -60,7 +60,11 @@ function buildM3UPlaylist(
 			.filter(Boolean)
 			.join(' ');
 
-		lines.push(`${extinf},${tvgName}`);
+		// The display name sits after the comma and is NOT an attribute, so it
+		// needs its own sanitizing: a provider-controlled name containing a
+		// newline could inject extra #EXTINF/URL lines into the playlist a media
+		// server then ingests, including URLs carrying the embedded api_key.
+		lines.push(`${extinf},${sanitizeM3UDisplayName(tvgName)}`);
 
 		// Proxy URL - media servers will request this
 		// Append .ts extension so Jellyfin/Emby auto-detect as MPEG-TS format.
@@ -86,6 +90,16 @@ function escapeM3UAttribute(value: string): string {
 		.replace(/"/g, "'") // Replace double quotes with single
 		.replace(/\n/g, ' ') // Remove newlines
 		.replace(/\r/g, ''); // Remove carriage returns
+}
+
+/**
+ * Sanitize the playlist display name (the text after the EXTINF comma).
+ *
+ * This is not a quoted attribute, so a newline would start a new playlist
+ * line — letting a provider inject its own entries.
+ */
+function sanitizeM3UDisplayName(value: string): string {
+	return value.replace(/[\r\n]+/g, ' ').trim();
 }
 
 export const GET: RequestHandler = async ({ request, url }) => {

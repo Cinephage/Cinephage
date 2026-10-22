@@ -49,17 +49,40 @@ function createEvent(
 }
 
 describe('checkApiRateLimit', () => {
-	it('bypasses shared API limits for authenticated internal requests', () => {
-		const userAgent = `auth-user-${Date.now()}`;
-		for (let i = 0; i < 150; i++) {
+	it('does not throttle normal authenticated browsing', () => {
+		// A page load plus its parallel API calls is well under a hundred
+		// requests; the limit must never bite during ordinary use.
+		const userAgent = `auth-browse-${Date.now()}`;
+		for (let i = 0; i < 100; i++) {
 			const response = checkApiRateLimit(
-				createEvent('/api/activity', {
+				createEvent('/api/library/series', {
 					authenticatedUser: true,
 					userAgent
 				})
 			);
 			expect(response).toBeNull();
 		}
+	});
+
+	it('still caps authenticated API traffic, at a higher ceiling', () => {
+		// Authenticated requests used to be exempt entirely, so any viewer could
+		// loop a fan-out endpoint without bound. They now get their own bucket:
+		// normal UI use stays far below it, a scripted loop does not.
+		const userAgent = `auth-loop-${Date.now()}`;
+		let blockedResponse: Response | null = null;
+
+		for (let i = 0; i < 3001; i++) {
+			blockedResponse = checkApiRateLimit(
+				createEvent('/api/library/movies', {
+					authenticatedUser: true,
+					userAgent
+				})
+			);
+			if (blockedResponse) break;
+		}
+
+		expect(blockedResponse).not.toBeNull();
+		expect(blockedResponse?.status).toBe(429);
 	});
 
 	it('continues to rate limit unauthenticated API requests', () => {

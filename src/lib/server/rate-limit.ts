@@ -54,8 +54,11 @@ function shouldEnforceApiRateLimit(event: RequestEvent): boolean {
 		return false;
 	}
 
-	// Internal authenticated UI traffic should not be throttled by shared IP limits.
-	return !hasAuthenticatedUserSession(event);
+	// Authenticated traffic is limited too. It used to be exempt so a shared
+	// LAN IP would not throttle the UI, but that let any viewer hammer
+	// viewer-allowed endpoints (and fan-out routes like /api/calendar) without
+	// bound. Authenticated requests get a much higher ceiling instead.
+	return true;
 }
 
 // Default rate limits
@@ -72,6 +75,17 @@ const STREAMING_LIMIT: RateLimitConfig = {
 const ACTIVITY_API_LIMIT: RateLimitConfig = {
 	windowMs: 15 * 60 * 1000, // 15 minutes
 	maxRequests: 300
+};
+
+/**
+ * Ceiling for signed-in UI traffic. High enough that page loads and polling
+ * never hit it, low enough that a scripted loop is stopped: the audit found
+ * authenticated requests were exempt entirely, so a viewer account could
+ * hammer fan-out endpoints without bound.
+ */
+const AUTHENTICATED_API_LIMIT: RateLimitConfig = {
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	maxRequests: 3000
 };
 
 const ACTIVITY_STREAM_LIMIT: RateLimitConfig = {
@@ -227,6 +241,11 @@ export function checkApiRateLimit(event: RequestEvent): Response | null {
 	} else if (pathname.startsWith('/api/streaming/') || pathname.startsWith('/api/livetv/stream/')) {
 		config = STREAMING_LIMIT;
 		keyPrefix = 'stream';
+	} else if (hasAuthenticatedUserSession(event)) {
+		// Signed-in UI traffic still gets a ceiling, but high enough that a
+		// normal browsing session never reaches it.
+		config = AUTHENTICATED_API_LIMIT;
+		keyPrefix = 'api-user';
 	} else {
 		config = DEFAULT_API_LIMIT;
 		keyPrefix = 'api';

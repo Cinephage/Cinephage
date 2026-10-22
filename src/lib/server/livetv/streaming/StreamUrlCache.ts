@@ -51,6 +51,37 @@ interface CachedStream {
 class StreamUrlCache {
 	private cache: Map<string, CachedStream> = new Map();
 	private locks: Map<string, Promise<void>> = new Map();
+	/**
+	 * Hosts each lineup item legitimately streams from.
+	 *
+	 * The segment proxy takes the upstream URL as a query parameter, so without
+	 * binding, anyone holding a streaming key could use it as a general-purpose
+	 * outbound proxy. A lineup's own host is learned on every resolution, and
+	 * HLS playlists add the hosts their segment URLs point at (CDNs routinely
+	 * differ from the playlist host).
+	 */
+	private allowedHosts: Map<string, Set<string>> = new Map();
+
+	/** Record that `hostname` serves content for this lineup item. */
+	allowHost(lineupItemId: string, hostname: string): void {
+		const normalized = hostname.toLowerCase();
+		let hosts = this.allowedHosts.get(lineupItemId);
+		if (!hosts) {
+			hosts = new Set();
+			this.allowedHosts.set(lineupItemId, hosts);
+		}
+		hosts.add(normalized);
+	}
+
+	/** True when the lineup item has never resolved, so no host is known yet. */
+	hasAllowedHosts(lineupItemId: string): boolean {
+		return (this.allowedHosts.get(lineupItemId)?.size ?? 0) > 0;
+	}
+
+	/** True when `hostname` is known to serve this lineup item's content. */
+	isHostAllowed(lineupItemId: string, hostname: string): boolean {
+		return this.allowedHosts.get(lineupItemId)?.has(hostname.toLowerCase()) ?? false;
+	}
 
 	/**
 	 * Get or create a cached stream resolution for a lineup item.
@@ -183,6 +214,14 @@ class StreamUrlCache {
 			logger.info({ lineupItemId, format }, '[StreamUrlCache] Resolving fresh stream URL');
 			const streamService = getLiveTvStreamService();
 			const result = await streamService.resolveStream(lineupItemId, format);
+
+			// Learn the host this lineup actually streams from so the segment
+			// proxy can refuse anything else.
+			try {
+				this.allowHost(lineupItemId, new URL(result.url).hostname);
+			} catch {
+				// Non-URL resolution (should not happen): no host to bind.
+			}
 
 			// Cache the result
 			this.cache.set(cacheKey, {

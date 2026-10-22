@@ -29,6 +29,7 @@ import { validatePlaylist, sanitizePlaylist, isHLSPlaylist } from '#lib/server/s
 import {
 	resolveAndValidateUrl,
 	fetchWithTimeout,
+	UnsafeUrlError,
 	MAX_REDIRECTS
 } from '#lib/server/http/ssrf-protection.js';
 import { rewriteHlsPlaylistUrls } from '#lib/server/streaming/utils/hls-rewrite.js';
@@ -121,6 +122,9 @@ async function fetchWithRetry(
 			return response;
 		} catch (error) {
 			lastError = error instanceof Error ? error : new Error(String(error));
+
+			// An SSRF rejection is deterministic; retrying just delays the 403.
+			if (error instanceof UnsafeUrlError) throw error;
 
 			// Don't retry on abort (timeout) - those are intentional
 			if (lastError.name === 'AbortError') {

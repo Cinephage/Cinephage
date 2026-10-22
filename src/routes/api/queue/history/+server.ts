@@ -22,8 +22,10 @@ export const GET: RequestHandler = async ({ url }) => {
 		const limitParam = url.searchParams.get('limit');
 		const offsetParam = url.searchParams.get('offset');
 
-		const limit = limitParam ? parseInt(limitParam, 10) : 50;
-		const offset = offsetParam ? parseInt(offsetParam, 10) : 0;
+		// Clamp: an unbounded limit materialises the whole table into memory and
+		// into a single JSON response.
+		const limit = Math.min(Math.max(parseInt(limitParam ?? '50', 10) || 50, 1), 500);
+		const offset = Math.max(parseInt(offsetParam ?? '0', 10) || 0, 0);
 
 		// Build where conditions
 		const conditions = [];

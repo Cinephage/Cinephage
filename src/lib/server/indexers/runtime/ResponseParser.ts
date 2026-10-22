@@ -632,7 +632,14 @@ export class ResponseParser {
 		// Optional fields
 		const magnetUrl = values['magnet'] || values['magneturl'] || values['magneturi'];
 		if (magnetUrl) {
-			result.magnetUrl = magnetUrl; // Magnet URLs are already absolute
+			// The value comes from an indexer (possibly a user-installed custom
+			// definition) and is rendered straight into an href. `downloadUrl`
+			// and `commentsUrl` are scheme-checked by makeAbsoluteUrl; this field
+			// was not, so `javascript:` could reach the anchor.
+			const safeMagnet = this.makeAbsoluteUrl(magnetUrl, baseUrl);
+			if (safeMagnet) {
+				result.magnetUrl = safeMagnet;
+			}
 		}
 
 		// Get infohash from field or auto-extract from magnet URI

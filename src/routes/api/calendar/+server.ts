@@ -40,7 +40,22 @@ const calendarQuerySchema = z.object({
 	certifications: z
 		.string()
 		.optional()
-		.transform((v) => (v ? v.split(',').filter(Boolean) : []))
+		// Each entry fans out to its own TMDB discover request, so an uncapped
+		// list (a viewer can send thousands) exhausts sockets and the TMDB rate
+		// limit. Certifications are short codes ("PG-13", "R"); anything beyond
+		// a handful is not a meaningful filter.
+		.transform((v) =>
+			v
+				? [
+						...new Set(
+							v
+								.split(',')
+								.map((entry) => entry.trim())
+								.filter(Boolean)
+						)
+					].slice(0, 10)
+				: []
+		)
 });
 
 export const GET: RequestHandler = async ({ url }) => {

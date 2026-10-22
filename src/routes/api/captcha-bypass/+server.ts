@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { captchaSolverSettingsService, getCaptchaSolver } from '#lib/server/captcha/index.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { resolveAndValidateUrl } from '#lib/server/http/ssrf-protection.js';
 import { resolveAppVersion } from '#lib/server/version.js';
 
 const logger = createChildLogger({ module: 'CaptchaBypassApi', logDomain: 'indexers' });
@@ -51,6 +52,34 @@ export const POST: RequestHandler = async (event) => {
 
 		const requestData = parsed.data;
 		requestUrl = requestData.url.replace(/"/g, '').trim();
+
+		// The solver loads this URL in a real browser and returns the rendered
+		// DOM. z.string().url() accepts file://, javascript: and gopher:, so
+		// without this an admin session could read arbitrary local files
+		// (file:///etc/passwd, the SQLite DB) or reach loopback services.
+		const safety = await resolveAndValidateUrl(requestUrl);
+		if (!safety.safe) {
+			logger.warn(
+				{ url: requestUrl, reason: safety.reason, logDomain: 'indexers' },
+				'[CaptchaBypassApi] Blocked unsafe URL'
+			);
+			return Response.json(
+				{
+					success: false,
+					message: 'URL not allowed',
+					error: safety.reason ?? 'URL not allowed',
+					data: null,
+					timings: {
+						startTimestamp: Date.now(),
+						endTimestamp: Date.now(),
+						durationMs: 0
+					},
+					version: appVersion
+				},
+				{ status: 403 }
+			);
+		}
+
 		const startTimestamp = Date.now();
 		const solver = getCaptchaSolver();
 		const solverEnabled = captchaSolverSettingsService.isEnabled();

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { MovieDetails, TVShowDetails, ReleaseDate } from '#lib/types/tmdb.js';
 	import TmdbImage from './TmdbImage.svelte';
+	import { safeExternalUrl } from '#lib/shared/url-safety.js';
 	import CrewList from './CrewList.svelte';
 	import WatchProviders from './WatchProviders.svelte';
 	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
@@ -764,10 +765,10 @@
 							<ExternalLink size={12} />
 						</a>
 					{/if}
-					{#if item.homepage}
+					{#if safeExternalUrl(item.homepage)}
 						<!-- eslint-disable svelte/no-navigation-without-resolve -- External URL -->
 						<a
-							href={item.homepage}
+							href={safeExternalUrl(item.homepage)}
 							target="_blank"
 							rel="noopener noreferrer"
 							class="btn gap-1 btn-ghost btn-xs"

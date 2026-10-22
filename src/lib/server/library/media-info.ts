@@ -26,6 +26,7 @@ import {
 import { readFile } from 'node:fs/promises';
 import type { movieFiles } from '#lib/server/db/schema.js';
 import { createChildLogger } from '#lib/logging/index.js';
+import { resolveAndValidateUrl } from '#lib/server/http/ssrf-protection.js';
 import { isVideoFile as isBaseVideoFile } from '#lib/config/constants.js';
 
 const logger = createChildLogger({ logDomain: 'scans' as const });
@@ -314,6 +315,20 @@ export class MediaInfoService {
 						throw new Error(`Unsupported STRM URL protocol: ${parsedUrl.protocol}`);
 					}
 					onStrmProbeFallback?.(`Unsupported STRM URL protocol: ${parsedUrl.protocol}`);
+					return this.getStrmMediaInfo();
+				}
+
+				// A .strm can be dropped into a watch folder by anyone with write
+				// access to the download directory, and ffprobe will happily
+				// connect to whatever it contains. Screen it against the same SSRF
+				// policy as the proxy endpoints so an import cannot probe loopback,
+				// RFC1918, or the cloud metadata endpoint.
+				const safety = await resolveAndValidateUrl(strmUrl);
+				if (!safety.safe) {
+					if (failOnInvalidStrmUrl) {
+						throw new Error(`Unsafe STRM URL: ${safety.reason}`);
+					}
+					onStrmProbeFallback?.(`Unsafe STRM URL: ${safety.reason}`);
 					return this.getStrmMediaInfo();
 				}
 

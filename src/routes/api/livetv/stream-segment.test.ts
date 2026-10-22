@@ -14,7 +14,12 @@ vi.mock('#lib/server/livetv/streaming/StreamUrlCache.js', () => ({
 	getStreamUrlCache: () => ({
 		getCached: vi.fn(),
 		isValid: vi.fn().mockReturnValue(true),
-		refreshStream: refreshStreamMock
+		refreshStream: refreshStreamMock,
+		// These tests exercise proxy mechanics against provider.test; the
+		// host-binding rule has its own coverage in livetv-host-binding.test.ts.
+		allowHost: vi.fn(),
+		hasAllowedHosts: vi.fn().mockReturnValue(true),
+		isHostAllowed: vi.fn().mockReturnValue(true)
 	})
 }));
 
