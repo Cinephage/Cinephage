@@ -347,35 +347,49 @@ export async function fetchWithTimeout(
 	// Literal IPs have no DNS step to race, so no dispatcher is needed.
 	const parsed = new URL(url);
 	const hostname = normalizeHostname(parsed.hostname);
-	let dispatcher: { close: () => Promise<void> } | null = null;
 
 	try {
-		let fetchOptions: RequestInit = { ...options, signal: controller.signal };
-
-		if (!isIpLiteral(hostname)) {
-			const addresses = await dns.lookup(hostname, { all: true, verbatim: true });
-			const pinned = addresses[0];
-			if (!pinned) {
-				throw new UnsafeUrlError(`No address resolved for '${hostname}'`);
-			}
-			const { Agent } = await import('undici');
-			const agent = new Agent({
-				connect: {
-					lookup: (_lookupHost, _lookupOptions, callback) => {
-						callback(null, [{ address: pinned.address, family: pinned.family }]);
-					}
-				}
-			});
-			dispatcher = agent;
-			fetchOptions = { ...fetchOptions, dispatcher: agent } as RequestInit & {
-				dispatcher: unknown;
-			};
+		if (isIpLiteral(hostname)) {
+			// Literal IPs have no DNS step to race, so global fetch is fine.
+			return await fetch(url, { ...options, signal: controller.signal });
 		}
 
-		return await fetch(url, fetchOptions);
+		// Hostname: resolve, then pin the connection to the address that passed.
+		// The Agent MUST come from the same undici copy as the fetch that uses
+		// it — Node's global fetch is the *bundled* undici, whose Dispatcher
+		// interface differs from the npm package's, and mixing them fails at
+		// connect time with `invalid onRequestStart method`.
+		const { Agent, fetch: undiciFetch } = await import('undici');
+
+		const addresses = await dns.lookup(hostname, { all: true, verbatim: true });
+		const pinned = addresses[0];
+		if (!pinned) {
+			throw new UnsafeUrlError(`No address resolved for '${hostname}'`);
+		}
+		const agent = new Agent({
+			connect: {
+				lookup: (_lookupHost, _lookupOptions, callback) => {
+					callback(null, [{ address: pinned.address, family: pinned.family }]);
+				}
+			}
+		});
+
+		try {
+			// undici's RequestInit differs from the DOM type (its `body` excludes
+			// Blob); the values are compatible at runtime. undici's Response
+			// implements the standard Response surface the callers rely on.
+			const init = {
+				...options,
+				signal: controller.signal,
+				dispatcher: agent
+			} as unknown as Parameters<typeof undiciFetch>[1];
+			const response = (await undiciFetch(url, init)) as unknown as Response;
+			return response;
+		} finally {
+			await agent.close().catch(() => {});
+		}
 	} finally {
 		clearTimeout(timeoutId);
 		externalSignal?.removeEventListener('abort', abortFromExternal);
-		if (dispatcher) await dispatcher.close().catch(() => {});
 	}
 }

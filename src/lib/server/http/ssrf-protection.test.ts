@@ -59,22 +59,67 @@ describe('fetchWithTimeout signal handling', () => {
 		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 
-	it('pins a hostname to the address that passed validation', async () => {
+	it('pins hostname fetches through undici fetch, not global fetch', async () => {
+		// Regression: passing an npm-undici Agent to Node's global fetch mixes
+		// two undici copies with incompatible Dispatcher contracts — every
+		// proxied hostname fetch failed at connect with `invalid onRequestStart
+		// method`. The Agent and the fetch must come from the same package.
 		dnsLookupMock.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
-		let seenOptions: (RequestInit & { dispatcher?: unknown }) | undefined;
-		vi.stubGlobal(
-			'fetch',
-			vi.fn((_url: string, options: RequestInit & { dispatcher?: unknown }) => {
-				seenOptions = options;
-				return Promise.resolve(new Response('ok'));
-			})
+		const globalFetch = vi.fn();
+		vi.stubGlobal('fetch', globalFetch);
+
+		const undiciFetch = vi.fn(
+			async (_url: string, _init?: Record<string, unknown>) => new Response('ok')
 		);
+		const agentInstances: Array<{ connect: unknown; closed: boolean }> = [];
+		vi.doMock('undici', () => ({
+			fetch: undiciFetch,
+			Agent: class {
+				connect: unknown;
+				closed = false;
+				constructor(options: { connect: unknown }) {
+					this.connect = options.connect;
+					agentInstances.push(this);
+				}
+				async close() {
+					this.closed = true;
+				}
+			}
+		}));
 
-		await fetchWithTimeout('https://public.example/stream', {});
+		try {
+			vi.resetModules();
+			const { fetchWithTimeout: fetchWithTimeoutFresh } = await import('./ssrf-protection');
+			const response = await fetchWithTimeoutFresh('https://public.example/stream', {});
 
-		// The connection is pinned through a dispatcher rather than resolving
-		// the hostname a second time at connect.
-		expect(seenOptions?.dispatcher).toBeDefined();
+			expect(response.status).toBe(200);
+			// Global fetch must be untouched for hostname fetches.
+			expect(globalFetch).not.toHaveBeenCalled();
+			expect(undiciFetch).toHaveBeenCalledTimes(1);
+			expect(undiciFetch.mock.calls[0]?.[1]?.dispatcher).toBeDefined();
+
+			// The pinned lookup returns exactly the validated address, and the
+			// agent is released afterwards so sockets do not accumulate.
+			const agent = agentInstances[0];
+			expect(agent).toBeDefined();
+			const lookupResult = (await new Promise((resolve) => {
+				(
+					agent!.connect as {
+						lookup: (
+							host: string,
+							opts: unknown,
+							cb: (err: null, addresses: Array<{ address: string; family: number }>) => void
+						) => void;
+					}
+				).lookup('public.example', {}, (err, addresses) => resolve({ err, addresses }));
+			})) as { err: null; addresses: Array<{ address: string; family: number }> };
+			expect(lookupResult.err).toBeNull();
+			expect(lookupResult.addresses).toEqual([{ address: '93.184.216.34', family: 4 }]);
+			expect(agent!.closed).toBe(true);
+		} finally {
+			vi.doUnmock('undici');
+			vi.resetModules();
+		}
 	});
 });
 
