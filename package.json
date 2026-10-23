@@ -45,7 +45,7 @@
 		"@sveltejs/vite-plugin-svelte": "^7.3.1",
 		"@tailwindcss/vite": "^4.3.3",
 		"@testing-library/svelte": "^5.4.2",
-		"@types/adm-zip": "^0.5.8",
+		"@types/adm-zip": "^0.6.0",
 		"@types/better-sqlite3": "^9.0.0",
 		"@types/js-yaml": "^4.0.9",
 		"@types/node": "^26.1.2",
@@ -88,10 +88,10 @@
 		"@rollup/rollup-linux-x64-gnu": "^4.62.3"
 	},
 	"dependencies": {
-		"@better-auth/api-key": "1.7.7",
+		"@better-auth/api-key": "1.7.12",
 		"@parcel/watcher": "^2.6.0",
 		"adm-zip": "^0.6.1",
-		"better-auth": "1.7.7",
+		"better-auth": "1.7.12",
 		"better-sqlite3": "^13.0.3",
 		"camoufox": "^0.5.8",
 		"cheerio": "^1.2.0",
@@ -107,7 +107,7 @@
 		"minimatch": "^10.2.6",
 		"parse-torrent": "^11.0.24",
 		"pino": "^10.4.0",
-		"playwright-core": "~1.62.0",
+		"playwright-core": "~1.64.0",
 		"zod": "^4.6.5"
 	},
 	"imports": {
