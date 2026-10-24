@@ -5,7 +5,7 @@
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { ensureVersionPrefix } from '#lib/version.js';
 
-	const GITHUB_URL = 'https://github.com/MoldyTaint/Cinephage';
+	const GITHUB_URL = 'https://github.com/Cinephage/Cinephage';
 	const DISCORD_URL = 'https://discord.gg/scGCBTSWEt';
 
 	let { data } = $props();

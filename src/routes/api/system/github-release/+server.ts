@@ -4,7 +4,7 @@ import { ensureVersionPrefix } from '#lib/version.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 
-const GITHUB_REPO = 'MoldyTaint/Cinephage';
+const GITHUB_REPO = 'Cinephage/Cinephage';
 const GITHUB_API_BASE = 'https://api.github.com';
 
 interface CachedRelease {

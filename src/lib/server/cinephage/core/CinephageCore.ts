@@ -188,7 +188,7 @@ export class CinephageCore {
 	private async fetchAndPersistLatestIdentity(): Promise<void> {
 		try {
 			const releaseResponse = await fetch(
-				`${this.githubApiBase}/repos/MoldyTaint/Cinephage/releases/latest`,
+				`${this.githubApiBase}/repos/Cinephage/Cinephage/releases/latest`,
 				{
 					headers: { Accept: 'application/vnd.github+json' },
 					signal: AbortSignal.timeout(15_000)
@@ -205,7 +205,7 @@ export class CinephageCore {
 			}
 
 			const commitResponse = await fetch(
-				`${this.githubApiBase}/repos/MoldyTaint/Cinephage/commits/${encodeURIComponent(tagName)}`,
+				`${this.githubApiBase}/repos/Cinephage/Cinephage/commits/${encodeURIComponent(tagName)}`,
 				{
 					headers: { Accept: 'application/vnd.github+json' },
 					signal: AbortSignal.timeout(15_000)

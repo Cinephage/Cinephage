@@ -50,7 +50,7 @@
 	} from '@lucide/svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 
-	const GITHUB_URL = 'https://github.com/MoldyTaint/Cinephage';
+	const GITHUB_URL = 'https://github.com/Cinephage/Cinephage';
 	const DISCORD_URL = 'https://discord.gg/scGCBTSWEt';
 
 	type MenuChildItem = {

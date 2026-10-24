@@ -15,7 +15,7 @@ Want to contribute? Here's how to get set up.
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/MoldyTaint/cinephage.git
+   git clone https://github.com/Cinephage/Cinephage.git
    cd cinephage
    ```
 

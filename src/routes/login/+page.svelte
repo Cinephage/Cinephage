@@ -5,7 +5,7 @@
 	import { ensureVersionPrefix } from '#lib/version.js';
 	import * as m from '#lib/paraglide/messages.js';
 
-	const GITHUB_URL = 'https://github.com/MoldyTaint/Cinephage';
+	const GITHUB_URL = 'https://github.com/Cinephage/Cinephage';
 	const DISCORD_URL = 'https://discord.gg/scGCBTSWEt';
 
 	let { data } = $props();
