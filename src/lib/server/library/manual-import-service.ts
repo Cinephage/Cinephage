@@ -19,6 +19,7 @@ import {
 	type MediaNamingInfo
 } from '#lib/server/library/naming/NamingService.js';
 import {
+	applyFilePermissions,
 	ensureDirectory,
 	ImportMode,
 	transferFileWithMode,
@@ -1497,6 +1498,17 @@ export class ManualImportService {
 
 		if (!transferResult.success) {
 			throw new Error(transferResult.error || 'Failed to transfer source file');
+		}
+
+		// Mirror the automatic import path (issue #617): a freshly copied or
+		// moved file must not keep the container's umask-truncated 0600 mode.
+		if (transferResult.mode !== 'symlink') {
+			await applyFilePermissions(
+				destinationPath,
+				sourcePath,
+				settings.preservePermissions,
+				settings.chmodFile
+			);
 		}
 
 		const action =

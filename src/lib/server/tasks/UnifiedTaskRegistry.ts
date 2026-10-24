@@ -229,6 +229,14 @@ const MAINTENANCE_TASKS: UnifiedTaskDefinition[] = [
 		runEndpoint: '/api/library/regenerate-sidecars'
 	},
 	{
+		id: 'fix-media-permissions',
+		name: 'Fix Media File Permissions',
+		description:
+			'Repair media files and folders that were created with restrictive permissions (0700/0600) while the container umask made them unreadable to media servers (issue #617). Only touches entries with no group/other access bits; read-only roots are skipped.',
+		category: 'maintenance',
+		runEndpoint: '/api/library/fix-media-permissions'
+	},
+	{
 		id: 'original-language-backfill',
 		name: 'Original Language Backfill',
 		description:

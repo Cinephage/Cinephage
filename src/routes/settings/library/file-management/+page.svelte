@@ -6,7 +6,13 @@
 	import { SettingsPage, SettingsSection } from '#lib/components/ui/settings/index.js';
 	import * as m from '#lib/paraglide/messages.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
-	import { updateFileManagementSettings, updateSidecarSettings } from '#lib/api/settings.js';
+	import {
+		fixMediaFilePermissions,
+		getMediaPermissionRepairStatus,
+		updateFileManagementSettings,
+		updateSidecarSettings
+	} from '#lib/api/settings.js';
+	import type { MediaPermissionRepairStatus } from '#lib/api/settings.js';
 	import { refreshAll } from '$app/navigation';
 	import type { PageData } from './$types';
 	import type { ImportMethod } from '#lib/validation/schemas.js';
@@ -119,6 +125,43 @@
 			toasts.error(m.settings_fileManagement_failedToSave());
 		} finally {
 			saving = false;
+		}
+	}
+
+	// One-shot repair for library files stuck with owner-only permissions
+	// (issue #617). The server walks the root folders in the background;
+	// poll the status endpoint until it settles so the summary can be shown.
+	let fixingPermissions = $state(false);
+	let permissionRepair = $state<MediaPermissionRepairStatus | null>(null);
+
+	async function runPermissionRepair() {
+		if (fixingPermissions) return;
+		fixingPermissions = true;
+		try {
+			await fixMediaFilePermissions();
+			// Cap the poll at ~5 minutes; the repair keeps running server-side
+			// even if we stop waiting for it here.
+			for (let i = 0; i < 300; i++) {
+				await new Promise((resolve) => setTimeout(resolve, 1000));
+				permissionRepair = await getMediaPermissionRepairStatus();
+				if (!permissionRepair.running) break;
+			}
+			if (permissionRepair?.lastError) {
+				toasts.error(permissionRepair.lastError);
+			} else if (permissionRepair?.lastResult) {
+				toasts.success(
+					m.settings_fileManagement_fixPermissionsDone({
+						dirs: permissionRepair.lastResult.dirsFixed,
+						files: permissionRepair.lastResult.filesFixed
+					})
+				);
+			}
+		} catch (err) {
+			toasts.error(
+				err instanceof Error ? err.message : m.settings_fileManagement_fixPermissionsFailed()
+			);
+		} finally {
+			fixingPermissions = false;
 		}
 	}
 </script>
@@ -512,6 +555,54 @@
 					{/if}
 				</div>
 			</label>
+		</div>
+	</SettingsSection>
+
+	<SettingsSection
+		title={m.settings_fileManagement_fixPermissionsSectionTitle()}
+		description={m.settings_fileManagement_fixPermissionsSectionDescription()}
+	>
+		<div class="flex flex-col gap-3">
+			<div class="flex items-center gap-3">
+				<button
+					type="button"
+					class="btn btn-outline btn-sm"
+					onclick={runPermissionRepair}
+					disabled={fixingPermissions}
+				>
+					{#if fixingPermissions}
+						<span class="loading loading-sm loading-spinner"></span>
+					{/if}
+					{m.settings_fileManagement_fixPermissionsRun()}
+				</button>
+				{#if fixingPermissions}
+					<span class="text-sm text-base-content/60">
+						{m.settings_fileManagement_fixPermissionsRunning()}
+					</span>
+				{/if}
+			</div>
+			{#if permissionRepair?.lastResult}
+				<p class="text-sm text-base-content/70">
+					{m.settings_fileManagement_fixPermissionsSummary({
+						dirs: permissionRepair.lastResult.dirsFixed,
+						files: permissionRepair.lastResult.filesFixed
+					})}
+				</p>
+			{/if}
+			{#if permissionRepair?.lastResult?.errors.length}
+				<div class="text-xs text-base-content/60">
+					<p>
+						{m.settings_fileManagement_fixPermissionsErrors({
+							count: permissionRepair.lastResult.errors.length
+						})}
+					</p>
+					<ul class="list-disc pl-5">
+						{#each permissionRepair.lastResult.errors.slice(0, 5) as error (error)}
+							<li class="break-all">{error}</li>
+						{/each}
+					</ul>
+				</div>
+			{/if}
 		</div>
 	</SettingsSection>
 

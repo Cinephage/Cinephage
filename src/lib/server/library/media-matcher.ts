@@ -7,6 +7,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
+import { applyMediaFileMode } from '#lib/server/filesystem/mkdir-helpers.js';
 import { db } from '#lib/server/db/index.js';
 import { todayDateString } from '#lib/utils/format.js';
 import {
@@ -1206,6 +1207,7 @@ export class MediaMatcherService {
 							),
 							'utf-8'
 						);
+						await applyMediaFileMode(nfoPath);
 					}
 
 					if (sidecarSettings.includeArtwork) {
@@ -1787,6 +1789,7 @@ export class MediaMatcherService {
 							}),
 							'utf-8'
 						);
+						await applyMediaFileMode(nfoPath);
 					}
 				} catch (err) {
 					logger.warn(
@@ -1805,6 +1808,7 @@ export class MediaMatcherService {
 							buildSeriesNfo(seriesRow, sidecarSettings.includeArtwork),
 							'utf-8'
 						);
+						await applyMediaFileMode(tvshowNfoPath);
 					}
 
 					if (sidecarSettings.includeArtwork) {
@@ -1836,6 +1840,7 @@ export class MediaMatcherService {
 						const seasonNfoPath = join(folderOf(destPath), 'season.nfo');
 						if (await shouldWriteSidecar(seasonNfoPath, sidecarSettings.overwriteExisting)) {
 							await writeFile(seasonNfoPath, buildSeasonNfo(season), 'utf-8');
+							await applyMediaFileMode(seasonNfoPath);
 						}
 
 						if (sidecarSettings.includeArtwork && season.posterPath) {

@@ -6,10 +6,11 @@
  * to locate and play streaming content.
  */
 
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { existsSync, writeFileSync, readFileSync } from 'fs';
 import { join, dirname, resolve, relative } from 'path';
 import { createChildLogger } from '#lib/logging/index.js';
 import { isRootFolderWritable } from '#lib/server/filesystem/writable-guard.js';
+import { applyMediaFileMode, ensureMediaDirectory } from '#lib/server/filesystem/mkdir-helpers.js';
 import { todayDateString } from '#lib/utils/format.js';
 import { getOwnerStreamingApiKey } from '#lib/server/auth/index.js';
 import { db } from '#lib/server/db/index.js';
@@ -349,16 +350,14 @@ export class StrmService {
 				};
 			}
 
-			// Ensure directory exists
-			const dir = dirname(destinationPath);
-			if (!existsSync(dir)) {
-				mkdirSync(dir, { recursive: true });
-				logger.debug({ dir }, '[StrmService] Created directory');
-			}
+			// Ensure directory exists - ensureMediaDirectory overrides the
+			// container's umask 077 so other-UID media servers can traverse it.
+			await ensureMediaDirectory(dirname(destinationPath));
 
 			// Generate and write .strm content
 			const content = await this.generateStrmContent(options);
 			writeFileSync(destinationPath, content, 'utf8');
+			await applyMediaFileMode(destinationPath);
 
 			logger.info(
 				{
@@ -418,15 +417,13 @@ export class StrmService {
 				episode.title
 			);
 
-			// Ensure directory exists
-			const dir = dirname(destinationPath);
-			if (!existsSync(dir)) {
-				mkdirSync(dir, { recursive: true });
-			}
+			// Ensure directory exists with traversable permissions (umask 077).
+			await ensureMediaDirectory(dirname(destinationPath));
 
 			// Generate and write .strm content with API key
 			const content = `${baseUrl}/api/streaming/session/tv/${tmdbId}/${seasonNumber}/${episode.episodeNumber}?api_key=${encodeURIComponent(apiKey)}`;
 			writeFileSync(destinationPath, content, 'utf8');
+			await applyMediaFileMode(destinationPath);
 
 			return { success: true, filePath: destinationPath };
 		} catch (error) {
@@ -1238,16 +1235,13 @@ export class StrmService {
 				};
 			}
 
-			// Ensure directory exists
-			const dir = dirname(destinationPath);
-			if (!existsSync(dir)) {
-				mkdirSync(dir, { recursive: true });
-				logger.debug({ dir }, '[StrmService] Created directory');
-			}
+			// Ensure directory exists with traversable permissions (umask 077).
+			await ensureMediaDirectory(dirname(destinationPath));
 
 			// Generate NZB streaming URL with API key
 			const content = `${baseUrl}/api/streaming/usenet/${mountId}/${fileIndex}?api_key=${encodeURIComponent(apiKey)}`;
 			writeFileSync(destinationPath, content, 'utf8');
+			await applyMediaFileMode(destinationPath);
 
 			logger.info(
 				{

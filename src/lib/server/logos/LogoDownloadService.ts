@@ -7,7 +7,7 @@ import { EventEmitter } from 'node:events';
 import { invalidateLogoLibraryCache } from './logo-library.js';
 import { LOGO_REPO_PATH_PREFIX, LOGOS_DIR } from './constants.js';
 
-const GITHUB_REPO = 'MoldyTaint/Cinephage';
+const GITHUB_REPO = 'Cinephage/Cinephage';
 const GITHUB_BRANCH = 'main';
 
 export interface LogoDownloadProgress {

@@ -1286,3 +1286,34 @@ export async function getFileManagementSettings() {
 export async function updateFileManagementSettings(payload: FileManagementSettings) {
 	return apiPut<FileManagementSettingsUpdateResponse>('/api/settings/file-management', payload);
 }
+
+export interface MediaPermissionRepairSummary {
+	scanned: number;
+	dirsFixed: number;
+	filesFixed: number;
+	roots: {
+		rootFolderId: string;
+		name: string;
+		path: string;
+		skipped: boolean;
+		skipReason?: string | null;
+	}[];
+	errors: string[];
+	errorsTruncated: boolean;
+}
+
+export interface MediaPermissionRepairStatus {
+	success: boolean;
+	running: boolean;
+	lastResult: MediaPermissionRepairSummary | null;
+	lastError: string | null;
+}
+
+/** Starts the background media permission repair (issue #617). Poll the status endpoint until `running` is false. */
+export async function fixMediaFilePermissions() {
+	return apiPost<MediaPermissionRepairStatus>('/api/library/fix-media-permissions', {});
+}
+
+export async function getMediaPermissionRepairStatus() {
+	return apiGet<MediaPermissionRepairStatus>('/api/library/fix-media-permissions');
+}

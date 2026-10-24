@@ -28,7 +28,7 @@ import {
 import { eq, and, inArray, isNull } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { writeFile, unlink, rename } from 'node:fs/promises';
-import { ensureMediaDirectory } from '#lib/server/filesystem/mkdir-helpers.js';
+import { applyMediaFileMode, ensureMediaDirectory } from '#lib/server/filesystem/mkdir-helpers.js';
 import { existsSync } from 'node:fs';
 import { dirname, join, basename, extname } from 'node:path';
 import { createChildLogger } from '#lib/logging/index.js';
@@ -437,6 +437,7 @@ export class SubtitleDownloadService {
 			try {
 				await writeFile(tempPath, content);
 				await rename(tempPath, finalPath);
+				await applyMediaFileMode(finalPath);
 			} catch (writeError) {
 				await this.safeUnlink(tempPath);
 				throw writeError;

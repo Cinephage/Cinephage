@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { lstat, realpath, rename, rm } from 'node:fs/promises';
-import { ensureMediaDirectory } from '#lib/server/filesystem/mkdir-helpers.js';
+import { applyMediaFileMode, ensureMediaDirectory } from '#lib/server/filesystem/mkdir-helpers.js';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
@@ -182,11 +182,15 @@ export class DebridFileMaterializer {
 						response.destroy(new Error('Provider download read timeout'))
 					);
 					void pipeline(response, createWriteStream(tempPath, { flags: 'wx' })).then(
-						() =>
+						async () => {
+							// The rename into the library preserves the file mode, so
+							// normalizing the temp file here covers the final artifact.
+							await applyMediaFileMode(tempPath);
 							resolvePromise({
 								sizeBytes: bytes,
 								contentLength: parseContentLength(response.headers['content-length'])
-							}),
+							});
+						},
 						(error) => rejectPromise(new Error('Provider download network error', { cause: error }))
 					);
 				}
