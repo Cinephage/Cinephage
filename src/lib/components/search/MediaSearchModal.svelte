@@ -165,9 +165,11 @@
 	): Promise<{ success: boolean; error?: string; errorCode?: string }> {
 		try {
 			const result = await grabRelease({
-				guid: release.guid,
-				downloadUrl: release.downloadUrl,
-				magnetUrl: release.magnetUrl,
+				// The search API redacts absent URLs to null; the grab schema
+				// accepts null defensively but its inferred type is string|undefined.
+				guid: release.guid ?? undefined,
+				downloadUrl: release.downloadUrl ?? undefined,
+				magnetUrl: release.magnetUrl ?? undefined,
 				infoHash: release.infoHash,
 				title: release.title,
 				indexerId: release.indexerId,

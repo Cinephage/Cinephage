@@ -80,6 +80,35 @@ describe('grabRequestSchema', () => {
 		}
 	});
 
+	it('accepts an explicit null magnetUrl (e.g. usenet release from the search API)', () => {
+		// Regression: the search API redacts absent URLs to null and JSON.stringify
+		// keeps the key, so `.optional()` alone rejected grabs with
+		// "expected string, received null".
+		const result = grabRequestSchema.safeParse({ ...validMovieGrab, magnetUrl: null, guid: null });
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.magnetUrl).toBeUndefined();
+			expect(result.data.guid).toBeUndefined();
+		}
+	});
+
+	it('accepts an explicit null downloadUrl when a magnetUrl is present', () => {
+		const result = grabRequestSchema.safeParse({
+			title: 'Futurama S06E17 1080p WEB-DL',
+			mediaType: 'tv',
+			downloadUrl: null,
+			magnetUrl: 'magnet:?xt=urn:btih:deadbeef',
+			seriesId: 'series-1',
+			seasonNumber: 6
+		});
+		expect(result.success).toBe(true);
+	});
+
+	it('still rejects when both downloadUrl and magnetUrl are null', () => {
+		const result = grabRequestSchema.safeParse({ ...validMovieGrab, downloadUrl: null });
+		expect(result.success).toBe(false);
+	});
+
 	it('requires a download source (downloadUrl or magnetUrl)', () => {
 		const { downloadUrl: _downloadUrl, ...noSource } = validMovieGrab;
 		const result = grabRequestSchema.safeParse(noSource);

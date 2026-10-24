@@ -20,10 +20,12 @@
 	import * as m from '#lib/paraglide/messages.js';
 
 	export interface Release {
-		guid: string;
+		guid: string | null;
 		title: string;
-		downloadUrl: string;
-		magnetUrl?: string;
+		/** Null when the indexer only offers a magnet (or vice versa); the
+		 * search API redacts absent URLs to null instead of omitting them. */
+		downloadUrl: string | null;
+		magnetUrl?: string | null;
 		infoHash?: string;
 		size: number;
 		seeders?: number;

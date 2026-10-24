@@ -2098,13 +2098,23 @@ export const seriesBatchDeleteSchema = z.object({
 // ============================================================================
 
 /**
+ * Helper: optional string that tolerates an explicit null. The search API
+ * redacts absent downloadUrl/guid/magnetUrl to null and JSON.stringify keeps
+ * the key, which plain `.optional()` rejects as "expected string, received null".
+ */
+const optionalNullableString = z.preprocess(
+	(v: unknown) => (v === null ? undefined : v),
+	z.string().optional()
+);
+
+/**
  * Schema for grab request
  */
 export const grabRequestSchema = z
 	.object({
-		guid: z.string().optional(),
-		downloadUrl: z.string().optional(),
-		magnetUrl: z.string().optional(),
+		guid: optionalNullableString,
+		downloadUrl: optionalNullableString,
+		magnetUrl: optionalNullableString,
 		infoHash: z.string().optional(),
 		title: z.string().min(1, 'title is required'),
 		indexerId: z.string().optional(),
