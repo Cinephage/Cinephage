@@ -163,10 +163,10 @@ describe('CinephageCore', () => {
 
 			expect(fetchMock).toHaveBeenCalledTimes(2);
 			expect(fetchMock.mock.calls[0][0]).toBe(
-				'https://gh.example.com/repos/MoldyTaint/Cinephage/releases/latest'
+				'https://gh.example.com/repos/cinephage/cinephage/releases/latest'
 			);
 			expect(fetchMock.mock.calls[1][0]).toBe(
-				'https://gh.example.com/repos/MoldyTaint/Cinephage/commits/v0.15.0'
+				'https://gh.example.com/repos/cinephage/cinephage/commits/v0.15.0'
 			);
 			expect(settings.updateConfig).toHaveBeenCalledWith({
 				latestVersion: 'v0.15.0',

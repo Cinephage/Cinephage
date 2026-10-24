@@ -1,13 +1,13 @@
 <?xml version="1.0"?>
 <Container version="2">
 	<Name>cinephage</Name>
-	<Repository>ghcr.io/moldytaint/cinephage:latest</Repository>
+	<Repository>ghcr.io/cinephage/cinephage:latest</Repository>
 	<Registry>https://ghcr.io</Registry>
 	<Network>bridge</Network>
 	<Privileged>false</Privileged>
 	<Shell>bash</Shell>
-	<Support>https://github.com/MoldyTaint/Cinephage/issues</Support>
-	<Project>https://github.com/MoldyTaint/Cinephage</Project>
+	<Support>https://github.com/cinephage/cinephage/issues</Support>
+	<Project>https://github.com/cinephage/cinephage</Project>
 	<Overview>
 Cinephage is a self-hosted media management application — automated movie/TV library management, quality upgrades, subtitle sync, and streaming.
 
@@ -15,8 +15,8 @@ Cinephage is a self-hosted media management application — automated movie/TV l
 	</Overview>
 	<Category>MediaApp:Video</Category>
 	<WebUI>http://[IP]:[PORT:3000]</WebUI>
-	<Icon>https://raw.githubusercontent.com/MoldyTaint/Cinephage/main/deploy/unraid/icon.png</Icon>
-	<TemplateURL>https://raw.githubusercontent.com/MoldyTaint/Cinephage/main/deploy/unraid/cinephage.xml</TemplateURL>
+	<Icon>https://raw.githubusercontent.com/cinephage/cinephage/main/deploy/unraid/icon.png</Icon>
+	<TemplateURL>https://raw.githubusercontent.com/cinephage/cinephage/main/deploy/unraid/cinephage.xml</TemplateURL>
 	<Branches>
 		<Branch>
 			<Tag>latest</Tag>
@@ -25,7 +25,7 @@ Cinephage is a self-hosted media management application — automated movie/TV l
 		<Branch>
 			<Tag>dev</Tag>
 			<TagDescription>Development Branch</TagDescription>
-			<Repository>ghcr.io/moldytaint/cinephage:dev</Repository>
+			<Repository>ghcr.io/cinephage/cinephage:dev</Repository>
 		</Branch>
 	</Branches>
 	<ExtraParams>--shm-size=256m</ExtraParams>

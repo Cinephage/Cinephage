@@ -68,7 +68,7 @@ FROM node:24-trixie-slim AS runner
 WORKDIR /app
 
 ARG APP_VERSION=dev
-ARG APP_SOURCE=https://github.com/MoldyTaint/Cinephage
+ARG APP_SOURCE=https://github.com/cinephage/cinephage
 ARG VCS_REF=unknown
 ARG BUILD_CREATED=unknown
 ENV APP_VERSION=${APP_VERSION}

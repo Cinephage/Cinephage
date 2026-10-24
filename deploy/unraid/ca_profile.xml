@@ -14,7 +14,7 @@ Cinephage is a self-hosted media management application that helps you build and
 * Multi-arch support (amd64 + arm64)
 	</Description>
 	<Category>MediaApp:Video</Category>
-	<Icon>https://raw.githubusercontent.com/MoldyTaint/Cinephage/main/deploy/unraid/icon.png</Icon>
-	<Project>https://github.com/MoldyTaint/Cinephage</Project>
-	<Support>https://github.com/MoldyTaint/Cinephage/issues</Support>
+	<Icon>https://raw.githubusercontent.com/cinephage/cinephage/main/deploy/unraid/icon.png</Icon>
+	<Project>https://github.com/cinephage/cinephage</Project>
+	<Support>https://github.com/cinephage/cinephage/issues</Support>
 </Repository>
