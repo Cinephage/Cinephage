@@ -1449,3 +1449,49 @@ describe('duplicate-file replacement on deliberate (re-)match (issue #627)', () 
 		expect(files[0].relativePath).toBe('Season 1/Show X - S01E01 - New Name.mkv');
 	});
 });
+
+describe('collection tagging on manual match', () => {
+	it('tags a newly-created movie with its TMDB collection', async () => {
+		await insertRootFolder('rf-coll', '/mnt/movies-coll', 'movie');
+		await insertUnmatchedFile({
+			id: 'uf-coll',
+			path: '/mnt/movies-coll/Weapons Collection/Weapons (2025)/Weapons (2025).mkv',
+			rootFolderId: 'rf-coll',
+			mediaType: 'movie'
+		});
+		mocks.getMovie.mockResolvedValue({
+			id: 7001,
+			title: 'Weapons',
+			release_date: '2025-08-08',
+			belongs_to_collection: { id: 999, name: 'Weapons Collection' }
+		});
+
+		await mediaMatcherService.acceptMatch('uf-coll', 7001, 'movie');
+
+		const [movie] = await testDb.db.select().from(movies).where(eq(movies.tmdbId, 7001));
+		expect(movie.tmdbCollectionId).toBe(999);
+		expect(movie.collectionName).toBe('Weapons Collection');
+	});
+
+	it('leaves collection fields null when the movie has no TMDB collection', async () => {
+		await insertRootFolder('rf-nocoll', '/mnt/movies-nocoll', 'movie');
+		await insertUnmatchedFile({
+			id: 'uf-nocoll',
+			path: '/mnt/movies-nocoll/Standalone (2024)/Standalone (2024).mkv',
+			rootFolderId: 'rf-nocoll',
+			mediaType: 'movie'
+		});
+		mocks.getMovie.mockResolvedValue({
+			id: 7002,
+			title: 'Standalone',
+			release_date: '2024-01-01',
+			belongs_to_collection: null
+		});
+
+		await mediaMatcherService.acceptMatch('uf-nocoll', 7002, 'movie');
+
+		const [movie] = await testDb.db.select().from(movies).where(eq(movies.tmdbId, 7002));
+		expect(movie.tmdbCollectionId).toBeNull();
+		expect(movie.collectionName).toBeNull();
+	});
+});

@@ -1089,6 +1089,8 @@ export class MediaMatcherService {
 					backdropPath: tmdbMovie.backdrop_path,
 					runtime: tmdbMovie.runtime,
 					genres: tmdbMovie.genres?.map((g) => g.name),
+					tmdbCollectionId: tmdbMovie.belongs_to_collection?.id ?? null,
+					collectionName: tmdbMovie.belongs_to_collection?.name ?? null,
 					path: movieFolder || fileName,
 					libraryId: owningLibrary.id,
 					rootFolderId: rootFolder.id,
