@@ -1,14 +1,14 @@
 blank_issues_enabled: false
 contact_links:
   - name: Questions & Support
-    url: https://github.com/MoldyTaint/Cinephage/discussions/categories/q-a
+    url: https://github.com/cinephage/cinephage/discussions/categories/q-a
     about: Ask questions and get help from the community. Please search existing discussions first.
   - name: Ideas & Brainstorming
-    url: https://github.com/MoldyTaint/Cinephage/discussions/categories/ideas
+    url: https://github.com/cinephage/cinephage/discussions/categories/ideas
     about: Share early-stage ideas before creating a formal feature request.
   - name: Discord Community
     url: https://discord.gg/scGCBTSWEt
     about: Join our Discord for real-time chat and community support.
   - name: Documentation
-    url: https://github.com/MoldyTaint/Cinephage/tree/main/docs
+    url: https://github.com/cinephage/cinephage/tree/main/docs
     about: Check the documentation - your answer might already be there.
