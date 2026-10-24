@@ -30,7 +30,7 @@ import { initializeProviderFactory } from '#lib/server/subtitles/providers/Subti
 import { ensureStreamingApiKeyRateLimit } from '#lib/server/auth/index.js';
 import { logCaptureStore } from '#lib/server/logging/log-capture-store.js';
 import { logHistoryService } from '#lib/server/logging/log-history.js';
-import { getCinephageApiService } from '#lib/server/cinephage/CinephageApiService.js';
+import { getCinephageApiService } from '#lib/server/cinephage/cinephageApiService.js';
 import { getDebridPollService } from '#lib/server/downloadClients/debrid/DebridPollService.js';
 import { getRequestAvailabilityProjector } from '#lib/server/requests/RequestAvailabilityProjector.js';
 
