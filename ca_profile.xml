@@ -2,10 +2,10 @@
 	<Profile>
 Cinephage is a self-hosted media management application for automated movie and TV show acquisition, quality upgrades, subtitle sync, streaming, and library management.
 
-This repository contains the official Unraid Docker template for Cinephage. The container image is published to ghcr.io/moldytaint/cinephage and supports amd64 and arm64.
+This repository contains the official Unraid Docker template for Cinephage. The container image is published to ghcr.io/cinephage/cinephage and supports amd64 and arm64.
 
 For support or to report issues, open an issue on the project's GitHub repository.
 	</Profile>
-	<Icon>https://raw.githubusercontent.com/MoldyTaint/Cinephage/main/deploy/unraid/icon.png</Icon>
-	<WebPage>https://github.com/MoldyTaint/Cinephage</WebPage>
+	<Icon>https://raw.githubusercontent.com/cinephage/cinephage/main/deploy/unraid/icon.png</Icon>
+	<WebPage>https://github.com/cinephage/cinephage</WebPage>
 </CommunityApplications>

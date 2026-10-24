@@ -8,7 +8,7 @@ body:
       value: |
         Thanks for suggesting an improvement! Please fill out the form below.
 
-        For early-stage ideas or brainstorming, consider starting a [Discussion](https://github.com/MoldyTaint/Cinephage/discussions/categories/ideas) first.
+        For early-stage ideas or brainstorming, consider starting a [Discussion](https://github.com/cinephage/cinephage/discussions/categories/ideas) first.
 
   - type: checkboxes
     id: checklist
