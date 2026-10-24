@@ -374,20 +374,45 @@ export async function fetchWithTimeout(
 			}
 		});
 
-		try {
-			// undici's RequestInit differs from the DOM type (its `body` excludes
-			// Blob); the values are compatible at runtime. undici's Response
-			// implements the standard Response surface the callers rely on.
-			const init = {
-				...options,
-				signal: controller.signal,
-				dispatcher: agent
-			} as unknown as Parameters<typeof undiciFetch>[1];
-			const response = (await undiciFetch(url, init)) as unknown as Response;
-			return response;
-		} finally {
-			await agent.close().catch(() => {});
+		// undici's RequestInit differs from the DOM type (its `body` excludes
+		// Blob); the values are compatible at runtime. undici's Response
+		// implements the standard Response surface the callers rely on.
+		const init = {
+			...options,
+			signal: controller.signal,
+			dispatcher: agent
+		} as unknown as Parameters<typeof undiciFetch>[1];
+		const response = (await undiciFetch(url, init)) as unknown as Response;
+
+		// The agent owns the connection this body streams on. Closing it here -
+		// when only the headers have arrived - deadlocks the response: close()
+		// waits on the in-flight request, which cannot complete until someone
+		// reads the body that the caller has not received yet, so the call only
+		// unwinds when the timeout abort fires and kills the body. Defer the
+		// close until the caller has consumed (or cancelled) the body.
+		const closeAgent = () => {
+			void agent.close().catch(() => {});
+		};
+		if (response.body) {
+			// `cancel` is part of the runtime Transformer spec (fired when the
+			// consumer cancels the stream, e.g. a player seeking away) but is
+			// missing from this project's TS lib types, hence the cast.
+			type StreamTransformer = ConstructorParameters<
+				typeof TransformStream<Uint8Array, Uint8Array>
+			>[0];
+			const transformer = {
+				flush: () => closeAgent(),
+				cancel: () => closeAgent()
+			} as unknown as StreamTransformer;
+			const tracked = response.body.pipeThrough(new TransformStream(transformer));
+			return new Response(tracked, {
+				status: response.status,
+				statusText: response.statusText,
+				headers: response.headers
+			}) as unknown as Response;
 		}
+		closeAgent();
+		return response;
 	} finally {
 		clearTimeout(timeoutId);
 		externalSignal?.removeEventListener('abort', abortFromExternal);

@@ -99,7 +99,10 @@ describe('fetchWithTimeout signal handling', () => {
 			expect(undiciFetch.mock.calls[0]?.[1]?.dispatcher).toBeDefined();
 
 			// The pinned lookup returns exactly the validated address, and the
-			// agent is released afterwards so sockets do not accumulate.
+			// agent is released only once the body has been consumed, so sockets
+			// do not accumulate but a streamed body is never cut off underneath
+			// the caller (issue: closing right after the headers deadlocked
+			// large proxied bodies - HLS segments - until the timeout abort).
 			const agent = agentInstances[0];
 			expect(agent).toBeDefined();
 			const lookupResult = (await new Promise((resolve) => {
@@ -115,6 +118,14 @@ describe('fetchWithTimeout signal handling', () => {
 			})) as { err: null; addresses: Array<{ address: string; family: number }> };
 			expect(lookupResult.err).toBeNull();
 			expect(lookupResult.addresses).toEqual([{ address: '93.184.216.34', family: 4 }]);
+			// Headers arrived but the body has not been read yet - the agent must
+			// still be alive, or the connection under the body would be destroyed.
+			expect(agent!.closed).toBe(false);
+
+			// Consuming the body releases the agent.
+			expect(await response.text()).toBe('ok');
+			// Let the deferred close (fire-and-forget) run.
+			await new Promise((resolve) => setTimeout(resolve, 0));
 			expect(agent!.closed).toBe(true);
 		} finally {
 			vi.doUnmock('undici');
