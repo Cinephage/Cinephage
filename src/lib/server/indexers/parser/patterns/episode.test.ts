@@ -46,4 +46,17 @@ describe('episode patterns (#513 regressions)', () => {
 		const match = extractEpisode('Show S01E01-S08E99');
 		expect(match?.info.seasons).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
 	});
+
+	it('recovers the title when it is preceded by a leading episode marker', () => {
+		// Some trackers front-load episode info ("Season 2 Episode 4 - Show
+		// Name - S02E04"), leaving nothing before the marker for the normal
+		// "slice before earliest match" path to use as a title.
+		const title = extractTitleBeforeEpisode('Season 2 Episode 4 - Mob Land - S2E4 - 2026');
+		expect(title).toBe('Mob Land');
+	});
+
+	it('falls back to the full remainder when no second episode marker follows a leading one', () => {
+		const title = extractTitleBeforeEpisode('Season 2 Episode 4 - Mob Land');
+		expect(title).toBe('Mob Land');
+	});
 });

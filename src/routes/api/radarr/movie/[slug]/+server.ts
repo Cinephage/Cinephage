@@ -1,9 +1,9 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { requireArrCompatEnabled } from '$lib/server/arr/requireArrCompatEnabled.js';
-import { db } from '$lib/server/db/index.js';
-import { movies } from '$lib/server/db/schema.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { requireArrCompatEnabled } from '#lib/server/arr/requireArrCompatEnabled.js';
+import { db } from '#lib/server/db/index.js';
+import { movies } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 
 /**

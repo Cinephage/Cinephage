@@ -16,7 +16,7 @@ const seriesOriginalByTmdbId: Record<number, string> = {
 	7777: 'ko'
 };
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -26,7 +26,7 @@ vi.mock('$lib/server/db', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/tmdb.js', () => ({
+vi.mock('#lib/server/tmdb.js', () => ({
 	tmdb: {
 		fetch: vi.fn(async (url: string) => {
 			fetchCalls.push(url);
@@ -70,7 +70,12 @@ vi.mock('$lib/server/tmdb.js', () => ({
 			}
 			if (/\/episode\/5\?/.test(url)) {
 				// Localized response with a real translation.
-				return { name: 'Die echte Übersetzung', overview: 'Echte Beschreibung.' };
+				return {
+					name: 'Die echte Übersetzung',
+					overview: 'Echte Beschreibung.',
+					air_date: '2026-03-10',
+					runtime: 42
+				};
 			}
 			if (/\/episode\/7\?/.test(url)) {
 				return { name: 'Folge 7', overview: '' };
@@ -100,9 +105,9 @@ const {
 	resolveLanguageForFetch,
 	metadataLanguageToLegacy
 } = await import('./metadata-refresh.js');
-const { tmdb } = await import('$lib/server/tmdb.js');
+const { tmdb } = await import('#lib/server/tmdb.js');
 const mockFetch = tmdb.fetch as unknown as ReturnType<typeof vi.fn>;
-const { movies, series, episodes } = await import('$lib/server/db/schema.js');
+const { movies, series, episodes } = await import('#lib/server/db/schema.js');
 
 testDb.db
 	.insert(series)
@@ -261,6 +266,22 @@ describe('refreshSeriesMetadata placeholder protection', () => {
 		const row = await getEpisode('episode-2');
 		expect(row.title).toBe('Die echte Übersetzung');
 		expect(row.overview).toBe('Echte Beschreibung.');
+	});
+
+	it('refreshes a stale air date and runtime unconditionally, not just on first backfill', async () => {
+		// Simulate a date TMDB later confirmed/shifted after the episode row
+		// already had a title (so the title-fallback path above wouldn't touch
+		// it) — this must still get corrected on every refresh, not just once.
+		await testDb.db
+			.update(episodes)
+			.set({ airDate: '2025-01-01', runtime: 30 })
+			.where(eq(episodes.id, 'episode-2'));
+
+		await refreshSeriesMetadata('series-1');
+
+		const after = await getEpisode('episode-2');
+		expect(after.airDate).toBe('2026-03-10');
+		expect(after.runtime).toBe(42);
 	});
 });
 

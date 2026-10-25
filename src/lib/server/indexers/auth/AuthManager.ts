@@ -11,8 +11,8 @@ import { SelectorEngine } from '../engine/SelectorEngine';
 import { CookieStore } from './CookieStore';
 import { decodeBuffer } from '../http/EncodingUtils';
 import { isCloudflareProtected, CloudflareProtectedError } from '../http/CloudflareDetection';
-import { captchaSolverSettingsService, getCaptchaSolver } from '$lib/server/captcha';
-import { createChildLogger } from '$lib/logging';
+import { captchaSolverSettingsService, getCaptchaSolver } from '#lib/server/captcha/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const authLogger = createChildLogger({ logDomain: 'indexers' as const });
 

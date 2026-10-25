@@ -15,6 +15,12 @@ export interface LibraryDataChangedEvent {
 	reason: string;
 	/** Optional affected entity id */
 	entityId?: string;
+	/**
+	 * TMDB id of the affected media when known. Consumers that match by
+	 * TMDB identity (e.g. pending request projection) use this instead of
+	 * re-resolving entityId -> tmdbId per event.
+	 */
+	tmdbId?: number;
 }
 
 export interface SeriesSearchStartedEvent {

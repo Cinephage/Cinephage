@@ -18,7 +18,7 @@ import type {
 	AuthResult,
 	StreamResolutionResult,
 	ProviderCapabilities
-} from '$lib/types/livetv';
+} from '#lib/types/livetv.js';
 
 /**
  * Live TV Provider Interface

@@ -1,11 +1,11 @@
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
-import { tmdb, type MovieReleaseInfo } from '$lib/server/tmdb';
+import { tmdb, type MovieReleaseInfo } from '#lib/server/tmdb.js';
 import {
 	getMovieAvailabilityLevel,
 	type MovieAvailabilityLevel
-} from '$lib/utils/movieAvailability';
+} from '#lib/utils/movieAvailability.js';
 
 interface MovieAvailabilityRow {
 	tmdbId: number;

@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { Loader2, Trash2, Clock } from 'lucide-svelte';
-	import * as m from '$lib/paraglide/messages.js';
+	import { Loader2, Trash2, Clock } from '@lucide/svelte';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
 		selectedCount: number;

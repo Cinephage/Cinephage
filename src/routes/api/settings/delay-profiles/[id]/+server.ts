@@ -1,7 +1,6 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { delayProfileService } from '$lib/server/monitoring/specifications/DelaySpecification.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { delayProfileService } from '#lib/server/monitoring/specifications/DelaySpecification.js';
 import { z } from 'zod';
 
 const updateDelayProfileSchema = z.object({
@@ -23,7 +22,7 @@ export const PUT: RequestHandler = async (event) => {
 	const parsed = updateDelayProfileSchema.safeParse(body);
 
 	if (!parsed.success) {
-		return json(
+		return Response.json(
 			{ error: 'Invalid request body', details: parsed.error.flatten() },
 			{ status: 400 }
 		);
@@ -31,9 +30,12 @@ export const PUT: RequestHandler = async (event) => {
 
 	try {
 		await delayProfileService.updateProfile(id, parsed.data);
-		return json({ success: true });
+		return Response.json({ success: true });
 	} catch (err) {
-		return json({ error: 'Failed to update delay profile', details: String(err) }, { status: 500 });
+		return Response.json(
+			{ error: 'Failed to update delay profile', details: String(err) },
+			{ status: 500 }
+		);
 	}
 };
 
@@ -45,9 +47,9 @@ export const DELETE: RequestHandler = async (event) => {
 
 	try {
 		await delayProfileService.deleteProfile(id);
-		return json({ success: true });
+		return Response.json({ success: true });
 	} catch (err) {
-		return json(
+		return Response.json(
 			{ error: err instanceof Error ? err.message : 'Failed to delete delay profile' },
 			{ status: 500 }
 		);

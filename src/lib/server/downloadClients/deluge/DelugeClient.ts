@@ -5,19 +5,22 @@
  * https://deluge.readthedocs.io/en/latest/reference/webapi.html
  */
 
-import type { ConnectionTestResult } from '$lib/types/downloadClient';
+import type { ConnectionTestResult } from '#lib/types/downloadClient.js';
 import type {
 	AddDownloadOptions,
 	DownloadClientConfig,
 	DownloadInfo,
 	IDownloadClient
 } from '../core/interfaces';
-import { getBasicAuthHeader } from '../core/client-utils.js';
+import { getBasicAuthHeader, joinCategoryPath } from '../core/client-utils.js';
 import {
 	buildMagnetFromInfoHash,
 	extractInfoHashFromMagnet,
 	parseTorrentFile
 } from '../utils/torrentParser';
+import { createChildLogger } from '#lib/logging/index.js';
+
+const logger = createChildLogger({ logDomain: 'imports' as const });
 
 interface DelugeJsonError {
 	code?: number;
@@ -366,12 +369,29 @@ export class DelugeClient implements IDownloadClient {
 		const addOptions: Record<string, unknown> = {};
 		if (options.savePath) {
 			addOptions.download_location = options.savePath;
+		} else if (options.category?.trim()) {
+			try {
+				const derived = joinCategoryPath(await this.getDefaultSavePath(), options.category);
+				if (derived) {
+					addOptions.download_location = derived;
+				}
+			} catch (error) {
+				// download_location stays unset; the label still gets applied below.
+				logger.warn(
+					{ err: error, category: options.category },
+					'[Deluge] Failed to resolve default save path; falling back to label-only'
+				);
+			}
+		}
+		if (options.category?.trim()) {
+			try {
+				await this.ensureCategory(options.category.trim());
+			} catch {
+				// Label plugin is optional — never block the download on it.
+			}
 		}
 		if (options.paused) {
 			addOptions.add_paused = true;
-		}
-		if (options.category?.trim()) {
-			addOptions.label = options.category.trim();
 		}
 		if (typeof options.seedRatioLimit === 'number') {
 			addOptions.stop_at_ratio = options.seedRatioLimit >= 0;
@@ -408,6 +428,17 @@ export class DelugeClient implements IDownloadClient {
 		const resultHash = (hash || infoHash || '').toLowerCase();
 		if (!resultHash) {
 			throw new Error('Deluge did not return a torrent hash');
+		}
+
+		if (options.category?.trim()) {
+			try {
+				// The classic label plugin has no label add-option; core.add_torrent_*
+				// silently ignores one. label.set_torrent after the add is the real
+				// mechanism (same one markItemAsImported already uses below).
+				await this.call<unknown>('label.set_torrent', [resultHash, options.category.trim()]);
+			} catch {
+				// Label plugin is optional; never block the download on it.
+			}
 		}
 
 		if (options.priority === 'force') {

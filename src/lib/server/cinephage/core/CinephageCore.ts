@@ -1,6 +1,6 @@
-import { createIndexerHttp } from '$lib/server/indexers/http';
-import type { IndexerHttp } from '$lib/server/indexers/http';
-import { createChildLogger } from '$lib/logging';
+import { createIndexerHttp } from '#lib/server/indexers/http/index.js';
+import type { IndexerHttp } from '#lib/server/indexers/http/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
 import type { CinephageSettingsService } from '../settings/CinephageSettingsService.js';
 import { getCinephageSettingsService } from '../settings/CinephageSettingsService.js';
 import { getServerIdentity, type CinephageServerIdentity } from './version.js';
@@ -188,7 +188,7 @@ export class CinephageCore {
 	private async fetchAndPersistLatestIdentity(): Promise<void> {
 		try {
 			const releaseResponse = await fetch(
-				`${this.githubApiBase}/repos/MoldyTaint/Cinephage/releases/latest`,
+				`${this.githubApiBase}/repos/cinephage/cinephage/releases/latest`,
 				{
 					headers: { Accept: 'application/vnd.github+json' },
 					signal: AbortSignal.timeout(15_000)
@@ -205,7 +205,7 @@ export class CinephageCore {
 			}
 
 			const commitResponse = await fetch(
-				`${this.githubApiBase}/repos/MoldyTaint/Cinephage/commits/${encodeURIComponent(tagName)}`,
+				`${this.githubApiBase}/repos/cinephage/cinephage/commits/${encodeURIComponent(tagName)}`,
 				{
 					headers: { Accept: 'application/vnd.github+json' },
 					signal: AbortSignal.timeout(15_000)

@@ -8,11 +8,11 @@
 import {
 	recalculateMovieShortfall,
 	recalculateSeriesShortfall
-} from '$lib/server/languages/language-shortfall';
+} from '#lib/server/languages/language-shortfall.js';
 import { readdir, stat } from 'fs/promises';
 import { join, dirname, relative, basename } from 'path';
-import { db } from '$lib/server/db/index.js';
-import { todayDateString } from '$lib/utils/format.js';
+import { db } from '#lib/server/db/index.js';
+import { todayDateString } from '#lib/utils/format.js';
 import {
 	rootFolders,
 	movies,
@@ -24,20 +24,24 @@ import {
 	unmatchedFiles,
 	libraryScanHistory,
 	renameHistory
-} from '$lib/server/db/schema.js';
+} from '#lib/server/db/schema.js';
 import { eq, and, inArray, gte } from 'drizzle-orm';
 import { isVideoFile, mediaInfoService } from './media-info.js';
-import { ReleaseParser } from '$lib/server/indexers/parser/ReleaseParser.js';
+import { ReleaseParser } from '#lib/server/indexers/parser/ReleaseParser.js';
 import { EventEmitter } from 'events';
-import { createChildLogger } from '$lib/logging';
-import { DOWNLOAD } from '$lib/config/constants';
+import { createChildLogger } from '#lib/logging/index.js';
+import { DOWNLOAD } from '#lib/config/constants.js';
 import {
 	findOverlappingRootFolder,
 	getRootFolderOverlapMessage
-} from '$lib/server/filesystem/root-folder-overlap.js';
+} from '#lib/server/filesystem/root-folder-overlap.js';
 import { libraryMediaEvents } from './LibraryMediaEvents.js';
 import { getMediaParseStem } from './media-utils.js';
 import { matchEpisodesByIdentifier, resolveTvEpisodeIdentifier } from './tv-episode-resolver.js';
+import {
+	matchSpecialEpisodeByTitle,
+	type SpecialEpisodeTitleMatch
+} from './episode-title-matcher.js';
 import { StreamingDiskScanner } from './jobs/StreamingDiskScanner.js';
 import { libraryOperationLock } from './library-operation-lock.js';
 
@@ -443,19 +447,26 @@ export class DiskScanService extends EventEmitter {
 				blockedExtensions = JSON.parse(rootFolder.blockedVideoExtensions) as string[];
 			} else {
 				const { getBlockedVideoExtensions } =
-					await import('$lib/server/settings/blocked-extensions.js');
+					await import('#lib/server/settings/blocked-extensions.js');
 				const global = await getBlockedVideoExtensions();
 				blockedExtensions = global.extensions;
 			}
 
+			const existingFiles = await this.getExistingFiles(rootFolderId, rootFolder.mediaType);
+			const transitions = await this.getRecentRenameTransitions();
 			const scanner = new StreamingDiskScanner({
 				batchSize: 500,
 				customExcludedFolders: customPatterns,
-				blockedExtensions
+				blockedExtensions,
+				alwaysScanPaths: [
+					...[...existingFiles.values()]
+						.filter((file) => file.source === 'tracked')
+						.map((file) => file.path),
+					...transitions.values()
+				]
 			});
 
 			let filesFound = 0;
-			const existingFiles = await this.getExistingFiles(rootFolderId, rootFolder.mediaType);
 			const seenPaths = new Set<string>();
 			// New on-disk files (not tracked in existingFiles by construction) that
 			// may be the relocated copy of a missing tracked file whose folder was
@@ -539,8 +550,6 @@ export class DiskScanService extends EventEmitter {
 				);
 			}
 
-			const transitions = await this.getRecentRenameTransitions();
-
 			// External-rename correlation: match missing tracked rows against
 			// newly-seen files that share basename+size and did not auto-link.
 			// Candidates never include already-tracked paths because newDiskFiles
@@ -605,6 +614,10 @@ export class DiskScanService extends EventEmitter {
 					}
 				}
 
+				logger.warn(
+					{ path, fileId: existingFile.id, mediaType: rootFolder.mediaType },
+					'[DiskScan] Removing missing file row after rename healing found no target'
+				);
 				await this.removeFile(existingFile.id, rootFolder.mediaType);
 				progress.filesRemoved++;
 			}
@@ -1204,6 +1217,7 @@ export class DiskScanService extends EventEmitter {
 			.select({
 				id: series.id,
 				path: series.path,
+				title: series.title,
 				seasonFolder: series.seasonFolder,
 				seriesType: series.seriesType
 			})
@@ -1224,11 +1238,6 @@ export class DiskScanService extends EventEmitter {
 						s.seriesType === 'anime' || s.seriesType === 'daily' ? s.seriesType : 'standard'
 				});
 
-				if (!identifier) {
-					logger.debug({ fileName }, '[DiskScan] Could not resolve episode mapping from filename');
-					return false;
-				}
-
 				const existingFile = await db
 					.select()
 					.from(episodeFiles)
@@ -1241,20 +1250,44 @@ export class DiskScanService extends EventEmitter {
 				}
 
 				const seriesEpisodes = await db.select().from(episodes).where(eq(episodes.seriesId, s.id));
-				const matchingEpisodes = matchEpisodesByIdentifier(seriesEpisodes, identifier);
+
+				let matchingEpisodes: (typeof episodes.$inferSelect)[];
+				let titleMatch: SpecialEpisodeTitleMatch<typeof episodes.$inferSelect> | null = null;
+
+				if (identifier) {
+					matchingEpisodes = matchEpisodesByIdentifier(seriesEpisodes, identifier);
+				} else {
+					// Sonarr-style fallback: title-only files ("Razor (2007).mp4")
+					// match season 0 specials by contained episode title. The
+					// series folder itself is not a candidate — a special sharing
+					// the series title would self-match.
+					const parentFolder = basename(dirname(file.path));
+					const candidates =
+						parentFolder !== basename(seriesFullPath) ? [fileName, parentFolder] : [fileName];
+					titleMatch = matchSpecialEpisodeByTitle(seriesEpisodes, candidates, parsed.year, s.title);
+					matchingEpisodes = titleMatch ? [titleMatch.episode] : [];
+				}
+
 				const episodeIds = matchingEpisodes.map((ep) => ep.id);
 				const seasonNum = matchingEpisodes[0]?.seasonNumber;
 				const episodeNums = matchingEpisodes.map((ep) => ep.episodeNumber);
 
 				if (episodeIds.length === 0 || seasonNum === undefined) {
-					logger.debug(
-						{
-							fileName,
-							identifier,
-							seriesId: s.id
-						},
-						'[DiskScan] No matching episodes in DB for file'
-					);
+					if (!identifier) {
+						logger.debug(
+							{ fileName },
+							'[DiskScan] Could not resolve episode mapping from filename'
+						);
+					} else {
+						logger.debug(
+							{
+								fileName,
+								identifier,
+								seriesId: s.id
+							},
+							'[DiskScan] No matching episodes in DB for file'
+						);
+					}
 					return false;
 				}
 
@@ -1288,14 +1321,29 @@ export class DiskScanService extends EventEmitter {
 
 				await this.updateSeriesAndSeasonStats(s.id);
 
-				logger.info(
-					{
-						relativePath,
-						season: seasonNum,
-						episodes: episodeNums
-					},
-					'[DiskScan] Auto-linked episode file'
-				);
+				if (titleMatch) {
+					logger.info(
+						{
+							relativePath,
+							season: seasonNum,
+							episodes: episodeNums,
+							method: titleMatch.method,
+							position: titleMatch.position,
+							coverage: titleMatch.coverage,
+							candidate: titleMatch.candidate
+						},
+						'[DiskScan] Auto-linked special by title'
+					);
+				} else {
+					logger.info(
+						{
+							relativePath,
+							season: seasonNum,
+							episodes: episodeNums
+						},
+						'[DiskScan] Auto-linked episode file'
+					);
+				}
 				return true;
 			}
 		}

@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { movieFiles, movies } from '$lib/server/db/schema';
+import { movieFiles, movies } from '#lib/server/db/schema.js';
 import type { StorageInsightRule, RuleContext, InsightFinding } from '../types.js';
 
 /**
@@ -71,7 +71,7 @@ export class DuplicateItemsRule implements StorageInsightRule {
 				severity: 'warning',
 				scope: 'global',
 				title: `Duplicate items`,
-				summary: `${totalDupes} movie${totalDupes === 1 ? ' has' : 's have'} multiple files. You may want to remove duplicates to reclaim space.`,
+				summary: `${totalDupes} Movie${totalDupes === 1 ? ' has' : 's have'} multiple files. You may want to remove duplicates to reclaim space.`,
 				details: {
 					items: duplicates.map((d) => ({
 						tmdbId: d.tmdbId,

@@ -8,7 +8,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Page, Frame } from 'playwright-core';
 
-vi.mock('$lib/logging', () => {
+vi.mock('#lib/logging/index.js', () => {
 	const mockLogger = {
 		info: vi.fn(),
 		debug: vi.fn(),

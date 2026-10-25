@@ -4,9 +4,9 @@ import type {
 	ReleaseInfo,
 	GrabDecisionOptions,
 	TargetIdentityInfo
-} from '$lib/server/filters/stages/grab/types.js';
-import type { ScoringProfile } from '$lib/server/scoring/types.js';
-import type { Resolution } from '$lib/server/indexers/parser/types.js';
+} from '#lib/server/filters/stages/grab/types.js';
+import type { ScoringProfile } from '#lib/server/scoring/types.js';
+import type { Resolution } from '#lib/server/indexers/parser/types.js';
 
 export type { GrabDecision, GrabTarget, ReleaseInfo, GrabDecisionOptions };
 

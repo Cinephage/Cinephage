@@ -2,7 +2,7 @@
  * Media server notification integration types.
  */
 
-import type { MediaBrowserPathMapping, MediaBrowserServerRecord } from '$lib/server/db/schema';
+import type { MediaBrowserPathMapping, MediaBrowserServerRecord } from '#lib/server/db/schema.js';
 
 export type { MediaBrowserPathMapping, MediaBrowserServerRecord };
 

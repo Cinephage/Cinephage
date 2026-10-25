@@ -1,5 +1,5 @@
-import { ReleaseParser } from '$lib/server/indexers/parser/ReleaseParser.js';
-import type { ParsedRelease } from '$lib/server/indexers/parser/types.js';
+import { ReleaseParser } from '#lib/server/indexers/parser/ReleaseParser.js';
+import type { ParsedRelease } from '#lib/server/indexers/parser/types.js';
 
 export interface ParsedReleaseCandidate {
 	label: 'sceneName' | 'currentFilename';

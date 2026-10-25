@@ -1,30 +1,30 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
-	import { goto, invalidateAll } from '$app/navigation';
+	import * as m from '#lib/paraglide/messages.js';
+	import { goto, refreshAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import type { PageData } from './$types';
-	import type { ScoringProfile, ScoringProfileFormData } from '$lib/types/profile';
-	import type { UICustomFormat } from '$lib/types/format';
-	import type { CustomFormatFormData } from '$lib/components/formats';
-	import { ProfileList, ProfileModal } from '$lib/components/profiles';
-	import { FormatList, CustomFormatModal } from '$lib/components/formats';
-	import { ConfirmationModal } from '$lib/components/ui/modal';
-	import { SettingsPage } from '$lib/components/ui/settings';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import { Sliders, Layers, Clock } from 'lucide-svelte';
-	import { DelayProfileList } from '$lib/components/delayProfiles';
+	import type { ScoringProfile, ScoringProfileFormData } from '#lib/types/profile.js';
+	import type { UICustomFormat } from '#lib/types/format.js';
+	import type { CustomFormatFormData } from '#lib/components/formats/index.js';
+	import { ProfileList, ProfileModal } from '#lib/components/profiles/index.js';
+	import { FormatList, CustomFormatModal } from '#lib/components/formats/index.js';
+	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
+	import { SettingsPage } from '#lib/components/ui/settings/index.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { Sliders, Layers, Clock } from '@lucide/svelte';
+	import { DelayProfileList } from '#lib/components/delayProfiles/index.js';
 	import {
 		createScoringProfile,
 		updateScoringProfile,
 		deleteScoringProfile
-	} from '$lib/api/settings.js';
-	import { createCustomFormat, updateCustomFormat, deleteCustomFormat } from '$lib/api/indexers.js';
+	} from '#lib/api/settings.js';
+	import { createCustomFormat, updateCustomFormat, deleteCustomFormat } from '#lib/api/indexers.js';
 	import type {
 		ScoringProfileCreate,
 		ScoringProfileUpdate,
 		CustomFormatCreate,
 		CustomFormatUpdateBody
-	} from '$lib/validation/schemas.js';
+	} from '#lib/validation/schemas.js';
 
 	let { data }: { data: PageData } = $props();
 
@@ -32,9 +32,9 @@
 	const activeTab = $derived(page.url.searchParams.get('tab') || 'profiles');
 
 	function setTab(tab: string) {
-		const url = new URL(page.url);
+		const url = new URL(page.url.href);
 		url.searchParams.set('tab', tab);
-		goto(url.toString(), { replaceState: true });
+		goto(url.toString(), { replace: true });
 	}
 
 	// ===================
@@ -98,7 +98,7 @@
 				} & ScoringProfileUpdate);
 			}
 
-			await invalidateAll();
+			await refreshAll();
 			closeProfileModal();
 		} catch (e) {
 			profileError = e instanceof Error ? e.message : 'An unexpected error occurred';
@@ -120,7 +120,7 @@
 		try {
 			await updateScoringProfile({ id: profileId, formatScores: {} });
 
-			await invalidateAll();
+			await refreshAll();
 		} catch (e) {
 			profileError = e instanceof Error ? e.message : 'An unexpected error occurred';
 		} finally {
@@ -139,7 +139,7 @@
 		try {
 			await deleteScoringProfile(profileDeleteTarget.id);
 
-			await invalidateAll();
+			await refreshAll();
 		} catch (e) {
 			toasts.error(e instanceof Error ? e.message : m.settings_quality_failedToDeleteProfile());
 		} finally {
@@ -155,7 +155,7 @@
 				isDefault: true
 			});
 
-			await invalidateAll();
+			await refreshAll();
 		} catch (e) {
 			toasts.error(e instanceof Error ? e.message : m.settings_quality_failedToSetDefault());
 		}
@@ -215,7 +215,7 @@
 				);
 			}
 
-			await invalidateAll();
+			await refreshAll();
 			closeFormatModal();
 		} catch (e) {
 			formatError = e instanceof Error ? e.message : 'An unexpected error occurred';
@@ -235,7 +235,7 @@
 		try {
 			await deleteCustomFormat(formatDeleteTarget.id);
 
-			await invalidateAll();
+			await refreshAll();
 		} catch (e) {
 			toasts.error(e instanceof Error ? e.message : m.settings_quality_failedToDeleteFormat());
 		} finally {
@@ -248,7 +248,7 @@
 	// Delay Profiles State
 	// ===================
 	// DelayProfileList is now a self-contained component at
-	// $lib/components/delayProfiles. All dp* state, functions, modal, and
+	// #lib/components/delayProfiles. All dp* state, functions, modal, and
 	// delete confirmation live there. This page just renders it.
 </script>
 

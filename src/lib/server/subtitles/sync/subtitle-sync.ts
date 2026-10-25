@@ -24,7 +24,7 @@ import { standardScoring, denormalizeSplitPenalty } from './scoring.js';
 import { alignNosplit } from './align-nosplit.js';
 import { alignWithSplits } from './align-split.js';
 import { extractSpeechSegments, mergeCloseSegments } from './vad.js';
-import { createChildLogger } from '$lib/logging/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'SubtitleSyncEngine', logDomain: 'subtitles' });
 

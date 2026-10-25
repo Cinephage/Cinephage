@@ -1,14 +1,13 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { db } from '$lib/server/db/index.js';
-import { movies, movieFiles, rootFolders } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { movies, movieFiles, rootFolders } from '#lib/server/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { rmdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
-import { libraryMediaEvents } from '$lib/server/library/LibraryMediaEvents';
-import { deletePhysicalFile } from '$lib/server/downloadClients/import/FileTransfer.js';
-import { getFileManagementSettings } from '$lib/server/settings/file-management.js';
-import { createChildLogger } from '$lib/logging';
+import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
+import { deletePhysicalFile } from '#lib/server/downloadClients/import/FileTransfer.js';
+import { getFileManagementSettings } from '#lib/server/settings/file-management.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LibraryMovieFilesApi', logDomain: 'scans' });
 
@@ -36,12 +35,12 @@ export const DELETE: RequestHandler = async ({ params }) => {
 			.where(and(eq(movieFiles.id, fileId), eq(movieFiles.movieId, movieId)));
 
 		if (!file) {
-			return json({ success: false, error: 'File not found' }, { status: 404 });
+			return Response.json({ success: false, error: 'File not found' }, { status: 404 });
 		}
 
 		// Block deletion from read-only folders
 		if (file.rootFolderReadOnly) {
-			return json(
+			return Response.json(
 				{ success: false, error: 'Cannot delete files from read-only folder' },
 				{ status: 400 }
 			);
@@ -93,10 +92,10 @@ export const DELETE: RequestHandler = async ({ params }) => {
 
 		libraryMediaEvents.emitMovieUpdated(movieId);
 
-		return json({ success: true });
+		return Response.json({ success: true });
 	} catch (error) {
 		logger.error('[API] Error deleting movie file', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to delete file'

@@ -1,7 +1,7 @@
 <script lang="ts">
-	import type { Season } from '$lib/types/tmdb';
+	import type { Season } from '#lib/types/tmdb.js';
 	import TmdbImage from './TmdbImage.svelte';
-	import * as m from '$lib/paraglide/messages.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	let { seasons }: { seasons: Season[] } = $props();
 

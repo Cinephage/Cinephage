@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { SvelteSet, SvelteMap } from 'svelte/reactivity';
-	import { X, Search, Loader2, RefreshCw, Captions, AlertTriangle, Info } from 'lucide-svelte';
+	import { X, Search, Loader2, RefreshCw, Captions, AlertTriangle, Info } from '@lucide/svelte';
 	import SubtitleSearchResultRow from './SubtitleSearchResultRow.svelte';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
-	import { searchSubtitles, downloadSubtitle, getSubtitleProviders } from '$lib/api/subtitles.js';
-	import { ALL_LANGUAGE_OPTIONS, getLanguageName } from '$lib/shared/languages.js';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
+	import { searchSubtitles, downloadSubtitle, getSubtitleProviders } from '#lib/api/subtitles.js';
+	import { ALL_LANGUAGE_OPTIONS } from '#lib/shared/languages.js';
 
 	interface SubtitleResult {
 		providerId: string;
@@ -90,6 +90,14 @@
 	let sortDir = $state<'asc' | 'desc'>('desc');
 	let filterQuery = $state('');
 	let showHashOnly = $state(false);
+	let languageFilterQuery = $state('');
+	const visibleLanguageOptions = $derived.by(() => {
+		const q = languageFilterQuery.trim().toLowerCase();
+		if (!q) return ALL_LANGUAGE_OPTIONS;
+		return ALL_LANGUAGE_OPTIONS.filter(
+			(option) => option.name.toLowerCase().includes(q) || option.code.toLowerCase().includes(q)
+		);
+	});
 
 	// Provider failures worth surfacing to the user.
 	const providerFailures = $derived(providerResults.filter((p) => p.error));
@@ -191,6 +199,7 @@
 			effectiveMinimumScore = null;
 			selectedProviderIds = [];
 			selectedLanguages = [];
+			languageFilterQuery = '';
 			languageSeeded = false;
 			includeForced = true;
 			includeHearingImpaired = true;
@@ -335,8 +344,16 @@
 		return `${result.providerId}:${result.providerSubtitleId}:${result.movieFileId ?? ''}`;
 	}
 
-	function languageLabel(code: string): string {
-		return getLanguageName(code) || code;
+	function toggleProvider(id: string): void {
+		selectedProviderIds = selectedProviderIds.includes(id)
+			? selectedProviderIds.filter((p) => p !== id)
+			: [...selectedProviderIds, id];
+	}
+
+	function toggleLanguage(code: string): void {
+		selectedLanguages = selectedLanguages.includes(code)
+			? selectedLanguages.filter((l) => l !== code)
+			: [...selectedLanguages, code];
 	}
 </script>
 
@@ -374,45 +391,42 @@
 	{/if}
 
 	<!-- Pre-search filters -->
-	<div class="mb-4 rounded-lg border border-base-300 p-3">
-		<p class="mb-2 text-xs font-semibold text-base-content/60 uppercase">Search filters</p>
-		<div class="flex flex-wrap items-end gap-4">
-			<label class="form-control">
-				<span class="label-text mb-1 text-xs">Providers</span>
-				<select
-					class="select-bordered select w-48 select-sm"
-					multiple
-					size="3"
-					bind:value={selectedProviderIds}
-					aria-label="Providers"
+	<div class="mb-4 flex flex-col gap-4 rounded-lg border border-base-300 p-3">
+		<div class="flex flex-wrap items-start gap-x-6 gap-y-4">
+			<div class="min-w-0 flex-1 basis-48">
+				<span
+					class="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-base-content/60 uppercase"
 				>
-					{#each providers as provider (provider.id)}
-						<option value={provider.id}>{provider.name}</option>
-					{/each}
-				</select>
-			</label>
+					Providers
+					{#if selectedProviderIds.length > 0}
+						<span class="badge badge-sm badge-primary">{selectedProviderIds.length}</span>
+					{/if}
+				</span>
+				{#if providers.length > 0}
+					<div class="flex flex-wrap gap-1.5">
+						{#each providers as provider (provider.id)}
+							<button
+								type="button"
+								class="btn btn-xs {selectedProviderIds.includes(provider.id)
+									? 'btn-primary'
+									: 'border-base-300 btn-outline hover:btn-primary'}"
+								onclick={() => toggleProvider(provider.id)}
+							>
+								{provider.name}
+							</button>
+						{/each}
+					</div>
+				{:else}
+					<p class="text-xs text-base-content/50">No providers configured</p>
+				{/if}
+			</div>
 
-			<label class="form-control">
-				<span class="label-text mb-1 text-xs">Languages</span>
-				<select
-					class="select-bordered select w-56 select-sm"
-					multiple
-					size="3"
-					bind:value={selectedLanguages}
-					aria-label="Languages"
-				>
-					{#each ALL_LANGUAGE_OPTIONS as option (option.code)}
-						<option value={option.code}>{option.name}</option>
-					{/each}
-				</select>
-			</label>
-
-			<div class="flex flex-col gap-1">
-				<label class="label cursor-pointer justify-start gap-2 py-1">
+			<div class="flex flex-col gap-1.5">
+				<label class="label cursor-pointer justify-start gap-2 py-0">
 					<input type="checkbox" class="checkbox checkbox-sm" bind:checked={includeForced} />
 					<span class="label-text text-xs">Include forced</span>
 				</label>
-				<label class="label cursor-pointer justify-start gap-2 py-1">
+				<label class="label cursor-pointer justify-start gap-2 py-0">
 					<input
 						type="checkbox"
 						class="checkbox checkbox-sm"
@@ -420,7 +434,7 @@
 					/>
 					<span class="label-text text-xs">Include HI</span>
 				</label>
-				<label class="label cursor-pointer justify-start gap-2 py-1">
+				<label class="label cursor-pointer justify-start gap-2 py-0">
 					<input
 						type="checkbox"
 						class="checkbox checkbox-sm"
@@ -430,11 +444,40 @@
 				</label>
 			</div>
 		</div>
-		{#if selectedLanguages.length > 0}
-			<p class="mt-2 text-xs text-base-content/60">
-				Languages: {selectedLanguages.map(languageLabel).join(', ')}
-			</p>
-		{/if}
+
+		<div class="min-w-0">
+			<span
+				class="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-base-content/60 uppercase"
+			>
+				Languages
+				{#if selectedLanguages.length > 0}
+					<span class="badge badge-sm badge-primary">{selectedLanguages.length}</span>
+				{/if}
+			</span>
+			<input
+				type="text"
+				placeholder="Filter languages…"
+				class="input-bordered input mb-1.5 w-full max-w-56 input-xs"
+				bind:value={languageFilterQuery}
+			/>
+			<div class="max-h-28 overflow-y-auto rounded-md bg-base-200/50 p-1.5">
+				<div class="flex flex-wrap gap-1.5">
+					{#each visibleLanguageOptions as option (option.code)}
+						<button
+							type="button"
+							class="btn btn-xs {selectedLanguages.includes(option.code)
+								? 'btn-primary'
+								: 'border-base-300 btn-outline hover:btn-primary'}"
+							onclick={() => toggleLanguage(option.code)}
+						>
+							{option.name}
+						</button>
+					{:else}
+						<p class="text-xs text-base-content/50">No languages match "{languageFilterQuery}"</p>
+					{/each}
+				</div>
+			</div>
+		</div>
 	</div>
 
 	<!-- Client-side result filtering -->

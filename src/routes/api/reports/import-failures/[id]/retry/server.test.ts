@@ -7,11 +7,11 @@ import {
 } from '../../../../../../test/db-helper';
 import { callHandler } from '../../../../../../test/api-helper';
 import { randomUUID } from 'node:crypto';
-import { importFailures, downloadQueue, downloadClients } from '$lib/server/db/schema';
+import { importFailures, downloadQueue, downloadClients } from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -29,14 +29,14 @@ const mockLogger = vi.hoisted(() => ({
 	child: vi.fn().mockReturnThis()
 }));
 
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	logger: mockLogger,
 	createChildLogger: vi.fn(() => mockLogger)
 }));
 
 const mockRequestImport = vi.fn().mockResolvedValue({ status: 'queued' });
 
-vi.mock('$lib/server/downloadClients/import', () => ({
+vi.mock('#lib/server/downloadClients/import/index.js', () => ({
 	getImportService: vi.fn(() => ({ requestImport: mockRequestImport }))
 }));
 
@@ -47,7 +47,8 @@ async function call(id: string) {
 	try {
 		return await callHandler(POST, 'POST', undefined, {
 			url: `http://localhost/api/reports/import-failures/${id}/retry`,
-			params: { id }
+			params: { id },
+			auth: 'admin' as const
 		});
 	} catch (err: any) {
 		if (err && typeof err.status === 'number') {

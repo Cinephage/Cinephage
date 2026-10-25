@@ -9,18 +9,18 @@ const mockLogger = vi.hoisted(() => ({
 	child: vi.fn().mockReturnThis()
 }));
 
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	logger: mockLogger,
 	createChildLogger: vi.fn(() => mockLogger)
 }));
 
-vi.mock('$lib/server/auth/authorization.js', () => ({
+vi.mock('#lib/server/auth/authorization.js', () => ({
 	requireAdmin: vi.fn().mockReturnValue(null)
 }));
 
 const mockExecuteRenames = vi.hoisted(() => vi.fn());
 
-vi.mock('$lib/server/library/naming/RenamePreviewService', () => ({
+vi.mock('#lib/server/library/naming/RenamePreviewService.js', () => ({
 	RenamePreviewService: class {
 		executeRenames = mockExecuteRenames;
 	}
@@ -28,11 +28,11 @@ vi.mock('$lib/server/library/naming/RenamePreviewService', () => ({
 
 const scanState = vi.hoisted(() => ({ scanning: false }));
 
-vi.mock('$lib/server/library/disk-scan.js', () => ({
+vi.mock('#lib/server/library/disk-scan.js', () => ({
 	diskScanService: scanState
 }));
 
-const { renameExecuteSchema } = await import('$lib/server/library/naming/rename-execute-schema.js');
+const { renameExecuteSchema } = await import('#lib/server/library/naming/rename-execute-schema.js');
 const { POST } = await import('./+server');
 
 describe('renameExecuteSchema', () => {

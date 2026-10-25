@@ -15,7 +15,7 @@ import type {
 	AudioCodec,
 	AudioChannels,
 	HdrFormat
-} from '$lib/server/scoring';
+} from '#lib/server/scoring/index.js';
 
 // Re-export server types for convenience
 export type {

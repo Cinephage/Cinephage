@@ -4,7 +4,7 @@
  * TMDB release_dates entries carry a numeric `type`:
  * 1=Premiere, 2=Theatrical (limited), 3=Theatrical, 4=Digital, 5=Physical, 6=TV.
  *
- * This module is intentionally free of any Paraglide/`$lib/paraglide` import so it
+ * This module is intentionally free of any Paraglide/`#lib/paraglide` import so it
  * stays usable from pure unit-tested utilities. Localized labels live in
  * `releaseTypeLabel.ts`.
  */

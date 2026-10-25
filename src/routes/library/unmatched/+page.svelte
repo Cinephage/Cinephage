@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { unmatchedFilesStore } from '$lib/stores/unmatched-files.svelte.js';
+	import { unmatchedFilesStore } from '#lib/stores/unmatched-files.svelte.js';
 	import {
 		UnmatchedFileCard,
 		UnmatchedFolderCard,
@@ -11,15 +11,15 @@
 		UnmatchedPagination,
 		UnmatchedLibraryIssues,
 		UnmatchedDeleteModal
-	} from '$lib/components/unmatched';
-	import MatchFileModal from '$lib/components/library/MatchFileModal.svelte';
-	import MatchFolderModal from '$lib/components/library/MatchFolderModal.svelte';
-	import BatchMatchModal from '$lib/components/library/BatchMatchModal.svelte';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import type { UnmatchedFile, UnmatchedFolder } from '$lib/types/unmatched.js';
-	import * as m from '$lib/paraglide/messages.js';
-	import { getFileName } from '$lib/utils/format.js';
-	import { forceMatchUnmatched, forceMatchAllUnmatched } from '$lib/api/library.js';
+	} from '#lib/components/unmatched/index.js';
+	import MatchFileModal from '#lib/components/library/MatchFileModal.svelte';
+	import MatchFolderModal from '#lib/components/library/MatchFolderModal.svelte';
+	import BatchMatchModal from '#lib/components/library/BatchMatchModal.svelte';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import type { UnmatchedFile, UnmatchedFolder } from '#lib/types/unmatched.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import { getFileName } from '#lib/utils/format.js';
+	import { forceMatchUnmatched, forceMatchAllUnmatched } from '#lib/api/library.js';
 
 	// Modal states
 	let showMatchModal = $state(false);

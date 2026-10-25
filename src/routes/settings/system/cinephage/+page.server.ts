@@ -1,7 +1,7 @@
 import type { PageServerLoad } from './$types';
-import { getCinephageSettingsService } from '$lib/server/cinephage/settings/CinephageSettingsService.js';
-import { getCinephageCore } from '$lib/server/cinephage/core/CinephageCore.js';
-import { getCinephageModuleRegistry } from '$lib/server/cinephage/registry/CinephageModuleRegistry.js';
+import { getCinephageSettingsService } from '#lib/server/cinephage/settings/CinephageSettingsService.js';
+import { getCinephageCore } from '#lib/server/cinephage/core/CinephageCore.js';
+import { getCinephageModuleRegistry } from '#lib/server/cinephage/registry/CinephageModuleRegistry.js';
 
 export const load: PageServerLoad = async () => {
 	const settings = getCinephageSettingsService();

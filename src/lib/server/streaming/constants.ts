@@ -6,22 +6,6 @@
  */
 
 // =============================================================================
-// Cache Configuration
-// =============================================================================
-
-/** Stream cache TTL in milliseconds (15 minutes) */
-export const STREAM_CACHE_TTL_MS = 15 * 60 * 1000;
-
-/** Stream cache maximum size (number of entries) */
-export const STREAM_CACHE_MAX_SIZE = 500;
-
-/** TMDB cache TTL in milliseconds (24 hours) */
-export const TMDB_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-
-/** TMDB cache maximum size (number of entries) */
-export const TMDB_CACHE_MAX_SIZE = 1000;
-
-// =============================================================================
 // HTTP Request Configuration
 // =============================================================================
 
@@ -36,35 +20,8 @@ export const DEFAULT_USER_AGENT =
 	'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 // =============================================================================
-// Streaming Release Configuration
-// =============================================================================
-
-/**
- * Fixed score for streaming releases.
- * Kept low (10) to ensure they can be upgraded to torrent releases.
- */
-export const STREAMING_RELEASE_SCORE = 10;
-
-/**
- * Placeholder size for streaming releases in bytes (1KB).
- * Used since streaming has no actual file size.
- */
-export const STREAMING_PLACEHOLDER_SIZE = 1024;
-
-/**
- * Placeholder size for season pack streaming releases in bytes (10KB).
- */
-export const STREAMING_SEASON_PACK_SIZE = 10 * 1024;
-
-// =============================================================================
 // Proxy Configuration
 // =============================================================================
-
-/** Cache max-age for HLS playlists in seconds (5 minutes) */
-export const PLAYLIST_CACHE_MAX_AGE = 300;
-
-/** Cache max-age for HLS segments in seconds (1 hour) */
-export const SEGMENT_CACHE_MAX_AGE = 3600;
 
 /** Proxy fetch timeout in milliseconds (default 30s) */
 export const PROXY_FETCH_TIMEOUT_MS = parseInt(process.env.PROXY_FETCH_TIMEOUT_MS || '30000', 10);

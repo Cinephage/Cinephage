@@ -8,18 +8,19 @@
 
 import { eq, and, gte, lte, inArray, isNull, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
-import { db } from '$lib/server/db';
+import { db } from '#lib/server/db/index.js';
 import {
 	livetvAccounts,
 	livetvChannels,
 	channelLineupItems,
 	epgPrograms,
 	type EpgProgramRecord
-} from '$lib/server/db/schema';
-import { createChildLogger } from '$lib/logging';
-import { normalizeLanguageTag } from '$lib/server/languages/normalize.js';
+} from '#lib/server/db/schema.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { normalizeLanguageTag } from '#lib/server/languages/normalize.js';
 import { getProvider } from '../providers';
 import { liveTvEvents } from '../LiveTvEvents';
+import { recordToAccount } from '../LiveTvAccountManager.js';
 import {
 	selectAutoAttachEpgSource,
 	type AutoAttachCandidate,
@@ -33,7 +34,7 @@ import type {
 	ChannelNowNext,
 	LiveTvAccount,
 	LiveTvProviderType
-} from '$lib/types/livetv';
+} from '#lib/types/livetv.js';
 
 const logger = createChildLogger({ module: 'EpgService' });
 
@@ -269,33 +270,9 @@ export class EpgService {
 				'Starting EPG sync'
 			);
 
-			// Convert account record to LiveTvAccount type
-			const liveTvAccount: LiveTvAccount = {
-				id: account.id,
-				name: account.name,
-				providerType: account.providerType as LiveTvProviderType,
-				enabled: account.enabled ?? true,
-				stalkerConfig: account.stalkerConfig ?? undefined,
-				xstreamConfig: account.xstreamConfig ?? undefined,
-				m3uConfig: account.m3uConfig ?? undefined,
-				playbackLimit: account.playbackLimit ?? null,
-				channelCount: account.channelCount ?? null,
-				categoryCount: account.categoryCount ?? null,
-				expiresAt: account.expiresAt ?? null,
-				serverTimezone: account.serverTimezone ?? null,
-				lastTestedAt: account.lastTestedAt ?? null,
-				lastTestSuccess: account.lastTestSuccess ?? null,
-				lastTestError: account.lastTestError ?? null,
-				lastSyncAt: account.lastSyncAt ?? null,
-				lastSyncError: account.lastSyncError ?? null,
-				syncStatus: account.syncStatus ?? 'never',
-				lastEpgSyncAt: account.lastEpgSyncAt ?? null,
-				lastEpgSyncError: account.lastEpgSyncError ?? null,
-				epgProgramCount: account.epgProgramCount ?? 0,
-				hasEpg: account.hasEpg ?? null,
-				createdAt: account.createdAt ?? new Date().toISOString(),
-				updatedAt: account.updatedAt ?? new Date().toISOString()
-			};
+			// Convert account record to LiveTvAccount type (shared mapper,
+			// decrypts credential fields enveloped at rest)
+			const liveTvAccount: LiveTvAccount = recordToAccount(account);
 
 			// Calculate time range. Include historical hours so the guide can show
 			// previously aired programs (within retention) after sync.

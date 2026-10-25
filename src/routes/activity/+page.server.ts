@@ -1,12 +1,14 @@
 import type { PageServerLoad } from './$types';
-import type { ActivityFilters, FilterOptions } from '$lib/types/activity';
-import { db } from '$lib/server/db';
-import { downloadClients, indexers } from '$lib/server/db/schema';
+import type { ActivityFilters, FilterOptions } from '#lib/types/activity.js';
+import { db } from '#lib/server/db/index.js';
+import { downloadClients, indexers } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { activityService } from '$lib/server/activity';
+import { activityService } from '#lib/server/activity/index.js';
+import { libraryJobService } from '#lib/server/library/jobs/LibraryJobService.js';
+import { requireAdminPage } from '#lib/server/auth/authorization.js';
 import { z } from 'zod';
 
-type ActivityTab = 'active' | 'history';
+type ActivityTab = 'active' | 'history' | 'unmatched';
 const ACTIVE_TAB_STATUSES: NonNullable<ActivityFilters['status']>[] = [
 	'all',
 	'downloading',
@@ -33,10 +35,11 @@ function normalizeStatusForTab(
 		: 'all';
 }
 
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
+	requireAdminPage(locals);
 	const tabParam = url.searchParams.get('tab');
 	const explicitTab: ActivityTab | null =
-		tabParam === 'active' || tabParam === 'history' ? tabParam : null;
+		tabParam === 'active' || tabParam === 'history' || tabParam === 'unmatched' ? tabParam : null;
 
 	// Parse all filter parameters
 	const rawStatus = url.searchParams.get('status') || 'all';
@@ -81,7 +84,11 @@ export const load: PageServerLoad = async ({ url }) => {
 		try {
 			// Lightweight COUNT query instead of a full API round-trip through the 8-query pipeline
 			const activeCount = await activityService.getActiveCount();
-			tab = activeCount > 0 ? 'active' : 'history';
+			// A running/queued background import has nothing in the download
+			// queue, so it never shows up in activeCount; check it too, or the
+			// page defaults to History while an import is actively running.
+			const hasActiveImports = libraryJobService.hasActiveJobs('manual_import');
+			tab = activeCount > 0 || hasActiveImports ? 'active' : 'history';
 		} catch {
 			tab = 'history';
 		}
@@ -91,7 +98,9 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	// Fetch filter options and activity data in parallel — call the service directly
 	// instead of routing through an internal HTTP fetch
-	const [indexerRows, clientRows, activityResult, cardStats] = await Promise.all([
+	// The unmatched tab fetches live client state on demand client-side;
+	// server-render it empty so page loads never block on client timeouts.
+	const [indexerRows, clientRows, activityResult, cardStats, importBatches] = await Promise.all([
 		db
 			.select({ id: indexers.id, name: indexers.name })
 			.from(indexers)
@@ -102,10 +111,18 @@ export const load: PageServerLoad = async ({ url }) => {
 			.from(downloadClients)
 			.where(eq(downloadClients.enabled, true))
 			.orderBy(downloadClients.name),
-		activityService
-			.getActivities(filters, { field: 'time', direction: 'desc' }, { limit: 50, offset: 0 }, tab)
-			.catch(() => null),
-		activityService.getQueueCardStats().catch(() => null)
+		tab === 'unmatched'
+			? Promise.resolve(null)
+			: activityService
+					.getActivities(
+						filters,
+						{ field: 'time', direction: 'desc' },
+						{ limit: 50, offset: 0 },
+						tab
+					)
+					.catch(() => null),
+		activityService.getQueueCardStats().catch(() => null),
+		(async () => libraryJobService.summarizeManualImportBatches())().catch(() => [])
 	]);
 
 	const filterOptions: FilterOptions = {
@@ -122,6 +139,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			hasMore: activityResult.hasMore,
 			summary: activityResult.summary,
 			cardStats,
+			importBatches,
 			tab,
 			filters,
 			filterOptions
@@ -134,6 +152,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		hasMore: false,
 		summary: null,
 		cardStats,
+		importBatches,
 		tab,
 		filters,
 		filterOptions

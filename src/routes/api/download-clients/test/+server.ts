@@ -1,8 +1,7 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getDownloadClientManager } from '$lib/server/downloadClients/DownloadClientManager';
-import { downloadClientImplementationSchema } from '$lib/validation/schemas';
-import { toFriendlyDownloadClientError } from '$lib/downloadClients/errorMessages';
+import { getDownloadClientManager } from '#lib/server/downloadClients/DownloadClientManager.js';
+import { downloadClientImplementationSchema } from '#lib/validation/schemas.js';
+import { toFriendlyDownloadClientError } from '#lib/downloadClients/errorMessages.js';
 import { z } from 'zod';
 
 const downloadClientTestWithIdSchema = z.object({
@@ -27,14 +26,14 @@ export const POST: RequestHandler = async ({ request }) => {
 	try {
 		data = await request.json();
 	} catch {
-		return json({ error: 'Invalid JSON body' }, { status: 400 });
+		return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
 	}
 
 	const result = downloadClientTestWithIdSchema.safeParse(data);
 
 	if (!result.success) {
 		const firstIssue = result.error.issues[0];
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: firstIssue?.message ?? 'Please review the required fields and try again.',
@@ -80,16 +79,16 @@ export const POST: RequestHandler = async ({ request }) => {
 					});
 
 		if (!testResult.success) {
-			return json({
+			return Response.json({
 				...testResult,
 				error: toFriendlyDownloadClientError(testResult.error)
 			});
 		}
 
-		return json(testResult);
+		return Response.json(testResult);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Unknown error';
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: toFriendlyDownloadClientError(message)

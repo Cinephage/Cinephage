@@ -12,7 +12,7 @@ import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { rename, unlink } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
-import { db } from '$lib/server/db';
+import { db } from '#lib/server/db/index.js';
 import {
 	subtitles,
 	subtitleHistory,
@@ -22,11 +22,11 @@ import {
 	movieFiles,
 	episodeFiles,
 	rootFolders
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
-import { libraryMediaEvents } from '$lib/server/library/LibraryMediaEvents';
-import { getMediaBrowserNotifier } from '$lib/server/notifications/mediabrowser';
+import { createChildLogger } from '#lib/logging/index.js';
+import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
+import { getMediaBrowserNotifier } from '#lib/server/notifications/mediabrowser/index.js';
 
 const logger = createChildLogger({ logDomain: 'subtitles' as const });
 import type { SubtitleSyncResult } from '../types';

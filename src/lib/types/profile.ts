@@ -4,7 +4,7 @@
  * Types for managing quality profiles
  */
 
-import type { Resolution } from '$lib/server/scoring/types';
+import type { Resolution } from '#lib/server/scoring/types.js';
 
 // =============================================================================
 // Scoring Profile Types
@@ -13,7 +13,7 @@ import type { Resolution } from '$lib/server/scoring/types';
 /**
  * Profile category for UI grouping and styling
  */
-type ProfileCategory = 'quality' | 'efficient' | 'micro' | 'streaming' | 'custom';
+type ProfileCategory = 'quality' | 'efficient' | 'micro' | 'streaming' | 'anime' | 'custom';
 
 /**
  * A single entry in the required formats list.

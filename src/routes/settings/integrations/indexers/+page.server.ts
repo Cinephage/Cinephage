@@ -1,15 +1,15 @@
 import type { PageServerLoad } from './$types';
-import { getIndexerManager } from '$lib/server/indexers/IndexerManager';
-import { toUIDefinition } from '$lib/server/indexers/loader';
-import { getPersistentStatusTracker } from '$lib/server/indexers/status';
-import { CINEPHAGE_STREAM_DEFINITION_ID } from '$lib/server/indexers/types';
+import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
+import { toUIDefinition } from '#lib/server/indexers/loader/index.js';
+import { getPersistentStatusTracker } from '#lib/server/indexers/status/index.js';
+import { CINEPHAGE_STREAM_DEFINITION_ID } from '#lib/server/indexers/types/index.js';
 import {
 	getSensitiveIndexerSettingsPresence,
 	redactIndexerSettingsForForm
-} from '$lib/server/indexers/settingsSecrets';
-import type { IndexerDefinition, IndexerWithStatus } from '$lib/types/indexer';
-import { getProwlarrConnection } from '$lib/server/indexers/prowlarr/ProwlarrConnectionService.js';
-import { getJackettConnection } from '$lib/server/indexers/jackett/JackettConnectionService.js';
+} from '#lib/server/indexers/settingsSecrets.js';
+import type { IndexerDefinition, IndexerWithStatus } from '#lib/types/indexer.js';
+import { getProwlarrConnection } from '#lib/server/indexers/prowlarr/ProwlarrConnectionService.js';
+import { getJackettConnection } from '#lib/server/indexers/jackett/JackettConnectionService.js';
 
 export const load: PageServerLoad = async () => {
 	const manager = await getIndexerManager();
@@ -88,6 +88,8 @@ export const load: PageServerLoad = async () => {
 						consecutiveFailures: status.consecutiveFailures,
 						lastFailure: status.lastFailure?.toISOString(),
 						disabledUntil: status.disabledUntil?.toISOString(),
+						disabledReason: status.disabledReason,
+						lastFailureMessage: status.recentFailures[0]?.message,
 						averageResponseTime: status.avgResponseTime
 					}
 				: undefined

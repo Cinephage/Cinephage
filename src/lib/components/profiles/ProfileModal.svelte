@@ -3,13 +3,13 @@
 		ScoringProfile,
 		ScoringProfileFormData,
 		RequiredFormatEntry
-	} from '$lib/types/profile';
-	import type { FormatCategory } from '$lib/types/format';
-	import * as m from '$lib/paraglide/messages.js';
-	import { groupFormatScoresByCategory, FORMAT_CATEGORY_LABELS } from '$lib/types/format';
-	import { X, Save, Info, Loader2, Settings, Layers, Search } from 'lucide-svelte';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
-	import { SectionHeader } from '$lib/components/ui/modal';
+	} from '#lib/types/profile.js';
+	import type { FormatCategory } from '#lib/types/format.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import { groupFormatScoresByCategory, FORMAT_CATEGORY_LABELS } from '#lib/types/format.js';
+	import { X, Save, Info, Loader2, Settings, Layers, Search } from '@lucide/svelte';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
+	import { SectionHeader } from '#lib/components/ui/modal/index.js';
 	import FormatScoreAccordion from './FormatScoreAccordion.svelte';
 
 	interface Props {
@@ -68,6 +68,10 @@
 	let copyFromId = $state<string>('');
 	let upgradesAllowed = $state(true);
 	let preventDowngrades = $state(true);
+	// Score thresholds (enforced at grab time; both are disallowed fields on
+	// built-in profiles, so they only apply to custom profiles)
+	let minScore = $state(0);
+	let minScoreIncrement = $state(0);
 	// Media-specific size limits (string inputs to preserve cursor/editing)
 	let movieMinSizeGbInput = $state('');
 	let movieMaxSizeGbInput = $state('');
@@ -105,6 +109,8 @@
 				copyFromId = ''; // No copy when editing existing profile
 				upgradesAllowed = profile.upgradesAllowed;
 				preventDowngrades = profile.preventDowngrades;
+				minScore = profile.minScore ?? 0;
+				minScoreIncrement = profile.minScoreIncrement ?? 0;
 				movieMinSizeGbInput = stringifyLimit(coerceLimit(profile.movieMinSizeGb));
 				movieMaxSizeGbInput = stringifyLimit(coerceLimit(profile.movieMaxSizeGb));
 				episodeMinSizeMbInput = stringifyLimit(coerceLimit(profile.episodeMinSizeMb));
@@ -120,6 +126,8 @@
 				copyFromId = defaultCopyFromId;
 				upgradesAllowed = true;
 				preventDowngrades = true;
+				minScore = 0;
+				minScoreIncrement = 0;
 				movieMinSizeGbInput = '';
 				movieMaxSizeGbInput = '';
 				episodeMinSizeMbInput = '';
@@ -290,6 +298,8 @@
 			copyFromId: copyFromId || undefined, // Only include if creating new profile
 			upgradesAllowed,
 			preventDowngrades,
+			minScore: minScore ?? 0,
+			minScoreIncrement: minScoreIncrement ?? 0,
 			movieMinSizeGb: normalizeGbLimit(movieMinSizeGbValue),
 			movieMaxSizeGb: normalizeGbLimit(movieMaxSizeGbValue),
 			episodeMinSizeMb: normalizeMbLimit(episodeMinSizeMbValue),
@@ -610,6 +620,49 @@
 						</div>
 					</div>
 				{/if}
+
+				<SectionHeader title={m.profiles_section_scoreThresholds()} />
+
+				<div class="grid grid-cols-2 gap-2 sm:gap-3">
+					<div class="form-control">
+						<label class="label py-1" for="profile-min-score">
+							<span class="label-text">{m.profiles_minScore_label()}</span>
+						</label>
+						<input
+							id="profile-min-score"
+							type="number"
+							step={1}
+							class="input-bordered input input-sm"
+							bind:value={minScore}
+							disabled={isCoreReadonly}
+						/>
+						<div class="label py-0.5">
+							<span class="label-text-alt text-xs">
+								{m.profiles_minScore_desc()}
+							</span>
+						</div>
+					</div>
+
+					<div class="form-control">
+						<label class="label py-1" for="profile-min-score-increment">
+							<span class="label-text">{m.profiles_minScoreIncrement_label()}</span>
+						</label>
+						<input
+							id="profile-min-score-increment"
+							type="number"
+							step={1}
+							min={0}
+							class="input-bordered input input-sm"
+							bind:value={minScoreIncrement}
+							disabled={isCoreReadonly}
+						/>
+						<div class="label py-0.5">
+							<span class="label-text-alt text-xs">
+								{m.profiles_minScoreIncrement_desc()}
+							</span>
+						</div>
+					</div>
+				</div>
 
 				<div class="rounded-lg bg-base-200 p-3 text-xs text-base-content/70">
 					<Info class="mr-1 inline h-3 w-3" />

@@ -1,8 +1,7 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { requireArrCompatEnabled } from '$lib/server/arr/requireArrCompatEnabled.js';
-import { buildQueueDetails } from '$lib/server/arr/queue.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { requireArrCompatEnabled } from '#lib/server/arr/requireArrCompatEnabled.js';
+import { buildQueueDetails } from '#lib/server/arr/queue.js';
 
 /**
  * GET /api/sonarr/api/v3/queue/details
@@ -23,5 +22,5 @@ export const GET: RequestHandler = async (event) => {
 		.map((value) => Number.parseInt(value, 10))
 		.filter((value) => !Number.isNaN(value));
 
-	return json(await buildQueueDetails('Sonarr', { seriesId, episodeIds }));
+	return Response.json(await buildQueueDetails('Sonarr', { seriesId, episodeIds }));
 };

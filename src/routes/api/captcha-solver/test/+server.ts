@@ -1,9 +1,8 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getCaptchaSolver } from '$lib/server/captcha';
-import { captchaSolverTestSchema } from '$lib/validation/schemas.js';
-import { createChildLogger } from '$lib/logging';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
+import { getCaptchaSolver } from '#lib/server/captcha/index.js';
+import { captchaSolverTestSchema } from '#lib/validation/schemas.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 
 const logger = createChildLogger({ module: 'CaptchaSolverTestApi', logDomain: 'indexers' });
 
@@ -21,7 +20,7 @@ export const POST: RequestHandler = async (event) => {
 		const validation = captchaSolverTestSchema.safeParse(body);
 
 		if (!validation.success) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: 'Invalid request body',
@@ -39,7 +38,7 @@ export const POST: RequestHandler = async (event) => {
 		const testResult = await solver.test(url);
 
 		if (!testResult.hasChallenge) {
-			return json({
+			return Response.json({
 				success: true,
 				hasChallenge: false,
 				message: 'No challenge detected for this URL'
@@ -58,7 +57,7 @@ export const POST: RequestHandler = async (event) => {
 
 		const solveResult = await solver.solve({ url });
 
-		return json({
+		return Response.json({
 			success: solveResult.success,
 			hasChallenge: true,
 			challengeType: testResult.type,
@@ -70,7 +69,7 @@ export const POST: RequestHandler = async (event) => {
 		});
 	} catch (error) {
 		logger.error('[API] Failed to test captcha solver', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to test captcha solver'

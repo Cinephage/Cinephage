@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { LiveTvAccount } from '$lib/types/livetv';
+import type { LiveTvAccount } from '#lib/types/livetv.js';
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	db: {},
 	sqlite: {},
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)

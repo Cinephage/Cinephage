@@ -3,7 +3,7 @@ import type { AsyncLocalStorage as NodeAsyncLocalStorage } from 'node:async_hook
 import pino, { stdSerializers, type Logger as PinoLogger, type LoggerOptions } from 'pino';
 
 import type { CapturedLogEntry } from './log-capture';
-import { PLACEHOLDER_PACKAGE_VERSION } from '$lib/version.js';
+import { PLACEHOLDER_PACKAGE_VERSION } from '#lib/version.js';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -156,6 +156,10 @@ function resolveLogVersion(): string {
 }
 
 function isRedactionBypassed(): boolean {
+	// Escape hatch for local debugging only: a production deployment must not
+	// be able to write every token/password in cleartext to stdout and the
+	// persisted log history with a single env var.
+	if (getRuntimeEnv('NODE_ENV') === 'production') return false;
 	return getRuntimeEnv('LOG_SENSITIVE') === 'true';
 }
 
@@ -351,14 +355,16 @@ function getBasePinoOptions(): LoggerOptions {
 	};
 }
 
-function createRootPinoLogger(): PinoLogger {
+async function createRootPinoLogger(): Promise<PinoLogger> {
 	const options = getBasePinoOptions();
 
 	if (import.meta.env?.SSR && isDev()) {
+		const { createRequire } = await import('node:module');
+
 		return pino(
 			options,
 			pino.transport({
-				target: 'pino-pretty',
+				target: createRequire(import.meta.url).resolve('pino-pretty'),
 				options: {
 					colorize: true,
 					translateTime: 'SYS:standard',
@@ -371,7 +377,7 @@ function createRootPinoLogger(): PinoLogger {
 	return pino(options);
 }
 
-const rootPinoLogger = createRootPinoLogger();
+const rootPinoLogger = await createRootPinoLogger();
 
 let asyncLocalStorage: NodeAsyncLocalStorage<LogStore> | null = null;
 let logCaptureStore: {

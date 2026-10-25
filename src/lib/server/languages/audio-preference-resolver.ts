@@ -8,13 +8,13 @@
  * canonical and comparable.
  */
 
-import { db } from '$lib/server/db';
-import { movies, series } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { movies, series } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { getLanguageProfileService } from '$lib/server/subtitles/services/LanguageProfileService';
-import { logger } from '$lib/logging';
-import { normalizeLanguageCode } from '$lib/shared/languages';
-import type { AudioPreference } from '$lib/shared/language-profile';
+import { getLanguageProfileService } from '#lib/server/subtitles/services/LanguageProfileService.js';
+import { logger } from '#lib/logging/index.js';
+import { normalizeLanguageCode } from '#lib/shared/languages.js';
+import type { AudioPreference } from '#lib/shared/language-profile.js';
 import {
 	DEFAULT_EFFECTIVE_AUDIO_PREFERENCE,
 	type EffectiveAudioPreference,

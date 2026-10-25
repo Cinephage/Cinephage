@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTestDb, type TestDatabase } from '../../../test/db-helper.js';
-import { rootFolders, scoringProfiles } from '$lib/server/db/schema.js';
+import { rootFolders, scoringProfiles } from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -15,7 +15,7 @@ vi.mock('$lib/server/db', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -29,7 +29,7 @@ const { buildRootFolders } = await import('./rootFolders.js');
 const { buildQualityProfiles } = await import('./qualityProfiles.js');
 const { buildTags } = await import('./tags.js');
 const { buildSystemStatus } = await import('./systemStatus.js');
-const { resetRootFolderService } = await import('$lib/server/downloadClients/RootFolderService.js');
+const { resetRootFolderService } = await import('#lib/server/downloadClients/RootFolderService.js');
 
 beforeEach(() => {
 	testDb.db.delete(rootFolders).run();

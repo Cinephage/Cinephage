@@ -1,11 +1,11 @@
 import { basename } from 'node:path';
 import { eq } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'scans' as const });
-import { db } from '$lib/server/db/index.js';
-import { episodeFiles, movieFiles, movies, series } from '$lib/server/db/schema.js';
-import { ReleaseParser } from '$lib/server/indexers/parser/ReleaseParser.js';
+import { db } from '#lib/server/db/index.js';
+import { episodeFiles, movieFiles, movies, series } from '#lib/server/db/schema.js';
+import { ReleaseParser } from '#lib/server/indexers/parser/ReleaseParser.js';
 import { chooseBestParsedRelease } from './naming/preview-metadata.js';
 
 const parser = new ReleaseParser();

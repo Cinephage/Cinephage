@@ -1,7 +1,6 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getSubtitleSyncService } from '$lib/server/subtitles/services/SubtitleSyncService';
-import { subtitleBulkSyncSchema } from '$lib/validation/schemas';
+import { getSubtitleSyncService } from '#lib/server/subtitles/services/SubtitleSyncService.js';
+import { subtitleBulkSyncSchema } from '#lib/validation/schemas.js';
 
 /**
  * POST /api/subtitles/sync/bulk
@@ -13,13 +12,13 @@ export const POST: RequestHandler = async ({ request }) => {
 	try {
 		data = await request.json();
 	} catch {
-		return json({ error: 'Invalid JSON body' }, { status: 400 });
+		return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
 	}
 
 	const result = subtitleBulkSyncSchema.safeParse(data);
 
 	if (!result.success) {
-		return json(
+		return Response.json(
 			{
 				error: 'Validation failed',
 				details: result.error.flatten()

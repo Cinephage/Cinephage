@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
 	getDebridClientForAcquisition: vi.fn()
 }));
 
-vi.mock('$lib/server/filters/GrabDecisionPipeline.js', () => ({
+vi.mock('#lib/server/filters/GrabDecisionPipeline.js', () => ({
 	grabDecisionPipeline: {
 		evaluate: vi.fn(async () => ({
 			accepted: true,
@@ -23,13 +23,13 @@ vi.mock('$lib/server/filters/GrabDecisionPipeline.js', () => ({
 	}
 }));
 
-vi.mock('$lib/server/quality/QualityFilter.js', () => ({
+vi.mock('#lib/server/quality/QualityFilter.js', () => ({
 	qualityFilter: {
 		getDefaultScoringProfile: vi.fn(async () => ({ id: 'profile-1', name: 'Default' }))
 	}
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	db: {
 		query: {
 			movies: {
@@ -53,7 +53,7 @@ vi.mock('$lib/server/db/index.js', () => ({
 	}
 }));
 
-vi.mock('$lib/server/acquisition/AcquisitionService.js', () => ({
+vi.mock('#lib/server/acquisition/AcquisitionService.js', () => ({
 	acquisitionService: {
 		createIntent: vi.fn(() => ({ ok: true, intentId: 'intent-1' })),
 		attachQueueId: vi.fn(),
@@ -67,17 +67,17 @@ vi.mock('$lib/server/acquisition/AcquisitionService.js', () => ({
 	}
 }));
 
-vi.mock('$lib/server/acquisition/MediaOccupancyService.js', () => ({
+vi.mock('#lib/server/acquisition/MediaOccupancyService.js', () => ({
 	mediaOccupancyService: {
 		runExclusive: vi.fn(async (_target, operation: () => Promise<unknown>) => operation())
 	}
 }));
 
-vi.mock('$lib/server/settings/acquisition.js', () => ({
+vi.mock('#lib/server/settings/acquisition.js', () => ({
 	getDefaultAcquisitionProtocol: mocks.getDefaultAcquisitionProtocol
 }));
 
-vi.mock('$lib/server/downloadClients/DownloadClientManager.js', () => ({
+vi.mock('#lib/server/downloadClients/DownloadClientManager.js', () => ({
 	getDownloadClientManager: () => ({
 		getDebridClientForAcquisition: mocks.getDebridClientForAcquisition
 	})

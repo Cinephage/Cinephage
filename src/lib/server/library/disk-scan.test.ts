@@ -9,7 +9,7 @@ import { createTestDb, destroyTestDb, type TestDatabase } from '../../../test/db
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -21,8 +21,16 @@ vi.mock('$lib/server/db', () => ({
 
 const { diskScanService, findExternalRenameMatches } = await import('./disk-scan.js');
 const { libraryOperationLock } = await import('./library-operation-lock.js');
-const { movies, movieFiles, rootFolders, series, episodeFiles, unmatchedFiles, renameHistory } =
-	await import('$lib/server/db/schema.js');
+const {
+	movies,
+	movieFiles,
+	rootFolders,
+	series,
+	episodes,
+	episodeFiles,
+	unmatchedFiles,
+	renameHistory
+} = await import('#lib/server/db/schema.js');
 
 const emptyRoot = await mkdtemp(join(tmpdir(), 'cinephage-empty-root-'));
 const missingRoot = join(tmpdir(), 'cinephage-missing-root-does-not-exist');
@@ -86,6 +94,54 @@ async function trackedFileCount(rootId: string): Promise<number> {
 }
 
 describe('DiskScanService.scanRootFolder data-safety', () => {
+	it('keeps the tracked ...And Justice for All movie inside its dot-prefixed folder', async () => {
+		const scanRoot = await mkdtemp(join(tmpdir(), 'cinephage-dot-title-scan-'));
+		healScanRoots.push(scanRoot);
+		const rootFolderId = randomUUID();
+		const movieId = randomUUID();
+		const fileId = randomUUID();
+		const folderName = '...And Justice for All (1979)';
+		const fileName = '...And Justice for All (1979).mkv';
+		const movieDir = join(scanRoot, folderName);
+		await mkdir(movieDir, { recursive: true });
+		await writeFile(join(movieDir, fileName), Buffer.alloc(11 * 1024 * 1024, 1));
+
+		await testDb.db.insert(rootFolders).values({
+			id: rootFolderId,
+			name: 'Dot-prefixed movie root',
+			path: scanRoot,
+			mediaType: 'movie',
+			blockedVideoExtensions: '[]'
+		});
+		await testDb.db.insert(movies).values({
+			id: movieId,
+			tmdbId: 17443,
+			title: '...And Justice for All',
+			path: folderName,
+			rootFolderId
+		});
+		await testDb.db.insert(movieFiles).values({
+			id: fileId,
+			movieId,
+			relativePath: fileName,
+			size: 11 * 1024 * 1024
+		});
+
+		const result = await diskScanService.scanRootFolder(rootFolderId);
+
+		expect(result.success).toBe(true);
+		expect(result.filesRemoved).toBe(0);
+		const [trackedFile] = await testDb.db
+			.select({ id: movieFiles.id })
+			.from(movieFiles)
+			.where(eq(movieFiles.id, fileId));
+		expect(trackedFile?.id).toBe(fileId);
+
+		await testDb.db.delete(movieFiles).where(eq(movieFiles.id, fileId));
+		await testDb.db.delete(movies).where(eq(movies.id, movieId));
+		await testDb.db.delete(rootFolders).where(eq(rootFolders.id, rootFolderId));
+	});
+
 	it('refuses to remove tracked records when an accessible folder scans as empty', async () => {
 		const result = await diskScanService.scanRootFolder('root-empty');
 
@@ -917,5 +973,211 @@ describe('rename transition healing', () => {
 		await db.delete(episodeFiles).where(eq(episodeFiles.id, fileId));
 		await db.delete(series).where(eq(series.id, seriesId));
 		await db.delete(rootFolders).where(eq(rootFolders.id, rootFolderId));
+	});
+});
+
+describe('title-only special auto-link (season 0, AroTheHawk report)', () => {
+	const FILE_SIZE = 11 * 1024 * 1024;
+
+	// Episode titles below are LIVE TMDB season-0 data, verified 2026-09-20
+	// (BSG tmdb 1972, Cosmos tmdb 1430). Do not "fix" them to match
+	// expectations — change the matcher instead.
+
+	it('links "Razor (2007).mp4" to the matching season 0 special', async () => {
+		const db = testDb.db;
+		const scanRoot = await mkdtemp(join(tmpdir(), 'cinephage-special-razor-'));
+		healScanRoots.push(scanRoot);
+
+		const seriesDir = 'Battlestar Galactica (2003) {tvdb-73545}';
+		const fileDir = join(scanRoot, seriesDir, 'Razor (2007)');
+		await mkdir(fileDir, { recursive: true });
+		await writeFile(join(fileDir, 'Razor (2007).mp4'), Buffer.alloc(FILE_SIZE, 1));
+
+		const rootFolderId = randomUUID();
+		const seriesId = randomUUID();
+		const ep1Id = randomUUID();
+		const ep2Id = randomUUID();
+
+		await db.insert(rootFolders).values({
+			id: rootFolderId,
+			path: scanRoot,
+			mediaType: 'tv',
+			name: 'special-razor-root',
+			blockedVideoExtensions: '[]'
+		});
+		await db.insert(series).values({
+			id: seriesId,
+			rootFolderId,
+			path: seriesDir,
+			title: 'Battlestar Galactica',
+			tmdbId: 1972
+		});
+		await db.insert(episodes).values([
+			{
+				id: ep1Id,
+				seriesId,
+				seasonNumber: 0,
+				episodeNumber: 19,
+				title: 'Razor (1)',
+				airDate: '2007-11-24'
+			},
+			{
+				id: ep2Id,
+				seriesId,
+				seasonNumber: 0,
+				episodeNumber: 20,
+				title: 'Razor (2)',
+				airDate: '2007-11-24'
+			}
+		]);
+
+		const result = await diskScanService.scanRootFolder(rootFolderId);
+
+		expect(result.success).toBe(true);
+
+		const linked = await db.select().from(episodeFiles).where(eq(episodeFiles.seriesId, seriesId));
+		expect(linked).toHaveLength(1);
+		expect(linked[0].seasonNumber).toBe(0);
+		// "razor2" is contained in normalized "razor2007"; "razor1" is not.
+		expect(linked[0].episodeIds).toEqual([ep2Id]);
+
+		const unmatchedRows = await db
+			.select()
+			.from(unmatchedFiles)
+			.where(eq(unmatchedFiles.rootFolderId, rootFolderId));
+		expect(unmatchedRows).toHaveLength(0);
+	});
+
+	it('maps "Episode 13 - <title>" onto season 1 for a single-regular-season series (Cosmos)', async () => {
+		const db = testDb.db;
+		const scanRoot = await mkdtemp(join(tmpdir(), 'cinephage-special-cosmos-'));
+		healScanRoots.push(scanRoot);
+
+		const seriesDir = 'Cosmos (1980) {tvdb-74995}';
+		await mkdir(join(scanRoot, seriesDir), { recursive: true });
+		await writeFile(
+			join(scanRoot, seriesDir, 'Episode 13 - Quem Responde Pela Terra (Who Speaks for Earth).mkv'),
+			Buffer.alloc(FILE_SIZE, 1)
+		);
+
+		const rootFolderId = randomUUID();
+		const seriesId = randomUUID();
+		const ep13Id = randomUUID();
+
+		await db.insert(rootFolders).values({
+			id: rootFolderId,
+			path: scanRoot,
+			mediaType: 'tv',
+			name: 'special-cosmos-root',
+			blockedVideoExtensions: '[]'
+		});
+		await db.insert(series).values({
+			id: seriesId,
+			rootFolderId,
+			path: seriesDir,
+			title: 'Cosmos: A Personal Voyage',
+			tmdbId: 1430
+		});
+		await db.insert(episodes).values([
+			// Live shape: 14 season 0 specials (incl. E99), 13 season 1 episodes.
+			{
+				id: randomUUID(),
+				seriesId,
+				seasonNumber: 0,
+				episodeNumber: 1,
+				title: 'A Dialogue Between Carl Sagan And Ted Turner',
+				airDate: '1989-04-18'
+			},
+			{
+				id: randomUUID(),
+				seriesId,
+				seasonNumber: 0,
+				episodeNumber: 99,
+				title: 'Introduction with Ann Druyan',
+				airDate: null
+			},
+			...Array.from({ length: 12 }, (_, i) => ({
+				id: randomUUID(),
+				seriesId,
+				seasonNumber: 1,
+				episodeNumber: i + 1,
+				title: `Cosmos Episode ${i + 1}`,
+				airDate: null
+			})),
+			{
+				id: ep13Id,
+				seriesId,
+				seasonNumber: 1,
+				episodeNumber: 13,
+				title: 'Who Speaks for Earth?',
+				airDate: '1980-12-21'
+			}
+		]);
+
+		const result = await diskScanService.scanRootFolder(rootFolderId);
+
+		expect(result.success).toBe(true);
+
+		const linked = await db.select().from(episodeFiles).where(eq(episodeFiles.seriesId, seriesId));
+		expect(linked).toHaveLength(1);
+		expect(linked[0].seasonNumber).toBe(1);
+		expect(linked[0].episodeIds).toEqual([ep13Id]);
+
+		const unmatchedRows = await db
+			.select()
+			.from(unmatchedFiles)
+			.where(eq(unmatchedFiles.rootFolderId, rootFolderId));
+		expect(unmatchedRows).toHaveLength(0);
+	});
+
+	it('leaves a title-only file unmatched when season 0 has no matching special', async () => {
+		const db = testDb.db;
+		const scanRoot = await mkdtemp(join(tmpdir(), 'cinephage-special-plan-'));
+		healScanRoots.push(scanRoot);
+
+		const seriesDir = 'Battlestar Galactica (2003) {tvdb-73545}';
+		const fileDir = join(scanRoot, seriesDir, 'The Plan (2009)');
+		await mkdir(fileDir, { recursive: true });
+		await writeFile(join(fileDir, 'The Plan (2009).mp4'), Buffer.alloc(FILE_SIZE, 1));
+
+		const rootFolderId = randomUUID();
+		const seriesId = randomUUID();
+
+		await db.insert(rootFolders).values({
+			id: rootFolderId,
+			path: scanRoot,
+			mediaType: 'tv',
+			name: 'special-plan-root',
+			blockedVideoExtensions: '[]'
+		});
+		await db.insert(series).values({
+			id: seriesId,
+			rootFolderId,
+			path: seriesDir,
+			title: 'Battlestar Galactica',
+			tmdbId: 197201
+		});
+		await db.insert(episodes).values({
+			id: randomUUID(),
+			seriesId,
+			seasonNumber: 0,
+			episodeNumber: 19,
+			title: 'Razor (1)',
+			airDate: '2007-11-24'
+		});
+
+		const result = await diskScanService.scanRootFolder(rootFolderId);
+
+		expect(result.success).toBe(true);
+
+		const linked = await db.select().from(episodeFiles).where(eq(episodeFiles.seriesId, seriesId));
+		expect(linked).toHaveLength(0);
+
+		const unmatchedRows = await db
+			.select()
+			.from(unmatchedFiles)
+			.where(eq(unmatchedFiles.rootFolderId, rootFolderId));
+		expect(unmatchedRows).toHaveLength(1);
+		expect(unmatchedRows[0].path).toBe(join(fileDir, 'The Plan (2009).mp4'));
 	});
 });

@@ -5,12 +5,12 @@
  * drift apart.
  */
 
-import { extractLanguages } from '$lib/server/indexers/parser/patterns/language';
+import { extractLanguages } from '#lib/server/indexers/parser/patterns/language.js';
 import {
 	AUDIO_PREFERENCE_BUCKETS,
 	rankLanguageEvidenceSet,
 	type EffectiveAudioPreference
-} from '$lib/server/languages/audio-preference';
+} from '#lib/server/languages/audio-preference.js';
 
 /**
  * Returns rejection reasons when the title affirmatively contradicts a

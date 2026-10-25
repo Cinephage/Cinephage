@@ -29,7 +29,7 @@ const dbState = vi.hoisted(() => ({
 	syncedRows: [] as Array<Record<string, unknown>>
 }));
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	db: {
 		select: vi.fn(() => {
 			const chain = {

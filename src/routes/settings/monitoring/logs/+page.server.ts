@@ -5,12 +5,12 @@ import {
 	CAPTURED_LOG_DOMAINS,
 	CAPTURED_LOG_LEVELS,
 	DEFAULT_CAPTURED_LOG_LEVEL
-} from '$lib/logging/log-capture';
+} from '#lib/logging/log-capture.js';
 import {
 	DEFAULT_LOG_RETENTION_DAYS,
 	MAX_LOG_RETENTION_DAYS,
 	logHistoryService
-} from '$lib/server/logging/log-history.js';
+} from '#lib/server/logging/log-history.js';
 
 export const load = async ({ locals }: RequestEvent) => {
 	if (!locals.user) {

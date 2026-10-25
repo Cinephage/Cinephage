@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { ChevronDown, ChevronUp } from 'lucide-svelte';
-	import * as m from '$lib/paraglide/messages.js';
-	import { FormInput, FormSelect } from '$lib/components/ui/form';
-	import type { NamingConfigShape } from '$lib/naming/setup-presets';
+	import { ChevronDown, ChevronUp } from '@lucide/svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { FormInput, FormSelect } from '#lib/components/ui/form/index.js';
+	import type { NamingConfigShape } from '#lib/naming/setup-presets.js';
 
 	interface Props {
 		config: NamingConfigShape;

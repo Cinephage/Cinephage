@@ -12,11 +12,11 @@ import {
 	seasons,
 	series,
 	subtitles
-} from '$lib/server/db/schema.js';
+} from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -26,7 +26,7 @@ vi.mock('$lib/server/db/index.js', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/tmdb.js', () => ({
+vi.mock('#lib/server/tmdb.js', () => ({
 	tmdb: {
 		getTVShow: vi.fn().mockResolvedValue(null),
 		getSeason: vi.fn().mockResolvedValue({ episodes: [] })
@@ -41,7 +41,7 @@ type SeriesLoadFn = (event: LoadEvent) => Promise<import('./+page.server').Libra
 const loadFn = load as unknown as SeriesLoadFn;
 const { eq } = await import('drizzle-orm');
 const { LanguageSettingsService } =
-	await import('$lib/server/subtitles/services/LanguageSettingsService.js');
+	await import('#lib/server/subtitles/services/LanguageSettingsService.js');
 
 const LANGUAGE_PROFILE_ID = 'd0000000-0000-4000-8000-000000000001';
 const SERIES_ID = 'series-loader-1';

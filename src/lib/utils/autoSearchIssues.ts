@@ -1,4 +1,4 @@
-import type { SearchResults } from '$lib/stores/searchProgress.svelte';
+import type { SearchResults } from '#lib/stores/searchProgress.svelte.js';
 
 export function getPrimaryAutoSearchIssue(
 	results: SearchResults | null | undefined

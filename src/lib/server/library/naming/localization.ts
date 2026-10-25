@@ -1,6 +1,6 @@
-import { tmdb } from '$lib/server/tmdb';
-import { createChildLogger } from '$lib/logging';
-import { normalizeTmdbLanguage } from '$lib/server/languages/normalize.js';
+import { tmdb } from '#lib/server/tmdb.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { normalizeTmdbLanguage } from '#lib/server/languages/normalize.js';
 import { tokenRegistry } from './tokens/index.js';
 
 const logger = createChildLogger({ logDomain: 'scans' as const });

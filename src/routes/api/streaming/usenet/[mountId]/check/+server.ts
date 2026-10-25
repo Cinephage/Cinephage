@@ -4,12 +4,10 @@
  * Check if a mount's content can be streamed directly.
  * RAR-compressed content is not supported for streaming.
  */
-
 import type { RequestHandler } from './$types';
-import { json } from '@sveltejs/kit';
-import { createChildLogger } from '$lib/logging';
-import { getUsenetStreamService } from '$lib/server/streaming/usenet/UsenetStreamService';
-import { getNzbMountManager } from '$lib/server/streaming/nzb/NzbMountManager';
+import { createChildLogger } from '#lib/logging/index.js';
+import { getUsenetStreamService } from '#lib/server/streaming/usenet/UsenetStreamService.js';
+import { getNzbMountManager } from '#lib/server/streaming/nzb/NzbMountManager.js';
 
 const logger = createChildLogger({ module: 'UsenetMountCheckApi', logDomain: 'streams' });
 
@@ -22,7 +20,7 @@ export const GET: RequestHandler = async ({ params }) => {
 	// Check if service is ready
 	if (!streamService.isReady()) {
 		logger.warn('[UsenetCheck] Usenet streaming service not ready');
-		return json({ error: 'Usenet streaming service not available' }, { status: 503 });
+		return Response.json({ error: 'Usenet streaming service not available' }, { status: 503 });
 	}
 
 	try {
@@ -48,16 +46,16 @@ export const GET: RequestHandler = async ({ params }) => {
 			'[UsenetCheck] Checked streamability'
 		);
 
-		return json(streamability);
+		return Response.json(streamability);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Unknown error';
 
 		if (message.includes('not found')) {
 			logger.warn({ mountId }, '[UsenetCheck] Mount not found');
-			return json({ error: 'Mount not found' }, { status: 404 });
+			return Response.json({ error: 'Mount not found' }, { status: 404 });
 		}
 
 		logger.error({ mountId, error: message }, '[UsenetCheck] Check error');
-		return json({ error: message }, { status: 500 });
+		return Response.json({ error: message }, { status: 500 });
 	}
 };

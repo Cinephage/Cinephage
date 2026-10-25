@@ -11,13 +11,13 @@
  */
 
 import type { RequestHandler } from './$types';
-import { logger } from '$lib/logging';
-import { ensureVttFormat } from '$lib/server/streaming/utils';
+import { logger } from '#lib/logging/index.js';
+import { ensureVttFormat } from '#lib/server/streaming/utils/index.js';
 import {
 	resolveAndValidateUrl,
 	fetchWithTimeout,
 	MAX_REDIRECTS
-} from '$lib/server/http/ssrf-protection';
+} from '#lib/server/http/ssrf-protection.js';
 
 const streamLog = { logDomain: 'streams' as const };
 

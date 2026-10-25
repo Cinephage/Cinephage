@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { FolderOpen, BarChart3, Search, Captions, TriangleAlert } from 'lucide-svelte';
+	import { FolderOpen, BarChart3, Search, Captions, TriangleAlert } from '@lucide/svelte';
 	import { resolve } from '$app/paths';
-	import { getWritableRootFoldersForMediaType } from '$lib/utils/root-folders.js';
-	import * as m from '$lib/paraglide/messages.js';
-	import { formatBytes } from '$lib/utils/format.js';
-	import type { RootFolderWithSpaceAndDefault as RootFolder } from '$lib/types/downloadClient.js';
-	import type { SubtitleRequirement } from '$lib/shared/language-profile.js';
-	import SubtitleRequirementsSection from '$lib/components/subtitles/SubtitleRequirementsSection.svelte';
+	import { getWritableRootFoldersForMediaType } from '#lib/utils/root-folders.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import { formatBytes } from '#lib/utils/format.js';
+	import type { RootFolderWithSpaceAndDefault as RootFolder } from '#lib/types/downloadClient.js';
+	import type { SubtitleRequirement } from '#lib/shared/language-profile.js';
+	import SubtitleRequirementsSection from '#lib/components/subtitles/SubtitleRequirementsSection.svelte';
 
 	interface ScoringProfile {
 		id: string;
@@ -107,7 +107,8 @@
 								: m.common_tvShows().toLowerCase()
 					})}
 				{/if}
-				<a href={resolve('/settings/library/libraries')} class="link"
+
+				<a href={resolve('settings/library/libraries')} class="link"
 					>{m.library_add_addOneInSettings()}</a
 				>
 			</span>
@@ -241,10 +242,9 @@
 			type="button"
 			class="btn mt-1 self-start btn-ghost px-0 text-base-content/70 btn-xs"
 			onclick={() => (customizingSubtitles = !customizingSubtitles)}
+			>{customizingSubtitles ? '▾' : '▸'} {m.library_subtitleRequirements_customized()}</button
 		>
-			{customizingSubtitles ? '▾' : '▸'}
-			{m.library_subtitleRequirements_customized()}
-		</button>
+
 		{#if customizingSubtitles}
 			<div class="mt-2">
 				<SubtitleRequirementsSection
@@ -267,9 +267,10 @@
 		<TriangleAlert class="h-4 w-4 shrink-0" />
 		<span>
 			{m.library_add_noDefaultProfileWarning()}
-			<a href={resolve('/settings/library/languages')} class="link">
-				{m.library_add_noDefaultProfileWarningLink()}
-			</a>
+
+			<a href={resolve('settings/library/languages')} class="link"
+				>{m.library_add_noDefaultProfileWarningLink()}</a
+			>
 		</span>
 	</div>
 {/if}

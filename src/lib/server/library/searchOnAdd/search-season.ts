@@ -1,14 +1,14 @@
-import { db } from '$lib/server/db/index.js';
-import { series, episodes } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { series, episodes } from '#lib/server/db/schema.js';
 import { eq, and } from 'drizzle-orm';
-import { getIndexerManager } from '$lib/server/indexers/IndexerManager.js';
-import { evaluateIndexerSearchAvailability } from '$lib/server/indexers/search/availability.js';
-import type { SearchCriteria } from '$lib/server/indexers/types';
-import { grabService } from '$lib/server/downloads/GrabService.js';
+import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
+import { evaluateIndexerSearchAvailability } from '#lib/server/indexers/search/availability.js';
+import type { SearchCriteria } from '#lib/server/indexers/types/index.js';
+import { grabService } from '#lib/server/downloads/GrabService.js';
 import type { SearchForSeasonParams, GrabResult } from './types.js';
 import type { AltTitleRefresher } from './alt-titles.js';
 import { AUTO_GRAB_MIN_SCORE } from './search-utils.js';
-import { createChildLogger } from '$lib/logging/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'SearchSeason', logDomain: 'scans' });
 

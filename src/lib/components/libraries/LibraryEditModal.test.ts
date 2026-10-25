@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/svelte';
 import LibraryEditModal from './LibraryEditModal.svelte';
 
-const { createLibrary, updateLibrary, getScoringProfiles, getLanguageProfiles, invalidateAll } =
+const { createLibrary, updateLibrary, getScoringProfiles, getLanguageProfiles, refreshAll } =
 	vi.hoisted(() => ({
 		createLibrary: vi.fn().mockResolvedValue({}),
 		updateLibrary: vi.fn().mockResolvedValue({}),
@@ -17,22 +17,22 @@ const { createLibrary, updateLibrary, getScoringProfiles, getLanguageProfiles, i
 			{ id: 'lp-en', name: 'English Only' },
 			{ id: 'lp-jp', name: 'Japanese + English' }
 		]),
-		invalidateAll: vi.fn().mockResolvedValue(undefined)
+		refreshAll: vi.fn().mockResolvedValue(undefined)
 	}));
 
-vi.mock('$app/navigation', () => ({ invalidateAll }));
+vi.mock('$app/navigation', () => ({ refreshAll }));
 
-vi.mock('$lib/api/settings.js', () => ({
+vi.mock('#lib/api/settings.js', () => ({
 	createLibrary,
 	updateLibrary,
 	getScoringProfiles
 }));
 
-vi.mock('$lib/api/subtitles.js', () => ({
+vi.mock('#lib/api/subtitles.js', () => ({
 	getLanguageProfiles
 }));
 
-vi.mock('$lib/stores/toast.svelte', () => ({
+vi.mock('#lib/stores/toast.svelte.js', () => ({
 	toasts: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() }
 }));
 

@@ -1,6 +1,5 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getRootFolderService } from '$lib/server/downloadClients/RootFolderService';
+import { getRootFolderService } from '#lib/server/downloadClients/RootFolderService.js';
 import { z } from 'zod';
 
 const validatePathSchema = z.object({
@@ -18,13 +17,13 @@ export const POST: RequestHandler = async ({ request }) => {
 	try {
 		data = await request.json();
 	} catch {
-		return json({ error: 'Invalid JSON body' }, { status: 400 });
+		return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
 	}
 
 	const result = validatePathSchema.safeParse(data);
 
 	if (!result.success) {
-		return json(
+		return Response.json(
 			{
 				error: 'Validation failed',
 				details: result.error.flatten()
@@ -38,10 +37,10 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	try {
 		const validation = await service.validatePath(path, readOnly, folderId);
-		return json(validation);
+		return Response.json(validation);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Unknown error';
-		return json(
+		return Response.json(
 			{
 				valid: false,
 				exists: false,

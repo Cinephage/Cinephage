@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../../test/db-helper';
-import { movies } from '$lib/server/db/schema';
+import { movies } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 
 const testDb: TestDatabase = createTestDb();
@@ -10,7 +10,7 @@ const { mockGetMovie, mockGetMovieExternalIds } = vi.hoisted(() => ({
 	mockGetMovieExternalIds: vi.fn()
 }));
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -20,7 +20,7 @@ vi.mock('$lib/server/db', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -38,12 +38,12 @@ const mockLogger = vi.hoisted(() => ({
 	child: vi.fn().mockReturnThis()
 }));
 
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	logger: mockLogger,
 	createChildLogger: vi.fn(() => mockLogger)
 }));
 
-vi.mock('$lib/server/tmdb.js', () => ({
+vi.mock('#lib/server/tmdb.js', () => ({
 	tmdb: {
 		getMovie: mockGetMovie,
 		getMovieExternalIds: mockGetMovieExternalIds,
@@ -51,7 +51,7 @@ vi.mock('$lib/server/tmdb.js', () => ({
 	}
 }));
 
-vi.mock('$lib/server/tasks/TaskCancelledException.js', () => {
+vi.mock('#lib/server/tasks/TaskCancelledException.js', () => {
 	class TaskCancelledException extends Error {
 		readonly taskId: string;
 		constructor(taskId: string) {
@@ -183,7 +183,7 @@ describe('MetadataRefreshTask', () => {
 		insertMovie({ id: 'm1', tmdbId: 100, title: 'Movie 1' });
 
 		const abortController = new AbortController();
-		const { TaskExecutionContext } = await import('$lib/server/tasks/TaskExecutionContext.js');
+		const { TaskExecutionContext } = await import('#lib/server/tasks/TaskExecutionContext.js');
 		const ctx = new TaskExecutionContext('metadata-refresh', 'history-1', abortController.signal);
 
 		abortController.abort();

@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { X, Search, Layers, RefreshCw, Trash2 } from 'lucide-svelte';
-	import { createFocusTrap, lockBodyScroll } from '$lib/utils/focus';
+	import { X, Search, Layers, RefreshCw, Trash2 } from '@lucide/svelte';
+	import { createFocusTrap, lockBodyScroll } from '#lib/utils/focus.js';
 
 	interface CollectionResult {
 		id: number;

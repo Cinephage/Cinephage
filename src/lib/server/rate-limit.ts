@@ -42,9 +42,10 @@ function shouldEnforceApiRateLimit(event: RequestEvent): boolean {
 		return false;
 	}
 
-	// Always protect auth endpoints from brute-force attempts.
+	// Better Auth enforces its own database-backed limiter on /api/auth —
+	// a second in-memory limit here would double-lock sign-in attempts.
 	if (pathname.startsWith('/api/auth/')) {
-		return true;
+		return false;
 	}
 
 	// Streaming/LiveTV playback routes already require a validated API key
@@ -61,11 +62,6 @@ function shouldEnforceApiRateLimit(event: RequestEvent): boolean {
 const DEFAULT_API_LIMIT: RateLimitConfig = {
 	windowMs: 15 * 60 * 1000, // 15 minutes
 	maxRequests: 100
-};
-
-const AUTH_LIMIT: RateLimitConfig = {
-	windowMs: 15 * 60 * 1000, // 15 minutes
-	maxRequests: 5
 };
 
 const STREAMING_LIMIT: RateLimitConfig = {
@@ -221,28 +217,17 @@ export function checkApiRateLimit(event: RequestEvent): Response | null {
 	let config: RateLimitConfig;
 	let keyPrefix: string;
 
-	// Auth endpoints get stricter limits
-	if (pathname.startsWith('/api/auth/')) {
-		config = AUTH_LIMIT;
-		keyPrefix = 'auth';
-	}
 	// Activity SSE is long-lived and should not compete with general API quota.
-	else if (pathname.startsWith('/api/activity/stream')) {
+	if (pathname.startsWith('/api/activity/stream')) {
 		config = ACTIVITY_STREAM_LIMIT;
 		keyPrefix = 'activity-stream';
-	}
-	// Activity endpoints are high-frequency by design (filters/live updates).
-	else if (pathname.startsWith('/api/activity')) {
+	} else if (pathname.startsWith('/api/activity')) {
 		config = ACTIVITY_API_LIMIT;
 		keyPrefix = 'activity';
-	}
-	// Streaming endpoints get different limits
-	else if (pathname.startsWith('/api/streaming/') || pathname.startsWith('/api/livetv/stream/')) {
+	} else if (pathname.startsWith('/api/streaming/') || pathname.startsWith('/api/livetv/stream/')) {
 		config = STREAMING_LIMIT;
 		keyPrefix = 'stream';
-	}
-	// Standard API endpoints
-	else {
+	} else {
 		config = DEFAULT_API_LIMIT;
 		keyPrefix = 'api';
 	}
@@ -289,10 +274,7 @@ export function applyRateLimitHeaders(event: RequestEvent, response: Response): 
 	let config: RateLimitConfig;
 	let keyPrefix: string;
 
-	if (pathname.startsWith('/api/auth/')) {
-		config = AUTH_LIMIT;
-		keyPrefix = 'auth';
-	} else if (pathname.startsWith('/api/activity/stream')) {
+	if (pathname.startsWith('/api/activity/stream')) {
 		config = ACTIVITY_STREAM_LIMIT;
 		keyPrefix = 'activity-stream';
 	} else if (pathname.startsWith('/api/activity')) {

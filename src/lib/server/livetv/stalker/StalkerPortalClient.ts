@@ -10,7 +10,7 @@
  * 3. API calls - all require proper headers with token
  */
 
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 import { randomBytes } from 'node:crypto';
 
 const logger = createChildLogger({ logDomain: 'livetv' as const });
@@ -20,7 +20,7 @@ import type {
 	StalkerCategory,
 	StalkerChannel,
 	EpgProgramRaw
-} from '$lib/types/livetv';
+} from '#lib/types/livetv.js';
 
 const REQUEST_TIMEOUT = 30000; // 30 seconds (increased for slow portals)
 

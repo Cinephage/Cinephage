@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
-import { db } from '$lib/server/db';
-import { storageInsights } from '$lib/server/db/schema';
-import { createChildLogger } from '$lib/logging';
+import { db } from '#lib/server/db/index.js';
+import { storageInsights } from '#lib/server/db/schema.js';
+import { createChildLogger } from '#lib/logging/index.js';
 import type { InsightFinding } from './types.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });

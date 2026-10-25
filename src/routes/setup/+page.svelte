@@ -1,22 +1,22 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { User, Lock, CheckCircle, AlertCircle } from 'lucide-svelte';
-	import { authClient } from '$lib/auth/client.js';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import { ensureVersionPrefix } from '$lib/version.js';
+	import { User, Lock, CheckCircle, AlertCircle } from '@lucide/svelte';
+	import { authClient } from '#lib/auth/client.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { ensureVersionPrefix } from '#lib/version.js';
 
-	const GITHUB_URL = 'https://github.com/MoldyTaint/Cinephage';
+	const GITHUB_URL = 'https://github.com/cinephage/cinephage';
 	const DISCORD_URL = 'https://discord.gg/scGCBTSWEt';
 
 	let { data } = $props();
-	import { createApiKeys } from '$lib/api';
+	import { createApiKeys } from '#lib/api/index.js';
 	import {
 		isHardReservedUsername,
 		USERNAME_MAX_LENGTH,
 		USERNAME_MIN_LENGTH,
 		USERNAME_PATTERN
-	} from '$lib/auth/username-policy.js';
-	import * as m from '$lib/paraglide/messages.js';
+	} from '#lib/auth/username-policy.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	let currentStep = $state(1);
 	let isLoading = $state(false);

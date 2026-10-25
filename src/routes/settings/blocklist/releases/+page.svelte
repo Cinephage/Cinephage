@@ -1,18 +1,18 @@
 <script lang="ts">
-	import { Search, Ban, Clock, Trash2 } from 'lucide-svelte';
+	import { Search, Ban, Clock, Trash2 } from '@lucide/svelte';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import { SettingsPage } from '$lib/components/ui/settings';
-	import { ConfirmationModal } from '$lib/components/ui/modal';
-	import { BlocklistTable, BlocklistBulkActions } from '$lib/components/blocklist';
-	import type { BlocklistEntry } from '$lib/components/blocklist';
-	import * as m from '$lib/paraglide/messages.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { SettingsPage } from '#lib/components/ui/settings/index.js';
+	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
+	import { BlocklistTable, BlocklistBulkActions } from '#lib/components/blocklist/index.js';
+	import type { BlocklistEntry } from '#lib/components/blocklist/index.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import {
 		getBlocklist,
 		deleteBlocklistEntries,
 		purgeBlocklistExpired,
 		updateBlocklistExpiry
-	} from '$lib/api/settings.js';
+	} from '#lib/api/settings.js';
 
 	let { data }: { data: { entries: BlocklistEntry[]; total: number } } = $props();
 

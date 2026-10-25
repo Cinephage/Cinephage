@@ -142,7 +142,8 @@ export {
 	// Legacy compatibility functions
 	getCategoriesForSearchType,
 	categoryMatchesSearchType,
-	indexerHasCategoriesForSearchType
+	indexerHasCategoriesForSearchType,
+	restrictionAllowsSearchType
 } from './category';
 
 // =============================================================================

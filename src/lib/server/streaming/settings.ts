@@ -19,8 +19,8 @@
  *   - getCinephageModuleRegistry().getById('library-streaming') for module settings
  */
 
-import { getCinephageSettingsService } from '$lib/server/cinephage/settings/CinephageSettingsService.js';
-import { getCinephageCore } from '$lib/server/cinephage/core/CinephageCore.js';
+import { getCinephageSettingsService } from '#lib/server/cinephage/settings/CinephageSettingsService.js';
+import { getCinephageCore } from '#lib/server/cinephage/core/CinephageCore.js';
 
 export interface StreamingIndexerSettings {
 	/** Whether to use HTTPS (string-typed for legacy callers) */

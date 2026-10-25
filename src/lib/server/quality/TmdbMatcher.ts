@@ -11,7 +11,7 @@ import { tmdb } from '../tmdb.js';
 import { db } from '../db/index.js';
 import { externalIdCache } from '../db/schema.js';
 import { eq, and } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'indexers' as const });
 

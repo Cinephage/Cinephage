@@ -1,12 +1,12 @@
 import { sql } from 'drizzle-orm';
-import { movieFiles, movies, scoringProfiles } from '$lib/server/db/schema';
-import type { Resolution } from '$lib/server/indexers/parser/types.js';
+import { movieFiles, movies, scoringProfiles } from '#lib/server/db/schema.js';
+import type { Resolution } from '#lib/server/indexers/parser/types.js';
 import type { StorageInsightRule, RuleContext, InsightFinding } from '../types.js';
 import {
 	effectiveBuckets,
 	redundantFileIds,
 	type BucketFile
-} from '$lib/server/quality/buckets.js';
+} from '#lib/server/quality/buckets.js';
 
 /**
  * Surfaces movie files that no longer fit the movie's desired-quality tiers.

@@ -36,7 +36,7 @@ const mockLogger = {
 	child: vi.fn().mockReturnThis()
 };
 
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	logger: mockLogger,
 	createChildLogger: vi.fn(() => mockLogger)
 }));
@@ -63,6 +63,7 @@ function createMockPage(): Page {
 		route: vi.fn().mockResolvedValue(undefined),
 		frames: vi.fn().mockReturnValue([]),
 		waitForLoadState: vi.fn().mockResolvedValue(undefined),
+		isClosed: vi.fn().mockReturnValue(false),
 		$: vi.fn().mockResolvedValue(null)
 	} as unknown as Page;
 }

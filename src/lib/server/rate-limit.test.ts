@@ -25,19 +25,19 @@ function createEvent(
 			user: options.authenticatedUser
 				? ({
 						id: 'test-user',
-						name: null,
+						name: 'Test Admin',
 						email: 'admin@example.com',
-						emailVerified: 1,
+						emailVerified: false,
 						image: null,
 						username: 'admin',
 						displayUsername: 'admin',
 						role: 'admin',
 						language: 'en',
-						banned: 0,
+						banned: false,
 						banReason: null,
 						banExpires: null,
-						createdAt: new Date().toISOString(),
-						updatedAt: new Date().toISOString()
+						createdAt: new Date(),
+						updatedAt: new Date()
 					} as App.Locals['user'])
 				: null,
 			session: null,
@@ -74,21 +74,17 @@ describe('checkApiRateLimit', () => {
 		expect(blockedResponse?.status).toBe(429);
 	});
 
-	it('keeps auth endpoint protection even when a user session exists', () => {
+	it('never applies the shared in-memory limiter to auth endpoints (Better Auth owns them)', () => {
 		const userAgent = `auth-route-${Date.now()}`;
-		let blockedResponse: Response | null = null;
-
-		for (let i = 0; i < 6; i++) {
-			blockedResponse = checkApiRateLimit(
+		for (let i = 0; i < 50; i++) {
+			const response = checkApiRateLimit(
 				createEvent('/api/auth/sign-in/email', {
-					authenticatedUser: true,
+					authenticatedUser: false,
 					userAgent
 				})
 			);
+			expect(response).toBeNull();
 		}
-
-		expect(blockedResponse).not.toBeNull();
-		expect(blockedResponse?.status).toBe(429);
 	});
 
 	it('bypasses shared limiter for validated streaming api-key traffic', () => {

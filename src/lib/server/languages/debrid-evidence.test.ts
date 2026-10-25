@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { ProviderFile } from '$lib/server/downloadClients/debrid/debrid-adapter';
+import type { ProviderFile } from '#lib/server/downloadClients/debrid/debrid-adapter.js';
 
 const { getClientMock } = vi.hoisted(() => ({
 	getClientMock: vi.fn()
 }));
 
-vi.mock('$lib/server/downloadClients/DownloadClientManager', () => ({
+vi.mock('#lib/server/downloadClients/DownloadClientManager.js', () => ({
 	getDownloadClientManager: vi.fn(async () => ({
 		getDebridClientForAcquisition: getClientMock
 	}))

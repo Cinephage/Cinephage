@@ -5,11 +5,10 @@
  * Returns a preview of how files for a specific series would be renamed.
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { RenamePreviewService } from '$lib/server/library/naming/RenamePreviewService';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { createChildLogger } from '$lib/logging';
+import { RenamePreviewService } from '#lib/server/library/naming/RenamePreviewService.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'RenamePreviewSeriesApi', logDomain: 'scans' });
 
@@ -26,13 +25,13 @@ export const GET: RequestHandler = async (event) => {
 		const { id } = params;
 
 		if (!id) {
-			return json({ error: 'Series ID is required' }, { status: 400 });
+			return Response.json({ error: 'Series ID is required' }, { status: 400 });
 		}
 
 		const service = new RenamePreviewService();
 		const result = await service.previewSeries(id);
 
-		return json({ success: true, ...result });
+		return Response.json({ success: true, ...result });
 	} catch (error) {
 		logger.error(
 			{
@@ -42,7 +41,7 @@ export const GET: RequestHandler = async (event) => {
 			'[RenamePreview API] Failed to preview series rename'
 		);
 
-		return json(
+		return Response.json(
 			{
 				error: 'Failed to generate series rename preview',
 				details: error instanceof Error ? error.message : 'Unknown error'

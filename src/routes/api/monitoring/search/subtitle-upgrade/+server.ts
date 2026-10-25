@@ -1,8 +1,7 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { monitoringScheduler } from '$lib/server/monitoring/MonitoringScheduler.js';
-import { createChildLogger } from '$lib/logging';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
+import { monitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 
 const logger = createChildLogger({
 	module: 'MonitoringSearchSubtitleUpgradeApi',
@@ -20,7 +19,7 @@ export const POST: RequestHandler = async (event) => {
 	try {
 		const result = await monitoringScheduler.runSubtitleUpgradeSearch();
 
-		return json({
+		return Response.json({
 			success: true,
 			message: 'Subtitle upgrade search completed',
 			result
@@ -30,7 +29,7 @@ export const POST: RequestHandler = async (event) => {
 			'[API] Failed to run subtitle upgrade search',
 			error instanceof Error ? error : undefined
 		);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: 'Failed to run subtitle upgrade search',

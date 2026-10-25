@@ -11,7 +11,7 @@
  */
 
 import { promises as dns } from 'node:dns';
-import { PROXY_FETCH_TIMEOUT_MS } from '$lib/server/streaming/constants';
+import { PROXY_FETCH_TIMEOUT_MS } from '#lib/server/streaming/constants.js';
 
 // Allowed URL schemes
 export const ALLOWED_SCHEMES = ['http:', 'https:'];

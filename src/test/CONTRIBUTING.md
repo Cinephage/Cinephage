@@ -30,7 +30,7 @@ import {
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -65,7 +65,7 @@ const mockLogger = vi.hoisted(() => ({
 	child: vi.fn().mockReturnThis()
 }));
 
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	logger: mockLogger,
 	createChildLogger: vi.fn(() => mockLogger)
 }));
@@ -118,7 +118,7 @@ vi.mock('./constants.js', () => ({ MAX_RETRIES: 3 }));
 
 - `clearTestDb(testDb)` clears all common tables (scoringProfiles, customFormats, blockedMedia, downloadClients, movies, movieFiles, series, seasons, episodes, episodeFiles, downloadQueue). Use it in `beforeEach`.
 - `destroyTestDb(testDb)` closes the connection. Use it in `afterAll`.
-- Never mock `$lib/server/db` when a real in-memory DB works for your test.
+- Never mock `#lib/server/db/index.js` when a real in-memory DB works for your test.
 
 ### File naming
 

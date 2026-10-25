@@ -5,16 +5,16 @@
  * Loads and saves naming preferences from the namingSettings table.
  */
 
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'scans' as const });
 import {
 	DEFAULT_NAMING_PRESET_SELECTION,
 	normalizeNamingPresetSelection,
 	type NamingPresetSelection
-} from '$lib/naming/editor-state';
-import { db } from '$lib/server/db';
-import { namingSettings } from '$lib/server/db/schema';
+} from '#lib/naming/editor-state.js';
+import { db } from '#lib/server/db/index.js';
+import { namingSettings } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { DEFAULT_NAMING_CONFIG, type NamingConfig } from './NamingService';
 
@@ -177,9 +177,8 @@ export class NamingSettingsService {
 		// Invalidate NamingSettingsService config cache and rename-preview cache.
 		// A naming format change invalidates every computed path in the library.
 		this.invalidateCache();
-		import('./RenamePreviewCache.js').then(({ renamePreviewCache }) => {
-			renamePreviewCache.invalidateAll();
-		});
+		const { renamePreviewCache } = await import('./RenamePreviewCache.js');
+		renamePreviewCache.invalidateAll();
 		return this.getConfig();
 	}
 
@@ -233,6 +232,11 @@ export class NamingSettingsService {
 
 		// Invalidate cache
 		this.invalidateCache();
+
+		// Restore-equivalent path: keep the rename-preview cache in sync the same
+		// way updateConfig does.
+		const { renamePreviewCache } = await import('./RenamePreviewCache.js');
+		renamePreviewCache.invalidateAll();
 
 		return { ...DEFAULT_NAMING_CONFIG };
 	}

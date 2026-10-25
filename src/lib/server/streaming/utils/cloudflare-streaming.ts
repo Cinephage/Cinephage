@@ -8,8 +8,8 @@
  * - Falls back to direct fetch if Cloudflare bypass fails
  */
 
-import { logger } from '$lib/logging';
-import { browserFetch, captchaSolverSettingsService } from '$lib/server/captcha';
+import { logger } from '#lib/logging/index.js';
+import { browserFetch, captchaSolverSettingsService } from '#lib/server/captcha/index.js';
 import { fetchWithTimeout } from './http';
 import type { FetchOptions } from './http';
 import { DEFAULT_USER_AGENT } from '../constants';

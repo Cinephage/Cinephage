@@ -1,10 +1,11 @@
-import { json, error } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { db } from '$lib/server/db/index.js';
-import { importFailures, downloadQueue } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { importFailures, downloadQueue } from '#lib/server/db/schema.js';
 import { eq, or, and } from 'drizzle-orm';
-import { getImportService } from '$lib/server/downloadClients/import';
-import { createChildLogger } from '$lib/logging';
+import { getImportService } from '#lib/server/downloadClients/import/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { requireAdminLocals } from '#lib/server/auth/authorization.js';
 
 const logger = createChildLogger({ module: 'ReportsImportFailuresRetry', logDomain: 'imports' });
 
@@ -15,14 +16,19 @@ const logger = createChildLogger({ module: 'ReportsImportFailuresRetry', logDoma
  * the file from the download client. Returns 404 if no matching
  * download queue entry can be found (likely cleaned up already).
  */
-export const POST: RequestHandler = async ({ params }) => {
+export const POST: RequestHandler = async ({ params, locals }) => {
+	// Defense-in-depth: the hooks viewer gate confines this route; this
+	// guard keeps it admin-only even if the gate is ever refactored.
+	const authError = requireAdminLocals(locals);
+	if (authError) return authError;
+
 	const { id } = params;
 
 	const failure = await db.select().from(importFailures).where(eq(importFailures.id, id)).get();
 
 	if (!failure) throw error(404, 'Import failure record not found');
 	if (failure.status === 'resolved') {
-		return json({ success: false, error: 'Record is already resolved' }, { status: 400 });
+		return Response.json({ success: false, error: 'Record is already resolved' }, { status: 400 });
 	}
 
 	// Find the matching download queue entry.
@@ -57,7 +63,7 @@ export const POST: RequestHandler = async ({ params }) => {
 	}
 
 	if (!queueItem) {
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error:
@@ -69,7 +75,7 @@ export const POST: RequestHandler = async ({ params }) => {
 
 	const hasPath = Boolean(queueItem.outputPath?.trim() || queueItem.clientDownloadPath?.trim());
 	if (!hasPath) {
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: 'Queue entry has no recorded file path. A re-download would be required to retry.'
@@ -86,7 +92,7 @@ export const POST: RequestHandler = async ({ params }) => {
 			.set({ status: 'completed', errorMessage: null, lastAttemptAt: new Date().toISOString() })
 			.where(eq(downloadQueue.id, queueItem.id));
 	} else if (!['completed', 'postprocessing'].includes(queueItem.status)) {
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: `Cannot retry import: queue item is in '${queueItem.status}' state.`
@@ -103,12 +109,16 @@ export const POST: RequestHandler = async ({ params }) => {
 			{ importFailureId: id, queueItemId: queueItem.id, result },
 			'[Reports] Import retry requested'
 		);
-		return json({ success: true, message: 'Import retry queued', importStatus: result.status });
+		return Response.json({
+			success: true,
+			message: 'Import retry queued',
+			importStatus: result.status
+		});
 	} catch (err) {
 		// Roll back the status change so the record doesn't get stuck in 'retrying'
 		await db.update(importFailures).set({ status: 'failed' }).where(eq(importFailures.id, id));
 		logger.error({ err, importFailureId: id }, '[Reports] Import retry failed');
 		const message = err instanceof Error ? err.message : 'Import retry failed';
-		return json({ success: false, error: message }, { status: 500 });
+		return Response.json({ success: false, error: message }, { status: 500 });
 	}
 };

@@ -1,7 +1,7 @@
 import { and, eq, notInArray, or } from 'drizzle-orm';
-import { db } from '$lib/server/db/index.js';
-import { downloadHistory, downloadQueue } from '$lib/server/db/schema.js';
-import { acquisitionService } from '$lib/server/acquisition/AcquisitionService.js';
+import { db } from '#lib/server/db/index.js';
+import { downloadHistory, downloadQueue } from '#lib/server/db/schema.js';
+import { acquisitionService } from '#lib/server/acquisition/AcquisitionService.js';
 
 export interface ResolvedIdentityRecheck {
 	blocked: boolean;

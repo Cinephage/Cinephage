@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { X, Loader2, Search } from 'lucide-svelte';
-	import { toasts } from '$lib/stores/toast.svelte';
+	import { X, Loader2, Search } from '@lucide/svelte';
+	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
-	import { getWritableRootFoldersForMediaType } from '$lib/utils/root-folders.js';
-	import { isLikelyAnimeMedia } from '$lib/shared/anime-classification.js';
-	import type { RootFolderWithSpaceAndDefault as RootFolder } from '$lib/types/downloadClient.js';
-	import type { DesiredQuality } from '$lib/types/library.js';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
+	import { getWritableRootFoldersForMediaType } from '#lib/utils/root-folders.js';
+	import { isLikelyAnimeMedia } from '#lib/shared/anime-classification.js';
+	import type { RootFolderWithSpaceAndDefault as RootFolder } from '#lib/types/downloadClient.js';
+	import type { DesiredQuality } from '#lib/types/library.js';
 	import type { MinimumAvailability } from './add/MovieAddOptions.svelte';
 	import type { MonitorType, MonitorNewItems, SeriesType } from './add/SeriesAddOptions.svelte';
 	import AddMovieForm from './AddMovieForm.svelte';
@@ -16,11 +16,17 @@
 		getLibraries,
 		getScoringProfiles,
 		getLibraryClassificationSettings
-	} from '$lib/api/settings.js';
-	import { getEffectiveSubtitleProfile, getLanguageProfiles } from '$lib/api/subtitles.js';
-	import type { SubtitleRequirement } from '$lib/shared/language-profile.js';
-	import { getLibraryStatus, createMovie, createSeries, bulkAddMovies } from '$lib/api/library.js';
-	import { getTmdb } from '$lib/api/discover.js';
+	} from '#lib/api/settings.js';
+	import { getEffectiveSubtitleProfile, getLanguageProfiles } from '#lib/api/subtitles.js';
+	import type { SubtitleRequirement } from '#lib/shared/language-profile.js';
+	import {
+		getLibraryStatus,
+		createMovie,
+		createSeries,
+		bulkAddMovies,
+		type LibraryStatus
+	} from '#lib/api/library.js';
+	import { getTmdb } from '#lib/api/discover.js';
 
 	interface Props {
 		open: boolean;
@@ -362,14 +368,21 @@
 		try {
 			const tmdbPromise = mediaType === 'tv' ? getTmdb(`tv/${tmdbId}`) : getTmdb(`movie/${tmdbId}`);
 
+			// The destructured names below and the type tuple in the `as unknown as`
+			// cast further down must both stay in this exact order, the cast
+			// bypasses structural type-checking entirely, so a reordering here
+			// (previously `tmdbRes`/`languageProfilesData` swapped relative to the
+			// Promise.all array) silently binds the wrong result to the wrong name
+			// with no compiler error. If you add/reorder an entry, update all three
+			// (names, Promise.all array, type tuple) together.
 			const [
 				foldersData,
 				librariesData,
 				profilesData,
 				classificationData,
 				subtitleProfileData,
-				tmdbRes,
-				languageProfilesData
+				languageProfilesData,
+				tmdbRes
 			] = (await Promise.all([
 				getRootFolders(),
 				getLibraries({ mediaType }),
@@ -386,8 +399,8 @@
 				{ profiles?: ScoringProfile[]; defaultProfileId?: string },
 				{ enforceAnimeSubtype?: boolean },
 				EffectiveSubtitleProfileInfo | null | undefined,
-				unknown,
-				{ profiles?: Array<{ id: string; name: string }> }
+				{ profiles?: Array<{ id: string; name: string }> },
+				unknown
 			];
 
 			rootFolders = Array.isArray(foldersData) ? foldersData : (foldersData.folders ?? []);
@@ -456,8 +469,8 @@
 			const tmdbIds = collectionData.parts.map((p: CollectionPart) => p.id);
 			const statusData = await getLibraryStatus({ tmdbIds, mediaType: 'movie' });
 
-			let statusMap: Record<number, { inLibrary: boolean }> = {};
-			statusMap = statusData.status ?? {};
+			// tmdbIds (plural) always yields the map-shaped response.
+			const statusMap = statusData.status as Record<number, LibraryStatus>;
 
 			collection = {
 				id: collectionData.id,

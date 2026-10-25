@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterAll, afterEach } from 'vitest';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../../test/db-helper';
-import { subtitleProviders } from '$lib/server/db/schema';
+import { subtitleProviders } from '#lib/server/db/schema.js';
 import { RateLimiter } from '../providers/mixins';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},

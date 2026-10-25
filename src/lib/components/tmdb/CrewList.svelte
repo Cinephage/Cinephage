@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { CrewMember, Creator } from '$lib/types/tmdb';
-	import * as m from '$lib/paraglide/messages.js';
+	import type { CrewMember, Creator } from '#lib/types/tmdb.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	let {
 		crew = [],

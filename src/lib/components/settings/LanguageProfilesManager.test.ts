@@ -2,25 +2,25 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/svelte';
 import LanguageProfilesManager from './languages/LanguageProfilesManager.svelte';
-import type { SubtitleRequirement } from '$lib/shared/language-profile';
+import type { SubtitleRequirement } from '#lib/shared/language-profile.js';
 
 const {
 	createLanguageProfile,
 	updateLanguageProfile,
 	deleteLanguageProfile,
 	updateLanguageSettings,
-	invalidateAll
+	refreshAll
 } = vi.hoisted(() => ({
 	createLanguageProfile: vi.fn().mockResolvedValue({ success: true }),
 	updateLanguageProfile: vi.fn().mockResolvedValue({ success: true }),
 	deleteLanguageProfile: vi.fn().mockResolvedValue({ success: true }),
 	updateLanguageSettings: vi.fn().mockResolvedValue({}),
-	invalidateAll: vi.fn().mockResolvedValue(undefined)
+	refreshAll: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$app/navigation', () => ({ invalidateAll }));
+vi.mock('$app/navigation', () => ({ refreshAll }));
 
-vi.mock('$lib/api', () => ({
+vi.mock('#lib/api/index.js', () => ({
 	createLanguageProfile,
 	updateLanguageProfile,
 	deleteLanguageProfile,
@@ -28,7 +28,7 @@ vi.mock('$lib/api', () => ({
 	ApiError: class ApiError extends Error {}
 }));
 
-vi.mock('$lib/stores/toast.svelte', () => ({
+vi.mock('#lib/stores/toast.svelte.js', () => ({
 	toasts: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() }
 }));
 
@@ -93,7 +93,7 @@ describe('language profiles manager', () => {
 
 		expect(updateLanguageSettings).toHaveBeenCalledTimes(1);
 		expect(updateLanguageSettings).toHaveBeenCalledWith({ defaultProfileId: 'p1' });
-		expect(invalidateAll).toHaveBeenCalledTimes(1);
+		expect(refreshAll).toHaveBeenCalledTimes(1);
 	});
 
 	it('shows the empty state with a create CTA when no profiles exist', async () => {
@@ -272,20 +272,20 @@ describe('language profile editor labels via paraglide keys', () => {
 
 		expect(screen.getByText('Audio & Matching')).not.toBeNull();
 		expect(screen.getByText('Prefer original audio track')).not.toBeNull();
-		expect(screen.getByText('Fallback audio languages')).not.toBeNull();
-		expect(screen.getByRole('button', { name: 'Add fallback language' })).not.toBeNull();
-		// No fallback rows yet: the per-row controls appear only after adding one.
-		await fireEvent.click(screen.getByRole('button', { name: 'Add fallback language' }));
-		expect(screen.getByRole('combobox', { name: 'Fallback audio language' })).not.toBeNull();
+		expect(screen.getByText('Preferred audio languages')).not.toBeNull();
+		expect(screen.getByRole('button', { name: 'Add audio language' })).not.toBeNull();
+		// No audio language rows yet: the per-row controls appear only after adding one.
+		await fireEvent.click(screen.getByRole('button', { name: 'Add audio language' }));
+		expect(screen.getByRole('combobox', { name: 'Preferred audio language' })).not.toBeNull();
 		expect(screen.getByRole('button', { name: 'Move audio language up' })).not.toBeNull();
 		expect(screen.getByRole('button', { name: 'Move audio language down' })).not.toBeNull();
-		expect(screen.getByRole('button', { name: 'Remove fallback audio language' })).not.toBeNull();
+		expect(screen.getByRole('button', { name: 'Remove audio language' })).not.toBeNull();
 	});
 
 	it('renders the profile card summary from message keys', () => {
 		renderManager('p2');
 
-		// p2 has fallback audio languages, so the summary line renders:
+		// p2 has preferred audio languages, so the summary line renders:
 		// "<Audio:> <prefer original> · French".
 		const summary = screen.getByText(/prefer original/);
 		expect(summary.textContent).toContain('Audio:');
@@ -326,6 +326,6 @@ describe('language profile deletion', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
 		expect(deleteLanguageProfile).toHaveBeenCalledWith('p1');
-		expect(invalidateAll).toHaveBeenCalled();
+		expect(refreshAll).toHaveBeenCalled();
 	});
 });

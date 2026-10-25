@@ -21,6 +21,7 @@ import {
 	isMovieSearch,
 	isTvSearch,
 	indexerHasCategoriesForSearchType,
+	restrictionAllowsSearchType,
 	categoryMatchesSearchType,
 	getCategoryContentType,
 	isXxxCategory,
@@ -35,6 +36,7 @@ import {
 	type EpisodeFormat
 } from './SearchFormatProvider';
 import { getPersistentStatusTracker, type PersistentStatusTracker } from '../status';
+import { isQuotaExceededMessage } from '../status/types';
 import { getRateLimitRegistry, type RateLimitRegistry } from '../ratelimit';
 import { getHostRateLimiter, type HostRateLimiter } from '../ratelimit/HostRateLimiter';
 import {
@@ -56,25 +58,25 @@ import { extractLanguages } from '../parser/patterns/language';
 import {
 	rankLanguageEvidenceSet,
 	type EffectiveAudioPreference
-} from '$lib/server/languages/audio-preference';
-import { resolveAudioPreferenceForItem } from '$lib/server/languages/audio-preference-resolver';
-import { normalizeLanguageCode } from '$lib/shared/languages';
+} from '#lib/server/languages/audio-preference.js';
+import { resolveAudioPreferenceForItem } from '#lib/server/languages/audio-preference-resolver.js';
+import { normalizeLanguageCode } from '#lib/shared/languages.js';
 import { CloudflareProtectedError } from '../http/CloudflareDetection';
 import {
 	releaseEnricher,
 	type EnrichmentOptions,
 	type IndexerConfigForEnrichment
 } from '../../quality';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'indexers' as const });
-import { tmdb } from '$lib/server/tmdb';
-import { db } from '$lib/server/db/index.js';
-import { movies, series } from '$lib/server/db/schema.js';
+import { tmdb } from '#lib/server/tmdb.js';
+import { db } from '#lib/server/db/index.js';
+import { movies, series } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { blocklistService } from '$lib/server/blocklist/BlocklistService.js';
-import { DANGEROUS_EXTENSIONS, EXECUTABLE_EXTENSIONS } from '$lib/config/constants.js';
-import { matchTitleContainment } from '$lib/server/releases/release-identity.js';
+import { blocklistService } from '#lib/server/blocklist/BlocklistService.js';
+import { DANGEROUS_EXTENSIONS, EXECUTABLE_EXTENSIONS } from '#lib/config/constants.js';
+import { matchTitleContainment } from '#lib/server/releases/release-identity.js';
 
 /** Options for search orchestration */
 export interface SearchOrchestratorOptions {
@@ -1104,11 +1106,28 @@ export class SearchOrchestrator {
 				'Indexer search failed'
 			);
 
+			// The indexer telling us outright that its API quota is exhausted is
+			// authoritative, not flaky - disable it until the quota is expected to
+			// reset rather than treating it like an ordinary transient failure.
+			if (isQuotaExceededMessage(message)) {
+				await this.statusTracker.recordQuotaExceeded(indexer.id, message);
+				return {
+					indexerId: indexer.id,
+					indexerName: indexer.name,
+					results: [],
+					searchTimeMs: Date.now() - startTime,
+					error: message
+				};
+			}
+
 			// Timeouts are caused by slow upstream aggregators (Prowlarr/Jackett gathering
 			// results across many trackers) and don't mean the indexer is broken.
-			// Only record a failure for actual errors, not search timeouts.
-			const isTimeout = message.toLowerCase().includes('timeout');
-			if (!isTimeout) {
+			// Aborts are caller-initiated cancellations (early-exit sibling variants,
+			// search race settled elsewhere), likewise not indexer health signals.
+			// Only record a failure for actual errors.
+			const lowerMessage = message.toLowerCase();
+			const isTimeoutOrAbort = lowerMessage.includes('timeout') || lowerMessage.includes('abort');
+			if (!isTimeoutOrAbort) {
 				await this.statusTracker.recordFailure(indexer.id, message);
 			}
 
@@ -1142,7 +1161,14 @@ export class SearchOrchestrator {
 
 			// Some Newznab providers over-constrain movie ID searches when q/year
 			// are present together. Retry once with IDs only before text fallback.
-			if (idReleases.length === 0 && isMovieSearch(criteria) && (criteria.query || criteria.year)) {
+			// Prowlarr ID searches already send only the ID tokens, so the retry
+			// would repeat the same request.
+			if (
+				idReleases.length === 0 &&
+				isMovieSearch(criteria) &&
+				(criteria.query || criteria.year) &&
+				indexer.definitionId !== 'prowlarr'
+			) {
 				const movieIdOnlyCriteria = {
 					...criteria,
 					query: undefined,
@@ -1162,7 +1188,12 @@ export class SearchOrchestrator {
 				}
 			}
 
-			if (idReleases.length > 0) {
+			// An ID answer ends the search only when it holds a release that actually
+			// matches; otherwise fall through to the title search and keep both.
+			if (
+				idReleases.length > 0 &&
+				(!hasTextFallbackSource || this.hasRelevantReleases(idReleases, criteria))
+			) {
 				// For anime episode searches, also run an absolute-format text search ("Show 02")
 				// even when the ID search succeeded.  ID search only finds releases catalogued as
 				// season=N/ep=N; releases titled with the absolute episode number are missed.
@@ -1187,29 +1218,6 @@ export class SearchOrchestrator {
 					}
 				}
 
-				// For TV season-only searches, meta-indexers sort by date so season packs
-				// (years old) are buried past position 100. A supplemental text search with
-				// "Complete" in the query narrows the server-side result set to pack-like
-				// titles only, bypassing the date-ordering problem entirely.
-				if (
-					isTvSearch(criteria) &&
-					criteria.season !== undefined &&
-					criteria.episode === undefined &&
-					hasTextFallbackSource
-				) {
-					const packReleases = await this.executeSeasonPackSupplementalSearch(
-						indexer,
-						criteria,
-						idReleases
-					);
-					if (packReleases.length > 0) {
-						return {
-							releases: [...idReleases, ...packReleases],
-							searchMethod: 'id'
-						};
-					}
-				}
-
 				return { releases: idReleases, searchMethod: 'id' };
 			}
 
@@ -1224,11 +1232,13 @@ export class SearchOrchestrator {
 					query: criteria.query,
 					hasSearchTitles: !!criteria.searchTitles?.length
 				},
-				'ID search returned no results, falling back to text search'
+				idReleases.length > 0
+					? 'ID search returned no matching results, falling back to text search'
+					: 'ID search returned no results, falling back to text search'
 			);
 
 			const fallbackReleases = await this.executeMultiTitleTextSearch(indexer, criteria);
-			return { releases: fallbackReleases, searchMethod: 'text' };
+			return { releases: [...idReleases, ...fallbackReleases], searchMethod: 'text' };
 		}
 
 		// Tier 2: Fall back to text search with multi-title support
@@ -1397,25 +1407,29 @@ export class SearchOrchestrator {
 		const BATCH_SIZE = 3;
 
 		for (let i = 0; i < variantCriteria.length; i += BATCH_SIZE) {
-			// Early exit: results from a previous batch mean the primary query
-			// already matched - skip remaining variants to avoid redundant requests.
-			// This prevents FlareSolverr-backed indexers from being overwhelmed
-			// by follow-up queries that can't finish within the per-indexer timeout.
-			if (allReleases.length > 0) {
+			// Early exit: a matching release from a previous batch means an earlier
+			// title already answered the search - skip remaining variants to avoid
+			// redundant requests. This prevents FlareSolverr-backed indexers from being
+			// overwhelmed by follow-up queries that can't finish within the per-indexer
+			// timeout. Unrelated results (a generic localized title hitting other
+			// content) don't count, so the next title still gets its turn.
+			if (this.hasRelevantReleases(allReleases, criteria)) {
 				break;
 			}
 
 			const batch = variantCriteria.slice(i, i + BATCH_SIZE);
 			// Movie variants are redundant reformulations of the same query
-			// (title±year), so the first variant that returns results answers the
-			// search - don't block on slower siblings stuck in Cloudflare bypass,
-			// or their stall eats the whole per-indexer timeout and discards the
-			// results already parsed (TV episode formats are alternative encodings,
-			// not nested queries, so they still merge every variant).
-			const earlyExitOnResults = isMovieSearch(criteria);
+			// (title±year), so the first variant that returns a matching release
+			// answers the search - don't block on slower siblings stuck in Cloudflare
+			// bypass, or their stall eats the whole per-indexer timeout and discards
+			// the results already parsed (TV episode formats are alternative
+			// encodings, not nested queries, so they still merge every variant).
+			const answersSearch = isMovieSearch(criteria)
+				? (releases: ReleaseResult[]) => this.hasRelevantReleases(releases, criteria)
+				: null;
 			const { settled } = await this.settleVariantBatch(
 				batch.map((vc) => indexer.search(vc)),
-				earlyExitOnResults
+				answersSearch
 			);
 
 			for (let j = 0; j < batch.length; j++) {
@@ -1518,79 +1532,6 @@ export class SearchOrchestrator {
 				logger.debug(
 					{ indexer: indexer.name, title, error: err instanceof Error ? err.message : String(err) },
 					'Anime absolute search variant failed'
-				);
-			}
-		}
-
-		return newReleases;
-	}
-
-	/**
-	 * Supplemental season-pack search for season-only TV queries.
-	 *
-	 * Meta-indexers (e.g. NZBHydra2) sort raw results by date descending, so a
-	 * standard ID search returns 100 individual episodes before any season pack
-	 * appears. Adding "Complete" to the keyword narrows the result set server-side:
-	 * underlying indexers only return titles that contain the word, which are almost
-	 * exclusively season packs. The small result count means date-sorting is no
-	 * longer a problem — all matching packs fit within the 100-result limit.
-	 */
-	private async executeSeasonPackSupplementalSearch(
-		indexer: IIndexer,
-		criteria: SearchCriteria,
-		seenReleases: ReleaseResult[]
-	): Promise<ReleaseResult[]> {
-		if (!isTvSearch(criteria) || criteria.season === undefined || criteria.episode !== undefined) {
-			return [];
-		}
-
-		const rawTitles =
-			criteria.searchTitles && criteria.searchTitles.length > 0
-				? criteria.searchTitles
-				: criteria.query
-					? [criteria.query]
-					: [];
-
-		if (rawTitles.length === 0) return [];
-
-		const seasonToken = `S${String(criteria.season).padStart(2, '0')}`;
-		const seenGuids = new Set(seenReleases.map((r) => r.guid));
-		const newReleases: ReleaseResult[] = [];
-
-		// Each keyword targets a distinct category of season pack title.
-		// Searches fire in parallel so adding more keywords costs no extra latency.
-		// Keep the set small: torrent trackers rate-limit aggressively, and broad
-		// substrings (e.g. "WEB" matches WEB-DL and WEBRip) cover several variants.
-		const PACK_KEYWORDS = ['Complete', 'BluRay', 'WEB', '2160p', '1080p'];
-
-		const title = rawTitles[0];
-		// Don't duplicate the season token when the incoming query already has one
-		// (e.g. query "Mr. Robot S03" would otherwise become "... S03 S03 1080p").
-		const baseQuery = new RegExp(`\\b${seasonToken}\\b`, 'i').test(title)
-			? title
-			: `${title} ${seasonToken}`;
-		const settled = await Promise.allSettled(
-			PACK_KEYWORDS.map((keyword) =>
-				indexer.search(createTextOnlyCriteria({ ...criteria, query: `${baseQuery} ${keyword}` }))
-			)
-		);
-
-		for (const [i, result] of settled.entries()) {
-			if (result.status === 'fulfilled') {
-				for (const r of result.value) {
-					if (!seenGuids.has(r.guid)) {
-						seenGuids.add(r.guid);
-						newReleases.push(r);
-					}
-				}
-			} else {
-				logger.debug(
-					{
-						indexer: indexer.name,
-						keyword: PACK_KEYWORDS[i],
-						error: result.reason instanceof Error ? result.reason.message : String(result.reason)
-					},
-					'Season pack supplemental search variant failed'
 				);
 			}
 		}
@@ -1733,6 +1674,16 @@ export class SearchOrchestrator {
 		const caps = indexer.capabilities;
 		const searchType = criteria.searchType;
 
+		// A user-configured "restrict to only these categories" setting narrows
+		// eligibility below what the indexer natively supports (e.g. an indexer
+		// that supports both Movies and TV, but the user restricted this
+		// instance to Movies only). Without this check the restriction only
+		// ever affected the outgoing cat= parameter, never whether the indexer
+		// was queried at all.
+		if (!restrictionAllowsSearchType(indexer.additionalCategories, searchType)) {
+			return false;
+		}
+
 		// Check categories match (movie indexer for movie search, etc.)
 		if (searchType === 'movie') {
 			const hasMovieCategories = indexerHasCategoriesForSearchType(caps.categories, 'movie');
@@ -1762,17 +1713,17 @@ export class SearchOrchestrator {
 	}
 
 	/**
-	 * Await a batch of variant searches. With `earlyExitOnResults`, resolve as
-	 * soon as any variant fulfills with non-empty results; slower siblings keep
-	 * running in the background and their outcomes are ignored (their rejections
-	 * stay handled, and the outer AbortController cancels them on timeout).
+	 * Await a batch of variant searches. With `answersSearch`, resolve as soon as
+	 * any variant fulfills with results it accepts; slower siblings keep running
+	 * in the background and their outcomes are ignored (their rejections stay
+	 * handled, and the outer AbortController cancels them on timeout).
 	 * Entries for still-in-flight variants remain unset when we resolve early.
 	 */
 	private settleVariantBatch(
 		promises: Promise<ReleaseResult[]>[],
-		earlyExitOnResults: boolean
+		answersSearch: ((releases: ReleaseResult[]) => boolean) | null
 	): Promise<{ settled: PromiseSettledResult<ReleaseResult[]>[] }> {
-		if (!earlyExitOnResults) {
+		if (!answersSearch) {
 			return Promise.allSettled(promises).then((settled) => ({ settled }));
 		}
 
@@ -1794,7 +1745,7 @@ export class SearchOrchestrator {
 						if (finished) return;
 						settled[index] = { status: 'fulfilled', value };
 						pending -= 1;
-						if (Array.isArray(value) && value.length > 0) {
+						if (Array.isArray(value) && answersSearch(value)) {
 							finished = true;
 							resolve({ settled });
 							return;
@@ -2906,6 +2857,19 @@ export class SearchOrchestrator {
 		if (distance > maxDistance) return 0;
 
 		return 1 - distance / maxLength;
+	}
+
+	/**
+	 * Whether any release actually matches the searched movie/series, using the
+	 * same ID/title/year check the final results go through. Decides when a
+	 * search step has answered the search: an unrelated hit (e.g. a generic
+	 * localized title matching other content) must not stop the remaining
+	 * titles from being searched. Non-movie/TV searches accept any result.
+	 */
+	private hasRelevantReleases(releases: ReleaseResult[], criteria: SearchCriteria): boolean {
+		if (releases.length === 0) return false;
+		if (!isMovieSearch(criteria) && !isTvSearch(criteria)) return true;
+		return this.filterByIdOrTitleMatch(releases, criteria).length > 0;
 	}
 
 	/**

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
-import { db } from '$lib/server/db/index.js';
+import { db } from '#lib/server/db/index.js';
 import {
 	libraries,
 	libraryRootFolders,
@@ -8,8 +8,8 @@ import {
 	movies,
 	rootFolders,
 	series
-} from '$lib/server/db/schema.js';
-import { NotFoundError, ValidationError } from '$lib/errors';
+} from '#lib/server/db/schema.js';
+import { NotFoundError, ValidationError } from '#lib/errors/index.js';
 
 export type LibraryMediaType = 'movie' | 'tv';
 export type LibraryMediaSubType = 'standard' | 'anime';

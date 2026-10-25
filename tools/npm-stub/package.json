@@ -1,0 +1,7 @@
+{
+	"name": "npm",
+	"version": "12.2.0",
+	"private": true,
+	"description": "Deliberate stub for the npm package; see README.md in this directory.",
+	"main": "index.js"
+}

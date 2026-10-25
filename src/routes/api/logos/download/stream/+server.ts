@@ -1,8 +1,8 @@
 import type { RequestHandler } from './$types';
-import { createSSEStream } from '$lib/server/sse';
-import { getLogoDownloadService } from '$lib/server/logos/LogoDownloadService';
-import type { LogoDownloadProgress } from '$lib/server/logos/LogoDownloadService';
-import { createChildLogger } from '$lib/logging';
+import { createSSEStream } from '#lib/server/sse.js';
+import { getLogoDownloadService } from '#lib/server/logos/LogoDownloadService.js';
+import type { LogoDownloadProgress } from '#lib/server/logos/LogoDownloadService.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LogosDownloadStreamApi', logDomain: 'system' });
 

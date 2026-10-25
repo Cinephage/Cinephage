@@ -3,12 +3,11 @@
  * PUT /api/livetv/lineup/[id]/backups/reorder - Reorder backup priorities
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { channelLineupService } from '$lib/server/livetv/lineup/ChannelLineupService';
-import { createChildLogger } from '$lib/logging';
-import { ValidationError } from '$lib/errors';
-import type { ReorderBackupsRequest } from '$lib/types/livetv';
+import { channelLineupService } from '#lib/server/livetv/lineup/ChannelLineupService.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { ValidationError } from '#lib/errors/index.js';
+import type { ReorderBackupsRequest } from '#lib/types/livetv.js';
 
 const logger = createChildLogger({ module: 'LiveTvLineupBackupsReorder', logDomain: 'livetv' });
 
@@ -22,7 +21,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		// Verify lineup item exists
 		const item = await channelLineupService.getChannelById(id);
 		if (!item) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: 'Lineup item not found'
@@ -46,14 +45,14 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 
 		// Return updated backups
 		const backups = await channelLineupService.getBackups(id);
-		return json({
+		return Response.json({
 			success: true,
 			backups
 		});
 	} catch (error) {
 		// Validation errors
 		if (error instanceof ValidationError) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: error.message,
@@ -63,7 +62,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			);
 		}
 		logger.error('[API] Failed to reorder backups', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to reorder backups'

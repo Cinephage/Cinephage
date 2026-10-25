@@ -1,12 +1,12 @@
 import type { DecisionStage, StageResult } from '../../types.js';
 import type { GrabDecisionContext, ExistingFile, UpgradeStatus } from './types.js';
-import { isUpgrade } from '$lib/server/scoring/scorer.js';
-import { buildExistingAttrs } from '$lib/server/scoring/utils.js';
+import { isUpgrade } from '#lib/server/scoring/scorer.js';
+import { buildExistingAttrs } from '#lib/server/scoring/utils.js';
 import {
 	effectiveBuckets,
 	isMultiQualityMode,
 	selectBestExistingFileInBucket
-} from '$lib/server/quality/buckets.js';
+} from '#lib/server/quality/buckets.js';
 
 export class UpgradeStage implements DecisionStage<GrabDecisionContext> {
 	name = 'upgrade';

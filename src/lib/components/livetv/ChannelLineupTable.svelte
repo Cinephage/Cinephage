@@ -5,7 +5,7 @@
 		ChannelCategory,
 		EpgProgram,
 		EpgProgramWithProgress
-	} from '$lib/types/livetv';
+	} from '#lib/types/livetv.js';
 
 	interface NowNextEntry {
 		now: EpgProgramWithProgress | null;

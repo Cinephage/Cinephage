@@ -5,8 +5,8 @@
  * row on first run, and compiles them into CompiledPatterns for the scanner.
  */
 
-import { db } from '$lib/server/db/index.js';
-import { libraryPatternConfig } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { libraryPatternConfig } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import {
@@ -17,7 +17,7 @@ import {
 	buildBonusPatterns,
 	type CompiledPatterns,
 	type PatternConfig
-} from '$lib/server/library/patterns/PatternRecognitionService.js';
+} from '#lib/server/library/patterns/PatternRecognitionService.js';
 
 // ---------------------------------------------------------------------------
 // Types

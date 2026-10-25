@@ -4,11 +4,10 @@
  * POST /api/livetv/portals/[id]/scan - Start a new scan
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getPortalScannerService } from '$lib/server/livetv/stalker';
-import { createChildLogger } from '$lib/logging';
-import { ValidationError } from '$lib/errors';
+import { getPortalScannerService } from '#lib/server/livetv/stalker/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { ValidationError } from '#lib/errors/index.js';
 import { z } from 'zod';
 
 const logger = createChildLogger({ module: 'LiveTvPortalScan', logDomain: 'livetv' });
@@ -82,7 +81,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 				break;
 		}
 
-		return json(
+		return Response.json(
 			{
 				success: true,
 				workerId: worker.id,
@@ -96,7 +95,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 
 		// Validation errors
 		if (error instanceof ValidationError) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: error.message,
@@ -110,7 +109,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		const message = error instanceof Error ? error.message : String(error);
 
 		if (message.includes('not found')) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: 'Portal not found'
@@ -120,7 +119,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		}
 
 		if (message.includes('too large') || message.includes('Maximum')) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: message
@@ -130,7 +129,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		}
 
 		if (message.includes('concurrency') || message.includes('Concurrency')) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: 'Too many scans running. Please wait for an existing scan to complete.'
@@ -139,7 +138,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 			);
 		}
 
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: message || 'Failed to start scan'

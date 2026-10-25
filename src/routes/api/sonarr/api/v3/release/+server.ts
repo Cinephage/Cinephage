@@ -1,9 +1,8 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { requireArrCompatEnabled } from '$lib/server/arr/requireArrCompatEnabled.js';
-import { searchReleasesForSeries, grabRelease } from '$lib/server/arr/release.js';
-import { withForwardedApiKey } from '$lib/server/arr/internalFetch.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { requireArrCompatEnabled } from '#lib/server/arr/requireArrCompatEnabled.js';
+import { searchReleasesForSeries, grabRelease } from '#lib/server/arr/release.js';
+import { withForwardedApiKey } from '#lib/server/arr/internalFetch.js';
 
 /** GET /api/sonarr/api/v3/release?seriesId=...&episodeId=...&seasonNumber=... */
 export const GET: RequestHandler = async (event) => {
@@ -15,14 +14,14 @@ export const GET: RequestHandler = async (event) => {
 
 	const { url } = event;
 	const seriesId = Number.parseInt(url.searchParams.get('seriesId') ?? '', 10);
-	if (Number.isNaN(seriesId)) return json([]);
+	if (Number.isNaN(seriesId)) return Response.json([]);
 
 	const episodeIdParam = url.searchParams.get('episodeId');
 	const episodeArrId = episodeIdParam ? Number.parseInt(episodeIdParam, 10) : undefined;
 	const seasonNumberParam = url.searchParams.get('seasonNumber');
 	const seasonNumber = seasonNumberParam ? Number.parseInt(seasonNumberParam, 10) : undefined;
 
-	return json(
+	return Response.json(
 		await searchReleasesForSeries(withForwardedApiKey(event), seriesId, {
 			episodeArrId,
 			seasonNumber
@@ -40,5 +39,5 @@ export const POST: RequestHandler = async (event) => {
 
 	const body = await event.request.json().catch(() => ({}));
 	const result = await grabRelease(withForwardedApiKey(event), 'Sonarr', body);
-	return json(result.body, { status: result.status });
+	return Response.json(result.body, { status: result.status });
 };

@@ -1,10 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestDb, destroyTestDb } from '../../../../test/db-helper';
-import { DEFAULT_NAMING_PRESET_SELECTION } from '$lib/naming/editor-state';
+import { DEFAULT_NAMING_PRESET_SELECTION } from '#lib/naming/editor-state.js';
 
 const testDb = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -15,7 +15,7 @@ vi.mock('$lib/server/db', () => ({
 }));
 
 const { namingSettingsService } = await import('./NamingSettingsService');
-const { namingSettings } = await import('$lib/server/db/schema');
+const { namingSettings } = await import('#lib/server/db/schema.js');
 
 describe('NamingSettingsService', () => {
 	beforeEach(() => {

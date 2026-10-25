@@ -1,7 +1,6 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { monitoringScheduler } from '$lib/server/monitoring/MonitoringScheduler.js';
-import { createChildLogger } from '$lib/logging';
+import { monitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'MonitoringStatusApi', logDomain: 'monitoring' });
 
@@ -13,7 +12,7 @@ export const GET: RequestHandler = async () => {
 	try {
 		const status = await monitoringScheduler.getStatus();
 
-		return json({
+		return Response.json({
 			success: true,
 			...status
 		});
@@ -22,7 +21,7 @@ export const GET: RequestHandler = async () => {
 			'[API] Failed to get monitoring status',
 			error instanceof Error ? error : undefined
 		);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: 'Failed to get monitoring status'

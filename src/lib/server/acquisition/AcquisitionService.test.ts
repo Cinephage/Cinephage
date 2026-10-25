@@ -7,11 +7,11 @@ import {
 	downloadQueue,
 	movies,
 	series
-} from '$lib/server/db/schema.js';
+} from '#lib/server/db/schema.js';
 
 const testDb = createTestDb();
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -353,5 +353,118 @@ describe('AcquisitionService', () => {
 		expect(
 			movieIntent({ qualitySlot: '2160p', identity: { kind: 'info_hash', value: 'next-2' } }).ok
 		).toBe(true);
+	});
+
+	describe('releaseUnmatchedQueueItems', () => {
+		beforeEach(() => {
+			resetDb();
+			testDb.db
+				.insert(downloadClients)
+				.values({
+					id: 'client-1',
+					name: 'qBittorrent',
+					implementation: 'qbittorrent',
+					host: 'localhost',
+					port: 8080
+				})
+				.run();
+		});
+
+		function insertQueueRow(overrides: Partial<typeof downloadQueue.$inferInsert> = {}) {
+			const id = overrides.id ?? 'queue-1';
+			testDb.db
+				.insert(downloadQueue)
+				.values({
+					id,
+					downloadClientId: 'client-1',
+					downloadId: `dl-${id}`,
+					title: 'Some.Release.2026',
+					protocol: 'torrent',
+					movieId: 'movie-1',
+					status: 'seeding-imported',
+					...overrides
+				})
+				.run();
+			return id;
+		}
+
+		// Issue: unmatching a movie/series previously inferred "came from
+		// track/enroll" from indexerId being null, which also matches a
+		// legitimate arr_push-pushed grab (releasePush.ts never sets indexerId
+		// either) - releaseUnmatchedQueueItems must only act on rows explicitly
+		// stamped with `origin`.
+		it('releases rows stamped with origin=unmatched_track or unmatched_enroll', () => {
+			insertQueueRow({ id: 'queue-track', origin: 'unmatched_track' });
+			insertQueueRow({ id: 'queue-enroll', origin: 'unmatched_enroll' });
+
+			const result = acquisitionService.releaseUnmatchedQueueItems(
+				{ movieId: 'movie-1' },
+				'files unmatched from library'
+			);
+
+			expect(result).toEqual({ released: 2, heldBack: 0 });
+			expect(testDb.db.select().from(downloadQueue).all()).toHaveLength(0);
+		});
+
+		it('never releases a legitimate arr_push-shaped row (indexerId null, origin null)', () => {
+			insertQueueRow({ id: 'queue-arr-push', origin: null, indexerId: null, protocol: 'torrent' });
+
+			const result = acquisitionService.releaseUnmatchedQueueItems(
+				{ movieId: 'movie-1' },
+				'files unmatched from library'
+			);
+
+			expect(result).toEqual({ released: 0, heldBack: 0 });
+			expect(testDb.db.select().from(downloadQueue).all()).toHaveLength(1);
+		});
+
+		it('leaves importing/postprocessing rows alone instead of deleting them mid-import', () => {
+			insertQueueRow({ id: 'queue-importing', origin: 'unmatched_enroll', status: 'importing' });
+			insertQueueRow({
+				id: 'queue-postprocessing',
+				origin: 'unmatched_enroll',
+				status: 'postprocessing'
+			});
+
+			const result = acquisitionService.releaseUnmatchedQueueItems(
+				{ movieId: 'movie-1' },
+				'files unmatched from library'
+			);
+
+			expect(result).toEqual({ released: 0, heldBack: 2 });
+			expect(testDb.db.select().from(downloadQueue).all()).toHaveLength(2);
+		});
+
+		it('releases rows in other statuses (queued, downloading, failed, stalled)', () => {
+			for (const status of ['queued', 'downloading', 'failed', 'stalled'] as const) {
+				insertQueueRow({ id: `queue-${status}`, origin: 'unmatched_track', status });
+			}
+
+			const result = acquisitionService.releaseUnmatchedQueueItems(
+				{ movieId: 'movie-1' },
+				'files unmatched from library'
+			);
+
+			expect(result).toEqual({ released: 4, heldBack: 0 });
+		});
+
+		it('scopes by seriesId when given one, independent of movie-scoped rows', () => {
+			insertQueueRow({ id: 'queue-movie', origin: 'unmatched_track', movieId: 'movie-1' });
+			insertQueueRow({
+				id: 'queue-series',
+				origin: 'unmatched_track',
+				movieId: null,
+				seriesId: 'series-1'
+			});
+
+			const result = acquisitionService.releaseUnmatchedQueueItems(
+				{ seriesId: 'series-1' },
+				'files unmatched from library'
+			);
+
+			expect(result).toEqual({ released: 1, heldBack: 0 });
+			const remaining = testDb.db.select().from(downloadQueue).all();
+			expect(remaining.map((r) => r.id)).toEqual(['queue-movie']);
+		});
 	});
 });

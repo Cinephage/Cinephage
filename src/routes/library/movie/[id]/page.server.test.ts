@@ -6,11 +6,11 @@ import {
 	movies,
 	rootFolders,
 	subtitles
-} from '$lib/server/db/schema.js';
+} from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -20,7 +20,7 @@ vi.mock('$lib/server/db/index.js', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/tmdb.js', () => ({
+vi.mock('#lib/server/tmdb.js', () => ({
 	tmdb: {
 		getMovieReleaseInfo: vi.fn().mockResolvedValue(null),
 		getMovie: vi.fn().mockResolvedValue(null)
@@ -34,7 +34,7 @@ type MovieLoadFn = (event: LoadEvent) => Promise<import('./+page.server').Librar
 // with a minimal event stub.
 const loadFn = load as unknown as MovieLoadFn;
 const { LanguageSettingsService } =
-	await import('$lib/server/subtitles/services/LanguageSettingsService.js');
+	await import('#lib/server/subtitles/services/LanguageSettingsService.js');
 
 const LANGUAGE_PROFILE_ID = 'c0000000-0000-4000-8000-000000000001';
 const MOVIE_ID = 'movie-loader-1';

@@ -3,14 +3,13 @@
  * List all items in the download queue
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { db } from '$lib/server/db';
-import { downloadQueue, movies, series, downloadClients } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { downloadQueue, movies, series, downloadClients } from '#lib/server/db/schema.js';
 import { eq, not, inArray, and, isNull, isNotNull } from 'drizzle-orm';
-import { downloadMonitor } from '$lib/server/downloadClients/monitoring';
-import type { QueueItem, QueueItemWithMedia, QueueStatus } from '$lib/types/queue';
-import { redactUrl } from '$lib/server/utils/urlSecurity';
+import { downloadMonitor } from '#lib/server/downloadClients/monitoring/index.js';
+import type { QueueItem, QueueItemWithMedia, QueueStatus } from '#lib/types/queue.js';
+import { redactUrl } from '#lib/server/utils/urlSecurity.js';
 
 /**
  * Terminal statuses (items that are done processing)
@@ -149,7 +148,7 @@ export const GET: RequestHandler = async ({ url }) => {
 	// Get stats
 	const stats = await downloadMonitor.getStats();
 
-	return json({
+	return Response.json({
 		success: true,
 		data: {
 			items,

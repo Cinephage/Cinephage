@@ -79,4 +79,40 @@ describe('tv-episode-resolver', () => {
 			})[0].episodeNumber
 		).toBe(18);
 	});
+
+	it('maps absolute numbers onto the single regular season when absolute metadata is absent (Cosmos shape)', () => {
+		// Live TMDB 1430: season 0 has 14 specials (incl. E99), season 1 has
+		// E01-E13. "Episode 13 - <title>" parses as absolute 13.
+		const episodes = [
+			{ seasonNumber: 0, episodeNumber: 1, absoluteEpisodeNumber: null, airDate: '1989-04-18' },
+			{ seasonNumber: 0, episodeNumber: 99, absoluteEpisodeNumber: null, airDate: null },
+			...Array.from({ length: 13 }, (_, i) => ({
+				seasonNumber: 1,
+				episodeNumber: i + 1,
+				absoluteEpisodeNumber: null,
+				airDate: `1980-${String((i % 12) + 1).padStart(2, '0')}-01`
+			}))
+		];
+
+		const matches = matchEpisodesByIdentifier(episodes, {
+			numbering: 'absolute',
+			absoluteEpisode: 13
+		});
+
+		expect(matches).toHaveLength(1);
+		expect(matches[0].seasonNumber).toBe(1);
+		expect(matches[0].episodeNumber).toBe(13);
+	});
+
+	it('does not map absolute numbers for series with multiple regular seasons', () => {
+		const episodes = [
+			{ seasonNumber: 0, episodeNumber: 1, absoluteEpisodeNumber: null, airDate: null },
+			{ seasonNumber: 1, episodeNumber: 1, absoluteEpisodeNumber: null, airDate: '1997-04-01' },
+			{ seasonNumber: 2, episodeNumber: 1, absoluteEpisodeNumber: null, airDate: '1998-04-01' }
+		];
+
+		expect(
+			matchEpisodesByIdentifier(episodes, { numbering: 'absolute', absoluteEpisode: 30 })
+		).toHaveLength(0);
+	});
 });

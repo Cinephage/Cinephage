@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { AlertCircle, ChevronDown, ChevronUp, Loader2, Plus, Trash2, Tv } from 'lucide-svelte';
-	import type { ChannelBackupLink } from '$lib/types/livetv';
-	import * as m from '$lib/paraglide/messages.js';
+	import { AlertCircle, ChevronDown, ChevronUp, Loader2, Plus, Trash2, Tv } from '@lucide/svelte';
+	import type { ChannelBackupLink } from '#lib/types/livetv.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
 		open: boolean;

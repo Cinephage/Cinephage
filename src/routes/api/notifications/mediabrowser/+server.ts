@@ -3,12 +3,11 @@
  * POST /api/notifications/mediabrowser - Create a new server
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getMediaBrowserManager } from '$lib/server/notifications/mediabrowser';
-import { mediaBrowserServerCreateSchema } from '$lib/validation/schemas';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { parseBody } from '$lib/server/api/validate.js';
+import { getMediaBrowserManager } from '#lib/server/notifications/mediabrowser/index.js';
+import { mediaBrowserServerCreateSchema } from '#lib/validation/schemas.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { parseBody } from '#lib/server/api/validate.js';
 
 /**
  * GET /api/notifications/mediabrowser
@@ -17,7 +16,7 @@ import { parseBody } from '$lib/server/api/validate.js';
 export const GET: RequestHandler = async () => {
 	const manager = getMediaBrowserManager();
 	const servers = await manager.getServers();
-	return json(servers);
+	return Response.json(servers);
 };
 
 /**
@@ -44,7 +43,7 @@ export const POST: RequestHandler = async (event) => {
 		});
 
 		if (!testResult.success) {
-			return json(
+			return Response.json(
 				{
 					error: testResult.error
 						? `Connection test failed: ${testResult.error}`
@@ -57,5 +56,5 @@ export const POST: RequestHandler = async (event) => {
 
 	const created = await manager.createServer(result);
 	if (testResult) await manager.recordTestResult(created.id, testResult);
-	return json({ success: true, server: created });
+	return Response.json({ success: true, server: created });
 };

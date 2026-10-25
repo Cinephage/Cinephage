@@ -1,23 +1,22 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getSubtitleSearchService } from '$lib/server/subtitles/services/SubtitleSearchService';
-import { LanguageProfileService } from '$lib/server/subtitles/services/LanguageProfileService';
-import { normalizeLanguageCode } from '$lib/shared/languages';
+import { getSubtitleSearchService } from '#lib/server/subtitles/services/SubtitleSearchService.js';
+import { LanguageProfileService } from '#lib/server/subtitles/services/LanguageProfileService.js';
+import { normalizeLanguageCode } from '#lib/shared/languages.js';
 import {
 	DEFAULT_MINIMUM_SCORE,
 	type EffectiveSubtitleRequirements
-} from '$lib/shared/language-profile';
+} from '#lib/shared/language-profile.js';
 import {
 	selectBestCandidate,
 	type CandidateRejectionReason,
 	type SearchResultLike
-} from '$lib/server/subtitles/acquisition';
-import { subtitleSearchSchema } from '$lib/validation/schemas';
-import { db } from '$lib/server/db';
-import { movies, episodes, series } from '$lib/server/db/schema';
+} from '#lib/server/subtitles/acquisition.js';
+import { subtitleSearchSchema } from '#lib/validation/schemas.js';
+import { db } from '#lib/server/db/index.js';
+import { movies, episodes, series } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import type { SubtitleSearchCriteria } from '$lib/server/subtitles/types';
-import { parseBody } from '$lib/server/api/validate.js';
+import type { SubtitleSearchCriteria } from '#lib/server/subtitles/types.js';
+import { parseBody } from '#lib/server/api/validate.js';
 
 /** Why no result would be auto-downloaded for the effective requirements. */
 interface RejectionSummary {
@@ -100,7 +99,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		});
 
 		if (!movie) {
-			return json({ error: 'Movie not found' }, { status: 404 });
+			return Response.json({ error: 'Movie not found' }, { status: 404 });
 		}
 
 		// Resolve languages and the rejection summary from the effective
@@ -123,7 +122,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			excludeHearingImpaired: validated.excludeHearingImpaired
 		});
 
-		return json({
+		return Response.json({
 			...results,
 			languages,
 			...summarizeRejections(results.results, effective)
@@ -137,7 +136,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		});
 
 		if (!episode) {
-			return json({ error: 'Episode not found' }, { status: 404 });
+			return Response.json({ error: 'Episode not found' }, { status: 404 });
 		}
 
 		const seriesData = await db.query.series.findFirst({
@@ -145,7 +144,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		});
 
 		if (!seriesData) {
-			return json({ error: 'Series not found' }, { status: 404 });
+			return Response.json({ error: 'Series not found' }, { status: 404 });
 		}
 
 		// Resolve languages and the rejection summary from the effective
@@ -168,7 +167,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			excludeHearingImpaired: validated.excludeHearingImpaired
 		});
 
-		return json({
+		return Response.json({
 			...results,
 			languages,
 			...summarizeRejections(results.results, effective)
@@ -177,7 +176,10 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	// Manual search with provided parameters
 	if (!validated.title) {
-		return json({ error: 'Either movieId, episodeId, or title is required' }, { status: 400 });
+		return Response.json(
+			{ error: 'Either movieId, episodeId, or title is required' },
+			{ status: 400 }
+		);
 	}
 
 	const languages = validated.languages?.length ? validated.languages : ['en'];
@@ -204,5 +206,5 @@ export const POST: RequestHandler = async ({ request }) => {
 	);
 
 	// Manual title search has no owning media item, so no effective profile.
-	return json({ ...results, languages });
+	return Response.json({ ...results, languages });
 };

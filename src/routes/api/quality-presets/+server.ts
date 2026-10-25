@@ -1,8 +1,6 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { createChildLogger } from '$lib/logging';
-
-import { requireAdmin } from '$lib/server/auth/authorization.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 
 const logger = createChildLogger({ module: 'QualityPresetsApi', logDomain: 'system' });
 
@@ -31,7 +29,7 @@ function logDeprecation(method: string) {
  */
 export const GET: RequestHandler = async () => {
 	logDeprecation('GET');
-	return json(
+	return Response.json(
 		{
 			success: false,
 			error: DEPRECATION_MESSAGE,
@@ -51,7 +49,7 @@ export const POST: RequestHandler = async (event) => {
 	if (authError) return authError;
 
 	logDeprecation('POST');
-	return json(
+	return Response.json(
 		{
 			success: false,
 			error: DEPRECATION_MESSAGE,
@@ -70,7 +68,7 @@ export const PUT: RequestHandler = async (event) => {
 	if (authError) return authError;
 
 	logDeprecation('PUT');
-	return json(
+	return Response.json(
 		{
 			success: false,
 			error: DEPRECATION_MESSAGE,
@@ -89,7 +87,7 @@ export const DELETE: RequestHandler = async (event) => {
 	if (authError) return authError;
 
 	logDeprecation('DELETE');
-	return json(
+	return Response.json(
 		{
 			success: false,
 			error: DEPRECATION_MESSAGE,

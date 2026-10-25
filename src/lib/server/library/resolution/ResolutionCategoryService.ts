@@ -7,8 +7,8 @@
  * IDs are immutable — quality profiles reference them.
  */
 
-import { db } from '$lib/server/db/index.js';
-import { resolutionCategories } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { resolutionCategories } from '#lib/server/db/schema.js';
 import { eq, asc } from 'drizzle-orm';
 
 export type ResCategory = typeof resolutionCategories.$inferSelect;

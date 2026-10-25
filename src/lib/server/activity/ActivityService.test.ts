@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { UnifiedActivity } from '$lib/types/activity';
+import type { UnifiedActivity } from '#lib/types/activity.js';
 import { ActivityService } from './ActivityService';
 import type { DownloadHistoryRecord, DownloadQueueRecord } from './types';
 import { applyFilters, sortActivities, buildActivitySummary } from './activity-filters.js';
 import { ActivityDeduplicationService } from './ActivityDeduplicationService.js';
+import { buildBlocklistIndex } from './activity-transformers.js';
 
 function createActivity(id: string, overrides: Partial<UnifiedActivity> = {}): UnifiedActivity {
 	return {
@@ -59,6 +60,7 @@ function createHistoryRecord(
 		quality: null,
 		releaseGroup: null,
 		importedPath: null,
+		transferMode: null,
 		movieFileId: null,
 		episodeFileIds: null,
 		grabbedAt: '2026-02-09T00:00:00.000Z',
@@ -98,6 +100,7 @@ function createQueueRecord(
 		clientDownloadPath: null,
 		outputPath: null,
 		importedPath: null,
+		transferMode: null,
 		quality: null,
 		addedAt: '2026-02-09T00:00:00.000Z',
 		startedAt: null,
@@ -111,6 +114,7 @@ function createQueueRecord(
 		isUpgrade: false,
 		importFailed: false,
 		releaseGroup: null,
+		origin: null,
 		...overrides
 	};
 }
@@ -405,6 +409,103 @@ describe('ActivityService failed activity retry linking', () => {
 		);
 
 		expect(activity).toBeNull();
+	});
+});
+
+describe('ActivityService blocklist surfacing (issue #618)', () => {
+	it('marks a failed history activity as blocklisted and adds a timeline entry', () => {
+		const service = ActivityService.getInstance();
+		const history = createHistoryRecord('history-blocklisted', {
+			status: 'failed',
+			title: 'Some.Release.2025.1080p',
+			movieId: 'movie-1',
+			statusReason: 'Download client reported an error'
+		});
+		const blocklistIndex = buildBlocklistIndex([
+			{
+				title: 'Some.Release.2025.1080p',
+				movieId: 'movie-1',
+				seriesId: null,
+				createdAt: '2026-02-09T01:00:00.000Z',
+				reason: 'download_failed',
+				expiresAt: null
+			}
+		]);
+
+		const activity = service.transformHistoryItem(
+			history,
+			{ movies: new Map(), series: new Map(), episodes: new Map() },
+			[],
+			undefined,
+			blocklistIndex
+		);
+
+		expect(activity).not.toBeNull();
+		expect(activity?.isBlocklisted).toBe(true);
+		expect(activity?.timeline).toContainEqual(
+			expect.objectContaining({ type: 'blocklisted', timestamp: '2026-02-09T01:00:00.000Z' })
+		);
+	});
+
+	it('does not mark a non-blocklisted failed history activity', () => {
+		const service = ActivityService.getInstance();
+		const history = createHistoryRecord('history-not-blocklisted', {
+			status: 'failed',
+			title: 'Some.Other.Release.2025.1080p',
+			movieId: 'movie-2'
+		});
+		const blocklistIndex = buildBlocklistIndex([
+			{
+				title: 'Some.Release.2025.1080p',
+				movieId: 'movie-1',
+				seriesId: null,
+				createdAt: '2026-02-09T01:00:00.000Z',
+				reason: 'download_failed',
+				expiresAt: null
+			}
+		]);
+
+		const activity = service.transformHistoryItem(
+			history,
+			{ movies: new Map(), series: new Map(), episodes: new Map() },
+			[],
+			undefined,
+			blocklistIndex
+		);
+
+		expect(activity?.isBlocklisted).toBe(false);
+		expect(activity?.timeline.some((e) => e.type === 'blocklisted')).toBe(false);
+	});
+
+	it('treats an expired blocklist entry as no longer blocklisted', () => {
+		const service = ActivityService.getInstance();
+		const history = createHistoryRecord('history-blocklist-expired', {
+			status: 'failed',
+			title: 'Some.Release.2025.1080p',
+			movieId: 'movie-1'
+		});
+		const blocklistIndex = buildBlocklistIndex([
+			{
+				title: 'Some.Release.2025.1080p',
+				movieId: 'movie-1',
+				seriesId: null,
+				createdAt: '2026-01-01T00:00:00.000Z',
+				reason: 'download_failed',
+				expiresAt: '2026-01-02T00:00:00.000Z'
+			}
+		]);
+
+		const activity = service.transformHistoryItem(
+			history,
+			{ movies: new Map(), series: new Map(), episodes: new Map() },
+			[],
+			undefined,
+			blocklistIndex
+		);
+
+		expect(activity?.isBlocklisted).toBe(false);
+		// The historical event still shows, even though the entry has since expired.
+		expect(activity?.timeline.some((e) => e.type === 'blocklisted')).toBe(true);
 	});
 });
 

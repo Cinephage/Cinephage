@@ -1,8 +1,8 @@
-import { db } from '$lib/server/db';
-import { settings } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { settings } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
-import { fileManagementSchema, type FileManagementSettings } from '$lib/validation/schemas.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { fileManagementSchema, type FileManagementSettings } from '#lib/validation/schemas.js';
 
 const logger = createChildLogger({ module: 'FileManagement' });
 const SETTINGS_KEY = 'file_management';

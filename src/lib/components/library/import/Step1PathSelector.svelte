@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { SvelteSet } from 'svelte/reactivity';
-	import * as m from '$lib/paraglide/messages.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import {
 		ArrowUp,
 		Check,
@@ -12,7 +12,7 @@
 		Search,
 		Sparkles,
 		X
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 
 	type MediaType = 'movie' | 'tv';
 

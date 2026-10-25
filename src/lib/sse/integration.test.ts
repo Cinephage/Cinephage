@@ -6,11 +6,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type { TaskStreamEvents } from '$lib/types/sse/events/task-events.js';
-import type { AccountStreamEvents } from '$lib/types/sse/events/livetv-account-events.js';
-import type { ChannelStreamEvents } from '$lib/types/sse/events/livetv-channel-events.js';
-import type { EpgStreamEvents } from '$lib/types/sse/events/livetv-epg-events.js';
-import type { ActivityStreamEvents } from '$lib/types/sse/events/activity-events.js';
+import type { TaskStreamEvents } from '#lib/types/sse/events/task-events.js';
+import type { AccountStreamEvents } from '#lib/types/sse/events/livetv-account-events.js';
+import type { ChannelStreamEvents } from '#lib/types/sse/events/livetv-channel-events.js';
+import type { EpgStreamEvents } from '#lib/types/sse/events/livetv-epg-events.js';
+import type { ActivityStreamEvents } from '#lib/types/sse/events/activity-events.js';
 
 describe('SSE Event Type Validation', () => {
 	describe('TaskStreamEvents', () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../../test/db-helper';
-import { movies, series, episodes, languageProfiles } from '$lib/server/db/schema';
+import { movies, series, episodes, languageProfiles } from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 
@@ -47,7 +47,7 @@ const { searchService, downloadService, profileService } = vi.hoisted(() => {
 	return { searchService, downloadService, profileService };
 });
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -57,7 +57,7 @@ vi.mock('$lib/server/db', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -75,7 +75,7 @@ const mockLogger = vi.hoisted(() => ({
 	child: vi.fn().mockReturnThis()
 }));
 
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	logger: mockLogger,
 	createChildLogger: vi.fn(() => mockLogger)
 }));
@@ -98,7 +98,7 @@ vi.mock('./LanguageProfileService.js', async (importOriginal) => {
 	};
 });
 
-vi.mock('$lib/server/monitoring/specifications/MonitoredSpecification.js', () => ({
+vi.mock('#lib/server/monitoring/specifications/MonitoredSpecification.js', () => ({
 	isMovieMonitored: vi.fn().mockResolvedValue(true)
 }));
 

@@ -1,4 +1,4 @@
-import type { CinephageSubsystemUpdate, CinephageModuleUpdate } from '$lib/validation/schemas.js';
+import type { CinephageSubsystemUpdate, CinephageModuleUpdate } from '#lib/validation/schemas.js';
 
 import { apiGet, apiPost, apiPut } from './client.js';
 

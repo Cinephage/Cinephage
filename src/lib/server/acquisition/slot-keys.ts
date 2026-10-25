@@ -1,5 +1,5 @@
-import { resolveMovieMultiQuality } from '$lib/server/quality/movie-buckets.js';
-import type { Resolution } from '$lib/server/indexers/parser/types.js';
+import { resolveMovieMultiQuality } from '#lib/server/quality/movie-buckets.js';
+import type { Resolution } from '#lib/server/indexers/parser/types.js';
 
 /**
  * Compute the reservation quality-slot for a movie grab.

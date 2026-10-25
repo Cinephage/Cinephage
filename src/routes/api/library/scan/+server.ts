@@ -1,13 +1,12 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { db } from '$lib/server/db/index.js';
-import { libraryScanHistory, rootFolders } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { libraryScanHistory, rootFolders } from '#lib/server/db/schema.js';
 import { eq, desc } from 'drizzle-orm';
-import { libraryJobService } from '$lib/server/library/jobs/LibraryJobService.js';
-import { diskScanService } from '$lib/server/library/index.js';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { parseOptionalBody } from '$lib/server/api/validate.js';
-import { libraryScanSchema } from '$lib/validation/schemas';
+import { libraryJobService } from '#lib/server/library/jobs/LibraryJobService.js';
+import { diskScanService } from '#lib/server/library/index.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { parseOptionalBody } from '#lib/server/api/validate.js';
+import { libraryScanSchema } from '#lib/validation/schemas.js';
 
 /**
  * GET /api/library/scan
@@ -42,7 +41,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		? await query.where(eq(libraryScanHistory.rootFolderId, rootFolderId))
 		: await query;
 
-	return json({
+	return Response.json({
 		success: true,
 		history
 	});
@@ -70,7 +69,7 @@ export const POST: RequestHandler = async (event) => {
 
 	if (rootFolderId) {
 		const job = await libraryJobService.enqueueRootFolderScan(rootFolderId);
-		return json({
+		return Response.json({
 			success: true,
 			message: `Scan queued for root folder ${rootFolderId}`,
 			jobId: job.id,
@@ -78,7 +77,7 @@ export const POST: RequestHandler = async (event) => {
 		});
 	} else if (fullScan) {
 		const job = await libraryJobService.enqueueFullScan();
-		return json({
+		return Response.json({
 			success: true,
 			message: 'Full library scan queued',
 			jobId: job.id,
@@ -86,7 +85,7 @@ export const POST: RequestHandler = async (event) => {
 		});
 	} else {
 		const job = await libraryJobService.enqueueFullScan();
-		return json({
+		return Response.json({
 			success: true,
 			message: 'Library scan queued',
 			jobId: job.id,

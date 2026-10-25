@@ -32,9 +32,9 @@
 import { getStreamUrlCache } from './StreamUrlCache.js';
 import { getLiveTvStreamService } from './LiveTvStreamService.js';
 import { createHlsToTsStream } from './HlsToTsConverter.js';
-import { getBaseUrlAsync } from '$lib/server/streaming/url';
-import { rewriteHlsPlaylistUrls } from '$lib/server/streaming/utils/hls-rewrite.js';
-import { createChildLogger } from '$lib/logging';
+import { getBaseUrlAsync } from '#lib/server/streaming/url.js';
+import { rewriteHlsPlaylistUrls } from '#lib/server/streaming/utils/hls-rewrite.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'livetv' as const });
 

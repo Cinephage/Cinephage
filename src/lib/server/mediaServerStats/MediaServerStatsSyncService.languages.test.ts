@@ -7,7 +7,7 @@ const managerMocks = vi.hoisted(() => ({
 	testServer: vi.fn()
 }));
 
-vi.mock('$lib/server/notifications/mediabrowser/MediaBrowserManager.js', () => ({
+vi.mock('#lib/server/notifications/mediabrowser/MediaBrowserManager.js', () => ({
 	getMediaBrowserManager: () => ({
 		getEnabledServers: managerMocks.getEnabledServers,
 		testServer: managerMocks.testServer
@@ -28,7 +28,7 @@ vi.mock('./providers/index.js', () => ({
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../test/db-helper.js';
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -38,7 +38,7 @@ vi.mock('$lib/server/db', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -50,7 +50,7 @@ vi.mock('$lib/server/db/index.js', () => ({
 
 import { randomUUID } from 'node:crypto';
 import { MediaServerStatsSyncService } from './MediaServerStatsSyncService.js';
-import { mediaBrowserServers, mediaServerSyncedItems } from '$lib/server/db/schema';
+import { mediaBrowserServers, mediaServerSyncedItems } from '#lib/server/db/schema.js';
 import type { SyncedMediaItem, SyncResult } from './types.js';
 import { eq } from 'drizzle-orm';
 

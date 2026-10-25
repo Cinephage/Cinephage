@@ -1,8 +1,8 @@
 import type { ReleaseResult, EnhancedReleaseResult } from '../types';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'indexers' as const });
-import { extractInfoHash } from '$lib/server/downloadClients/utils/hashUtils';
+import { extractInfoHash } from '#lib/server/downloadClients/utils/hashUtils.js';
 
 /**
  * Result of deduplication operation.

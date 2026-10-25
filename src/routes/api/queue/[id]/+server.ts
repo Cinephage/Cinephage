@@ -1,19 +1,20 @@
-import { json, error } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { db } from '$lib/server/db';
+import { db } from '#lib/server/db/index.js';
 import {
 	downloadQueue,
 	downloadHistory,
 	movies,
 	series,
 	downloadClients
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 import { and, desc, eq } from 'drizzle-orm';
-import { getDownloadClientManager } from '$lib/server/downloadClients/DownloadClientManager';
-import { downloadMonitor } from '$lib/server/downloadClients/monitoring';
-import { upsertQueueTombstoneFromQueueItem } from '$lib/server/downloadClients/monitoring/QueueTombstoneService';
-import { acquisitionService } from '$lib/server/acquisition/AcquisitionService.js';
-import { createChildLogger } from '$lib/logging';
+import { getDownloadClientManager } from '#lib/server/downloadClients/DownloadClientManager.js';
+import { downloadMonitor } from '#lib/server/downloadClients/monitoring/index.js';
+import { upsertQueueTombstoneFromQueueItem } from '#lib/server/downloadClients/monitoring/QueueTombstoneService.js';
+import { acquisitionService } from '#lib/server/acquisition/AcquisitionService.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { requireAdminLocals } from '#lib/server/auth/authorization.js';
 
 const logger = createChildLogger({ module: 'QueueItemApi', logDomain: 'downloads' });
 
@@ -143,7 +144,12 @@ async function removeDownloadWithTimeout(
 /**
  * GET - Get a single queue item by ID
  */
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, locals }) => {
+	// Defense-in-depth: the hooks viewer gate confines this route; this
+	// guard keeps it admin-only even if the gate is ever refactored.
+	const authError = requireAdminLocals(locals);
+	if (authError) return authError;
+
 	const { id } = params;
 
 	try {
@@ -186,7 +192,7 @@ export const GET: RequestHandler = async ({ params }) => {
 			clientInfo = client;
 		}
 
-		return json({
+		return Response.json({
 			...queueItem,
 			media: mediaInfo,
 			downloadClient: clientInfo
@@ -201,7 +207,12 @@ export const GET: RequestHandler = async ({ params }) => {
 /**
  * PATCH - Update a queue item (e.g., pause, resume, change priority)
  */
-export const PATCH: RequestHandler = async ({ params, request }) => {
+export const PATCH: RequestHandler = async ({ params, request, locals }) => {
+	// Defense-in-depth: the hooks viewer gate confines this route; this
+	// guard keeps it admin-only even if the gate is ever refactored.
+	const authError = requireAdminLocals(locals);
+	if (authError) return authError;
+
 	const { id } = params;
 
 	try {
@@ -223,12 +234,12 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 		// Handle different actions using downloadMonitor which emits SSE events
 		if (action === 'pause') {
 			await downloadMonitor.pauseDownload(id);
-			return json({ success: true, action: 'paused' });
+			return Response.json({ success: true, action: 'paused' });
 		}
 
 		if (action === 'resume') {
 			await downloadMonitor.resumeDownload(id);
-			return json({ success: true, action: 'resumed' });
+			return Response.json({ success: true, action: 'resumed' });
 		}
 
 		throw error(400, 'No valid action specified');
@@ -242,7 +253,12 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 /**
  * DELETE - Remove a queue item from queue and optionally from download client
  */
-export const DELETE: RequestHandler = async ({ params, url }) => {
+export const DELETE: RequestHandler = async ({ params, url, locals }) => {
+	// Defense-in-depth: the hooks viewer gate confines this route; this
+	// guard keeps it admin-only even if the gate is ever refactored.
+	const authError = requireAdminLocals(locals);
+	if (authError) return authError;
+
 	const { id } = params;
 	const removeFromClient = url.searchParams.get('removeFromClient') !== 'false';
 	const deleteFiles = url.searchParams.get('deleteFiles') === 'true';
@@ -314,10 +330,40 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 			}
 		}
 
-		// Add to blocklist if requested
-		// Note: Blocklist table not yet implemented - would store infoHash to prevent re-downloading
-		if (addToBlocklist && queueItem.infoHash) {
-			logger.warn({ infoHash: queueItem.infoHash }, 'Blocklist not yet implemented');
+		// Add to blocklist if requested. Not gated on infoHash - usenet queue
+		// items never have one, and the blocklist service matches on title/
+		// indexer/quality/size too (see BlocklistService.addToBlocklist).
+		if (addToBlocklist) {
+			try {
+				const { blocklistService } =
+					await import('#lib/server/monitoring/specifications/BlocklistSpecification.js');
+				await blocklistService.addToBlocklist(
+					{
+						title: queueItem.title,
+						infoHash: queueItem.infoHash ?? undefined,
+						indexerId: queueItem.indexerId ?? undefined,
+						quality: queueItem.quality ?? undefined,
+						size: queueItem.size ?? undefined,
+						protocol: queueItem.protocol
+					},
+					{
+						movieId: queueItem.movieId ?? undefined,
+						seriesId: queueItem.seriesId ?? undefined,
+						episodeIds: queueItem.episodeIds ?? undefined,
+						reason: 'manual',
+						message: 'Manually blocklisted from the queue/history'
+					}
+				);
+			} catch (blocklistError) {
+				logger.warn(
+					{
+						queueId: queueItem.id,
+						title: queueItem.title,
+						error: blocklistError instanceof Error ? blocklistError.message : String(blocklistError)
+					},
+					'Failed to add release to blocklist'
+				);
+			}
 		}
 
 		// Add/refresh a suppression tombstone when local state is removed without confirmed
@@ -350,7 +396,7 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 		acquisitionService.cancelByQueueId(id, 'removed from queue');
 		await db.delete(downloadQueue).where(eq(downloadQueue.id, id));
 
-		return json({ success: true, message: 'Queue item removed' });
+		return Response.json({ success: true, message: 'Queue item removed' });
 	} catch (err) {
 		if (err instanceof Error && 'status' in err) throw err;
 		logger.error('Error deleting queue item', err instanceof Error ? err : undefined);

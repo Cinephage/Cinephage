@@ -7,7 +7,7 @@ import {
 
 const getIndexerInstance = vi.fn();
 
-vi.mock('$lib/server/indexers/IndexerManager', () => ({
+vi.mock('#lib/server/indexers/IndexerManager.js', () => ({
 	getIndexerManager: vi.fn(async () => ({ getIndexerInstance }))
 }));
 

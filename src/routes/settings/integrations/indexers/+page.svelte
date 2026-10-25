@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
-	import { Plus, Download } from 'lucide-svelte';
+	import { refreshAll } from '$app/navigation';
+	import { Plus, Download } from '@lucide/svelte';
 	import type { PageData } from './$types';
 	import type {
 		Indexer,
@@ -8,21 +8,27 @@
 		IndexerFilters as IIndexerFilters,
 		IndexerSort,
 		IndexerFormData
-	} from '$lib/types/indexer';
+	} from '#lib/types/indexer.js';
 
-	import IndexerTable from '$lib/components/indexers/IndexerTable.svelte';
-	import IndexerFilters from '$lib/components/indexers/IndexerFilters.svelte';
-	import IndexerBulkActions from '$lib/components/indexers/IndexerBulkActions.svelte';
-	import IndexerModal from '$lib/components/indexers/IndexerModal.svelte';
-	import ProwlarrImportModal from '$lib/components/indexers/ProwlarrImportModal.svelte';
-	import JackettImportModal from '$lib/components/indexers/JackettImportModal.svelte';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import { getResponseErrorMessage } from '$lib/utils/http';
+	import IndexerTable from '#lib/components/indexers/IndexerTable.svelte';
+	import IndexerFilters from '#lib/components/indexers/IndexerFilters.svelte';
+	import IndexerBulkActions from '#lib/components/indexers/IndexerBulkActions.svelte';
+	import IndexerModal from '#lib/components/indexers/IndexerModal.svelte';
+	import ProwlarrImportModal from '#lib/components/indexers/ProwlarrImportModal.svelte';
+	import JackettImportModal from '#lib/components/indexers/JackettImportModal.svelte';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { getResponseErrorMessage } from '#lib/utils/http.js';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { ConfirmationModal } from '$lib/components/ui/modal';
-	import { SettingsPage } from '$lib/components/ui/settings';
-	import * as m from '$lib/paraglide/messages.js';
-	import { createIndexer, updateIndexer, deleteIndexer, testIndexer, ApiError } from '$lib/api';
+	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
+	import { SettingsPage } from '#lib/components/ui/settings/index.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import {
+		createIndexer,
+		updateIndexer,
+		deleteIndexer,
+		testIndexer,
+		ApiError
+	} from '#lib/api/index.js';
 
 	let { data }: { data: PageData } = $props();
 
@@ -273,7 +279,7 @@
 		} finally {
 			testingIds.delete(indexer.id);
 			if (refresh) {
-				await invalidateAll();
+				await refreshAll();
 			}
 		}
 	}
@@ -314,7 +320,7 @@
 				await createIndexer(payload);
 			}
 
-			await invalidateAll();
+			await refreshAll();
 			closeModal();
 			toasts.success(
 				modalMode === 'edit'
@@ -337,7 +343,7 @@
 
 		try {
 			await deleteIndexer(editingIndexer.id);
-			await invalidateAll();
+			await refreshAll();
 			closeModal();
 		} catch (e) {
 			toasts.error(
@@ -355,7 +361,7 @@
 
 		try {
 			await deleteIndexer(deleteTarget.id);
-			await invalidateAll();
+			await refreshAll();
 			confirmDeleteOpen = false;
 			deleteTarget = null;
 		} catch (e) {
@@ -375,7 +381,7 @@
 			for (const id of selectedIds) {
 				await updateIndexerById(id, { enabled: true }, 'Failed to enable indexer');
 			}
-			await invalidateAll();
+			await refreshAll();
 			selectedIds.clear();
 		} catch (e) {
 			toasts.error(e instanceof Error ? e.message : 'Failed to enable selected indexers');
@@ -390,7 +396,7 @@
 			for (const id of selectedIds) {
 				await updateIndexerById(id, { enabled: false }, 'Failed to disable indexer');
 			}
-			await invalidateAll();
+			await refreshAll();
 			selectedIds.clear();
 		} catch (e) {
 			toasts.error(e instanceof Error ? e.message : 'Failed to disable selected indexers');
@@ -415,7 +421,7 @@
 			for (const id of selectedIds) {
 				await deleteIndexer(id);
 			}
-			await invalidateAll();
+			await refreshAll();
 			selectedIds.clear();
 			confirmBulkDeleteOpen = false;
 		} catch (e) {
@@ -449,7 +455,7 @@
 					}
 				}
 			}
-			await invalidateAll();
+			await refreshAll();
 			toasts.info(
 				m.settings_integrations_bulkTestComplete({
 					successCount: String(successCount),
@@ -483,7 +489,7 @@
 					'Failed to restore indexer'
 				);
 				toasts.success('Connection restored - indexer re-enabled');
-				await invalidateAll();
+				await refreshAll();
 				return;
 			}
 
@@ -492,7 +498,7 @@
 				{ enabled: !indexer.enabled },
 				'Failed to update indexer state'
 			);
-			await invalidateAll();
+			await refreshAll();
 		} catch (e) {
 			toasts.error(e instanceof Error ? e.message : 'Failed to update indexer state');
 		} finally {
@@ -510,7 +516,7 @@
 		} catch (e) {
 			toasts.error(e instanceof Error ? e.message : 'Failed to reorder priorities');
 		} finally {
-			await invalidateAll();
+			await refreshAll();
 		}
 	}
 </script>

@@ -5,12 +5,11 @@
  * POST /api/livetv/portals - Create a new portal
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getStalkerPortalManager } from '$lib/server/livetv/stalker';
-import { stalkerPortalCreateSchema } from '$lib/validation/schemas';
-import { createChildLogger } from '$lib/logging';
-import { ValidationError, isAppError } from '$lib/errors';
+import { getStalkerPortalManager } from '#lib/server/livetv/stalker/index.js';
+import { stalkerPortalCreateSchema } from '#lib/validation/schemas.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { ValidationError, isAppError } from '#lib/errors/index.js';
 
 const logger = createChildLogger({ module: 'LiveTvPortals', logDomain: 'livetv' });
 
@@ -21,7 +20,7 @@ export const GET: RequestHandler = async () => {
 	const manager = getStalkerPortalManager();
 	const portals = await manager.getPortals();
 
-	return json({
+	return Response.json({
 		success: true,
 		portals
 	});
@@ -49,7 +48,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	try {
 		const portal = await manager.createPortal(parsed.data, detectType);
 
-		return json(
+		return Response.json(
 			{
 				success: true,
 				portal
@@ -68,7 +67,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		// Duplicate URL detection
 		if (message.includes('already exists') || message.includes('UNIQUE constraint failed')) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: 'A portal with this URL already exists'
@@ -78,7 +77,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		// Generic error - don't leak details
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: 'Failed to create portal'

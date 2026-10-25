@@ -1,5 +1,5 @@
-import { db } from '$lib/server/db/index.js';
-import { delayProfileService } from '$lib/server/monitoring/specifications/DelaySpecification.js';
+import { db } from '#lib/server/db/index.js';
+import { delayProfileService } from '#lib/server/monitoring/specifications/DelaySpecification.js';
 import {
 	movies,
 	movieFiles,
@@ -8,25 +8,24 @@ import {
 	downloadQueue,
 	subtitles,
 	libraries
-} from '$lib/server/db/schema.js';
+} from '#lib/server/db/schema.js';
 import { eq, and, inArray } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import type { LibraryMovie, MovieFile, QualityProfileSummary } from '$lib/types/library';
-import type { MovieDetails } from '$lib/types/tmdb';
-import { tmdb } from '$lib/server/tmdb.js';
-import { isMovieSearching } from '$lib/server/library/ActiveSearchTracker.js';
-import { ACTIVE_DOWNLOAD_STATUSES } from '$lib/types/queue';
-import { resolveMissingAnimeProviderRefs } from '$lib/server/metadata/provider-ref-resolver.js';
-import { getMetadataProviderConfig } from '$lib/server/metadata/provider-settings.js';
-import { getLanguageProfileService } from '$lib/server/subtitles/services/LanguageProfileService.js';
-import { getLanguageSettingsService } from '$lib/server/subtitles/services/LanguageSettingsService.js';
-import type { SubtitleStatus } from '$lib/server/subtitles/types.js';
+import type { LibraryMovie, MovieFile, QualityProfileSummary } from '#lib/types/library.js';
+import type { MovieDetails } from '#lib/types/tmdb.js';
+import { tmdb } from '#lib/server/tmdb.js';
+import { isMovieSearching } from '#lib/server/library/ActiveSearchTracker.js';
+import { ACTIVE_DOWNLOAD_STATUSES } from '#lib/types/queue.js';
+import { getMetadataProviderConfig } from '#lib/server/metadata/provider-settings.js';
+import { getLanguageProfileService } from '#lib/server/subtitles/services/LanguageProfileService.js';
+import { getLanguageSettingsService } from '#lib/server/subtitles/services/LanguageSettingsService.js';
+import type { SubtitleStatus } from '#lib/server/subtitles/types.js';
 import type {
 	EffectiveLanguageProfile,
 	EffectiveSubtitleRequirements
-} from '$lib/shared/language-profile.js';
-import { createChildLogger } from '$lib/logging';
+} from '#lib/shared/language-profile.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LibraryMoviePage', logDomain: 'scans' });
 
@@ -97,18 +96,6 @@ export interface LibraryMoviePageData {
 	languageProfiles: Array<{ id: string; name: string }>;
 	/** Instance default for original-title display (language_settings.prefer_original_title). */
 	preferOriginalTitleDefault: boolean;
-}
-
-function isAnimeMovieSignal(input: {
-	rootFolderPath: string | null;
-	genres: string[] | null;
-	title: string;
-}): boolean {
-	const path = (input.rootFolderPath ?? '').toLowerCase();
-	if (path.includes('/anime/')) return true;
-	const genres = input.genres ?? [];
-	if (genres.some((genre) => genre.toLowerCase() === 'animation')) return true;
-	return /\banime\b/i.test(input.title);
 }
 
 export const load: PageServerLoad = async ({ params }): Promise<LibraryMoviePageData> => {
@@ -399,21 +386,19 @@ export const load: PageServerLoad = async ({ params }): Promise<LibraryMoviePage
 		mal: providerConfig.animeEnrichmentEnabled
 	};
 
-	const enrichedProviderRefs = await resolveMissingAnimeProviderRefs({
-		title: movieWithFiles.title,
-		aliases: [movieWithFiles.originalTitle ?? ''],
-		year: movieWithFiles.year,
-		isAnime: isAnimeMovieSignal({
-			rootFolderPath: movieWithFiles.rootFolderPath ?? null,
-			genres: movieWithFiles.genres ?? null,
-			title: movieWithFiles.title
-		}),
-		configured: configuredMetadataProviders,
-		existingRefs:
-			(movieWithFiles.providerRefs as Partial<Record<'tmdb' | 'anilist' | 'mal', string>> | null) ??
-			undefined
-	});
-	movieWithFiles.providerRefs = enrichedProviderRefs;
+	// AniList/Jikan(MAL) enrichment is NOT looked up here. It used to be
+	// (first awaited directly, then returned as an unawaited streamed
+	// promise), but even streamed it still visibly delayed first paint in
+	// practice - something between this app and the browser (proxy, adapter,
+	// or SvelteKit's own streaming semantics) wasn't actually deferring it
+	// the way the "don't await" pattern assumes. Moved to a dedicated
+	// endpoint (/api/library/movies/[id]/anime-refs) that the client calls
+	// after the page has already rendered - see +page.svelte. This page only
+	// ever shows whatever provider refs are already stored.
+	const existingMovieProviderRefs =
+		(movieWithFiles.providerRefs as Partial<Record<'tmdb' | 'anilist' | 'mal', string>> | null) ??
+		undefined;
+	movieWithFiles.providerRefs = existingMovieProviderRefs ?? {};
 
 	const librarySlug = movie.libraryIsDefault ? null : (movie.librarySlug ?? null);
 	const libraryName = movie.libraryName ?? null;

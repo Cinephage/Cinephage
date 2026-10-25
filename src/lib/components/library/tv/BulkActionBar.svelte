@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { X, Download, Loader2, Captions, RefreshCw } from 'lucide-svelte';
-	import * as m from '$lib/paraglide/messages.js';
+	import { X, Download, Loader2, Captions, RefreshCw } from '@lucide/svelte';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
 		selectedCount: number;

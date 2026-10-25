@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import { createHash } from 'node:crypto';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 
@@ -24,13 +24,14 @@ export const BETTER_AUTH_TABLE_DEFINITIONS = [
 			"image" text,
 			"username" text UNIQUE,
 			"displayUsername" text,
-			"role" text DEFAULT 'admin' NOT NULL,
+			"role" text DEFAULT 'user' NOT NULL,
 			"language" text DEFAULT 'en',
 			"banned" integer DEFAULT 0,
 			"banReason" text,
 			"banExpires" date,
 			"createdAt" date NOT NULL,
-			"updatedAt" date NOT NULL
+			"updatedAt" date NOT NULL,
+			"lastActiveAt" date
 		)`
 	},
 	{
@@ -44,7 +45,8 @@ export const BETTER_AUTH_TABLE_DEFINITIONS = [
 			"userAgent" text,
 			"impersonatedBy" text,
 			"createdAt" date NOT NULL,
-			"updatedAt" date NOT NULL
+			"updatedAt" date NOT NULL,
+			"lastActiveAt" date
 		)`
 	},
 	{
@@ -84,7 +86,8 @@ export const BETTER_AUTH_TABLE_DEFINITIONS = [
 			"start" text,
 			"prefix" text,
 			"key" text NOT NULL,
-			"userId" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+			"referenceId" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+			"configId" text DEFAULT 'default',
 			"refillInterval" integer,
 			"refillAmount" integer,
 			"lastRefillAt" date,
@@ -311,6 +314,22 @@ export function createBetterAuthIndexes(sqlite: Database.Database): void {
 	if (hasUserId) {
 		sqlite.prepare(`CREATE INDEX IF NOT EXISTS "idx_apikey_user" ON "apikey" ("userId")`).run();
 	}
+}
+
+/**
+ * Converge the apikey table to the v1.5+ shape (referenceId + configId).
+ * Runs at auth module init, before betterAuth() is constructed: better-auth
+ * >= 1.7 validates the schema on first access and latches a mismatch for the
+ * process lifetime, so a pre-1.5 database must be converged before the first
+ * auth request — it cannot wait for schema-sync migrations 065/066.
+ */
+export function convergeApikeySchemaToV15(sqlite: Database.Database): void {
+	if (!tableExists(sqlite, 'apikey')) {
+		return;
+	}
+
+	renameColumnIfExists(sqlite, 'apikey', 'userId', 'referenceId');
+	ensureColumn(sqlite, 'apikey', 'configId', `"configId" text DEFAULT 'default'`);
 }
 
 export function recreateBetterAuthSchema(sqlite: Database.Database): void {
@@ -603,6 +622,61 @@ export const MIGRATION_COLUMN_MAP: Record<number, Array<{ table: string; column:
 		{ table: 'movies', column: 'library_id' },
 		{ table: 'series', column: 'library_id' }
 	],
+	81: [
+		{ table: 'scoring_profiles', column: 'is_built_in' },
+		{ table: 'scoring_profiles', column: 'min_resolution' },
+		{ table: 'scoring_profiles', column: 'max_resolution' },
+		{ table: 'scoring_profiles', column: 'allowed_sources' },
+		{ table: 'scoring_profiles', column: 'excluded_sources' }
+	],
+	83: [
+		{ table: 'movies', column: 'tmdb_collection_id' },
+		{ table: 'movies', column: 'collection_name' }
+	],
+	84: [
+		{ table: 'movies', column: 'release_date' },
+		{ table: 'series', column: 'first_air_date' }
+	],
+	// metadata_provider and pinned_external from v85/v86 are dropped by v95
+	85: [{ table: 'series', column: 'provider_refs' }],
+	86: [{ table: 'movies', column: 'provider_refs' }],
+	88: [
+		{ table: 'root_folders', column: 'skip_folder_patterns' },
+		{ table: 'root_folders', column: 'blocked_video_extensions' }
+	],
+	91: [
+		{ table: 'movies', column: 'download_release_date' },
+		{ table: 'movies', column: 'download_release_type' }
+	],
+	92: [
+		{ table: 'movies', column: 'digital_release_date' },
+		{ table: 'movies', column: 'physical_release_date' },
+		{ table: 'movies', column: 'availability_delay' }
+	],
+	93: [{ table: 'indexers', column: 'upstream_enabled' }],
+	94: [{ table: 'indexers', column: 'orphaned' }],
+	96: [
+		{ table: 'movies', column: 'adult' },
+		{ table: 'movies', column: 'adult_source' },
+		{ table: 'movies', column: 'adult_confidence' },
+		{ table: 'series', column: 'adult' },
+		{ table: 'series', column: 'adult_source' },
+		{ table: 'series', column: 'adult_confidence' }
+	],
+	97: [{ table: 'series', column: 'episode_group_id' }],
+	98: [
+		{ table: 'indexers', column: 'cached_categories' },
+		{ table: 'indexers', column: 'additional_categories' }
+	],
+	100: [{ table: 'scoring_profiles', column: 'prevent_downgrades' }],
+	102: [{ table: 'indexers', column: 'is_built_in' }],
+	105: [
+		{ table: 'pending_releases', column: 'publish_date' },
+		{ table: 'movies', column: 'delay_profile_id' },
+		{ table: 'series', column: 'delay_profile_id' }
+	],
+	106: [{ table: 'scoring_profiles', column: 'required_formats' }],
+	108: [{ table: 'download_queue', column: 'stalled_since' }],
 	125: [
 		{ table: 'download_clients', column: 'api_token' },
 		{ table: 'download_clients', column: 'remove_after_import' }
@@ -645,7 +719,10 @@ export const MIGRATION_COLUMN_MAP: Record<number, Array<{ table: string; column:
 		{ table: 'movies', column: 'language_profile_id' },
 		{ table: 'series', column: 'language_profile_id' },
 		{ table: 'smart_lists', column: 'language_profile_id' }
-	]
+	],
+	154: [{ table: 'library_jobs', column: 'acknowledged_at' }],
+	155: [{ table: 'indexers', column: 'rate_limit_per_minute' }],
+	156: [{ table: 'indexer_status', column: 'disabled_reason' }]
 };
 
 /**

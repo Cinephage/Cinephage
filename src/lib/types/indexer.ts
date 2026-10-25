@@ -16,23 +16,23 @@ export type {
 	TorrentProtocolSettings,
 	UsenetProtocolSettings,
 	StreamingProtocolSettings
-} from '$lib/server/indexers/types';
+} from '#lib/server/indexers/types/index.js';
 
 // Definition types
 export type {
 	SettingField,
 	IndexerCapabilities as ServerIndexerCapabilities,
 	BaseIndexerDefinition
-} from '$lib/server/indexers/types';
+} from '#lib/server/indexers/types/index.js';
 
 // Loader types (for UI components)
-export type { UIDefinitionSetting as DefinitionSetting } from '$lib/server/indexers/loader/types';
+export type { UIDefinitionSetting as DefinitionSetting } from '#lib/server/indexers/loader/types.js';
 
 // Config types
 export type {
 	IndexerConfig,
 	IndexerStatus as ServerIndexerStatus
-} from '$lib/server/indexers/types';
+} from '#lib/server/indexers/types/index.js';
 
 // =============================================================================
 // UI-SPECIFIC TYPES
@@ -80,8 +80,8 @@ export interface IndexerUIHints {
 	isStreaming: boolean;
 }
 
-import type { IndexerAccessType, IndexerProtocol } from '$lib/server/indexers/types';
-import type { UIDefinitionSetting } from '$lib/server/indexers/loader/types';
+import type { IndexerAccessType, IndexerProtocol } from '#lib/server/indexers/types/index.js';
+import type { UIDefinitionSetting } from '#lib/server/indexers/loader/types.js';
 
 /**
  * Simplified indexer definition from /api/indexers/definitions
@@ -141,6 +141,8 @@ export interface Indexer {
 	/** Alternative/fallback URLs (tried in order if primary fails) */
 	alternateUrls: string[];
 	priority: number;
+	/** User override for max requests/minute sent to this indexer. Null = use definition/default. */
+	rateLimitPerMinute?: number | null;
 	protocol: IndexerProtocol;
 	settings?: Record<string, string> | null;
 	sensitiveSettings?: Record<string, boolean>;
@@ -176,6 +178,10 @@ export interface IndexerStatus {
 	consecutiveFailures: number;
 	lastFailure?: string;
 	disabledUntil?: string;
+	/** Why the indexer is currently auto-disabled, if it is */
+	disabledReason?: 'consecutive_failures' | 'quota_exceeded' | 'manual';
+	/** Message from the most recent failure, e.g. the indexer's own quota-exceeded text */
+	lastFailureMessage?: string;
 	averageResponseTime?: number;
 }
 
@@ -201,6 +207,8 @@ export interface IndexerFormData {
 	alternateUrls: string[];
 	enabled: boolean;
 	priority: number;
+	/** User override for max requests/minute sent to this indexer. Null = use definition/default. */
+	rateLimitPerMinute?: number | null;
 	/**
 	 * Protocol derived from definition - used client-side for UI hints.
 	 * Server ignores this and gets protocol from the YAML definition.

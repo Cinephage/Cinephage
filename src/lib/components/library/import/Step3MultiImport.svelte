@@ -1,6 +1,6 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
-	import { Check, Loader2 } from 'lucide-svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { Check, Clock, Loader2 } from '@lucide/svelte';
 	import type { MediaType, DetectionGroup, DetectionSection, TvSeasonSection } from './types.js';
 
 	interface DestinationLibrary {
@@ -25,6 +25,8 @@
 		hasMultipleImportTvSeries = false,
 		importMediaFilter = $bindable('all' as QueueMediaFilter),
 		importMode = $bindable('move' as 'move' | 'copy' | 'symlink'),
+		preferHardlink = $bindable(true),
+		backgroundImport = $bindable(false),
 		bulkDestinationBySectionId = {},
 		selectedImportGroupCount = 0,
 		selectedNeedsInputCount = 0,
@@ -32,6 +34,7 @@
 		skippedGroupCount = 0,
 		executingImport = false,
 		canImport = (_group: DetectionGroup) => false,
+		getGroupActionLabel = (_group: DetectionGroup) => null as 'link' | 'enroll' | null,
 		getEffectiveMediaType = (_group: DetectionGroup) => 'movie' as MediaType,
 		getGroupEpisodeInfo = (_group: DetectionGroup) =>
 			null as { season: number; episode: number; title?: string } | null,
@@ -54,6 +57,8 @@
 		hasMultipleImportTvSeries: boolean;
 		importMediaFilter: QueueMediaFilter;
 		importMode: 'move' | 'copy' | 'symlink';
+		preferHardlink: boolean;
+		backgroundImport: boolean;
 		bulkDestinationBySectionId: Record<string, string>;
 		selectedImportGroupCount: number;
 		selectedNeedsInputCount: number;
@@ -61,6 +66,7 @@
 		skippedGroupCount: number;
 		executingImport: boolean;
 		canImport: (group: DetectionGroup) => boolean;
+		getGroupActionLabel: (group: DetectionGroup) => 'link' | 'enroll' | null;
 		getEffectiveMediaType: (group: DetectionGroup) => MediaType;
 		getGroupEpisodeInfo: (group: DetectionGroup) => {
 			season: number;
@@ -201,6 +207,15 @@
 													<span class="text-success">{m.library_import_ready()}</span>
 												{:else}
 													<span class="text-warning">{m.library_import_needsInput()}</span>
+												{/if}
+												{#if getGroupActionLabel(group) === 'link'}
+													<span class="badge badge-sm badge-info"
+														>{m.activity_unmatched_linkNow()}</span
+													>
+												{:else if getGroupActionLabel(group) === 'enroll'}
+													<span class="badge badge-outline badge-sm"
+														>{m.activity_unmatched_enrollAction()}</span
+													>
 												{/if}
 											</div>
 										</div>
@@ -357,6 +372,15 @@
 														{:else}
 															<span class="text-warning">{m.library_import_needsInput()}</span>
 														{/if}
+														{#if getGroupActionLabel(group) === 'link'}
+															<span class="badge badge-sm badge-info"
+																>{m.activity_unmatched_linkNow()}</span
+															>
+														{:else if getGroupActionLabel(group) === 'enroll'}
+															<span class="badge badge-outline badge-sm"
+																>{m.activity_unmatched_enrollAction()}</span
+															>
+														{/if}
 														{#if episodeInfo}
 															<span class="badge badge-outline font-mono badge-xs badge-primary">
 																{formatEpisodePill(episodeInfo)}
@@ -448,6 +472,22 @@
 				</div>
 			</label>
 		</div>
+		<label
+			class="mt-3 flex items-start gap-3 rounded-lg border p-3 transition-colors
+				{importMode === 'copy' ? 'border-primary/40 bg-base-200/50' : 'border-base-300 opacity-50'}
+				{executingImport || importMode !== 'copy' ? 'cursor-not-allowed' : 'cursor-pointer'}"
+		>
+			<input
+				type="checkbox"
+				class="checkbox mt-0.5 checkbox-primary"
+				bind:checked={preferHardlink}
+				disabled={executingImport || importMode !== 'copy'}
+			/>
+			<div>
+				<div class="font-medium">{m.library_import_preferHardlinkLabel()}</div>
+				<div class="text-sm text-base-content/70">{m.library_import_preferHardlinkDesc()}</div>
+			</div>
+		</label>
 	</div>
 
 	{#if selectedNeedsInputCount > 0}
@@ -457,6 +497,34 @@
 			</span>
 		</div>
 	{/if}
+
+	<label
+		class="flex cursor-pointer items-center justify-between gap-4 rounded-xl border p-4 transition-colors sm:p-5
+			{backgroundImport ? 'border-primary bg-primary/5' : 'border-base-300 bg-base-100'}
+			{executingImport ? 'cursor-not-allowed opacity-50' : ''}"
+	>
+		<span class="flex items-start gap-3">
+			<span
+				class="mt-0.5 rounded-lg p-2 {backgroundImport
+					? 'bg-primary/10 text-primary'
+					: 'bg-base-200 text-base-content/60'}"
+			>
+				<Clock class="h-4 w-4" />
+			</span>
+			<span>
+				<span class="block font-medium">{m.library_import_runInBackground()}</span>
+				<span class="block text-sm text-base-content/70"
+					>{m.library_import_runInBackgroundHint()}</span
+				>
+			</span>
+		</span>
+		<input
+			type="checkbox"
+			class="toggle toggle-primary"
+			bind:checked={backgroundImport}
+			disabled={executingImport}
+		/>
+	</label>
 
 	<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 		<button class="btn btn-ghost" onclick={() => onGoToStep(2)}

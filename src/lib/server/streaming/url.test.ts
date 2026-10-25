@@ -7,7 +7,7 @@ vi.mock('./settings', () => ({
 	getStreamingIndexerSettings: getStreamingIndexerSettingsMock
 }));
 
-vi.mock('$lib/server/utils/origin', () => ({
+vi.mock('#lib/server/utils/origin.js', () => ({
 	isTrustedOrigin: isTrustedOriginMock
 }));
 

@@ -1,4 +1,4 @@
-import { db } from '$lib/server/db';
+import { db } from '#lib/server/db/index.js';
 import {
 	downloadQueue,
 	downloadHistory,
@@ -7,12 +7,13 @@ import {
 	movies,
 	series,
 	episodes,
-	settings
-} from '$lib/server/db/schema';
+	settings,
+	blocklist
+} from '#lib/server/db/schema.js';
 import { and, desc, gte, inArray, eq, lte, lt, sql, count, or } from 'drizzle-orm';
-import { upsertQueueTombstoneFromQueueItem } from '$lib/server/downloadClients/monitoring/QueueTombstoneService';
-import { getDownloadClientManager } from '$lib/server/downloadClients/DownloadClientManager';
-import { createChildLogger } from '$lib/logging';
+import { upsertQueueTombstoneFromQueueItem } from '#lib/server/downloadClients/monitoring/QueueTombstoneService.js';
+import { getDownloadClientManager } from '#lib/server/downloadClients/DownloadClientManager.js';
+import { createChildLogger } from '#lib/logging/index.js';
 import type { SQL } from 'drizzle-orm';
 import {
 	ActivityDeduplicationService,
@@ -23,9 +24,13 @@ import {
 	buildFailedQueueIndex,
 	findFailedQueueItemId,
 	buildHistoryTimeline,
+	buildBlocklistIndex,
+	findBlocklistEntry,
+	isBlocklistEntryActive,
 	resolveMediaInfo,
 	resolveMonitoringMediaInfo,
-	type MediaMaps
+	type MediaMaps,
+	type BlocklistEntryInfo
 } from './activity-transformers.js';
 import {
 	type UnifiedActivity,
@@ -35,7 +40,7 @@ import {
 	type ActivitySortOptions,
 	type ActivityScope,
 	type ActivitySummary
-} from '$lib/types/activity';
+} from '#lib/types/activity.js';
 import type {
 	DownloadQueueRecord,
 	DownloadHistoryRecord,
@@ -43,7 +48,7 @@ import type {
 	MoveTaskRecord
 } from './types';
 import { projectQueueActivity } from './projectors';
-import { parseMoveTaskId } from '$lib/server/library/MediaMoveService.js';
+import { parseMoveTaskId } from '#lib/server/library/MediaMoveService.js';
 import {
 	mapFilterStatusToQueueStatuses,
 	mapFilterStatusToHistoryStatuses,
@@ -153,6 +158,7 @@ export class ActivityService {
 			monitoringItems,
 			moveTasks,
 			failedQueueItems,
+			blocklistEntries,
 			historyCount,
 			monitoringCount,
 			moveTaskCount,
@@ -175,6 +181,7 @@ export class ActivityService {
 				: Promise.resolve(
 						[] as Pick<DownloadQueueRecord, 'id' | 'downloadId' | 'title' | 'addedAt' | 'status'>[]
 					),
+			needsHistory ? this.fetchBlocklistEntries() : Promise.resolve([]),
 			needsHistory && !hasJsOnlyFilters ? this.countHistoryItems(filters) : Promise.resolve(0),
 			needsHistory && !hasJsOnlyFilters
 				? this.countMonitoringItems(filters.includeNoResults, filters)
@@ -194,6 +201,7 @@ export class ActivityService {
 			: new Map<string, MonitoringHistoryRecord[]>();
 
 		const failedQueueIndex = buildFailedQueueIndex(failedQueueItems);
+		const blocklistIndex = buildBlocklistIndex(blocklistEntries);
 
 		const queueActivities = this.transformQueueItems(
 			activeDownloads,
@@ -204,7 +212,8 @@ export class ActivityService {
 			historyItems,
 			mediaMaps,
 			activeDownloads,
-			failedQueueIndex
+			failedQueueIndex,
+			blocklistIndex
 		);
 		const historyActivities = needsHistory
 			? this.deduplicationService.deduplicateHistoryActivities(rawHistoryActivities)
@@ -297,6 +306,7 @@ export class ActivityService {
 					'paused',
 					'stalled',
 					'seeding',
+					'seeding-imported',
 					'completed',
 					'postprocessing',
 					'importing'
@@ -323,6 +333,7 @@ export class ActivityService {
 						'queued',
 						'stalled',
 						'seeding',
+						'seeding-imported',
 						'completed',
 						'postprocessing',
 						'importing',
@@ -345,7 +356,7 @@ export class ActivityService {
 			(statusMap.get('completed') ?? 0) +
 			(statusMap.get('postprocessing') ?? 0) +
 			(statusMap.get('importing') ?? 0);
-		const seedingCount = statusMap.get('seeding') ?? 0;
+		const seedingCount = (statusMap.get('seeding') ?? 0) + (statusMap.get('seeding-imported') ?? 0);
 		const pausedCount = statusMap.get('paused') ?? 0;
 		const failedCount = historyFailed?.count ?? 0;
 		const totalCount = downloadingCount + seedingCount + pausedCount;
@@ -781,7 +792,8 @@ export class ActivityService {
 		history: DownloadHistoryRecord,
 		mediaMaps: MediaMaps,
 		activeDownloads: DownloadQueueRecord[] = [],
-		failedQueueIndex?: Map<string, string>
+		failedQueueIndex?: Map<string, string>,
+		blocklistIndex?: Map<string, BlocklistEntryInfo>
 	): UnifiedActivity | null {
 		// Skip if this release is already represented by an active queue row.
 		// This avoids duplicate active entries when a failed history record is retried.
@@ -790,7 +802,8 @@ export class ActivityService {
 			return null;
 		}
 
-		const timeline = buildHistoryTimeline(history);
+		const blocklistEntry = findBlocklistEntry(history, blocklistIndex);
+		const timeline = buildHistoryTimeline(history, blocklistEntry);
 		const mediaInfo = resolveMediaInfo(history, mediaMaps);
 		const queueItemId =
 			history.status === 'failed' ? findFailedQueueItemId(history, failedQueueIndex) : undefined;
@@ -829,7 +842,9 @@ export class ActivityService {
 			completedAt: history.importedAt || history.completedAt || null,
 			queueItemId,
 			downloadHistoryId: history.id,
-			importedPath: history.importedPath ?? undefined
+			importedPath: history.importedPath ?? undefined,
+			transferMode: (history.transferMode as UnifiedActivity['transferMode']) ?? undefined,
+			isBlocklisted: blocklistEntry ? isBlocklistEntryActive(blocklistEntry) : false
 		};
 	}
 
@@ -904,6 +919,7 @@ export class ActivityService {
 			'paused',
 			'stalled',
 			'seeding',
+			'seeding-imported',
 			'completed',
 			'postprocessing',
 			'importing'
@@ -1001,6 +1017,33 @@ export class ActivityService {
 			.all();
 	}
 
+	/**
+	 * Lets Activity entries show whether their release is currently
+	 * blocklisted, and when - without a per-item query.
+	 */
+	private async fetchBlocklistEntries(): Promise<
+		{
+			title: string;
+			movieId: string | null;
+			seriesId: string | null;
+			createdAt: string | null;
+			reason: string;
+			expiresAt: string | null;
+		}[]
+	> {
+		return db
+			.select({
+				title: blocklist.title,
+				movieId: blocklist.movieId,
+				seriesId: blocklist.seriesId,
+				createdAt: blocklist.createdAt,
+				reason: blocklist.reason,
+				expiresAt: blocklist.expiresAt
+			})
+			.from(blocklist)
+			.all();
+	}
+
 	private async fetchHistoryItems(filters: ActivityFilters = {}): Promise<DownloadHistoryRecord[]> {
 		const conditions: SQL[] = [];
 
@@ -1069,6 +1112,7 @@ export class ActivityService {
 				quality: downloadHistory.quality,
 				releaseGroup: downloadHistory.releaseGroup,
 				importedPath: downloadHistory.importedPath,
+				transferMode: downloadHistory.transferMode,
 				grabbedAt: downloadHistory.grabbedAt,
 				completedAt: downloadHistory.completedAt,
 				importedAt: downloadHistory.importedAt,
@@ -1568,14 +1612,21 @@ export class ActivityService {
 		historyItems: DownloadHistoryRecord[],
 		mediaMaps: MediaMaps,
 		activeDownloads: DownloadQueueRecord[],
-		failedQueueIndex?: Map<string, string>
+		failedQueueIndex?: Map<string, string>,
+		blocklistIndex?: Map<string, BlocklistEntryInfo>
 	): UnifiedActivity[] {
 		// Build the active queue index once for all history items (O(n) build, O(1) lookups)
 		const activeIndex = this.deduplicationService.buildActiveQueueIndex(activeDownloads);
 
 		return historyItems
 			.map((history) =>
-				this.transformHistoryItemWithIndex(history, mediaMaps, activeIndex, failedQueueIndex)
+				this.transformHistoryItemWithIndex(
+					history,
+					mediaMaps,
+					activeIndex,
+					failedQueueIndex,
+					blocklistIndex
+				)
 			)
 			.filter((activity): activity is UnifiedActivity => activity !== null);
 	}
@@ -1587,13 +1638,15 @@ export class ActivityService {
 		history: DownloadHistoryRecord,
 		mediaMaps: MediaMaps,
 		activeIndex: ActiveQueueIndex,
-		failedQueueIndex?: Map<string, string>
+		failedQueueIndex?: Map<string, string>,
+		blocklistIndex?: Map<string, BlocklistEntryInfo>
 	): UnifiedActivity | null {
 		if (this.deduplicationService.isHistoryRepresentedByActiveQueueIndexed(history, activeIndex)) {
 			return null;
 		}
 
-		const timeline = buildHistoryTimeline(history);
+		const blocklistEntry = findBlocklistEntry(history, blocklistIndex);
+		const timeline = buildHistoryTimeline(history, blocklistEntry);
 		const mediaInfo = resolveMediaInfo(history, mediaMaps);
 		const queueItemId =
 			history.status === 'failed' ? findFailedQueueItemId(history, failedQueueIndex) : undefined;
@@ -1632,7 +1685,9 @@ export class ActivityService {
 			completedAt: history.importedAt || history.completedAt || null,
 			queueItemId,
 			downloadHistoryId: history.id,
-			importedPath: history.importedPath ?? undefined
+			importedPath: history.importedPath ?? undefined,
+			transferMode: (history.transferMode as UnifiedActivity['transferMode']) ?? undefined,
+			isBlocklisted: blocklistEntry ? isBlocklistEntryActive(blocklistEntry) : false
 		};
 	}
 

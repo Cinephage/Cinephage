@@ -1,28 +1,19 @@
-import { describe, expect, it } from 'vitest';
+// @vitest-environment jsdom
+// storeLibraryReturnTo/getLibraryDetailBackHref use sessionStorage, which
+// only exists in a browser-like environment; this file's project default
+// is plain node.
+import { describe, expect, it, beforeEach } from 'vitest';
 
 import {
 	getLibraryDetailBackHref,
-	getLibraryDetailWithReturnTo,
 	getLibraryNavigationContext,
-	getSafeLibraryReturnTo
+	getSafeLibraryReturnTo,
+	storeLibraryReturnTo
 } from './libraryReturnNavigation';
 
-/**
- * Faithful simulation of SvelteKit's server-side resolve() during SSR
- * (kit.paths.relative defaults to true, empty base — @sveltejs/kit 2.70.2,
- * src/runtime/app/paths/server.js): absolute paths are returned relative to
- * the page being rendered, and non-absolute input throws.
- */
-function ssrResolve(path: string, currentPathname: string): string {
-	if (!path.startsWith('/')) {
-		throw new Error(
-			`Cannot use \`resolve(...)\` with a non-absolute pathname or route ID (got "${path}").`
-		);
-	}
-	const segments = currentPathname.split('/').slice(2);
-	const prefix = segments.map(() => '..').join('/') || '.';
-	return prefix + path;
-}
+beforeEach(() => {
+	sessionStorage.clear();
+});
 
 describe('library return navigation', () => {
 	it('recognizes Movies and TV list/detail routes independently', () => {
@@ -47,56 +38,81 @@ describe('library return navigation', () => {
 			listPath: '/library/tv'
 		});
 	});
+});
 
-	it('rewrites TV detail navigation with the exact filtered TV list URL', () => {
-		const result = getLibraryDetailWithReturnTo(
+describe('storeLibraryReturnTo + getLibraryDetailBackHref', () => {
+	it('records the exact filtered TV list URL and makes it available as a back href', () => {
+		const stored = storeLibraryReturnTo(
 			'/library/tv',
 			'?library=anime&status=continuing&progress=missing&sort=year-desc&q=voyager',
 			'/library/tv/series-id'
 		);
 
-		const url = new URL(result!, 'http://cinephage.local');
-		expect(url.pathname).toBe('/library/tv/series-id');
-		expect(url.searchParams.get('returnTo')).toBe(
+		expect(stored).toBe(true);
+		expect(getLibraryDetailBackHref('tv', '/library/tv')).toBe(
 			'/library/tv?library=anime&status=continuing&progress=missing&sort=year-desc&q=voyager'
 		);
 	});
 
-	it('rewrites movie detail navigation with the exact filtered Movies list URL', () => {
-		const result = getLibraryDetailWithReturnTo(
+	it('records the exact filtered Movies list URL and makes it available as a back href', () => {
+		storeLibraryReturnTo(
 			'/library/movies',
 			'?library=anime&fileStatus=missingFile&resolution=2160p&sort=added-desc&q=alien',
 			'/library/movie/movie-id'
 		);
 
-		const url = new URL(result!, 'http://cinephage.local');
-		expect(url.pathname).toBe('/library/movie/movie-id');
-		expect(url.searchParams.get('returnTo')).toBe(
+		expect(getLibraryDetailBackHref('movies', '/library/movies')).toBe(
 			'/library/movies?library=anime&fileStatus=missingFile&resolution=2160p&sort=added-desc&q=alien'
 		);
 	});
 
+	it('never puts returnTo in the URL — nothing to inspect on the target itself', () => {
+		// storeLibraryReturnTo returns a boolean, not a rewritten URL; the
+		// navigation target passed in is never touched.
+		const target = '/library/tv/series-id';
+		storeLibraryReturnTo('/library/tv', '?status=ended', target);
+		expect(target).toBe('/library/tv/series-id');
+	});
+
 	it('does not cross Movies and TV navigation', () => {
-		expect(
-			getLibraryDetailWithReturnTo(
-				'/library/movies',
-				'?fileStatus=missingFile',
-				'/library/tv/series-id'
-			)
-		).toBeNull();
+		const stored = storeLibraryReturnTo(
+			'/library/movies',
+			'?fileStatus=missingFile',
+			'/library/tv/series-id'
+		);
+		expect(stored).toBe(false);
+		expect(getLibraryDetailBackHref('tv', '/library/tv')).toBeNull();
 	});
 
 	it('rejects non-library and external targets', () => {
+		expect(storeLibraryReturnTo('/library/tv', '?status=ended', '/settings/system/general')).toBe(
+			false
+		);
 		expect(
-			getLibraryDetailWithReturnTo('/library/tv', '?status=ended', '/settings/system/general')
-		).toBeNull();
-		expect(
-			getLibraryDetailWithReturnTo(
+			storeLibraryReturnTo(
 				'/library/tv',
 				'?status=ended',
 				'https://example.com/library/tv/series-id'
 			)
-		).toBeNull();
+		).toBe(false);
+	});
+
+	it('does not record anything when navigating from a non-list route', () => {
+		expect(storeLibraryReturnTo('/library/movie/other-id', '', '/library/movie/movie-id')).toBe(
+			false
+		);
+	});
+
+	it('is scoped per section — recording one does not affect the other', () => {
+		storeLibraryReturnTo('/library/movies', '?monitored=true', '/library/movie/movie-id');
+		expect(getLibraryDetailBackHref('movies', '/library/movies')).toBe(
+			'/library/movies?monitored=true'
+		);
+		expect(getLibraryDetailBackHref('tv', '/library/tv')).toBeNull();
+	});
+
+	it('returns null when nothing has been recorded yet', () => {
+		expect(getLibraryDetailBackHref('movies', '/library/movies')).toBeNull();
 	});
 });
 
@@ -136,83 +152,5 @@ describe('getSafeLibraryReturnTo', () => {
 		expect(getSafeLibraryReturnTo(null, '/library/movies')).toBeNull();
 		expect(getSafeLibraryReturnTo('', '/library/movies')).toBeNull();
 		expect(getSafeLibraryReturnTo('not-a-path', '/library/movies')).toBeNull();
-	});
-});
-
-describe('getLibraryDetailBackHref', () => {
-	it('returns the validated filtered Movies list URL from the page URL', () => {
-		const url = new URL(
-			'/library/movie/movie-id?returnTo=%2Flibrary%2Fmovies%3Fmonitored%3Dunmonitored%26sort%3Dyear-desc%26q%3Dmatrix',
-			'http://cinephage.local'
-		);
-		expect(getLibraryDetailBackHref(url, '/library/movies')).toBe(
-			'/library/movies?monitored=unmonitored&sort=year-desc&q=matrix'
-		);
-	});
-
-	it('returns the validated filtered TV list URL from the page URL', () => {
-		const url = new URL(
-			'/library/tv/series-id?returnTo=%2Flibrary%2Ftv%3Fstatus%3Dended%26q%3Dvoyager',
-			'http://cinephage.local'
-		);
-		expect(getLibraryDetailBackHref(url, '/library/tv')).toBe('/library/tv?status=ended&q=voyager');
-	});
-
-	it('returns null for missing, external, and cross-section returnTo values', () => {
-		expect(
-			getLibraryDetailBackHref(
-				new URL('/library/movie/movie-id', 'http://cinephage.local'),
-				'/library/movies'
-			)
-		).toBeNull();
-		expect(
-			getLibraryDetailBackHref(
-				new URL(
-					'/library/movie/movie-id?returnTo=https%3A%2F%2Fevil.example.com%2Flibrary%2Fmovies',
-					'http://cinephage.local'
-				),
-				'/library/movies'
-			)
-		).toBeNull();
-		expect(
-			getLibraryDetailBackHref(
-				new URL(
-					'/library/movie/movie-id?returnTo=%2Flibrary%2Ftv%3Fstatus%3Dended',
-					'http://cinephage.local'
-				),
-				'/library/movies'
-			)
-		).toBeNull();
-	});
-
-	it('returns an absolute path that survives the header single-resolve during SSR', () => {
-		// What the header does: resolvePath(backHref) once, while rendering
-		// /library/movie/movie-id server-side.
-		const backHref = getLibraryDetailBackHref(
-			new URL(
-				'/library/movie/movie-id?returnTo=%2Flibrary%2Fmovies%3Fmonitored%3Dtrue',
-				'http://cinephage.local'
-			),
-			'/library/movies'
-		)!;
-		expect(backHref.startsWith('/')).toBe(true);
-
-		const href = ssrResolve(backHref, '/library/movie/movie-id');
-		expect(href).toBe('../../library/movies?monitored=true');
-	});
-
-	it('double-resolving the back value throws during SSR (the PR #518 regression)', () => {
-		// The pre-fix detail pages called resolvePath() on the validated value
-		// before the header resolved it again. During SSR the first call
-		// relativizes the path and the second throws — HTTP 500.
-		const backHref = getLibraryDetailBackHref(
-			new URL(
-				'/library/tv/series-id?returnTo=%2Flibrary%2Ftv%3Fstatus%3Dended',
-				'http://cinephage.local'
-			),
-			'/library/tv'
-		)!;
-		const preResolved = ssrResolve(backHref, '/library/tv/series-id');
-		expect(() => ssrResolve(preResolved, '/library/tv/series-id')).toThrow(/non-absolute pathname/);
 	});
 });

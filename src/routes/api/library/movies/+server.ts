@@ -1,31 +1,12 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { db } from '$lib/server/db/index.js';
-import { movies, movieFiles, rootFolders } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { movies, movieFiles, rootFolders } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { addMovieSchema } from '$lib/validation/schemas.js';
-import { getLanguageProfileService } from '$lib/server/subtitles/services/LanguageProfileService.js';
-import { buildMovieFolderName } from '$lib/server/library/naming/naming-helpers.js';
-import { namingSettingsService } from '$lib/server/library/naming/NamingSettingsService.js';
-import {
-	extractLanguageCodes,
-	resolveLocalizedTitles
-} from '$lib/server/library/naming/localization.js';
-import {
-	validateRootFolder,
-	getAnimeSubtypeEnforcement,
-	getEffectiveScoringProfileId,
-	fetchMovieDetails,
-	fetchMovieExternalIds,
-	triggerMovieSearch
-} from '$lib/server/library/LibraryAddService.js';
-import { isLikelyAnimeMedia } from '$lib/shared/anime-classification.js';
-import { fetchAndStoreMovieAlternateTitles } from '$lib/server/services/AlternateTitleService.js';
-import { getLibraryEntityService } from '$lib/server/library/LibraryEntityService.js';
-import { ValidationError, isAppError } from '$lib/errors';
-import { libraryMediaEvents } from '$lib/server/library/LibraryMediaEvents.js';
-import { requireAuth } from '$lib/server/auth/authorization.js';
-import { createChildLogger } from '$lib/logging';
+import { addMovieSchema } from '#lib/validation/schemas.js';
+import { addMovieToLibrary } from '#lib/server/library/add/add-movie.js';
+import { ValidationError, isAppError } from '#lib/errors/index.js';
+import { requireAuth } from '#lib/server/auth/authorization.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LibraryMoviesApi', logDomain: 'scans' });
 
@@ -104,14 +85,14 @@ export const GET: RequestHandler = async (event) => {
 			};
 		});
 
-		return json({
+		return Response.json({
 			success: true,
 			movies: moviesWithFiles,
 			total: moviesWithFiles.length
 		});
 	} catch (error) {
 		logger.error('[API] Error fetching movies', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to fetch movies'
@@ -142,188 +123,37 @@ export const POST: RequestHandler = async (event) => {
 			});
 		}
 
-		const {
-			tmdbId,
-			rootFolderId,
-			scoringProfileId,
-			desiredQualities,
-			monitored,
-			minimumAvailability,
-			availabilityDelay,
-			searchOnAdd: shouldSearch,
-			wantsSubtitles,
-			languageProfileId,
-			subtitleRequirementsOverride
-		} = result.data;
+		const addResult = await addMovieToLibrary(result.data);
 
-		// A client-provided language profile must exist.
-		if (languageProfileId) {
-			const languageProfile = await getLanguageProfileService().getProfile(languageProfileId);
-			if (!languageProfile) {
-				return json(
-					{ success: false, error: `Language profile not found: ${languageProfileId}` },
-					{ status: 400 }
-				);
-			}
-		}
-
-		// Check if movie already exists
-		const existingMovie = await db
-			.select({ id: movies.id })
-			.from(movies)
-			.where(eq(movies.tmdbId, tmdbId))
-			.limit(1);
-
-		if (existingMovie.length > 0) {
-			return json(
+		if (addResult.outcome === 'exists') {
+			return Response.json(
 				{
 					success: false,
 					error: 'Movie already exists in library',
-					movieId: existingMovie[0].id
+					movieId: addResult.movieId
 				},
 				{ status: 409 }
 			);
 		}
 
-		// Fetch movie details from TMDB (shared logic with error handling)
-		const movieDetails = await fetchMovieDetails(tmdbId);
-		const enforceAnimeSubtype = await getAnimeSubtypeEnforcement();
-		const isAnimeMedia = isLikelyAnimeMedia({
-			genres: movieDetails.genres,
-			originalLanguage: movieDetails.original_language,
-			originCountries: movieDetails.production_countries?.map((country) => country.iso_3166_1),
-			productionCountries: movieDetails.production_countries,
-			title: movieDetails.title,
-			originalTitle: movieDetails.original_title
-		});
-
-		// Verify root folder exists and is for movies (with optional anime subtype enforcement)
-		await validateRootFolder(rootFolderId, 'movie', {
-			requireWritable: true,
-			enforceAnimeSubtype,
-			isAnimeMedia,
-			mediaTitle: movieDetails.title
-		});
-		const owningLibrary = await getLibraryEntityService().resolveOwningLibraryForRootFolder(
-			rootFolderId,
-			'movie'
-		);
-
-		// Generate folder path
-		const year = movieDetails.release_date
-			? new Date(movieDetails.release_date).getFullYear()
-			: undefined;
-		const collectionData = movieDetails.belongs_to_collection;
-		const namingConfig = namingSettingsService.getConfigSync();
-		const langCodes = [
-			...extractLanguageCodes(namingConfig.movieFolderFormat),
-			...extractLanguageCodes(namingConfig.movieFileFormat)
-		];
-		const uniqueLangCodes = [...new Set(langCodes)];
-		const localizedTitles =
-			uniqueLangCodes.length > 0
-				? await resolveLocalizedTitles(tmdbId, uniqueLangCodes)
-				: undefined;
-		const folderName = buildMovieFolderName(
-			movieDetails.title,
-			year,
-			tmdbId,
-			collectionData?.name,
-			localizedTitles,
-			movieDetails.original_title
-		);
-
-		// Extract external IDs (shared logic)
-		const { imdbId } = await fetchMovieExternalIds(tmdbId);
-
-		// Get the effective scoring profile (shared logic)
-		const effectiveProfileId = await getEffectiveScoringProfileId(scoringProfileId, owningLibrary);
-
-		// Insert movie into database
-		const [newMovie] = await db
-			.insert(movies)
-			.values({
-				tmdbId,
-				imdbId,
-				title: movieDetails.title,
-				originalLanguage: movieDetails.original_language,
-				originalTitle: movieDetails.original_title,
-				year,
-				overview: movieDetails.overview,
-				posterPath: movieDetails.poster_path,
-				backdropPath: movieDetails.backdrop_path,
-				runtime: movieDetails.runtime,
-				genres: movieDetails.genres?.map((g) => g.name) ?? [],
-				path: folderName,
-				libraryId: owningLibrary.id,
-				rootFolderId,
-				scoringProfileId: effectiveProfileId,
-				desiredQualities: desiredQualities ?? null,
-				monitored,
-				minimumAvailability,
-				availabilityDelay,
-				hasFile: false,
-				wantsSubtitles,
-				languageProfileId: languageProfileId ?? null,
-				subtitleRequirementsOverride: subtitleRequirementsOverride ?? null,
-				tmdbCollectionId: collectionData?.id ?? null,
-				collectionName: collectionData?.name ?? null,
-				releaseDate: movieDetails.release_date ?? null
-			})
-			.returning();
-
-		// Fetch and store alternate titles from TMDB (non-blocking)
-		fetchAndStoreMovieAlternateTitles(newMovie.id, tmdbId).catch((err) => {
-			logger.warn(
-				{
-					movieId: newMovie.id,
-					tmdbId,
-					error: err instanceof Error ? err.message : String(err)
-				},
-				'Failed to fetch alternate titles for movie'
-			);
-		});
-
-		// Trigger search if explicitly requested regardless of monitoring state
-		let searchTriggered = false;
-		let searchWarning: string | undefined;
-		if (shouldSearch) {
-			const searchResult = await triggerMovieSearch({
-				movieId: newMovie.id,
-				tmdbId,
-				imdbId,
-				title: movieDetails.title,
-				year,
-				scoringProfileId
-			});
-			searchTriggered = searchResult.triggered;
-			searchWarning = searchResult.searchWarning;
-		}
-
-		libraryMediaEvents.emitLibraryDataChanged({
-			source: 'movie',
-			reason: 'movie-added',
-			entityId: newMovie.id
-		});
-
-		return json({
+		return Response.json({
 			success: true,
 			movie: {
-				id: newMovie.id,
-				tmdbId: newMovie.tmdbId,
-				title: newMovie.title,
-				year: newMovie.year,
-				path: newMovie.path,
-				monitored: newMovie.monitored,
-				searchTriggered,
-				searchWarning
+				id: addResult.movieId,
+				tmdbId: addResult.tmdbId,
+				title: addResult.title,
+				year: addResult.year,
+				path: addResult.path,
+				monitored: addResult.monitored,
+				searchTriggered: addResult.searchTriggered,
+				searchWarning: addResult.searchWarning
 			}
 		});
 	} catch (error) {
 		logger.error('[API] Error adding movie', error instanceof Error ? error : undefined);
 
 		if (isAppError(error)) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					...error.toJSON()
@@ -333,7 +163,7 @@ export const POST: RequestHandler = async (event) => {
 		}
 
 		if (error instanceof Error && /FOREIGN KEY constraint failed/i.test(error.message)) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error:
@@ -344,7 +174,7 @@ export const POST: RequestHandler = async (event) => {
 			);
 		}
 
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to add movie'

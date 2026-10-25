@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { Globe, Check } from 'lucide-svelte';
-	import { setLocale, getLocale, locales, type Locale } from '$lib/paraglide/runtime.js';
-	import * as m from '$lib/paraglide/messages.js';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import { updateUserLanguage } from '$lib/api/settings.js';
+	import { Globe, Check } from '@lucide/svelte';
+	import { setLocale, getLocale, locales, type Locale } from '#lib/paraglide/runtime.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { updateUserLanguage } from '#lib/api/settings.js';
 
 	interface Props {
 		class?: string;

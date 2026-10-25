@@ -7,10 +7,10 @@
  */
 
 import type { Cookie } from 'playwright-core';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'indexers' as const });
-import type { BackgroundService } from '$lib/server/services/background-service';
+import type { BackgroundService } from '#lib/server/services/background-service.js';
 import { captchaSolverSettingsService } from './CaptchaSolverSettings';
 import type {
 	BrowserFetchRequest,

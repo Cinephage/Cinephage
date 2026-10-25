@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildAccountRequestBody, buildAccountTestRequestBody } from './accountFormPayload';
-import type { FormData, TestConfig } from '$lib/components/livetv/LiveTvAccountModal.svelte';
+import type { FormData, TestConfig } from '#lib/components/livetv/LiveTvAccountModal.svelte';
 
 const baseFormData: FormData = {
 	name: 'My Portal',

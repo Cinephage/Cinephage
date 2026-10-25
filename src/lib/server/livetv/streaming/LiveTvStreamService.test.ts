@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const resolveAndValidateUrlMock = vi.hoisted(() => vi.fn());
 
-vi.mock('$lib/server/http/ssrf-protection', () => ({
+vi.mock('#lib/server/http/ssrf-protection.js', () => ({
 	resolveAndValidateUrl: resolveAndValidateUrlMock
 }));
 
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	createChildLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() })
 }));
 

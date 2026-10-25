@@ -1,5 +1,5 @@
 import type { RequestHandler } from './$types';
-import { emptyListSkeleton } from '$lib/server/arr/skeleton.js';
+import { emptyListSkeleton } from '#lib/server/arr/skeleton.js';
 
 /**
  * GET /api/sonarr/api/v3/customfilter

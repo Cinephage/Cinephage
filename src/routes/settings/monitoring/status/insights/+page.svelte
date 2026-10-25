@@ -1,7 +1,7 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
-	import { SettingsPage, SettingsSection } from '$lib/components/ui/settings';
-	import InsightsPanel from '$lib/components/storage/InsightsPanel.svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { SettingsPage, SettingsSection } from '#lib/components/ui/settings/index.js';
+	import InsightsPanel from '#lib/components/storage/InsightsPanel.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -14,7 +14,12 @@
 	<title>{m.status_insights_title()}</title>
 </svelte:head>
 
-<SettingsPage title={m.status_insights_title()} subtitle={m.status_insights_subtitle()}>
+<SettingsPage
+	title={m.status_insights_title()}
+	subtitle={m.status_insights_subtitle()}
+	backHref="/settings/monitoring/status"
+	backLabel={m.nav_storageMaintenance()}
+>
 	<SettingsSection title="Active">
 		<InsightsPanel insights={activeInsights} />
 	</SettingsSection>

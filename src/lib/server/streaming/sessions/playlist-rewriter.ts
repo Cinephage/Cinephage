@@ -1,11 +1,11 @@
 import type { PlaybackSession, PlaybackSessionSubtitle, SessionResourceKind } from '../types';
-import type { SubtitleRequirement } from '$lib/shared/language-profile';
+import type { SubtitleRequirement } from '#lib/shared/language-profile.js';
 import { resolveHlsUrl } from '../utils/hls-rewrite.js';
 import {
 	languageSatisfies,
 	matchesRequirement
-} from '$lib/server/subtitles/requirement-matcher.js';
-import { normalizeLanguageCode } from '$lib/shared/languages';
+} from '#lib/server/subtitles/requirement-matcher.js';
+import { normalizeLanguageCode } from '#lib/shared/languages.js';
 
 /**
  * Index of the track that should carry DEFAULT=YES, chosen from the item's

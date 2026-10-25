@@ -1,11 +1,10 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { z } from 'zod';
 import { stat } from 'node:fs/promises';
-import { manualImportService } from '$lib/server/library/manual-import-service.js';
-import { isPathAllowed, isPathInsideManagedRoot } from '$lib/server/filesystem/path-guard.js';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { createChildLogger } from '$lib/logging';
+import { manualImportService } from '#lib/server/library/manual-import-service.js';
+import { isPathAllowed, isPathInsideManagedRoot } from '#lib/server/filesystem/path-guard.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LibraryImportDetectApi', logDomain: 'scans' });
 
@@ -45,14 +44,17 @@ export const POST: RequestHandler = async (event) => {
 			// BODY_SIZE_LIMIT, surfacing here as a 413 Payload Too Large.
 			const status = (error as { status?: number } | null)?.status;
 			if (status === 413) {
-				return json({ success: false, error: 'Request payload too large' }, { status: 413 });
+				return Response.json(
+					{ success: false, error: 'Request payload too large' },
+					{ status: 413 }
+				);
 			}
-			return json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
+			return Response.json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
 		}
 
 		const parsed = detectSchema.safeParse(body);
 		if (!parsed.success) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: 'Validation failed',
@@ -64,7 +66,7 @@ export const POST: RequestHandler = async (event) => {
 
 		const { sourcePath, mediaType, requireFile } = parsed.data;
 		if (!(await isPathAllowed(sourcePath))) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: 'Access denied: Path is outside allowed directories'
@@ -73,7 +75,7 @@ export const POST: RequestHandler = async (event) => {
 			);
 		}
 		if (await isPathInsideManagedRoot(sourcePath)) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: 'Import source cannot be inside a managed root folder.'
@@ -84,7 +86,7 @@ export const POST: RequestHandler = async (event) => {
 		if (requireFile) {
 			const sourceStats = await stat(sourcePath);
 			if (!sourceStats.isFile()) {
-				return json(
+				return Response.json(
 					{
 						success: false,
 						error: 'Please select a media file for this import.'
@@ -95,10 +97,10 @@ export const POST: RequestHandler = async (event) => {
 		}
 
 		const result = await manualImportService.detectFromPath(sourcePath, mediaType);
-		return json({ success: true, data: result });
+		return Response.json({ success: true, data: result });
 	} catch (error) {
 		logger.error('[API] Manual import detect failed', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: getDetectErrorMessage(error)

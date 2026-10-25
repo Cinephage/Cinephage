@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { History } from 'lucide-svelte';
-	import * as m from '$lib/paraglide/messages.js';
-	import type { UnifiedTask } from '$lib/server/tasks/UnifiedTaskRegistry';
-	import type { TaskHistoryEntry } from '$lib/types/task';
-	import { toasts } from '$lib/stores/toast.svelte';
+	import { History } from '@lucide/svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import type { UnifiedTask } from '#lib/server/tasks/UnifiedTaskRegistry.js';
+	import type { TaskHistoryEntry } from '#lib/types/task.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
 	import TaskIntervalCell from './TaskIntervalCell.svelte';
-	import { formatDuration, formatDisplayDate } from '$lib/utils/format.js';
+	import { formatDuration, formatDisplayDate } from '#lib/utils/format.js';
 
 	interface Props {
 		task: UnifiedTask;

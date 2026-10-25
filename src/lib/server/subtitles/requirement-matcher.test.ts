@@ -3,7 +3,7 @@ import type {
 	SubtitleAccessibility,
 	SubtitleRequirement,
 	SubtitleVariant
-} from '$lib/shared/language-profile.js';
+} from '#lib/shared/language-profile.js';
 import { languageSatisfies, matchesRequirement, type SubtitleLike } from './requirement-matcher.js';
 
 const req = (

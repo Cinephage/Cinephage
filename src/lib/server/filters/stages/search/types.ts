@@ -1,4 +1,4 @@
-import type { ScoringProfile } from '$lib/server/scoring/types.js';
+import type { ScoringProfile } from '#lib/server/scoring/types.js';
 
 export interface SearchEligibilityContext {
 	media: {

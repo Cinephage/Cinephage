@@ -1,5 +1,5 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import {
 		X,
 		Loader2,
@@ -11,12 +11,15 @@
 		User,
 		Crown,
 		CreditCard
-	} from 'lucide-svelte';
-	import type { SubtitleProviderConfig, ProviderImplementation } from '$lib/server/subtitles/types';
-	import type { ProviderDefinition } from '$lib/server/subtitles/providers/interfaces';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
-	import { SectionHeader, TestResult } from '$lib/components/ui/modal';
-	import { isBlankOrRedacted, isSensitiveKeyName } from '$lib/shared/sensitiveSettings';
+	} from '@lucide/svelte';
+	import type {
+		SubtitleProviderConfig,
+		ProviderImplementation
+	} from '#lib/server/subtitles/types.js';
+	import type { ProviderDefinition } from '#lib/server/subtitles/providers/interfaces.js';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
+	import { SectionHeader, TestResult } from '#lib/components/ui/modal/index.js';
+	import { isBlankOrRedacted, isSensitiveKeyName } from '#lib/shared/sensitiveSettings.js';
 
 	/**
 	 * Setting keys that map to dedicated top-level provider config columns

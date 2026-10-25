@@ -1,7 +1,7 @@
 import type { MediaServerStatsProviderConfig } from '../types.js';
 import { normalizeJellyfinHdr } from '../hdr-normalize.js';
 import { EmbyCompatibleProvider } from './EmbyCompatibleProvider.js';
-import { MediaBrowserClient } from '$lib/server/notifications/mediabrowser/MediaBrowserClient.js';
+import { MediaBrowserClient } from '#lib/server/notifications/mediabrowser/MediaBrowserClient.js';
 
 export class JellyfinStatsProvider extends EmbyCompatibleProvider {
 	constructor(config: MediaServerStatsProviderConfig) {

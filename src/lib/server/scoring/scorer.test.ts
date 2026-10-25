@@ -8,7 +8,7 @@ vi.mock('./formats/registry.js', () => ({
 }));
 
 import { scoreRelease, isUpgrade } from './scorer';
-import { DEFAULT_PROFILES } from './profiles';
+import { DEFAULT_PROFILES, BALANCED_PROFILE } from './profiles';
 import type { ScoringProfile } from './types';
 
 // Profiles that support torrent-based release scoring (excludes streaming-only)
@@ -638,5 +638,24 @@ describe('Season Pack and Episode Scoring', () => {
 		// Current implementation: same quality = same score
 		// (Pack bonuses are not applied in current scorer implementation)
 		expect(singleEpisode.totalScore).toBe(seasonPack.totalScore);
+	});
+});
+
+describe('Glued channel-digit audio parsing (#585)', () => {
+	it('detects FLAC1.0 and lets the Bluray encode outrank the REMUX under Balanced', () => {
+		const remux = scoreRelease(
+			'And.Justice.for.All.1979.1080p.BluRay.REMUX.AVC.FLAC.1.0-ZnP',
+			BALANCED_PROFILE
+		);
+		const encode = scoreRelease(
+			'And.Justice.for.All.1979.1080p.BluRay.FLAC1.0.x264-ZoroSenpai',
+			BALANCED_PROFILE
+		);
+
+		// Both detect FLAC now, so the encode's +50 Bluray-vs-Remux source
+		// edge decides: 200+200+10+80 = 490 beats 200+150+10+80 = 440.
+		// Before the parser fix the encode lost FLAC's 80 points (410 < 440).
+		expect(encode.totalScore).toBe(490);
+		expect(remux.totalScore).toBe(440);
 	});
 });

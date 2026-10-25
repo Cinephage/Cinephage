@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { X, Loader2, XCircle, Tv, Radio, List, Globe } from 'lucide-svelte';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
-	import { TestResult } from '$lib/components/ui/modal';
+	import { X, Loader2, XCircle, Tv, Radio, List, Globe } from '@lucide/svelte';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
+	import { TestResult } from '#lib/components/ui/modal/index.js';
 	import LiveTvProviderPicker from './LiveTvProviderPicker.svelte';
 	import StalkerAccountForm from './forms/StalkerAccountForm.svelte';
 	import XstreamAccountForm from './forms/XstreamAccountForm.svelte';
@@ -12,10 +12,10 @@
 		LiveTvAccount,
 		LiveTvProviderType,
 		LiveTvAccountTestResult
-	} from '$lib/types/livetv';
-	import * as m from '$lib/paraglide/messages.js';
-	import { isBlankOrRedacted } from '$lib/shared/sensitiveSettings';
-	import { formatDisplayDate } from '$lib/utils/format.js';
+	} from '#lib/types/livetv.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import { isBlankOrRedacted, REDACTED_VALUE } from '#lib/shared/sensitiveSettings.js';
+	import { formatDisplayDate } from '#lib/utils/format.js';
 
 	interface Props {
 		open: boolean;
@@ -49,6 +49,8 @@
 
 	export interface TestConfig {
 		providerType: LiveTvProviderType;
+		/** Stored account to resolve [REDACTED] secrets against (edit mode). */
+		accountId?: string;
 		portalUrl?: string;
 		macAddress?: string;
 		baseUrl?: string;
@@ -232,6 +234,13 @@
 			providerType: selectedProvider as LiveTvProviderType
 		};
 
+		// In edit mode the stored credential never reaches this browser, so an
+		// untouched password field tests against the server-side value via the
+		// redaction marker + accountId.
+		if (mode === 'edit' && account) {
+			config.accountId = account.id;
+		}
+
 		switch (selectedProvider) {
 			case 'stalker':
 				config.portalUrl = portalUrl.trim();
@@ -241,10 +250,7 @@
 			case 'xstream':
 				config.baseUrl = baseUrl.trim();
 				config.username = username.trim();
-				config.password =
-					(isBlankOrRedacted(password?.trim())
-						? account?.xstreamConfig?.password
-						: password.trim()) || '';
+				config.password = isBlankOrRedacted(password?.trim()) ? REDACTED_VALUE : password.trim();
 				if (epgUrl.trim()) {
 					config.epgUrl = epgUrl.trim();
 				}

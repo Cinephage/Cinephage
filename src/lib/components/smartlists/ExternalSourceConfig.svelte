@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { Database, Globe, Loader2, Check, AlertCircle } from 'lucide-svelte';
-	import * as m from '$lib/paraglide/messages.js';
+	import { Database, Globe, Loader2, Check, AlertCircle } from '@lucide/svelte';
+	import * as m from '#lib/paraglide/messages.js';
 	import { onMount } from 'svelte';
-	import { getSmartListPresets, testExternalList } from '$lib/api/smartlists.js';
+	import { getSmartListPresets, testExternalList } from '#lib/api/smartlists.js';
 
 	// Types
 	interface PresetSetting {

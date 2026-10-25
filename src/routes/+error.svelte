@@ -1,5 +1,5 @@
 <script lang="ts" module>
-	import * as m from '$lib/paraglide/messages.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	const fallbackMessage = m.error_fallbackMessage();
 </script>

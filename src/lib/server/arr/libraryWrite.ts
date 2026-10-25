@@ -15,12 +15,12 @@
  */
 
 import { eq } from 'drizzle-orm';
-import { db } from '$lib/server/db/index.js';
-import { rootFolders } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { rootFolders } from '#lib/server/db/schema.js';
 import { getEntityIdForArrId, getOrAssignArrId } from './ArrIdMappingService.js';
 import { buildMovieByArrId } from './movies.js';
 import { buildSeriesByArrId } from './series.js';
-import { tmdb } from '$lib/server/tmdb.js';
+import { tmdb } from '#lib/server/tmdb.js';
 
 type FetchFn = typeof fetch;
 

@@ -6,8 +6,9 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { db } from '$lib/server/db/index.js';
-import { todayDateString } from '$lib/utils/format.js';
+import { writeFile } from 'node:fs/promises';
+import { db } from '#lib/server/db/index.js';
+import { todayDateString } from '#lib/utils/format.js';
 import {
 	unmatchedFiles,
 	movies,
@@ -17,22 +18,59 @@ import {
 	episodes,
 	episodeFiles,
 	librarySettings,
-	rootFolders
-} from '$lib/server/db/schema.js';
-import { eq, and, gt, asc } from 'drizzle-orm';
-import { tmdb, type SearchResult } from '$lib/server/tmdb.js';
+	rootFolders,
+	downloadQueue,
+	downloadHistory,
+	requests
+} from '#lib/server/db/schema.js';
+import { eq, and, gt, asc, inArray } from 'drizzle-orm';
+import { tmdb, type SearchResult } from '#lib/server/tmdb.js';
 import { mediaInfoService } from './media-info.js';
-import { basename, dirname, extname, join, relative } from 'path';
-import { RootFolderConflictError } from '$lib/errors';
-import { searchSubtitlesForNewMedia } from '$lib/server/subtitles/services/SubtitleImportService.js';
-import { monitoringScheduler } from '$lib/server/monitoring/MonitoringScheduler.js';
-import { logger, createChildLogger } from '$lib/logging/index.js';
-import { parseRelease, extractExternalIds } from '$lib/server/indexers/parser/ReleaseParser.js';
+import { basename, dirname, extname, isAbsolute, join, relative } from 'path';
+import { RootFolderConflictError } from '#lib/errors/index.js';
+import { searchSubtitlesForNewMedia } from '#lib/server/subtitles/services/SubtitleImportService.js';
+import { monitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.js';
+import { logger, createChildLogger } from '#lib/logging/index.js';
+import { parseRelease, extractExternalIds } from '#lib/server/indexers/parser/ReleaseParser.js';
 import { getMediaParseStem } from './media-utils.js';
-import { resolveTvEpisodeIdentifier, extractSeasonFromPath } from './tv-episode-resolver.js';
-import { getLibraryEntityService } from '$lib/server/library/LibraryEntityService.js';
-import { isLikelyAnimeMedia } from '$lib/shared/anime-classification.js';
+import {
+	resolveTvEpisodeIdentifier,
+	extractSeasonFromPath,
+	matchEpisodesByIdentifier
+} from './tv-episode-resolver.js';
+import { matchSpecialEpisodeByTitle } from './episode-title-matcher.js';
+import { getLibraryEntityService } from '#lib/server/library/LibraryEntityService.js';
+import { isLikelyAnimeMedia } from '#lib/shared/anime-classification.js';
 import { canonicalizeArticleTitle, calculateMatchConfidence } from './title-matching.js';
+import { deleteAllSeasonsAndEpisodes } from '#lib/server/metadata/EpisodeGroupService.js';
+import { getDownloadClientManager } from '#lib/server/downloadClients/DownloadClientManager.js';
+import { acquisitionService } from '#lib/server/acquisition/AcquisitionService.js';
+import { RenamePreviewService } from './naming/RenamePreviewService.js';
+import { getSidecarSettings } from '#lib/server/library/sidecar/sidecarSettings.js';
+import { resolveMovieMultiQuality } from '#lib/server/quality/movie-buckets.js';
+import {
+	computeMovieReplacement,
+	computeEpisodeReplacement
+} from '#lib/server/downloadClients/import/replacement.js';
+import { deletePhysicalFile } from '#lib/server/downloadClients/import/FileTransfer.js';
+import { getFileManagementSettings } from '#lib/server/settings/file-management.js';
+import type { Resolution } from '#lib/server/indexers/parser/types.js';
+import {
+	buildMovieNfo,
+	buildSeriesNfo,
+	buildSeasonNfo,
+	buildEpisodeNfo,
+	nfoPathFor
+} from '#lib/server/library/sidecar/NfoGenerator.js';
+import {
+	downloadSidecarImage,
+	shouldWriteSidecar,
+	tmdbImageUrl,
+	movieArtworkPaths,
+	seriesArtworkPaths,
+	seasonArtworkPath,
+	folderOf
+} from '#lib/server/library/sidecar/SidecarImageService.js';
 
 /**
  * Default match confidence threshold (0.0 - 1.0)
@@ -774,8 +812,10 @@ export class MediaMatcherService {
 	async acceptMatch(
 		unmatchedFileId: string,
 		tmdbId: number,
-		mediaType: 'movie' | 'tv'
+		mediaType: 'movie' | 'tv',
+		options?: { allowReplace?: boolean }
 	): Promise<void> {
+		const allowReplace = options?.allowReplace ?? false;
 		const [file] = await db
 			.select()
 			.from(unmatchedFiles)
@@ -888,9 +928,9 @@ export class MediaMatcherService {
 		const mediaInfo = await mediaInfoService.extractMediaInfo(file.path, { allowStrmProbe });
 
 		if (mediaType === 'movie') {
-			await this.createMovieEntry(file, tmdbId, rootFolder, mediaInfo);
+			await this.createMovieEntry(file, tmdbId, rootFolder, mediaInfo, allowReplace);
 		} else {
-			await this.createSeriesEntry(file, tmdbId, rootFolder, mediaInfo);
+			await this.createSeriesEntry(file, tmdbId, rootFolder, mediaInfo, allowReplace);
 		}
 
 		// Remove from unmatched
@@ -960,7 +1000,17 @@ export class MediaMatcherService {
 		if (!existingRoot) return;
 
 		const expectedDir = join(existingRoot.path, existingPath);
-		if (!file.path.startsWith(expectedDir + '/')) {
+		// path.relative() normalizes both sides (collapses redundant separators,
+		// trailing slashes, '.'/'..' segments) before comparing, a plain
+		// String.startsWith on raw paths falsely conflicted whenever the two
+		// path strings differed only cosmetically (e.g. a root folder path
+		// re-saved with/without a trailing slash), which is exactly what NFS
+		// mounts plus a "reapply root folder" troubleshooting step can produce
+		// (GitHub Issue #595). A relative path that starts with '..' or is itself
+		// absolute means file.path falls outside expectedDir.
+		const rel = relative(expectedDir, file.path);
+		const isInside = rel !== '' && !rel.startsWith('..') && !isAbsolute(rel);
+		if (!isInside) {
 			throw new RootFolderConflictError(
 				`Refusing to link "${file.path}" to "${title}": the file is not inside "${expectedDir}", where "${title}" is registered under the "${existingRoot.name}" root folder. Linking it would create an unresolvable file path.`
 			);
@@ -974,7 +1024,8 @@ export class MediaMatcherService {
 		file: typeof unmatchedFiles.$inferSelect,
 		tmdbId: number,
 		rootFolder: typeof rootFolders.$inferSelect,
-		mediaInfo: Awaited<ReturnType<typeof mediaInfoService.extractMediaInfo>>
+		mediaInfo: Awaited<ReturnType<typeof mediaInfoService.extractMediaInfo>>,
+		allowReplace: boolean
 	): Promise<void> {
 		// Fetch movie details and external IDs from TMDB
 		const [tmdbMovie, externalIds] = await Promise.all([
@@ -1038,6 +1089,8 @@ export class MediaMatcherService {
 					backdropPath: tmdbMovie.backdrop_path,
 					runtime: tmdbMovie.runtime,
 					genres: tmdbMovie.genres?.map((g) => g.name),
+					tmdbCollectionId: tmdbMovie.belongs_to_collection?.id ?? null,
+					collectionName: tmdbMovie.belongs_to_collection?.name ?? null,
 					path: movieFolder || fileName,
 					libraryId: owningLibrary.id,
 					rootFolderId: rootFolder.id,
@@ -1092,7 +1145,7 @@ export class MediaMatcherService {
 		const parsedQuality = parseRelease(parseableFilename || originalFilename);
 
 		// Create movie file entry with proper sceneName, releaseGroup, and quality data
-		await db
+		const [insertedFile] = await db
 			.insert(movieFiles)
 			.values({
 				movieId,
@@ -1109,7 +1162,78 @@ export class MediaMatcherService {
 					hdr: parsedQuality.hdr ?? undefined
 				}
 			})
-			.onConflictDoNothing();
+			.onConflictDoNothing()
+			.returning({ id: movieFiles.id });
+
+		let newFileId = insertedFile?.id;
+		if (!newFileId) {
+			const [raced] = await db
+				.select({ id: movieFiles.id })
+				.from(movieFiles)
+				.where(and(eq(movieFiles.movieId, movieId), eq(movieFiles.relativePath, fileName)))
+				.limit(1);
+			newFileId = raced?.id;
+		}
+
+		// Deliberate (manual-match) links apply the shared replacement policy:
+		// a re-match whose generated filename differs from the existing file's
+		// no longer leaves both on disk (issue #627). Scan auto-match passes
+		// allowReplace=false and stays purely additive.
+		if (newFileId) {
+			await this.retireReplacedMovieFiles(
+				movieId,
+				newFileId,
+				parsedQuality.resolution,
+				allowReplace
+			);
+		}
+
+		// Optional sidecar files (.nfo + poster/fanart) - mirrors the
+		// automatic download-client import path in ImportService.ts.
+		// Never let a write failure here fail an otherwise-successful match.
+		const sidecarSettings = getSidecarSettings();
+		if (sidecarSettings.enabled) {
+			try {
+				const [movieRow] = await db.select().from(movies).where(eq(movies.id, movieId));
+				if (movieRow) {
+					const destPath = file.path;
+					const nfoPath = nfoPathFor(destPath);
+					if (await shouldWriteSidecar(nfoPath, sidecarSettings.overwriteExisting)) {
+						await writeFile(
+							nfoPath,
+							buildMovieNfo(
+								movieRow,
+								{ mediaInfo, quality: { codec: parsedQuality.codec ?? undefined } },
+								sidecarSettings.includeArtwork
+							),
+							'utf-8'
+						);
+					}
+
+					if (sidecarSettings.includeArtwork) {
+						const movieFolder = folderOf(destPath);
+						const { poster, fanart } = movieArtworkPaths(movieFolder);
+						await Promise.all([
+							downloadSidecarImage(
+								tmdbImageUrl(movieRow.posterPath),
+								poster,
+								sidecarSettings.overwriteExisting
+							),
+							downloadSidecarImage(
+								tmdbImageUrl(movieRow.backdropPath),
+								fanart,
+								sidecarSettings.overwriteExisting
+							)
+						]);
+					}
+				}
+			} catch (err) {
+				logger.warn(
+					{ movieId, err: err instanceof Error ? err.message : String(err) },
+					'[MediaMatcher] Failed to write sidecar files'
+				);
+			}
+		}
 
 		// Trigger subtitle search if enabled (after metadata is fetched)
 		this.triggerSubtitleSearch('movie', movieId).catch((err) => {
@@ -1124,13 +1248,167 @@ export class MediaMatcherService {
 	}
 
 	/**
+	 * Retire movie files displaced by a deliberate (re-)match (issue #627).
+	 * `retire: allowReplace` makes computeMovieReplacement a no-op when the
+	 * match wasn't deliberate (scan auto-match), so this is always safe to call.
+	 */
+	private async retireReplacedMovieFiles(
+		movieId: string,
+		keepFileId: string,
+		newResolution: Resolution | null | undefined,
+		allowReplace: boolean
+	): Promise<void> {
+		const currentFiles = await db.select().from(movieFiles).where(eq(movieFiles.movieId, movieId));
+		const [movieRow] = await db
+			.select({
+				path: movies.path,
+				desiredQualities: movies.desiredQualities,
+				scoringProfileId: movies.scoringProfileId
+			})
+			.from(movies)
+			.where(eq(movies.id, movieId));
+		if (!movieRow) return;
+
+		const { multiQuality } = await resolveMovieMultiQuality(
+			movieRow.desiredQualities,
+			movieRow.scoringProfileId
+		);
+		const replaceIds = new Set(
+			computeMovieReplacement({
+				existingFiles: currentFiles,
+				newResolution: newResolution ?? undefined,
+				multiQuality,
+				retire: allowReplace,
+				keepFileIds: [keepFileId]
+			})
+		);
+		if (replaceIds.size === 0) return;
+
+		const rootFolder = await this.getRootFolderForMovie(movieId);
+		if (!rootFolder) return;
+		const { recycleEnabled } = await getFileManagementSettings();
+
+		for (const oldFile of currentFiles) {
+			if (!replaceIds.has(oldFile.id)) continue;
+			const oldFilePath = join(rootFolder.path, movieRow.path, oldFile.relativePath);
+			try {
+				await deletePhysicalFile(oldFilePath, recycleEnabled, rootFolder.path);
+			} catch (err) {
+				logger.warn(
+					{ movieId, fileId: oldFile.id, err: err instanceof Error ? err.message : String(err) },
+					'[MediaMatcher] Failed to delete displaced movie file (issue #627)'
+				);
+				continue;
+			}
+			// Best-effort: the displaced file's .nfo would otherwise be left
+			// behind as a stale orphan under the old name.
+			try {
+				await deletePhysicalFile(nfoPathFor(oldFilePath), recycleEnabled, rootFolder.path);
+			} catch (err) {
+				logger.warn(
+					{ movieId, fileId: oldFile.id, err: err instanceof Error ? err.message : String(err) },
+					'[MediaMatcher] Failed to delete displaced movie .nfo sidecar (non-fatal)'
+				);
+			}
+			await db.delete(movieFiles).where(eq(movieFiles.id, oldFile.id));
+			logger.info(
+				{ movieId, fileId: oldFile.id, relativePath: oldFile.relativePath },
+				'[MediaMatcher] Retired displaced movie file after manual (re-)match'
+			);
+		}
+	}
+
+	/**
+	 * Retire episode files displaced by a deliberate (re-)match (issue #627),
+	 * following the same coverage rule ImportService uses: a multi-episode
+	 * pack only retires when the incoming file covers every episode it held.
+	 * No-op when `allowReplace` is false (scan auto-match stays additive -
+	 * computeEpisodeReplacement has no retire flag of its own to delegate to).
+	 */
+	private async retireReplacedEpisodeFiles(
+		seriesId: string,
+		incomingEpisodeIds: string[],
+		keepFileId: string | undefined,
+		rootFolder: typeof rootFolders.$inferSelect,
+		allowReplace: boolean
+	): Promise<void> {
+		if (!allowReplace || !keepFileId) return;
+
+		const currentFiles = await db
+			.select()
+			.from(episodeFiles)
+			.where(eq(episodeFiles.seriesId, seriesId));
+		const [seriesRow] = await db
+			.select({ path: series.path })
+			.from(series)
+			.where(eq(series.id, seriesId));
+		if (!seriesRow) return;
+
+		const replaceIds = new Set(
+			computeEpisodeReplacement({
+				existingFiles: currentFiles,
+				incomingEpisodeIds,
+				keepFileIds: [keepFileId],
+				retireStrmPlaceholders: true
+			})
+		);
+		if (replaceIds.size === 0) return;
+
+		const { recycleEnabled } = await getFileManagementSettings();
+		for (const oldFile of currentFiles) {
+			if (!replaceIds.has(oldFile.id)) continue;
+			const oldFilePath = join(rootFolder.path, seriesRow.path, oldFile.relativePath);
+			try {
+				await deletePhysicalFile(oldFilePath, recycleEnabled, rootFolder.path);
+			} catch (err) {
+				logger.warn(
+					{ seriesId, fileId: oldFile.id, err: err instanceof Error ? err.message : String(err) },
+					'[MediaMatcher] Failed to delete displaced episode file (issue #627)'
+				);
+				continue;
+			}
+			// Best-effort: the displaced file's .nfo would otherwise be left
+			// behind as a stale orphan under the old name.
+			try {
+				await deletePhysicalFile(nfoPathFor(oldFilePath), recycleEnabled, rootFolder.path);
+			} catch (err) {
+				logger.warn(
+					{ seriesId, fileId: oldFile.id, err: err instanceof Error ? err.message : String(err) },
+					'[MediaMatcher] Failed to delete displaced episode .nfo sidecar (non-fatal)'
+				);
+			}
+			await db.delete(episodeFiles).where(eq(episodeFiles.id, oldFile.id));
+			logger.info(
+				{ seriesId, fileId: oldFile.id, relativePath: oldFile.relativePath },
+				'[MediaMatcher] Retired displaced episode file after manual (re-)match'
+			);
+		}
+	}
+
+	private async getRootFolderForMovie(
+		movieId: string
+	): Promise<typeof rootFolders.$inferSelect | undefined> {
+		const [movieRow] = await db
+			.select({ rootFolderId: movies.rootFolderId })
+			.from(movies)
+			.where(eq(movies.id, movieId));
+		if (!movieRow?.rootFolderId) return undefined;
+		const [rootFolder] = await db
+			.select()
+			.from(rootFolders)
+			.where(eq(rootFolders.id, movieRow.rootFolderId));
+		return rootFolder;
+	}
+
+	/**
 	 * Create a series/episode entry from an unmatched file
 	 */
 	private async createSeriesEntry(
 		file: typeof unmatchedFiles.$inferSelect,
 		tmdbId: number,
 		rootFolder: typeof rootFolders.$inferSelect,
-		mediaInfo: Awaited<ReturnType<typeof mediaInfoService.extractMediaInfo>>
+		mediaInfo: Awaited<ReturnType<typeof mediaInfoService.extractMediaInfo>>,
+		allowReplace: boolean
 	): Promise<void> {
 		// Fetch series details and external IDs from TMDB
 		const [tmdbSeries, externalIds] = await Promise.all([
@@ -1249,23 +1527,57 @@ export class MediaMatcherService {
 				resolvedEpisode = resolvedEpisode ?? tvId.episodeNumbers[0];
 			} else if (tvId?.numbering === 'absolute') {
 				// Absolute episode - resolve to season/episode via DB (populated above)
-				const [epRecord] = await db
+				const seriesEpisodes = await db
 					.select({
 						seasonNumber: episodes.seasonNumber,
-						episodeNumber: episodes.episodeNumber
+						episodeNumber: episodes.episodeNumber,
+						absoluteEpisodeNumber: episodes.absoluteEpisodeNumber
 					})
 					.from(episodes)
-					.where(
-						and(
-							eq(episodes.seriesId, seriesId),
-							eq(episodes.absoluteEpisodeNumber, tvId.absoluteEpisode)
-						)
-					)
-					.limit(1);
-				if (epRecord) {
-					resolvedSeason = epRecord.seasonNumber;
-					resolvedEpisode = epRecord.episodeNumber;
+					.where(eq(episodes.seriesId, seriesId));
+				const [match] = matchEpisodesByIdentifier(seriesEpisodes, tvId);
+				if (match) {
+					resolvedSeason = match.seasonNumber;
+					resolvedEpisode = match.episodeNumber;
 				}
+			}
+		}
+
+		if (resolvedSeason === null || resolvedEpisode === null) {
+			// Sonarr-style fallback: title-only files match season 0 specials by
+			// contained episode title ("Razor (2007)" → the BSG special "Razor").
+			const stem = getMediaParseStem(file.path);
+			const reparsed = parseRelease(stem);
+			const seriesEpisodes = await db
+				.select()
+				.from(episodes)
+				.where(eq(episodes.seriesId, seriesId));
+			const parentFolder = basename(dirname(file.path));
+			const candidates = parentFolder !== seriesFolder ? [stem, parentFolder] : [stem];
+			const titleMatch = matchSpecialEpisodeByTitle(
+				seriesEpisodes,
+				candidates,
+				file.parsedYear ?? reparsed.year,
+				existingSeries?.title ?? tmdbSeries.name
+			);
+
+			if (titleMatch) {
+				resolvedSeason = titleMatch.episode.seasonNumber;
+				resolvedEpisode = titleMatch.episode.episodeNumber;
+				logger.info(
+					{
+						fileId: file.id,
+						filePath: file.path,
+						tmdbId,
+						season: resolvedSeason,
+						episode: resolvedEpisode,
+						method: titleMatch.method,
+						position: titleMatch.position,
+						coverage: titleMatch.coverage,
+						candidate: titleMatch.candidate
+					},
+					'[MediaMatcher] Resolved special episode by title'
+				);
 			}
 		}
 
@@ -1359,6 +1671,7 @@ export class MediaMatcherService {
 		// single-episode files have only one entry.
 		const episodeMonitored = (rootFolder.defaultMonitored ?? true) && seasonNumber !== 0;
 		const allEpisodeIds: string[] = [];
+		const matchingEpisodeRows: (typeof episodes.$inferSelect)[] = [];
 		let primaryEpisode: typeof episodes.$inferSelect | undefined;
 
 		for (const epNum of allEpisodeNumbers) {
@@ -1415,6 +1728,7 @@ export class MediaMatcherService {
 			}
 
 			allEpisodeIds.push(ep.id);
+			matchingEpisodeRows.push(ep);
 			if (epNum === episodeNumber) {
 				primaryEpisode = ep;
 			}
@@ -1445,7 +1759,7 @@ export class MediaMatcherService {
 		const parsedQuality = parseRelease(parseableFilename || originalFilename);
 
 		// Create/update episode file entry with proper sceneName, releaseGroup, and quality data
-		await this.upsertEpisodeFileByPath({
+		const newEpisodeFileId = await this.upsertEpisodeFileByPath({
 			seriesId,
 			seasonNumber,
 			episodeIds: allEpisodeIds,
@@ -1462,6 +1776,110 @@ export class MediaMatcherService {
 				hdr: parsedQuality.hdr ?? undefined
 			}
 		});
+
+		// Deliberate (manual-match) links retire files displaced by the
+		// coverage rule (issue #627). Scan auto-match passes allowReplace=false.
+		await this.retireReplacedEpisodeFiles(
+			seriesId,
+			allEpisodeIds,
+			newEpisodeFileId,
+			rootFolder,
+			allowReplace
+		);
+
+		// Optional sidecar files - mirrors the automatic download-client
+		// import path in ImportService.ts. TV has three independent levels (episode .nfo,
+		// show-level tvshow.nfo + artwork, season poster) - see the comment
+		// on the equivalent block in ImportService.ts for why.
+		const sidecarSettings = getSidecarSettings();
+		if (sidecarSettings.enabled) {
+			const seriesFolderAbsolute = join(rootFolder.path, seriesFolder);
+			const destPath = file.path;
+			const [seriesRow] = await db.select().from(series).where(eq(series.id, seriesId));
+
+			if (sidecarSettings.tvEpisodeLevel && seriesRow) {
+				try {
+					const nfoPath = nfoPathFor(destPath);
+					if (await shouldWriteSidecar(nfoPath, sidecarSettings.overwriteExisting)) {
+						await writeFile(
+							nfoPath,
+							buildEpisodeNfo(seriesRow, matchingEpisodeRows, {
+								mediaInfo,
+								quality: { codec: parsedQuality.codec ?? undefined }
+							}),
+							'utf-8'
+						);
+					}
+				} catch (err) {
+					logger.warn(
+						{ seriesId, err: err instanceof Error ? err.message : String(err) },
+						'[MediaMatcher] Failed to write episode NFO sidecar'
+					);
+				}
+			}
+
+			if (sidecarSettings.tvSeriesLevel && seriesRow) {
+				try {
+					const tvshowNfoPath = join(seriesFolderAbsolute, 'tvshow.nfo');
+					if (await shouldWriteSidecar(tvshowNfoPath, sidecarSettings.overwriteExisting)) {
+						await writeFile(
+							tvshowNfoPath,
+							buildSeriesNfo(seriesRow, sidecarSettings.includeArtwork),
+							'utf-8'
+						);
+					}
+
+					if (sidecarSettings.includeArtwork) {
+						const { poster, fanart } = seriesArtworkPaths(seriesFolderAbsolute);
+						await Promise.all([
+							downloadSidecarImage(
+								tmdbImageUrl(seriesRow.posterPath),
+								poster,
+								sidecarSettings.overwriteExisting
+							),
+							downloadSidecarImage(
+								tmdbImageUrl(seriesRow.backdropPath),
+								fanart,
+								sidecarSettings.overwriteExisting
+							)
+						]);
+					}
+				} catch (err) {
+					logger.warn(
+						{ seriesId, err: err instanceof Error ? err.message : String(err) },
+						'[MediaMatcher] Failed to write series-level sidecar files'
+					);
+				}
+			}
+
+			if (sidecarSettings.tvSeasonLevel) {
+				try {
+					if (season) {
+						const seasonNfoPath = join(folderOf(destPath), 'season.nfo');
+						if (await shouldWriteSidecar(seasonNfoPath, sidecarSettings.overwriteExisting)) {
+							await writeFile(seasonNfoPath, buildSeasonNfo(season), 'utf-8');
+						}
+
+						if (sidecarSettings.includeArtwork && season.posterPath) {
+							await downloadSidecarImage(
+								tmdbImageUrl(season.posterPath),
+								seasonArtworkPath(seriesFolderAbsolute, seasonNumber),
+								sidecarSettings.overwriteExisting
+							);
+						}
+					}
+				} catch (err) {
+					logger.warn(
+						{
+							seriesId,
+							seasonNumber,
+							err: err instanceof Error ? err.message : String(err)
+						},
+						'[MediaMatcher] Failed to write season-level sidecar files'
+					);
+				}
+			}
+		}
 
 		// Update series stats
 		await this.updateSeriesStats(seriesId);
@@ -1632,6 +2050,359 @@ export class MediaMatcherService {
 				suggestedMatches: []
 			})
 			.where(eq(unmatchedFiles.id, unmatchedFileId));
+	}
+
+	/**
+	 * Cancel and remove any active downloads for a library item before a
+	 * rematch regenerates its episode rows (which in-flight downloads may
+	 * reference by UUID) or replaces its identity outright.
+	 *
+	 * Mirrors the cancel-on-delete behavior in the series/movie DELETE
+	 * handlers so a rematch has the same "stop anything in flight" guarantee.
+	 */
+	private async cancelActiveDownloads(
+		mediaType: 'movie' | 'series',
+		mediaId: string
+	): Promise<void> {
+		const queueFilter =
+			mediaType === 'movie'
+				? eq(downloadQueue.movieId, mediaId)
+				: eq(downloadQueue.seriesId, mediaId);
+		const activeQueueItems = await db.select().from(downloadQueue).where(queueFilter);
+
+		for (const queueItem of activeQueueItems) {
+			if (queueItem.downloadClientId) {
+				try {
+					const isTorrent = queueItem.protocol === 'torrent';
+					const clientDownloadId = isTorrent
+						? queueItem.infoHash || queueItem.downloadId
+						: queueItem.downloadId || queueItem.infoHash;
+					if (clientDownloadId) {
+						const clientInstance = await getDownloadClientManager().getClientInstance(
+							queueItem.downloadClientId
+						);
+						if (clientInstance) {
+							await clientInstance.removeDownload(clientDownloadId, true);
+						}
+					}
+				} catch (err) {
+					logger.warn(
+						{
+							queueItemId: queueItem.id,
+							error: err instanceof Error ? err.message : 'Unknown'
+						},
+						'[MediaMatcher] Failed to remove download from client during rematch'
+					);
+				}
+			}
+			acquisitionService.cancelByQueueId(queueItem.id, 'media rematched to a different title');
+			await db.delete(downloadQueue).where(eq(downloadQueue.id, queueItem.id));
+		}
+
+		const historyFilter =
+			mediaType === 'movie'
+				? eq(downloadHistory.movieId, mediaId)
+				: eq(downloadHistory.seriesId, mediaId);
+		await db
+			.update(downloadHistory)
+			.set({ status: 'removed', statusReason: 'media rematched to a different title' })
+			.where(historyFilter);
+	}
+
+	/**
+	 * Reorganize the item's folder and rename its files to match the new
+	 * title/year/tmdbId already written to the row. Runs after the DB row is
+	 * updated since RenamePreviewService reads title/year/tmdbId live from it.
+	 */
+	private async reorganizeAndRename(mediaId: string, mediaType: 'movie' | 'series'): Promise<void> {
+		const renameService = new RenamePreviewService();
+		await renameService.reorganizeFolder(mediaId, mediaType);
+
+		const preview =
+			mediaType === 'movie'
+				? await renameService.previewMovie(mediaId)
+				: await renameService.previewSeries(mediaId);
+		const fileIds = preview.willChange.map((item) => item.fileId);
+		if (fileIds.length > 0) {
+			await renameService.executeRenames(fileIds, mediaType === 'movie' ? 'movie' : 'episode');
+		}
+	}
+
+	/**
+	 * Change an already-added movie's TMDB match in place: re-fetches
+	 * metadata for `newTmdbId`, cancels active downloads, backfills linked
+	 * requests, and renames the folder/file to match. Reuses the same row
+	 * (and therefore every FK into it), so this is NOT a delete+re-add.
+	 */
+	async rematchMovie(
+		movieId: string,
+		newTmdbId: number
+	): Promise<{ title: string; year?: number | null }> {
+		const [movie] = await db.select().from(movies).where(eq(movies.id, movieId));
+		if (!movie) {
+			throw new Error(`Movie not found: ${movieId}`);
+		}
+		if (movie.tmdbId === newTmdbId) {
+			throw new Error('This movie is already matched to that title');
+		}
+
+		const [conflict] = await db
+			.select({ id: movies.id, title: movies.title })
+			.from(movies)
+			.where(eq(movies.tmdbId, newTmdbId))
+			.limit(1);
+		if (conflict) {
+			throw new Error(`"${conflict.title}" is already matched to that TMDB title`);
+		}
+
+		await this.cancelActiveDownloads('movie', movieId);
+
+		const [tmdbMovie, externalIds] = await Promise.all([
+			tmdb.getMovie(newTmdbId),
+			tmdb.getMovieExternalIds(newTmdbId).catch(() => ({ imdb_id: null }))
+		]);
+
+		await db
+			.update(movies)
+			.set({
+				tmdbId: newTmdbId,
+				imdbId: externalIds.imdb_id,
+				title: tmdbMovie.title,
+				originalTitle: tmdbMovie.original_title,
+				originalLanguage: tmdbMovie.original_language,
+				year: tmdbMovie.release_date ? parseInt(tmdbMovie.release_date.split('-')[0]) : movie.year,
+				overview: tmdbMovie.overview,
+				posterPath: tmdbMovie.poster_path,
+				backdropPath: tmdbMovie.backdrop_path,
+				runtime: tmdbMovie.runtime,
+				genres: tmdbMovie.genres?.map((g) => g.name),
+				releaseDate: tmdbMovie.release_date,
+				providerRefs: null
+			})
+			.where(eq(movies.id, movieId));
+
+		await db.update(requests).set({ tmdbId: newTmdbId }).where(eq(requests.movieId, movieId));
+
+		await this.reorganizeAndRename(movieId, 'movie');
+
+		logger.info(
+			{
+				movieId,
+				oldTmdbId: movie.tmdbId,
+				newTmdbId,
+				oldTitle: movie.title,
+				newTitle: tmdbMovie.title
+			},
+			'[MediaMatcher] Rematched movie'
+		);
+
+		return {
+			title: tmdbMovie.title,
+			year: tmdbMovie.release_date ? parseInt(tmdbMovie.release_date.split('-')[0]) : movie.year
+		};
+	}
+
+	/**
+	 * Change an already-added series's TMDB match in place: re-fetches
+	 * metadata for `newTmdbId`, cancels active downloads, regenerates every
+	 * season/episode row from the new show, re-links existing episode files
+	 * by season/episode number, backfills linked requests, and renames the
+	 * folder/files to match. Files whose season/episode number doesn't exist
+	 * on the new show become unmatched again, which is expected, since the
+	 * new show may have a different structure.
+	 */
+	async rematchSeries(
+		seriesId: string,
+		newTmdbId: number
+	): Promise<{ title: string; year?: number | null }> {
+		const [existingSeries] = await db.select().from(series).where(eq(series.id, seriesId));
+		if (!existingSeries) {
+			throw new Error(`Series not found: ${seriesId}`);
+		}
+		if (existingSeries.tmdbId === newTmdbId) {
+			throw new Error('This series is already matched to that title');
+		}
+
+		const [conflict] = await db
+			.select({ id: series.id, title: series.title })
+			.from(series)
+			.where(eq(series.tmdbId, newTmdbId))
+			.limit(1);
+		if (conflict) {
+			throw new Error(`"${conflict.title}" is already matched to that TMDB title`);
+		}
+
+		await this.cancelActiveDownloads('series', seriesId);
+
+		const [tmdbSeries, externalIds] = await Promise.all([
+			tmdb.getTVShow(newTmdbId),
+			tmdb.getTvExternalIds(newTmdbId).catch(() => null)
+		]);
+
+		await db
+			.update(series)
+			.set({
+				tmdbId: newTmdbId,
+				tvdbId: externalIds?.tvdb_id ?? null,
+				imdbId: externalIds?.imdb_id ?? null,
+				title: tmdbSeries.name,
+				originalTitle: tmdbSeries.original_name,
+				originalLanguage: tmdbSeries.original_language,
+				year: tmdbSeries.first_air_date
+					? parseInt(tmdbSeries.first_air_date.split('-')[0])
+					: existingSeries.year,
+				overview: tmdbSeries.overview,
+				posterPath: tmdbSeries.poster_path,
+				backdropPath: tmdbSeries.backdrop_path,
+				status: tmdbSeries.status,
+				network: tmdbSeries.networks?.[0]?.name,
+				genres: tmdbSeries.genres?.map((g) => g.name),
+				firstAirDate: tmdbSeries.first_air_date,
+				episodeGroupId: null,
+				providerRefs: null
+			})
+			.where(eq(series.id, seriesId));
+
+		// Capture (fileId -> episode numbers) before wiping episodes so the
+		// files can be re-linked to the new show's episode rows afterward.
+		const existingEpFiles = await db
+			.select({ id: episodeFiles.id, episodeIds: episodeFiles.episodeIds })
+			.from(episodeFiles)
+			.where(eq(episodeFiles.seriesId, seriesId));
+		const existingEpisodeRows = await db
+			.select({
+				id: episodes.id,
+				seasonNumber: episodes.seasonNumber,
+				episodeNumber: episodes.episodeNumber,
+				monitored: episodes.monitored
+			})
+			.from(episodes)
+			.where(eq(episodes.seriesId, seriesId));
+		const epNumByOldId = new Map(
+			existingEpisodeRows.map((e) => [e.id, { s: e.seasonNumber, e: e.episodeNumber }])
+		);
+		const fileEpNumbers = new Map(
+			existingEpFiles.map((f) => [
+				f.id,
+				(f.episodeIds ?? []).flatMap((eid) => {
+					const ep = epNumByOldId.get(eid);
+					return ep ? [ep] : [];
+				})
+			])
+		);
+
+		// Preserve per-season/per-episode monitored choices across the rebuild
+		// below, populateSeriesEpisodes has no prior state to consult once the
+		// old rows are gone, so without this every season/episode would reset
+		// to its computed default (silently re-monitoring anything the user
+		// had explicitly turned off; see the refresh endpoint's identical fix).
+		const priorSeasonMonitored = new Map(
+			(
+				await db
+					.select({ seasonNumber: seasons.seasonNumber, monitored: seasons.monitored })
+					.from(seasons)
+					.where(eq(seasons.seriesId, seriesId))
+			).map((s) => [s.seasonNumber, s.monitored])
+		);
+		const priorEpisodeMonitored = new Map(
+			existingEpisodeRows.map((e) => [`${e.seasonNumber}-${e.episodeNumber}`, e.monitored])
+		);
+
+		await deleteAllSeasonsAndEpisodes(seriesId);
+		await this.populateSeriesEpisodes(
+			seriesId,
+			newTmdbId,
+			tmdbSeries,
+			existingSeries.monitored ?? true
+		);
+
+		if (priorSeasonMonitored.size > 0) {
+			const newSeasonRows = await db
+				.select({ id: seasons.id, seasonNumber: seasons.seasonNumber })
+				.from(seasons)
+				.where(eq(seasons.seriesId, seriesId));
+			for (const row of newSeasonRows) {
+				const prior = priorSeasonMonitored.get(row.seasonNumber);
+				if (prior !== undefined) {
+					await db.update(seasons).set({ monitored: prior }).where(eq(seasons.id, row.id));
+				}
+			}
+		}
+		if (priorEpisodeMonitored.size > 0) {
+			const newEpisodeRowsForMonitoring = await db
+				.select({
+					id: episodes.id,
+					seasonNumber: episodes.seasonNumber,
+					episodeNumber: episodes.episodeNumber
+				})
+				.from(episodes)
+				.where(eq(episodes.seriesId, seriesId));
+			for (const row of newEpisodeRowsForMonitoring) {
+				const prior = priorEpisodeMonitored.get(`${row.seasonNumber}-${row.episodeNumber}`);
+				if (prior !== undefined) {
+					await db.update(episodes).set({ monitored: prior }).where(eq(episodes.id, row.id));
+				}
+			}
+		}
+
+		if (fileEpNumbers.size > 0) {
+			const newEpisodeRows = await db
+				.select({
+					id: episodes.id,
+					seasonNumber: episodes.seasonNumber,
+					episodeNumber: episodes.episodeNumber
+				})
+				.from(episodes)
+				.where(eq(episodes.seriesId, seriesId));
+			const newIdByKey = new Map(
+				newEpisodeRows.map((e) => [`${e.seasonNumber}-${e.episodeNumber}`, e.id])
+			);
+
+			const linkedEpisodeIds = new Set<string>();
+			for (const [fileId, epNums] of fileEpNumbers) {
+				const newIds = epNums
+					.map(({ s, e }) => newIdByKey.get(`${s}-${e}`))
+					.filter((eid): eid is string => eid !== undefined);
+
+				await db
+					.update(episodeFiles)
+					.set({ episodeIds: newIds.length > 0 ? newIds : null })
+					.where(eq(episodeFiles.id, fileId));
+
+				newIds.forEach((eid) => linkedEpisodeIds.add(eid));
+			}
+
+			if (linkedEpisodeIds.size > 0) {
+				await db
+					.update(episodes)
+					.set({ hasFile: true })
+					.where(inArray(episodes.id, [...linkedEpisodeIds]));
+			}
+		}
+
+		await this.updateSeriesStats(seriesId);
+
+		await db.update(requests).set({ tmdbId: newTmdbId }).where(eq(requests.seriesId, seriesId));
+
+		await this.reorganizeAndRename(seriesId, 'series');
+
+		logger.info(
+			{
+				seriesId,
+				oldTmdbId: existingSeries.tmdbId,
+				newTmdbId,
+				oldTitle: existingSeries.title,
+				newTitle: tmdbSeries.name
+			},
+			'[MediaMatcher] Rematched series'
+		);
+
+		return {
+			title: tmdbSeries.name,
+			year: tmdbSeries.first_air_date
+				? parseInt(tmdbSeries.first_air_date.split('-')[0])
+				: existingSeries.year
+		};
 	}
 
 	/**

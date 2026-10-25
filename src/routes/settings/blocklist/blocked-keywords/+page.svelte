@@ -1,18 +1,18 @@
 <script lang="ts">
-	import { Loader2, Plus, X, Sparkles, Search, Trash2 } from 'lucide-svelte';
+	import { Loader2, Plus, X, Sparkles, Search, Trash2 } from '@lucide/svelte';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { getSmartListHelpers } from '$lib/api/smartlists.js';
+	import { getSmartListHelpers } from '#lib/api/smartlists.js';
 	import {
 		getBlockedKeywords,
 		addBlockedKeyword,
 		removeBlockedKeyword,
 		seedBlockedKeywords
-	} from '$lib/api/settings.js';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import { formatDisplayDate } from '$lib/utils/format.js';
-	import { SettingsPage } from '$lib/components/ui/settings';
-	import { ConfirmationModal } from '$lib/components/ui/modal';
-	import * as m from '$lib/paraglide/messages.js';
+	} from '#lib/api/settings.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { formatDisplayDate } from '#lib/utils/format.js';
+	import { SettingsPage } from '#lib/components/ui/settings/index.js';
+	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface KeywordResult {
 		id: number;

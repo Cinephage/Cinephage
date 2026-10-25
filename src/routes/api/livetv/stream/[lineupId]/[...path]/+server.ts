@@ -11,15 +11,15 @@
  */
 
 import type { RequestHandler } from './$types';
-import { getBaseUrlAsync } from '$lib/server/streaming/url';
-import { resolveAndValidateUrl, fetchWithTimeout } from '$lib/server/http/ssrf-protection';
+import { getBaseUrlAsync } from '#lib/server/streaming/url.js';
+import { resolveAndValidateUrl, fetchWithTimeout } from '#lib/server/http/ssrf-protection.js';
 import {
 	getStreamUrlCache,
 	HLS_STREAM_TIMEOUT_MS
-} from '$lib/server/livetv/streaming/StreamUrlCache.js';
-import { rewriteHlsPlaylistUrls } from '$lib/server/streaming/utils/hls-rewrite.js';
-import { STB_USER_AGENT } from '$lib/server/livetv/stalker/StalkerPortalClient.js';
-import { createChildLogger } from '$lib/logging';
+} from '#lib/server/livetv/streaming/StreamUrlCache.js';
+import { rewriteHlsPlaylistUrls } from '#lib/server/streaming/utils/hls-rewrite.js';
+import { STB_USER_AGENT } from '#lib/server/livetv/stalker/StalkerPortalClient.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LiveTvStreamProxy', logDomain: 'livetv' });
 

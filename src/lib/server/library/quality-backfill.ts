@@ -5,11 +5,11 @@
  * This fixes historical data that was imported before quality parsing was properly stored.
  */
 
-import { db } from '$lib/server/db/index.js';
-import { episodeFiles, movieFiles } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { episodeFiles, movieFiles } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { ReleaseParser } from '$lib/server/indexers/parser/ReleaseParser.js';
-import { createChildLogger } from '$lib/logging';
+import { ReleaseParser } from '#lib/server/indexers/parser/ReleaseParser.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'scans' as const });
 

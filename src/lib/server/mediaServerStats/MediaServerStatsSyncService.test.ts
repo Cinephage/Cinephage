@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterAll } from 'vitest';
 
 // Mock the media browser manager so no real HTTP calls happen.
-vi.mock('$lib/server/notifications/mediabrowser/MediaBrowserManager.js', () => ({
+vi.mock('#lib/server/notifications/mediabrowser/MediaBrowserManager.js', () => ({
 	getMediaBrowserManager: () => ({
 		getEnabledServers: vi.fn().mockResolvedValue([]),
 		testServer: vi.fn().mockResolvedValue({ success: true })
@@ -12,7 +12,7 @@ vi.mock('$lib/server/notifications/mediabrowser/MediaBrowserManager.js', () => (
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../test/db-helper.js';
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -22,7 +22,7 @@ vi.mock('$lib/server/db', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},

@@ -1,21 +1,21 @@
 import { eq } from 'drizzle-orm';
-import { db } from '$lib/server/db/index.js';
-import { movieFiles, movies, scoringProfiles } from '$lib/server/db/schema.js';
-import { grabService } from '$lib/server/downloads/GrabService.js';
-import { getIndexerManager } from '$lib/server/indexers/IndexerManager.js';
-import { evaluateIndexerSearchAvailability } from '$lib/server/indexers/search/availability';
+import { db } from '#lib/server/db/index.js';
+import { movieFiles, movies, scoringProfiles } from '#lib/server/db/schema.js';
+import { grabService } from '#lib/server/downloads/GrabService.js';
+import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
+import { evaluateIndexerSearchAvailability } from '#lib/server/indexers/search/availability.js';
 import {
 	effectiveBuckets,
 	getFilledResolutions,
 	unfilledBuckets,
 	isMultiQualityMode
-} from '$lib/server/quality/buckets.js';
-import type { Resolution } from '$lib/server/indexers/parser/types.js';
-import type { SearchCriteria, EnhancedReleaseResult } from '$lib/server/indexers/types';
+} from '#lib/server/quality/buckets.js';
+import type { Resolution } from '#lib/server/indexers/parser/types.js';
+import type { SearchCriteria, EnhancedReleaseResult } from '#lib/server/indexers/types/index.js';
 import { AUTO_GRAB_MIN_SCORE } from './search-utils.js';
 import type { AltTitleRefresher } from './alt-titles.js';
 import type { SearchForMovieParams, GrabResult } from './types.js';
-import { createChildLogger } from '$lib/logging/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'SearchMovie', logDomain: 'scans' });
 

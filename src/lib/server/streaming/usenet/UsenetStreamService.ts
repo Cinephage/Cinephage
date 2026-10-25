@@ -12,7 +12,7 @@
 
 import { createReadStream, existsSync, statSync } from 'fs';
 import { basename } from 'path';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 import { getNntpManager } from './NntpManager';
 
 const logger = createChildLogger({ logDomain: 'streams' as const });

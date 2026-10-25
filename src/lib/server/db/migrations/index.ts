@@ -149,6 +149,19 @@ import { migration_v149 } from './149-import-operations-journal.js';
 import { migration_v150 } from './150-movie-files-path-unique.js';
 import { migration_v151 } from './151-language-system-column-guards.js';
 import { migration_v152 } from './152-drop-subtitle-settings.js';
+import { migration_v153 } from './153-backfill-remove-after-import.js';
+import { migration_v154 } from './154-library-jobs-acknowledged.js';
+import { migration_v155 } from './155-indexer-rate-limit-override.js';
+import { migration_v156 } from './156-indexer-status-disabled-reason.js';
+import { migration_v157 } from './157-user-media-server-links.js';
+import { migration_v158 } from './158-user-preferences.js';
+import { migration_v159 } from './159-encrypt-media-browser-api-keys.js';
+import { migration_v160 } from './160-request-system.js';
+import { migration_v161 } from './161-encrypt-credentials-at-rest.js';
+import { migration_v162 } from './162-session-last-active.js';
+import { migration_v163 } from './163-repair-orphaned-episode-seasons.js';
+import { migration_v164 } from './164-transfer-mode.js';
+import { migration_v165 } from './165-unmatched-origin.js';
 
 export const MIGRATIONS: MigrationDefinition[] = [
 	migration_v002,
@@ -300,5 +313,18 @@ export const MIGRATIONS: MigrationDefinition[] = [
 	migration_v149,
 	migration_v150,
 	migration_v151,
-	migration_v152
+	migration_v152,
+	migration_v153,
+	migration_v154,
+	migration_v155,
+	migration_v156,
+	migration_v157,
+	migration_v158,
+	migration_v159,
+	migration_v160,
+	migration_v161,
+	migration_v162,
+	migration_v163,
+	migration_v164,
+	migration_v165
 ];

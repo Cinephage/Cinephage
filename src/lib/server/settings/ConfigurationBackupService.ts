@@ -1,16 +1,28 @@
 import type { AnySQLiteColumn, AnySQLiteTable, SQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { getTableColumns } from 'drizzle-orm';
 
-import { ValidationError } from '$lib/errors';
-import { logger } from '$lib/logging';
+import { ValidationError } from '#lib/errors/index.js';
+import { logger } from '#lib/logging/index.js';
 import {
 	decryptBackupPayload,
 	encryptBackupPayload,
 	type EncryptedBackupPayload
-} from '$lib/server/crypto/backupCrypto.js';
-import { decryptDebridToken, encryptDebridToken } from '$lib/server/crypto/debridTokenCrypto.js';
-import { db } from '$lib/server/db';
-import { getCookieStore } from '$lib/server/indexers/auth/CookieStore.js';
+} from '#lib/server/crypto/backupCrypto.js';
+import { decryptDebridToken } from '#lib/server/crypto/debridTokenCrypto.js';
+import { decryptApiKey } from '#lib/server/crypto/apiKeyCrypto.js';
+import {
+	decryptCredential,
+	encryptCredential,
+	isEncryptedCredential,
+	parseCredentialEnvelope
+} from '#lib/server/crypto/credentialsCrypto.js';
+import {
+	encryptRecordSecrets,
+	findSecretFieldSpecByAlias
+} from '#lib/server/crypto/secretFields.js';
+import { db } from '#lib/server/db/index.js';
+import { namingSettingsService } from '#lib/server/library/naming/NamingSettingsService.js';
+import { getCookieStore } from '#lib/server/indexers/auth/CookieStore.js';
 import {
 	captchaSolverSettings,
 	channelCategories,
@@ -39,7 +51,7 @@ import {
 	subtitleProviders,
 	taskSettings,
 	indexerStatus
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 
 export interface ConfigurationBackupFile {
 	format: 'cinephage-config-backup';
@@ -405,7 +417,13 @@ function isKeyValueSecretEntry(tableName: TableName, row: Record<string, unknown
 	}
 
 	if (tableName === 'settings') {
-		return ['tmdb_api_key'].includes(row.key);
+		return [
+			'tmdb_api_key',
+			'tvdb_api_key',
+			'tvdb_api_pin',
+			'jackett_connection',
+			'prowlarr_connection'
+		].includes(row.key);
 	}
 
 	if (tableName === 'captchaSolverSettings') {
@@ -413,6 +431,59 @@ function isKeyValueSecretEntry(tableName: TableName, row: Record<string, unknown
 	}
 
 	return false;
+}
+
+/**
+ * Portable-secrets transform: the backup payload carries PLAINTEXT so it can
+ * be re-encrypted under the destination instance's master key on restore.
+ * Walks a secrets tree and decrypts every credential envelope it contains.
+ * Field names are irrelevant here — the AAD binds `purpose:recordId`, both of
+ * which the walker knows. A failed decrypt aborts the backup (fail-closed).
+ */
+function decryptBackupSecretTree(purpose: string, recordKey: string, node: unknown): unknown {
+	if (typeof node === 'string') {
+		// Plain-boolean check (not the type-guard) so negative narrowing
+		// doesn't reduce the string to `never` for the JSON-blob branch below.
+		const envelope = parseCredentialEnvelope(node);
+		if (envelope) {
+			void envelope;
+			const plaintext = decryptCredential(
+				purpose,
+				recordKey,
+				node,
+				`backup:${purpose}:${recordKey}`
+			);
+			if (plaintext === null) {
+				throw new ValidationError(
+					`Failed to decrypt ${purpose} secret for record ${recordKey}; backup aborted`
+				);
+			}
+			return plaintext;
+		}
+		// JSON blobs (e.g. jackett_connection) carry envelopes inside.
+		if (node.startsWith('{') && node.includes('cphg1.')) {
+			try {
+				const parsed = JSON.parse(node) as Record<string, unknown>;
+				const walked = decryptBackupSecretTree(purpose, recordKey, parsed);
+				return typeof walked === 'string' ? walked : JSON.stringify(walked);
+			} catch (error) {
+				if (error instanceof ValidationError) throw error;
+				return node;
+			}
+		}
+		return node;
+	}
+	if (Array.isArray(node)) {
+		return node.map((item) => decryptBackupSecretTree(purpose, recordKey, item));
+	}
+	if (node !== null && typeof node === 'object') {
+		const out: Record<string, unknown> = {};
+		for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+			out[key] = decryptBackupSecretTree(purpose, recordKey, value);
+		}
+		return out;
+	}
+	return node;
 }
 
 function isSensitiveField(fieldName: string): boolean {
@@ -652,11 +723,14 @@ export class ConfigurationBackupService {
 
 				// Debrid token portable transform: decrypt the at-rest encrypted
 				// token and store the plaintext in the backup secrets payload so
-				// it can be re-encrypted with a different auth secret on restore.
+				// it can be re-encrypted with a different master key on restore.
 				// If decryption fails, fail the backup closed rather than silently
 				// dropping the credential.
 				if (config.name === 'downloadClients' && row.apiToken) {
-					const plaintext = decryptDebridToken(row.apiToken as string);
+					const stored = row.apiToken as string;
+					const plaintext = isEncryptedCredential(stored)
+						? decryptCredential('debrid-token', String(recordKey), stored)
+						: decryptDebridToken(stored);
 					if (plaintext === null) {
 						throw new ValidationError(
 							`Failed to decrypt debrid token for client ${recordKey}; backup aborted`
@@ -666,6 +740,42 @@ export class ConfigurationBackupService {
 					existingSecret.apiToken = plaintext;
 					existingSecret.apiTokenPlaintext = true;
 					tableSecrets[recordKey] = existingSecret;
+				}
+
+				// Media-browser key portable transform: same contract as the debrid
+				// token — the backup secrets payload carries plaintext (fail-closed
+				// on decrypt error) and restore re-encrypts with the destination
+				// master key.
+				if (config.name === 'mediaBrowserServers' && row.apiKey) {
+					const stored = row.apiKey as string;
+					const legacyTriplet =
+						stored.split(':').length === 3 &&
+						stored.split(':').every((p) => /^[0-9a-f]+$/i.test(p));
+					const plaintext = isEncryptedCredential(stored)
+						? decryptCredential('media-browser-api-key', String(recordKey), stored)
+						: legacyTriplet
+							? decryptApiKey(stored)
+							: stored;
+					if (plaintext === null) {
+						throw new ValidationError(
+							`Failed to decrypt media browser API key for server ${recordKey}; backup aborted`
+						);
+					}
+					const existingSecret = (tableSecrets[recordKey] as Record<string, unknown>) ?? {};
+					existingSecret.apiKey = plaintext;
+					existingSecret.apiKeyPlaintext = true;
+					tableSecrets[recordKey] = existingSecret;
+				}
+
+				// Registry-covered tables: every credential envelope in the
+				// secrets tree becomes plaintext in the portable payload.
+				const spec = findSecretFieldSpecByAlias(config.name);
+				if (spec && tableSecrets[recordKey] !== undefined) {
+					tableSecrets[recordKey] = decryptBackupSecretTree(
+						spec.purpose,
+						String(recordKey),
+						tableSecrets[recordKey]
+					);
 				}
 			}
 
@@ -693,13 +803,32 @@ export class ConfigurationBackupService {
 
 			if (activeCookieRows.length > 0) {
 				secretPayload.indexerCookies = Object.fromEntries(
-					activeCookieRows.map((row) => [
-						row.indexerId,
-						{
-							cookies: row.cookies as Record<string, string>,
-							expiry: row.cookiesExpirationDate as string
-						}
-					])
+					activeCookieRows
+						.map((row) => {
+							// Cookies are an envelope at rest; the backup carries the
+							// plaintext map so restore works across master keys.
+							const stored = row.cookies;
+							let cookies: Record<string, string> | null;
+							if (typeof stored === 'string' && isEncryptedCredential(stored)) {
+								const plaintext = decryptCredential(
+									'indexer-cookies',
+									row.indexerId,
+									stored,
+									`backup:indexer-cookies:${row.indexerId}`
+								);
+								cookies = plaintext ? (JSON.parse(plaintext) as Record<string, string>) : null;
+							} else {
+								cookies = stored as Record<string, string> | null;
+							}
+							return [
+								row.indexerId,
+								{
+									cookies,
+									expiry: row.cookiesExpirationDate as string
+								}
+							];
+						})
+						.filter((entry) => (entry[1] as { cookies: unknown }).cookies !== null)
 				);
 			}
 		}
@@ -803,16 +932,58 @@ export class ConfigurationBackupService {
 					if (typeof restoredRecord.apiToken === 'string' && restoredRecord.apiToken.length > 0) {
 						const isPlaintextFromSecrets = secretEntry?.apiTokenPlaintext === true;
 						if (isPlaintextFromSecrets) {
-							restoredRecord.apiToken = encryptDebridToken(restoredRecord.apiToken);
+							restoredRecord.apiToken = encryptCredential(
+								'debrid-token',
+								String(recordKey),
+								restoredRecord.apiToken
+							);
 						} else {
 							const parts = restoredRecord.apiToken.split(':');
-							const looksEncrypted =
+							const looksLegacyEncrypted =
 								parts.length === 3 && parts.every((p) => /^[0-9a-f]+$/i.test(p));
-							if (!looksEncrypted) {
-								restoredRecord.apiToken = encryptDebridToken(restoredRecord.apiToken);
+							if (!looksLegacyEncrypted && !isEncryptedCredential(restoredRecord.apiToken)) {
+								restoredRecord.apiToken = encryptCredential(
+									'debrid-token',
+									String(recordKey),
+									restoredRecord.apiToken
+								);
 							}
 						}
 					}
+				}
+
+				if (config.name === 'mediaBrowserServers') {
+					const restoredRecord = restored as Record<string, unknown>;
+					const secretEntry = tableSecrets[recordKey] as Record<string, unknown> | undefined;
+					if (typeof restoredRecord.apiKey === 'string' && restoredRecord.apiKey.length > 0) {
+						const isPlaintextFromSecrets = secretEntry?.apiKeyPlaintext === true;
+						if (isPlaintextFromSecrets) {
+							restoredRecord.apiKey = encryptCredential(
+								'media-browser-api-key',
+								String(recordKey),
+								restoredRecord.apiKey
+							);
+						} else {
+							const parts = restoredRecord.apiKey.split(':');
+							const looksLegacyEncrypted =
+								parts.length === 3 && parts.every((p) => /^[0-9a-f]+$/i.test(p));
+							if (!looksLegacyEncrypted && !isEncryptedCredential(restoredRecord.apiKey)) {
+								restoredRecord.apiKey = encryptCredential(
+									'media-browser-api-key',
+									String(recordKey),
+									restoredRecord.apiKey
+								);
+							}
+						}
+					}
+				}
+
+				// Registry-covered tables: re-encrypt the restored plaintext
+				// secrets with the destination master key (idempotent — values
+				// that are already envelopes pass through).
+				const spec = findSecretFieldSpecByAlias(config.name);
+				if (spec) {
+					encryptRecordSecrets(spec, restored as Record<string, unknown>);
 				}
 
 				return restored;
@@ -838,6 +1009,16 @@ export class ConfigurationBackupService {
 				}
 			}
 		});
+
+		if (restoredTables.includes('namingSettings')) {
+			// Rows were written directly to the DB, bypassing NamingSettingsService.
+			// Drop both its config cache and the rename-preview cache so naming
+			// previews reflect the restored formats.
+			namingSettingsService.invalidateCache();
+			const { renamePreviewCache } =
+				await import('#lib/server/library/naming/RenamePreviewCache.js');
+			renamePreviewCache.invalidateAll();
+		}
 
 		if (selectedSections.has('indexers') && decryptedSecrets.indexerCookies) {
 			const cookieStore = getCookieStore();

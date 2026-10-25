@@ -1,22 +1,30 @@
 <script lang="ts">
 	import { SvelteMap, SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
-	import { Download, Loader2, Search, CalendarSync, CalendarClock, X, Trash2 } from 'lucide-svelte';
-	import { ConfirmationModal } from '$lib/components/ui/modal';
-	import { copyToClipboard } from '$lib/utils/clipboard';
+	import {
+		Download,
+		Loader2,
+		Search,
+		CalendarSync,
+		CalendarClock,
+		X,
+		Trash2
+	} from '@lucide/svelte';
+	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
+	import { copyToClipboard } from '#lib/utils/clipboard.js';
 
-	import * as m from '$lib/paraglide/messages.js';
-	import { SettingsPage } from '$lib/components/ui/settings';
-	import { layoutState, deriveMobileSseStatus } from '$lib/layout.svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { SettingsPage } from '#lib/components/ui/settings/index.js';
+	import { layoutState, deriveMobileSseStatus } from '#lib/layout.svelte.js';
 	import {
 		DOMAIN_LABELS,
 		type CapturedLogDomain,
 		type CapturedLogEntry,
 		type CapturedLogLevel
-	} from '$lib/logging/log-capture';
-	import { createDynamicSSE } from '$lib/sse';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import { updateLogSettings, getLogHistory } from '$lib/api/settings.js';
-	import { apiGetStream } from '$lib/api';
+	} from '#lib/logging/log-capture.js';
+	import { createDynamicSSE } from '#lib/sse/index.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { updateLogSettings, getLogHistory } from '#lib/api/settings.js';
+	import { apiGetStream } from '#lib/api/index.js';
 
 	interface LogSeedEvent {
 		entries: CapturedLogEntry[];

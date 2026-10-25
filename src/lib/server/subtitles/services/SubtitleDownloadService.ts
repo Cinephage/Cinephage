@@ -13,7 +13,7 @@
  *   DB transaction; on failure the previous file state is restored.
  */
 
-import { db } from '$lib/server/db';
+import { db } from '#lib/server/db/index.js';
 import {
 	subtitles,
 	subtitleHistory,
@@ -24,15 +24,16 @@ import {
 	movieFiles,
 	episodeFiles,
 	rootFolders
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 import { eq, and, inArray, isNull } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
-import { writeFile, mkdir, unlink, rename } from 'node:fs/promises';
+import { writeFile, unlink, rename } from 'node:fs/promises';
+import { ensureMediaDirectory } from '#lib/server/filesystem/mkdir-helpers.js';
 import { existsSync } from 'node:fs';
 import { dirname, join, basename, extname } from 'node:path';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 import { getSubtitleSyncService } from './SubtitleSyncService';
-import { getMediaBrowserNotifier } from '$lib/server/notifications/mediabrowser';
+import { getMediaBrowserNotifier } from '#lib/server/notifications/mediabrowser/index.js';
 
 const logger = createChildLogger({ logDomain: 'subtitles' as const });
 
@@ -43,7 +44,7 @@ const logger = createChildLogger({ logDomain: 'subtitles' as const });
 const MAX_SUBTITLE_DOWNLOAD_BYTES = 25 * 1024 * 1024; // 25 MB (multi-sub archives)
 const MAX_SUBTITLE_ARCHIVE_ENTRIES = 200;
 const MAX_SUBTITLE_UNCOMPRESSED_BYTES = 50 * 1024 * 1024; // 50 MB
-import { normalizeLanguageTag } from '$lib/server/languages/normalize.js';
+import { normalizeLanguageTag } from '#lib/server/languages/normalize.js';
 import type {
 	SubtitleSearchResult,
 	SubtitleDownloadResult,
@@ -373,7 +374,7 @@ export class SubtitleDownloadService {
 		);
 
 		// Ensure directory exists
-		await mkdir(options.mediaPath, { recursive: true });
+		await ensureMediaDirectory(options.mediaPath);
 
 		const finalPath = await resolveDestructivePathWithinBase(options.mediaPath, subtitleFileName);
 		if (!finalPath) {

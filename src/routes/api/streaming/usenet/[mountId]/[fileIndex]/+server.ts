@@ -7,8 +7,8 @@
 
 import { Readable } from 'node:stream';
 import type { RequestHandler } from './$types';
-import { logger } from '$lib/logging';
-import { getUsenetStreamService } from '$lib/server/streaming/usenet/UsenetStreamService';
+import { logger } from '#lib/logging/index.js';
+import { getUsenetStreamService } from '#lib/server/streaming/usenet/UsenetStreamService.js';
 
 const streamLog = { logDomain: 'streams' as const, component: 'UsenetStreamApi' };
 

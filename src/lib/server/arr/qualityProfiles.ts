@@ -15,8 +15,8 @@
  * but not Sonarr's, so it's only included for the Radarr persona.
  */
 
-import { db } from '$lib/server/db/index.js';
-import { scoringProfiles } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { scoringProfiles } from '#lib/server/db/schema.js';
 import { getOrAssignArrIds } from './ArrIdMappingService.js';
 import type { ArrAppName } from './systemStatus.js';
 

@@ -13,7 +13,7 @@
  * - Authentication failures
  */
 
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const log = createChildLogger({ module: 'RetryPolicy' });
 

@@ -1,4 +1,4 @@
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 import type {
 	CinephageModule,
 	CinephageModuleCapabilities,

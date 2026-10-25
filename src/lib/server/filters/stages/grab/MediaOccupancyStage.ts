@@ -1,7 +1,7 @@
-import { mediaOccupancyService } from '$lib/server/acquisition/MediaOccupancyService.js';
+import { mediaOccupancyService } from '#lib/server/acquisition/MediaOccupancyService.js';
 import type { DecisionStage, StageResult } from '../../types.js';
 import type { GrabDecisionContext } from './types.js';
-import { createChildLogger } from '$lib/logging/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'MediaOccupancyStage' });
 

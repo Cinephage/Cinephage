@@ -1,4 +1,4 @@
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'imports' as const });
 import type {
@@ -8,7 +8,7 @@ import type {
 	DownloadInfo,
 	ConnectionTestResult,
 	NntpServerConfig
-} from '$lib/server/downloadClients/core/interfaces';
+} from '#lib/server/downloadClients/core/interfaces.js';
 import type { JsonRpcResponse, NzbgetGroup, NzbgetHistory, NzbgetStatus } from './types';
 
 export class NZBGetClient implements IDownloadClient {

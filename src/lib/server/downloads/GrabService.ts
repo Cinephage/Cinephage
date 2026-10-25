@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { grabDecisionPipeline } from '$lib/server/filters/GrabDecisionPipeline.js';
-import { qualityFilter } from '$lib/server/quality/QualityFilter.js';
-import { db } from '$lib/server/db/index.js';
+import { grabDecisionPipeline } from '#lib/server/filters/GrabDecisionPipeline.js';
+import { qualityFilter } from '#lib/server/quality/QualityFilter.js';
+import { db } from '#lib/server/db/index.js';
 import {
 	movies,
 	series,
@@ -12,26 +12,26 @@ import {
 	alternateTitles,
 	rejectedReleases,
 	downloadHistory
-} from '$lib/server/db/schema.js';
+} from '#lib/server/db/schema.js';
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import type { GrabRequest, GrabResult, ResolvedContext, HandlerResult } from './grab-types.js';
-import type { GrabDecisionContext, ExistingFile } from '$lib/server/filters/stages/grab/types.js';
-import { mediaOccupancyService } from '$lib/server/acquisition/MediaOccupancyService.js';
+import type { GrabDecisionContext, ExistingFile } from '#lib/server/filters/stages/grab/types.js';
+import { mediaOccupancyService } from '#lib/server/acquisition/MediaOccupancyService.js';
 import { TorrentHandler } from './handlers/TorrentHandler.js';
 import { UsenetHandler } from './handlers/UsenetHandler.js';
 import { StreamingHandler } from './handlers/StreamingHandler.js';
 import { NzbStreamingHandler } from './handlers/NzbStreamingHandler.js';
 import { DebridHandler } from './handlers/DebridHandler.js';
-import { getDefaultAcquisitionProtocol } from '$lib/server/settings/acquisition.js';
-import { createChildLogger, getRequestId } from '$lib/logging/index.js';
+import { getDefaultAcquisitionProtocol } from '#lib/server/settings/acquisition.js';
+import { createChildLogger, getRequestId } from '#lib/logging/index.js';
 import { grabRejectionLogLevel } from './grab-rejection-log-level.js';
-import { resolveInfoHash } from '$lib/server/downloadClients/utils/hashUtils.js';
-import { normalizeIdentityTitle } from '$lib/server/releases/release-identity.js';
-import type { TargetIdentityInfo } from '$lib/server/filters/stages/grab/types.js';
-import { acquisitionService } from '$lib/server/acquisition/AcquisitionService.js';
-import type { CreateIntentResult } from '$lib/server/acquisition/AcquisitionService.js';
-import { computeMovieQualitySlot } from '$lib/server/acquisition/slot-keys.js';
-import { parseRelease } from '$lib/server/indexers/parser/index.js';
+import { resolveInfoHash } from '#lib/server/downloadClients/utils/hashUtils.js';
+import { normalizeIdentityTitle } from '#lib/server/releases/release-identity.js';
+import type { TargetIdentityInfo } from '#lib/server/filters/stages/grab/types.js';
+import { acquisitionService } from '#lib/server/acquisition/AcquisitionService.js';
+import type { CreateIntentResult } from '#lib/server/acquisition/AcquisitionService.js';
+import { computeMovieQualitySlot } from '#lib/server/acquisition/slot-keys.js';
+import { parseRelease } from '#lib/server/indexers/parser/index.js';
 
 const logger = createChildLogger({ module: 'GrabService', logDomain: 'downloads' });
 

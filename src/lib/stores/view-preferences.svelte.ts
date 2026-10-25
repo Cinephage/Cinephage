@@ -1,4 +1,4 @@
-import { browser } from '$app/environment';
+import { browser } from '$app/env';
 
 const VIEW_MODE_KEY = 'library-view-mode';
 const GROUP_BY_COLLECTION_KEY = 'library-group-by-collection';

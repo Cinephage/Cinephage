@@ -1,19 +1,24 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
-	import { Plus, X, ArrowUp, ArrowDown, Flag, Info } from 'lucide-svelte';
-	import { getResponseErrorMessage } from '$lib/utils/http';
-	import { ALL_LANGUAGE_OPTIONS } from '$lib/shared/languages';
-	import { requirementKey } from '$lib/shared/language-profile.js';
+	import { refreshAll } from '$app/navigation';
+	import { Plus, X, ArrowUp, ArrowDown, Flag, Info } from '@lucide/svelte';
+	import { getResponseErrorMessage } from '#lib/utils/http.js';
+	import { ALL_LANGUAGE_OPTIONS } from '#lib/shared/languages.js';
+	import { requirementKey } from '#lib/shared/language-profile.js';
 	import type {
 		LanguageProfileV2,
 		SubtitleAccessibility,
 		SubtitleRequirement,
 		SubtitleVariant
-	} from '$lib/shared/language-profile.js';
+	} from '#lib/shared/language-profile.js';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { ModalWrapper, ModalHeader, ModalFooter, SectionHeader } from '$lib/components/ui/modal';
-	import * as m from '$lib/paraglide/messages.js';
-	import { createLanguageProfile, updateLanguageProfile, ApiError } from '$lib/api';
+	import {
+		ModalWrapper,
+		ModalHeader,
+		ModalFooter,
+		SectionHeader
+	} from '#lib/components/ui/modal/index.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import { createLanguageProfile, updateLanguageProfile, ApiError } from '#lib/api/index.js';
 	import { variantLabel, accessibilityLabel } from './labels';
 
 	/** Server-load profile row: v2 shape plus timestamps. */
@@ -144,7 +149,7 @@
 		formCutoffRank = formCutoffRank === index ? null : index;
 	}
 
-	// --- Audio fallback language list ---
+	// --- Preferred audio language list ---
 	function addAudioLanguage() {
 		formAudioLanguages = [...formAudioLanguages, 'en'];
 	}
@@ -203,7 +208,7 @@
 				await createLanguageProfile(payload);
 			}
 
-			await invalidateAll();
+			await refreshAll();
 			onClose();
 		} catch (e) {
 			modalError =
@@ -443,6 +448,9 @@
 						{/if}
 					</button>
 				</div>
+				<p class="text-xs text-base-content/50">
+					{m.settings_languages_profiles_audioLanguagesHint()}
+				</p>
 				{#each formAudioLanguages as code, i (i)}
 					<div class="flex flex-wrap items-center gap-1.5 rounded-lg bg-base-200/50 px-2.5 py-1.5">
 						<span class="w-4 shrink-0 text-center font-mono text-xs text-base-content/50">

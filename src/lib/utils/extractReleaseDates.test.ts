@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { extractReleaseDates } from './extractReleaseDates.js';
-import type { ReleaseDatesResponse } from '$lib/types/tmdb';
+import type { ReleaseDatesResponse } from '#lib/types/tmdb.js';
 
 describe('extractReleaseDates', () => {
 	const mkResponse = (results: ReleaseDatesResponse['results']): ReleaseDatesResponse => ({

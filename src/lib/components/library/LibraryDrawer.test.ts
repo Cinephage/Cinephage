@@ -9,7 +9,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/svelte';
 import LibraryDrawer from './LibraryDrawer.svelte';
-import { seriesStatusFilterOptions } from '$lib/utils/format-status.js';
+import { seriesStatusFilterOptions } from '#lib/utils/format-status.js';
 
 function renderDrawer() {
 	return render(LibraryDrawer, {

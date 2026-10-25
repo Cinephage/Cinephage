@@ -1,5 +1,5 @@
-import { logger } from '$lib/logging';
-import { getLibraryStreamingModule } from '$lib/server/cinephage/modules/library-streaming/LibraryStreamingModule.js';
+import { logger } from '#lib/logging/index.js';
+import { getLibraryStreamingModule } from '#lib/server/cinephage/modules/library-streaming/LibraryStreamingModule.js';
 import { resolveAudioPreferenceBucket, sortSourcesByAudioPreference } from '../language-utils';
 import type {
 	PlaybackMediaType,

@@ -2,24 +2,24 @@
  * Search On Add — missing episodes search
  */
 
-import { todayDateString } from '$lib/utils/format.js';
-import { db } from '$lib/server/db/index.js';
-import { series, episodes } from '$lib/server/db/schema.js';
+import { todayDateString } from '#lib/utils/format.js';
+import { db } from '#lib/server/db/index.js';
+import { series, episodes } from '#lib/server/db/schema.js';
 import { eq, and, ne } from 'drizzle-orm';
-import { getIndexerManager } from '$lib/server/indexers/IndexerManager.js';
-import { evaluateIndexerSearchAvailability } from '$lib/server/indexers/search/availability';
-import { type EpisodeToSearch } from '$lib/server/downloads/index.js';
+import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
+import { evaluateIndexerSearchAvailability } from '#lib/server/indexers/search/availability.js';
+import { type EpisodeToSearch } from '#lib/server/downloads/index.js';
 import type {
 	SearchForMissingEpisodesOptions,
 	MultiSearchResult,
 	AutoSearchItemResult
 } from './types.js';
 import type { AltTitleRefresher } from './alt-titles.js';
-import type { SearchProgressUpdate } from '$lib/server/downloads/MultiSeasonSearchStrategy.js';
+import type { SearchProgressUpdate } from '#lib/server/downloads/MultiSeasonSearchStrategy.js';
 import { resolveAutoMissingSearchStrategy } from './search-utils.js';
 import { searchForEpisode as searchForEpisodeImpl } from './search-episode.js';
 import { searchForSeason as searchForSeasonImpl } from './search-season.js';
-import { createChildLogger } from '$lib/logging/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'SearchMissing', logDomain: 'scans' });
 
@@ -362,7 +362,7 @@ export async function searchForMissingEpisodes(
 
 		// Use multi-season search strategy
 		const { getMultiSeasonSearchStrategy } =
-			await import('$lib/server/downloads/MultiSeasonSearchStrategy.js');
+			await import('#lib/server/downloads/MultiSeasonSearchStrategy.js');
 		const multiSeasonStrategy = getMultiSeasonSearchStrategy();
 		// Manual missing auto-grab should avoid re-downloading existing episodes.
 		// Require 100% missing coverage before attempting any pack type.

@@ -5,12 +5,11 @@
  * PUT  /api/settings/library/history-retention
  * GET  /api/settings/library/history-retention/forecast
  */
-
-import { json, error } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { db } from '$lib/server/db/index.js';
-import { librarySettings } from '$lib/server/db/schema.js';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
+import { db } from '#lib/server/db/index.js';
+import { librarySettings } from '#lib/server/db/schema.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 import { z } from 'zod';
 
 const DEFAULTS = { fileHistoryDays: 30, libraryHistoryDays: 365, scanHistoryDays: 30 };
@@ -57,7 +56,7 @@ export const GET: RequestHandler = async (event) => {
 	if (authError) return authError;
 
 	const retention = await readAll();
-	return json(retention);
+	return Response.json(retention);
 };
 
 export const PUT: RequestHandler = async (event) => {
@@ -69,5 +68,5 @@ export const PUT: RequestHandler = async (event) => {
 	if (!parsed.success) throw error(400, 'Invalid retention settings');
 
 	await writeAll(parsed.data);
-	return json({ success: true });
+	return Response.json({ success: true });
 };

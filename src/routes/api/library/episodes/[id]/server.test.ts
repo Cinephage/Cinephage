@@ -10,11 +10,11 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../../../test/db-helper';
 import { api } from '../../../../../test/api-helper';
-import { episodes, libraries, rootFolders, series } from '$lib/server/db/schema.js';
+import { episodes, libraries, rootFolders, series } from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -24,19 +24,19 @@ vi.mock('$lib/server/db/index.js', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/library/searchOnAdd.js', () => ({
+vi.mock('#lib/server/library/searchOnAdd.js', () => ({
 	searchOnAdd: {
 		searchForEpisode: vi.fn().mockResolvedValue(undefined)
 	}
 }));
 
-vi.mock('$lib/server/monitoring/MonitoringScheduler.js', () => ({
+vi.mock('#lib/server/monitoring/MonitoringScheduler.js', () => ({
 	monitoringScheduler: {
 		getSettings: vi.fn().mockResolvedValue({ searchOnMonitorEnabled: false })
 	}
 }));
 
-vi.mock('$lib/server/library/LibraryMediaEvents', () => ({
+vi.mock('#lib/server/library/LibraryMediaEvents.js', () => ({
 	libraryMediaEvents: {
 		emitSeriesUpdated: vi.fn()
 	}

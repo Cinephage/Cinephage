@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { CapturedLogEntry, CapturedLogFilters } from '$lib/logging/log-capture';
+import type { CapturedLogEntry, CapturedLogFilters } from '#lib/logging/log-capture.js';
 
 const MAX_ENTRIES = 1000;
 

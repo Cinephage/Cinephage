@@ -3,7 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/svelte';
 import LiveTvAccountModal from './LiveTvAccountModal.svelte';
 import type { FormData } from './LiveTvAccountModal.svelte';
-import type { LiveTvAccount } from '$lib/types/livetv';
+import type { LiveTvAccount } from '#lib/types/livetv.js';
 
 function makeStalkerAccount(
 	stalkerConfig: Partial<NonNullable<LiveTvAccount['stalkerConfig']>> = {}

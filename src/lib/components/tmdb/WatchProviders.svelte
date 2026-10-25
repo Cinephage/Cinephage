@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { SvelteSet } from 'svelte/reactivity';
-	import type { WatchProvidersResponse, WatchProvider } from '$lib/types/tmdb';
+	import type { WatchProvidersResponse, WatchProvider } from '#lib/types/tmdb.js';
 	import TmdbImage from './TmdbImage.svelte';
 	import { page } from '$app/state';
-	import { TMDB } from '$lib/config/constants.js';
-	import * as m from '$lib/paraglide/messages.js';
+	import { TMDB } from '#lib/config/constants.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	let {
 		providers,

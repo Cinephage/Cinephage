@@ -1,12 +1,12 @@
-import { getDownloadClientManager } from '$lib/server/downloadClients/DownloadClientManager.js';
-import type { AutoSearchIssue } from '$lib/server/library/autoSearchIssues.js';
-import { getIndexerManager } from '$lib/server/indexers/IndexerManager.js';
+import { getDownloadClientManager } from '#lib/server/downloadClients/DownloadClientManager.js';
+import type { AutoSearchIssue } from '#lib/server/library/autoSearchIssues.js';
+import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
 import {
 	CINEPHAGE_STREAM_DEFINITION_ID,
 	indexerHasCategoriesForSearchType,
 	type IndexerCapabilities,
 	type SearchType
-} from '$lib/server/indexers/types';
+} from '#lib/server/indexers/types/index.js';
 
 function supportsSearchType(
 	capabilities: IndexerCapabilities | undefined,

@@ -13,7 +13,7 @@ import type {
 import { generateEpisodeFormat } from '../search/SearchFormatProvider';
 import type { FilterBlock, SettingsField } from '../schema/yamlDefinition';
 import { createSafeRegex, safeReplace } from './safeRegex';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'indexers' as const });
 

@@ -1,7 +1,7 @@
 /**
  * Shared naming/rename types
  *
- * Lives outside $lib/server so it can be imported from .svelte files
+ * Lives outside #lib/server so it can be imported from .svelte files
  * without leaking server code into the client bundle. The server's
  * RenamePreviewService imports these types from here.
  */

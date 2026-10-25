@@ -1,12 +1,11 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { db } from '$lib/server/db';
-import { namingPresets } from '$lib/server/db/schema';
-import { getBuiltInPreset, type NamingPreset } from '$lib/server/library/naming/presets';
-import { namingSettingsService } from '$lib/server/library/naming/NamingSettingsService';
+import { db } from '#lib/server/db/index.js';
+import { namingPresets } from '#lib/server/db/schema.js';
+import { getBuiltInPreset, type NamingPreset } from '#lib/server/library/naming/presets.js';
+import { namingSettingsService } from '#lib/server/library/naming/NamingSettingsService.js';
 import { eq } from 'drizzle-orm';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { createChildLogger } from '$lib/logging';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'NamingPresetApplyApi', logDomain: 'scans' });
 
@@ -32,7 +31,7 @@ export const POST: RequestHandler = async (event) => {
 			const [customPreset] = await db.select().from(namingPresets).where(eq(namingPresets.id, id));
 
 			if (!customPreset) {
-				return json({ error: 'Preset not found' }, { status: 404 });
+				return Response.json({ error: 'Preset not found' }, { status: 404 });
 			}
 
 			presetConfig = customPreset.config as NamingPreset['config'];
@@ -44,12 +43,12 @@ export const POST: RequestHandler = async (event) => {
 		// Get the updated config to return
 		const updatedConfig = await namingSettingsService.getConfig();
 
-		return json({
+		return Response.json({
 			success: true,
 			config: updatedConfig
 		});
 	} catch (err) {
 		logger.error({ err, component: 'NamingPresetApplyApi' }, 'Error applying naming preset');
-		return json({ error: 'Failed to apply preset' }, { status: 500 });
+		return Response.json({ error: 'Failed to apply preset' }, { status: 500 });
 	}
 };

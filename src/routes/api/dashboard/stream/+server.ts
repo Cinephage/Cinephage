@@ -1,14 +1,14 @@
-import { createSSEStream } from '$lib/server/sse';
-import { downloadMonitor } from '$lib/server/downloadClients/monitoring';
-import { librarySchedulerService } from '$lib/server/library/library-scheduler';
-import { diskScanService } from '$lib/server/library/disk-scan';
-import { logger } from '$lib/logging';
-import { activityService } from '$lib/server/activity';
+import { createSSEStream } from '#lib/server/sse.js';
+import { downloadMonitor } from '#lib/server/downloadClients/monitoring/index.js';
+import { librarySchedulerService } from '#lib/server/library/library-scheduler.js';
+import { diskScanService } from '#lib/server/library/disk-scan.js';
+import { logger } from '#lib/logging/index.js';
+import { activityService } from '#lib/server/activity/index.js';
 import {
 	getDashboardStats,
 	getRecentlyAdded,
 	getMissingEpisodes
-} from '$lib/server/dashboard/queries.js';
+} from '#lib/server/dashboard/queries.js';
 import type { RequestHandler } from '@sveltejs/kit';
 
 /**

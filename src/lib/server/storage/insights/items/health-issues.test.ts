@@ -5,11 +5,11 @@ import {
 	clearTestDb,
 	type TestDatabase
 } from '../../../../../test/db-helper.js';
-import { rootFolders } from '$lib/server/db/schema';
+import { rootFolders } from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -19,7 +19,7 @@ vi.mock('$lib/server/db', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -77,7 +77,7 @@ describe('healthIssuesResolver', () => {
 		expect(result.items).toHaveLength(2);
 		expect(result.total).toBe(2);
 		expect(result.items[0].kind).toBe('folder');
-		expect(result.items[0].href).toBe('/settings/monitoring/status/folders');
+		expect(result.items[0].href).toBe('/settings/monitoring/status/folders?folderId=hi-f1');
 	});
 
 	it('supports folderPaths', async () => {

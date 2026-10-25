@@ -17,11 +17,11 @@ import type { ScoreComponents } from './types.js';
 import type { ScoringProfile, SizeValidationContext, PackPreference } from '../scoring/index.js';
 import { calculatePackBonus } from '../scoring/types.js';
 import { getFormat } from '../scoring/formats/index.js';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'indexers' as const });
 import { getProtocolHandler, type ProtocolContext } from '../indexers/protocols';
-import type { ProtocolSettings } from '$lib/server/indexers/types/index.js';
+import type { ProtocolSettings } from '#lib/server/indexers/types/index.js';
 
 /**
  * Indexer configuration for protocol-specific rejection

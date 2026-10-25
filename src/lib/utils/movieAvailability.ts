@@ -1,6 +1,6 @@
 import { resolveReleaseStage, type ReleaseStage } from './releaseStage.js';
 import { DOWNLOADABLE_TYPES } from './releaseTypes.js';
-import { RELEASE } from '$lib/config/constants.js';
+import { RELEASE } from '#lib/config/constants.js';
 
 export type MovieAvailabilityLevel = 'announced' | 'inCinemas' | 'released';
 

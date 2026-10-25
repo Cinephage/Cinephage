@@ -9,19 +9,19 @@
 		Loader2,
 		X,
 		Search
-	} from 'lucide-svelte';
-	import * as m from '$lib/paraglide/messages.js';
-	import type { ChannelLineupItemWithDetails, EpgProgram } from '$lib/types/livetv';
+	} from '@lucide/svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import type { ChannelLineupItemWithDetails, EpgProgram } from '#lib/types/livetv.js';
 	import { onMount } from 'svelte';
 	import {
 		getEpgGuide,
 		getStoredEpgDisplayLanguage,
 		storeEpgDisplayLanguage
-	} from '$lib/api/livetv.js';
-	import { ALL_LANGUAGE_OPTIONS } from '$lib/shared/languages';
+	} from '#lib/api/livetv.js';
+	import { ALL_LANGUAGE_OPTIONS } from '#lib/shared/languages.js';
 	import { getEpgConfig } from './epgConfig';
-	import { getLocale } from '$lib/paraglide/runtime.js';
-	import { formatDisplayDate, toDateString } from '$lib/utils/format.js';
+	import { getLocale } from '#lib/paraglide/runtime.js';
+	import { formatDisplayDate, toDateString } from '#lib/utils/format.js';
 
 	interface Props {
 		lineup: ChannelLineupItemWithDetails[];

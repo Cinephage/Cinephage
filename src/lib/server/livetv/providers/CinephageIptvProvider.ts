@@ -5,12 +5,12 @@
  * Fetches free IPTV channels from https://api.cinephage.net/api/v1/iptv/*
  */
 
-import { db } from '$lib/server/db';
-import { livetvAccounts, livetvChannels, livetvCategories } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { livetvAccounts, livetvChannels, livetvCategories } from '#lib/server/db/schema.js';
 import { and, eq, inArray, notInArray } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
-import { getStreamingIndexerSettings } from '$lib/server/streaming/settings.js';
-import { getCinephageCore } from '$lib/server/cinephage/core/CinephageCore.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { getStreamingIndexerSettings } from '#lib/server/streaming/settings.js';
+import { getCinephageCore } from '#lib/server/cinephage/core/CinephageCore.js';
 import { randomUUID } from 'node:crypto';
 
 const logger = createChildLogger({ logDomain: 'livetv' as const });
@@ -27,7 +27,7 @@ import type {
 	LiveTvAccountTestResult,
 	CinephageIptvConfig,
 	M3uChannelData
-} from '$lib/types/livetv';
+} from '#lib/types/livetv.js';
 import { recordToAccount } from '../LiveTvAccountManager.js';
 
 const CINEPHAGE_API_BASE = 'https://api.cinephage.net';

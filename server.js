@@ -26,15 +26,17 @@ process.env.BODY_SIZE_LIMIT ??= '10M';
 // KeepAlive note: Node's default keepAliveTimeout is 5s, but reverse proxies
 // (Nginx, Traefik) typically use 60-75s. The mismatch causes 502 Bad Gateway
 // errors on connection reuse; keepAliveTimeout is raised to 65s below.
-const { server } = await import('./build/index.js');
+// adapter-node 6 exports the underlying http.Server directly (kit 2 wrapped
+// it in a ServerApp object, hence the removed `.server` indirection here).
+const server = (await import('./build/index.js')).server;
 
 // Set keepAliveTimeout to 65 seconds (higher than typical proxy timeouts of 60s)
 // This prevents 502 errors from connection reuse issues
-server.server.keepAliveTimeout = 65000;
+server.keepAliveTimeout = 65000;
 
 // headersTimeout must be higher than keepAliveTimeout
 // This is how long the server waits for request headers
-server.server.headersTimeout = 66000;
+server.headersTimeout = 66000;
 
 console.log('Server configured with keepAliveTimeout=65s for reverse proxy compatibility');
 console.log(`Body size limit: ${process.env.BODY_SIZE_LIMIT}`);

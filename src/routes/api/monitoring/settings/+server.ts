@@ -1,9 +1,8 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { monitoringScheduler } from '$lib/server/monitoring/MonitoringScheduler.js';
-import { monitoringSettingsUpdateSchema } from '$lib/validation/schemas.js';
-import { createChildLogger } from '$lib/logging';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
+import { monitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.js';
+import { monitoringSettingsUpdateSchema } from '#lib/validation/schemas.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 
 const logger = createChildLogger({ module: 'MonitoringSettingsApi', logDomain: 'monitoring' });
 
@@ -20,7 +19,7 @@ export const GET: RequestHandler = async (event) => {
 		const status = await monitoringScheduler.getStatus();
 		const fullSettings = await monitoringScheduler.getSettings();
 
-		return json({
+		return Response.json({
 			success: true,
 			settings: {
 				missingSearchIntervalHours: status.tasks.missing.intervalHours,
@@ -40,7 +39,7 @@ export const GET: RequestHandler = async (event) => {
 			'[API] Failed to get monitoring settings',
 			error instanceof Error ? error : undefined
 		);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: 'Failed to get monitoring settings'
@@ -64,7 +63,7 @@ export const PUT: RequestHandler = async (event) => {
 		const validation = monitoringSettingsUpdateSchema.safeParse(body);
 
 		if (!validation.success) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: 'Invalid request body',
@@ -83,7 +82,7 @@ export const PUT: RequestHandler = async (event) => {
 		const status = await monitoringScheduler.getStatus();
 		const fullUpdatedSettings = await monitoringScheduler.getSettings();
 
-		return json({
+		return Response.json({
 			success: true,
 			message: 'Monitoring settings updated',
 			settings: {
@@ -104,7 +103,7 @@ export const PUT: RequestHandler = async (event) => {
 			'[API] Failed to update monitoring settings',
 			error instanceof Error ? error : undefined
 		);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: 'Failed to update monitoring settings'

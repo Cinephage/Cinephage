@@ -6,7 +6,7 @@ import {
 	type TestDatabase
 } from '../../../../test/db-helper';
 import { api, type ErrorResponse } from '../../../../test/api-helper';
-import { movies, episodes, series } from '$lib/server/db/schema';
+import { movies, episodes, series } from '#lib/server/db/schema.js';
 
 const downloadForMovieMock = vi.hoisted(() => vi.fn());
 const downloadForEpisodeMock = vi.hoisted(() => vi.fn());
@@ -22,7 +22,7 @@ const mockLogger = vi.hoisted(() => ({
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -32,19 +32,19 @@ vi.mock('$lib/server/db', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	logger: mockLogger,
 	createChildLogger: vi.fn(() => mockLogger)
 }));
 
-vi.mock('$lib/server/subtitles/services/SubtitleDownloadService', () => ({
+vi.mock('#lib/server/subtitles/services/SubtitleDownloadService.js', () => ({
 	getSubtitleDownloadService: () => ({
 		downloadForMovie: downloadForMovieMock,
 		downloadForEpisode: downloadForEpisodeMock
 	})
 }));
 
-vi.mock('$lib/server/library/LibraryMediaEvents', () => ({
+vi.mock('#lib/server/library/LibraryMediaEvents.js', () => ({
 	libraryMediaEvents: {
 		emitMovieUpdated: emitMovieUpdatedMock,
 		emitSeriesUpdated: emitSeriesUpdatedMock

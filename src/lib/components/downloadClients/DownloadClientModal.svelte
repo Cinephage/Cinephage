@@ -1,26 +1,26 @@
 <script lang="ts">
-	import { X } from 'lucide-svelte';
+	import { X } from '@lucide/svelte';
 	import type {
 		DownloadClient,
 		DownloadClientFormData,
 		DownloadClientImplementation,
 		ConnectionTestResult
-	} from '$lib/types/downloadClient';
-	import { FolderBrowser } from '$lib/components/library';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
+	} from '#lib/types/downloadClient.js';
+	import { FolderBrowser } from '#lib/components/library/index.js';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
 	import { clientDefinitions } from './forms/clientDefinitions';
 	import DownloadClientSettings from './forms/DownloadClientSettings.svelte';
 	import ClientFormFields from './ClientFormFields.svelte';
 	import DebridClientFields from './DebridClientFields.svelte';
 	import ClientSpecificOptions from './ClientSpecificOptions.svelte';
 	import ClientTestConnection from './ClientTestConnection.svelte';
-	import { toFriendlyDownloadClientError } from '$lib/downloadClients/errorMessages';
+	import { toFriendlyDownloadClientError } from '#lib/downloadClients/errorMessages.js';
 	import {
 		serializeDownloadClientForm,
 		type DownloadClientFormState,
 		type NntpServerFormData
 	} from './formSerializer.js';
-	import * as m from '$lib/paraglide/messages.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface NntpServer {
 		id: string;
@@ -107,6 +107,8 @@
 	let olderPriority = $state<'normal' | 'high' | 'force'>('normal');
 	let initialState = $state<'start' | 'pause' | 'force'>('start');
 	let sequentialDownload = $state(false);
+	let seedRatioLimit = $state('');
+	let seedTimeLimit = $state('');
 
 	let downloadPathLocal = $state('');
 	let downloadPathRemote = $state('');
@@ -247,6 +249,8 @@
 			initialState = dcClient?.initialState ?? 'start';
 			sequentialDownload = dcClient?.sequentialDownload ?? false;
 			removeAfterImport = dcClient?.removeAfterImport ?? false;
+			seedRatioLimit = dcClient?.seedRatioLimit ?? '';
+			seedTimeLimit = dcClient?.seedTimeLimit != null ? String(dcClient.seedTimeLimit) : '';
 			allowMovies = dcClient?.allowMovies ?? true;
 			allowTv = dcClient?.allowTv ?? true;
 			downloadPathLocal = dcClient?.downloadPathLocal ?? '';
@@ -279,6 +283,12 @@
 			if (def) {
 				port = def.defaultPort;
 				name = def.name;
+				// Non-debrid clients default to removing completed downloads (for
+				// seeding clients: once seed goals are met), matching the migration
+				// backfill for existing clients.
+				if (!def.isDebrid) {
+					removeAfterImport = true;
+				}
 				if (newImpl === 'nntp') {
 					useSsl = true;
 				}
@@ -313,6 +323,8 @@
 			olderPriority,
 			initialState,
 			sequentialDownload,
+			seedRatioLimit,
+			seedTimeLimit,
 			downloadPathLocal,
 			downloadPathRemote,
 			tempPathLocal,
@@ -549,6 +561,9 @@
 							bind:olderPriority
 							bind:initialState
 							bind:sequentialDownload
+							bind:removeAfterImport
+							bind:seedRatioLimit
+							bind:seedTimeLimit
 							bind:downloadPathLocal
 							bind:downloadPathRemote
 							bind:tempPathLocal

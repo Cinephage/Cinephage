@@ -8,15 +8,16 @@
 		Pencil,
 		Trash2,
 		Tv
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 	import ChannelLineupRow from './ChannelLineupRow.svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 	import type {
 		ChannelLineupItemWithDetails,
 		ChannelCategory,
 		EpgProgram,
 		EpgProgramWithProgress
-	} from '$lib/types/livetv';
-	import * as m from '$lib/paraglide/messages.js';
+	} from '#lib/types/livetv.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface NowNextEntry {
 		now: EpgProgramWithProgress | null;
@@ -74,6 +75,25 @@
 		onInlineEdit,
 		onShowSchedule
 	}: Props = $props();
+
+	// Logo broken-image fallback, keyed by channel id (multiple logos render
+	// in the same #each, so a single ref/state pair can't track them all).
+	// onerror as a prop renders as a literal inline HTML attribute during SSR
+	// (Svelte replays the pre-hydration event that way), which a strict CSP
+	// blocks without 'unsafe-hashes'; a use: action attaches imperatively
+	// instead, avoiding that path.
+	const failedLogoIds = new SvelteSet<string>();
+	function trackLogoError(node: HTMLImageElement, channelId: string) {
+		const handleError = () => {
+			failedLogoIds.add(channelId);
+		};
+		node.addEventListener('error', handleError);
+		return {
+			destroy() {
+				node.removeEventListener('error', handleError);
+			}
+		};
+	}
 
 	// Derived: Check if all channels in this category are selected
 	const allSelected = $derived(channels.length > 0 && channels.every((c) => selectedIds.has(c.id)));
@@ -220,15 +240,12 @@
 						>
 							<GripVertical class="h-4 w-4" />
 						</div>
-						{#if channel.displayLogo}
+						{#if channel.displayLogo && !failedLogoIds.has(channel.id)}
 							<img
+								use:trackLogoError={channel.id}
 								src={channel.displayLogo}
 								alt={channel.displayName}
 								class="h-10 w-10 rounded bg-base-100 object-contain"
-								onerror={(e) => {
-									const target = e.currentTarget as HTMLImageElement;
-									target.style.display = 'none';
-								}}
 							/>
 						{:else}
 							<div class="flex h-10 w-10 items-center justify-center rounded bg-base-300">

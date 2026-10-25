@@ -23,10 +23,10 @@
  * problem can never fail a library scan or watcher cycle.
  */
 
-import { db } from '$lib/server/db/index.js';
-import { movies, series } from '$lib/server/db/schema.js';
-import { eq } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
+import { db } from '#lib/server/db/index.js';
+import { movies, series, episodeFiles } from '#lib/server/db/schema.js';
+import { and, eq } from 'drizzle-orm';
+import { createChildLogger } from '#lib/logging/index.js';
 import { getSubtitleScannerService } from './SubtitleScannerService';
 
 const logger = createChildLogger({ logDomain: 'subtitles' as const });
@@ -67,12 +67,25 @@ export function scheduleReconcileSeries(seriesId: string): void {
 /**
  * Enumerate the movies/series in a root folder and schedule a debounced
  * reconciliation for each. Never throws.
+ *
+ * File-row-driven (Sonarr parity: subtitle scans ride on existing media
+ * files, not on library rows). Items with no files — wanted-but-missing
+ * entries whose folders don't exist yet, or rows whose files were removed —
+ * have nothing to discover and no folder to read, so they are not scheduled.
  */
 export async function scheduleReconcileRootFolder(rootFolderId: string): Promise<void> {
 	try {
 		const [movieRows, seriesRows] = await Promise.all([
-			db.select({ id: movies.id }).from(movies).where(eq(movies.rootFolderId, rootFolderId)),
-			db.select({ id: series.id }).from(series).where(eq(series.rootFolderId, rootFolderId))
+			db
+				.select({ id: movies.id })
+				.from(movies)
+				// hasFile=false movies have no folder on disk by design.
+				.where(and(eq(movies.rootFolderId, rootFolderId), eq(movies.hasFile, true))),
+			db
+				.selectDistinct({ id: series.id })
+				.from(series)
+				.innerJoin(episodeFiles, eq(episodeFiles.seriesId, series.id))
+				.where(eq(series.rootFolderId, rootFolderId))
 		]);
 
 		for (const movie of movieRows) scheduleReconcileMovie(movie.id);

@@ -5,7 +5,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 import type { WorkerType, WorkerStatus, WorkerLogEntry, WorkerState } from './types.js';

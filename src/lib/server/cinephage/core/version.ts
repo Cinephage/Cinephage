@@ -1,4 +1,4 @@
-import { resolveAppVersion as resolveAppVersionBase } from '$lib/server/version';
+import { resolveAppVersion as resolveAppVersionBase } from '#lib/server/version.js';
 
 /**
  * Cinephage subsystem version resolution.

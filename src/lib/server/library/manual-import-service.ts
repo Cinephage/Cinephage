@@ -2,60 +2,48 @@ import { randomUUID } from 'node:crypto';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import { readdir, stat, unlink } from 'node:fs/promises';
 import { and, asc, eq, gt, inArray } from 'drizzle-orm';
-import { db } from '$lib/server/db/index.js';
-import { episodes, movies, rootFolders, series, unmatchedFiles } from '$lib/server/db/schema.js';
-import { tmdb } from '$lib/server/tmdb.js';
-import { createChildLogger } from '$lib/logging';
+import { db } from '#lib/server/db/index.js';
+import { episodes, movies, rootFolders, series, unmatchedFiles } from '#lib/server/db/schema.js';
+import { tmdb } from '#lib/server/tmdb.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'scans' as const });
-import { parseRelease, extractExternalIds } from '$lib/server/indexers/parser/ReleaseParser.js';
-import { isVideoFile, mediaInfoService, MediaInfoService } from '$lib/server/library/media-info.js';
-import { unmatchedFileService } from '$lib/server/library/unmatched-file-service.js';
-import { namingSettingsService } from '$lib/server/library/naming/NamingSettingsService.js';
-import { resolveLocalizedTitlesForFormats } from '$lib/server/library/naming/localization.js';
+import { parseRelease } from '#lib/server/indexers/parser/ReleaseParser.js';
+import { isVideoFile, mediaInfoService, MediaInfoService } from '#lib/server/library/media-info.js';
+import { unmatchedFileService } from '#lib/server/library/unmatched-file-service.js';
+import { namingSettingsService } from '#lib/server/library/naming/NamingSettingsService.js';
+import { resolveLocalizedTitlesForFormats } from '#lib/server/library/naming/localization.js';
 import {
 	NamingService,
 	releaseToNamingInfo,
 	type MediaNamingInfo
-} from '$lib/server/library/naming/NamingService.js';
+} from '#lib/server/library/naming/NamingService.js';
 import {
 	ensureDirectory,
 	ImportMode,
 	transferFileWithMode,
 	hasSufficientDiskSpace,
 	removeEmptyDirectories
-} from '$lib/server/downloadClients/import/FileTransfer.js';
-import { getFileManagementSettings } from '$lib/server/settings/file-management.js';
+} from '#lib/server/downloadClients/import/FileTransfer.js';
+import { getFileManagementSettings } from '#lib/server/settings/file-management.js';
 import {
 	validateRootFolder,
 	getAnimeSubtypeEnforcement,
 	type MediaType
-} from '$lib/server/library/LibraryAddService.js';
-import { getLibraryEntityService } from '$lib/server/library/LibraryEntityService.js';
-import { isLikelyAnimeMedia } from '$lib/shared/anime-classification.js';
-import { getMediaParseStem } from '$lib/server/library/media-utils.js';
-import {
-	canonicalizeArticleTitle,
-	calculateMatchConfidence,
-	normalizeTitleForMatch
-} from './title-matching.js';
+} from '#lib/server/library/LibraryAddService.js';
+import { getLibraryEntityService } from '#lib/server/library/LibraryEntityService.js';
+import { isLikelyAnimeMedia } from '#lib/shared/anime-classification.js';
+import { getMediaParseStem } from '#lib/server/library/media-utils.js';
+import { normalizeTitleForMatch } from './title-matching.js';
+import { findSuggestedMatches, type SuggestedMatch } from './suggested-matches.js';
 import {
 	extractSeasonFromPath,
 	resolveTvEpisodeIdentifier
-} from '$lib/server/library/tv-episode-resolver.js';
+} from '#lib/server/library/tv-episode-resolver.js';
 
 interface SourceMediaFile {
 	path: string;
 	size: number;
-}
-
-interface SuggestedMatch {
-	tmdbId: number;
-	title: string;
-	year?: number;
-	confidence: number;
-	mediaType: MediaType;
-	isAnime?: boolean;
 }
 
 export interface ManualImportMatch extends SuggestedMatch {
@@ -106,6 +94,10 @@ export interface ExecuteManualImportRequest {
 	episodeNumber?: number;
 	/** Override the global file management import mode for this specific import */
 	importMode?: 'move' | 'copy' | 'symlink';
+	/** Override the global "use hardlinks when possible" setting for this import */
+	preferHardlink?: boolean;
+	/** When set, the import was requested as a background library job (#530) */
+	background?: boolean;
 }
 
 export interface ExecuteManualImportResult {
@@ -240,7 +232,7 @@ export class ManualImportService {
 		});
 		const detectedSeasons = this.extractDetectedSeasons(sourceFiles);
 		const suggestedSeason = extractSeasonFromPath(selectedFile.path);
-		const matches = await this.findMatches(
+		const matches = await findSuggestedMatches(
 			titleCandidates,
 			parsed.year,
 			inferredMediaType,
@@ -560,7 +552,8 @@ export class ManualImportService {
 				sourceFile.path,
 				destinationPath,
 				rootFolder.preserveSymlinks ?? false,
-				request.importMode
+				request.importMode,
+				request.preferHardlink
 			);
 			const unmatchedId = await this.insertUnmatchedImportRecord({
 				destinationPath,
@@ -641,7 +634,8 @@ export class ManualImportService {
 					sourceFile.path,
 					destinationPath,
 					rootFolder.preserveSymlinks ?? false,
-					request.importMode
+					request.importMode,
+					request.preferHardlink
 				);
 				const unmatchedId = await this.insertUnmatchedImportRecord({
 					destinationPath,
@@ -766,7 +760,7 @@ export class ManualImportService {
 			...namingInfo,
 			originalExtension: sourceExtension
 		});
-		const seasonFolderName = this.namingService.generateSeasonFolderName(seasonNumber);
+		const seasonFolderName = this.namingService.generateSeasonFolderName(seasonNumber, namingInfo);
 		return useSeasonFolders
 			? join(rootFolderPath, seriesFolderName, seasonFolderName, episodeFileName)
 			: join(rootFolderPath, seriesFolderName, episodeFileName);
@@ -1469,7 +1463,8 @@ export class ManualImportService {
 		sourcePath: string,
 		destinationPath: string,
 		preserveSymlinks: boolean,
-		importModeOverride?: 'move' | 'copy' | 'symlink'
+		importModeOverride?: 'move' | 'copy' | 'symlink',
+		preferHardlinkOverride?: boolean
 	): Promise<{ transferMode: string }> {
 		await ensureDirectory(dirname(destinationPath));
 
@@ -1497,7 +1492,7 @@ export class ManualImportService {
 			importMode,
 			canMoveFiles,
 			preserveSymlinks,
-			preferHardlink: settings.preferHardlink
+			preferHardlink: preferHardlinkOverride ?? settings.preferHardlink
 		});
 
 		if (!transferResult.success) {
@@ -1915,280 +1910,6 @@ export class ManualImportService {
 				rootFolderPath: existing.rootFolderId ? folderMap.get(existing.rootFolderId) : null
 			};
 		});
-	}
-
-	private async findMatches(
-		titleCandidates: string[],
-		year: number | undefined,
-		mediaType: MediaType,
-		filePath: string,
-		matchCache?: Map<string, SuggestedMatch[]>
-	): Promise<SuggestedMatch[]> {
-		try {
-			const extractedIds = extractExternalIds(filePath);
-
-			if (extractedIds.tmdbId) {
-				const direct = await this.lookupByTmdbId(extractedIds.tmdbId, mediaType);
-				if (direct) {
-					return [direct];
-				}
-			}
-
-			if (extractedIds.tvdbId) {
-				const tvdb = await this.lookupByTvdbId(extractedIds.tvdbId);
-				if (tvdb) {
-					return [tvdb];
-				}
-			}
-
-			if (extractedIds.imdbId) {
-				const imdb = await this.lookupByImdbId(extractedIds.imdbId, mediaType);
-				if (imdb) {
-					return [imdb];
-				}
-			}
-			const candidates =
-				titleCandidates.length > 0 ? titleCandidates : [basename(getMediaParseStem(filePath))];
-			const aggregatedMatches = new Map<number, SuggestedMatch>();
-
-			for (const candidate of candidates) {
-				// Canonicalize inverted-article candidates ("Lion King, The") so
-				// the TMDB query and confidence scoring use the canonical form.
-				const canonicalCandidate = canonicalizeArticleTitle(candidate);
-				const cacheKey = `${mediaType}:${year ?? 'na'}:${canonicalCandidate.toLowerCase()}`;
-				let cachedMatches = matchCache?.get(cacheKey);
-
-				if (!cachedMatches) {
-					const results =
-						mediaType === 'movie'
-							? await tmdb.searchMovies(canonicalCandidate, year, true)
-							: await tmdb.searchTv(canonicalCandidate, year, true);
-
-					cachedMatches =
-						results.results?.slice(0, 10).map((result) => {
-							const resultTitle = result.title || result.name || '';
-							const resultDate = result.release_date || result.first_air_date;
-							const resultYear = resultDate ? parseInt(resultDate.split('-')[0], 10) : undefined;
-
-							return {
-								tmdbId: result.id,
-								title: resultTitle,
-								year: resultYear,
-								confidence: this.calculateMatchConfidence(
-									canonicalCandidate,
-									year,
-									resultTitle,
-									resultYear,
-									result.original_title ?? result.original_name
-								),
-								mediaType,
-								isAnime: this.classifyTmdbResultAnime(result, mediaType)
-							} satisfies SuggestedMatch;
-						}) ?? [];
-
-					matchCache?.set(cacheKey, cachedMatches);
-				}
-
-				for (const match of cachedMatches) {
-					const existing = aggregatedMatches.get(match.tmdbId);
-					if (!existing || match.confidence > existing.confidence) {
-						aggregatedMatches.set(match.tmdbId, { ...match });
-					}
-				}
-			}
-
-			const matches = [...aggregatedMatches.values()];
-			matches.sort((a, b) => b.confidence - a.confidence);
-			return matches.slice(0, 5);
-		} catch (error) {
-			logger.error(
-				{
-					err: error instanceof Error ? error : undefined,
-					...{
-						titleCandidates,
-						mediaType
-					}
-				},
-				'[ManualImport] Failed to find TMDB matches'
-			);
-			return [];
-		}
-	}
-
-	private async lookupByTmdbId(
-		tmdbId: number,
-		mediaType: MediaType
-	): Promise<SuggestedMatch | null> {
-		try {
-			if (mediaType === 'movie') {
-				const movie = await tmdb.getMovie(tmdbId);
-				return {
-					tmdbId: movie.id,
-					title: movie.title,
-					year: movie.release_date ? parseInt(movie.release_date.split('-')[0], 10) : undefined,
-					confidence: 1,
-					mediaType,
-					isAnime: isLikelyAnimeMedia({
-						genres: movie.genres,
-						originalLanguage: movie.original_language,
-						originCountries: movie.production_countries?.map((country) => country.iso_3166_1),
-						productionCountries: movie.production_countries,
-						title: movie.title,
-						originalTitle: movie.original_title
-					})
-				};
-			}
-			const show = await tmdb.getTVShow(tmdbId);
-			return {
-				tmdbId: show.id,
-				title: show.name,
-				year: show.first_air_date ? parseInt(show.first_air_date.split('-')[0], 10) : undefined,
-				confidence: 1,
-				mediaType,
-				isAnime: isLikelyAnimeMedia({
-					genres: show.genres,
-					originalLanguage: show.original_language,
-					originCountries: show.origin_country,
-					title: show.name,
-					originalTitle: show.original_name
-				})
-			};
-		} catch {
-			return null;
-		}
-	}
-
-	private async lookupByTvdbId(tvdbId: number): Promise<SuggestedMatch | null> {
-		try {
-			const result = await tmdb.findByExternalId(String(tvdbId), 'tvdb_id');
-			if (result.tv_results.length === 0) {
-				return null;
-			}
-			const show = result.tv_results[0];
-			return {
-				tmdbId: show.id,
-				title: show.name,
-				year: show.first_air_date ? parseInt(show.first_air_date.split('-')[0], 10) : undefined,
-				confidence: 1,
-				mediaType: 'tv',
-				isAnime: this.classifyTmdbResultAnime(show, 'tv')
-			};
-		} catch {
-			return null;
-		}
-	}
-
-	private async lookupByImdbId(
-		imdbId: string,
-		preferredMediaType: MediaType
-	): Promise<SuggestedMatch | null> {
-		try {
-			const result = await tmdb.findByExternalId(imdbId, 'imdb_id');
-
-			if (preferredMediaType === 'movie' && result.movie_results.length > 0) {
-				const movie = result.movie_results[0];
-				return {
-					tmdbId: movie.id,
-					title: movie.title,
-					year: movie.release_date ? parseInt(movie.release_date.split('-')[0], 10) : undefined,
-					confidence: 1,
-					mediaType: 'movie',
-					isAnime: this.classifyTmdbResultAnime(movie, 'movie')
-				};
-			}
-
-			if (preferredMediaType === 'tv' && result.tv_results.length > 0) {
-				const show = result.tv_results[0];
-				return {
-					tmdbId: show.id,
-					title: show.name,
-					year: show.first_air_date ? parseInt(show.first_air_date.split('-')[0], 10) : undefined,
-					confidence: 1,
-					mediaType: 'tv',
-					isAnime: this.classifyTmdbResultAnime(show, 'tv')
-				};
-			}
-
-			if (result.movie_results.length > 0) {
-				const movie = result.movie_results[0];
-				return {
-					tmdbId: movie.id,
-					title: movie.title,
-					year: movie.release_date ? parseInt(movie.release_date.split('-')[0], 10) : undefined,
-					confidence: 1,
-					mediaType: 'movie',
-					isAnime: this.classifyTmdbResultAnime(movie, 'movie')
-				};
-			}
-
-			if (result.tv_results.length > 0) {
-				const show = result.tv_results[0];
-				return {
-					tmdbId: show.id,
-					title: show.name,
-					year: show.first_air_date ? parseInt(show.first_air_date.split('-')[0], 10) : undefined,
-					confidence: 1,
-					mediaType: 'tv',
-					isAnime: this.classifyTmdbResultAnime(show, 'tv')
-				};
-			}
-		} catch {
-			return null;
-		}
-		return null;
-	}
-
-	private classifyTmdbResultAnime(result: Record<string, unknown>, mediaType: MediaType): boolean {
-		const genreIds = Array.isArray(result.genre_ids)
-			? result.genre_ids.filter((value): value is number => typeof value === 'number')
-			: [];
-		const originCountries = Array.isArray(result.origin_country)
-			? result.origin_country.filter((value): value is string => typeof value === 'string')
-			: [];
-		const originalLanguage =
-			typeof result.original_language === 'string' ? result.original_language : null;
-		const title =
-			mediaType === 'movie'
-				? typeof result.title === 'string'
-					? result.title
-					: null
-				: typeof result.name === 'string'
-					? result.name
-					: null;
-		const originalTitle =
-			mediaType === 'movie'
-				? typeof result.original_title === 'string'
-					? result.original_title
-					: null
-				: typeof result.original_name === 'string'
-					? result.original_name
-					: null;
-
-		return isLikelyAnimeMedia({
-			genres: genreIds.map((id) => ({ id })),
-			originalLanguage,
-			originCountries,
-			title,
-			originalTitle
-		});
-	}
-
-	private calculateMatchConfidence(
-		parsedTitle: string,
-		parsedYear: number | undefined,
-		tmdbTitle: string,
-		tmdbYear: number | undefined,
-		tmdbOriginalTitle?: string
-	): number {
-		// Delegates to the shared title-matching primitives (kept in sync with
-		// MediaMatcherService).
-		return calculateMatchConfidence(
-			parsedTitle,
-			parsedYear,
-			tmdbTitle,
-			tmdbYear,
-			tmdbOriginalTitle
-		);
 	}
 }
 

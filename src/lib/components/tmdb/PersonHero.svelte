@@ -1,9 +1,9 @@
 <script lang="ts">
-	import type { PersonDetails } from '$lib/types/tmdb';
+	import type { PersonDetails } from '#lib/types/tmdb.js';
 	import TmdbImage from './TmdbImage.svelte';
-	import { ExternalLink, Briefcase } from 'lucide-svelte';
-	import { formatDisplayDate } from '$lib/utils/format.js';
-	import * as m from '$lib/paraglide/messages.js';
+	import { ExternalLink, Briefcase } from '@lucide/svelte';
+	import { formatDisplayDate } from '#lib/utils/format.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	// Accept PersonDetails with or without combined_credits (for optimized loading)
 	// The combined_credits field is intentionally optional as this component works with both variants

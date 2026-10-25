@@ -10,11 +10,11 @@ import {
 } from 'drizzle-orm/sqlite-core';
 import { relations, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
-import type { ProtocolSettings } from '$lib/server/indexers/types/index.js';
-import type { NewznabCategory } from '$lib/server/indexers/newznab/types.js';
-import type { DesiredQuality } from '$lib/types/library.js';
-import type { AudioPreference, SubtitleRequirement } from '$lib/shared/language-profile.js';
-import type { EpgLocalizedText } from '$lib/types/livetv.js';
+import type { ProtocolSettings } from '#lib/server/indexers/types/index.js';
+import type { NewznabCategory } from '#lib/server/indexers/newznab/types.js';
+import type { DesiredQuality } from '#lib/types/library.js';
+import type { AudioPreference, SubtitleRequirement } from '#lib/shared/language-profile.js';
+import type { EpgLocalizedText } from '#lib/types/livetv.js';
 
 // ============================================================================
 // Better Auth Tables
@@ -32,13 +32,18 @@ export const user = sqliteTable(
 		image: text('image'),
 		username: text('username').unique(),
 		displayUsername: text('displayUsername'),
-		role: text('role').default('admin').notNull(),
+		role: text('role').default('user').notNull(),
 		language: text('language').default('en'),
 		banned: integer('banned').default(0),
 		banReason: text('banReason'),
 		banExpires: text('banExpires'),
 		createdAt: text('createdAt').notNull(),
-		updatedAt: text('updatedAt').notNull()
+		updatedAt: text('updatedAt').notNull(),
+		// Mirrors the most recent session.lastActiveAt write (see touchLastActive
+		// in session-helpers.ts), but on the user row so it survives a session
+		// being revoked/deleted — the admin users list needs this to still mean
+		// something for an account with zero current sessions.
+		lastActiveAt: text('lastActiveAt')
 	},
 	(table) => [
 		uniqueIndex('idx_user_email').on(table.email),
@@ -62,7 +67,10 @@ export const session = sqliteTable(
 		userAgent: text('userAgent'),
 		impersonatedBy: text('impersonatedBy'),
 		createdAt: text('createdAt').notNull(),
-		updatedAt: text('updatedAt').notNull()
+		updatedAt: text('updatedAt').notNull(),
+		// Updated on a throttle (see touchLastActive in session-helpers.ts), unlike
+		// updatedAt which better-auth only refreshes once per session.updateAge.
+		lastActiveAt: text('lastActiveAt')
 	},
 	(table) => [index('idx_session_user').on(table.userId)]
 );
@@ -209,6 +217,11 @@ export const indexers = sqliteTable(
 		// Extra Newznab category IDs the user wants included in all searches for this indexer,
 		// on top of the content-type defaults (e.g. [8000, 8010] to catch Other/Misc releases).
 		additionalCategories: text('additional_categories', { mode: 'json' }).$type<number[]>(),
+		// User override for max requests/minute sent to this indexer. Overrides the
+		// definition's `requestdelay` (if any) and the generic default. Null = use
+		// definition/default behavior. Protects real account API quotas (especially
+		// Usenet indexers) from being exceeded by a large automatic/manual search.
+		rateLimitPerMinute: integer('rate_limit_per_minute'),
 		// Timestamps
 		createdAt: text('created_at').$defaultFn(() => new Date().toISOString()),
 		updatedAt: text('updated_at').$defaultFn(() => new Date().toISOString())
@@ -247,6 +260,10 @@ export const indexerStatus = sqliteTable(
 		isDisabled: integer('is_disabled', { mode: 'boolean' }).notNull().default(false),
 		disabledAt: text('disabled_at'),
 		disabledUntil: text('disabled_until'),
+		// Why isDisabled is set: 'consecutive_failures' | 'quota_exceeded' | 'manual'.
+		// Lets the UI distinguish "the indexer told us its quota is exhausted" (expected,
+		// self-clearing) from "we can't reach it" (a real health problem).
+		disabledReason: text('disabled_reason'),
 
 		// Last activity
 		lastSuccess: text('last_success'),
@@ -1171,6 +1188,7 @@ export const libraryJobs = sqliteTable(
 		metadata: text('metadata', { mode: 'json' }).$type<Record<string, unknown>>(),
 		startedAt: text('started_at'),
 		completedAt: text('completed_at'),
+		acknowledgedAt: text('acknowledged_at'),
 		createdAt: text('created_at').$defaultFn(() => new Date().toISOString()),
 		updatedAt: text('updated_at').$defaultFn(() => new Date().toISOString())
 	},
@@ -1383,6 +1401,10 @@ export const downloadQueue = sqliteTable(
 		outputPath: text('output_path'),
 		// Path where files were imported to (in root folder)
 		importedPath: text('imported_path'),
+		// How the imported file reached its destination: 'hardlink' | 'copy' |
+		// 'move' | 'symlink'. For multi-file imports (season packs) this is the
+		// first successfully imported file's mode, same as quality/releaseGroup.
+		transferMode: text('transfer_mode'),
 
 		// Quality info (from parsed release name)
 		quality: text('quality', { mode: 'json' }).$type<{
@@ -1424,7 +1446,15 @@ export const downloadQueue = sqliteTable(
 		// Set when markFailed() is called due to exhausted import attempts.
 		// Prevents the polling loop from treating the download client's
 		// persistent 'completed' status as a client-side recovery.
-		importFailed: integer('import_failed', { mode: 'boolean' }).notNull().default(false)
+		importFailed: integer('import_failed', { mode: 'boolean' }).notNull().default(false),
+
+		// Set only for rows created by the Unmatched-tab track/enroll flow
+		// ('unmatched_track' | 'unmatched_enroll'). Left null for every other
+		// insert path (normal grabs, arr_push, overrides) - this is the only
+		// reliable signal that a row came from that flow; indexerId being
+		// null is NOT unique to it (arr_push pushes never set indexerId
+		// either). See AcquisitionService.releaseUnmatchedQueueItems.
+		origin: text('origin')
 	},
 	(table) => [
 		index('idx_download_queue_status').on(table.status),
@@ -1697,6 +1727,9 @@ export const downloadHistory = sqliteTable('download_history', {
 
 	// Paths
 	importedPath: text('imported_path'),
+	// How the imported file reached its destination: 'hardlink' | 'copy' |
+	// 'move' | 'symlink'.
+	transferMode: text('transfer_mode'),
 
 	// Created file IDs (for tracking what was imported)
 	movieFileId: text('movie_file_id').references(() => movieFiles.id, { onDelete: 'set null' }),
@@ -1960,7 +1993,7 @@ export const monitoringHistory = sqliteTable(
 
 /**
  * Language Profile (v2) - Persisted row shape for the combined
- * audio + subtitle preference model (see $lib/shared/language-profile).
+ * audio + subtitle preference model (see #lib/shared/language-profile).
  */
 export interface LanguageProfileRow {
 	id: string;
@@ -1986,7 +2019,7 @@ export const languageProfiles = sqliteTable('language_profiles', {
 		.primaryKey()
 		.$defaultFn(() => randomUUID()),
 	name: text('name').notNull(),
-	// Audio preference: prefer original track + ordered fallback languages
+	// Audio preference: prefer original track + ordered preferred languages
 	audio: text('audio', { mode: 'json' }).$type<AudioPreference>().notNull(),
 	// Ordered subtitle requirements (order = priority)
 	subtitles: text('subtitles', { mode: 'json' }).$type<SubtitleRequirement[]>().notNull(),
@@ -3300,6 +3333,54 @@ export const mediaBrowserServers = sqliteTable('media_browser_servers', {
 
 export type MediaBrowserServerRecord = typeof mediaBrowserServers.$inferSelect;
 export type NewMediaBrowserServerRecord = typeof mediaBrowserServers.$inferInsert;
+/**
+ * Per-account preference storage (JSON values keyed by a namespaced key,
+ * e.g. 'calendar', 'theme'). Personal by definition — nothing here falls
+ * back to a global row.
+ */
+export const userPreferences = sqliteTable(
+	'user_preferences',
+	{
+		userId: text('user_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		key: text('key').notNull(),
+		value: text('value').notNull(),
+		updatedAt: text('updated_at').$defaultFn(() => new Date().toISOString())
+	},
+	(table) => [primaryKey({ columns: [table.userId, table.key] })]
+);
+
+/**
+ * A Cinephage account linked to its media-server account (Jellyfin first).
+ * Identity mapping only: serverUserId + a username snapshot. No per-user
+ * tokens are ever stored — pairing proves identity and the server-side
+ * admin key handles data access internally.
+ */
+export const userMediaServerLinks = sqliteTable(
+	'user_media_server_links',
+	{
+		id: text('id')
+			.primaryKey()
+			.$defaultFn(() => randomUUID()),
+		userId: text('user_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		serverId: text('server_id')
+			.notNull()
+			.references(() => mediaBrowserServers.id, { onDelete: 'cascade' }),
+		serverUserId: text('server_user_id').notNull(),
+		serverUsername: text('server_username').notNull(),
+		linkedAt: text('linked_at').$defaultFn(() => new Date().toISOString()),
+		createdAt: text('created_at').$defaultFn(() => new Date().toISOString())
+	},
+	(table) => [
+		// One media-server account maps to exactly one Cinephage account,
+		// and each Cinephage account holds at most one link per server.
+		uniqueIndex('idx_user_media_server_links_server_user').on(table.serverId, table.serverUserId),
+		uniqueIndex('idx_user_media_server_links_user_server').on(table.userId, table.serverId)
+	]
+);
 
 export const mediaServerSyncedItems = sqliteTable(
 	'media_server_synced_items',
@@ -4362,3 +4443,118 @@ export const arrNotificationConfigs = sqliteTable('arr_notification_configs', {
 
 export type ArrNotificationConfig = typeof arrNotificationConfigs.$inferSelect;
 export type NewArrNotificationConfig = typeof arrNotificationConfigs.$inferInsert;
+
+/**
+ * A user-submitted media request (Seerr-style). No movies/series row exists
+ * until approval — the request carries the TMDB identity plus display
+ * snapshots; approval creates/links the library row through the add path.
+ * TV scope is stored as season numbers plus optional episode entries; the
+ * episode-level truth lives on episodes.hasFile, never here.
+ */
+export const requests = sqliteTable(
+	'requests',
+	{
+		id: text('id')
+			.primaryKey()
+			.$defaultFn(() => randomUUID()),
+		mediaType: text('media_type').notNull(),
+		tmdbId: integer('tmdb_id').notNull(),
+		title: text('title').notNull(),
+		posterPath: text('poster_path'),
+		year: integer('year'),
+		// Linked once approval creates (or re-monitors) the library row.
+		movieId: text('movie_id').references(() => movies.id, { onDelete: 'set null' }),
+		seriesId: text('series_id').references(() => series.id, { onDelete: 'set null' }),
+		status: text('status').notNull().default('pending'),
+		// JSON: number[] of whole-season scope entries (series only).
+		seasons: text('seasons', { mode: 'json' }).$type<number[]>(),
+		// JSON: {seasonNumber, episodeNumber}[] episode-scope entries (series only).
+		episodes: text('episodes', { mode: 'json' }).$type<
+			{ seasonNumber: number; episodeNumber: number }[]
+		>(),
+		// Quota snapshot per season entry at approval time ({season, count}[]).
+		episodeCountSnapshot: text('episode_count_snapshot', { mode: 'json' }).$type<
+			{ season: number; count: number }[]
+		>(),
+		requestedBy: text('requested_by')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		// Set when an admin created this while impersonating the requester.
+		actingUserId: text('acting_user_id').references(() => user.id, {
+			onDelete: 'set null'
+		}),
+		decidedBy: text('decided_by').references(() => user.id, { onDelete: 'set null' }),
+		autoApproved: integer('auto_approved', { mode: 'boolean' }).notNull().default(false),
+		declineReason: text('decline_reason'),
+		failureReason: text('failure_reason'),
+		ignoreQuota: integer('ignore_quota', { mode: 'boolean' }).notNull().default(false),
+		expiresAt: text('expires_at'),
+		decidedAt: text('decided_at'),
+		fulfilledAt: text('fulfilled_at'),
+		createdAt: text('created_at')
+			.notNull()
+			.$defaultFn(() => new Date().toISOString()),
+		updatedAt: text('updated_at')
+			.notNull()
+			.$defaultFn(() => new Date().toISOString())
+	},
+	(table) => [
+		index('idx_requests_media_status').on(table.mediaType, table.tmdbId, table.status),
+		index('idx_requests_requester_created').on(table.requestedBy, table.createdAt),
+		index('idx_requests_pending').on(table.status)
+	]
+);
+
+/**
+ * Admin-managed per-user request settings. Deliberately NOT in
+ * user_preferences — that table is self-writable by the account owner, and
+ * these values (disable, auto-approve grant, quota overrides) must only
+ * change through admin endpoints. Null quota/auto-approve values inherit
+ * the global request_settings defaults.
+ */
+export const userRequestSettings = sqliteTable('user_request_settings', {
+	userId: text('user_id')
+		.primaryKey()
+		.references(() => user.id, { onDelete: 'cascade' }),
+	requestsDisabled: integer('requests_disabled', { mode: 'boolean' }).notNull().default(false),
+	autoApprove: integer('auto_approve', { mode: 'boolean' }),
+	movieQuotaLimit: integer('movie_quota_limit'),
+	movieQuotaDays: integer('movie_quota_days'),
+	tvQuotaLimit: integer('tv_quota_limit'),
+	tvQuotaDays: integer('tv_quota_days'),
+	updatedAt: text('updated_at')
+		.notNull()
+		.$defaultFn(() => new Date().toISOString())
+});
+
+/**
+ * In-app request notifications (one row per user per event). Feed rows only
+ * — live delivery rides the requests SSE stream; this table is the durable
+ * inbox behind the bell.
+ */
+export const requestNotifications = sqliteTable(
+	'request_notifications',
+	{
+		id: text('id')
+			.primaryKey()
+			.$defaultFn(() => randomUUID()),
+		userId: text('user_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		requestId: text('request_id').references(() => requests.id, { onDelete: 'cascade' }),
+		event: text('event').notNull(),
+		payload: text('payload', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+		readAt: text('read_at'),
+		createdAt: text('created_at')
+			.notNull()
+			.$defaultFn(() => new Date().toISOString())
+	},
+	(table) => [index('idx_request_notifications_user_read').on(table.userId, table.readAt)]
+);
+
+export type RequestRecord = typeof requests.$inferSelect;
+export type NewRequestRecord = typeof requests.$inferInsert;
+export type UserRequestSettingsRecord = typeof userRequestSettings.$inferSelect;
+export type NewUserRequestSettingsRecord = typeof userRequestSettings.$inferInsert;
+export type RequestNotificationRecord = typeof requestNotifications.$inferSelect;
+export type NewRequestNotificationRecord = typeof requestNotifications.$inferInsert;

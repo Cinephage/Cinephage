@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { StorageSummary } from './utils.js';
-	import { formatBytes } from '$lib/utils/format.js';
+	import { formatBytes } from '#lib/utils/format.js';
 
 	interface Props {
 		storage: StorageSummary;

@@ -4,7 +4,7 @@ import { makeGrabDecisionContext } from '../../../../../test/fixtures/filters.js
 
 const mockCheck = vi.hoisted(() => vi.fn());
 
-vi.mock('$lib/server/acquisition/MediaOccupancyService.js', () => ({
+vi.mock('#lib/server/acquisition/MediaOccupancyService.js', () => ({
 	mediaOccupancyService: { check: mockCheck }
 }));
 

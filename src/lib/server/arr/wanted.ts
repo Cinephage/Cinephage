@@ -17,14 +17,14 @@
 import { sql } from 'drizzle-orm';
 import { buildMovies } from './movies.js';
 import { buildEpisodesForSeries } from './episodes.js';
-import { db } from '$lib/server/db/index.js';
+import { db } from '#lib/server/db/index.js';
 import {
 	series,
 	movies,
 	movieFiles,
 	episodeFiles,
 	scoringProfiles
-} from '$lib/server/db/schema.js';
+} from '#lib/server/db/schema.js';
 import { getOrAssignArrIds } from './ArrIdMappingService.js';
 import type { ArrAppName } from './systemStatus.js';
 

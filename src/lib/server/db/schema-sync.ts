@@ -11,7 +11,7 @@
  */
 
 import Database from 'better-sqlite3';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 // Import extracted migrations and helpers
@@ -151,11 +151,36 @@ import {
  * Version 144: Add language_settings.prefer_original_title instance default (boolean, default 0)
  * Version 145: Drop deprecated per-item adaptive subtitle columns (movies/episodes failed_subtitle_attempts, first_subtitle_search_at)
  * Version 146: Per-item subtitle requirement overrides on movies/series/episodes + inheritance repair
+ * Version 147: language_shortfall flags on movies/series (audio-preference verification)
  * Version 148: Acquisition intents + reservations — durable acquisition authority and slot exclusivity
  * Version 149: Import operations journal — durable multi-step import record for recovery and reports
  * Version 150: movie_files (movie_id, relative_path) unique index (legacy duplicates deduped)
+ * Version 151: Language-system column guards — idempotent ALTERs for the m140-146 columns on legacy databases (episodes.wants_subtitles_override et al.)
+ * Version 152: Drop the legacy subtitle_settings key-value table (superseded by language_settings + subtitle_providers)
+ * Version 153: Backfill remove_after_import = 1 for existing non-debrid download clients
+ * Version 154: library_jobs.acknowledged_at — dismiss failed background-import batches from Activity
+ * Version 155: indexers.rate_limit_per_minute — manual per-indexer request cap override
+ * Version 156: indexer_status.disabled_reason — distinguish quota_exhausted from consecutive-failure disables
+ * Version 157: user_media_server_links — Cinephage account <-> media-server identity pairing (no tokens)
+ * Version 158: user_preferences table; global calendar preferences migrated to the first admin
+ * Version 159: Encrypt media_browser_servers.api_key at rest (AES-256-GCM under BETTER_AUTH_SECRET)
+ * Version 160: Request system foundation — requests, user_request_settings, request_notifications tables
+ * Version 161: Encrypt remaining plaintext credentials at rest (secret-field registry walk) and re-encode
+ *   the legacy iv:tag:ct surfaces (user API key secrets, media-browser keys, debrid tokens) onto the
+ *   versioned cphg1 envelope
+ * Version 162: Add lastActiveAt columns to session and user for throttled last-active tracking.
+ *   The user-level column preserves activity history after a session is revoked, since
+ *   revocation hard-deletes the session row
+ * Version 163: Repair episodes whose season_id is null or dangling (reuses or creates the right
+ *   season row). EpisodeMonitoredSpecification used to fail open on a broken season link,
+ *   treating those episodes as monitored regardless of the season's real state; this both
+ *   fixes existing data and pairs with the specification now failing closed instead
+ * Version 164: Add `transferMode` column to `download_queue` and `download_history`.
+ * Version 165: Add `origin` column to `download_queue` (marks Unmatched-tab
+ *   track/enroll rows so unmatching a movie/series can't mistake a legitimate
+ *   arr_push-pushed grab for one of its own rows).
  */
-export const CURRENT_SCHEMA_VERSION = 152;
+export const CURRENT_SCHEMA_VERSION = 165;
 
 export const SYSTEM_LIBRARY_SEEDS = [
 	{
@@ -768,6 +793,7 @@ const TABLE_DEFINITIONS: string[] = [
 		"metadata" text,
 		"started_at" text,
 		"completed_at" text,
+		"acknowledged_at" text,
 		"created_at" text,
 		"updated_at" text
 	)`,
@@ -1226,6 +1252,24 @@ const TABLE_DEFINITIONS: string[] = [
 		"updated_at" text
 	)`,
 
+	`CREATE TABLE IF NOT EXISTS "user_media_server_links" (
+		"id" text PRIMARY KEY NOT NULL,
+		"user_id" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+		"server_id" text NOT NULL REFERENCES "media_browser_servers"("id") ON DELETE CASCADE,
+		"server_user_id" text NOT NULL,
+		"server_username" text NOT NULL,
+		"linked_at" text,
+		"created_at" text
+	)`,
+
+	`CREATE TABLE IF NOT EXISTS "user_preferences" (
+		"user_id" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+		"key" text NOT NULL,
+		"value" text NOT NULL,
+		"updated_at" text,
+		PRIMARY KEY ("user_id", "key")
+	)`,
+
 	`CREATE TABLE IF NOT EXISTS "media_server_synced_items" (
 		"id" text PRIMARY KEY NOT NULL,
 		"server_id" text NOT NULL REFERENCES "media_browser_servers"("id") ON DELETE CASCADE,
@@ -1588,6 +1632,54 @@ const TABLE_DEFINITIONS: string[] = [
 		"detected_at" text NOT NULL,
 		"status" text NOT NULL DEFAULT 'unresolved',
 		"resolved_at" text
+	)`,
+
+	`CREATE TABLE IF NOT EXISTS "requests" (
+		"id" text PRIMARY KEY NOT NULL,
+		"media_type" text NOT NULL,
+		"tmdb_id" integer NOT NULL,
+		"title" text NOT NULL,
+		"poster_path" text,
+		"year" integer,
+		"movie_id" text REFERENCES "movies"("id") ON DELETE SET NULL,
+		"series_id" text REFERENCES "series"("id") ON DELETE SET NULL,
+		"status" text NOT NULL DEFAULT 'pending',
+		"seasons" text,
+		"episodes" text,
+		"episode_count_snapshot" text,
+		"requested_by" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+		"acting_user_id" text REFERENCES "user"("id") ON DELETE SET NULL,
+		"decided_by" text REFERENCES "user"("id") ON DELETE SET NULL,
+		"auto_approved" integer NOT NULL DEFAULT 0,
+		"decline_reason" text,
+		"failure_reason" text,
+		"ignore_quota" integer NOT NULL DEFAULT 0,
+		"expires_at" text,
+		"decided_at" text,
+		"fulfilled_at" text,
+		"created_at" text NOT NULL,
+		"updated_at" text NOT NULL
+	)`,
+
+	`CREATE TABLE IF NOT EXISTS "user_request_settings" (
+		"user_id" text PRIMARY KEY NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+		"requests_disabled" integer NOT NULL DEFAULT 0,
+		"auto_approve" integer,
+		"movie_quota_limit" integer,
+		"movie_quota_days" integer,
+		"tv_quota_limit" integer,
+		"tv_quota_days" integer,
+		"updated_at" text NOT NULL
+	)`,
+
+	`CREATE TABLE IF NOT EXISTS "request_notifications" (
+		"id" text PRIMARY KEY NOT NULL,
+		"user_id" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+		"request_id" text REFERENCES "requests"("id") ON DELETE CASCADE,
+		"event" text NOT NULL,
+		"payload" text NOT NULL,
+		"read_at" text,
+		"created_at" text NOT NULL
 	)`
 ];
 
@@ -1741,6 +1833,10 @@ const INDEX_DEFINITIONS: string[] = [
 	`CREATE INDEX IF NOT EXISTS "idx_synced_items_tmdb_id" ON "media_server_synced_items" ("tmdb_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_synced_items_tvdb_id" ON "media_server_synced_items" ("tvdb_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_synced_items_item_type" ON "media_server_synced_items" ("item_type")`,
+	// User media server link indexes
+	`CREATE UNIQUE INDEX IF NOT EXISTS "idx_user_media_server_links_server_user" ON "user_media_server_links" ("server_id", "server_user_id")`,
+	`CREATE UNIQUE INDEX IF NOT EXISTS "idx_user_media_server_links_user_server" ON "user_media_server_links" ("user_id", "server_id")`,
+	// User preferences (composite PK covers lookups; no extra index needed)
 	// Rename history audit indexes
 	`CREATE INDEX IF NOT EXISTS "idx_rename_history_file" ON "rename_history" ("file_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_rename_history_created" ON "rename_history" ("created_at")`,
@@ -1756,7 +1852,12 @@ const INDEX_DEFINITIONS: string[] = [
 	`CREATE INDEX IF NOT EXISTS "idx_renaming_failures_status" ON "renaming_failures" ("status")`,
 	`CREATE INDEX IF NOT EXISTS "idx_metadata_conflicts_tmdb" ON "metadata_conflicts" ("tmdb_id", "media_type")`,
 	`CREATE INDEX IF NOT EXISTS "idx_metadata_conflicts_detected_at" ON "metadata_conflicts" ("detected_at")`,
-	`CREATE INDEX IF NOT EXISTS "idx_metadata_conflicts_status" ON "metadata_conflicts" ("status")`
+	`CREATE INDEX IF NOT EXISTS "idx_metadata_conflicts_status" ON "metadata_conflicts" ("status")`,
+	// Request system indexes
+	`CREATE INDEX IF NOT EXISTS "idx_requests_media_status" ON "requests" ("media_type", "tmdb_id", "status")`,
+	`CREATE INDEX IF NOT EXISTS "idx_requests_requester_created" ON "requests" ("requested_by", "created_at")`,
+	`CREATE INDEX IF NOT EXISTS "idx_requests_pending" ON "requests" ("status")`,
+	`CREATE INDEX IF NOT EXISTS "idx_request_notifications_user_read" ON "request_notifications" ("user_id", "read_at")`
 ];
 
 /**

@@ -1,19 +1,25 @@
 import type { PageServerLoad } from './$types';
-import { createChildLogger } from '$lib/logging';
+import { redirect } from '@sveltejs/kit';
+import { createChildLogger } from '#lib/logging/index.js';
 
-import { activityService } from '$lib/server/activity';
+import { activityService } from '#lib/server/activity/index.js';
 import {
 	getDashboardStats,
 	getRecentlyAdded,
 	getMissingEpisodes
-} from '$lib/server/dashboard/queries';
-import { getUpcomingItems } from '$lib/server/calendar/queries.js';
-import { getCalendarPreferences } from '$lib/server/settings/calendar-preferences.js';
-import type { DashboardStats } from '$lib/types/dashboard.js';
+} from '#lib/server/dashboard/queries.js';
+import { getUpcomingItems } from '#lib/server/calendar/queries.js';
+import { getUserPreference } from '#lib/server/preferences/user-preferences.js';
+import type { DashboardStats } from '#lib/types/dashboard.js';
 
 const logger = createChildLogger({ module: 'HomePage', logDomain: 'system' });
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ locals }) => {
+	// The dashboard is an operations view (queue, activity, missing episodes);
+	// viewer accounts land on the shared library instead.
+	if (locals.user?.role !== 'admin') {
+		throw redirect(302, '/library/movies');
+	}
 	try {
 		// Fetch critical stats immediately (blocks SSR)
 		const stats = await getDashboardStats();
@@ -51,7 +57,7 @@ export const load: PageServerLoad = async () => {
 				return [];
 			});
 
-		const upcomingPromise = getCalendarPreferences()
+		const upcomingPromise = getUserPreference(locals.user!.id, 'calendar')
 			.catch(() => ({
 				upcomingShowNonLibrary: true,
 				excludeAdult: false,

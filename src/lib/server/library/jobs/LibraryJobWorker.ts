@@ -1,11 +1,17 @@
 import { EventEmitter } from 'events';
-import { createChildLogger } from '$lib/logging';
-import type { BackgroundService, ServiceStatus } from '$lib/server/services/background-service.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import type { BackgroundService, ServiceStatus } from '#lib/server/services/background-service.js';
 import { LibraryJobService, libraryJobService } from './LibraryJobService.js';
-import { diskScanService } from '$lib/server/library/disk-scan.js';
-import { librarySchedulerService } from '$lib/server/library/library-scheduler.js';
-import { mediaMatcherService } from '$lib/server/library/media-matcher.js';
-import type { MatchResult } from '$lib/server/library/media-matcher.js';
+import type { LibraryJobType } from './types.js';
+import { diskScanService } from '#lib/server/library/disk-scan.js';
+import { librarySchedulerService } from '#lib/server/library/library-scheduler.js';
+import { mediaMatcherService } from '#lib/server/library/media-matcher.js';
+import type { MatchResult } from '#lib/server/library/media-matcher.js';
+import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
+import type {
+	ExecuteManualImportRequest,
+	ExecuteManualImportResult
+} from '../manual-import-service.js';
 
 const logger = createChildLogger({ logDomain: 'scans' as const });
 
@@ -20,6 +26,10 @@ export interface ScanResultLike {
 }
 
 export interface WorkerDeps {
+	name?: string;
+	/** Restrict this worker to only claim these job types. Undefined = any
+	 * type (the primary worker's default, matching pre-pool behavior). */
+	jobTypes?: LibraryJobType[];
 	jobService?: LibraryJobService;
 	scanRootFolder?: (rootFolderId: string) => Promise<ScanResultLike>;
 	scanAll?: () => Promise<ScanResultLike[]>;
@@ -28,10 +38,12 @@ export interface WorkerDeps {
 		limit?: number,
 		afterId?: string | null
 	) => Promise<{ results: MatchResult[]; hasMore: boolean; nextCursor: string | null }>;
+	executeManualImport?: (request: ExecuteManualImportRequest) => Promise<ExecuteManualImportResult>;
 }
 
 export class LibraryJobWorker extends EventEmitter implements BackgroundService {
-	readonly name = 'LibraryJobWorker';
+	readonly name: string;
+	private readonly jobTypes?: LibraryJobType[];
 	private _status: ServiceStatus = 'pending';
 	private _error?: Error;
 	private running = false;
@@ -44,9 +56,14 @@ export class LibraryJobWorker extends EventEmitter implements BackgroundService 
 		limit?: number,
 		afterId?: string | null
 	) => Promise<{ results: MatchResult[]; hasMore: boolean; nextCursor: string | null }>;
+	private executeManualImport: (
+		request: ExecuteManualImportRequest
+	) => Promise<ExecuteManualImportResult>;
 
 	constructor(deps: WorkerDeps = {}) {
 		super();
+		this.name = deps.name ?? 'LibraryJobWorker';
+		this.jobTypes = deps.jobTypes;
 		this.jobService = deps.jobService ?? libraryJobService;
 		this.scanRootFolder =
 			deps.scanRootFolder ??
@@ -56,6 +73,12 @@ export class LibraryJobWorker extends EventEmitter implements BackgroundService 
 			deps.matchUnmatchedByRootFolder ??
 			((rootFolderId, limit, afterId) =>
 				mediaMatcherService.processUnmatchedByRootFolder(rootFolderId, limit, afterId));
+		this.executeManualImport =
+			deps.executeManualImport ??
+			((request) =>
+				import('../manual-import-service.js').then((m) =>
+					m.manualImportService.executeImport(request)
+				));
 	}
 
 	get status(): ServiceStatus {
@@ -91,27 +114,33 @@ export class LibraryJobWorker extends EventEmitter implements BackgroundService 
 	}
 
 	async processOne(): Promise<boolean> {
-		const activeJobs = await this.jobService.listActiveJobs();
-		const queuedJob = activeJobs.find((j) => j.status === 'queued');
+		// Atomic claim: closes the race two concurrent worker loops would
+		// otherwise hit between finding a queued job and marking it running.
+		const queuedJob = this.jobService.claimNextJob(this.jobTypes);
 		if (!queuedJob) return false;
 
+		// The claim (select + guarded update) runs as one synchronous
+		// transaction with no window for an external request to touch the
+		// row in between, so cancelRequested here can only mean it was set
+		// while the job was still queued.
 		if (queuedJob.cancelRequested) {
-			await this.jobService.cancelJob(queuedJob.id);
+			await this.jobService.markCancelled(queuedJob.id);
 			return true;
 		}
 
-		await this.jobService.markRunning(queuedJob.id);
-
-		const reloaded = await this.jobService.getJob(queuedJob.id);
-		if (reloaded?.cancelRequested) {
-			await this.jobService.markFailed(queuedJob.id, 'Job cancelled');
-			return true;
+		// diskScanService.setCancelCheck is process-wide mutable state; only
+		// scan-type jobs (below) read it, and only one worker instance ever
+		// runs those (see LibraryJobWorker pool registration), so scoping the
+		// set/reset to just those branches keeps this safe even with multiple
+		// worker instances running concurrently on other job types.
+		const usesDiskScanCancelCheck =
+			queuedJob.type === 'scan_root_folder' || queuedJob.type === 'scan_all_root_folders';
+		if (usesDiskScanCancelCheck) {
+			diskScanService.setCancelCheck(async () => {
+				const job = await this.jobService.getJob(queuedJob.id);
+				return job?.cancelRequested === true;
+			});
 		}
-
-		diskScanService.setCancelCheck(async () => {
-			const job = await this.jobService.getJob(queuedJob.id);
-			return job?.cancelRequested === true;
-		});
 
 		try {
 			if (queuedJob.type === 'scan_root_folder') {
@@ -158,6 +187,39 @@ export class LibraryJobWorker extends EventEmitter implements BackgroundService 
 					progressCurrent: total,
 					progressTotal: total
 				});
+			} else if (queuedJob.type === 'manual_import') {
+				const request = (queuedJob.metadata as { request?: ExecuteManualImportRequest } | null)
+					?.request;
+				if (!request) {
+					throw new Error('manual_import job missing request metadata');
+				}
+				await this.jobService.markProgress(queuedJob.id, {
+					phase: 'importing',
+					progressTotal: 1,
+					progressCurrent: 0
+				});
+				const result = await this.executeManualImport(request);
+				await this.jobService.markCompleted(queuedJob.id, {
+					phase: 'done',
+					progressCurrent: 1,
+					progressTotal: 1,
+					filesAdded: result.importedCount,
+					metadata: {
+						result: {
+							libraryId: result.libraryId,
+							mediaType: result.mediaType,
+							tmdbId: result.tmdbId,
+							importedPaths: result.importedPaths
+						}
+					}
+				});
+				// Mirror the sync import endpoint: downstream caches (rename preview,
+				// library views) key off this event.
+				libraryMediaEvents.emitLibraryDataChanged({
+					source: request.mediaType === 'movie' ? 'movie' : 'series',
+					reason: 'manual-import',
+					tmdbId: result.tmdbId ?? undefined
+				});
 			} else if (queuedJob.type === 'scan_all_root_folders') {
 				const results = await this.scanAll();
 				const failed = results.filter((r) => !r.success);
@@ -184,12 +246,21 @@ export class LibraryJobWorker extends EventEmitter implements BackgroundService 
 					}
 				);
 				this.jobService.markCompleted(queuedJob.id, { ...totals, phase: 'done' });
+			} else {
+				// Declared job types without a handler must never sit in `running`
+				// forever — fail them visibly so retry/cancel stays available.
+				await this.jobService.markFailed(
+					queuedJob.id,
+					`Unsupported library job type: ${queuedJob.type}`
+				);
 			}
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
 			await this.jobService.markFailed(queuedJob.id, message);
 		} finally {
-			diskScanService.setCancelCheck(null);
+			if (usesDiskScanCancelCheck) {
+				diskScanService.setCancelCheck(null);
+			}
 		}
 
 		return true;

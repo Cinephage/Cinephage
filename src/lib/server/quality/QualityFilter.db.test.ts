@@ -5,12 +5,12 @@ import {
 	clearTestDb,
 	type TestDatabase
 } from '../../../test/db-helper';
-import { scoringProfiles } from '$lib/server/db/schema';
+import { scoringProfiles } from '#lib/server/db/schema.js';
 import { COMPACT_PROFILE, BALANCED_PROFILE } from '../scoring';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -20,7 +20,7 @@ vi.mock('$lib/server/db/index.js', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	createChildLogger: () => ({
 		info: vi.fn(),
 		error: vi.fn(),

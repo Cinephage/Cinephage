@@ -4,7 +4,7 @@ import { createTestDb, destroyTestDb } from '../../../test/db-helper.js';
 
 const testDb = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -14,7 +14,7 @@ vi.mock('$lib/server/db', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/tmdb.js', () => ({
+vi.mock('#lib/server/tmdb.js', () => ({
 	tmdb: {
 		getMovieAlternateTitles: vi.fn(),
 		getTvAlternateTitles: vi.fn(),
@@ -33,8 +33,14 @@ import {
 	getMovieSearchTitles,
 	getSeriesSearchTitles
 } from './AlternateTitleService';
-import { tmdb } from '$lib/server/tmdb.js';
-import { alternateTitles, movies, series } from '$lib/server/db/schema.js';
+import { tmdb } from '#lib/server/tmdb.js';
+import {
+	alternateTitles,
+	languageProfiles,
+	languageSettings,
+	movies,
+	series
+} from '#lib/server/db/schema.js';
 
 const mockedAlternateTitles = tmdb as unknown as {
 	getMovieAlternateTitles: ReturnType<typeof vi.fn>;
@@ -534,5 +540,156 @@ describe('search titles include provider variants (regression)', () => {
 		expect(titles[0]).toBe('Vinland Saga');
 		expect(titles).toContain('Vinland Saga Season 2');
 		expect(titles).toContain('ヴィンランド・サガ II');
+	});
+});
+
+describe('search titles following the language profile', () => {
+	const ITALIAN_FIRST = 'profile-italian-first';
+	const ENGLISH_FIRST = 'profile-english-first';
+	const ORIGINAL_FIRST = 'profile-original-first';
+
+	testDb.db
+		.insert(languageSettings)
+		.values({ id: 'singleton', metadataLocale: 'it-IT', region: 'IT' })
+		.onConflictDoUpdate({
+			target: languageSettings.id,
+			set: { metadataLocale: 'it-IT', region: 'IT' }
+		})
+		.run();
+	testDb.db
+		.insert(languageProfiles)
+		.values([
+			{
+				id: ITALIAN_FIRST,
+				name: 'Italian, then English',
+				audio: { preferOriginal: false, languages: ['it', 'en'], mode: 'prefer' },
+				subtitles: [{ tag: 'it', variant: 'regular', accessibility: 'any' }]
+			},
+			{
+				id: ENGLISH_FIRST,
+				name: 'English, then Italian',
+				audio: { preferOriginal: false, languages: ['en', 'it'], mode: 'prefer' },
+				subtitles: [{ tag: 'en', variant: 'regular', accessibility: 'any' }]
+			},
+			{
+				id: ORIGINAL_FIRST,
+				name: 'Original, then Italian',
+				audio: { preferOriginal: true, languages: ['it'], mode: 'prefer' },
+				subtitles: [{ tag: 'it', variant: 'regular', accessibility: 'any' }]
+			}
+		])
+		.run();
+
+	function insertHangover(id: string, tmdbId: number, languageProfileId: string | null) {
+		testDb.db
+			.insert(movies)
+			.values({
+				id,
+				tmdbId,
+				title: 'Una notte da leoni',
+				originalTitle: 'The Hangover',
+				originalLanguage: 'en',
+				path: id,
+				languageProfileId
+			})
+			.run();
+	}
+
+	it('keeps the display title first without a language profile', async () => {
+		insertHangover('movie-no-profile', 18785, null);
+
+		const titles = await getMovieSearchTitles('movie-no-profile', 'it');
+
+		expect(titles.slice(0, 2)).toEqual(['Una notte da leoni', 'The Hangover']);
+	});
+
+	it('searches the Italian title first for an Italian-first profile', async () => {
+		insertHangover('movie-italian-first', 18786, ITALIAN_FIRST);
+
+		const titles = await getMovieSearchTitles('movie-italian-first', 'it');
+
+		expect(titles.slice(0, 2)).toEqual(['Una notte da leoni', 'The Hangover']);
+	});
+
+	it('searches the English title first for an English-first profile', async () => {
+		insertHangover('movie-english-first', 18787, ENGLISH_FIRST);
+
+		const titles = await getMovieSearchTitles('movie-english-first', 'it');
+
+		expect(titles.slice(0, 2)).toEqual(['The Hangover', 'Una notte da leoni']);
+	});
+
+	it('searches the original title first when the profile prefers original audio', async () => {
+		insertHangover('movie-original-first', 18788, ORIGINAL_FIRST);
+
+		const titles = await getMovieSearchTitles('movie-original-first', 'it');
+
+		expect(titles.slice(0, 2)).toEqual(['The Hangover', 'Una notte da leoni']);
+	});
+
+	it('uses a stored translation for a language that is neither original nor display', async () => {
+		testDb.db
+			.insert(movies)
+			.values({
+				id: 'movie-translation',
+				tmdbId: 129,
+				title: 'La città incantata',
+				originalTitle: '千と千尋の神隠し',
+				originalLanguage: 'ja',
+				path: 'movie-translation',
+				languageProfileId: ENGLISH_FIRST
+			})
+			.run();
+		await testDb.db.insert(alternateTitles).values({
+			mediaType: 'movie',
+			mediaId: 'movie-translation',
+			title: 'Spirited Away',
+			cleanTitle: cleanTitle('Spirited Away'),
+			source: 'tmdb',
+			language: 'en'
+		});
+
+		const titles = await getMovieSearchTitles('movie-translation', 'it');
+
+		expect(titles.slice(0, 2)).toEqual(['Spirited Away', 'La città incantata']);
+	});
+
+	it('keeps a non-Latin original title out of the first slot', async () => {
+		testDb.db
+			.insert(movies)
+			.values({
+				id: 'movie-original-cjk',
+				tmdbId: 130,
+				title: 'La città incantata',
+				originalTitle: '千と千尋の神隠し',
+				originalLanguage: 'ja',
+				path: 'movie-original-cjk',
+				languageProfileId: ORIGINAL_FIRST
+			})
+			.run();
+
+		const titles = await getMovieSearchTitles('movie-original-cjk', 'it');
+
+		expect(titles[0]).toBe('La città incantata');
+		expect(titles).toContain('千と千尋の神隠し');
+	});
+
+	it('applies to series too', async () => {
+		testDb.db
+			.insert(series)
+			.values({
+				id: 'series-english-first',
+				tmdbId: 1399,
+				title: 'Il trono di spade',
+				originalTitle: 'Game of Thrones',
+				originalLanguage: 'en',
+				path: 'series-english-first',
+				languageProfileId: ENGLISH_FIRST
+			})
+			.run();
+
+		const titles = await getSeriesSearchTitles('series-english-first', 'it');
+
+		expect(titles.slice(0, 2)).toEqual(['Game of Thrones', 'Il trono di spade']);
 	});
 });

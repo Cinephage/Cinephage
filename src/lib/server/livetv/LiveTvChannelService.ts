@@ -6,17 +6,17 @@
  */
 
 import { eq, and, like, inArray, or, sql } from 'drizzle-orm';
-import { db } from '$lib/server/db';
+import { db } from '#lib/server/db/index.js';
 import {
 	livetvAccounts,
 	livetvChannels,
 	livetvCategories,
 	type LivetvChannelRecord
-} from '$lib/server/db/schema';
-import { createChildLogger } from '$lib/logging';
+} from '#lib/server/db/schema.js';
+import { createChildLogger } from '#lib/logging/index.js';
 import { getProvider } from './providers';
-import type { BackgroundService, ServiceStatus } from '$lib/server/services/background-service.js';
-import { NotFoundError } from '$lib/errors';
+import type { BackgroundService, ServiceStatus } from '#lib/server/services/background-service.js';
+import { NotFoundError } from '#lib/errors/index.js';
 import type {
 	LiveTvChannel,
 	LiveTvCategory,
@@ -26,7 +26,7 @@ import type {
 	AccountSyncStatus,
 	ChannelSyncResult,
 	LiveTvProviderType
-} from '$lib/types/livetv';
+} from '#lib/types/livetv.js';
 
 const logger = createChildLogger({ module: 'LiveTvChannelService' });
 

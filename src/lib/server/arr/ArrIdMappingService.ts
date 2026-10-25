@@ -11,8 +11,8 @@
  * don't shift across requests or restarts.
  */
 
-import { db } from '$lib/server/db';
-import { arrIdMappings } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { arrIdMappings } from '#lib/server/db/schema.js';
 import { and, eq, inArray } from 'drizzle-orm';
 
 /** Entity kinds the arr-compat layer assigns surrogate IDs for. */

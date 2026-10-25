@@ -1,17 +1,17 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { invalidateAll } from '$app/navigation';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import { Sparkles, Loader2 } from 'lucide-svelte';
-	import { SettingsPage } from '$lib/components/ui/settings';
-	import * as m from '$lib/paraglide/messages.js';
-	import { ensureVersionPrefix } from '$lib/version.js';
+	import { refreshAll } from '$app/navigation';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { Sparkles, Loader2 } from '@lucide/svelte';
+	import { SettingsPage } from '#lib/components/ui/settings/index.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import { ensureVersionPrefix } from '#lib/version.js';
 	import {
 		updateCinephageConfig,
 		updateCinephageModule,
 		testCinephageConnection,
 		getGithubRelease
-	} from '$lib/api';
+	} from '#lib/api/index.js';
 
 	let { data } = $props();
 
@@ -35,7 +35,7 @@
 	async function handleToggleSubsystem() {
 		try {
 			await updateCinephageConfig({ enabled: !config.enabled });
-			await invalidateAll();
+			await refreshAll();
 		} catch {
 			toasts.add({ message: 'Failed to toggle Cinephage Network', type: 'error' });
 		}
@@ -44,7 +44,7 @@
 	async function handleToggleAutoUpdate() {
 		try {
 			await updateCinephageConfig({ autoUpdate: !config.autoUpdate });
-			await invalidateAll();
+			await refreshAll();
 		} catch {
 			toasts.add({ message: 'Failed to toggle auto update', type: 'error' });
 		}
@@ -66,7 +66,7 @@
 	async function handleToggleModule(moduleId: string, current: boolean) {
 		try {
 			await updateCinephageModule({ moduleId, enabled: !current });
-			await invalidateAll();
+			await refreshAll();
 		} catch {
 			toasts.add({ message: 'Failed to toggle module', type: 'error' });
 		}
@@ -75,7 +75,7 @@
 	async function handleSaveModuleSettings(moduleId: string, settings: Record<string, unknown>) {
 		try {
 			await updateCinephageModule({ moduleId, settings });
-			await invalidateAll();
+			await refreshAll();
 			toasts.add({ message: 'Settings saved', type: 'success' });
 		} catch {
 			toasts.add({ message: 'Failed to save settings', type: 'error' });
@@ -88,7 +88,7 @@
 				versionOverride: config.versionOverride || null,
 				commitOverride: config.commitOverride || null
 			});
-			await invalidateAll();
+			await refreshAll();
 			toasts.add({ message: 'Overrides saved', type: 'success' });
 		} catch {
 			toasts.add({ message: 'Failed to save overrides', type: 'error' });

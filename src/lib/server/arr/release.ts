@@ -13,8 +13,8 @@
  */
 
 import { eq } from 'drizzle-orm';
-import { db } from '$lib/server/db/index.js';
-import { movies, series, episodes } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { movies, series, episodes } from '#lib/server/db/schema.js';
 import { getEntityIdForArrId, getOrAssignArrId } from './ArrIdMappingService.js';
 import type { ArrAppName } from './systemStatus.js';
 

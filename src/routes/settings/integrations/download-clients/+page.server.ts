@@ -1,7 +1,7 @@
 import type { PageServerLoad } from './$types';
-import { getDownloadClientManager } from '$lib/server/downloadClients/DownloadClientManager';
-import { monitoringScheduler } from '$lib/server/monitoring/MonitoringScheduler.js';
-import { getDefaultAcquisitionProtocol } from '$lib/server/settings/acquisition.js';
+import { getDownloadClientManager } from '#lib/server/downloadClients/DownloadClientManager.js';
+import { monitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.js';
+import { getDefaultAcquisitionProtocol } from '#lib/server/settings/acquisition.js';
 
 export const load: PageServerLoad = async () => {
 	const downloadClientManager = getDownloadClientManager();

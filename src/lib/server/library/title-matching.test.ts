@@ -76,6 +76,24 @@ describe('calculateMatchConfidence', () => {
 		expect(score).toBeGreaterThanOrEqual(0.95);
 	});
 
+	it('does not let an exact-title match override a clear year mismatch (GitHub #595)', () => {
+		// "Maigret" (2025) vs. TMDB's unrelated "Maigret" (1981): identical
+		// titles used to unconditionally floor the score at 0.95, silently
+		// erasing the year-mismatch penalty and auto-matching the wrong show.
+		const score = calculateMatchConfidence('Maigret', 2025, 'Maigret', 1981);
+		expect(score).toBeLessThan(0.8); // below DEFAULT_MATCH_THRESHOLD
+	});
+
+	it('still applies the exact-title boost when years are close (within 1)', () => {
+		const score = calculateMatchConfidence('Maigret', 2025, 'Maigret', 2024);
+		expect(score).toBeGreaterThanOrEqual(0.95);
+	});
+
+	it('still applies the exact-title boost when one year is unknown', () => {
+		const score = calculateMatchConfidence('Maigret', undefined, 'Maigret', 1981);
+		expect(score).toBeGreaterThanOrEqual(0.95);
+	});
+
 	it('keeps the year boost and mismatch penalty behavior', () => {
 		const boosted = calculateMatchConfidence('Some Title', 2010, 'Some Title', 2010);
 		const penalized = calculateMatchConfidence('Completely Different', 1990, 'Some Title', 2010);

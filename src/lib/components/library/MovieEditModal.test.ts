@@ -2,17 +2,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/svelte';
 import MovieEditModal, { type MovieEditData } from './MovieEditModal.svelte';
-import type { LibraryMovie } from '$lib/types/library';
+import type { LibraryMovie } from '#lib/types/library.js';
 
-vi.mock('$lib/api/settings.js', () => ({
+vi.mock('#lib/api/settings.js', () => ({
 	getLibraryClassificationSettings: vi.fn().mockResolvedValue({})
 }));
 
-vi.mock('$lib/api/discover.js', () => ({
+vi.mock('#lib/api/discover.js', () => ({
 	getTmdb: vi.fn().mockResolvedValue(null)
 }));
 
-vi.mock('$lib/stores/toast.svelte', () => ({
+vi.mock('#lib/stores/toast.svelte.js', () => ({
 	toasts: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() }
 }));
 

@@ -1,6 +1,5 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 import {
 	getProwlarrConnection,
 	saveProwlarrConnection,
@@ -8,7 +7,7 @@ import {
 	fetchProwlarrIndexers,
 	normalizeProwlarrUrl,
 	propagateProwlarrApiKey
-} from '$lib/server/indexers/prowlarr/ProwlarrConnectionService.js';
+} from '#lib/server/indexers/prowlarr/ProwlarrConnectionService.js';
 import { z } from 'zod';
 
 /**
@@ -31,9 +30,9 @@ export const GET: RequestHandler = async (event) => {
 	if (authError) return authError;
 
 	const conn = await getProwlarrConnection();
-	if (!conn) return json({ connection: null });
+	if (!conn) return Response.json({ connection: null });
 
-	return json({
+	return Response.json({
 		connection: {
 			url: conn.url,
 			autoSync: conn.autoSync,
@@ -60,12 +59,15 @@ export const PUT: RequestHandler = async (event) => {
 	try {
 		body = await event.request.json();
 	} catch {
-		return json({ error: 'Invalid JSON body' }, { status: 400 });
+		return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
 	}
 
 	const result = connectionSchema.safeParse(body);
 	if (!result.success) {
-		return json({ error: result.error.issues[0]?.message ?? 'Invalid request' }, { status: 400 });
+		return Response.json(
+			{ error: result.error.issues[0]?.message ?? 'Invalid request' },
+			{ status: 400 }
+		);
 	}
 
 	const {
@@ -92,7 +94,7 @@ export const PUT: RequestHandler = async (event) => {
 			const message = err instanceof Error ? err.message : String(err);
 			const isTimeout =
 				message.toLowerCase().includes('timeout') || message.includes('TimeoutError');
-			return json(
+			return Response.json(
 				{
 					error: isTimeout
 						? 'Connection timed out. Check the URL and ensure Prowlarr is accessible.'
@@ -107,7 +109,7 @@ export const PUT: RequestHandler = async (event) => {
 		// No new key - reuse the stored one
 		apiKey = existing.apiKey;
 	} else {
-		return json({ error: 'API key is required.' }, { status: 400 });
+		return Response.json({ error: 'API key is required.' }, { status: 400 });
 	}
 
 	await saveProwlarrConnection({
@@ -129,7 +131,7 @@ export const PUT: RequestHandler = async (event) => {
 		propagateProwlarrApiKey(newKey).catch(() => {});
 	}
 
-	return json({ success: true });
+	return Response.json({ success: true });
 };
 
 /** DELETE - remove connection. Already-imported indexers are not affected. */
@@ -138,5 +140,5 @@ export const DELETE: RequestHandler = async (event) => {
 	if (authError) return authError;
 
 	await deleteProwlarrConnection();
-	return json({ success: true });
+	return Response.json({ success: true });
 };

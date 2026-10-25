@@ -1,5 +1,5 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import { untrack } from 'svelte';
 	import {
 		Check,
@@ -10,7 +10,7 @@
 		Search,
 		Tv,
 		X
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 	import type { MediaType, DetectionGroup, MatchResult } from './types.js';
 
 	interface ImportRouteContext {
@@ -27,12 +27,12 @@
 		selectedMatch = null as MatchResult | null,
 		searchQuery = $bindable(''),
 		matchCandidates = [],
-		// eslint-disable-next-line no-useless-assignment
+		// eslint-disable-next-line no-useless-assignment, @typescript-eslint/no-unused-vars
 		importTarget = $bindable('new' as 'new' | 'existing'),
 		seasonNumber = $bindable(1),
 		episodeNumber = $bindable(1),
 		batchSeasonOverride = $bindable(null as number | null),
-		// eslint-disable-next-line no-useless-assignment
+		// eslint-disable-next-line no-useless-assignment, @typescript-eslint/no-unused-vars
 		selectedRootFolder = $bindable(''),
 		isMediaTypeLockedByContext = false,
 		isBatchTvImport = false,

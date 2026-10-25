@@ -5,11 +5,11 @@
  * Wraps the existing StalkerPortalClient to provide a unified provider interface.
  */
 
-import { db } from '$lib/server/db';
-import { livetvAccounts, livetvChannels, livetvCategories } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { livetvAccounts, livetvChannels, livetvCategories } from '#lib/server/db/schema.js';
 import { and, eq, inArray, notInArray } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
-import { randomUUID } from 'node:crypto';
+import { createChildLogger } from '#lib/logging/index.js';
+import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 
 const logger = createChildLogger({ logDomain: 'livetv' as const });
 import type {
@@ -25,9 +25,10 @@ import type {
 	EpgProgram,
 	LiveTvAccountTestResult,
 	StalkerChannelData
-} from '$lib/types/livetv';
+} from '#lib/types/livetv.js';
 import { StalkerPortalClient, type StalkerPortalConfig } from '../stalker/StalkerPortalClient';
 import { recordToAccount } from '../LiveTvAccountManager.js';
+import { decryptLivetvConfig, encryptLivetvConfig } from '../configCrypto';
 
 export class StalkerProvider implements LiveTvProvider {
 	readonly type = 'stalker';
@@ -640,7 +641,16 @@ export class StalkerProvider implements LiveTvProvider {
 			.then((rows) => rows[0]);
 
 		if (account?.stalkerConfig) {
-			const updatedConfig = { ...account.stalkerConfig, token };
+			// Stored config is encrypted at rest: decrypt, merge the fresh
+			// token, re-encrypt (other envelopes pass through idempotently).
+			const decrypted = decryptLivetvConfig(
+				accountId,
+				account.stalkerConfig as unknown as Record<string, unknown>
+			);
+			const updatedConfig = encryptLivetvConfig(accountId, {
+				...decrypted,
+				token
+			}) as unknown as typeof account.stalkerConfig;
 			await db
 				.update(livetvAccounts)
 				.set({ stalkerConfig: updatedConfig })
@@ -652,18 +662,13 @@ export class StalkerProvider implements LiveTvProvider {
 		const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 		let sn = '';
 		for (let i = 0; i < 12; i++) {
-			sn += chars[Math.floor(Math.random() * chars.length)];
+			sn += chars[randomInt(chars.length)];
 		}
 		return sn;
 	}
 
 	private generateDeviceId(): string {
-		const chars = 'ABCDEF0123456789';
-		let id = '';
-		for (let i = 0; i < 32; i++) {
-			id += chars[Math.floor(Math.random() * chars.length)];
-		}
-		return id;
+		return randomBytes(16).toString('hex').toUpperCase();
 	}
 
 	private detectStreamType(url: string): 'hls' | 'direct' | 'unknown' {

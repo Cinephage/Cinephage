@@ -1,9 +1,9 @@
 import type { ServerLoad } from '@sveltejs/kit';
-import { getManagedApiKeysForRequest } from '$lib/server/auth/index.js';
-import { channelLineupService } from '$lib/server/livetv/lineup';
-import { channelCategoryService } from '$lib/server/livetv/categories';
-import { getEpgService } from '$lib/server/livetv/epg';
-import { logger } from '$lib/logging';
+import { getManagedApiKeysForRequest } from '#lib/server/auth/index.js';
+import { channelLineupService } from '#lib/server/livetv/lineup/index.js';
+import { channelCategoryService } from '#lib/server/livetv/categories/index.js';
+import { getEpgService } from '#lib/server/livetv/epg/index.js';
+import { logger } from '#lib/logging/index.js';
 import { error } from '@sveltejs/kit';
 
 interface NowNextEntry {

@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { Loader2, CheckCircle, XCircle, Trash2, FlaskConical } from 'lucide-svelte';
-	import * as m from '$lib/paraglide/messages.js';
+	import { Loader2, CheckCircle, XCircle, Trash2, FlaskConical } from '@lucide/svelte';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
 		selectedCount: number;

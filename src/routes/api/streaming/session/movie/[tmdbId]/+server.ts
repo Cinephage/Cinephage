@@ -4,7 +4,7 @@ import {
 	getPlaybackSessionService,
 	getSessionProxyService,
 	type PlaybackSession
-} from '$lib/server/streaming';
+} from '#lib/server/streaming/index.js';
 
 function errorResponse(message: string, code: string, status: number): Response {
 	return new Response(JSON.stringify({ error: message, code }), {

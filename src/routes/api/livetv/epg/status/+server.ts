@@ -4,14 +4,13 @@
  * GET /api/livetv/epg/status - Get EPG sync status and statistics
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getEpgService, getEpgScheduler } from '$lib/server/livetv/epg';
-import { getEpgSyncState } from '$lib/server/livetv/epg/EpgSyncState';
-import { db } from '$lib/server/db';
-import { livetvAccounts } from '$lib/server/db/schema';
+import { getEpgService, getEpgScheduler } from '#lib/server/livetv/epg/index.js';
+import { getEpgSyncState } from '#lib/server/livetv/epg/EpgSyncState.js';
+import { db } from '#lib/server/db/index.js';
+import { livetvAccounts } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LiveTvEpgStatus', logDomain: 'livetv' });
 
@@ -54,7 +53,7 @@ export const GET: RequestHandler = async () => {
 			error: account.lastEpgSyncError ?? undefined
 		}));
 
-		return json({
+		return Response.json({
 			success: true,
 			isEnabled: true,
 			isSyncing:
@@ -73,7 +72,7 @@ export const GET: RequestHandler = async () => {
 		});
 	} catch (error) {
 		logger.error('[API] Failed to get EPG status', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to get EPG status'

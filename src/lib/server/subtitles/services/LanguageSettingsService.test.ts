@@ -3,7 +3,7 @@ import { createTestDb, destroyTestDb, type TestDatabase } from '../../../../test
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},

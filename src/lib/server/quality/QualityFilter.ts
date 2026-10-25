@@ -8,7 +8,7 @@
 import type { ParsedRelease, Resolution, Source } from '../indexers/parser/types.js';
 import { RESOLUTION_ORDER } from '../indexers/parser/types.js';
 import { db } from '../db/index.js';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'QualityFilter' });
 import { scoringProfiles } from '../db/schema.js';

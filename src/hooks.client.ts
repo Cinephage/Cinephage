@@ -1,6 +1,7 @@
-import type { HandleClientError } from '@sveltejs/kit';
+import { isHttpError } from '@sveltejs/kit';
+import type { HandleClientError } from '@sveltejs/kit/hooks';
 
-import { logger } from '$lib/logging';
+import { logger } from '#lib/logging/index.js';
 
 interface ClientErrorReportPayload {
 	supportId: string;
@@ -66,7 +67,13 @@ function reportClientError(payload: ClientErrorReportPayload): void {
 	});
 }
 
-export const handleError: HandleClientError = ({ error, event, status }) => {
+export const handleError: HandleClientError = ({ error, event }) => {
+	// SvelteKit 3 routes expected error(...) throws through handleError too.
+	// Surface the authored message and skip crash reporting for them.
+	if (isHttpError(error) && error.status < 500) {
+		return { message: error.body.message, code: 'HTTP_ERROR' };
+	}
+
 	const supportId = createClientSupportId();
 	const message = 'Unhandled client error';
 	const serializedError = serializeClientError(error);
@@ -77,7 +84,6 @@ export const handleError: HandleClientError = ({ error, event, status }) => {
 			logDomain: 'client',
 			component: 'hooks.client',
 			supportId,
-			status,
 			path: event.url.pathname,
 			routeId: event.route.id ?? null
 		},
@@ -87,7 +93,6 @@ export const handleError: HandleClientError = ({ error, event, status }) => {
 	reportClientError({
 		supportId,
 		message,
-		status,
 		path: event.url.pathname,
 		routeId: event.route.id ?? null,
 		userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,

@@ -6,11 +6,11 @@ import type { ExistingFile } from './types.js';
 const mockIsUpgrade = vi.hoisted(() => vi.fn());
 const mockBuildExistingAttrs = vi.hoisted(() => vi.fn());
 
-vi.mock('$lib/server/scoring/scorer.js', () => ({
+vi.mock('#lib/server/scoring/scorer.js', () => ({
 	isUpgrade: mockIsUpgrade
 }));
 
-vi.mock('$lib/server/scoring/utils.js', () => ({
+vi.mock('#lib/server/scoring/utils.js', () => ({
 	buildExistingAttrs: mockBuildExistingAttrs
 }));
 

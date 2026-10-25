@@ -13,10 +13,10 @@ import type {
 	LanguageCode
 } from '../types';
 import { TimeoutError, ConnectionError } from '../errors/ProviderErrors';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'subtitles' as const });
-import { normalizeLanguageCode } from '$lib/shared/languages';
+import { normalizeLanguageCode } from '#lib/shared/languages.js';
 import { languageSatisfies } from '../requirement-matcher';
 
 /**

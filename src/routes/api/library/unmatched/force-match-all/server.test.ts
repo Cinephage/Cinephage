@@ -7,11 +7,11 @@ import {
 } from '../../../../../test/db-helper';
 import { callHandler } from '../../../../../test/api-helper';
 import { randomUUID } from 'node:crypto';
-import { unmatchedFiles } from '$lib/server/db/schema';
+import { unmatchedFiles } from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -29,20 +29,20 @@ const mockLogger = vi.hoisted(() => ({
 	child: vi.fn().mockReturnThis()
 }));
 
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	logger: mockLogger,
 	createChildLogger: vi.fn(() => mockLogger)
 }));
 
 const mockAcceptMatch = vi.fn().mockResolvedValue(undefined);
 
-vi.mock('$lib/server/library/media-matcher', () => ({
+vi.mock('#lib/server/library/media-matcher.js', () => ({
 	mediaMatcherService: {
 		acceptMatch: mockAcceptMatch
 	}
 }));
 
-vi.mock('$lib/server/auth/authorization', () => ({
+vi.mock('#lib/server/auth/authorization.js', () => ({
 	requireAdmin: vi.fn().mockReturnValue(null)
 }));
 
@@ -134,7 +134,12 @@ describe('Force Match All API', () => {
 		const { data } = await postForceMatch({ minScore: 0.5 });
 		expect((data as any).data.eligible).toBe(1);
 		expect((data as any).data.matched).toBe(1);
-		expect(mockAcceptMatch).toHaveBeenCalledWith(expect.any(String), 400, 'movie');
+		// Force Match All is a deliberate action: it now opts into the
+		// replacement policy so a differently-named re-match doesn't leave a
+		// duplicate file behind (issue #627).
+		expect(mockAcceptMatch).toHaveBeenCalledWith(expect.any(String), 400, 'movie', {
+			allowReplace: true
+		});
 	});
 
 	it('happy path: two eligible files → acceptMatch called twice, matched: 2', async () => {

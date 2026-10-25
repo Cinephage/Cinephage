@@ -1,21 +1,21 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
-	import { invalidateAll } from '$app/navigation';
-	import { Clock, Plus, Pencil, Trash2 } from 'lucide-svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { refreshAll } from '$app/navigation';
+	import { Clock, Plus, Pencil, Trash2 } from '@lucide/svelte';
 	import {
 		ModalWrapper,
 		ModalHeader,
 		ModalFooter,
 		ConfirmationModal
-	} from '$lib/components/ui/modal';
-	import { toasts } from '$lib/stores/toast.svelte';
+	} from '#lib/components/ui/modal/index.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
 	import {
 		createDelayProfile,
 		updateDelayProfile,
 		deleteDelayProfile,
 		type DelayProfile,
 		type DelayProfileInput
-	} from '$lib/api/delay-profiles.js';
+	} from '#lib/api/delay-profiles.js';
 
 	interface Props {
 		delayProfiles: DelayProfile[];
@@ -87,7 +87,7 @@
 				toasts.success(m.settings_quality_delay_updated());
 			}
 			dpModalOpen = false;
-			await invalidateAll();
+			await refreshAll();
 		} catch (e) {
 			toasts.error(e instanceof Error ? e.message : 'Failed to save');
 		} finally {
@@ -103,7 +103,7 @@
 			toasts.success(m.settings_quality_delay_deleted({ name: dpDeleteTarget.name }));
 			dpDeleteOpen = false;
 			dpDeleteTarget = null;
-			await invalidateAll();
+			await refreshAll();
 		} catch (e) {
 			toasts.error(e instanceof Error ? e.message : 'Failed to delete');
 		} finally {

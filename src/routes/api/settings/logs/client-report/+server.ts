@@ -1,8 +1,6 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
-
-import { logger } from '$lib/logging';
+import { logger } from '#lib/logging/index.js';
 
 const clientErrorReportSchema = z.object({
 	supportId: z.string().min(1).max(100),
@@ -31,19 +29,19 @@ function isSameOriginRequest(event: Parameters<RequestHandler>[0]): boolean {
 
 export const POST: RequestHandler = async (event) => {
 	if (!isSameOriginRequest(event)) {
-		return json({ success: false, error: 'Forbidden' }, { status: 403 });
+		return Response.json({ success: false, error: 'Forbidden' }, { status: 403 });
 	}
 
 	let body: unknown;
 	try {
 		body = await event.request.json();
 	} catch {
-		return json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
+		return Response.json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
 	}
 
 	const parsed = clientErrorReportSchema.safeParse(body);
 	if (!parsed.success) {
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: 'Validation failed',
@@ -71,5 +69,5 @@ export const POST: RequestHandler = async (event) => {
 		payload.message
 	);
 
-	return json({ success: true });
+	return Response.json({ success: true });
 };

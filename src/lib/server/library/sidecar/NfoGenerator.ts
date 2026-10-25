@@ -2,7 +2,7 @@
  * Kodi-compatible .nfo sidecar generation.
  */
 
-import type { movies, series, seasons, episodes } from '$lib/server/db/schema.js';
+import type { movies, series, seasons, episodes } from '#lib/server/db/schema.js';
 
 type Movie = typeof movies.$inferSelect;
 type Series = typeof series.$inferSelect;

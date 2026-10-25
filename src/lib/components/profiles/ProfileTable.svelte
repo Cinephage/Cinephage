@@ -1,7 +1,7 @@
 <script lang="ts">
-	import type { ScoringProfile } from '$lib/types/profile';
-	import { Settings, Trash2, Lock, Star, Check, Film, Tv, Sliders } from 'lucide-svelte';
-	import { toNullableNumber } from '$lib/utils/number.js';
+	import type { ScoringProfile } from '#lib/types/profile.js';
+	import { Settings, Trash2, Lock, Star, Check, Film, Tv, Sliders } from '@lucide/svelte';
+	import { toNullableNumber } from '#lib/utils/number.js';
 
 	interface Props {
 		profiles: ScoringProfile[];

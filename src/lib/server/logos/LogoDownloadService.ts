@@ -1,13 +1,13 @@
 import { writeFile, mkdir, readdir, stat, rm } from 'fs/promises';
 import { join } from 'path';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 import { EventEmitter } from 'node:events';
 import { invalidateLogoLibraryCache } from './logo-library.js';
 import { LOGO_REPO_PATH_PREFIX, LOGOS_DIR } from './constants.js';
 
-const GITHUB_REPO = 'MoldyTaint/Cinephage';
+const GITHUB_REPO = 'cinephage/cinephage';
 const GITHUB_BRANCH = 'main';
 
 export interface LogoDownloadProgress {

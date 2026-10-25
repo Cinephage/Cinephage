@@ -12,18 +12,18 @@
  * Provides progress callbacks for real-time SSE streaming to the frontend.
  */
 
-import { getIndexerManager } from '$lib/server/indexers/IndexerManager.js';
-import { todayDateString } from '$lib/utils/format.js';
+import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
+import { todayDateString } from '#lib/utils/format.js';
 import { grabService } from './GrabService.js';
-import { createChildLogger } from '$lib/logging/index.js';
-import { db } from '$lib/server/db/index.js';
-import { episodes } from '$lib/server/db/schema.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { db } from '#lib/server/db/index.js';
+import { episodes } from '#lib/server/db/schema.js';
 import { eq, and, inArray } from 'drizzle-orm';
-import type { SearchCriteria } from '$lib/server/indexers/types';
+import type { SearchCriteria } from '#lib/server/indexers/types/index.js';
 
 const logger = createChildLogger({ module: 'MultiSeasonSearchStrategy', logDomain: 'downloads' });
-import { isSeasonPack } from '$lib/server/indexers/types/release.js';
-import { getSeriesSearchTitles } from '$lib/server/services/AlternateTitleService.js';
+import { isSeasonPack } from '#lib/server/indexers/types/release.js';
+import { getSeriesSearchTitles } from '#lib/server/services/AlternateTitleService.js';
 
 // Re-export types from CascadingSearchStrategy for consistency
 export interface EpisodeToSearch {

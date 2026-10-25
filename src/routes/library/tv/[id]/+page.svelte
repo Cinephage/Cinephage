@@ -5,20 +5,21 @@
 		LibrarySeriesHeader,
 		SeasonAccordion,
 		SeriesEditModal,
-		RenamePreviewModal
-	} from '$lib/components/library';
-	import { TVSeriesSidebar, BulkActionBar } from '$lib/components/library/tv';
-	import { MediaSearchModal } from '$lib/components/search';
-	import { SubtitleSearchModal } from '$lib/components/subtitles';
-	import SubtitleSyncModal from '$lib/components/subtitles/SubtitleSyncModal.svelte';
-	import SubtitleRequirementsSection from '$lib/components/subtitles/SubtitleRequirementsSection.svelte';
-	import { deriveSeriesSubtitleProgress } from '$lib/utils/subtitle-status-display.js';
-	import type { SubtitleRequirement } from '$lib/shared/language-profile.js';
-	import DeleteConfirmationModal from '$lib/components/ui/modal/DeleteConfirmationModal.svelte';
-	import { ModalWrapper, ModalHeader, ModalFooter } from '$lib/components/ui/modal';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import { todayDateString } from '$lib/utils/format.js';
-	import { autoSearchSubtitles, syncSubtitle, deleteSubtitle } from '$lib/api/subtitles.js';
+		RenamePreviewModal,
+		ChangeMatchModal
+	} from '#lib/components/library/index.js';
+	import { TVSeriesSidebar, BulkActionBar } from '#lib/components/library/tv/index.js';
+	import { MediaSearchModal } from '#lib/components/search/index.js';
+	import { SubtitleSearchModal } from '#lib/components/subtitles/index.js';
+	import SubtitleSyncModal from '#lib/components/subtitles/SubtitleSyncModal.svelte';
+	import SubtitleRequirementsSection from '#lib/components/subtitles/SubtitleRequirementsSection.svelte';
+	import { deriveSeriesSubtitleProgress } from '#lib/utils/subtitle-status-display.js';
+	import type { SubtitleRequirement } from '#lib/shared/language-profile.js';
+	import DeleteConfirmationModal from '#lib/components/ui/modal/DeleteConfirmationModal.svelte';
+	import { ModalWrapper, ModalHeader, ModalFooter } from '#lib/components/ui/modal/index.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { todayDateString } from '#lib/utils/format.js';
+	import { autoSearchSubtitles, syncSubtitle, deleteSubtitle } from '#lib/api/subtitles.js';
 	import {
 		updateSeries,
 		getSeries,
@@ -27,26 +28,29 @@
 		deleteEpisode,
 		updateSeason,
 		updateEpisode
-	} from '$lib/api/library.js';
-	import { apiPostStream } from '$lib/api';
-	import type { SeriesEditData } from '$lib/components/library/SeriesEditModal.svelte';
-	import type { SearchMode } from '$lib/components/search/InteractiveSearchModal.svelte';
-	import { CheckSquare, FileEdit, RefreshCw, X } from 'lucide-svelte';
+	} from '#lib/api/library.js';
+	import { apiPostStream } from '#lib/api/index.js';
+	import type { SeriesEditData } from '#lib/components/library/SeriesEditModal.svelte';
+	import type { SearchMode } from '#lib/components/search/InteractiveSearchModal.svelte';
+	import { CheckSquare, FileEdit, RefreshCw, X } from '@lucide/svelte';
 	import { SvelteSet, SvelteMap } from 'svelte/reactivity';
 	import { page } from '$app/state';
-	import { goto, invalidateAll } from '$app/navigation';
-	import { resolvePath } from '$lib/utils/routing';
-	import { getLibraryDetailBackHref } from '$lib/utils/libraryReturnNavigation';
-	import { createDynamicSSE } from '$lib/sse';
-	import { createSearchProgress } from '$lib/stores/searchProgress.svelte';
-	import { createSubtitleProgress } from '$lib/stores/subtitleProgress.svelte';
-	import { getPrimaryAutoSearchIssue } from '$lib/utils/autoSearchIssues';
-	import { layoutState, deriveMobileSseStatus } from '$lib/layout.svelte';
-	import * as m from '$lib/paraglide/messages.js';
-	import { calculateEpisodeStats } from '$lib/utils/episode-stats.svelte';
-	import { ACTIVE_DOWNLOAD_STATUSES } from '$lib/types/queue';
+	import { goto, refreshAll } from '$app/navigation';
+	import { resolvePath } from '#lib/utils/routing.js';
+	import { getLibraryDetailBackHref } from '#lib/utils/libraryReturnNavigation.js';
+	import { createDynamicSSE } from '#lib/sse/index.js';
+	import { createSearchProgress } from '#lib/stores/searchProgress.svelte.js';
+	import { createSubtitleProgress } from '#lib/stores/subtitleProgress.svelte.js';
+	import { getPrimaryAutoSearchIssue } from '#lib/utils/autoSearchIssues.js';
+	import { layoutState, deriveMobileSseStatus } from '#lib/layout.svelte.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import { calculateEpisodeStats } from '#lib/utils/episode-stats.svelte.js';
+	import { ACTIVE_DOWNLOAD_STATUSES } from '#lib/types/queue.js';
 
 	let { data }: { data: PageData } = $props();
+
+	// Viewer accounts browse a read-only library; admin controls stay hidden.
+	const isAdminUser = $derived(data.user?.role === 'admin');
 
 	const activeStatusSet: Set<string> = new Set(ACTIVE_DOWNLOAD_STATUSES);
 
@@ -59,11 +63,11 @@
 	const seasons = $derived(seasonsState ?? data.seasons);
 	const queueItems = $derived(queueItemsState ?? data.queueItems);
 
-	// Back link target: the validated returnTo URL carries the exact filtered
-	// list state from the page the user navigated from (issue #515). It stays
-	// absolute — LibrarySeriesHeader applies resolvePath() exactly once, and
-	// pre-resolving here relativizes it during SSR and throws (PR #518).
-	const tvBackHref = $derived(getLibraryDetailBackHref(page.url, '/library/tv'));
+	// Back link target: the exact filtered list state from the page the user
+	// navigated from (issue #515), read from sessionStorage rather than a
+	// `?returnTo=` URL param so it doesn't show up in the address bar. Null
+	// during SSR (sessionStorage is client-only); fills in after hydration.
+	const tvBackHref = $derived(getLibraryDetailBackHref('tv', '/library/tv'));
 
 	function computeSeriesEpisodeStats(seasonList: PageData['seasons']) {
 		const regularSeasons = seasonList.filter((season) => season.seasonNumber > 0);
@@ -117,6 +121,35 @@
 			queueItemsState = $state.snapshot(data.queueItems);
 			lastSeriesId = incomingSeriesId;
 		}
+	});
+
+	// AniList/MAL provider refs are resolved client-side after the page has
+	// already rendered, not in the page load - a slow/rate-limited upstream
+	// must never delay first paint. (An earlier version streamed this lookup
+	// as an unawaited promise from +page.server.ts, but that still visibly
+	// delayed first paint in practice.) Skip the fetch entirely when nothing
+	// is missing - most series already have their refs stored from the last
+	// visit. Merge the result in once it lands; guard against having
+	// navigated to a different series in the meantime.
+	$effect(() => {
+		const forSeriesId = data.series.id;
+		const providers = data.configuredMetadataProviders;
+		const refs = data.series.providerRefs ?? {};
+		const missingEnabledProvider =
+			(providers.anilist && !refs.anilist) || (providers.mal && !refs.mal);
+		if (!missingEnabledProvider) return;
+
+		fetch(`/api/library/series/${forSeriesId}/anime-refs`)
+			.then((res) => (res.ok ? res.json() : null))
+			.then((body: { providerRefs?: Record<string, string> } | null) => {
+				if (body?.providerRefs && seriesState && seriesState.id === forSeriesId) {
+					seriesState.providerRefs = body.providerRefs;
+				}
+			})
+			.catch(() => {
+				// Best-effort enrichment; the page already rendered with whatever
+				// refs were already stored.
+			});
 	});
 
 	// SSE Connection - internally handles browser/SSR
@@ -300,6 +333,7 @@
 
 	// State
 	let isEditModalOpen = $state(false);
+	let isChangeMatchModalOpen = $state(false);
 	let isSearchModalOpen = $state(false);
 	let isRenameModalOpen = $state(false);
 	let isDeleteModalOpen = $state(false);
@@ -547,7 +581,11 @@
 	}
 
 	function buildProviderSearchLink(provider: 'anilist' | 'mal'): string {
-		const query = `${series.title}${series.year ? ` ${series.year}` : ''}`;
+		// Title only - AniList/MAL's own search often returns nothing when the
+		// year is appended to the query text (e.g. "Series Title 1992" frequently
+		// fails where "Series Title" alone succeeds). The year is shown alongside
+		// the results for the user to confirm visually instead.
+		const query = series.title;
 		if (provider === 'anilist') {
 			return `https://anilist.co/search/anime?search=${encodeURIComponent(query)}`;
 		}
@@ -589,10 +627,22 @@
 		isEditModalOpen = true;
 	}
 
+	function handleChangeMatch() {
+		isChangeMatchModalOpen = true;
+	}
+
+	function handleChangeMatchSuccess() {
+		isChangeMatchModalOpen = false;
+		// Seasons/episodes were fully regenerated under a new identity; a full
+		// reload keeps this in step with the episode-group-change path above
+		// rather than trying to patch every derived client-side field.
+		window.location.reload();
+	}
+
 	function handleEditClose() {
 		isEditModalOpen = false;
 		if (page.url.searchParams.get('edit') === '1') {
-			goto(page.url.pathname, { replaceState: true, keepFocus: true, noScroll: true });
+			goto(page.url.pathname, { replace: true, reset: false });
 		}
 	}
 
@@ -609,12 +659,15 @@
 
 	async function refreshSeriesFromApi(): Promise<void> {
 		try {
-			const result = (await getSeries(series.id)) as {
-				series?: Record<string, unknown> & { seasons?: PageData['seasons'] };
-			};
+			const result = await getSeries(series.id);
 			if (!result.series) return;
 
-			const { seasons: refreshedSeasons, ...seriesFields } = result.series;
+			// Narrow to the page's season shape; the server series row is a
+			// superset of the load() projection.
+			const { seasons: refreshedSeasons, ...seriesFields } = result.series as unknown as Record<
+				string,
+				unknown
+			> & { seasons?: PageData['seasons'] };
 			seriesState = { ...series, ...seriesFields };
 			if (Array.isArray(refreshedSeasons)) {
 				seasonsState = refreshedSeasons;
@@ -747,7 +800,11 @@
 					// Navigate to library since the series no longer exists
 					window.location.href = '/library/tv';
 				} else {
-					toasts.success(m.toast_library_tvDetail_seriesFilesDeleted());
+					toasts.success(
+						deleteFiles
+							? m.toast_library_tvDetail_seriesFilesDeleted()
+							: m.toast_library_tvDetail_seriesUnmatched()
+					);
 					const updatedSeasons = seasons.map((season) => ({
 						...season,
 						episodeFileCount: 0,
@@ -1529,7 +1586,7 @@
 				body: JSON.stringify({ wantsSubtitlesOverride: value })
 			});
 			if (!response.ok) throw new Error('Failed to update episode subtitle gate');
-			await invalidateAll();
+			await refreshAll();
 		} catch (error) {
 			showActionError(m.toast_library_tvDetail_failedToUpdateMonitor(), error);
 		}
@@ -1547,7 +1604,7 @@
 				const body = (await response.json().catch(() => ({}))) as { error?: string };
 				throw new Error(body.error ?? 'Search failed');
 			}
-			await invalidateAll();
+			await refreshAll();
 		} catch (error) {
 			showActionError(m.toast_library_tvDetail_failedToUpdateMonitor(), error);
 		} finally {
@@ -1567,7 +1624,7 @@
 				const body = (await response.json().catch(() => ({}))) as { error?: string };
 				throw new Error(body.error ?? 'Failed to save subtitle languages');
 			}
-			await invalidateAll();
+			await refreshAll();
 		} finally {
 			savingRequirements = false;
 		}
@@ -1786,6 +1843,8 @@
 		onEdit={handleEdit}
 		onDelete={handleDelete}
 		onRefresh={handleRefresh}
+		onChangeMatch={handleChangeMatch}
+		readOnly={!isAdminUser}
 	/>
 
 	<!-- Subtitle requirements (series-level fallback for all episodes) -->
@@ -1794,7 +1853,7 @@
 		source={data.effectiveSubtitleRequirements?.source ?? null}
 		profileName={data.effectiveLanguageProfile?.profile.name ?? null}
 		audioShortfall={data.series.languageShortfall ?? false}
-		editable
+		editable={isAdminUser}
 		saving={savingRequirements || searchingRequirements}
 		onSave={handleRequirementsSave}
 		onSearch={handleRequirementSearch}
@@ -1809,30 +1868,34 @@
 					<h2 class="text-lg font-semibold">{m.library_tvDetail_seasonsHeading()}</h2>
 				</div>
 				<div class="flex gap-1">
-					{#if !isStreamerProfile && syncableSubtitles.length > 0}
+					{#if isAdminUser && !isStreamerProfile && syncableSubtitles.length > 0}
 						<button class="btn gap-1 btn-ghost btn-sm" onclick={handleSubtitleSync}>
 							<RefreshCw class="h-4 w-4" />
 							{m.library_tvDetail_syncSubtitles()}
 						</button>
 					{/if}
-					<button
-						class="btn gap-1 btn-ghost btn-sm"
-						onclick={() => (isRenameModalOpen = true)}
-						title={m.library_tvDetail_renameFilesTitle()}
-					>
-						<FileEdit class="h-4 w-4" />
-						{m.library_tvDetail_rename()}
-					</button>
-					<button
-						class="btn gap-2 btn-ghost btn-sm"
-						onclick={toggleSelectionMode}
-						title={showCheckboxes
-							? m.library_tvDetail_exitSelectionMode()
-							: m.library_tvDetail_selectEpisodes()}
-					>
-						<CheckSquare size={16} />
-						{showCheckboxes ? m.library_tvDetail_done() : m.library_tvDetail_select()}
-					</button>
+					{#if isAdminUser}
+						<button
+							class="btn gap-1 btn-ghost btn-sm"
+							onclick={() => (isRenameModalOpen = true)}
+							title={m.library_tvDetail_renameFilesTitle()}
+						>
+							<FileEdit class="h-4 w-4" />
+							{m.library_tvDetail_rename()}
+						</button>
+					{/if}
+					{#if isAdminUser}
+						<button
+							class="btn gap-2 btn-ghost btn-sm"
+							onclick={toggleSelectionMode}
+							title={showCheckboxes
+								? m.library_tvDetail_exitSelectionMode()
+								: m.library_tvDetail_selectEpisodes()}
+						>
+							<CheckSquare size={16} />
+							{showCheckboxes ? m.library_tvDetail_done() : m.library_tvDetail_select()}
+						</button>
+					{/if}
 				</div>
 			</div>
 
@@ -1847,6 +1910,7 @@
 						seriesMonitored={series.monitored ?? false}
 						{isStreamerProfile}
 						wantsSubtitles={series.wantsSubtitles ?? false}
+						readOnly={!isAdminUser}
 						defaultOpen={openSeasonId === season.id}
 						{selectedEpisodes}
 						{showCheckboxes}
@@ -1892,17 +1956,19 @@
 	</div>
 </div>
 
-<!-- Bulk Action Bar -->
-<BulkActionBar
-	{selectedCount}
-	searching={autoSearchingEpisodes.size > 0}
-	subtitleAutoSearching={bulkSubtitleAutoSearching}
-	subtitleSyncing={bulkSubtitleSyncing}
-	onSearch={handleBulkAutoSearch}
-	onClear={clearSelection}
-	onSubtitleAutoSearch={handleBulkSubtitleAutoSearch}
-	onSubtitleSync={isStreamerProfile ? undefined : handleBulkSubtitleSyncSelected}
-/>
+<!-- Bulk Action Bar (admin only) -->
+{#if isAdminUser}
+	<BulkActionBar
+		{selectedCount}
+		searching={autoSearchingEpisodes.size > 0}
+		subtitleAutoSearching={bulkSubtitleAutoSearching}
+		subtitleSyncing={bulkSubtitleSyncing}
+		onSearch={handleBulkAutoSearch}
+		onClear={clearSelection}
+		onSubtitleAutoSearch={handleBulkSubtitleAutoSearch}
+		onSubtitleSync={isStreamerProfile ? undefined : handleBulkSubtitleSyncSelected}
+	/>
+{/if}
 
 <!-- Edit Modal -->
 <SeriesEditModal
@@ -1916,6 +1982,17 @@
 	saving={isSaving}
 	onClose={handleEditClose}
 	onSave={handleEditSave}
+/>
+
+<!-- Change Match Modal -->
+<ChangeMatchModal
+	open={isChangeMatchModalOpen}
+	mediaType="tv"
+	mediaId={series.id}
+	currentTitle={series.title}
+	currentYear={series.year}
+	onClose={() => (isChangeMatchModalOpen = false)}
+	onSuccess={handleChangeMatchSuccess}
 />
 
 <!-- Search Modal -->

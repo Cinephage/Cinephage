@@ -1,10 +1,11 @@
 <script lang="ts">
-	import { AlertTriangle, RefreshCw } from 'lucide-svelte';
+	import { AlertTriangle, RefreshCw } from '@lucide/svelte';
 	import InteractiveSearchModal from './InteractiveSearchModal.svelte';
 	import type { SearchMode } from './InteractiveSearchModal.svelte';
 	import type { Release } from './SearchResultRow.svelte';
-	import { getMovie, getSeries } from '$lib/api/library.js';
-	import { grabRelease } from '$lib/api/downloads.js';
+	import { getMovie, getSeries } from '#lib/api/library.js';
+	import { grabRelease } from '#lib/api/downloads.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
 		open: boolean;
@@ -73,75 +74,88 @@
 	let error = $state<string | null>(null);
 	let meta = $state<Metadata | null>(null);
 
+	// Tracks which movie/series metadata is currently loaded so an unrelated
+	// re-render while the modal is open (e.g. background download counters
+	// updating elsewhere on the page) can't reset loading/meta and discard
+	// the already-open InteractiveSearchModal's in-progress search results.
+	let loadedKey: string | null = null;
+
 	$effect(() => {
-		if (open) {
-			loading = true;
-			error = null;
-			meta = null;
-			void (async () => {
-				try {
-					if (movieId) {
-						const res = (await getMovie(movieId)) as {
-							success: boolean;
-							error?: string;
-							movie?: {
-								title: string;
-								tmdbId: number;
-								imdbId: string | null;
-								year: number | null;
-								scoringProfileId: string | null;
-							};
-						};
-						if (res.success && res.movie) {
-							meta = {
-								title: res.movie.title,
-								tmdbId: res.movie.tmdbId,
-								imdbId: res.movie.imdbId ?? null,
-								tvdbId: null,
-								year: res.movie.year ?? null,
-								scoringProfileId: res.movie.scoringProfileId ?? null,
-								episodeCount: null
-							};
-						} else {
-							error = res.error || 'Failed to load movie';
-						}
-					} else if (seriesId) {
-						const res = (await getSeries(seriesId)) as {
-							success: boolean;
-							error?: string;
-							series?: {
-								title: string;
-								tmdbId: number;
-								imdbId: string | null;
-								tvdbId: number | null;
-								year: number | null;
-								scoringProfileId: string | null;
-								episodeCount: number | null;
-							};
-						};
-						if (res.success && res.series) {
-							meta = {
-								title: res.series.title,
-								tmdbId: res.series.tmdbId,
-								imdbId: res.series.imdbId ?? null,
-								tvdbId: res.series.tvdbId ?? null,
-								year: res.series.year ?? null,
-								scoringProfileId: res.series.scoringProfileId ?? null,
-								episodeCount: res.series.episodeCount ?? null
-							};
-						} else {
-							error = res.error || 'Failed to load series';
-						}
-					} else {
-						error = 'No media ID provided';
-					}
-				} catch (e) {
-					error = e instanceof Error ? e.message : 'Failed to load media';
-				} finally {
-					loading = false;
-				}
-			})();
+		if (!open) {
+			loadedKey = null;
+			return;
 		}
+
+		const key = movieId ? `movie:${movieId}` : seriesId ? `series:${seriesId}` : null;
+		if (!key || key === loadedKey) return;
+		loadedKey = key;
+
+		loading = true;
+		error = null;
+		meta = null;
+		void (async () => {
+			try {
+				if (movieId) {
+					const res = (await getMovie(movieId)) as {
+						success: boolean;
+						error?: string;
+						movie?: {
+							title: string;
+							tmdbId: number;
+							imdbId: string | null;
+							year: number | null;
+							scoringProfileId: string | null;
+						};
+					};
+					if (res.success && res.movie) {
+						meta = {
+							title: res.movie.title,
+							tmdbId: res.movie.tmdbId,
+							imdbId: res.movie.imdbId ?? null,
+							tvdbId: null,
+							year: res.movie.year ?? null,
+							scoringProfileId: res.movie.scoringProfileId ?? null,
+							episodeCount: null
+						};
+					} else {
+						error = res.error || 'Failed to load movie';
+					}
+				} else if (seriesId) {
+					const res = (await getSeries(seriesId)) as {
+						success: boolean;
+						error?: string;
+						series?: {
+							title: string;
+							tmdbId: number;
+							imdbId: string | null;
+							tvdbId: number | null;
+							year: number | null;
+							scoringProfileId: string | null;
+							episodeCount: number | null;
+						};
+					};
+					if (res.success && res.series) {
+						meta = {
+							title: res.series.title,
+							tmdbId: res.series.tmdbId,
+							imdbId: res.series.imdbId ?? null,
+							tvdbId: res.series.tvdbId ?? null,
+							year: res.series.year ?? null,
+							scoringProfileId: res.series.scoringProfileId ?? null,
+							episodeCount: res.series.episodeCount ?? null
+						};
+					} else {
+						error = res.error || 'Failed to load series';
+					}
+				} else {
+					error = 'No media ID provided';
+				}
+			} catch (e) {
+				error = e instanceof Error ? e.message : 'Failed to load media';
+			} finally {
+				loading = false;
+			}
+		})();
 	});
 
 	async function handleGrab(
@@ -190,13 +204,13 @@
 </script>
 
 {#if loading}
-	<dialog class="modal modal-open">
+	<div class="modal modal-open">
 		<div class="modal-box flex items-center justify-center py-16">
 			<RefreshCw class="h-6 w-6 animate-spin text-base-content/50" />
 		</div>
-	</dialog>
+	</div>
 {:else if error}
-	<dialog class="modal modal-open" onclick={(e) => e.target === e.currentTarget && onClose()}>
+	<div class="modal modal-open">
 		<div class="modal-box">
 			<div class="flex flex-col items-center gap-3 py-8 text-center">
 				<AlertTriangle class="h-8 w-8 text-error" />
@@ -204,7 +218,13 @@
 				<button class="btn btn-ghost btn-sm" onclick={onClose}>Close</button>
 			</div>
 		</div>
-	</dialog>
+		<button
+			type="button"
+			class="modal-backdrop cursor-default border-none bg-black/50"
+			onclick={onClose}
+			aria-label={m.ui_modal_closeModal()}
+		></button>
+	</div>
 {:else if meta}
 	<InteractiveSearchModal
 		{open}

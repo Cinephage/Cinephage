@@ -5,11 +5,11 @@ import {
 	clearTestDb,
 	type TestDatabase
 } from '../../../../../test/db-helper.js';
-import { storageItems } from '$lib/server/db/schema';
+import { storageItems } from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -19,7 +19,7 @@ vi.mock('$lib/server/db', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -63,6 +63,68 @@ describe('UntrackedByCinephageRule', () => {
 		expect(findings).toHaveLength(1);
 		expect(findings[0].itemCount).toBe(2);
 		expect(findings[0].severity).toBe('info');
+	});
+
+	it('summary breaks down the raw item count by movies vs series', async () => {
+		await testDb.db.insert(storageItems).values([
+			createStorageItem({ sourceSystem: 'server', itemType: 'movie', tmdbId: 700 }),
+			createStorageItem({
+				sourceSystem: 'server',
+				itemType: 'episode',
+				tmdbId: 800,
+				seasonNumber: 1,
+				episodeNumber: 1
+			}),
+			createStorageItem({
+				sourceSystem: 'server',
+				itemType: 'episode',
+				tmdbId: 800,
+				seasonNumber: 1,
+				episodeNumber: 2
+			})
+		]);
+
+		const findings = await rule.evaluate({
+			db: testDb.db as RuleContext['db'],
+			now: '2026-07-01T00:00:00.000Z'
+		});
+
+		expect(findings).toHaveLength(1);
+		expect(findings[0].itemCount).toBe(3);
+		expect(findings[0].summary).toContain('3 items');
+		expect(findings[0].summary).toContain('1 Movie');
+		expect(findings[0].summary).toContain('1 Series');
+	});
+
+	it('groups episodes with no resolved tmdbId by seriesName instead of counting each as a separate show', async () => {
+		await testDb.db.insert(storageItems).values([
+			createStorageItem({
+				sourceSystem: 'server',
+				itemType: 'episode',
+				tmdbId: null,
+				seriesName: 'Unresolved Show',
+				seasonNumber: 1,
+				episodeNumber: 1
+			}),
+			createStorageItem({
+				sourceSystem: 'server',
+				itemType: 'episode',
+				tmdbId: null,
+				seriesName: 'Unresolved Show',
+				seasonNumber: 1,
+				episodeNumber: 2
+			})
+		]);
+
+		const findings = await rule.evaluate({
+			db: testDb.db as RuleContext['db'],
+			now: '2026-07-01T00:00:00.000Z'
+		});
+
+		expect(findings).toHaveLength(1);
+		expect(findings[0].itemCount).toBe(2);
+		expect(findings[0].summary).toContain('2 items');
+		expect(findings[0].summary).toContain('1 Series');
 	});
 
 	it('returns zero findings when all items are local or both', async () => {

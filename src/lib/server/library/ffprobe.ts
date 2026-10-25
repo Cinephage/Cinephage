@@ -9,7 +9,7 @@
 
 import { spawn } from 'child_process';
 import { access } from 'fs/promises';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'scans' as const });
 
@@ -433,13 +433,6 @@ export async function runFFprobeExtended(
 // =============================================================================
 // Helper Functions
 // =============================================================================
-
-/**
- * Get video streams from FFprobe output
- */
-export function getVideoStreams(output: FFprobeOutput): FFprobeStream[] {
-	return output.streams.filter((s) => s.codec_type === 'video');
-}
 
 /**
  * Get audio streams from FFprobe output

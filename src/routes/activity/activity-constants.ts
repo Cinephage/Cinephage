@@ -5,14 +5,14 @@
  * composables, and sub-components without pulling in Svelte-specific code.
  */
 
-import type { ActivityFilters as FiltersType } from '$lib/types/activity';
+import type { ActivityFilters as FiltersType } from '#lib/types/activity.js';
 
 // ── Tab type ──────────────────────────────────────────────────────────
-export type ActivityTab = 'active' | 'history';
+export type ActivityTab = 'active' | 'history' | 'unmatched';
 
 // ── Confirmation / bulk action types ──────────────────────────────────
 export type HistoryConfirmAction = 'purge_older_than_retention' | 'purge_all' | 'delete_selected';
-export type ActiveBulkAction = 'pause' | 'resume' | 'retry_failed' | 'remove_failed';
+export type ActiveBulkAction = 'pause' | 'resume' | 'cancel' | 'retry_failed' | 'remove_failed';
 
 // ── Tab-specific status options ───────────────────────────────────────
 export const ACTIVE_TAB_STATUSES: NonNullable<FiltersType['status']>[] = [

@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
-import { db } from '$lib/server/db';
-import { settings } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { settings } from '#lib/server/db/schema.js';
 
 export type AcquisitionProtocol = 'torrent' | 'debrid';
 export const DEFAULT_ACQUISITION_PROTOCOL_KEY = 'default_acquisition_protocol';

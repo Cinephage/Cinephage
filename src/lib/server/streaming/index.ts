@@ -31,7 +31,7 @@ export { fetchWithTimeout, checkStreamAvailability, checkHlsAvailability } from 
 
 // Cinephage API playback services
 // Note: the legacy `streaming/cinephage-api/CinephageApiService` was moved to
-// the CinephageAPI subsystem (`$lib/server/cinephage/modules/remote-streaming`).
+// the CinephageAPI subsystem (`#lib/server/cinephage/modules/remote-streaming`).
 // Consumers should import RemoteStreamingModule from there directly.
 export * from './sessions/session-store';
 export * from './sessions/PlaybackSessionService';

@@ -13,7 +13,7 @@ vi.mock('./LiveTvStreamService.js', () => ({
 	getLiveTvStreamService: () => ({ fetchFromUrl: fetchFromUrlMock })
 }));
 
-vi.mock('$lib/server/http/ssrf-protection', () => ({
+vi.mock('#lib/server/http/ssrf-protection.js', () => ({
 	resolveAndValidateUrl: resolveAndValidateUrlMock
 }));
 

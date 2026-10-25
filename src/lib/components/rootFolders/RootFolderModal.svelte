@@ -1,16 +1,16 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
-	import { Loader2, CheckCircle2, XCircle, FolderOpen, Info } from 'lucide-svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { Loader2, CheckCircle2, XCircle, FolderOpen, Info } from '@lucide/svelte';
 	import type {
 		RootFolder,
 		RootFolderFormData,
 		PathValidationResult
-	} from '$lib/types/downloadClient';
-	import { FolderBrowser } from '$lib/components/library';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
-	import ModalHeader from '$lib/components/ui/modal/ModalHeader.svelte';
-	import ModalFooter from '$lib/components/ui/modal/ModalFooter.svelte';
-	import TagInput from '$lib/components/ui/TagInput.svelte';
+	} from '#lib/types/downloadClient.js';
+	import { FolderBrowser } from '#lib/components/library/index.js';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
+	import ModalHeader from '#lib/components/ui/modal/ModalHeader.svelte';
+	import ModalFooter from '#lib/components/ui/modal/ModalFooter.svelte';
+	import TagInput from '#lib/components/ui/TagInput.svelte';
 
 	interface Props {
 		open: boolean;

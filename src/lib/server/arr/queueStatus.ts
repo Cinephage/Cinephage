@@ -10,8 +10,8 @@
  */
 
 import { and, isNotNull, sql } from 'drizzle-orm';
-import { db } from '$lib/server/db/index.js';
-import { downloadQueue } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { downloadQueue } from '#lib/server/db/schema.js';
 
 export async function buildQueueStatus(mediaType: 'movie' | 'tv') {
 	const mediaFilter = isNotNull(

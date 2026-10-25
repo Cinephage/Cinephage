@@ -7,9 +7,9 @@
  * real standalone Radarr only knows about its own movie root folders.
  */
 
-import { getRootFolderService } from '$lib/server/downloadClients/RootFolderService.js';
+import { getRootFolderService } from '#lib/server/downloadClients/RootFolderService.js';
 import { getOrAssignArrIds } from './ArrIdMappingService.js';
-import type { RootFolderMediaType } from '$lib/types/downloadClient.js';
+import type { RootFolderMediaType } from '#lib/types/downloadClient.js';
 
 export async function buildDiskSpace(mediaType: RootFolderMediaType) {
 	const folders = await getRootFolderService().getFoldersByType(mediaType);

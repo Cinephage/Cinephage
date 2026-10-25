@@ -8,11 +8,11 @@
 import { existsSync } from 'fs';
 import { readdir, rm, stat } from 'fs/promises';
 import { join } from 'path';
-import { db } from '$lib/server/db';
-import { nzbStreamMounts, rootFolders } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { nzbStreamMounts, rootFolders } from '#lib/server/db/schema.js';
 import { eq, lt, and, isNotNull, sql } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
-import type { BackgroundService, ServiceStatus } from '$lib/server/services/background-service';
+import { createChildLogger } from '#lib/logging/index.js';
+import type { BackgroundService, ServiceStatus } from '#lib/server/services/background-service.js';
 
 const logger = createChildLogger({ logDomain: 'streams' as const });
 

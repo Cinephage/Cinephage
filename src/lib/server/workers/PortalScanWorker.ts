@@ -7,11 +7,11 @@
 
 import { TaskWorker } from './TaskWorker';
 import type { WorkerType, PortalScanWorkerMetadata } from './types';
-import { db } from '$lib/server/db';
-import { portalScanResults, portalScanHistory } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { portalScanResults, portalScanHistory } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { MacGenerator } from '$lib/server/livetv/stalker/MacGenerator';
-import { StalkerPortalClient } from '$lib/server/livetv/stalker/StalkerPortalClient';
+import { MacGenerator } from '#lib/server/livetv/stalker/MacGenerator.js';
+import { StalkerPortalClient } from '#lib/server/livetv/stalker/StalkerPortalClient.js';
 import { randomUUID } from 'node:crypto';
 
 export interface PortalScanOptions {

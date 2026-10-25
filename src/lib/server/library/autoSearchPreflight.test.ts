@@ -7,14 +7,14 @@ const mocks = vi.hoisted(() => ({
 	getDefinitionCapabilities: vi.fn()
 }));
 
-vi.mock('$lib/server/downloadClients/DownloadClientManager.js', () => ({
+vi.mock('#lib/server/downloadClients/DownloadClientManager.js', () => ({
 	getDownloadClientManager: () => ({
 		getEnabledClientsForProtocol: mocks.getEnabledClientsForProtocol,
 		getDebridClientForAcquisition: mocks.getDebridClientForAcquisition
 	})
 }));
 
-vi.mock('$lib/server/indexers/IndexerManager.js', () => ({
+vi.mock('#lib/server/indexers/IndexerManager.js', () => ({
 	getIndexerManager: async () => ({
 		getIndexers: mocks.getIndexers,
 		getDefinitionCapabilities: mocks.getDefinitionCapabilities

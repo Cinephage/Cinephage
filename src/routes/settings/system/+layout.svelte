@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Server, Film, Shield, Download, Zap } from 'lucide-svelte';
-	import { SettingsTabNav } from '$lib/components/settings';
-	import * as m from '$lib/paraglide/messages.js';
+	import { Server, Film, Shield, Download, Zap, Inbox } from '@lucide/svelte';
+	import { SettingsTabNav } from '#lib/components/settings/index.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	let { children } = $props();
 
@@ -30,6 +30,11 @@
 			href: '/settings/system/cinephage',
 			label: m.nav_cinephage(),
 			icon: Zap
+		},
+		{
+			href: '/settings/system/requests',
+			label: m.requestsSettings_title(),
+			icon: Inbox
 		}
 	];
 </script>

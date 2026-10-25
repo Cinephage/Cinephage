@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { X, ChevronRight } from 'lucide-svelte';
+	import { X, ChevronRight } from '@lucide/svelte';
 	import { severityBadgeClass, insightTypeLabel, dismissInsight, formatBytes } from './utils.js';
 	import type { Insight } from './utils.js';
 

@@ -5,7 +5,7 @@
  */
 
 import type { Readable } from 'node:stream';
-import { VIDEO_EXTENSIONS_SET, isVideoFile as isBaseVideoFile } from '$lib/config/constants.js';
+import { VIDEO_EXTENSIONS_SET, isVideoFile as isBaseVideoFile } from '#lib/config/constants.js';
 
 /**
  * NNTP server configuration.

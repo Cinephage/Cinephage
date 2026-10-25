@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { and, eq, gt, inArray, lt } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
-import { db } from '$lib/server/db';
-import { downloadQueue, downloadQueueTombstones } from '$lib/server/db/schema';
+import { createChildLogger } from '#lib/logging/index.js';
+import { db } from '#lib/server/db/index.js';
+import { downloadQueue, downloadQueueTombstones } from '#lib/server/db/schema.js';
 import type { DownloadInfo } from '../core/interfaces';
 
 const logger = createChildLogger({ logDomain: 'monitoring' as const });

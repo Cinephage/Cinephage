@@ -13,7 +13,7 @@ const mockLogger = vi.hoisted(() => ({
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -23,15 +23,15 @@ vi.mock('$lib/server/db', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	logger: mockLogger,
 	createChildLogger: vi.fn(() => mockLogger)
 }));
 
 const { GET } = await import('./+server');
-const { languageProfiles, languageSettings } = await import('$lib/server/db/schema');
+const { languageProfiles, languageSettings } = await import('#lib/server/db/schema.js');
 const { LanguageSettingsService } =
-	await import('$lib/server/subtitles/services/LanguageSettingsService');
+	await import('#lib/server/subtitles/services/LanguageSettingsService.js');
 
 const PROFILE_DEFAULT = 'b0000000-0000-4000-8000-000000000001';
 

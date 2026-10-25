@@ -1,8 +1,9 @@
-import { db } from '$lib/server/db';
-import { settings as settingsTable } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { settings as settingsTable } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { getIndexerManager } from '$lib/server/indexers/IndexerManager';
-import { createChildLogger } from '$lib/logging';
+import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { decryptSettingValue, encryptSettingValue } from '#lib/server/settings/secretSettings.js';
 
 const logger = createChildLogger({ logDomain: 'indexers' as const });
 
@@ -51,7 +52,10 @@ export async function getJackettConnection(): Promise<JackettConnection | null> 
 	});
 	if (!row) return null;
 	try {
-		const conn = JSON.parse(row.value) as JackettConnection;
+		// Credential fields (apiKey/adminPassword) are encrypted at rest.
+		const conn = JSON.parse(
+			decryptSettingValue(SETTINGS_KEY, row.value) ?? '{}'
+		) as JackettConnection;
 		if (conn.syncAddNew === undefined) conn.syncAddNew = false;
 		if (conn.lastSyncError === undefined) conn.lastSyncError = null;
 		return conn;
@@ -61,10 +65,11 @@ export async function getJackettConnection(): Promise<JackettConnection | null> 
 }
 
 export async function saveJackettConnection(conn: JackettConnection): Promise<void> {
+	const value = encryptSettingValue(SETTINGS_KEY, JSON.stringify(conn));
 	await db
 		.insert(settingsTable)
-		.values({ key: SETTINGS_KEY, value: JSON.stringify(conn) })
-		.onConflictDoUpdate({ target: settingsTable.key, set: { value: JSON.stringify(conn) } });
+		.values({ key: SETTINGS_KEY, value })
+		.onConflictDoUpdate({ target: settingsTable.key, set: { value } });
 }
 
 export async function deleteJackettConnection(): Promise<void> {

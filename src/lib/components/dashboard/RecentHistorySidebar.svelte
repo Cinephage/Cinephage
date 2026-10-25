@@ -1,18 +1,18 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
-	import { Activity, Clapperboard, Tv, Clock, ArrowRight } from 'lucide-svelte';
-	import Skeleton from '$lib/components/ui/Skeleton.svelte';
-	import { resolvePath } from '$lib/utils/routing';
-	import { formatBytes } from '$lib/utils/format.js';
-	import { getMediaLink, canLinkToMedia } from '$lib/utils/media-link.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import { Activity, Clapperboard, Tv, Clock, ArrowRight } from '@lucide/svelte';
+	import Skeleton from '#lib/components/ui/Skeleton.svelte';
+	import { resolvePath } from '#lib/utils/routing.js';
+	import { formatBytes } from '#lib/utils/format.js';
+	import { getMediaLink, canLinkToMedia } from '#lib/utils/media-link.js';
 	import {
 		statusConfig,
 		getCompactStatusLabel,
 		getMobileCompactStatusLabel,
 		formatRelativeTime
-	} from '$lib/components/activity/activity-display-utils.js';
-	import ActivityStatusPopover from '$lib/components/activity/ActivityStatusPopover.svelte';
-	import type { UnifiedActivity } from '$lib/types/activity';
+	} from '#lib/components/activity/activity-display-utils.js';
+	import ActivityStatusPopover from '#lib/components/activity/ActivityStatusPopover.svelte';
+	import type { UnifiedActivity } from '#lib/types/activity.js';
 
 	interface Props {
 		activities: UnifiedActivity[];

@@ -8,9 +8,9 @@
 		Clock,
 		Database,
 		X
-	} from 'lucide-svelte';
-	import type { EpgStatus } from '$lib/types/livetv';
-	import * as m from '$lib/paraglide/messages.js';
+	} from '@lucide/svelte';
+	import type { EpgStatus } from '#lib/types/livetv.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
 		status: EpgStatus | null;

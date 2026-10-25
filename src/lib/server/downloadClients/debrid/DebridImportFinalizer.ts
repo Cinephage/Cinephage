@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { stat } from 'node:fs/promises';
 import { basename, isAbsolute, relative, resolve, sep } from 'node:path';
 import { and, eq } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
-import { db } from '$lib/server/db';
+import { createChildLogger } from '#lib/logging/index.js';
+import { db } from '#lib/server/db/index.js';
 import {
 	downloadClients,
 	downloadHistory,
@@ -14,14 +14,14 @@ import {
 	movies,
 	rootFolders,
 	series
-} from '$lib/server/db/schema';
-import { libraryMediaEvents } from '$lib/server/library/LibraryMediaEvents';
-import { eventBuffer } from '$lib/server/sse/EventBuffer.js';
+} from '#lib/server/db/schema.js';
+import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
+import { eventBuffer } from '#lib/server/sse/EventBuffer.js';
 import { downloadMonitor } from '../monitoring/DownloadMonitorService';
 import { ImportService } from '../import/ImportService';
 import { computeMovieReplacement, computeEpisodeReplacement } from '../import/replacement.js';
-import { resolveMovieMultiQuality } from '$lib/server/quality/movie-buckets.js';
-import type { Resolution } from '$lib/server/indexers/parser/types.js';
+import { resolveMovieMultiQuality } from '#lib/server/quality/movie-buckets.js';
+import type { Resolution } from '#lib/server/indexers/parser/types.js';
 
 const logger = createChildLogger({ logDomain: 'imports' as const });
 type Quality = { resolution?: string; source?: string; codec?: string; hdr?: string };

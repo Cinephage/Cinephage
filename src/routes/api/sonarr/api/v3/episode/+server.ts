@@ -1,9 +1,9 @@
-import { error, json } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { requireArrCompatEnabled } from '$lib/server/arr/requireArrCompatEnabled.js';
-import { buildEpisodesForSeries, buildEpisodesByArrIds } from '$lib/server/arr/episodes.js';
-import { getEntityIdForArrId } from '$lib/server/arr/ArrIdMappingService.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { requireArrCompatEnabled } from '#lib/server/arr/requireArrCompatEnabled.js';
+import { buildEpisodesForSeries, buildEpisodesByArrIds } from '#lib/server/arr/episodes.js';
+import { getEntityIdForArrId } from '#lib/server/arr/ArrIdMappingService.js';
 
 /**
  * GET /api/sonarr/api/v3/episode
@@ -23,7 +23,7 @@ export const GET: RequestHandler = async (event) => {
 		.map((v) => Number.parseInt(v, 10))
 		.filter((v) => !Number.isNaN(v));
 	if (episodeIds.length > 0) {
-		return json(await buildEpisodesByArrIds(episodeIds));
+		return Response.json(await buildEpisodesByArrIds(episodeIds));
 	}
 
 	const seriesIdParam = url.searchParams.get('seriesId');
@@ -33,10 +33,10 @@ export const GET: RequestHandler = async (event) => {
 	}
 
 	const seriesId = await getEntityIdForArrId('series', seriesArrId);
-	if (!seriesId) return json([]);
+	if (!seriesId) return Response.json([]);
 
 	const seasonNumberParam = url.searchParams.get('seasonNumber');
 	const seasonNumber = seasonNumberParam ? Number.parseInt(seasonNumberParam, 10) : undefined;
 
-	return json(await buildEpisodesForSeries({ seriesArrId, seriesId, seasonNumber }));
+	return Response.json(await buildEpisodesForSeries({ seriesArrId, seriesId, seasonNumber }));
 };

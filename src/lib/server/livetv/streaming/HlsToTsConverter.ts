@@ -47,11 +47,11 @@
  * - Client disconnect (AbortSignal) cleanly cancels the loop
  */
 
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 import { getStreamUrlCache } from './StreamUrlCache.js';
 import { getLiveTvStreamService } from './LiveTvStreamService.js';
-import { resolveHlsUrl } from '$lib/server/streaming/utils/hls-rewrite.js';
-import { resolveAndValidateUrl } from '$lib/server/http/ssrf-protection';
+import { resolveHlsUrl } from '#lib/server/streaming/utils/hls-rewrite.js';
+import { resolveAndValidateUrl } from '#lib/server/http/ssrf-protection.js';
 
 const logger = createChildLogger({ module: 'HlsToTsConverter' });
 

@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { X, Loader2, Search, Tv } from 'lucide-svelte';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
-	import { getChannelsWithEpg } from '$lib/api/livetv.js';
-	import * as m from '$lib/paraglide/messages.js';
+	import { X, Loader2, Search, Tv } from '@lucide/svelte';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
+	import { getChannelsWithEpg } from '#lib/api/livetv.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface ChannelWithEpg {
 		id: string;

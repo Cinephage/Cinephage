@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { SvelteSet } from 'svelte/reactivity';
-	import type { LibraryMovie, LibrarySeries } from '$lib/types/library';
-	import { Clapperboard, Tv } from 'lucide-svelte';
+	import type { LibraryMovie, LibrarySeries } from '#lib/types/library.js';
+	import { Clapperboard, Tv } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
-	import { resolvePath } from '$lib/utils/routing';
-	import type { MediaType } from '$lib/utils/media-type';
+	import { resolvePath } from '#lib/utils/routing.js';
+	import type { MediaType } from '#lib/utils/media-type.js';
 	import LibraryMediaMobileCard from './LibraryMediaMobileCard.svelte';
 	import LibraryMediaTableRow from './LibraryMediaTableRow.svelte';
 	import LibraryMediaTableHeader from './LibraryMediaTableHeader.svelte';
@@ -152,10 +152,12 @@
 				{downloadingIds}
 				hasStreamerProfile={hasStreamerProfile(item)}
 				onSelectChange={handleSelectChange}
-				onMonitorToggle={(id) => handleMonitorToggle(id, item.monitored ?? false)}
+				onMonitorToggle={onMonitorToggle
+					? (id) => handleMonitorToggle(id, item.monitored ?? false)
+					: undefined}
 				onAutoGrab={onAutoGrab ? handleAutoGrab : undefined}
 				onManualGrab={onManualGrab ? handleManualGrab : undefined}
-				onDelete={handleDelete}
+				onDelete={onDelete ? handleDelete : undefined}
 				onNavigate={() => navigateToItem(item.id)}
 				{preferOriginalTitleDefault}
 			/>
@@ -191,10 +193,12 @@
 						profileName={getProfileName(item)}
 						{isTv}
 						onSelectChange={handleSelectChange}
-						onMonitorToggle={(id) => handleMonitorToggle(id, item.monitored ?? false)}
+						onMonitorToggle={onMonitorToggle
+							? (id) => handleMonitorToggle(id, item.monitored ?? false)
+							: undefined}
 						onAutoGrab={onAutoGrab ? handleAutoGrab : undefined}
 						onManualGrab={onManualGrab ? handleManualGrab : undefined}
-						onDelete={handleDelete}
+						onDelete={onDelete ? handleDelete : undefined}
 						onNavigate={() => navigateToItem(item.id)}
 						{preferOriginalTitleDefault}
 					/>

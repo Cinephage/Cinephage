@@ -429,6 +429,24 @@ describe('ImportService metadata extraction', () => {
 		expect(metadata.quality.resolution).toBe('1080p');
 		expect(metadata.quality.codec).toBe('h265');
 	});
+
+	it('rejects a file when ffprobe cannot read media information', () => {
+		// #532: an unreadable file (still downloading, corrupt, or a fragment
+		// adopted by mistake) must surface as a failed file, never an import.
+		const service = ImportService.getInstance() as unknown as {
+			getMediaProbeFailure: (
+				sourcePath: string,
+				mediaInfo: Record<string, unknown> | null
+			) => { success: boolean; sourcePath: string; error?: string } | null;
+		};
+
+		expect(service.getMediaProbeFailure('/downloads/corrupt.mkv', null)).toEqual({
+			success: false,
+			sourcePath: '/downloads/corrupt.mkv',
+			error: 'Media validation failed: ffprobe could not read the file'
+		});
+		expect(service.getMediaProbeFailure('/downloads/valid.mkv', { width: 1920 })).toBeNull();
+	});
 });
 
 describe('ImportService episode naming', () => {

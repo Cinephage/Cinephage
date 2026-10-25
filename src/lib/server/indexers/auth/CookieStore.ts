@@ -8,10 +8,43 @@
  * - Database persistence across server restarts (NEW!)
  */
 
-import { createChildLogger } from '$lib/logging';
-import { db } from '$lib/server/db';
-import { indexerStatus } from '$lib/server/db/schema';
+import { createChildLogger } from '#lib/logging/index.js';
+import { db } from '#lib/server/db/index.js';
+import { indexerStatus } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
+import {
+	decryptCredential,
+	encryptCredential,
+	isEncryptedCredential
+} from '#lib/server/crypto/credentialsCrypto.js';
+
+/** AAD purpose for the encrypted indexer session-cookie blob. */
+const INDEXER_COOKIES_PURPOSE = 'indexer-cookies';
+
+/** Cookies are session credentials: encrypt the whole map as one envelope. */
+function encryptCookieBlob(indexerId: string, cookies: Record<string, string>): string {
+	return encryptCredential(INDEXER_COOKIES_PURPOSE, indexerId, JSON.stringify(cookies));
+}
+
+function decryptCookieBlob(indexerId: string, stored: unknown): Record<string, string> | null {
+	if (stored === null || stored === undefined) return null;
+	if (typeof stored === 'string' && isEncryptedCredential(stored)) {
+		const plaintext = decryptCredential(
+			INDEXER_COOKIES_PURPOSE,
+			indexerId,
+			stored,
+			`indexer-cookies:${indexerId}`
+		);
+		if (plaintext === null) return null;
+		try {
+			return JSON.parse(plaintext) as Record<string, string>;
+		} catch {
+			return null;
+		}
+	}
+	// Plain map (pre-migration rows).
+	return stored as Record<string, string>;
+}
 
 const log = createChildLogger({ module: 'CookieStore' });
 
@@ -124,20 +157,29 @@ export class CookieStore {
 			});
 
 			if (existingRecord) {
-				// Update existing record
+				// Update existing record. The column is JSON-mode; the envelope is
+				// stored as a JSON string value (cast for the Record-typed column).
+				const blob = encryptCookieBlob(indexerId, mergedCookies) as unknown as Record<
+					string,
+					string
+				>;
 				await db
 					.update(indexerStatus)
 					.set({
-						cookies: mergedCookies,
+						cookies: blob,
 						cookiesExpirationDate: expiry.toISOString(),
 						updatedAt: new Date().toISOString()
 					})
 					.where(eq(indexerStatus.indexerId, indexerId));
 			} else {
 				// Create new record
+				const blob = encryptCookieBlob(indexerId, mergedCookies) as unknown as Record<
+					string,
+					string
+				>;
 				await db.insert(indexerStatus).values({
 					indexerId,
-					cookies: mergedCookies,
+					cookies: blob,
 					cookiesExpirationDate: expiry.toISOString(),
 					health: 'healthy',
 					createdAt: new Date().toISOString(),
@@ -186,29 +228,33 @@ export class CookieStore {
 				});
 
 				if (record?.cookies && record.cookiesExpirationDate) {
-					// Parse stored cookies
-					const cookies = record.cookies as Record<string, string>;
-					const expiry = new Date(record.cookiesExpirationDate);
+					// Parse stored cookies (envelope at rest since schema 161).
+					// A failed decrypt (rotated-away key) means no usable session —
+					// the indexer re-authenticates.
+					const cookies = decryptCookieBlob(indexerId, record.cookies);
+					if (cookies) {
+						const expiry = new Date(record.cookiesExpirationDate);
 
-					// Create stored cookies object (without per-cookie expirations - stored as overall expiry)
-					stored = {
-						cookies,
-						expirations: {},
-						expiry,
-						updatedAt: record.updatedAt ? new Date(record.updatedAt) : new Date()
-					};
+						// Create stored cookies object (without per-cookie expirations - stored as overall expiry)
+						stored = {
+							cookies,
+							expirations: {},
+							expiry,
+							updatedAt: record.updatedAt ? new Date(record.updatedAt) : new Date()
+						};
 
-					// Populate cache
-					cookieMemoryStore.set(indexerId, stored);
+						// Populate cache
+						cookieMemoryStore.set(indexerId, stored);
 
-					log.debug(
-						{
-							indexerId,
-							cookieCount: Object.keys(cookies).length,
-							expiry: expiry.toISOString()
-						},
-						'Loaded cookies from database'
-					);
+						log.debug(
+							{
+								indexerId,
+								cookieCount: Object.keys(cookies).length,
+								expiry: expiry.toISOString()
+							},
+							'Loaded cookies from database'
+						);
+					}
 				}
 			} catch (error) {
 				log.error(

@@ -8,11 +8,11 @@ import {
 	movieFiles,
 	movies,
 	series
-} from '$lib/server/db/schema.js';
+} from '#lib/server/db/schema.js';
 
 const testDb = createTestDb();
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},

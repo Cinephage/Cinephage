@@ -5,7 +5,7 @@ import type {
 	AggregatedSearchResult
 } from '../types';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../../test/db-helper';
-import { movies, movieFiles, rootFolders } from '$lib/server/db/schema';
+import { movies, movieFiles, rootFolders } from '#lib/server/db/schema.js';
 
 const mockGetMovieExternalIds = vi.fn();
 const mockGetTvExternalIds = vi.fn();
@@ -15,7 +15,7 @@ const mockRecordSuccess = vi.hoisted(() => vi.fn());
 const mockRecordError = vi.hoisted(() => vi.fn());
 const mockAcquireRateLimit = vi.hoisted(() => vi.fn());
 
-vi.mock('$lib/server/tmdb', () => ({
+vi.mock('#lib/server/tmdb.js', () => ({
 	tmdb: {
 		getMovieExternalIds: (...args: unknown[]) => mockGetMovieExternalIds(...args),
 		getTvExternalIds: (...args: unknown[]) => mockGetTvExternalIds(...args)
@@ -43,7 +43,7 @@ vi.mock('./SubtitleScoringService', () => ({
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -476,6 +476,44 @@ describe('SubtitleSearchService - searchForMovie', () => {
 			expect(criteria.filePath).toBeUndefined();
 			expect(criteria.fileSize).toBeUndefined();
 			expect(criteria.title).toBe('Test Movie');
+		} finally {
+			searchSpy.mockRestore();
+		}
+	});
+
+	it('passes the movie original language to providers as a canonical tag', async () => {
+		const rootFolderId = 'root-original-language';
+		const movieId = 'movie-original-language';
+		await testDb.db.insert(rootFolders).values({
+			id: rootFolderId,
+			name: 'Movies',
+			path: ROOT_PATH,
+			mediaType: 'movie'
+		});
+		await testDb.db.insert(movies).values({
+			id: movieId,
+			tmdbId: 202,
+			title: 'Idioma Original',
+			path: 'Idioma Original (2024)',
+			rootFolderId,
+			originalLanguage: 'spa'
+		});
+		await testDb.db.insert(movieFiles).values({
+			id: 'file-original-language',
+			movieId,
+			relativePath: 'Idioma.Original.2024.mkv',
+			size: 1000
+		});
+
+		const service = SubtitleSearchService.getInstance();
+		const searchSpy = vi.spyOn(service, 'search').mockResolvedValue(buildAggregatedResult([]));
+
+		try {
+			await service.searchForMovie(movieId, ['es']);
+
+			const criteria = searchSpy.mock.calls[0][0] as SubtitleSearchCriteria;
+			// ISO-639-3 input ('spa') reaches providers as the canonical tag.
+			expect(criteria.originalLanguage).toBe('es');
 		} finally {
 			searchSpy.mockRestore();
 		}

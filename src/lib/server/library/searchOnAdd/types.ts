@@ -6,7 +6,7 @@ import type {
 	IndexerCapabilities,
 	IndexerConfig,
 	SearchCriteria
-} from '$lib/server/indexers/types';
+} from '#lib/server/indexers/types/index.js';
 
 export type { IndexerCapabilities, IndexerConfig, SearchCriteria };
 

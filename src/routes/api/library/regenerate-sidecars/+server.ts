@@ -8,11 +8,10 @@
  * POST /api/library/regenerate-sidecars
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { regenerateSidecars } from '$lib/server/library/sidecar/regenerateSidecars.js';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { createChildLogger } from '$lib/logging';
+import { regenerateSidecars } from '#lib/server/library/sidecar/regenerateSidecars.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'RegenerateSidecarsApi', logDomain: 'imports' });
 
@@ -24,13 +23,13 @@ export const POST: RequestHandler = async (event) => {
 		logger.info('[API] Starting sidecar regeneration');
 		const result = await regenerateSidecars();
 
-		return json({
+		return Response.json({
 			success: true,
 			...result
 		});
 	} catch (error) {
 		logger.error('[API] Sidecar regeneration failed', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Unknown error'

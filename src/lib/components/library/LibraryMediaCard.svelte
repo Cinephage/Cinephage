@@ -1,10 +1,10 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
-	import type { LibraryMovie, LibrarySeries } from '$lib/types/library';
-	import { isLibraryMovie, getBestQualityFromFiles, displayTitle } from '$lib/types/library';
-	import TmdbImage from '$lib/components/tmdb/TmdbImage.svelte';
-	import { Eye, EyeOff, Check, X, Download, AlertTriangle } from 'lucide-svelte';
-	import { resolvePath } from '$lib/utils/routing';
+	import * as m from '#lib/paraglide/messages.js';
+	import type { LibraryMovie, LibrarySeries } from '#lib/types/library.js';
+	import { isLibraryMovie, getBestQualityFromFiles, displayTitle } from '#lib/types/library.js';
+	import TmdbImage from '#lib/components/tmdb/TmdbImage.svelte';
+	import { Eye, EyeOff, Check, X, Download, AlertTriangle } from '@lucide/svelte';
+	import { resolvePath } from '#lib/utils/routing.js';
 
 	type LibraryItem = LibraryMovie | LibrarySeries;
 

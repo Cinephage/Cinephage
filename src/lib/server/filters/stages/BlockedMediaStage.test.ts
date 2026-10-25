@@ -3,7 +3,7 @@ import { BlockedMediaStage } from './BlockedMediaStage.js';
 
 const mockFilter = vi.hoisted(() => vi.fn());
 
-vi.mock('$lib/server/library/status.js', () => ({
+vi.mock('#lib/server/library/status.js', () => ({
 	filterBlockedMedia: mockFilter
 }));
 

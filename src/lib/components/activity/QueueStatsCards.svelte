@@ -1,6 +1,5 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
-	import { Activity, AlertTriangle, Download, Pause, Upload } from 'lucide-svelte';
+	import * as m from '#lib/paraglide/messages.js';
 	import type {
 		QueueCardStats,
 		QueueCardStatusFilter
@@ -10,91 +9,108 @@
 		stats: QueueCardStats;
 		activeFilter: QueueCardStatusFilter;
 		onFilterSelect: (status: QueueCardStatusFilter) => void;
+		unmatchedCount?: number | null;
+		unmatchedActive?: boolean;
+		onUnmatchedSelect?: () => void;
 	}
 
-	let { stats, activeFilter, onFilterSelect }: Props = $props();
+	let {
+		stats,
+		activeFilter,
+		onFilterSelect,
+		unmatchedCount,
+		unmatchedActive = false,
+		onUnmatchedSelect
+	}: Props = $props();
+
+	const INACTIVE_TILE =
+		'border-base-content/12 bg-base-200 hover:border-base-content/25 hover:bg-base-200/80';
+	const ACTIVE_TILE = 'border-primary/60 bg-primary/8 ring-1 ring-primary/30';
 
 	function cardClass(status: QueueCardStatusFilter): string {
-		return activeFilter === status
-			? 'border-primary/80 bg-base-200'
-			: 'border-base-300 bg-base-200 hover:border-base-content/25';
+		// Status filters don't apply on the unmatched tab (different data
+		// source) — only the Unmatched tile highlights there.
+		if (unmatchedActive) return INACTIVE_TILE;
+		return activeFilter === status ? ACTIVE_TILE : INACTIVE_TILE;
 	}
 </script>
 
-<div class="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-3 xl:grid-cols-5">
+<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
 	<button
 		type="button"
-		class="min-h-26 rounded-xl border p-3 text-left transition-colors sm:p-4 {cardClass('all')}"
+		class="flex cursor-pointer flex-col gap-1 rounded-lg border px-4 py-3 text-left shadow-sm transition-all {cardClass(
+			'all'
+		)}"
 		onclick={() => onFilterSelect('all')}
 	>
-		<div class="flex items-center justify-between">
-			<span class="text-xs font-medium text-base-content/70 sm:text-sm"
-				>{m.activity_queueStats_total()}</span
-			>
-			<Activity class="h-4 w-4 text-base-content/50" />
-		</div>
-		<div class="text-2xl font-bold">
-			{stats.totalCount}
-		</div>
+		<p class="text-[11px] font-medium tracking-wide text-base-content/50 uppercase">
+			{m.activity_queueStats_total()}
+		</p>
+		<p class="text-3xl font-bold">{stats.totalCount}</p>
 	</button>
 
 	<button
 		type="button"
-		class="min-h-26 rounded-xl border p-3 text-left transition-colors sm:p-4 {cardClass(
+		class="flex cursor-pointer flex-col gap-1 rounded-lg border px-4 py-3 text-left shadow-sm transition-all {cardClass(
 			'downloading'
 		)}"
 		onclick={() => onFilterSelect('downloading')}
 	>
-		<div class="flex items-center justify-between">
-			<span class="text-xs font-medium text-base-content/70 sm:text-sm"
-				>{m.status_downloading()}</span
-			>
-			<Download class="h-4 w-4 text-info" />
-		</div>
-		<div class="text-2xl font-bold">
-			{stats.downloadingCount}
-		</div>
+		<p class="text-[11px] font-medium tracking-wide text-base-content/50 uppercase">
+			{m.status_downloading()}
+		</p>
+		<p class="text-3xl font-bold text-info">{stats.downloadingCount}</p>
 	</button>
 
 	<button
 		type="button"
-		class="min-h-26 rounded-xl border p-3 text-left transition-colors sm:p-4 {cardClass('seeding')}"
+		class="flex cursor-pointer flex-col gap-1 rounded-lg border px-4 py-3 text-left shadow-sm transition-all {cardClass(
+			'seeding'
+		)}"
 		onclick={() => onFilterSelect('seeding')}
 	>
-		<div class="flex items-center justify-between">
-			<span class="text-xs font-medium text-base-content/70 sm:text-sm">{m.status_seeding()}</span>
-			<Upload class="h-4 w-4 text-success" />
-		</div>
-		<div class="text-2xl font-bold">
-			{stats.seedingCount}
-		</div>
+		<p class="text-[11px] font-medium tracking-wide text-base-content/50 uppercase">
+			{m.status_seeding()}
+		</p>
+		<p class="text-3xl font-bold text-success">{stats.seedingCount}</p>
 	</button>
 
 	<button
 		type="button"
-		class="min-h-26 rounded-xl border p-3 text-left transition-colors sm:p-4 {cardClass('paused')}"
+		class="flex cursor-pointer flex-col gap-1 rounded-lg border px-4 py-3 text-left shadow-sm transition-all {cardClass(
+			'paused'
+		)}"
 		onclick={() => onFilterSelect('paused')}
 	>
-		<div class="flex items-center justify-between">
-			<span class="text-xs font-medium text-base-content/70 sm:text-sm">{m.status_paused()}</span>
-			<Pause class="h-4 w-4 text-warning" />
-		</div>
-		<div class="text-2xl font-bold">
-			{stats.pausedCount}
-		</div>
+		<p class="text-[11px] font-medium tracking-wide text-base-content/50 uppercase">
+			{m.status_paused()}
+		</p>
+		<p class="text-3xl font-bold text-warning">{stats.pausedCount}</p>
 	</button>
 
 	<button
 		type="button"
-		class="min-h-26 rounded-xl border p-3 text-left transition-colors sm:p-4 {cardClass('failed')}"
+		class="flex cursor-pointer flex-col gap-1 rounded-lg border px-4 py-3 text-left shadow-sm transition-all {cardClass(
+			'failed'
+		)}"
 		onclick={() => onFilterSelect('failed')}
 	>
-		<div class="flex items-center justify-between">
-			<span class="text-xs font-medium text-base-content/70 sm:text-sm">{m.status_failed()}</span>
-			<AlertTriangle class="h-4 w-4 text-error" />
-		</div>
-		<div class="text-2xl font-bold">
-			{stats.failedCount}
-		</div>
+		<p class="text-[11px] font-medium tracking-wide text-base-content/50 uppercase">
+			{m.status_failed()}
+		</p>
+		<p class="text-3xl font-bold text-error">{stats.failedCount}</p>
+	</button>
+
+	<button
+		type="button"
+		class="flex cursor-pointer flex-col gap-1 rounded-lg border px-4 py-3 text-left shadow-sm transition-all {unmatchedActive
+			? ACTIVE_TILE
+			: INACTIVE_TILE}"
+		onclick={() => onUnmatchedSelect?.()}
+	>
+		<p class="text-[11px] font-medium tracking-wide text-base-content/50 uppercase">
+			{m.activity_queueStats_unmatched()}
+		</p>
+		<p class="text-3xl font-bold text-primary">{unmatchedCount ?? '–'}</p>
 	</button>
 </div>

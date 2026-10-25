@@ -12,10 +12,10 @@
 		Loader2,
 		Calendar,
 		RefreshCw
-	} from 'lucide-svelte';
-	import type { LiveTvAccount, LiveTvProviderType } from '$lib/types/livetv';
-	import * as m from '$lib/paraglide/messages.js';
-	import { formatDisplayDate } from '$lib/utils/format.js';
+	} from '@lucide/svelte';
+	import type { LiveTvAccount, LiveTvProviderType } from '#lib/types/livetv.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import { formatDisplayDate } from '#lib/utils/format.js';
 
 	interface Props {
 		accounts: LiveTvAccount[];

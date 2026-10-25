@@ -2,8 +2,8 @@
  * Library types for movies and TV series in the local library
  */
 
-import { pickBestMovieFile } from '$lib/shared/best-file.js';
-import { displayTitle as sharedDisplayTitle } from '$lib/shared/title-display.js';
+import { pickBestMovieFile } from '#lib/shared/best-file.js';
+import { displayTitle as sharedDisplayTitle } from '#lib/shared/title-display.js';
 
 /** Desired quality tiers selectable for multi-quality mode. */
 export type DesiredQuality = '2160p' | '1080p' | '720p' | '480p';
@@ -157,6 +157,8 @@ export interface LibrarySeries {
 	added: string;
 	episodeCount: number | null;
 	episodeFileCount: number | null;
+	/** Aired episodes without a tracked file (derived at list load). */
+	missingCount?: number;
 	percentComplete: number;
 	totalSize?: number;
 	/** Per-item metadata language override mode ('inherit' | 'original' | 'explicit') */

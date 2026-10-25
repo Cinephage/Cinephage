@@ -7,7 +7,7 @@ import type {
 	PersonDetails
 } from './types/tmdb';
 
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'tmdb', logDomain: 'system' });
 

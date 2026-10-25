@@ -25,8 +25,8 @@ import type {
 } from '../types';
 import type { YamlDefinition } from '../schema/yamlDefinition';
 import { buildCapabilitiesFromYaml } from '../capabilities';
-import type { IndexerRecord } from '$lib/server/db/schema';
-import type { ProtocolSettings } from '$lib/server/indexers/types/index.js';
+import type { IndexerRecord } from '#lib/server/db/schema.js';
+import type { ProtocolSettings } from '#lib/server/indexers/types/index.js';
 import { TemplateEngine, createTemplateEngine } from '../engine/TemplateEngine';
 import { FilterEngine, createFilterEngine } from '../engine/FilterEngine';
 import { SelectorEngine, createSelectorEngine } from '../engine/SelectorEngine';
@@ -40,8 +40,8 @@ import { SearchCapabilityChecker } from './SearchCapabilityChecker';
 import { getPersistentStatusTracker } from '../status';
 import { getRateLimitRegistry } from '../ratelimit';
 import { getHostRateLimiter, type HostRateLimiter } from '../ratelimit/HostRateLimiter';
-import type { RateLimitConfig } from '../ratelimit/types';
-import { createChildLogger } from '$lib/logging';
+import { DEFAULT_RATE_LIMIT, type RateLimitConfig } from '../ratelimit/types';
+import { createChildLogger } from '#lib/logging/index.js';
 import { IndexerHttp, createIndexerHttp } from '../http/IndexerHttp';
 import { DatabaseQueryExecutor, createDatabaseQueryExecutor } from './DatabaseQueryExecutor';
 import type { NewznabCapabilities } from '../newznab/types';
@@ -96,7 +96,7 @@ export class UnifiedIndexer implements IIndexer {
 	private readonly log: ReturnType<typeof createChildLogger>;
 	private readonly http: IndexerHttp;
 	private readonly hostRateLimiter: HostRateLimiter;
-	private readonly additionalCategories: number[];
+	readonly additionalCategories: number[];
 	/** True when the user explicitly configured a category restriction (even an empty/open one). */
 	private readonly categoryRestrictionEnabled: boolean;
 	private readonly dbExecutor?: DatabaseQueryExecutor;
@@ -239,7 +239,7 @@ export class UnifiedIndexer implements IIndexer {
 				? record.alternateUrls
 				: definition.links.slice(1),
 			userAgent: 'Cinephage/1.0',
-			rateLimit: rateLimit ?? { requests: 30, periodMs: 60_000 },
+			rateLimit: rateLimit ?? DEFAULT_RATE_LIMIT,
 			encoding: definition.encoding,
 			defaultTimeout: definition.requesttimeout
 		});
@@ -385,7 +385,7 @@ export class UnifiedIndexer implements IIndexer {
 	 * Check if this indexer can handle the given search criteria
 	 */
 	canSearch(criteria: SearchCriteria): boolean {
-		return this.capabilityChecker.canSearch(criteria, this.capabilities);
+		return this.capabilityChecker.canSearch(criteria, this.capabilities, this.additionalCategories);
 	}
 
 	/**
@@ -474,6 +474,12 @@ export class UnifiedIndexer implements IIndexer {
 		const requestErrors: string[] = [];
 
 		for (const request of requests) {
+			if (criteria.signal?.aborted) {
+				// Search was cancelled (race settled elsewhere); skip the remaining
+				// variants instead of burning rate-limit budget on dead requests.
+				this.log.debug('Search cancelled before remaining request variants ran');
+				break;
+			}
 			this.log.debug({ url: request.url, method: request.method }, 'Executing search request');
 			try {
 				// Enforce both indexer and host limits per outbound request
@@ -486,6 +492,14 @@ export class UnifiedIndexer implements IIndexer {
 				successfulRequests += 1;
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
+				if (criteria.signal?.aborted) {
+					// The orchestrator aborts sibling variants after one wins the
+					// race (early-exit movie search) and settles the overall race
+					// on success or timeout. Their 'Aborted' rejections are
+					// deliberate cancellations, not indexer failures.
+					this.log.debug({ url: request.url, error: message }, 'Search request cancelled');
+					continue;
+				}
 				this.log.warn({ url: request.url, error: message }, 'Search request failed');
 				requestErrors.push(this.normalizeTestRequestError(message));
 			}
@@ -581,11 +595,13 @@ export class UnifiedIndexer implements IIndexer {
 				request.method === 'POST'
 					? await this.http.post(request.url, request.body!, {
 							headers: request.headers,
-							followRedirects: this.definition.followredirect ?? true
+							followRedirects: this.definition.followredirect ?? true,
+							signal
 						})
 					: await this.http.get(request.url, {
 							headers: request.headers,
-							followRedirects: this.definition.followredirect ?? true
+							followRedirects: this.definition.followredirect ?? true,
+							signal
 						});
 
 			const retryApiError = this.detectProviderError(retryResponse.body);
@@ -1057,7 +1073,7 @@ export class UnifiedIndexer implements IIndexer {
 
 			if (url.startsWith('magnet:')) {
 				const { extractInfoHashFromMagnet } =
-					await import('$lib/server/downloadClients/utils/torrentParser');
+					await import('#lib/server/downloadClients/utils/torrentParser.js');
 				const infoHash = await extractInfoHashFromMagnet(url);
 				return {
 					success: true,
@@ -1134,7 +1150,7 @@ export class UnifiedIndexer implements IIndexer {
 							'Resolved download URL to magnet'
 						);
 						const { extractInfoHashFromMagnet } =
-							await import('$lib/server/downloadClients/utils/torrentParser');
+							await import('#lib/server/downloadClients/utils/torrentParser.js');
 						const infoHash = await extractInfoHashFromMagnet(resolution.magnetUrl);
 						return {
 							success: true,
@@ -1164,7 +1180,7 @@ export class UnifiedIndexer implements IIndexer {
 						}
 
 						const { parseTorrentFile } =
-							await import('$lib/server/downloadClients/utils/torrentParser');
+							await import('#lib/server/downloadClients/utils/torrentParser.js');
 						const parseResult = await parseTorrentFile(resolution.torrentData);
 
 						if (!parseResult.success) {
@@ -1206,7 +1222,7 @@ export class UnifiedIndexer implements IIndexer {
 						// Check if the resolved URL is a magnet link
 						if (url.startsWith('magnet:')) {
 							const { extractInfoHashFromMagnet } =
-								await import('$lib/server/downloadClients/utils/torrentParser');
+								await import('#lib/server/downloadClients/utils/torrentParser.js');
 							const infoHash = await extractInfoHashFromMagnet(url);
 							return {
 								success: true,
@@ -1266,7 +1282,7 @@ export class UnifiedIndexer implements IIndexer {
 
 					if (location.startsWith('magnet:')) {
 						const { extractInfoHashFromMagnet } =
-							await import('$lib/server/downloadClients/utils/torrentParser');
+							await import('#lib/server/downloadClients/utils/torrentParser.js');
 						const infoHash = await extractInfoHashFromMagnet(location);
 						return {
 							success: true,
@@ -1301,7 +1317,7 @@ export class UnifiedIndexer implements IIndexer {
 				const isCloudflare = isCloudflareProtected(response.status, response.headers, _errorText);
 				if (isCloudflare || response.status === 403 || response.status === 503) {
 					this.log.info({ url: currentUrl }, 'Download blocked, retrying through browser');
-					const { getCaptchaSolver } = await import('$lib/server/captcha/CaptchaSolver');
+					const { getCaptchaSolver } = await import('#lib/server/captcha/CaptchaSolver.js');
 					const solver = getCaptchaSolver();
 					const browserResult = await solver.fetch({
 						url: currentUrl,
@@ -1324,7 +1340,7 @@ export class UnifiedIndexer implements IIndexer {
 						}
 
 						const { parseTorrentFile } =
-							await import('$lib/server/downloadClients/utils/torrentParser');
+							await import('#lib/server/downloadClients/utils/torrentParser.js');
 						const parseResult = await parseTorrentFile(data);
 
 						if (!parseResult.success) {
@@ -1375,7 +1391,8 @@ export class UnifiedIndexer implements IIndexer {
 			}
 
 			// For torrent, parse the file
-			const { parseTorrentFile } = await import('$lib/server/downloadClients/utils/torrentParser');
+			const { parseTorrentFile } =
+				await import('#lib/server/downloadClients/utils/torrentParser.js');
 			const parseResult = await parseTorrentFile(data);
 
 			if (!parseResult.success) {

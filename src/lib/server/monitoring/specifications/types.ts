@@ -10,7 +10,7 @@ import type {
 	episodes,
 	episodeFiles,
 	scoringProfiles
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 
 /**
  * Result of a specification evaluation
@@ -78,6 +78,7 @@ export enum RejectionReason {
 	NOT_MONITORED = 'not_monitored',
 	SERIES_NOT_MONITORED = 'series_not_monitored',
 	SEASON_NOT_MONITORED = 'season_not_monitored',
+	SEASON_LINK_MISSING = 'season_link_missing',
 
 	// Quality/Upgrade
 	QUALITY_NOT_BETTER = 'quality_not_better',

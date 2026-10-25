@@ -12,10 +12,10 @@
  * immediate consistency.
  */
 
-import { getLibraryEntityService } from '$lib/server/library/LibraryEntityService.js';
-import { createChildLogger } from '$lib/logging/index.js';
+import { getLibraryEntityService } from '#lib/server/library/LibraryEntityService.js';
+import { createChildLogger } from '#lib/logging/index.js';
 import type { TaskResult } from '../MonitoringScheduler.js';
-import type { TaskExecutionContext } from '$lib/server/tasks/TaskExecutionContext.js';
+import type { TaskExecutionContext } from '#lib/server/tasks/TaskExecutionContext.js';
 
 const logger = createChildLogger({ module: 'LibraryReconcileTask', logDomain: 'monitoring' });
 
@@ -59,8 +59,8 @@ export async function executeLibraryReconcileTask(
 }
 
 async function getAssignmentCount(): Promise<number> {
-	const { db } = await import('$lib/server/db/index.js');
-	const { libraryRootFolders } = await import('$lib/server/db/schema.js');
+	const { db } = await import('#lib/server/db/index.js');
+	const { libraryRootFolders } = await import('#lib/server/db/schema.js');
 	const { count } = await import('drizzle-orm');
 	const result = await db.select({ value: count() }).from(libraryRootFolders).get();
 	return Number(result?.value ?? 0);

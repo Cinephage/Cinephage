@@ -1,17 +1,17 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { X, RefreshCw, CheckCircle, AlertTriangle, ArrowRight, Film, Tv } from 'lucide-svelte';
-	import type { RenamePreviewResult } from '$lib/server/library/naming/RenamePreviewService';
-	import { createFocusTrap, lockBodyScroll } from '$lib/utils/focus';
-	import { mediaTypeLabel, type MediaType } from '$lib/utils/media-type';
+	import { X, RefreshCw, CheckCircle, AlertTriangle, ArrowRight, Film, Tv } from '@lucide/svelte';
+	import type { RenamePreviewResult } from '#lib/server/library/naming/RenamePreviewService.js';
+	import { createFocusTrap, lockBodyScroll } from '#lib/utils/focus.js';
+	import { mediaTypeLabel, type MediaType } from '#lib/utils/media-type.js';
 	import {
 		getMovieRenamePreview,
 		getSeriesRenamePreview,
 		executeRename
-	} from '$lib/api/settings.js';
-	import { chunkFileIds } from '$lib/library/naming/batch-rename';
-	import type { RenameExecuteResult } from '$lib/library/naming/types.js';
+	} from '#lib/api/settings.js';
+	import { chunkFileIds } from '#lib/library/naming/batch-rename.js';
+	import type { RenameExecuteResult } from '#lib/library/naming/types.js';
 
 	interface Props {
 		open: boolean;

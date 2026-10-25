@@ -104,3 +104,26 @@ describe('MonitoringScheduler cooldown propagation', () => {
 		});
 	});
 });
+
+describe('MonitoringScheduler.getStatus', () => {
+	it('reports a defined status for every task, including hyphenated ids', async () => {
+		const scheduler = getMonitoringScheduler();
+		vi.spyOn(scheduler, 'getSettings').mockResolvedValue(settings);
+
+		const status = await scheduler.getStatus();
+
+		// Regression guard: the returned object's keys must exactly match the
+		// UnifiedTaskRegistry ids used everywhere else (taskIntervals,
+		// lastRunTimes, the runTask switch). A camelCase key here (e.g.
+		// libraryReconcile instead of 'library-reconcile') type-checks fine on
+		// its own but makes /api/tasks's `monitoringStatus.tasks[def.id]` lookup
+		// silently return undefined at runtime, showing "Never"/"-" in the UI
+		// even though the task is actually running on schedule.
+		expect(status.tasks['library-reconcile']).toBeDefined();
+		expect(status.tasks['metadata-refresh']).toBeDefined();
+		for (const [taskType, taskStatus] of Object.entries(status.tasks)) {
+			expect(taskStatus, `status.tasks['${taskType}'] should be defined`).toBeDefined();
+			expect(typeof taskStatus.intervalHours).toBe('number');
+		}
+	});
+});

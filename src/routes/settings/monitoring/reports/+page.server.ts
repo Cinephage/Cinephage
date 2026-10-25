@@ -1,11 +1,11 @@
 import type { PageServerLoad } from './$types.js';
-import { db } from '$lib/server/db/index.js';
+import { db } from '#lib/server/db/index.js';
 import {
 	rejectedReleases,
 	importFailures,
 	renamingFailures,
 	unmatchedFiles
-} from '$lib/server/db/schema.js';
+} from '#lib/server/db/schema.js';
 import { count, ne } from 'drizzle-orm';
 
 export const load: PageServerLoad = async () => {

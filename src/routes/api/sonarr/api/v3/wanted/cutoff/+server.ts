@@ -1,8 +1,7 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { requireArrCompatEnabled } from '$lib/server/arr/requireArrCompatEnabled.js';
-import { buildWantedCutoff } from '$lib/server/arr/wanted.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { requireArrCompatEnabled } from '#lib/server/arr/requireArrCompatEnabled.js';
+import { buildWantedCutoff } from '#lib/server/arr/wanted.js';
 
 /** GET /api/sonarr/api/v3/wanted/cutoff */
 export const GET: RequestHandler = async (event) => {
@@ -18,5 +17,7 @@ export const GET: RequestHandler = async (event) => {
 	const sortKey = url.searchParams.get('sortKey');
 	const sortDirection = url.searchParams.get('sortDirection') ?? 'default';
 
-	return json(await buildWantedCutoff('Sonarr', { page, pageSize, sortKey, sortDirection }));
+	return Response.json(
+		await buildWantedCutoff('Sonarr', { page, pageSize, sortKey, sortDirection })
+	);
 };

@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => ({
 	fetchAndStoreSeriesAlternateTitles: vi.fn()
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	db: {
 		query: {
 			movieFiles: { findFirst: mocks.movieFilesFindFirst, findMany: mocks.movieFilesFindMany },
@@ -33,25 +33,25 @@ vi.mock('$lib/server/db/index.js', () => ({
 	}
 }));
 
-vi.mock('$lib/server/indexers/IndexerManager.js', () => ({
+vi.mock('#lib/server/indexers/IndexerManager.js', () => ({
 	getIndexerManager: mocks.getIndexerManager
 }));
 
-vi.mock('$lib/server/downloads/index.js', () => ({
+vi.mock('#lib/server/downloads/index.js', () => ({
 	getCascadingSearchStrategy: vi.fn()
 }));
 
-vi.mock('$lib/server/downloads/GrabService.js', () => ({
+vi.mock('#lib/server/downloads/GrabService.js', () => ({
 	grabService: {
 		grab: mocks.grab
 	}
 }));
 
-vi.mock('$lib/server/downloads/MultiSeasonSearchStrategy.js', () => ({
+vi.mock('#lib/server/downloads/MultiSeasonSearchStrategy.js', () => ({
 	getMultiSeasonSearchStrategy: mocks.getMultiSeasonSearchStrategy
 }));
 
-vi.mock('$lib/server/services/AlternateTitleService.js', () => ({
+vi.mock('#lib/server/services/AlternateTitleService.js', () => ({
 	getMovieSearchTitles: mocks.getMovieSearchTitles,
 	getSeriesSearchTitles: mocks.getSeriesSearchTitles,
 	fetchAndStoreMovieAlternateTitles: mocks.fetchAndStoreMovieAlternateTitles,
@@ -66,7 +66,7 @@ const mockLogger = vi.hoisted(() => ({
 	child: vi.fn().mockReturnThis()
 }));
 
-vi.mock('$lib/logging/index.js', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	logger: mockLogger,
 	createChildLogger: vi.fn(() => mockLogger)
 }));

@@ -16,24 +16,24 @@
  */
 
 import type { RequestHandler } from './$types';
-import { getBaseUrlAsync } from '$lib/server/streaming';
-import { logger } from '$lib/logging';
+import { getBaseUrlAsync } from '#lib/server/streaming/index.js';
+import { logger } from '#lib/logging/index.js';
 import {
 	PROXY_FETCH_TIMEOUT_MS,
 	PROXY_SEGMENT_MAX_SIZE,
 	PROXY_MAX_RETRIES,
 	DEFAULT_PROXY_REFERER,
 	PROXY_REFERER_MAP
-} from '$lib/server/streaming/constants';
-import { validatePlaylist, sanitizePlaylist, isHLSPlaylist } from '$lib/server/streaming/hls';
+} from '#lib/server/streaming/constants.js';
+import { validatePlaylist, sanitizePlaylist, isHLSPlaylist } from '#lib/server/streaming/hls.js';
 import {
 	resolveAndValidateUrl,
 	fetchWithTimeout,
 	MAX_REDIRECTS
-} from '$lib/server/http/ssrf-protection';
-import { rewriteHlsPlaylistUrls } from '$lib/server/streaming/utils/hls-rewrite.js';
-import { getCachedSession } from '$lib/server/streaming/utils/cloudflare-streaming';
-import { isPngWrappedSegment, stripPngWrapper } from '$lib/server/streaming/utils/png-wrapper';
+} from '#lib/server/http/ssrf-protection.js';
+import { rewriteHlsPlaylistUrls } from '#lib/server/streaming/utils/hls-rewrite.js';
+import { getCachedSession } from '#lib/server/streaming/utils/cloudflare-streaming.js';
+import { isPngWrappedSegment, stripPngWrapper } from '#lib/server/streaming/utils/png-wrapper.js';
 
 const streamLog = { logDomain: 'streams' as const };
 

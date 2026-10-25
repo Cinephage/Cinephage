@@ -3,7 +3,7 @@ import { createTestDb, destroyTestDb, type TestDatabase } from '../../../test/db
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -14,7 +14,7 @@ vi.mock('$lib/server/db/index.js', () => ({
 }));
 
 const { libraries, libraryRootFolders, rootFolders, scoringProfiles, languageProfiles } =
-	await import('$lib/server/db/schema.js');
+	await import('#lib/server/db/schema.js');
 const { eq } = await import('drizzle-orm');
 const { LibraryEntityService } = await import('./LibraryEntityService.js');
 

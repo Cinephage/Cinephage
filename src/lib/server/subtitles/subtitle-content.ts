@@ -9,7 +9,7 @@
  */
 
 import { basename, extname } from 'node:path';
-import { canonicalizeLanguageTag, normalizeLanguageCode } from '$lib/shared/languages';
+import { canonicalizeLanguageTag, normalizeLanguageCode } from '#lib/shared/languages.js';
 import type { SubtitleFormat } from './types';
 
 /** File extensions treated as subtitle payloads. */

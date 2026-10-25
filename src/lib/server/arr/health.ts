@@ -9,8 +9,8 @@
  * openapi.json.
  */
 
-import { db } from '$lib/server/db/index.js';
-import { downloadClients } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { downloadClients } from '#lib/server/db/schema.js';
 
 export async function buildHealth(): Promise<Record<string, unknown>[]> {
 	const clients = await db

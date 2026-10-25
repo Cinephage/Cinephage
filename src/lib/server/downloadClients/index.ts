@@ -10,7 +10,7 @@ export {
 	getDownloadClientManager,
 	resetDownloadClientManager
 } from './DownloadClientManager';
-export type { DownloadClientInput } from '$lib/types/downloadClient';
+export type { DownloadClientInput } from '#lib/types/downloadClient.js';
 
 export {
 	RootFolderService,

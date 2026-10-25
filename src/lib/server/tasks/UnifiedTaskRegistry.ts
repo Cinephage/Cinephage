@@ -143,6 +143,18 @@ const SCHEDULED_TASKS: UnifiedTaskDefinition[] = [
 		intervalEditable: true
 	},
 	{
+		id: 'request-sweep',
+		name: 'Request Sweep',
+		description:
+			'Expire stale pending requests (TTL), re-drive approvals waiting for a writable target, re-check active requests against library availability, and prune read request notifications',
+		category: 'scheduled',
+		runEndpoint: '/api/monitoring/search/request-sweep',
+		intervalKey: 'request_sweep_interval_hours',
+		defaultIntervalHours: 1,
+		minIntervalHours: 1,
+		intervalEditable: true
+	},
+	{
 		id: 'historyCleanup',
 		name: 'History Cleanup',
 		description: 'Automatically purge old history entries based on the retention period setting',
@@ -163,6 +175,20 @@ const SCHEDULED_TASKS: UnifiedTaskDefinition[] = [
 		defaultIntervalHours: 24,
 		minIntervalHours: 1,
 		intervalEditable: false
+	},
+	{
+		id: 'metadata-refresh',
+		name: 'Metadata Refresh',
+		description:
+			'Refresh metadata for all movies and series from TMDB. Updates titles, overviews, posters, air dates, and other metadata that may be missing or outdated.',
+		category: 'scheduled',
+		runEndpoint: '/api/monitoring/search/metadata-refresh',
+		intervalKey: 'metadata_refresh_interval_hours',
+		defaultIntervalHours: 24,
+		// A full metadata refresh fetches TMDB per-episode across the whole library;
+		// 24h is a floor, not just a default, to keep that load sane.
+		minIntervalHours: 24,
+		intervalEditable: true
 	}
 ];
 
@@ -195,14 +221,6 @@ const MAINTENANCE_TASKS: UnifiedTaskDefinition[] = [
 		runEndpoint: '/api/streaming/strm/reprobe'
 	},
 	{
-		id: 'metadata-refresh',
-		name: 'Metadata Refresh',
-		description:
-			'Refresh metadata for all movies and series from TMDB. Updates titles, overviews, posters, collection data, and other metadata that may be missing or outdated.',
-		category: 'maintenance',
-		runEndpoint: '/api/monitoring/search/metadata-refresh'
-	},
-	{
 		id: 'regenerate-sidecars',
 		name: 'Regenerate Sidecar Files',
 		description:
@@ -217,6 +235,14 @@ const MAINTENANCE_TASKS: UnifiedTaskDefinition[] = [
 			'Fill in the original language for movies and series that are missing it (typically imported before this data was tracked) by fetching their TMDB details. Safe to re-run; already-populated items are skipped.',
 		category: 'maintenance',
 		runEndpoint: '/api/monitoring/search/original-language-backfill'
+	},
+	{
+		id: 'rotate-credentials',
+		name: 'Rotate Credential Encryption',
+		description:
+			'Re-encrypt every stored credential (download clients, indexers, subtitle providers, Live TV, metadata API keys, NNTP) under the current encryption master key. Run this after changing the master key with the old key listed in ENCRYPTION_PREVIOUS_KEYS, then remove the fallback variable.',
+		category: 'maintenance',
+		runEndpoint: '/api/settings/system/rotate-credentials'
 	}
 ];
 

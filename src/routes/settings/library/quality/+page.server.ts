@@ -1,10 +1,14 @@
 import type { PageServerLoad } from './$types';
-import type { Resolution } from '$lib/server/scoring/types';
-import { db } from '$lib/server/db';
-import { scoringProfiles, customFormats } from '$lib/server/db/schema';
-import { DEFAULT_PROFILES, DEFAULT_RESOLUTION_ORDER, ALL_FORMATS } from '$lib/server/scoring';
-import { toNullableNumber } from '$lib/utils/number.js';
-import { delayProfileService } from '$lib/server/monitoring/specifications/DelaySpecification.js';
+import type { Resolution } from '#lib/server/scoring/types.js';
+import { db } from '#lib/server/db/index.js';
+import { scoringProfiles, customFormats } from '#lib/server/db/schema.js';
+import {
+	DEFAULT_PROFILES,
+	DEFAULT_RESOLUTION_ORDER,
+	ALL_FORMATS
+} from '#lib/server/scoring/index.js';
+import { toNullableNumber } from '#lib/utils/number.js';
+import { delayProfileService } from '#lib/server/monitoring/specifications/DelaySpecification.js';
 
 // Built-in profile IDs - derived from DEFAULT_PROFILES for single source of truth
 const BUILT_IN_PROFILE_IDS = DEFAULT_PROFILES.map((p) => p.id);

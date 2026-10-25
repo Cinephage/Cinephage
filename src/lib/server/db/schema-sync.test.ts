@@ -1,6 +1,8 @@
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { syncSchema } from './schema-sync';
+import { createBetterAuthTables, convergeApikeySchemaToV15 } from './migration-helpers';
+import { migration_v065 } from './migrations/065-migrate-apikey-schema-v1-5';
 
 const databases: Database.Database[] = [];
 
@@ -755,6 +757,120 @@ describe('syncSchema Better Auth repair', () => {
 				negate: false
 			}
 		]);
+	});
+});
+
+describe('apikey v1.5 baseline shape and pre-migration converge', () => {
+	function getApikeyColumn(
+		sqlite: Database.Database,
+		name: string
+	): { notnull: number } | undefined {
+		const columns = sqlite.prepare(`PRAGMA table_info(apikey)`).all() as Array<{
+			name: string;
+			notnull: number;
+		}>;
+		return columns.find((column) => column.name === name);
+	}
+
+	it('creates the apikey table in the v1.5 shape before any migration runs', () => {
+		const sqlite = createTestDatabase();
+
+		createBetterAuthTables(sqlite);
+
+		const columns = getColumnNames(sqlite, 'apikey');
+		expect(columns).toContain('referenceId');
+		expect(columns).toContain('configId');
+		// better-auth >= 1.7 validates required columns on first access and
+		// latches a mismatch — the table must be born correct, not converged
+		// later by migrations 065/066.
+		expect(columns).not.toContain('userId');
+		expect(getApikeyColumn(sqlite, 'referenceId')?.notnull).toBe(1);
+	});
+
+	it('converges a legacy v1.4 apikey table before better-auth is constructed', () => {
+		const sqlite = createTestDatabase();
+		sqlite
+			.prepare(`CREATE TABLE "user" ("id" text PRIMARY KEY NOT NULL, "email" text NOT NULL)`)
+			.run();
+		sqlite
+			.prepare(`INSERT INTO "user" ("id", "email") VALUES ('user-1', 'user@example.com')`)
+			.run();
+		sqlite
+			.prepare(
+				`CREATE TABLE "apikey" (
+					"id" text PRIMARY KEY NOT NULL,
+					"key" text NOT NULL,
+					"userId" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+					"createdAt" date NOT NULL,
+					"updatedAt" date NOT NULL
+				)`
+			)
+			.run();
+		sqlite
+			.prepare(
+				`INSERT INTO "apikey" ("id", "key", "userId", "createdAt", "updatedAt")
+				 VALUES ('key-1', 'secret', 'user-1', '2026-01-01', '2026-01-01')`
+			)
+			.run();
+
+		convergeApikeySchemaToV15(sqlite);
+
+		const columns = getColumnNames(sqlite, 'apikey');
+		expect(columns).toContain('referenceId');
+		expect(columns).toContain('configId');
+		expect(columns).not.toContain('userId');
+
+		const row = sqlite.prepare(`SELECT "referenceId" FROM "apikey" WHERE "id" = 'key-1'`).get() as {
+			referenceId: string;
+		};
+		expect(row.referenceId).toBe('user-1');
+		// RENAME COLUMN preserves constraints — the renamed column stays NOT NULL.
+		expect(getApikeyColumn(sqlite, 'referenceId')?.notnull).toBe(1);
+
+		expect(() => convergeApikeySchemaToV15(sqlite)).not.toThrow();
+	});
+
+	it('keeps a fresh install free of the legacy userId column through full syncSchema', () => {
+		const sqlite = createTestDatabase();
+
+		syncSchema(sqlite);
+
+		const columns = getColumnNames(sqlite, 'apikey');
+		expect(columns).toContain('referenceId');
+		expect(columns).toContain('configId');
+		expect(columns).not.toContain('userId');
+	});
+
+	it('drops a stray userId column instead of failing migration 065', () => {
+		const sqlite = createTestDatabase();
+		sqlite
+			.prepare(
+				`CREATE TABLE "apikey" (
+					"id" text PRIMARY KEY NOT NULL,
+					"key" text NOT NULL,
+					"userId" text,
+					"referenceId" text
+				)`
+			)
+			.run();
+		sqlite
+			.prepare(
+				`INSERT INTO "apikey" ("id", "key", "userId", "referenceId")
+				 VALUES ('key-1', 'secret', 'user-legacy', 'user-1')`
+			)
+			.run();
+
+		expect(() => migration_v065.apply(sqlite)).not.toThrow();
+
+		const columns = getColumnNames(sqlite, 'apikey');
+		expect(columns).not.toContain('userId');
+		expect(columns).toContain('referenceId');
+		expect(columns).toContain('configId');
+
+		const row = sqlite.prepare(`SELECT "referenceId" FROM "apikey" WHERE "id" = 'key-1'`).get() as {
+			referenceId: string;
+		};
+		expect(row.referenceId).toBe('user-1');
 	});
 });
 

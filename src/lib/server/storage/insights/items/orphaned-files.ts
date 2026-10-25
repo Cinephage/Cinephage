@@ -1,4 +1,4 @@
-import { unmatchedFiles } from '$lib/server/db/schema';
+import { unmatchedFiles } from '#lib/server/db/schema.js';
 import { count } from 'drizzle-orm';
 import type { InsightItemResolver } from './types.js';
 

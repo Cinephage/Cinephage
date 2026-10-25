@@ -13,7 +13,7 @@ import {
 	handleStreamGet,
 	handleStreamHead,
 	handleStreamOptions
-} from '$lib/server/livetv/streaming/StreamRequestHandler.js';
+} from '#lib/server/livetv/streaming/StreamRequestHandler.js';
 
 export const GET: RequestHandler = async ({ params, request, url }) => {
 	const { lineupId } = params;

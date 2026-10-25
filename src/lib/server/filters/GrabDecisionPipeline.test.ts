@@ -7,21 +7,21 @@ const mockParse = vi.hoisted(() => vi.fn());
 const mockIsUpgrade = vi.hoisted(() => vi.fn());
 const mockBuildExistingAttrs = vi.hoisted(() => vi.fn());
 
-vi.mock('$lib/server/blocklist/BlocklistService.js', () => ({
+vi.mock('#lib/server/blocklist/BlocklistService.js', () => ({
 	blocklistService: { isBlocklisted: mockIsBlocklisted }
 }));
 
-vi.mock('$lib/server/quality/QualityFilter.js', () => ({
+vi.mock('#lib/server/quality/QualityFilter.js', () => ({
 	qualityFilter: { calculateEnhancedScore: mockCalculateEnhancedScore }
 }));
 
-vi.mock('$lib/server/indexers/parser/ReleaseParser.js', () => ({
+vi.mock('#lib/server/indexers/parser/ReleaseParser.js', () => ({
 	ReleaseParser: class {
 		parse = mockParse;
 	}
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	db: {
 		select: () => ({
 			from: () => ({
@@ -39,15 +39,15 @@ vi.mock('$lib/server/db/index.js', () => ({
 	}
 }));
 
-vi.mock('$lib/server/settings/blocked-extensions.js', () => ({
+vi.mock('#lib/server/settings/blocked-extensions.js', () => ({
 	resolveBlockedExtensionsForQueueItem: vi.fn().mockReturnValue([])
 }));
 
-vi.mock('$lib/server/scoring/scorer.js', () => ({
+vi.mock('#lib/server/scoring/scorer.js', () => ({
 	isUpgrade: mockIsUpgrade
 }));
 
-vi.mock('$lib/server/monitoring/specifications/utils.js', () => ({
+vi.mock('#lib/server/monitoring/specifications/utils.js', () => ({
 	buildExistingAttrs: mockBuildExistingAttrs
 }));
 
@@ -62,7 +62,7 @@ vi.mock('drizzle-orm', () => ({
 	sql: vi.fn()
 }));
 
-vi.mock('$lib/server/db/schema.js', () => ({
+vi.mock('#lib/server/db/schema.js', () => ({
 	downloadQueue: {
 		id: 'id',
 		infoHash: 'infoHash',

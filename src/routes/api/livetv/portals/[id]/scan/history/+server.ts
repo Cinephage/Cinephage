@@ -4,10 +4,9 @@
  * GET /api/livetv/portals/[id]/scan/history - Get scan history
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getPortalScannerService } from '$lib/server/livetv/stalker';
-import { createChildLogger } from '$lib/logging';
+import { getPortalScannerService } from '#lib/server/livetv/stalker/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LiveTvPortalScanHistory', logDomain: 'livetv' });
 
@@ -21,14 +20,14 @@ export const GET: RequestHandler = async ({ params, url }) => {
 		const scannerService = getPortalScannerService();
 		const history = await scannerService.getScanHistory(params.id, limit);
 
-		return json({
+		return Response.json({
 			success: true,
 			history
 		});
 	} catch (error) {
 		logger.error('[API] Failed to get scan history', error instanceof Error ? error : undefined);
 
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to get scan history'

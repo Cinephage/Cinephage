@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { SvelteSet } from 'svelte/reactivity';
 	import CommonOptions from './add/CommonOptions.svelte';
-	import type { SubtitleRequirement } from '$lib/shared/language-profile.js';
+	import type { SubtitleRequirement } from '#lib/shared/language-profile.js';
 	import SeriesAddOptions, {
 		type MonitorType,
 		type MonitorNewItems,
 		type SeriesType
 	} from './add/SeriesAddOptions.svelte';
-	import type { RootFolderWithSpaceAndDefault as RootFolder } from '$lib/types/downloadClient.js';
+	import type { RootFolderWithSpaceAndDefault as RootFolder } from '#lib/types/downloadClient.js';
 
 	interface ScoringProfile {
 		id: string;

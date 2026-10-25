@@ -16,7 +16,7 @@ import type {
 	ProviderSearchOptions,
 	LanguageCode
 } from '../../types';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'subtitles' as const });
 import * as cheerio from 'cheerio';

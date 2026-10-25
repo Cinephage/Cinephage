@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Search, Globe, Lock, Zap } from 'lucide-svelte';
-	import * as m from '$lib/paraglide/messages.js';
-	import type { IndexerDefinition } from '$lib/types/indexer';
+	import { Search, Globe, Lock, Zap } from '@lucide/svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import type { IndexerDefinition } from '#lib/types/indexer.js';
 
 	interface Props {
 		definitions: IndexerDefinition[];

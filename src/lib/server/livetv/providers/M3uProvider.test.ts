@@ -1,9 +1,9 @@
 import { describe, expect, it, vi, afterEach, beforeAll, afterAll } from 'vitest';
 import { deflateSync, gzipSync } from 'node:zlib';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../../test/db-helper';
-import { livetvAccounts, livetvChannels } from '$lib/server/db/schema';
+import { livetvAccounts, livetvChannels } from '#lib/server/db/schema.js';
 import { M3uProvider } from './M3uProvider';
-import type { LiveTvAccount } from '$lib/types/livetv';
+import type { LiveTvAccount } from '#lib/types/livetv.js';
 
 /**
  * In-memory database backing the livetv channel lookups fetchEpg performs.
@@ -11,7 +11,7 @@ import type { LiveTvAccount } from '$lib/types/livetv';
  */
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},

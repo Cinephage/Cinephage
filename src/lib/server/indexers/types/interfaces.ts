@@ -45,6 +45,14 @@ export interface IIndexer {
 	readonly enableInteractiveSearch: boolean;
 
 	/**
+	 * User-configured category restriction ("restrict searches to only these
+	 * categories"). Empty means no restriction - either it was never
+	 * configured, or the user explicitly chose "open search" - see
+	 * `restrictionAllowsSearchType()`, which treats both the same way.
+	 */
+	readonly additionalCategories: number[];
+
+	/**
 	 * Perform a search
 	 * @param criteria - Search criteria
 	 * @returns Release results

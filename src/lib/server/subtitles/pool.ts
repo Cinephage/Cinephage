@@ -15,7 +15,7 @@ import type { Subtitle } from './subtitle';
 import type { Video } from './video';
 import type { LanguageEquivalencePair } from './language';
 import { BaseSubtitleProvider } from './providers/BaseProvider';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'subtitles' as const });
 

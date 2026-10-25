@@ -122,10 +122,13 @@ export const DEFAULT_NAMING_CONFIG: NamingConfig = {
 };
 
 /**
- * Characters that are illegal in file/folder names
+ * Characters that are illegal in file/folder names. Includes '/' so token
+ * values (TMDB titles, release names) can never inject path separators into a
+ * generated name — format strings split on '/' deliberately, token output
+ * must not.
  */
 // eslint-disable-next-line no-control-regex
-const ILLEGAL_CHARS = /[<>"\\|?*\x00-\x1f]/g;
+const ILLEGAL_CHARS = new RegExp('[<>"\\\\|?*/\x00-\x1f]', 'g');
 
 /**
  * Smart colon replacement patterns
@@ -187,14 +190,18 @@ export class NamingService {
 	}
 
 	/**
-	 * Generate a season folder name
+	 * Generate a season folder name. The optional series context lets season
+	 * folder formats that reference series-level tokens ({Year}, {Title},
+	 * media IDs) render instead of collapsing to empty; without it only
+	 * season tokens resolve.
 	 */
-	generateSeasonFolderName(seasonNumber: number): string {
+	generateSeasonFolderName(seasonNumber: number, series?: Partial<MediaNamingInfo>): string {
 		if (seasonNumber === 0 && this.config.useSpecialsFolder) {
 			return 'Specials';
 		}
 		return this.formatName(this.config.seasonFolderFormat, {
 			title: '',
+			...series,
 			seasonNumber
 		});
 	}
@@ -253,7 +260,10 @@ export class NamingService {
 			const result = this.templateEngine.render(segment, info, this.config);
 			return this.cleanName(result);
 		});
-		return segments.filter((s) => s.length > 0).join('/');
+		// A '.'/'..' segment (e.g. a token rendering to exactly "..") would
+		// escape the library root once joined — drop it rather than trust
+		// external metadata.
+		return segments.filter((s) => s.length > 0 && s !== '.' && s !== '..').join('/');
 	}
 
 	/**
@@ -280,8 +290,11 @@ export class NamingService {
 		result = result.replace(/-{2,}/g, '-');
 		result = result.replace(/\s+-\s+-/g, ' -');
 
-		// Clean up trailing/leading dashes and spaces
-		result = result.replace(/^[\s-]+|[\s-]+$/g, '');
+		// Clean up trailing/leading dashes and spaces. Leading dots too - a
+		// segment starting with "." (e.g. a title literally beginning with an
+		// ellipsis, "...And Justice for All") makes that folder/file hidden on
+		// Linux/macOS, so media servers never see it (GitHub issue #616).
+		result = result.replace(/^[\s.-]+|[\s-]+$/g, '');
 
 		// Replace spaces if configured
 		if (this.config.replaceSpacesWith) {

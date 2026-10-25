@@ -9,14 +9,14 @@
 		Loader2,
 		AlertCircle,
 		ChevronRight
-	} from 'lucide-svelte';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
-	import TmdbImage from '$lib/components/tmdb/TmdbImage.svelte';
-	import * as m from '$lib/paraglide/messages.js';
-	import { getFileName } from '$lib/utils/format.js';
-	import { batchUnmatchedMatch } from '$lib/api/library.js';
-	import { searchTmdb } from '$lib/api/discover.js';
+	} from '@lucide/svelte';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
+	import TmdbImage from '#lib/components/tmdb/TmdbImage.svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { getFileName } from '#lib/utils/format.js';
+	import { batchUnmatchedMatch } from '#lib/api/library.js';
+	import { searchTmdb } from '#lib/api/discover.js';
 
 	interface UnmatchedFile {
 		id: string;

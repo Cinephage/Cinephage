@@ -1,21 +1,20 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getIndexerManager } from '$lib/server/indexers/IndexerManager';
-import { getNewznabCapabilitiesProvider } from '$lib/server/indexers/newznab/NewznabCapabilitiesProvider';
-import { indexerTestSchema } from '$lib/validation/schemas';
-import { mergeBlankSensitiveIndexerSettings } from '$lib/server/indexers/settingsSecrets';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
+import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
+import { getNewznabCapabilitiesProvider } from '#lib/server/indexers/newznab/NewznabCapabilitiesProvider.js';
+import { indexerTestSchema } from '#lib/validation/schemas.js';
+import { mergeBlankSensitiveIndexerSettings } from '#lib/server/indexers/settingsSecrets.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 import {
 	getJackettConnection,
 	isIndexerFromJackett,
 	normalizeJackettUrl
-} from '$lib/server/indexers/jackett/JackettConnectionService.js';
+} from '#lib/server/indexers/jackett/JackettConnectionService.js';
 import {
 	fetchProwlarrIndexers,
 	getProwlarrConnection,
 	isIndexerFromConnection,
 	normalizeProwlarrUrl
-} from '$lib/server/indexers/prowlarr/ProwlarrConnectionService.js';
+} from '#lib/server/indexers/prowlarr/ProwlarrConnectionService.js';
 
 function redactSensitiveDetails(message: string): string {
 	return message
@@ -151,13 +150,13 @@ export const POST: RequestHandler = async (event) => {
 	try {
 		data = await request.json();
 	} catch {
-		return json({ error: 'Invalid JSON body' }, { status: 400 });
+		return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
 	}
 
 	const result = indexerTestSchema.safeParse(data);
 
 	if (!result.success) {
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: 'Validation failed',
@@ -175,7 +174,7 @@ export const POST: RequestHandler = async (event) => {
 	// Verify the definition exists
 	const definition = manager.getDefinition(validated.definitionId);
 	if (!definition) {
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: `Unknown indexer definition: ${validated.definitionId}`
@@ -193,7 +192,7 @@ export const POST: RequestHandler = async (event) => {
 	if (indexerId) {
 		const existing = await manager.getIndexer(indexerId);
 		if (!existing) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: `Unknown indexer ID: ${indexerId}`
@@ -207,7 +206,7 @@ export const POST: RequestHandler = async (event) => {
 
 		// If Prowlarr has this indexer disabled, skip the test and tell the user where to fix it.
 		if (existing.upstreamEnabled === false) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: 'This indexer is disabled in Prowlarr. Enable it there first, then re-sync.'
@@ -271,14 +270,17 @@ export const POST: RequestHandler = async (event) => {
 		if (validated.definitionId === 'prowlarr' && settings.aggregate) {
 			const apiKey = extractApiKey(settings);
 			if (!apiKey) {
-				return json({ success: false, error: 'Prowlarr API key is missing.' }, { status: 400 });
+				return Response.json(
+					{ success: false, error: 'Prowlarr API key is missing.' },
+					{ status: 400 }
+				);
 			}
 			try {
 				await fetchProwlarrIndexers(validated.baseUrl, apiKey);
-				return json({ success: true });
+				return Response.json({ success: true });
 			} catch (e) {
 				const message = e instanceof Error ? e.message : 'Unable to connect to Prowlarr.';
-				return json({ success: false, error: message }, { status: 400 });
+				return Response.json({ success: false, error: message }, { status: 400 });
 			}
 		}
 
@@ -313,7 +315,7 @@ export const POST: RequestHandler = async (event) => {
 			indexerId
 		);
 
-		return json({ success: true });
+		return Response.json({ success: true });
 	} catch (e) {
 		const message = e instanceof Error ? e.message : 'Unknown error';
 		const lower = message.toLowerCase();
@@ -349,7 +351,7 @@ export const POST: RequestHandler = async (event) => {
 				} catch {
 					// Ignore - the error response below is still correct
 				}
-				return json(
+				return Response.json(
 					{
 						success: false,
 						error: `Indexer not found in ${source} - it was likely removed. Marked as deleted; enable it to run a connection test and restore it if it comes back.`
@@ -359,7 +361,7 @@ export const POST: RequestHandler = async (event) => {
 			}
 		}
 
-		return json(
+		return Response.json(
 			{ success: false, error: toFriendlyTestError(message, apiStandard) },
 			{ status: 400 }
 		);

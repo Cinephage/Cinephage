@@ -4,12 +4,12 @@ const fetchWithTimeoutMock = vi.fn();
 const resolveAndValidateUrlMock = vi.fn();
 const refreshStreamMock = vi.fn();
 
-vi.mock('$lib/server/http/ssrf-protection', () => ({
+vi.mock('#lib/server/http/ssrf-protection.js', () => ({
 	resolveAndValidateUrl: resolveAndValidateUrlMock,
 	fetchWithTimeout: fetchWithTimeoutMock
 }));
 
-vi.mock('$lib/server/livetv/streaming/StreamUrlCache.js', () => ({
+vi.mock('#lib/server/livetv/streaming/StreamUrlCache.js', () => ({
 	HLS_STREAM_TIMEOUT_MS: 20_000,
 	getStreamUrlCache: () => ({
 		getCached: vi.fn(),
@@ -18,7 +18,7 @@ vi.mock('$lib/server/livetv/streaming/StreamUrlCache.js', () => ({
 	})
 }));
 
-vi.mock('$lib/server/streaming/url', () => ({
+vi.mock('#lib/server/streaming/url.js', () => ({
 	getBaseUrlAsync: vi.fn().mockResolvedValue('http://cinephage.test')
 }));
 

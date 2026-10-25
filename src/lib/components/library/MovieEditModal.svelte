@@ -1,17 +1,17 @@
 <script lang="ts">
-	import { X, FolderOpen, Search, Layers, Trash2, Pencil, Info } from 'lucide-svelte';
-	import { FolderBrowser } from '$lib/components/library';
-	import type { LibraryMovie, DesiredQuality } from '$lib/types/library';
-	import { ModalWrapper, ModalFooter } from '$lib/components/ui/modal';
-	import { sortRootFoldersForMediaType } from '$lib/utils/root-folders.js';
-	import { isLikelyAnimeMedia } from '$lib/shared/anime-classification.js';
-	import { effectiveResolutions, redundantMovieFileIds } from '$lib/shared/best-file.js';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import * as m from '$lib/paraglide/messages.js';
-	import { formatBytes } from '$lib/utils/format.js';
-	import type { RootFolderWithSpace as RootFolder } from '$lib/types/downloadClient.js';
-	import { getLibraryClassificationSettings } from '$lib/api/settings.js';
-	import { getTmdb } from '$lib/api/discover.js';
+	import { X, FolderOpen, Search, Layers, Trash2, Pencil, Info } from '@lucide/svelte';
+	import { FolderBrowser } from '#lib/components/library/index.js';
+	import type { LibraryMovie, DesiredQuality } from '#lib/types/library.js';
+	import { ModalWrapper, ModalFooter } from '#lib/components/ui/modal/index.js';
+	import { sortRootFoldersForMediaType } from '#lib/utils/root-folders.js';
+	import { isLikelyAnimeMedia } from '#lib/shared/anime-classification.js';
+	import { effectiveResolutions, redundantMovieFileIds } from '#lib/shared/best-file.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import { formatBytes } from '#lib/utils/format.js';
+	import type { RootFolderWithSpace as RootFolder } from '#lib/types/downloadClient.js';
+	import { getLibraryClassificationSettings } from '#lib/api/settings.js';
+	import { getTmdb } from '#lib/api/discover.js';
 
 	interface QualityProfileOption {
 		id: string;

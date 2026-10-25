@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
-	import { invalidateAll } from '$app/navigation';
+	import { refreshAll } from '$app/navigation';
 	import { goto } from '$app/navigation';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import { formatDisplayDateShort } from '$lib/utils/format.js';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
-	import ModalHeader from '$lib/components/ui/modal/ModalHeader.svelte';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { formatDisplayDateShort } from '#lib/utils/format.js';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
+	import ModalHeader from '#lib/components/ui/modal/ModalHeader.svelte';
 	import {
 		ArrowLeft,
 		RefreshCw,
@@ -23,10 +23,10 @@
 		Library,
 		Globe,
 		Database
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 	import type { PageData } from './$types';
-	import * as m from '$lib/paraglide/messages.js';
-	import { refreshSmartList, addSmartListItems } from '$lib/api';
+	import * as m from '#lib/paraglide/messages.js';
+	import { refreshSmartList, addSmartListItems } from '#lib/api/index.js';
 
 	let { data }: { data: PageData } = $props();
 
@@ -108,7 +108,7 @@
 				throw new Error(result?.errorMessage ?? result?.error ?? 'Smart list refresh failed');
 			}
 
-			await invalidateAll();
+			await refreshAll();
 		} catch (error) {
 			const message = error instanceof Error ? error.message : m.smartlists_detail_refreshFailed();
 			toasts.error(m.smartlists_detail_refreshFailed(), { description: message });
@@ -140,7 +140,7 @@
 
 			toasts.success(m.smartlists_detail_addedToLibrary({ title }));
 			closeItemDetails();
-			await invalidateAll();
+			await refreshAll();
 		} catch (error) {
 			const message =
 				error instanceof Error ? error.message : m.smartlists_detail_failedToAddToLibrary();
@@ -162,7 +162,7 @@
 			});
 			toasts.success(m.smartlists_detail_excludedFromList({ title }));
 			closeItemDetails();
-			await invalidateAll();
+			await refreshAll();
 		} finally {
 			excludingIds.delete(tmdbId);
 			excludingIds = excludingIds;
@@ -180,7 +180,7 @@
 			});
 			toasts.success(m.smartlists_detail_includedInList({ title }));
 			closeItemDetails();
-			await invalidateAll();
+			await refreshAll();
 		} finally {
 			excludingIds.delete(tmdbId);
 			excludingIds = excludingIds;
@@ -220,7 +220,7 @@
 				);
 			}
 
-			await invalidateAll();
+			await refreshAll();
 		} catch (error) {
 			const message =
 				error instanceof Error ? error.message : m.smartlists_detail_failedToAddItems();
@@ -244,10 +244,9 @@
 			if (current === queryString) return;
 		}
 		goto(`/smartlists/${data.list.id}${queryString ? '?' + queryString : ''}`, {
-			invalidateAll: true,
-			keepFocus: options?.keepFocus ?? false,
-			noScroll: options?.keepFocus ?? false,
-			replaceState: options?.replaceState ?? false
+			refreshAll: true,
+			reset: !(options?.keepFocus ?? false),
+			replace: options?.replaceState ?? false
 		});
 	}
 
@@ -266,7 +265,7 @@
 	function goToPage(page: number) {
 		const params = new SvelteURLSearchParams(window.location.search);
 		params.set('page', String(page));
-		goto(`/smartlists/${data.list.id}?${params.toString()}`, { invalidateAll: true });
+		goto(`/smartlists/${data.list.id}?${params.toString()}`, { refreshAll: true });
 	}
 
 	const filteredItems = $derived(

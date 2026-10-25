@@ -14,10 +14,21 @@
 
 import { apiGet, apiPost, apiPut, apiDelete } from './client.js';
 
+/**
+ * A delay_profiles row as serialized by GET /api/settings/delay-profiles
+ * (a full DB row: JSON columns already parsed, timestamps as ISO strings).
+ */
 export interface DelayProfile {
 	id: string;
 	name: string;
 	sortOrder: number;
+	qualityProfileId: string | null;
+	scanMode: string;
+	scanConfig: {
+		intervalMinutes?: number;
+		scheduledTime?: string;
+		debounceSeconds?: number;
+	} | null;
 	enabled: boolean | null;
 	usenetDelay: number;
 	torrentDelay: number;
@@ -45,10 +56,11 @@ export interface DelayProfileInput {
 
 /**
  * List all delay profiles.
- * The endpoint returns the profiles array directly.
+ * The endpoint returns the bare profiles array, not the success/error envelope.
  */
 export async function listDelayProfiles(): Promise<DelayProfile[]> {
-	return apiGet<DelayProfile[]>('/api/settings/delay-profiles');
+	const response = await apiGet('/api/settings/delay-profiles');
+	return response as unknown as DelayProfile[];
 }
 
 /**

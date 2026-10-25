@@ -8,7 +8,7 @@ import {
 	subtitleHistory,
 	subtitleProviders,
 	subtitles
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 import type { SubtitleSearchResult } from '../types';
 import AdmZip from 'adm-zip';
 
@@ -37,7 +37,7 @@ const mockLogger = vi.hoisted(() => ({
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -47,12 +47,12 @@ vi.mock('$lib/server/db', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	logger: mockLogger,
 	createChildLogger: vi.fn(() => mockLogger)
 }));
 
-vi.mock('$lib/server/notifications/mediabrowser', () => ({
+vi.mock('#lib/server/notifications/mediabrowser/index.js', () => ({
 	getMediaBrowserNotifier: () => ({ queueUpdate: notifierQueueUpdateMock })
 }));
 

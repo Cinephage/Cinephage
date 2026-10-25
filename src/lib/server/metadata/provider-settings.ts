@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
-import { db } from '$lib/server/db/index.js';
-import { settings } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { settings } from '#lib/server/db/schema.js';
 import type { MetadataProviderConfig } from './providers/types.js';
 
 const PROVIDER_SETTINGS_KEY = 'metadata_providers';

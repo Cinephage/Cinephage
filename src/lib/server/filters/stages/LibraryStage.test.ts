@@ -5,7 +5,7 @@ import type { FilterContext } from '../types.js';
 const mockEnrich = vi.hoisted(() => vi.fn());
 const mockFilter = vi.hoisted(() => vi.fn());
 
-vi.mock('$lib/server/library/status.js', () => ({
+vi.mock('#lib/server/library/status.js', () => ({
 	enrichWithLibraryStatus: mockEnrich,
 	filterInLibrary: mockFilter
 }));

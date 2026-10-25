@@ -10,7 +10,7 @@
  */
 
 import { desc, eq, inArray } from 'drizzle-orm';
-import { db } from '$lib/server/db/index.js';
+import { db } from '#lib/server/db/index.js';
 import {
 	series,
 	seasons,
@@ -18,7 +18,7 @@ import {
 	episodeFiles,
 	alternateTitles,
 	rootFolders
-} from '$lib/server/db/schema.js';
+} from '#lib/server/db/schema.js';
 import { getOrAssignArrId, getOrAssignArrIds } from './ArrIdMappingService.js';
 import {
 	cleanTitleFor,
@@ -28,8 +28,8 @@ import {
 	tmdbPosterUrl
 } from './movieShape.js';
 import { deriveSeriesStatus } from './seriesShape.js';
-import { tmdb } from '$lib/server/tmdb.js';
-import { createChildLogger } from '$lib/logging';
+import { tmdb } from '#lib/server/tmdb.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 

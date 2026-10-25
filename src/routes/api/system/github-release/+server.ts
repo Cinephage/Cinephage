@@ -1,11 +1,10 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { createChildLogger } from '$lib/logging';
-import { ensureVersionPrefix } from '$lib/version.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { ensureVersionPrefix } from '#lib/version.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 
-const GITHUB_REPO = 'MoldyTaint/Cinephage';
+const GITHUB_REPO = 'cinephage/cinephage';
 const GITHUB_API_BASE = 'https://api.github.com';
 
 interface CachedRelease {
@@ -68,7 +67,7 @@ async function fetchLatestRelease(): Promise<CachedRelease> {
 export const GET: RequestHandler = async () => {
 	try {
 		const release = await fetchLatestRelease();
-		return json(
+		return Response.json(
 			{ success: true, ...release },
 			{
 				headers: {
@@ -78,6 +77,9 @@ export const GET: RequestHandler = async () => {
 		);
 	} catch (err) {
 		logger.error({ err }, 'Failed to fetch latest GitHub release');
-		return json({ success: false, error: 'Failed to fetch release info' }, { status: 502 });
+		return Response.json(
+			{ success: false, error: 'Failed to fetch release info' },
+			{ status: 502 }
+		);
 	}
 };

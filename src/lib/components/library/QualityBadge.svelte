@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { QualityInfo, MediaInfo } from '$lib/types/library';
-	import { getQualityDisplay, getHdrDisplay } from '$lib/types/library';
+	import type { QualityInfo, MediaInfo } from '#lib/types/library.js';
+	import { getQualityDisplay, getHdrDisplay } from '#lib/types/library.js';
 
 	interface Props {
 		quality: QualityInfo | null;

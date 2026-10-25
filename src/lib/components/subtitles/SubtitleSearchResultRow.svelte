@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Download, Check, AlertCircle, Hash, Ear } from 'lucide-svelte';
+	import { Download, Check, AlertCircle, Hash, Ear } from '@lucide/svelte';
 	import SubtitleBadge from './SubtitleBadge.svelte';
 
 	interface SubtitleResult {

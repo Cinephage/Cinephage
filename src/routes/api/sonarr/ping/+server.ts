@@ -1,6 +1,5 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { requireArrCompatEnabled } from '$lib/server/arr/requireArrCompatEnabled.js';
+import { requireArrCompatEnabled } from '#lib/server/arr/requireArrCompatEnabled.js';
 
 /**
  * GET /api/sonarr/ping
@@ -15,5 +14,5 @@ export const GET: RequestHandler = async () => {
 	const disabledError = requireArrCompatEnabled();
 	if (disabledError) return disabledError;
 
-	return json({ status: 'OK' });
+	return Response.json({ status: 'OK' });
 };

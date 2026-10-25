@@ -1,9 +1,9 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
-	import type { SmartListFilters } from '$lib/server/db/schema.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import type { SmartListFilters } from '#lib/server/db/schema.js';
 	import { page } from '$app/state';
-	import { TMDB } from '$lib/config/constants.js';
-	import { getSmartListHelpers } from '$lib/api/smartlists.js';
+	import { TMDB } from '#lib/config/constants.js';
+	import { getSmartListHelpers } from '#lib/api/smartlists.js';
 	import GenreFilter from './GenreFilter.svelte';
 	import ChipSelector from './ChipSelector.svelte';
 	import NumericRangeFilter from './NumericRangeFilter.svelte';

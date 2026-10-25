@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { DesiredQuality } from '$lib/types/library.js';
+	import type { DesiredQuality } from '#lib/types/library.js';
 
 	interface Props {
 		desiredQualities: DesiredQuality[];

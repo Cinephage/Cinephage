@@ -6,17 +6,18 @@
  */
 
 import { and, eq, inArray, lte, sql } from 'drizzle-orm';
-import { db } from '$lib/server/db';
-import { epgPrograms, livetvAccounts, type LivetvAccountRecord } from '$lib/server/db/schema';
-import { createChildLogger } from '$lib/logging';
-import { toFriendlyLiveTvTestError } from '$lib/livetv/errorMessages';
-import { randomUUID } from 'node:crypto';
+import { db } from '#lib/server/db/index.js';
+import { epgPrograms, livetvAccounts, type LivetvAccountRecord } from '#lib/server/db/schema.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { toFriendlyLiveTvTestError } from '#lib/livetv/errorMessages.js';
+import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { getProvider, getProviderForAccount } from './providers';
 import { probeStalkerEndpoint } from './stalker/StalkerPortalClient';
-import { normalizeTmdbLanguage } from '$lib/server/languages/normalize.js';
+import { normalizeTmdbLanguage } from '#lib/server/languages/normalize.js';
 import { liveTvEvents } from './LiveTvEvents';
-import type { BackgroundService, ServiceStatus } from '$lib/server/services/background-service.js';
-import { ExternalServiceError } from '$lib/errors';
+import { decryptLivetvConfig, encryptLivetvConfig } from './configCrypto';
+import type { BackgroundService, ServiceStatus } from '#lib/server/services/background-service.js';
+import { ExternalServiceError } from '#lib/errors/index.js';
 import type {
 	LiveTvAccount,
 	LiveTvAccountInput,
@@ -27,32 +28,30 @@ import type {
 	XstreamConfig,
 	M3uConfig,
 	CinephageIptvConfig
-} from '$lib/types/livetv';
+} from '#lib/types/livetv.js';
 
 const logger = createChildLogger({ module: 'LiveTvAccountManager' });
 
 /**
- * Generate a random serial number (like MAG devices use)
+ * Generate a random serial number (like MAG devices use).
+ * Stalker portals treat these as device identity — use the CSPRNG, not
+ * Math.random, so one account's device identity is not guessable from
+ * another's.
  */
 function generateSerialNumber(): string {
 	const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 	let sn = '';
 	for (let i = 0; i < 12; i++) {
-		sn += chars[Math.floor(Math.random() * chars.length)];
+		sn += chars[randomInt(chars.length)];
 	}
 	return sn;
 }
 
 /**
- * Generate a random device ID (like MAG devices use)
+ * Generate a random device ID (like MAG devices use).
  */
 function generateDeviceId(): string {
-	const chars = 'ABCDEF0123456789';
-	let id = '';
-	for (let i = 0; i < 32; i++) {
-		id += chars[Math.floor(Math.random() * chars.length)];
-	}
-	return id;
+	return randomBytes(16).toString('hex').toUpperCase();
 }
 
 /**
@@ -65,10 +64,26 @@ export function recordToAccount(record: LivetvAccountRecord): LiveTvAccount {
 		name: record.name,
 		providerType: record.providerType as LiveTvProviderType,
 		enabled: record.enabled ?? true,
-		// Provider configs
-		stalkerConfig: record.stalkerConfig ?? undefined,
-		xstreamConfig: record.xstreamConfig ?? undefined,
-		m3uConfig: record.m3uConfig ?? undefined,
+		// Provider configs (credential fields are enveloped at rest; decrypted
+		// here for the API/service layer)
+		stalkerConfig: record.stalkerConfig
+			? (decryptLivetvConfig(
+					record.id,
+					record.stalkerConfig as unknown as Record<string, unknown>
+				) as unknown as StalkerConfig)
+			: undefined,
+		xstreamConfig: record.xstreamConfig
+			? (decryptLivetvConfig(
+					record.id,
+					record.xstreamConfig as unknown as Record<string, unknown>
+				) as unknown as XstreamConfig)
+			: undefined,
+		m3uConfig: record.m3uConfig
+			? (decryptLivetvConfig(
+					record.id,
+					record.m3uConfig as unknown as Record<string, unknown>
+				) as unknown as M3uConfig)
+			: undefined,
 		cinephageIptvConfig: record.iptvOrgConfig as CinephageIptvConfig | undefined,
 		// Metadata from provider
 		playbackLimit: record.playbackLimit ?? null,
@@ -389,15 +404,32 @@ export class LiveTvAccountManager implements BackgroundService {
 			}
 		}
 
-		// Prepare insert data
+		// Prepare insert data (credential fields encrypted at rest, bound to the
+		// account id via AAD)
+		const accountId = randomUUID();
 		const insertData: typeof livetvAccounts.$inferInsert = {
-			id: randomUUID(),
+			id: accountId,
 			name: input.name,
 			providerType: input.providerType,
 			enabled: input.enabled ?? true,
-			stalkerConfig,
-			xstreamConfig,
-			m3uConfig,
+			stalkerConfig: stalkerConfig
+				? (encryptLivetvConfig(
+						accountId,
+						stalkerConfig as unknown as Record<string, unknown>
+					) as unknown as StalkerConfig)
+				: stalkerConfig,
+			xstreamConfig: xstreamConfig
+				? (encryptLivetvConfig(
+						accountId,
+						xstreamConfig as unknown as Record<string, unknown>
+					) as unknown as XstreamConfig)
+				: xstreamConfig,
+			m3uConfig: m3uConfig
+				? (encryptLivetvConfig(
+						accountId,
+						m3uConfig as unknown as Record<string, unknown>
+					) as unknown as M3uConfig)
+				: m3uConfig,
 			iptvOrgConfig,
 			createdAt: now,
 			updatedAt: now
@@ -469,14 +501,17 @@ export class LiveTvAccountManager implements BackgroundService {
 				mergedConfig.endpoint = await probeStalkerEndpoint(updates.stalkerConfig.portalUrl);
 			}
 
-			updateData.stalkerConfig = mergedConfig;
+			updateData.stalkerConfig = encryptLivetvConfig(
+				id,
+				mergedConfig as unknown as Record<string, unknown>
+			) as unknown as StalkerConfig;
 		}
 
 		if (updates.xstreamConfig && existing.providerType === 'xstream') {
-			updateData.xstreamConfig = {
+			updateData.xstreamConfig = encryptLivetvConfig(id, {
 				...existing.xstreamConfig,
 				...updates.xstreamConfig
-			} as XstreamConfig;
+			} as unknown as Record<string, unknown>) as unknown as XstreamConfig;
 		}
 
 		if (updates.m3uConfig && existing.providerType === 'm3u') {
@@ -496,7 +531,10 @@ export class LiveTvAccountManager implements BackgroundService {
 				mergedM3uConfig.epgUrl = nextEpgUrl || undefined;
 			}
 
-			updateData.m3uConfig = mergedM3uConfig;
+			updateData.m3uConfig = encryptLivetvConfig(
+				id,
+				mergedM3uConfig as unknown as Record<string, unknown>
+			) as M3uConfig;
 
 			if (purgeAccountEpgData) {
 				// Force fresh EPG state when source changes/clears.

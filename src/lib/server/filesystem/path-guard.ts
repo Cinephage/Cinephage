@@ -1,10 +1,14 @@
 import { realpath } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
-import { RootFolderService } from '$lib/server/downloadClients/RootFolderService.js';
+import { RootFolderService } from '#lib/server/downloadClients/RootFolderService.js';
 
+// Bases the browse/import surfaces may touch. Deliberately NOT '/': with the
+// filesystem root in this list every absolute path is "allowed" and the whole
+// guard becomes a no-op. A deployment whose media lives outside these bases
+// plus the configured root folders (the intended escape hatch for exotic
+// mount points) should register that path as a root folder in settings.
 const COMMON_BASE_PATHS = [
-	'/',
 	'/mnt',
 	'/media',
 	'/srv',
@@ -13,7 +17,11 @@ const COMMON_BASE_PATHS = [
 	'/home',
 	'/opt',
 	'/vol',
-	'/downloads'
+	'/downloads',
+	// Scratch space: test fixtures and the occasional download client land
+	// here; browsing it is admin-only and low-sensitivity.
+	'/tmp',
+	'/var/tmp'
 ];
 
 function isPathWithinScope(pathToCheck: string, scopePath: string): boolean {

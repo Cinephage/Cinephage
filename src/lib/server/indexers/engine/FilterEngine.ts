@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import type { FilterBlock } from '../schema/yamlDefinition';
 import type { TemplateEngine } from './TemplateEngine';
 import { createSafeRegex, safeMatch, safeReplace } from './safeRegex';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 import { parse as dateParse } from 'date-format-parse';
 
 const logger = createChildLogger({ logDomain: 'indexers' as const });
@@ -24,6 +24,12 @@ export type FilterFunction = (
  */
 function parseDateWithLayout(dateStr: string, layout: string): Date | null {
 	if (!dateStr || !layout) return null;
+
+	// date-format-parse matches literal whitespace in the layout exactly, so
+	// incidental leading/trailing whitespace or doubled spaces (common in
+	// pretty-printed RSS/XML pubDate text nodes) fails to parse even though
+	// the date is perfectly well-formed.
+	dateStr = dateStr.trim().replace(/[ \t]+/g, ' ');
 
 	// Handle special unix layouts
 	if (layout === 'unix' || layout === 'Unix') {

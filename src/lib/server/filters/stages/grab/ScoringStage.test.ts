@@ -5,13 +5,13 @@ import { makeGrabDecisionContext } from '../../../../../test/fixtures/filters.js
 const mockParse = vi.hoisted(() => vi.fn());
 const mockCalculateEnhancedScore = vi.hoisted(() => vi.fn());
 
-vi.mock('$lib/server/indexers/parser/ReleaseParser.js', () => ({
+vi.mock('#lib/server/indexers/parser/ReleaseParser.js', () => ({
 	ReleaseParser: class {
 		parse = mockParse;
 	}
 }));
 
-vi.mock('$lib/server/quality/QualityFilter.js', () => ({
+vi.mock('#lib/server/quality/QualityFilter.js', () => ({
 	qualityFilter: { calculateEnhancedScore: mockCalculateEnhancedScore }
 }));
 

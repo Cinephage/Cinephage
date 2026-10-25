@@ -12,13 +12,13 @@ import {
 	type ErrorResponse,
 	type DeleteResponse
 } from '../../../test/api-helper';
-import { scoringProfiles } from '$lib/server/db/schema';
+import { scoringProfiles } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { DEFAULT_PROFILES } from '$lib/server/scoring';
+import { DEFAULT_PROFILES } from '#lib/server/scoring/index.js';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -28,7 +28,7 @@ vi.mock('$lib/server/db', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/quality', () => ({
+vi.mock('#lib/server/quality/index.js', () => ({
 	qualityFilter: {
 		clearProfileCache: vi.fn()
 	}
@@ -42,7 +42,7 @@ const mockLogger = vi.hoisted(() => ({
 	child: vi.fn().mockReturnThis()
 }));
 
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	logger: mockLogger,
 	createChildLogger: vi.fn(() => mockLogger)
 }));

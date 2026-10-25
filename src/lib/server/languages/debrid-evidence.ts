@@ -12,10 +12,10 @@
  * must never block or slow a grab decision beyond the single probe call.
  */
 
-import type { ProviderFile } from '$lib/server/downloadClients/debrid/debrid-adapter';
-import { extractLanguagesFromFileName } from '$lib/server/indexers/parser/patterns/language';
-import { getDownloadClientManager } from '$lib/server/downloadClients/DownloadClientManager';
-import { createChildLogger } from '$lib/logging';
+import type { ProviderFile } from '#lib/server/downloadClients/debrid/debrid-adapter.js';
+import { extractLanguagesFromFileName } from '#lib/server/indexers/parser/patterns/language.js';
+import { getDownloadClientManager } from '#lib/server/downloadClients/DownloadClientManager.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'downloads' as const });
 

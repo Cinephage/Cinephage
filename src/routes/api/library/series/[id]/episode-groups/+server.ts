@@ -3,16 +3,15 @@
  * Returns available TMDB episode groups for a series and the currently selected group.
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { db } from '$lib/server/db/index.js';
-import { series } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { series } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 import {
 	fetchEpisodeGroups,
 	buildEpisodeGroupInfoList
-} from '$lib/server/metadata/EpisodeGroupService.js';
+} from '#lib/server/metadata/EpisodeGroupService.js';
 
 const logger = createChildLogger({ module: 'LibrarySeriesEpisodeGroupsApi', logDomain: 'scans' });
 
@@ -27,13 +26,13 @@ export const GET: RequestHandler = async ({ params }) => {
 			.where(eq(series.id, params.id));
 
 		if (!seriesItem) {
-			return json({ success: false, error: 'Series not found' }, { status: 404 });
+			return Response.json({ success: false, error: 'Series not found' }, { status: 404 });
 		}
 
 		const groupsResponse = await fetchEpisodeGroups(seriesItem.tmdbId);
 		const groups = buildEpisodeGroupInfoList(groupsResponse, seriesItem.episodeGroupId ?? null);
 
-		return json({
+		return Response.json({
 			success: true,
 			episodeGroups: groups,
 			selectedGroupId: seriesItem.episodeGroupId ?? null
@@ -43,7 +42,7 @@ export const GET: RequestHandler = async ({ params }) => {
 			'[EpisodeGroups] Failed to fetch episode groups',
 			error instanceof Error ? error : undefined
 		);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to fetch episode groups'

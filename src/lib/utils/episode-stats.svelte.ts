@@ -3,7 +3,7 @@
  * Single source of truth for episode counts and progress calculations
  */
 
-import { todayDateString } from '$lib/utils/format.js';
+import { todayDateString } from '#lib/utils/format.js';
 
 export interface EpisodeStats {
 	totalAired: number;

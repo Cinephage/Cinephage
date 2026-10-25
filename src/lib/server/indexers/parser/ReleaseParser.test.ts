@@ -10,6 +10,36 @@ import { extractReleaseGroup } from './patterns/releaseGroup';
 
 describe('ReleaseParser', () => {
 	describe('Movie Releases', () => {
+		it.each([
+			[
+				"Straight Outta Compton (2015-Director's Cut)",
+				'Straight Outta Compton',
+				2015,
+				"Director's Cut"
+			],
+			['Se7en (1995-Remastered)', 'Se7en', 1995, 'Remastered'],
+			[
+				"Gods and Generals (2003-Extended Director's Cut)",
+				'Gods and Generals',
+				2003,
+				"Director's Cut"
+			],
+			['Aquaman (2018-Imax)', 'Aquaman', 2018, 'IMAX'],
+			['Alien (1979-Theatrical Cut)', 'Alien', 1979, 'Theatrical'],
+			['Se7en (1995 Remastered)', 'Se7en', 1995, 'Remastered'],
+			[
+				"Straight Outta Compton (2015 Director's Cut)",
+				'Straight Outta Compton',
+				2015,
+				"Director's Cut"
+			]
+		])('parses year and edition from %s', (filename, cleanTitle, year, edition) => {
+			const result = parseRelease(filename);
+			expect(result.cleanTitle).toBe(cleanTitle);
+			expect(result.year).toBe(year);
+			expect(result.edition).toBe(edition);
+		});
+
 		it('should parse a standard movie release', () => {
 			const result = parseRelease('The.Matrix.1999.1080p.BluRay.x264-GROUP');
 
@@ -658,6 +688,22 @@ describe('ReleaseParser', () => {
 			expect(extractResolution('SD')?.resolution).toBe('480p');
 		});
 
+		it('should prefer an explicit resolution over a UHD/4K marketing alias in the same title', () => {
+			// A 1080p encode sourced from UHD/4K media - the title states
+			// both, but the explicit "1080p" is what the release actually is.
+			expect(
+				extractResolution('A Bronx Tale 1993 1080p UHD BluRay FLAC 2.0 DV HDR x265-PTer')
+					?.resolution
+			).toBe('1080p');
+			expect(extractResolution('Movie.2021.720p.UHD.BluRay.x264-GROUP')?.resolution).toBe('720p');
+			expect(extractResolution('Movie.2021.4K.1080p.BluRay.x264-GROUP')?.resolution).toBe('1080p');
+
+			// Alias-only titles (no explicit numeric resolution) must still
+			// resolve to 2160p.
+			expect(extractResolution('Movie 2021 UHD BluRay REMUX')?.resolution).toBe('2160p');
+			expect(extractResolution('Movie 2021 4K BluRay REMUX')?.resolution).toBe('2160p');
+		});
+
 		it('should detect all source variants', () => {
 			expect(extractSource('REMUX')?.source).toBe('remux');
 			expect(extractSource('BluRay')?.source).toBe('bluray');
@@ -700,6 +746,50 @@ describe('ReleaseParser', () => {
 			expect(extractEnhancedAudio('AC3').codec).toBe('dd');
 			expect(extractEnhancedAudio('AAC').codec).toBe('aac');
 			expect(extractEnhancedAudio('FLAC').codec).toBe('flac');
+		});
+
+		it('should detect codecs with channel digits glued on (#585)', () => {
+			// Releases routinely glue the channel spec straight onto the codec
+			// token (FLAC1.0, DTSHDMA7.1) and a trailing \b never matches there.
+			expect(extractEnhancedAudio('FLAC1.0').codec).toBe('flac');
+			expect(extractEnhancedAudio('FLAC.1.0').codec).toBe('flac');
+			expect(extractEnhancedAudio('LPCM7.1').codec).toBe('pcm');
+			expect(extractEnhancedAudio('PCM2.0').codec).toBe('pcm');
+			expect(extractEnhancedAudio('DTSHDMA7.1').codec).toBe('dts-hdma');
+			expect(extractEnhancedAudio('DTS-HDMA7.1').codec).toBe('dts-hdma');
+			expect(extractEnhancedAudio('DTS-HD.MA.5.1').codec).toBe('dts-hdma');
+			expect(extractEnhancedAudio('DTS-HD7.1').codec).toBe('dts-hd');
+			expect(extractEnhancedAudio('DTS-HD-HRA7.1').codec).toBe('dts-hd-hra');
+			expect(extractEnhancedAudio('DTS-ES6.1').codec).toBe('dts-es');
+			expect(extractEnhancedAudio('DTSX5.1').codec).toBe('dts-x');
+			expect(extractEnhancedAudio('EAC35.1').codec).toBe('dd+');
+			expect(extractEnhancedAudio('AC35.1').codec).toBe('dd');
+			expect(extractEnhancedAudio('DolbyDigitalPlus5.1').codec).toBe('dd+');
+			expect(extractEnhancedAudio('DolbyDigital5.1').codec).toBe('dd');
+			expect(extractEnhancedAudio('DTS5.1').codec).toBe('dts');
+			expect(extractEnhancedAudio('MP3 320kbps').codec).toBe('mp3');
+		});
+
+		it('should still parse channels glued after letter-ending codecs (#585)', () => {
+			expect(extractEnhancedAudio('FLAC1.0').channels).toBe('1.0');
+			expect(extractEnhancedAudio('LPCM7.1').channels).toBe('7.1');
+			// AC3-style codecs end in a digit themselves, so the channel guard
+			// still cannot see the glued spec; codec detection is what scoring
+			// depends on.
+			expect(extractEnhancedAudio('EAC35.1').channels).toBe('unknown');
+		});
+
+		it('should detect Atmos glued to codec tokens and channel digits (#585)', () => {
+			expect(extractEnhancedAudio('TrueHDAtmos7.1').hasAtmos).toBe(true);
+			expect(extractEnhancedAudio('Atmos7.1').hasAtmos).toBe(true);
+			expect(extractEnhancedAudio('TrueHD.Atmos.7.1').hasAtmos).toBe(true);
+			expect(extractEnhancedAudio('Atmospheric.Disaster.2020.1080p').hasAtmos).toBe(false);
+		});
+
+		it('should parse FLAC1.0 inside a full release title (#585)', () => {
+			const parsed = parseRelease('And.Justice.for.All.1979.1080p.BluRay.FLAC1.0.x264-ZoroSenpai');
+			expect(parsed.audioCodec).toBe('flac');
+			expect(parsed.audioChannels).toBe('1.0');
 		});
 
 		it('should detect HDR formats', () => {
@@ -974,6 +1064,36 @@ describe('ReleaseParser', () => {
 
 			expect(result.cleanTitle).toContain('Demon Slayer');
 			expect(result.resolution).toBe('1080p');
+		});
+
+		it('keeps a dual-language alternate title joined with " / " intact (movie)', () => {
+			// Reported identity-mismatch false positive: the release joins a
+			// Russian primary title with its English alternate via " / ".
+			// cleanTitle deliberately keeps both segments, SearchOrchestrator's
+			// alias matching relies on the alternate segment surviving here;
+			// release-identity.ts's matchReleaseToTarget is what scores each
+			// segment separately against the library's title (see its tests).
+			const result = parseRelease(
+				'Зловещие Мертвецы 3: Армия Тьмы / Army of Darkness (1992) BDRip [H.264/1080p] [Theatrical Cut]',
+				{ mode: 'movie' }
+			);
+
+			expect(result.cleanTitle).toBe('Зловещие Мертвецы 3: Армия Тьмы / Army of Darkness');
+			expect(result.year).toBe(1992);
+		});
+
+		it('recovers a title that comes after a leading "Season N Episode M" marker (TV)', () => {
+			// Reported identity-mismatch false positive: extractTitleBeforeEpisode
+			// cut at the leading episode marker (index 0), leaving cleanTitle
+			// empty. The title is recovered from between that marker and the
+			// next one instead.
+			const result = parseRelease(
+				'Season 2 Episode 4 - Гангстерленд / MobLand / - S2E1-4 - 2026 / DUB, 4 x MVO, 2 x DVO, Sub / 4K, HEVC, SDR / WEBDL 2160p'
+			);
+
+			expect(result.cleanTitle).toBe('Гангстерленд / Mobland');
+			expect(result.episode?.season).toBe(2);
+			expect(result.episode?.episodes).toEqual([4]);
 		});
 	});
 

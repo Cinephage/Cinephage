@@ -1,9 +1,8 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { db } from '$lib/server/db/index.js';
-import { episodes } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { episodes } from '#lib/server/db/schema.js';
 import { eq, inArray, and } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LibraryEpisodesBatchApi', logDomain: 'scans' });
 
@@ -26,7 +25,7 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		const { episodeIds, seriesId, seasonNumber, monitored } = body;
 
 		if (typeof monitored !== 'boolean') {
-			return json(
+			return Response.json(
 				{ success: false, error: 'monitored field is required and must be a boolean' },
 				{ status: 400 }
 			);
@@ -58,19 +57,19 @@ export const PATCH: RequestHandler = async ({ request }) => {
 
 			updatedCount = result.changes;
 		} else {
-			return json(
+			return Response.json(
 				{ success: false, error: 'Either episodeIds or seriesId must be provided' },
 				{ status: 400 }
 			);
 		}
 
-		return json({
+		return Response.json({
 			success: true,
 			updatedCount
 		});
 	} catch (error) {
 		logger.error('[API] Error batch updating episodes', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to batch update episodes'

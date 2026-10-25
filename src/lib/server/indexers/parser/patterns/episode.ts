@@ -540,15 +540,38 @@ export function isTvRelease(title: string): boolean {
  * @param title - Full release title
  * @returns Title portion before any episode markers
  */
-export function extractTitleBeforeEpisode(title: string): string {
-	// Find earliest match index
-	let earliestIndex = title.length;
+function earliestEpisodeMatch(text: string): { index: number; end: number } | null {
+	let earliestIndex = text.length;
+	let earliestEnd = text.length;
 
 	for (const { pattern } of EPISODE_PATTERNS) {
-		const match = title.match(pattern);
+		const match = text.match(pattern);
 		if (match && match.index !== undefined && match.index < earliestIndex) {
 			earliestIndex = match.index;
+			earliestEnd = match.index + match[0].length;
 		}
+	}
+
+	return earliestIndex < text.length ? { index: earliestIndex, end: earliestEnd } : null;
+}
+
+export function extractTitleBeforeEpisode(title: string): string {
+	const leading = earliestEpisodeMatch(title);
+	const earliestIndex = leading?.index ?? title.length;
+
+	// Some trackers front-load episode info ("Season 2 Episode 4 - Show
+	// Name / ..."), leaving nothing before the marker to use as a title.
+	// Fall back to the segment between that marker and the next one (if
+	// any) instead of returning an empty string.
+	if (leading && leading.index === 0 && leading.end < title.length) {
+		const remainder = title.slice(leading.end);
+		const next = earliestEpisodeMatch(remainder);
+		const candidate = remainder
+			.slice(0, next?.index ?? remainder.length)
+			.trim()
+			.replace(/^[\s._\-–—/]+|[\s._\-–—/]+$/g, '')
+			.trim();
+		if (candidate) return candidate;
 	}
 
 	// Trim, then strip trailing separators left behind by the cut

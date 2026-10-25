@@ -1,18 +1,20 @@
 import { EventEmitter } from 'node:events';
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import type { ServiceStatus, BackgroundService } from '$lib/server/services/background-service.js';
-import { db } from '$lib/server/db';
+import type { ServiceStatus, BackgroundService } from '#lib/server/services/background-service.js';
+import type { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
+import { db } from '#lib/server/db/index.js';
 import {
 	episodeFiles,
 	episodes,
+	mediaBrowserServers,
 	mediaServerSyncedItems,
 	movies,
 	movieFiles,
 	series,
 	storageItemServerLinks,
 	storageItems
-} from '$lib/server/db/schema';
-import { createChildLogger } from '$lib/logging';
+} from '#lib/server/db/schema.js';
+import { createChildLogger } from '#lib/logging/index.js';
 import { logicalKey } from './matchers.js';
 import type { ReconcileResult } from '../types.js';
 
@@ -44,6 +46,15 @@ type SourceRow = {
 	episodeFileId: string | null;
 	rootFolderId: string | null;
 	libraryId: string | null;
+	/**
+	 * Movie rows only (null for episodes). Used as a fallback match key for
+	 * media-server sync rows whose own TMDB resolution failed but which
+	 * still carry an IMDB id - see unmatchedServerMoviesByImdbId in
+	 * reconcile(). Without this, a movie present on both sides falsely
+	 * reports as "missing from your media server" whenever the server's
+	 * metadata agent couldn't resolve TMDB for it (GitHub #601).
+	 */
+	imdbId: string | null;
 };
 
 const CHUNK_SIZE = 500;
@@ -62,6 +73,9 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 	private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 	private listenersAttached = false;
 	private attachPromise: Promise<void> | null = null;
+	private attachedScheduler: EventEmitter | null = null;
+	private attachedStatsSync: EventEmitter | null = null;
+	private attachedLibraryEvents: typeof libraryMediaEvents | null = null;
 
 	get status(): ServiceStatus {
 		return this._status;
@@ -110,25 +124,30 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 		// Track the combined Promise so stop() can await completion before detaching,
 		// preventing orphaned listeners if stop() is called while imports are in-flight.
 		this.attachPromise = Promise.all([
-			import('$lib/server/library/library-scheduler.js')
+			import('#lib/server/library/library-scheduler.js')
 				.then(({ getLibraryScheduler }) => {
-					getLibraryScheduler().on('scanComplete', this.handleScanComplete);
+					const scheduler = getLibraryScheduler();
+					scheduler.on('scanComplete', this.handleScanComplete);
+					this.attachedScheduler = scheduler;
 				})
 				.catch((e) => {
 					logger.error('[ReconciliationService] failed to subscribe to scanComplete', e);
 				}),
-			import('$lib/server/mediaServerStats/MediaServerStatsSyncService.js')
+			import('#lib/server/mediaServerStats/MediaServerStatsSyncService.js')
 				.then(({ getMediaServerStatsSyncService }) => {
-					getMediaServerStatsSyncService().on('syncComplete', this.handleSyncComplete);
+					const statsSync = getMediaServerStatsSyncService();
+					statsSync.on('syncComplete', this.handleSyncComplete);
+					this.attachedStatsSync = statsSync;
 				})
 				.catch((e) => {
 					logger.error('[ReconciliationService] failed to subscribe to syncComplete', e);
 				}),
 			// Subscribe to library data mutations triggered by downloads/imports (NOT
 			// disk scans, those are handled by scanComplete with a proper rootFolderId).
-			import('$lib/server/library/LibraryMediaEvents.js')
+			import('#lib/server/library/LibraryMediaEvents.js')
 				.then(({ libraryMediaEvents }) => {
 					libraryMediaEvents.onLibraryDataChanged(this.handleLibraryDataChanged);
+					this.attachedLibraryEvents = libraryMediaEvents;
 				})
 				.catch((e) => {
 					logger.error('[ReconciliationService] failed to subscribe to library:data-changed', e);
@@ -139,27 +158,17 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 	private detachListeners(): void {
 		if (!this.listenersAttached) return;
 		this.listenersAttached = false;
-		void import('$lib/server/library/library-scheduler.js')
-			.then(({ getLibraryScheduler }) => {
-				getLibraryScheduler().off('scanComplete', this.handleScanComplete);
-			})
-			.catch((e) => {
-				logger.error('[ReconciliationService] failed to unsubscribe from scanComplete', e);
-			});
-		void import('$lib/server/mediaServerStats/MediaServerStatsSyncService.js')
-			.then(({ getMediaServerStatsSyncService }) => {
-				getMediaServerStatsSyncService().off('syncComplete', this.handleSyncComplete);
-			})
-			.catch((e) => {
-				logger.error('[ReconciliationService] failed to unsubscribe from syncComplete', e);
-			});
-		void import('$lib/server/library/LibraryMediaEvents.js')
-			.then(({ libraryMediaEvents }) => {
-				libraryMediaEvents.offLibraryDataChanged(this.handleLibraryDataChanged);
-			})
-			.catch((e) => {
-				logger.error('[ReconciliationService] failed to unsubscribe from library:data-changed', e);
-			});
+		// Use the references captured on attach rather than re-importing: a fresh
+		// dynamic import here can fail if the module runner's transport has
+		// already been torn down (Vite dev SSR, "transport was disconnected"),
+		// or could even resolve to a different post-reload module instance,
+		// silently targeting the wrong emitter and leaking the real listener.
+		this.attachedScheduler?.off('scanComplete', this.handleScanComplete);
+		this.attachedScheduler = null;
+		this.attachedStatsSync?.off('syncComplete', this.handleSyncComplete);
+		this.attachedStatsSync = null;
+		this.attachedLibraryEvents?.offLibraryDataChanged(this.handleLibraryDataChanged);
+		this.attachedLibraryEvents = null;
 	}
 
 	/**
@@ -285,6 +294,7 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 
 			let localRows: SourceRow[];
 			let serverItemRows: Array<typeof mediaServerSyncedItems.$inferSelect>;
+			let unmatchedServerMovieRows: Array<typeof mediaServerSyncedItems.$inferSelect>;
 			let existingItems: Array<{
 				id: string;
 				itemType: string;
@@ -322,35 +332,39 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 					.select({ id: storageItems.id })
 					.from(storageItems)
 					.where(eq(storageItems.rootFolderId, scope.rootFolderId));
-				[serverItemRows, existingItems, existingLinks] = await Promise.all([
-					this.loadServerItemsForTmdbIds(folderTmdbIds),
-					db
-						.select(existingItemsSelect)
-						.from(storageItems)
-						.where(eq(storageItems.rootFolderId, scope.rootFolderId)),
-					db
-						.select({
-							storageItemId: storageItemServerLinks.storageItemId,
-							serverId: storageItemServerLinks.serverId,
-							syncedItemId: storageItemServerLinks.syncedItemId
-						})
-						.from(storageItemServerLinks)
-						.where(inArray(storageItemServerLinks.storageItemId, folderLinkSubquery))
-				]);
+				[serverItemRows, unmatchedServerMovieRows, existingItems, existingLinks] =
+					await Promise.all([
+						this.loadServerItemsForTmdbIds(folderTmdbIds),
+						this.loadUnmatchedServerMovieItems(),
+						db
+							.select(existingItemsSelect)
+							.from(storageItems)
+							.where(eq(storageItems.rootFolderId, scope.rootFolderId)),
+						db
+							.select({
+								storageItemId: storageItemServerLinks.storageItemId,
+								serverId: storageItemServerLinks.serverId,
+								syncedItemId: storageItemServerLinks.syncedItemId
+							})
+							.from(storageItemServerLinks)
+							.where(inArray(storageItemServerLinks.storageItemId, folderLinkSubquery))
+					]);
 			} else {
 				// Full run: load everything in parallel.
-				[localRows, serverItemRows, existingItems, existingLinks] = await Promise.all([
-					this.loadLocalRows(),
-					this.loadServerItems(),
-					db.select(existingItemsSelect).from(storageItems),
-					db
-						.select({
-							storageItemId: storageItemServerLinks.storageItemId,
-							serverId: storageItemServerLinks.serverId,
-							syncedItemId: storageItemServerLinks.syncedItemId
-						})
-						.from(storageItemServerLinks)
-				]);
+				[localRows, serverItemRows, unmatchedServerMovieRows, existingItems, existingLinks] =
+					await Promise.all([
+						this.loadLocalRows(),
+						this.loadServerItems(),
+						this.loadUnmatchedServerMovieItems(),
+						db.select(existingItemsSelect).from(storageItems),
+						db
+							.select({
+								storageItemId: storageItemServerLinks.storageItemId,
+								serverId: storageItemServerLinks.serverId,
+								syncedItemId: storageItemServerLinks.syncedItemId
+							})
+							.from(storageItemServerLinks)
+					]);
 			}
 
 			// ---- Build all read-only maps before touching the DB ----
@@ -438,6 +452,26 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 				}
 			}
 
+			// Fallback coverage for movies whose server-side TMDB resolution
+			// failed: match by IMDB id instead so a movie present on both
+			// sides doesn't falsely report as "missing from your media
+			// server" just because the server's metadata agent couldn't
+			// resolve TMDB for it (#601). Keyed by lowercased IMDB id.
+			const unmatchedServerMoviesByImdbId = new Map<
+				string,
+				Array<typeof mediaServerSyncedItems.$inferSelect>
+			>();
+			for (const s of unmatchedServerMovieRows) {
+				if (!s.imdbId) continue;
+				const key = s.imdbId.toLowerCase();
+				const arr = unmatchedServerMoviesByImdbId.get(key);
+				if (arr) {
+					arr.push(s);
+				} else {
+					unmatchedServerMoviesByImdbId.set(key, [s]);
+				}
+			}
+
 			// Existing rows indexed by logical key (full row for change-detection)
 			const existingByKey = new Map<string, (typeof existingItems)[number]>();
 			for (const item of existingItems) {
@@ -478,6 +512,12 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 							// sibling episode number, so this episode is satisfied too.
 							if (serverItems.length === 0 && localRow?.episodeFileId) {
 								serverItems = serverItemsByFile.get(localRow.episodeFileId) ?? [];
+							}
+							// Fall back to IMDB-id matching for movies whose server
+							// counterpart has no TMDB id (see unmatchedServerMoviesByImdbId).
+							if (serverItems.length === 0 && localRow?.itemType === 'movie' && localRow.imdbId) {
+								serverItems =
+									unmatchedServerMoviesByImdbId.get(localRow.imdbId.toLowerCase()) ?? [];
 							}
 							const existing = existingByKey.get(key);
 
@@ -652,6 +692,28 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 				}
 			}
 
+			// Drop any storage_item_server_links left over from a server that's
+			// since been disabled. The "Upsert server links" loop above only
+			// inserts/updates links for servers the (enabled-filtered) loaders
+			// above returned - it never deletes a link whose server dropped out,
+			// so without this a disabled server's links would linger as orphans
+			// and keep being counted by anything that joins through them
+			// (e.g. UnplayedRule's play-count aggregation).
+			const disabledServerRows = await db
+				.select({ id: mediaBrowserServers.id })
+				.from(mediaBrowserServers)
+				.where(eq(mediaBrowserServers.enabled, false));
+			if (disabledServerRows.length > 0) {
+				db.delete(storageItemServerLinks)
+					.where(
+						inArray(
+							storageItemServerLinks.serverId,
+							disabledServerRows.map((r) => r.id)
+						)
+					)
+					.run();
+			}
+
 			const result: ReconcileResult = {
 				itemsUpserted: itemsInserted + itemsUpdated,
 				itemsInserted,
@@ -697,6 +759,7 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 					movieId: movies.id,
 					movieFileId: movieFiles.id,
 					tmdbId: movies.tmdbId,
+					imdbId: movies.imdbId,
 					title: movies.title,
 					year: movies.year,
 					libraryId: movies.libraryId,
@@ -769,6 +832,7 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 			.map((r) => ({
 				itemType: 'movie' as const,
 				tmdbId: r.tmdbId,
+				imdbId: r.imdbId ?? null,
 				title: r.title,
 				year: r.year ?? null,
 				seasonNumber: null,
@@ -792,6 +856,7 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 					epRows.push({
 						itemType: 'episode' as const,
 						tmdbId: r.tmdbId,
+						imdbId: null,
 						title: r.title,
 						year: r.year ?? null,
 						seasonNumber: ep.seasonNumber,
@@ -819,6 +884,7 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 				epRows.push({
 					itemType: 'episode' as const,
 					tmdbId: r.tmdbId,
+					imdbId: null,
 					title: r.title,
 					year: r.year ?? null,
 					seasonNumber: r.seasonNumber,
@@ -834,24 +900,76 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 		return [...movieRows, ...epRows];
 	}
 
+	/**
+	 * A disabled media server's synced data is kept (not deleted) so
+	 * re-enabling and re-syncing is cheap, but it must stop counting toward
+	 * Storage Maintenance while disabled. Every loader below scopes to this
+	 * set so a disabled server's rows are invisible to reconciliation without
+	 * touching the underlying media_server_synced_items rows at all.
+	 */
+	private async getEnabledServerIds(): Promise<string[]> {
+		const rows = await db
+			.select({ id: mediaBrowserServers.id })
+			.from(mediaBrowserServers)
+			.where(eq(mediaBrowserServers.enabled, true));
+		return rows.map((r) => r.id);
+	}
+
 	private async loadServerItems(): Promise<Array<typeof mediaServerSyncedItems.$inferSelect>> {
+		const enabledServerIds = await this.getEnabledServerIds();
+		if (enabledServerIds.length === 0) return [];
 		return db
 			.select()
 			.from(mediaServerSyncedItems)
-			.where(sql`${mediaServerSyncedItems.tmdbId} IS NOT NULL`);
+			.where(
+				and(
+					sql`${mediaServerSyncedItems.tmdbId} IS NOT NULL`,
+					inArray(mediaServerSyncedItems.serverId, enabledServerIds)
+				)
+			);
+	}
+
+	/**
+	 * Movie rows that the media server synced but whose TMDB resolution
+	 * failed (so they're excluded from loadServerItems's primary key-based
+	 * matching). These still carry an IMDB id in many cases, which lets us
+	 * avoid falsely reporting a movie as "missing from your media server"
+	 * when it's genuinely present there under unresolved metadata (#601).
+	 */
+	private async loadUnmatchedServerMovieItems(): Promise<
+		Array<typeof mediaServerSyncedItems.$inferSelect>
+	> {
+		const enabledServerIds = await this.getEnabledServerIds();
+		if (enabledServerIds.length === 0) return [];
+		return db
+			.select()
+			.from(mediaServerSyncedItems)
+			.where(
+				and(
+					sql`${mediaServerSyncedItems.itemType} = 'movie' AND ${mediaServerSyncedItems.tmdbId} IS NULL AND ${mediaServerSyncedItems.imdbId} IS NOT NULL`,
+					inArray(mediaServerSyncedItems.serverId, enabledServerIds)
+				)
+			);
 	}
 
 	private async loadServerItemsForTmdbIds(
 		tmdbIds: number[]
 	): Promise<Array<typeof mediaServerSyncedItems.$inferSelect>> {
 		if (tmdbIds.length === 0) return [];
+		const enabledServerIds = await this.getEnabledServerIds();
+		if (enabledServerIds.length === 0) return [];
 		const results: Array<typeof mediaServerSyncedItems.$inferSelect> = [];
 		for (let i = 0; i < tmdbIds.length; i += CHUNK_SIZE) {
 			const batch = tmdbIds.slice(i, i + CHUNK_SIZE);
 			const rows = await db
 				.select()
 				.from(mediaServerSyncedItems)
-				.where(inArray(mediaServerSyncedItems.tmdbId, batch));
+				.where(
+					and(
+						inArray(mediaServerSyncedItems.tmdbId, batch),
+						inArray(mediaServerSyncedItems.serverId, enabledServerIds)
+					)
+				);
 			results.push(...rows);
 		}
 		return results;

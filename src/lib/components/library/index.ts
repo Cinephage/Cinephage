@@ -19,6 +19,7 @@ export { default as AddToLibraryModal } from './AddToLibraryModal.svelte';
 export { default as AddMovieForm } from './AddMovieForm.svelte';
 export { default as AddSeriesForm } from './AddSeriesForm.svelte';
 export { default as MediaSearchInput } from './MediaSearchInput.svelte';
+export { default as ChangeMatchModal } from './ChangeMatchModal.svelte';
 
 // TV Series components
 export { default as LibrarySeriesHeader } from './LibrarySeriesHeader.svelte';

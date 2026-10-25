@@ -1,7 +1,7 @@
 <script lang="ts">
-	import type { CastMember, CrewMember } from '$lib/types/tmdb';
-	import { isCastMember } from '$lib/types/tmdb-guards';
-	import { resolvePath } from '$lib/utils/routing';
+	import type { CastMember, CrewMember } from '#lib/types/tmdb.js';
+	import { isCastMember } from '#lib/types/tmdb-guards.js';
+	import { resolvePath } from '#lib/utils/routing.js';
 	import TmdbImage from './TmdbImage.svelte';
 
 	let { person }: { person: CastMember | CrewMember } = $props();

@@ -5,7 +5,7 @@
  * Allows users to see what would change before applying renames.
  */
 
-import { db } from '$lib/server/db';
+import { db } from '#lib/server/db/index.js';
 import {
 	movies,
 	movieFiles,
@@ -16,28 +16,30 @@ import {
 	rootFolders,
 	renameHistory,
 	renamingFailures
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 import { and, eq, inArray } from 'drizzle-orm';
 import { extname, join, dirname, basename, resolve } from 'path';
-import { createChildLogger, getRequestId } from '$lib/logging';
-import { todayDateString } from '$lib/utils/format.js';
+import { createChildLogger, getRequestId } from '#lib/logging/index.js';
+import { todayDateString } from '#lib/utils/format.js';
 import { randomUUID } from 'node:crypto';
 
 import { NamingService, type MediaNamingInfo } from './NamingService';
 import { namingSettingsService } from './NamingSettingsService';
 import { libraryOperationLock } from '../library-operation-lock.js';
 import { diskScanService } from '../disk-scan.js';
-import { moveFile, fileExists } from '$lib/server/downloadClients/import/FileTransfer';
-import { ReleaseParser } from '$lib/server/indexers/parser/ReleaseParser';
-import { rename, stat, readdir, rmdir, mkdir } from 'node:fs/promises';
+import { moveFile, fileExists } from '#lib/server/downloadClients/import/FileTransfer.js';
+import { ReleaseParser } from '#lib/server/indexers/parser/ReleaseParser.js';
+import { rename, stat, readdir, rmdir } from 'node:fs/promises';
+import { ensureMediaDirectory } from '#lib/server/filesystem/mkdir-helpers.js';
 import { chooseBestParsedRelease, resolveAudioLanguages } from './preview-metadata';
 import { extractLanguageCodes, resolveLocalizedTitles } from './localization';
 import {
 	getMediaBrowserManager,
 	getMediaBrowserNotifier
-} from '$lib/server/notifications/mediabrowser';
-import { syncSubtitleRowsForRenames } from '$lib/server/subtitles/subtitle-rename-sync';
-import { isSubtitleExtension } from '$lib/server/subtitles/subtitle-content';
+} from '#lib/server/notifications/mediabrowser/index.js';
+import { syncSubtitleRowsForRenames } from '#lib/server/subtitles/subtitle-rename-sync.js';
+import { isSubtitleExtension } from '#lib/server/subtitles/subtitle-content.js';
+import { nfoPathFor } from '#lib/server/library/sidecar/NfoGenerator.js';
 
 const logger = createChildLogger({ logDomain: 'scans' as const });
 
@@ -45,8 +47,8 @@ const logger = createChildLogger({ logDomain: 'scans' as const });
 // requests are not starved while processing large libraries.
 const PREVIEW_BATCH_SIZE = 500;
 
-export type { RenameStreamEvent } from '$lib/library/naming/types.js';
-import type { RenameStreamEvent } from '$lib/library/naming/types.js';
+export type { RenameStreamEvent } from '#lib/library/naming/types.js';
+import type { RenameStreamEvent } from '#lib/library/naming/types.js';
 
 // Number of media groups to process concurrently during rename execution.
 // Bounds open file handles and OS I/O queue depth.
@@ -56,7 +58,7 @@ function yieldToEventLoop(): Promise<void> {
 	return new Promise<void>((resolve) => setImmediate(resolve));
 }
 
-// Types are defined in $lib/library/naming/types.ts (outside the server
+// Types are defined in #lib/library/naming/types.ts (outside the server
 // bundle) so .svelte files can import them without pulling server code
 // into the client. Re-exported here for server-internal consumers.
 export type {
@@ -66,13 +68,13 @@ export type {
 	RenameExecuteResult,
 	ReorganizeRequestItem,
 	ReorganizeBatchResult
-} from '$lib/library/naming/types.js';
+} from '#lib/library/naming/types.js';
 
 import type {
 	RenamePreviewItem,
 	RenamePreviewResult,
 	RenameExecuteResult
-} from '$lib/library/naming/types.js';
+} from '#lib/library/naming/types.js';
 
 /**
  * Create an empty preview result
@@ -1097,7 +1099,7 @@ export class RenamePreviewService {
 			// The target parent may not exist yet (e.g. letter-bucket naming like
 			// "T/Title (2026) [tmdbid-x]") and rename() does not create intermediate
 			// directories — create the parent chain before the move.
-			await mkdir(dirname(actualNewFolder), { recursive: true });
+			await ensureMediaDirectory(dirname(actualNewFolder));
 
 			// Atomically rename the folder on disk.
 			await rename(actualOldFolder, actualNewFolder);
@@ -1711,6 +1713,15 @@ export class RenamePreviewService {
 				mediaId: item.mediaId
 			});
 
+			// Carry the generated .nfo along too, same-folder or cross-folder -
+			// its path is a deterministic stem match (no directory scan needed,
+			// unlike subtitles), so unlike renameSubtitleCompanions this isn't
+			// restricted to same-directory renames. Without this the old .nfo
+			// is orphaned under the stale name while nothing regenerates a new
+			// one to match - at best a missing sidecar, at worst a stale
+			// duplicate sitting next to the renamed video.
+			await this.renameNfoCompanion(item.currentFullPath, item.newFullPath, warnings);
+
 			return {
 				fileId: item.fileId,
 				mediaType: item.mediaType,
@@ -1803,6 +1814,51 @@ export class RenamePreviewService {
 				logger.warn(
 					{ err, mediaType: context.mediaType, mediaId: context.mediaId },
 					'[RenamePreviewService] Failed to sync subtitle rows after companion rename'
+				);
+			}
+		}
+	}
+
+	/**
+	 * Move the generated .nfo sidecar to match the renamed video's new stem
+	 * and/or folder. Best-effort: failures produce a warning, never fail the
+	 * rename - the video file itself already moved successfully by this point.
+	 */
+	private async renameNfoCompanion(
+		oldVideoPath: string,
+		newVideoPath: string,
+		warnings: string[]
+	): Promise<void> {
+		const oldNfoPath = nfoPathFor(oldVideoPath);
+		const newNfoPath = nfoPathFor(newVideoPath);
+		if (oldNfoPath === newNfoPath) return;
+		if (!(await fileExists(oldNfoPath))) return;
+		if (await fileExists(newNfoPath)) {
+			// A .nfo already exists at the destination (e.g. from an earlier
+			// partial rename) - leave both alone rather than overwrite it.
+			return;
+		}
+
+		try {
+			await rename(oldNfoPath, newNfoPath);
+			logger.info(
+				{ from: oldNfoPath, to: newNfoPath },
+				'[RenamePreviewService] Renamed .nfo companion'
+			);
+		} catch {
+			try {
+				const moveResult = await moveFile(oldNfoPath, newNfoPath);
+				if (!moveResult.success) throw new Error(moveResult.error);
+				logger.info(
+					{ from: oldNfoPath, to: newNfoPath },
+					'[RenamePreviewService] Moved .nfo companion (cross-filesystem)'
+				);
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				warnings.push(`.nfo sidecar could not be renamed: ${message}`);
+				logger.warn(
+					{ err, from: oldNfoPath, to: newNfoPath },
+					'[RenamePreviewService] .nfo companion rename failed'
 				);
 			}
 		}
@@ -2438,7 +2494,10 @@ export class RenamePreviewService {
 			let newRelativePath: string;
 
 			if (useSeasonFolders) {
-				const seasonFolder = this.namingService.generateSeasonFolderName(file.seasonNumber);
+				const seasonFolder = this.namingService.generateSeasonFolderName(
+					file.seasonNumber,
+					namingInfo
+				);
 				newRelativePath = join(seasonFolder, newFileName);
 			} else {
 				newRelativePath = newFileName;

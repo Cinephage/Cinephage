@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { SvelteSet } from 'svelte/reactivity';
-	import { X } from 'lucide-svelte';
-	import type { LiveTvAccount, LiveTvCategory, CachedChannel } from '$lib/types/livetv';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import * as m from '$lib/paraglide/messages.js';
+	import { X } from '@lucide/svelte';
+	import type { LiveTvAccount, LiveTvCategory, CachedChannel } from '#lib/types/livetv.js';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import ChannelBrowserFilters from './ChannelBrowserFilters.svelte';
 	import ChannelBrowserActions from './ChannelBrowserActions.svelte';
 	import ChannelBrowserList from './ChannelBrowserList.svelte';
@@ -17,7 +17,7 @@
 		getChannelCategories,
 		createChannelCategory,
 		addLineupBackup
-	} from '$lib/api/livetv.js';
+	} from '#lib/api/livetv.js';
 
 	type BrowserMode = 'add-to-lineup' | 'select-backup';
 

@@ -10,7 +10,7 @@ const { enrichMock, getBlockedIdentifiersMock, findMovieMock } = vi.hoisted(() =
 	findMovieMock: vi.fn()
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	db: {
 		query: {
 			movies: { findFirst: findMovieMock },
@@ -19,11 +19,11 @@ vi.mock('$lib/server/db/index.js', () => ({
 	}
 }));
 
-vi.mock('$lib/server/blocklist/BlocklistService.js', () => ({
+vi.mock('#lib/server/blocklist/BlocklistService.js', () => ({
 	blocklistService: { getBlockedIdentifiers: getBlockedIdentifiersMock }
 }));
 
-vi.mock('$lib/server/tmdb.js', () => ({
+vi.mock('#lib/server/tmdb.js', () => ({
 	tmdb: {
 		getMovieExternalIds: vi.fn(),
 		getTvExternalIds: vi.fn(),

@@ -68,6 +68,21 @@ const DATE_PARSER_TEST_CASES: { date: string; layout: string; expected: Date }[]
 		layout: 'ddd, DD MMM YYYY HH:mm:ss ZZ',
 		expected: new Date(2026, 3, 24, 3, 12, 22, 0)
 	},
+	// Real indexer pubDate values commonly carry incidental whitespace from
+	// pretty-printed RSS/XML (leading/trailing, or doubled internal spaces).
+	// A search request already succeeded and spent the tracker's API quota
+	// before this parse ever runs, so these must not fail just because of
+	// whitespace the layout otherwise matches token-for-token.
+	{
+		date: '  Fri, 24 Apr 2026 04:12:22 +0100  ',
+		layout: 'ddd, DD MMM YYYY HH:mm:ss ZZ',
+		expected: new Date(2026, 3, 24, 3, 12, 22, 0)
+	},
+	{
+		date: 'Fri,  24 Apr 2026 04:12:22  +0100',
+		layout: 'ddd, DD MMM YYYY HH:mm:ss ZZ',
+		expected: new Date(2026, 3, 24, 3, 12, 22, 0)
+	},
 	{
 		date: '14.11.2026 13:31',
 		layout: 'DD.MM.YYYY HH:mm',

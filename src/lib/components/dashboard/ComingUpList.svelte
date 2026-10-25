@@ -1,11 +1,11 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
-	import { Calendar, Clapperboard, Tv, ArrowRight } from 'lucide-svelte';
-	import TmdbImage from '$lib/components/tmdb/TmdbImage.svelte';
-	import Skeleton from '$lib/components/ui/Skeleton.svelte';
-	import { resolvePath } from '$lib/utils/routing';
-	import { formatDisplayDate } from '$lib/utils/format.js';
-	import type { UpcomingItem } from '$lib/types/dashboard.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import { Calendar, Clapperboard, Tv, ArrowRight } from '@lucide/svelte';
+	import TmdbImage from '#lib/components/tmdb/TmdbImage.svelte';
+	import Skeleton from '#lib/components/ui/Skeleton.svelte';
+	import { resolvePath } from '#lib/utils/routing.js';
+	import { formatDisplayDate } from '#lib/utils/format.js';
+	import type { UpcomingItem } from '#lib/types/dashboard.js';
 
 	interface Props {
 		items: UpcomingItem[];

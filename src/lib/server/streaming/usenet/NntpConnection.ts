@@ -10,7 +10,7 @@
 
 import * as net from 'net';
 import * as tls from 'tls';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 import {
 	type NntpConnectionState,
 	type NntpResponse,

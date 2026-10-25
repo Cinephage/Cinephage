@@ -1,4 +1,4 @@
-import type { LiveTvProviderType } from '$lib/types/livetv';
+import type { LiveTvProviderType } from '#lib/types/livetv.js';
 
 function extractHttpStatus(raw: string): number | null {
 	const match = raw.match(/\bHTTP\s+(\d{3})\b/i) ?? raw.match(/\b(\d{3})\b/);

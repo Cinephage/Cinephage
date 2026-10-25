@@ -9,7 +9,7 @@ import type {
 	ChannelCategory,
 	EpgProgram,
 	EpgProgramWithProgress
-} from '$lib/types/livetv';
+} from '#lib/types/livetv.js';
 
 /**
  * EPG Now/Next entry for a channel

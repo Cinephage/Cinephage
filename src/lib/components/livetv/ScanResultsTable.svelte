@@ -9,7 +9,7 @@
 		CheckCheck,
 		XCircle,
 		Trash2
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import {
@@ -17,9 +17,9 @@
 		batchApprovePortalScanResults,
 		batchIgnorePortalScanResults,
 		clearIgnoredScanResults
-	} from '$lib/api/livetv.js';
-	import * as m from '$lib/paraglide/messages.js';
-	import { formatDisplayDate } from '$lib/utils/format.js';
+	} from '#lib/api/livetv.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import { formatDisplayDate } from '#lib/utils/format.js';
 
 	interface ScanResult {
 		id: string;

@@ -3,34 +3,34 @@
  * Handles path validation and free space checking.
  */
 
-import { db } from '$lib/server/db';
-import { rootFolders as rootFoldersTable } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { rootFolders as rootFoldersTable } from '#lib/server/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
-import { ValidationError } from '$lib/errors';
-import { createChildLogger } from '$lib/logging';
+import { ValidationError } from '#lib/errors/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'imports' as const });
 import {
 	findOverlappingRootFolder,
 	getRootFolderOverlapMessage
-} from '$lib/server/filesystem/root-folder-overlap.js';
+} from '#lib/server/filesystem/root-folder-overlap.js';
 import {
 	isAnimeRootFolderEnforcementEnabled,
 	setAnimeRootFolderEnforcement
-} from '$lib/server/library/anime-root-enforcement-settings.js';
-import { getLibraryEntityService } from '$lib/server/library/LibraryEntityService.js';
+} from '#lib/server/library/anime-root-enforcement-settings.js';
+import { getLibraryEntityService } from '#lib/server/library/LibraryEntityService.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { libraryJobService } from '$lib/server/library/jobs/LibraryJobService.js';
-import { libraryWatcherService } from '$lib/server/library/library-watcher.js';
+import { libraryJobService } from '#lib/server/library/jobs/LibraryJobService.js';
+import { libraryWatcherService } from '#lib/server/library/library-watcher.js';
 
 import type {
 	RootFolder,
 	PathValidationResult,
 	RootFolderMediaType,
 	RootFolderMediaSubType
-} from '$lib/types/downloadClient';
+} from '#lib/types/downloadClient.js';
 
 /**
  * Configuration for creating/updating a root folder.

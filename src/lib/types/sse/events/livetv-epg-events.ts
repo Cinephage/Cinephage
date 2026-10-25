@@ -4,7 +4,7 @@
  * Shared types for the /api/livetv/epg/stream endpoint
  */
 
-import type { ChannelLineupItemWithDetails, EpgStatus } from '$lib/types/livetv';
+import type { ChannelLineupItemWithDetails, EpgStatus } from '#lib/types/livetv.js';
 
 /**
  * epg:initial event - Full initial state

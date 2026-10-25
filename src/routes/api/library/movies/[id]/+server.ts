@@ -1,8 +1,7 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { stat } from 'node:fs/promises';
 import { join, resolve, normalize } from 'node:path';
-import { db } from '$lib/server/db/index.js';
+import { db } from '#lib/server/db/index.js';
 import {
 	downloadHistory,
 	downloadQueue,
@@ -10,41 +9,41 @@ import {
 	movieFiles,
 	rootFolders,
 	subtitles
-} from '$lib/server/db/schema.js';
+} from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { mediaInfoService } from '$lib/server/library/index.js';
-import { getLanguageProfileService } from '$lib/server/subtitles/services/LanguageProfileService.js';
-import { searchSubtitlesForNewMedia } from '$lib/server/subtitles/services/SubtitleImportService.js';
-import { monitoringScheduler } from '$lib/server/monitoring/MonitoringScheduler.js';
-import { monitoringSearchService } from '$lib/server/monitoring/search/MonitoringSearchService.js';
-import { getDownloadClientManager } from '$lib/server/downloadClients/DownloadClientManager.js';
-import { deleteAllAlternateTitles } from '$lib/server/services/index.js';
-import { deleteDirectoryWithinRoot } from '$lib/server/filesystem/delete-helpers.js';
-import { libraryMediaEvents } from '$lib/server/library/LibraryMediaEvents';
-import { tmdb } from '$lib/server/tmdb.js';
-import { movieUpdateSchema } from '$lib/validation/schemas';
-import { parseBody } from '$lib/server/api/validate.js';
-import { acquisitionService } from '$lib/server/acquisition/AcquisitionService.js';
+import { mediaInfoService } from '#lib/server/library/index.js';
+import { getLanguageProfileService } from '#lib/server/subtitles/services/LanguageProfileService.js';
+import { searchSubtitlesForNewMedia } from '#lib/server/subtitles/services/SubtitleImportService.js';
+import { monitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.js';
+import { monitoringSearchService } from '#lib/server/monitoring/search/MonitoringSearchService.js';
+import { getDownloadClientManager } from '#lib/server/downloadClients/DownloadClientManager.js';
+import { deleteAllAlternateTitles } from '#lib/server/services/index.js';
+import { deleteDirectoryWithinRoot } from '#lib/server/filesystem/delete-helpers.js';
+import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
+import { tmdb } from '#lib/server/tmdb.js';
+import { movieUpdateSchema } from '#lib/validation/schemas.js';
+import { parseBody } from '#lib/server/api/validate.js';
+import { acquisitionService } from '#lib/server/acquisition/AcquisitionService.js';
 import {
 	validateRootFolder,
 	getAnimeSubtypeEnforcement
-} from '$lib/server/library/LibraryAddService.js';
-import { isLikelyAnimeMedia } from '$lib/shared/anime-classification.js';
-import { mediaMoveService } from '$lib/server/library/MediaMoveService.js';
-import { getLibraryEntityService } from '$lib/server/library/LibraryEntityService.js';
-import { getLibraryScheduler } from '$lib/server/library/library-scheduler.js';
-import { getMetadataProviderConfig } from '$lib/server/metadata/provider-settings.js';
-import { resolveMissingAnimeProviderRefs } from '$lib/server/metadata/provider-ref-resolver.js';
-import { persistLinkedProviderTitleVariants } from '$lib/server/metadata/provider-resolution.js';
-import { importService } from '$lib/server/downloadClients/import/index.js';
-import { getFileManagementSettings } from '$lib/server/settings/file-management.js';
-import { redundantFileIds } from '$lib/server/quality/buckets.js';
-import { resolveMovieMultiQuality } from '$lib/server/quality/movie-buckets.js';
+} from '#lib/server/library/LibraryAddService.js';
+import { isLikelyAnimeMedia } from '#lib/shared/anime-classification.js';
+import { mediaMoveService } from '#lib/server/library/MediaMoveService.js';
+import { getLibraryEntityService } from '#lib/server/library/LibraryEntityService.js';
+import { getLibraryScheduler } from '#lib/server/library/library-scheduler.js';
+import { getMetadataProviderConfig } from '#lib/server/metadata/provider-settings.js';
+import { resolveMissingAnimeProviderRefs } from '#lib/server/metadata/provider-ref-resolver.js';
+import { persistLinkedProviderTitleVariants } from '#lib/server/metadata/provider-resolution.js';
+import { importService } from '#lib/server/downloadClients/import/index.js';
+import { getFileManagementSettings } from '#lib/server/settings/file-management.js';
+import { redundantFileIds } from '#lib/server/quality/buckets.js';
+import { resolveMovieMultiQuality } from '#lib/server/quality/movie-buckets.js';
 import {
 	refreshMovieMetadata,
 	metadataLanguageToLegacy,
 	warnLegacyMetadataLanguage
-} from '$lib/server/metadata/metadata-refresh.js';
+} from '#lib/server/metadata/metadata-refresh.js';
 
 function isAnimeMovieSignal(input: {
 	rootFolderPath: string | null;
@@ -102,7 +101,7 @@ export const GET: RequestHandler = async ({ params }) => {
 			.where(eq(movies.id, params.id));
 
 		if (!movie) {
-			return json({ success: false, error: 'Movie not found' }, { status: 404 });
+			return Response.json({ success: false, error: 'Movie not found' }, { status: 404 });
 		}
 
 		const profileService = getLanguageProfileService();
@@ -149,7 +148,7 @@ export const GET: RequestHandler = async ({ params }) => {
 				(movie.providerRefs as Partial<Record<'tmdb' | 'anilist' | 'mal', string>> | null) ??
 				undefined
 		});
-		return json({
+		return Response.json({
 			success: true,
 			movie: {
 				...movie,
@@ -202,7 +201,7 @@ export const GET: RequestHandler = async ({ params }) => {
 		});
 	} catch (error) {
 		logger.error('[API] Error fetching movie', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to fetch movie'
@@ -299,7 +298,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 		const nextRootFolderId = typeof rootFolderId === 'string' ? rootFolderId.trim() : '';
 		const currentRootFolderId = currentMovie?.rootFolderId ?? null;
 		if (!nextRootFolderId) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: 'Root folder is required and cannot be unset after adding media.'
@@ -313,7 +312,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 			const hasExistingFiles = currentMovie?.hasFile === true;
 			const canMoveFromCurrentRoot = Boolean(currentRootFolderId);
 			if (hasExistingFiles && canMoveFromCurrentRoot && moveFilesOnRootChange !== true) {
-				return json(
+				return Response.json(
 					{
 						success: false,
 						error:
@@ -386,7 +385,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 		if (languageProfileId !== null) {
 			const profile = await profileService.getProfile(languageProfileId);
 			if (!profile) {
-				return json(
+				return Response.json(
 					{ success: false, error: `Language profile not found: ${languageProfileId}` },
 					{ status: 400 }
 				);
@@ -404,11 +403,11 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 				.where(eq(rootFolders.id, currentMovie.rootFolderId))
 				.limit(1);
 			if (!rootFolder) {
-				return json({ success: false, error: 'Root folder not found' }, { status: 400 });
+				return Response.json({ success: false, error: 'Root folder not found' }, { status: 400 });
 			}
 			const resolved = normalize(join(rootFolder.path, trimmed));
 			if (!resolved.startsWith(normalize(rootFolder.path) + '/')) {
-				return json(
+				return Response.json(
 					{ success: false, error: 'Folder must be within the root folder' },
 					{ status: 400 }
 				);
@@ -416,7 +415,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 			try {
 				await stat(resolved);
 			} catch {
-				return json(
+				return Response.json(
 					{ success: false, error: `Folder does not exist on disk: ${resolve(resolved)}` },
 					{ status: 400 }
 				);
@@ -454,7 +453,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 	}
 
 	if (Object.keys(updateData).length === 0 && !moveRequest && appliedSideEffectFields === 0) {
-		return json({ success: false, error: 'No valid fields to update' }, { status: 400 });
+		return Response.json({ success: false, error: 'No valid fields to update' }, { status: 400 });
 	}
 
 	if (Object.keys(updateData).length > 0) {
@@ -562,7 +561,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 				},
 				'[API] Failed to reconcile redundant quality files'
 			);
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: error instanceof Error ? error.message : 'Failed to remove unwanted files'
@@ -665,7 +664,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 	}
 
 	const failedCount = reconcileFailures.length;
-	return json({
+	return Response.json({
 		success: true,
 		moveQueued: Boolean(moveTask),
 		moveTaskId: moveTask?.taskId,
@@ -707,20 +706,38 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 			.where(eq(movies.id, params.id));
 
 		if (!movie) {
-			return json({ success: false, error: 'Movie not found' }, { status: 404 });
+			return Response.json({ success: false, error: 'Movie not found' }, { status: 404 });
 		}
 
 		// Get all files for this movie
 		const files = await db.select().from(movieFiles).where(eq(movieFiles.movieId, params.id));
 
-		// Only require files if not removing from library entirely
-		if (files.length === 0 && !removeFromLibrary) {
-			return json({ success: false, error: 'Movie has no files to delete' }, { status: 400 });
+		// Unmatch also releases client-side tracking from the Unmatched-tab
+		// track/enroll flow so the torrent resurfaces in Unmatched. Real
+		// grabs (including arr_push-pushed ones) and the client itself are
+		// never touched - only rows explicitly stamped with `origin` qualify.
+		const unmatchedRelease = acquisitionService.releaseUnmatchedQueueItems(
+			{ movieId: params.id },
+			'files unmatched from library'
+		);
+
+		// Only require files if not removing from library entirely and there
+		// is no client tracking to release back to Unmatched.
+		if (
+			files.length === 0 &&
+			!removeFromLibrary &&
+			unmatchedRelease.released === 0 &&
+			unmatchedRelease.heldBack === 0
+		) {
+			return Response.json(
+				{ success: false, error: 'Movie has no files to delete' },
+				{ status: 400 }
+			);
 		}
 
 		// Block file deletion from read-only folders
 		if (deleteFiles && movie.rootFolderReadOnly) {
-			return json(
+			return Response.json(
 				{ success: false, error: 'Cannot delete files from read-only folder' },
 				{ status: 400 }
 			);
@@ -790,21 +807,23 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 			libraryMediaEvents.emitMovieUpdated(params.id);
 
 			logger.info({ movieId: params.id }, '[API] Removed movie from library');
-			return json({ success: true, removed: true });
+			return Response.json({ success: true, removed: true });
 		} else {
 			// Update movie to show as missing
 			await db
 				.update(movies)
 				.set({ hasFile: false, lastSearchTime: null })
 				.where(eq(movies.id, params.id));
+
+			// Unmatched-flow queue rows were already released above.
 			libraryMediaEvents.emitMovieUpdated(params.id);
 
 			// Note: Movie metadata is kept - it will show as "missing"
-			return json({ success: true });
+			return Response.json({ success: true });
 		}
 	} catch (error) {
 		logger.error('[API] Error deleting movie files', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to delete movie files'
@@ -815,7 +834,7 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 };
 
 // Import for static method access
-import { MediaInfoService } from '$lib/server/library/index.js';
-import { createChildLogger } from '$lib/logging';
+import { MediaInfoService } from '#lib/server/library/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LibraryMovieByIdApi', logDomain: 'scans' });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { EffectiveAudioPreference } from '$lib/server/languages/audio-preference';
+import type { EffectiveAudioPreference } from '#lib/server/languages/audio-preference.js';
 import { evaluatePushLanguageGate } from './language-gate';
 
 function preference(overrides: Partial<EffectiveAudioPreference> = {}): EffectiveAudioPreference {

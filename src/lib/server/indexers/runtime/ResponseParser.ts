@@ -16,11 +16,11 @@ import { parseSize } from '../types';
 import { TemplateEngine } from '../engine/TemplateEngine';
 import { FilterEngine } from '../engine/FilterEngine';
 import { SelectorEngine, type JsonValue } from '../engine/SelectorEngine';
-import { createChildLogger } from '$lib/logging';
-import { normalizeLanguageTag } from '$lib/server/languages/normalize.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { normalizeLanguageTag } from '#lib/server/languages/normalize.js';
 
 const logger = createChildLogger({ logDomain: 'indexers' as const });
-import { extractInfoHash } from '$lib/server/downloadClients/utils/hashUtils';
+import { extractInfoHash } from '#lib/server/downloadClients/utils/hashUtils.js';
 
 export interface ParseResult {
 	releases: ReleaseResult[];
@@ -73,6 +73,14 @@ export class ResponseParser {
 
 		try {
 			if (responseType === 'json') {
+				// An indexer occasionally returns HTTP 200 with an empty body (a
+				// remote-side hiccup, not a bad request - the HTTP layer already
+				// throws on any non-2xx status before this ever runs). JSON.parse('')
+				// throws the cryptic "Unexpected end of JSON input", which reads like
+				// a Cinephage parsing bug rather than what it actually is.
+				if (content.trim().length === 0) {
+					throw new Error('Indexer returned an empty response body');
+				}
 				const parsed = this.selectorEngine.parseJson(content);
 				const results = this.parseJsonResponse(parsed, context);
 				releases.push(...results);
@@ -889,7 +897,11 @@ export class ResponseParser {
 	}
 
 	/**
-	 * Make URL absolute using base URL.
+	 * Make URL absolute using base URL. Only http(s) and magnet survive
+	 * verbatim; everything else is resolved against the indexer base, and the
+	 * result is scheme-checked — scraped content is untrusted, and a
+	 * `javascript:`/`data:` value that survives parsing would be rendered as a
+	 * clickable link in the search UI.
 	 */
 	private makeAbsoluteUrl(url: string, baseUrl: string): string {
 		if (!url) return url;
@@ -898,9 +910,13 @@ export class ResponseParser {
 		}
 
 		try {
-			return new URL(url, baseUrl).toString();
+			const resolved = new URL(url, baseUrl);
+			if (resolved.protocol !== 'http:' && resolved.protocol !== 'https:') {
+				return '';
+			}
+			return resolved.toString();
 		} catch {
-			return url;
+			return '';
 		}
 	}
 }

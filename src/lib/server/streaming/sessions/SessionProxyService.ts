@@ -1,9 +1,9 @@
-import { logger } from '$lib/logging';
+import { logger } from '#lib/logging/index.js';
 import {
 	resolveAndValidateUrl,
 	fetchWithTimeout,
 	MAX_REDIRECTS
-} from '$lib/server/http/ssrf-protection';
+} from '#lib/server/http/ssrf-protection.js';
 import { isHLSPlaylist, sanitizePlaylist, validatePlaylist } from '../hls';
 import { ensureVttFormat } from '../utils/srt-to-vtt';
 import { isPngWrappedSegment, stripPngWrapper } from '../utils/png-wrapper';

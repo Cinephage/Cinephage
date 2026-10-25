@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { AlertCircle, Settings } from 'lucide-svelte';
-	import * as m from '$lib/paraglide/messages.js';
+	import { AlertCircle, Settings } from '@lucide/svelte';
+	import * as m from '#lib/paraglide/messages.js';
 
 	let { message = m.ui_tmdbRequired_description() }: { message?: string } = $props();
 </script>

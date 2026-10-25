@@ -10,26 +10,26 @@
  * acquisition helper so the requirement tuple is always honoured.
  */
 
-import { db } from '$lib/server/db/index.js';
-import { movies, series, episodes, monitoringHistory } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { movies, series, episodes, monitoringHistory } from '#lib/server/db/schema.js';
 import { eq, and, or, exists } from 'drizzle-orm';
-import { getSubtitleSearchService } from '$lib/server/subtitles/services/SubtitleSearchService.js';
-import { getSubtitleDownloadService } from '$lib/server/subtitles/services/SubtitleDownloadService.js';
-import { getSubtitleProviderManager } from '$lib/server/subtitles/services/SubtitleProviderManager.js';
-import { LanguageProfileService } from '$lib/server/subtitles/services/LanguageProfileService.js';
-import { selectBestCandidate } from '$lib/server/subtitles/acquisition.js';
+import { getSubtitleSearchService } from '#lib/server/subtitles/services/SubtitleSearchService.js';
+import { getSubtitleDownloadService } from '#lib/server/subtitles/services/SubtitleDownloadService.js';
+import { getSubtitleProviderManager } from '#lib/server/subtitles/services/SubtitleProviderManager.js';
+import { LanguageProfileService } from '#lib/server/subtitles/services/LanguageProfileService.js';
+import { selectBestCandidate } from '#lib/server/subtitles/acquisition.js';
 import {
 	filterSearchEligible,
 	recordSearchFailure,
 	resetSearchFailure
-} from '$lib/server/subtitles/subtitle-search-state.js';
-import { DEFAULT_MINIMUM_SCORE, requirementKey } from '$lib/shared/language-profile.js';
-import type { SubtitleRequirement } from '$lib/shared/language-profile.js';
-import { createChildLogger } from '$lib/logging/index.js';
-import { normalizeLanguageCode } from '$lib/shared/languages';
+} from '#lib/server/subtitles/subtitle-search-state.js';
+import { DEFAULT_MINIMUM_SCORE, requirementKey } from '#lib/shared/language-profile.js';
+import type { SubtitleRequirement } from '#lib/shared/language-profile.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { normalizeLanguageCode } from '#lib/shared/languages.js';
 import type { TaskResult } from '../MonitoringScheduler.js';
-import type { TaskExecutionContext } from '$lib/server/tasks/TaskExecutionContext.js';
-import { isMovieMonitored } from '$lib/server/monitoring/specifications/MonitoredSpecification.js';
+import type { TaskExecutionContext } from '#lib/server/tasks/TaskExecutionContext.js';
+import { isMovieMonitored } from '#lib/server/monitoring/specifications/MonitoredSpecification.js';
 
 const logger = createChildLogger({ module: 'MissingSubtitlesTask', logDomain: 'monitoring' });
 

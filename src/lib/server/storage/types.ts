@@ -3,7 +3,7 @@
  * Used by ReconciliationService (Phase 2) and InsightsService (Phase 3).
  */
 
-import type { storageItems, storageItemServerLinks } from '$lib/server/db/schema.js';
+import type { storageItems, storageItemServerLinks } from '#lib/server/db/schema.js';
 
 /**
  * A storage_items row joined with its server links (if any).

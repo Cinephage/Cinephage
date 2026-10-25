@@ -12,11 +12,11 @@ import {
 	rootFolders,
 	libraryRootFolders,
 	languageProfiles
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -26,7 +26,7 @@ vi.mock('$lib/server/db/index.js', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn(), child: vi.fn() },
 	createChildLogger: vi.fn(() => ({
 		info: vi.fn(),
@@ -37,11 +37,11 @@ vi.mock('$lib/logging', () => ({
 	}))
 }));
 
-vi.mock('$lib/server/subtitles/services/SubtitleImportService.js', () => ({
+vi.mock('#lib/server/subtitles/services/SubtitleImportService.js', () => ({
 	searchSubtitlesForMediaBatch: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/monitoring/MonitoringScheduler.js', () => ({
+vi.mock('#lib/server/monitoring/MonitoringScheduler.js', () => ({
 	monitoringScheduler: {
 		getSettings: vi.fn().mockResolvedValue({ subtitleSearchOnImportEnabled: false })
 	}

@@ -1,10 +1,9 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { unmatchedFileService } from '$lib/server/library/unmatched-file-service.js';
-import { parseBody } from '$lib/server/api/validate.js';
-import { unmatchedMatchSchema } from '$lib/validation/schemas.js';
-import { libraryMediaEvents } from '$lib/server/library/LibraryMediaEvents.js';
-import { createChildLogger } from '$lib/logging';
+import { unmatchedFileService } from '#lib/server/library/unmatched-file-service.js';
+import { parseBody } from '#lib/server/api/validate.js';
+import { unmatchedMatchSchema } from '#lib/validation/schemas.js';
+import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LibraryUnmatchedMatchApi', logDomain: 'scans' });
 
@@ -29,11 +28,12 @@ export const POST: RequestHandler = async ({ request }: { request: Request }) =>
 		if (result.matched > 0) {
 			libraryMediaEvents.emitLibraryDataChanged({
 				source: mediaType === 'tv' ? 'series' : 'movie',
-				reason: 'unmatched-matched'
+				reason: 'unmatched-matched',
+				tmdbId
 			});
 		}
 
-		return json({
+		return Response.json({
 			success: result.matched > 0,
 			error: result.matched === 0 ? firstError : undefined,
 			data: result,
@@ -51,7 +51,7 @@ export const POST: RequestHandler = async ({ request }: { request: Request }) =>
 			{ error: error instanceof Error ? error.message : String(error) },
 			'[API] Error matching files'
 		);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to match files',

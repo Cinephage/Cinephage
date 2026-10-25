@@ -1,15 +1,15 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
-	import { Plus, Trash2, Pencil, Star, Globe, Copy, Loader2 } from 'lucide-svelte';
-	import { getResponseErrorMessage } from '$lib/utils/http';
-	import { getLanguageName } from '$lib/shared/languages';
-	import { requirementKey } from '$lib/shared/language-profile.js';
-	import type { LanguageProfileV2 } from '$lib/shared/language-profile.js';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import { SettingsSection } from '$lib/components/ui/settings';
-	import { ConfirmationModal } from '$lib/components/ui/modal';
-	import * as m from '$lib/paraglide/messages.js';
-	import { deleteLanguageProfile, updateLanguageSettings, ApiError } from '$lib/api';
+	import { refreshAll } from '$app/navigation';
+	import { Plus, Trash2, Pencil, Star, Globe, Copy, Loader2 } from '@lucide/svelte';
+	import { getResponseErrorMessage } from '#lib/utils/http.js';
+	import { getLanguageName } from '#lib/shared/languages.js';
+	import { requirementKey } from '#lib/shared/language-profile.js';
+	import type { LanguageProfileV2 } from '#lib/shared/language-profile.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { SettingsSection } from '#lib/components/ui/settings/index.js';
+	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import { deleteLanguageProfile, updateLanguageSettings, ApiError } from '#lib/api/index.js';
 	import LanguageProfileEditModal from './LanguageProfileEditModal.svelte';
 	import { variantLabel, accessibilityLabel } from './labels';
 
@@ -64,7 +64,7 @@
 		settingDefault = true;
 		try {
 			await updateLanguageSettings({ defaultProfileId: profile.id });
-			await invalidateAll();
+			await refreshAll();
 			toasts.success(m.settings_languages_defaultSaved());
 		} catch (error) {
 			toasts.error(
@@ -113,7 +113,7 @@
 		deleting = true;
 		try {
 			await deleteLanguageProfile(deleteTarget.id);
-			await invalidateAll();
+			await refreshAll();
 			confirmDeleteOpen = false;
 			deleteTarget = null;
 		} catch (error) {

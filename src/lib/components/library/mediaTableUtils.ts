@@ -1,5 +1,5 @@
-import type { LibraryMovie, LibrarySeries } from '$lib/types/library';
-import { pickBestMovieFile } from '$lib/shared/best-file.js';
+import type { LibraryMovie, LibrarySeries } from '#lib/types/library.js';
+import { pickBestMovieFile } from '#lib/shared/best-file.js';
 
 export function isMovie(item: LibraryMovie | LibrarySeries): item is LibraryMovie {
 	return 'hasFile' in item;

@@ -12,7 +12,8 @@ import {
 	supportsParam,
 	isMovieSearch,
 	isTvSearch,
-	indexerHasCategoriesForSearchType
+	indexerHasCategoriesForSearchType,
+	restrictionAllowsSearchType
 } from '../types';
 
 /**
@@ -27,7 +28,11 @@ export class SearchCapabilityChecker {
 	 * @param capabilities - The indexer's capabilities
 	 * @returns true if the indexer can handle this search
 	 */
-	canSearch(criteria: SearchCriteria, capabilities: IndexerCapabilities): boolean {
+	canSearch(
+		criteria: SearchCriteria,
+		capabilities: IndexerCapabilities,
+		categoryRestriction?: number[]
+	): boolean {
 		const searchType = criteria.searchType as SearchType;
 
 		// First check: Does the indexer have categories that match this search type?
@@ -39,6 +44,16 @@ export class SearchCapabilityChecker {
 				searchType
 			);
 			if (!hasMatchingCategories) {
+				return false;
+			}
+
+			// The indexer's own declared capabilities are necessary but not
+			// sufficient: a user may have restricted this specific instance to a
+			// narrower set of categories (e.g. "Movies only") than what the
+			// indexer natively supports. That restriction only ever fed into the
+			// outgoing cat= parameter before, never into eligibility - so a TV
+			// search would still fire against a Movies-restricted indexer.
+			if (!restrictionAllowsSearchType(categoryRestriction, searchType)) {
 				return false;
 			}
 		}
@@ -92,7 +107,8 @@ export class SearchCapabilityChecker {
 	 */
 	canSearchWithReason(
 		criteria: SearchCriteria,
-		capabilities: IndexerCapabilities
+		capabilities: IndexerCapabilities,
+		categoryRestriction?: number[]
 	): { canSearch: boolean; reason?: string } {
 		const searchType = criteria.searchType as SearchType;
 
@@ -106,6 +122,13 @@ export class SearchCapabilityChecker {
 				return {
 					canSearch: false,
 					reason: `No ${searchType} categories (indexer has: ${Array.from(capabilities.categories.keys()).join(', ')})`
+				};
+			}
+
+			if (!restrictionAllowsSearchType(categoryRestriction, searchType)) {
+				return {
+					canSearch: false,
+					reason: `Indexer is restricted to categories [${categoryRestriction?.join(', ')}], which don't include ${searchType}`
 				};
 			}
 		}

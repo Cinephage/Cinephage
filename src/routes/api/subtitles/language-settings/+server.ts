@@ -1,10 +1,9 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { getLanguageSettingsService } from '$lib/server/subtitles/services/LanguageSettingsService';
-import { languageSettingsUpdateSchema } from '$lib/validation/schemas';
-import { parseBody } from '$lib/server/api/validate.js';
-import { tmdb } from '$lib/server/tmdb.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { getLanguageSettingsService } from '#lib/server/subtitles/services/LanguageSettingsService.js';
+import { languageSettingsUpdateSchema } from '#lib/server/validation/schemas.js';
+import { parseBody } from '#lib/server/api/validate.js';
+import { tmdb } from '#lib/server/tmdb.js';
 
 /**
  * GET /api/subtitles/language-settings
@@ -12,7 +11,7 @@ import { tmdb } from '$lib/server/tmdb.js';
  */
 export const GET: RequestHandler = async () => {
 	const settings = await getLanguageSettingsService().get();
-	return json(settings);
+	return Response.json(settings);
 };
 
 /**
@@ -31,5 +30,5 @@ export const PUT: RequestHandler = async (event) => {
 	// settings cache TTL.
 	tmdb.invalidateSettings();
 
-	return json(settings);
+	return Response.json(settings);
 };

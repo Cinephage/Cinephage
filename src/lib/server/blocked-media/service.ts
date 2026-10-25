@@ -1,19 +1,19 @@
-import { db } from '$lib/server/db/index.js';
+import { db } from '#lib/server/db/index.js';
 import {
 	blockedMedia,
 	movies,
 	series,
 	downloadQueue,
 	downloadHistory
-} from '$lib/server/db/schema.js';
+} from '#lib/server/db/schema.js';
 import { eq, and, count, desc, sql } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 import { randomUUID } from 'node:crypto';
-import { invalidateBlockedCache } from '$lib/server/library/status.js';
-import { getDownloadClientManager } from '$lib/server/downloadClients/DownloadClientManager.js';
-import { deleteAllAlternateTitles } from '$lib/server/services/index.js';
-import { libraryMediaEvents } from '$lib/server/library/LibraryMediaEvents';
-import { acquisitionService } from '$lib/server/acquisition/AcquisitionService.js';
+import { invalidateBlockedCache } from '#lib/server/library/status.js';
+import { getDownloadClientManager } from '#lib/server/downloadClients/DownloadClientManager.js';
+import { deleteAllAlternateTitles } from '#lib/server/services/index.js';
+import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
+import { acquisitionService } from '#lib/server/acquisition/AcquisitionService.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 
@@ -56,6 +56,24 @@ class BlockedMediaService {
 		}
 
 		await this.removeFromLibrary(tmdbId, mediaType);
+
+		// Blocking must also kill demand: active requests for this media are
+		// declined (leaf module — deny.ts must never import this service).
+		try {
+			const { declinePendingRequestsForBlockedMedia } = await import('../requests/deny.js');
+			const declined = await declinePendingRequestsForBlockedMedia(
+				tmdbId,
+				mediaType === 'tv' ? 'series' : 'movie'
+			);
+			if (declined > 0) {
+				logger.info({ tmdbId, mediaType, declined }, 'Declined active requests for blocked media');
+			}
+		} catch (err) {
+			logger.warn(
+				{ tmdbId, error: err instanceof Error ? err.message : String(err) },
+				'Failed to decline requests for blocked media'
+			);
+		}
 
 		const [entry] = await db
 			.insert(blockedMedia)

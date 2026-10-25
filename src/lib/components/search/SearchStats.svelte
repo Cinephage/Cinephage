@@ -7,7 +7,7 @@
 		ChevronUp,
 		Download,
 		XCircle
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 	import { getContext } from 'svelte';
 
 	type SearchMode = 'all' | 'multiSeasonPack';

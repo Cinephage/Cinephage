@@ -9,11 +9,11 @@ import {
 	type TestDatabase
 } from '../../../../../../test/db-helper';
 import { createRequestEvent } from '../../../../../../test/api-helper';
-import { rootFolders, series, episodeFiles } from '$lib/server/db/schema';
+import { rootFolders, series, episodeFiles } from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	}
@@ -27,7 +27,7 @@ const mockLogger = vi.hoisted(() => ({
 	child: vi.fn().mockReturnThis()
 }));
 
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	logger: mockLogger,
 	createChildLogger: vi.fn(() => mockLogger)
 }));
@@ -36,7 +36,7 @@ const { isPathInsideManagedRootMock } = vi.hoisted(() => ({
 	isPathInsideManagedRootMock: vi.fn().mockResolvedValue(true)
 }));
 
-vi.mock('$lib/server/filesystem/path-guard.js', () => ({
+vi.mock('#lib/server/filesystem/path-guard.js', () => ({
 	isPathInsideManagedRoot: isPathInsideManagedRootMock
 }));
 

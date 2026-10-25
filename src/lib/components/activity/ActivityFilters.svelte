@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 	import type { Snippet } from 'svelte';
-	import * as m from '$lib/paraglide/messages.js';
-	import type { ActivityFilters, FilterOptions } from '$lib/types/activity';
+	import * as m from '#lib/paraglide/messages.js';
+	import type { ActivityFilters, FilterOptions } from '#lib/types/activity.js';
 	import {
 		Filter,
 		X,
@@ -15,15 +15,14 @@
 		Search,
 		ChevronDown,
 		ChevronUp
-	} from 'lucide-svelte';
-	import { toDateString } from '$lib/utils/format.js';
+	} from '@lucide/svelte';
+	import { toDateString } from '#lib/utils/format.js';
 
 	interface Props {
 		filters: ActivityFilters;
 		filterOptions: FilterOptions;
 		statusContext?: 'active' | 'history';
 		onFiltersChange: (filters: ActivityFilters) => void;
-		onClearFilters: () => void;
 		showActiveFilters?: boolean;
 		showHistoryControls?: boolean;
 		activeFiltersContent?: Snippet;
@@ -35,7 +34,6 @@
 		filterOptions,
 		statusContext = 'history',
 		onFiltersChange,
-		onClearFilters,
 		showActiveFilters = false,
 		showHistoryControls = false,
 		activeFiltersContent,
@@ -43,19 +41,6 @@
 	}: Props = $props();
 
 	let isExpanded = $state(false);
-	let hasActiveFilters = $derived(
-		filters.status !== 'all' ||
-			filters.mediaType !== 'all' ||
-			filters.protocol !== 'all' ||
-			filters.indexer ||
-			filters.releaseGroup ||
-			filters.resolution ||
-			filters.isUpgrade ||
-			filters.includeNoResults ||
-			filters.startDate ||
-			filters.endDate ||
-			filters.search
-	);
 
 	// ── Debounced text inputs ────────────────────────────────────────────
 	// Search and releaseGroup are text inputs that fire on every keystroke.
@@ -147,6 +132,19 @@
 		return filters.startDate === range.startDate && filters.endDate === range.endDate;
 	}
 
+	const activeDatePresetValue = $derived.by(() => {
+		const match = datePresets.find((preset) => isDatePresetActive(preset.days));
+		return match ? String(match.days) : '';
+	});
+
+	function handleDatePresetChange(value: string) {
+		if (value === '') {
+			clearDateRange();
+			return;
+		}
+		applyDatePreset(Number(value));
+	}
+
 	function clearDateRange() {
 		onFiltersChange({
 			...filters,
@@ -195,40 +193,9 @@
 	const resolutionOptions = ['4K', '2160p', '1080p', '720p', '480p', 'SD'];
 </script>
 
-<div class="rounded-xl border border-base-300 bg-base-200 p-4">
-	<div class="flex items-center justify-between gap-2">
-		<div class="flex items-center gap-2">
-			<Filter class="h-5 w-5" />
-			<span class="font-medium">{m.activity_filters_title()}</span>
-			{#if hasActiveFilters}
-				<span class="badge badge-sm badge-primary">{m.common_active()}</span>
-			{/if}
-		</div>
-		<div class="flex items-center gap-2">
-			{#if hasActiveFilters}
-				<button class="btn btn-ghost btn-xs" onclick={onClearFilters}>
-					<X class="h-3 w-3" />
-					{m.action_clear()}
-				</button>
-			{/if}
-			<button
-				class="btn gap-1 btn-sm"
-				onclick={() => (isExpanded = !isExpanded)}
-				aria-label={isExpanded ? 'Collapse filters' : 'Expand filters'}
-			>
-				{#if isExpanded}
-					<span>{m.activity_filters_lessFilters()}</span>
-					<ChevronUp class="h-4 w-4" />
-				{:else}
-					<span>{m.activity_filters_moreFilters()}</span>
-					<ChevronDown class="h-4 w-4" />
-				{/if}
-			</button>
-		</div>
-	</div>
-
-	<div class="mt-3 flex flex-wrap items-center gap-2">
-		<div class="form-control min-w-50 flex-1">
+<div class="rounded-lg border border-base-content/12 bg-base-100 p-4 shadow-sm">
+	<div class="flex flex-wrap items-center gap-2">
+		<div class="form-control min-w-50 flex-1 sm:max-w-64">
 			<div class="group relative">
 				<div class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2">
 					<Search
@@ -238,12 +205,14 @@
 				<input
 					type="text"
 					placeholder={m.activity_filters_searchPlaceholder()}
-					class="input w-full rounded-full border-base-content/20 bg-base-200/60 pr-9 pl-10 transition-all duration-200 input-md placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
+					class="input w-full rounded-full border-base-content/20 bg-base-200/60 pr-9 pl-10 transition-all duration-200 input-sm placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
 					value={searchValue}
 					oninput={(e) => onSearchInput(e.currentTarget.value)}
 				/>
 			</div>
 		</div>
+
+		<span class="h-4 w-px bg-base-content/15"></span>
 
 		<div class="join">
 			<button
@@ -267,30 +236,40 @@
 		</div>
 
 		{#if statusContext === 'history'}
-			<div class="join">
+			<span class="h-4 w-px bg-base-content/15"></span>
+
+			<select
+				class="select w-28 border-base-content/20 bg-base-200 select-sm sm:w-auto"
+				onchange={(e) => handleDatePresetChange(e.currentTarget.value)}
+				aria-label="Date range"
+			>
+				<option value="" selected={activeDatePresetValue === ''}>All time</option>
 				{#each datePresets as preset (preset.label)}
-					<button
-						class="btn join-item btn-sm {isDatePresetActive(preset.days)
-							? 'btn-primary'
-							: 'btn-ghost'}"
-						onclick={() => applyDatePreset(preset.days)}
-						title="Last {preset.days === 0 ? '24 hours' : preset.days + ' days'}"
-						aria-pressed={isDatePresetActive(preset.days)}
-					>
+					<option value={preset.days} selected={activeDatePresetValue === String(preset.days)}>
 						{preset.label}
-					</button>
+					</option>
 				{/each}
-				{#if filters.startDate || filters.endDate}
-					<button class="btn join-item btn-ghost btn-error btn-sm" onclick={clearDateRange}>
-						<X class="h-3 w-3" />
-					</button>
-				{/if}
-			</div>
+			</select>
 		{/if}
+
+		<button
+			class="btn ml-auto gap-1.5 btn-ghost btn-sm"
+			onclick={() => (isExpanded = !isExpanded)}
+			aria-label={isExpanded ? 'Collapse filters' : 'Expand filters'}
+		>
+			<Filter class="h-4 w-4 text-base-content/50" />
+			{#if isExpanded}
+				<span>{m.activity_filters_lessFilters()}</span>
+				<ChevronUp class="h-4 w-4" />
+			{:else}
+				<span>{m.activity_filters_moreFilters()}</span>
+				<ChevronDown class="h-4 w-4" />
+			{/if}
+		</button>
 	</div>
 
 	{#if isExpanded}
-		<div class="mt-3 grid gap-4 border-t border-base-300 pt-4 md:grid-cols-2 lg:grid-cols-3">
+		<div class="mt-3 grid gap-4 border-t border-base-content/10 pt-4 md:grid-cols-2 lg:grid-cols-3">
 			<!-- Status -->
 			<div class="space-y-2">
 				<label class="flex items-center gap-2 text-sm font-medium">
@@ -466,7 +445,7 @@
 	{/if}
 
 	{#if showActiveFilters && activeFiltersContent}
-		<div class="mt-3 border-t border-base-300 pt-3">
+		<div class="mt-3 border-t border-base-content/10 pt-3">
 			{@render activeFiltersContent()}
 		</div>
 	{/if}

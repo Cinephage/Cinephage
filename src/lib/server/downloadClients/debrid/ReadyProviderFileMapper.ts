@@ -1,15 +1,15 @@
 import { basename } from 'node:path';
-import { DOWNLOAD, EXCLUDED_FILE_PATTERNS, isVideoFile } from '$lib/config/constants.js';
-import { LibraryDestinationPlanner } from '$lib/server/downloadClients/import/LibraryDestinationPlanner';
+import { DOWNLOAD, EXCLUDED_FILE_PATTERNS, isVideoFile } from '#lib/config/constants.js';
+import { LibraryDestinationPlanner } from '#lib/server/downloadClients/import/LibraryDestinationPlanner.js';
 import {
 	matchEpisodesByIdentifier,
 	matchEpisodesFromQueueContext,
 	resolveEpisodeIdentifierWithFallback,
 	type SeriesType
-} from '$lib/server/library/tv-episode-resolver.js';
+} from '#lib/server/library/tv-episode-resolver.js';
 import type { ProviderFile, ProviderItem } from './debrid-adapter';
-import { extractLanguagesFromFileName } from '$lib/server/indexers/parser/patterns/language';
-import { languageMatches } from '$lib/server/languages/audio-preference';
+import { extractLanguagesFromFileName } from '#lib/server/indexers/parser/patterns/language.js';
+import { languageMatches } from '#lib/server/languages/audio-preference.js';
 
 interface ReadyProviderFileMapperOptions {
 	naming: ConstructorParameters<typeof LibraryDestinationPlanner>[0];

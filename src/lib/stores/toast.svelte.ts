@@ -5,7 +5,7 @@
  * that only make sense in the browser context.
  */
 
-import { browser } from '$app/environment';
+import { browser } from '$app/env';
 
 // Generate unique ID with fallback for environments without crypto.randomUUID
 function generateId(): string {

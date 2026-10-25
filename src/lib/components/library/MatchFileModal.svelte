@@ -1,13 +1,14 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import { untrack } from 'svelte';
-	import { Search, X, Clapperboard, Tv, Check, Loader2, ChevronRight } from 'lucide-svelte';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
-	import TmdbImage from '$lib/components/tmdb/TmdbImage.svelte';
-	import { getFileName } from '$lib/utils/format.js';
-	import { searchTmdb } from '$lib/api/discover.js';
-	import { matchUnmatched } from '$lib/api/library.js';
+	import { Search, X, Clapperboard, Tv, Check, Loader2, ChevronRight } from '@lucide/svelte';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
+	import TmdbImage from '#lib/components/tmdb/TmdbImage.svelte';
+	import { getFileName } from '#lib/utils/format.js';
+	import { searchTmdb } from '#lib/api/discover.js';
+	import { matchUnmatched } from '#lib/api/library.js';
+	import { extractSearchYear } from '#lib/utils/search-query.js';
 
 	interface UnmatchedFile {
 		id: string;
@@ -24,9 +25,9 @@
 		id: number;
 		name?: string;
 		title?: string;
-		poster_path: string | null;
-		first_air_date?: string;
-		release_date?: string;
+		poster_path?: string | null;
+		first_air_date?: string | null;
+		release_date?: string | null;
 		overview?: string;
 	}
 
@@ -55,7 +56,8 @@
 	// Reset state when file changes
 	$effect(() => {
 		if (file) {
-			searchQuery = file.parsedTitle || '';
+			const { title, year } = extractSearchYear(file.parsedTitle || '');
+			searchQuery = year ? `${title} (${year})` : title;
 			searchType = file.mediaType === 'tv' ? 'tv' : 'movie';
 			selectedShow = null;
 			season = file.parsedSeason ?? 1;
@@ -203,7 +205,7 @@
 			<div class="flex items-center gap-3">
 				<div class="h-16 w-12 shrink-0 overflow-hidden rounded">
 					<TmdbImage
-						path={selectedShow.poster_path}
+						path={selectedShow.poster_path ?? null}
 						alt={selectedShow.name ?? 'Show poster'}
 						size="w92"
 						class="h-full w-full object-cover"

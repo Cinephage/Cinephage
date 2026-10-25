@@ -1,12 +1,11 @@
-import { json } from '@sveltejs/kit';
 import { z } from 'zod';
 import type { RequestHandler } from './$types.js';
-import { requireAdmin, requireAuth } from '$lib/server/auth/authorization.js';
-import { parseBody } from '$lib/server/api/validate.js';
-import { getLibraryEntityService } from '$lib/server/library/LibraryEntityService.js';
-import { libraryCreateSchema, libraryMediaTypeSchema } from '$lib/validation/schemas.js';
-import { isAppError } from '$lib/errors';
-import { libraryMediaEvents } from '$lib/server/library/LibraryMediaEvents.js';
+import { requireAdmin, requireAuth } from '#lib/server/auth/authorization.js';
+import { parseBody } from '#lib/server/api/validate.js';
+import { getLibraryEntityService } from '#lib/server/library/LibraryEntityService.js';
+import { libraryCreateSchema, libraryMediaTypeSchema } from '#lib/validation/schemas.js';
+import { isAppError } from '#lib/errors/index.js';
+import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
 
 const listSchema = z.object({
 	mediaType: libraryMediaTypeSchema.optional(),
@@ -23,7 +22,7 @@ export const GET: RequestHandler = async (event) => {
 	});
 
 	if (!parsed.success) {
-		return json(
+		return Response.json(
 			{
 				error: 'Invalid query parameters',
 				details: parsed.error.flatten()
@@ -35,7 +34,7 @@ export const GET: RequestHandler = async (event) => {
 	const service = getLibraryEntityService();
 	const libraries = await service.listLibraries(parsed.data);
 
-	return json({ success: true, libraries });
+	return Response.json({ success: true, libraries });
 };
 
 export const POST: RequestHandler = async (event) => {
@@ -51,10 +50,10 @@ export const POST: RequestHandler = async (event) => {
 			reason: 'library-created',
 			entityId: library.id
 		});
-		return json({ success: true, library });
+		return Response.json({ success: true, library });
 	} catch (error) {
 		if (isAppError(error)) {
-			return json(error.toJSON(), { status: error.statusCode });
+			return Response.json(error.toJSON(), { status: error.statusCode });
 		}
 		throw error;
 	}

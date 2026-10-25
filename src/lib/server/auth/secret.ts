@@ -1,9 +1,5 @@
-import { existsSync, mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import Database from 'better-sqlite3';
-import { env } from '$env/dynamic/private';
+import { getSharedSqliteConnection } from '#lib/server/db/connection.js';
 
-const DATA_DIR = process.env.DATA_DIR || 'data';
 const DEFAULT_BASE_URL = 'http://localhost:5173';
 const BUILD_TIME_PLACEHOLDER = 'build-time-placeholder-do-not-use-in-production';
 
@@ -11,34 +7,11 @@ function normalizeUrl(url: string): string {
 	return url.trim().replace(/\/+$/, '');
 }
 
-export function getAuthDatabasePath(): string {
-	return (
-		process.env.AUTH_DATABASE_URL || process.env.DATABASE_URL || join(DATA_DIR, 'cinephage.db')
-	);
-}
-
-export function ensureAuthDatabaseDirectory(): void {
-	const dbPath = getAuthDatabasePath();
-
-	// Skip URI-style and in-memory database targets.
-	if (dbPath === ':memory:' || dbPath.startsWith('file:')) {
-		return;
-	}
-
-	mkdirSync(dirname(dbPath), { recursive: true });
-}
-
 function getConfiguredExternalUrl(): string | null {
-	const dbPath = getAuthDatabasePath();
-
-	if (!existsSync(dbPath)) {
-		return null;
-	}
-
-	let sqlite: Database.Database | null = null;
-
+	// Runs during auth module init, before schema-sync may have created the
+	// settings table — guard with sqlite_master and tolerate a missing table.
 	try {
-		sqlite = new Database(dbPath, { readonly: true });
+		const sqlite = getSharedSqliteConnection();
 		const settingsTable = sqlite
 			.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'settings'`)
 			.get();
@@ -58,8 +31,6 @@ function getConfiguredExternalUrl(): string | null {
 		return normalizeUrl(row.value);
 	} catch {
 		return null;
-	} finally {
-		sqlite?.close();
 	}
 }
 
@@ -74,14 +45,24 @@ function getConfiguredExternalUrl(): string | null {
  * encrypted API keys in the database permanently unrecoverable.
  */
 export function getAuthSecret(): string {
-	const secret = env.BETTER_AUTH_SECRET?.trim() || process.env.BETTER_AUTH_SECRET?.trim();
+	// Read process.env directly and stay live: every runtime we ship (dev
+	// server, adapter-node behind server.js + dotenv, vitest setup) populates
+	// it, and tests/orchestrators rotate it after module init. SvelteKit 3's
+	// declared $app/env/private bindings are captured at module load instead.
+	const secret = process.env.BETTER_AUTH_SECRET?.trim();
 	if (secret) {
 		return secret;
 	}
 
-	// During SSR build and vitest runs there is no runtime auth flow.
-	// Use a deterministic placeholder to keep imports from crashing in CI/tests.
-	if (process.env.VITE_SSR_BUILD || process.env.VITEST || process.env.NODE_ENV === 'test') {
+	// During vite builds and vitest runs there is no runtime auth flow.
+	// SvelteKit 3's post-build route analysis imports server modules (e.g. the
+	// better-auth instance below reads this at module scope), so the placeholder
+	// must also apply to build workers running under NODE_ENV=production —
+	// VITE_SSR_BUILD is only ever set by `npm run build`, never by the built
+	// server's runtime (server.js / systemd), which still fails closed here.
+	const isBuildOrTestContext =
+		process.env.VITE_SSR_BUILD || process.env.VITEST || process.env.NODE_ENV === 'test';
+	if (isBuildOrTestContext) {
 		return BUILD_TIME_PLACEHOLDER;
 	}
 

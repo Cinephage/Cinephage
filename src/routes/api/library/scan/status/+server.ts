@@ -1,10 +1,10 @@
 import type { RequestHandler } from './$types.js';
-import { createSSEStream } from '$lib/server/sse';
+import { createSSEStream } from '#lib/server/sse.js';
 import {
 	librarySchedulerService,
 	diskScanService,
 	libraryJobService
-} from '$lib/server/library/index.js';
+} from '#lib/server/library/index.js';
 
 /**
  * GET /api/library/scan/status

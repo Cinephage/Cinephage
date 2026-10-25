@@ -1,21 +1,21 @@
 import parseTorrent from 'parse-torrent';
-import { getDownloadClientManager } from '$lib/server/downloadClients/DownloadClientManager.js';
-import { downloadMonitor } from '$lib/server/downloadClients/monitoring/index.js';
-import { extractLanguagesFromFileName } from '$lib/server/indexers/parser/patterns/language';
-import type { QueueQualityInfo } from '$lib/types/queue';
-import { ReleaseParser } from '$lib/server/indexers/parser/ReleaseParser.js';
+import { getDownloadClientManager } from '#lib/server/downloadClients/DownloadClientManager.js';
+import { downloadMonitor } from '#lib/server/downloadClients/monitoring/index.js';
+import { extractLanguagesFromFileName } from '#lib/server/indexers/parser/patterns/language.js';
+import type { QueueQualityInfo } from '#lib/types/queue.js';
+import { ReleaseParser } from '#lib/server/indexers/parser/ReleaseParser.js';
 import { getDownloadResolutionService } from '../DownloadResolutionService.js';
 import {
 	buildEpisodePointerFileSelection,
 	parseEpisodePointerFromGuid,
 	parseEpisodePointerFromTitle
 } from '../episode-pointer.js';
-import { getIndexerManager } from '$lib/server/indexers/IndexerManager.js';
-import { blocklistService } from '$lib/server/monitoring/specifications/BlocklistSpecification.js';
-import { acquisitionService } from '$lib/server/acquisition/AcquisitionService.js';
-import { createChildLogger } from '$lib/logging/index.js';
+import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
+import { blocklistService } from '#lib/server/monitoring/specifications/BlocklistSpecification.js';
+import { acquisitionService } from '#lib/server/acquisition/AcquisitionService.js';
+import { createChildLogger } from '#lib/logging/index.js';
 import type { GrabRequest, ResolvedContext, HandlerResult } from '../grab-types.js';
-import type { DownloadInfo } from '$lib/server/downloadClients/core/interfaces.js';
+import type { DownloadInfo } from '#lib/server/downloadClients/core/interfaces.js';
 
 const logger = createChildLogger({ module: 'TorrentHandler' });
 const parser = new ReleaseParser();
@@ -139,9 +139,9 @@ export class TorrentHandler {
 					parsedTorrent.files.length > 0
 				) {
 					const { resolveBlockedExtensionsForQueueItem } =
-						await import('$lib/server/settings/blocked-extensions.js');
+						await import('#lib/server/settings/blocked-extensions.js');
 					const { DANGEROUS_EXTENSIONS, EXECUTABLE_EXTENSIONS } =
-						await import('$lib/config/constants.js');
+						await import('#lib/config/constants.js');
 					const userBlocked = await resolveBlockedExtensionsForQueueItem({
 						movieId: movieId ?? null,
 						seriesId: seriesId ?? null

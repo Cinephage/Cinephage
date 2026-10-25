@@ -7,7 +7,7 @@ import {
 	series,
 	subtitleHistory,
 	subtitles
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 import { join } from 'node:path';
 
 const mockLogger = vi.hoisted(() => ({
@@ -20,7 +20,7 @@ const mockLogger = vi.hoisted(() => ({
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -30,7 +30,7 @@ vi.mock('$lib/server/db', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -40,7 +40,7 @@ vi.mock('$lib/server/db/index.js', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	logger: mockLogger,
 	createChildLogger: vi.fn(() => mockLogger)
 }));
@@ -347,5 +347,45 @@ describe('SubtitleScannerService scanSeriesSubtitles association', () => {
 
 		const history = await testDb.db.select().from(subtitleHistory);
 		expect(history.filter((h) => h.action === 'deleted')).toHaveLength(1);
+	});
+
+	it('skips discovery for a series with no episode files but still cleans its stale subtitle rows (arr parity)', async () => {
+		await seedRootAndSeries();
+		await seedEpisode('ep-1', 1, 1);
+		// No episode files: nothing to discover, folder may not even exist.
+		// A subtitle row survived from when the file existed.
+		await testDb.db.insert(subtitles).values({
+			id: 'sub-orphan',
+			episodeId: 'ep-1',
+			relativePath: 'Season 01/Show S01E01.en.srt',
+			language: 'en',
+			isForced: false,
+			isHearingImpaired: false,
+			format: 'srt',
+			size: 40
+		});
+
+		const service = SubtitleScannerService.getInstance();
+		const discoverSpy = vi.spyOn(service, 'discoverSubtitles').mockResolvedValue([]);
+
+		const result = await service.scanSeriesSubtitles(SERIES_ID);
+
+		expect(discoverSpy).not.toHaveBeenCalled();
+		expect(result.errors).toHaveLength(0);
+		// Owner-keyed reconcile sees the row; its path cannot resolve (the
+		// episode has no media file anymore), so it is deleted.
+		expect(result.removed).toBe(1);
+		expect(await savedSubtitles()).toHaveLength(0);
+	});
+
+	it('logs a missing scan target at debug, not error', async () => {
+		const service = SubtitleScannerService.getInstance();
+		const missing = '/tmp/cinephage-does-not-exist-xyz';
+
+		const discovered = await service.discoverSubtitles(missing, missing);
+
+		expect(discovered).toEqual([]);
+		expect(mockLogger.error).not.toHaveBeenCalled();
+		expect(mockLogger.debug).toHaveBeenCalled();
 	});
 });

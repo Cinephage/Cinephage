@@ -1,4 +1,4 @@
-import { browser } from '$app/environment';
+import { browser } from '$app/env';
 
 export type ApiResponse<T = unknown> = { success: boolean; error?: string } & T;
 
@@ -37,6 +37,7 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<ApiRe
 		// always the generic "Validation failed" - surface the specific
 		// reason instead when it's available.
 		const details = body.context?.details;
+
 		const fieldMessages = Object.entries(details?.fieldErrors ?? {})
 			.filter(([, messages]) => messages?.length)
 			.map(([field, messages]) => `${field}: ${messages[0]}`);

@@ -6,10 +6,9 @@
  * Returns estimated storage usage and projections for history tables.
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { db } from '$lib/server/db/index.js';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
+import { db } from '#lib/server/db/index.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 import { sql } from 'drizzle-orm';
 
 export const GET: RequestHandler = async (event) => {
@@ -34,7 +33,7 @@ export const GET: RequestHandler = async (event) => {
 	// Rough average daily growth estimate
 	const avgDailyBytes = Math.max(1, Math.round(totalBytes / 30));
 
-	return json({
+	return Response.json({
 		currentEstimatedBytes: totalBytes,
 		averageDailyBytes: avgDailyBytes,
 		projectedBytes30d: totalBytes + avgDailyBytes * 30,

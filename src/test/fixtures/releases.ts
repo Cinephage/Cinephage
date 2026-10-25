@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { ReleaseAttributes } from '$lib/server/scoring/types.js';
+import type { ReleaseAttributes } from '#lib/server/scoring/types.js';
 
 const FIXED_DATE = '2024-01-01T00:00:00.000Z';
 

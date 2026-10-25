@@ -1,9 +1,9 @@
-import { json, error } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import { and, eq, sql } from 'drizzle-orm';
-import { db } from '$lib/server/db';
-import { storageInsights } from '$lib/server/db/schema';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { storageEvents } from '$lib/server/storage/StorageEvents.js';
+import { db } from '#lib/server/db/index.js';
+import { storageInsights } from '#lib/server/db/schema.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { storageEvents } from '#lib/server/storage/StorageEvents.js';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async (event) => {
@@ -33,5 +33,5 @@ export const POST: RequestHandler = async (event) => {
 
 	storageEvents.emitInsightUndismissed({ insightId });
 
-	return json({ success: true, id: result[0].id });
+	return Response.json({ success: true, id: result[0].id });
 };

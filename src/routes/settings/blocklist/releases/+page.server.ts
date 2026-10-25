@@ -1,5 +1,5 @@
 import type { PageServerLoad } from './$types';
-import { blocklistService } from '$lib/server/monitoring/specifications/BlocklistSpecification.js';
+import { blocklistService } from '#lib/server/monitoring/specifications/BlocklistSpecification.js';
 
 export const load: PageServerLoad = async () => {
 	const [entries, total] = await Promise.all([

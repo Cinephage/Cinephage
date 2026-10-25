@@ -22,7 +22,7 @@ import type {
 	SearchForSeasonParams,
 	SearchForMissingEpisodesOptions
 } from './types.js';
-import type { SearchProgressUpdate } from '$lib/server/downloads/MultiSeasonSearchStrategy.js';
+import type { SearchProgressUpdate } from '#lib/server/downloads/MultiSeasonSearchStrategy.js';
 
 export type {
 	GrabResult,

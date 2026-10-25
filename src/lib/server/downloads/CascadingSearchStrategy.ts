@@ -11,22 +11,22 @@
  * This strategy is used by both SearchOnAdd (interactive) and MonitoringSearchService (automatic).
  */
 
-import { getIndexerManager } from '$lib/server/indexers/IndexerManager.js';
-import { todayDateString } from '$lib/utils/format.js';
+import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
+import { todayDateString } from '#lib/utils/format.js';
 import { grabService } from './GrabService.js';
 import {
 	ReleaseBlocklistSpecification,
 	type ReleaseCandidate
-} from '$lib/server/monitoring/specifications/index.js';
-import { scoreRelease } from '$lib/server/scoring/scorer.js';
-import { qualityFilter } from '$lib/server/quality/index.js';
-import { createChildLogger } from '$lib/logging';
-import { db } from '$lib/server/db/index.js';
-import { episodes } from '$lib/server/db/schema.js';
+} from '#lib/server/monitoring/specifications/index.js';
+import { scoreRelease } from '#lib/server/scoring/scorer.js';
+import { qualityFilter } from '#lib/server/quality/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { db } from '#lib/server/db/index.js';
+import { episodes } from '#lib/server/db/schema.js';
 import { eq, and, inArray } from 'drizzle-orm';
-import type { SearchCriteria } from '$lib/server/indexers/types';
-import type { ScoringProfile } from '$lib/server/scoring/types.js';
-import { getSeriesSearchTitles } from '$lib/server/services/AlternateTitleService.js';
+import type { SearchCriteria } from '#lib/server/indexers/types/index.js';
+import type { ScoringProfile } from '#lib/server/scoring/types.js';
+import { getSeriesSearchTitles } from '#lib/server/services/AlternateTitleService.js';
 
 const logger = createChildLogger({ module: 'CascadingSearchStrategy', logDomain: 'downloads' });
 

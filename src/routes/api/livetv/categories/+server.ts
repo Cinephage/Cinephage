@@ -4,10 +4,9 @@
  * GET /api/livetv/categories - List cached categories for filtering
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getLiveTvChannelService } from '$lib/server/livetv/LiveTvChannelService';
-import { createChildLogger } from '$lib/logging';
+import { getLiveTvChannelService } from '#lib/server/livetv/LiveTvChannelService.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LiveTvCategories', logDomain: 'livetv' });
 
@@ -26,13 +25,13 @@ export const GET: RequestHandler = async ({ url }) => {
 
 	try {
 		const categories = await channelService.getCategories(accountIds);
-		return json({
+		return Response.json({
 			success: true,
 			categories
 		});
 	} catch (error) {
 		logger.error('[API] Failed to get categories', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to get categories'

@@ -38,6 +38,12 @@ interface HdrMatch {
 /**
  * Audio codec patterns ordered by specificity (most specific first)
  * Based on Profilarr regex_patterns/*.yml
+ *
+ * Boundary convention: patterns end in the lookahead `(?=\b|\d)` instead of
+ * plain `\b` because releases routinely glue the channel spec straight onto
+ * the codec (FLAC1.0, DTSHDMA7.1, EAC35.1). `\b` never exists between a
+ * letter and a digit, so a plain trailing `\b` silently drops the codec for
+ * those forms (#585).
  */
 const AUDIO_CODEC_PATTERNS: Array<{ pattern: RegExp; codec: AudioCodec }> = [
 	// =========================================================================
@@ -50,19 +56,19 @@ const AUDIO_CODEC_PATTERNS: Array<{ pattern: RegExp; codec: AudioCodec }> = [
 
 	// DTS:X (object-based DTS, lossless core) - Pattern: DTS-X
 	// Must check before DTS-HD MA and basic DTS
-	{ pattern: /\bDTS[ ._-]?X\b/i, codec: 'dts-x' },
+	{ pattern: /\bDTS[ ._-]?X(?=\b|\d)/i, codec: 'dts-x' },
 
 	// DTS-HD MA (Master Audio, lossless) - Pattern: \b(dts[-_. ]?(ma|hd([-_. ]?ma)?|xll))(\b|\d)
 	// Must check before DTS-HD HRA and generic DTS-HD
-	{ pattern: /\bDTS[ ._-]?HD[ ._-]?MA\b/i, codec: 'dts-hdma' },
-	{ pattern: /\bDTS[ ._-]?MA\b/i, codec: 'dts-hdma' },
-	{ pattern: /\bDTS[ ._-]?XLL\b/i, codec: 'dts-hdma' }, // XLL = lossless extension
+	{ pattern: /\bDTS[ ._-]?HD[ ._-]?MA(?=\b|\d)/i, codec: 'dts-hdma' },
+	{ pattern: /\bDTS[ ._-]?MA(?=\b|\d)/i, codec: 'dts-hdma' },
+	{ pattern: /\bDTS[ ._-]?XLL(?=\b|\d)/i, codec: 'dts-hdma' }, // XLL = lossless extension
 
 	// PCM (uncompressed) - Pattern: \b(l?)PCM(\b|\d)
-	{ pattern: /\bL?PCM\b/i, codec: 'pcm' },
+	{ pattern: /\bL?PCM(?=\b|\d)/i, codec: 'pcm' },
 
 	// FLAC (lossless) - Pattern: \bFLAC(\b|\d)
-	{ pattern: /\bFLAC\b/i, codec: 'flac' },
+	{ pattern: /\bFLAC(?=\b|\d)/i, codec: 'flac' },
 
 	// =========================================================================
 	// HIGH QUALITY LOSSY CODECS
@@ -70,15 +76,15 @@ const AUDIO_CODEC_PATTERNS: Array<{ pattern: RegExp; codec: AudioCodec }> = [
 
 	// DTS-HD HRA (High Resolution Audio, lossy) - Pattern: dts[-. ]?(hd[. ]?)?(hra?|hi\b)
 	// Must check before generic DTS-HD
-	{ pattern: /\bDTS[ ._-]?HD[ ._-]?HRA?\b/i, codec: 'dts-hd-hra' },
-	{ pattern: /\bDTS[ ._-]?HD[ ._-]?Hi\b/i, codec: 'dts-hd-hra' },
-	{ pattern: /\bDTS[ ._-]?HRA\b/i, codec: 'dts-hd-hra' },
+	{ pattern: /\bDTS[ ._-]?HD[ ._-]?HRA?(?=\b|\d)/i, codec: 'dts-hd-hra' },
+	{ pattern: /\bDTS[ ._-]?HD[ ._-]?Hi(?=\b|\d)/i, codec: 'dts-hd-hra' },
+	{ pattern: /\bDTS[ ._-]?HRA(?=\b|\d)/i, codec: 'dts-hd-hra' },
 
 	// DTS-HD (generic, unspecified) - Must check after MA and HRA
-	{ pattern: /\bDTS[ ._-]?HD\b/i, codec: 'dts-hd' },
+	{ pattern: /\bDTS[ ._-]?HD(?=\b|\d)/i, codec: 'dts-hd' },
 
 	// DTS-ES (Extended Surround, legacy 6.1) - Pattern: dts[-. ]?es\b
-	{ pattern: /\bDTS[ ._-]?ES\b/i, codec: 'dts-es' },
+	{ pattern: /\bDTS[ ._-]?ES(?=\b|\d)/i, codec: 'dts-es' },
 
 	// =========================================================================
 	// STANDARD LOSSY CODECS
@@ -93,19 +99,19 @@ const AUDIO_CODEC_PATTERNS: Array<{ pattern: RegExp; codec: AudioCodec }> = [
 	// Must check before basic DD
 	{ pattern: /\bDD[P+]/i, codec: 'dd+' },
 	{ pattern: /\bDDP[ ._]?[0-9]/i, codec: 'dd+' },
-	{ pattern: /\bE[ ._-]?AC[ ._-]?3\b/i, codec: 'dd+' },
-	{ pattern: /\bEAC3\b/i, codec: 'dd+' },
-	{ pattern: /\bDolby[ ._-]?Digital[ ._-]?Plus\b/i, codec: 'dd+' },
-	{ pattern: /\bDD[ ._-]?Plus\b/i, codec: 'dd+' },
+	{ pattern: /\bE[ ._-]?AC[ ._-]?3(?=\b|\d)/i, codec: 'dd+' },
+	{ pattern: /\bEAC3(?=\b|\d)/i, codec: 'dd+' },
+	{ pattern: /\bDolby[ ._-]?Digital[ ._-]?Plus(?=\b|\d)/i, codec: 'dd+' },
+	{ pattern: /\bDD[ ._-]?Plus(?=\b|\d)/i, codec: 'dd+' },
 	// DDPA = DD+ Atmos (Profilarr BTN Atmos pattern includes this)
 	{ pattern: /\bDDPA[ ._]?[0-9]/i, codec: 'dd+' },
 
 	// Dolby Digital (AC3) - Pattern: \bDD[^a-z+]|(?<!e)ac3
 	// Must check after DD+
 	{ pattern: /\bDD[ ._]?[0-9]/i, codec: 'dd' },
-	{ pattern: /\bAC[ ._-]?3\b/i, codec: 'dd' },
-	{ pattern: /\bAC3\b/i, codec: 'dd' },
-	{ pattern: /\bDolby[ ._-]?Digital\b(?![ ._-]?Plus)/i, codec: 'dd' },
+	{ pattern: /\bAC[ ._-]?3(?=\b|\d)/i, codec: 'dd' },
+	{ pattern: /\bAC3(?=\b|\d)/i, codec: 'dd' },
+	{ pattern: /\bDolby[ ._-]?Digital(?=\b|\d)(?![ ._-]?Plus)/i, codec: 'dd' },
 
 	// Opus (modern efficient) - Pattern: \bOPUS(\b|\d)(?!.*[ ._-](\d{3,4}p))
 	// Profilarr excludes matches where "Opus" is followed by resolution (movie title)
@@ -117,7 +123,7 @@ const AUDIO_CODEC_PATTERNS: Array<{ pattern: RegExp; codec: AudioCodec }> = [
 	{ pattern: /\bAAC\b/i, codec: 'aac' },
 
 	// MP3
-	{ pattern: /\bMP3\b/i, codec: 'mp3' }
+	{ pattern: /\bMP3(?=\b|\d)/i, codec: 'mp3' }
 ];
 
 // =============================================================================
@@ -128,10 +134,14 @@ const AUDIO_CODEC_PATTERNS: Array<{ pattern: RegExp; codec: AudioCodec }> = [
  * Atmos detection patterns
  * Profilarr pattern: \bATMOS|DDPA(\b|\d)
  * Also includes BTN naming convention: \bTrue[ .-]?HDA[ .-]?[57]\.1
+ *
+ * The generic Atmos pattern has no leading boundary: codecs glue directly
+ * onto it (TrueHDAtmos7.1, DTS-X.Atmos). The trailing `(?=\b|\d)` lookahead
+ * keeps embedded words like "Atmospheric" from matching.
  */
 const ATMOS_PATTERNS: RegExp[] = [
-	/\bAtmos\b/i,
-	/\bDolby[ ._-]?Atmos\b/i,
+	/Atmos(?=\b|\d)/i,
+	/\bDolby[ ._-]?Atmos(?=\b|\d)/i,
 	// DDPA = Dolby Digital Plus Atmos (common in WEB-DL)
 	/\bDDPA/i,
 	// BTN naming convention: TrueHDA7.1 = TrueHD Atmos 7.1

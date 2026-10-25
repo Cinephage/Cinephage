@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { db } from '$lib/server/db';
-import { indexers } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { indexers } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { logger } from '$lib/logging';
+import { logger } from '#lib/logging/index.js';
 import { BaseCinephageModule } from '../BaseCinephageModule.js';
 import type { ConnectionTestResult, CinephageModuleContext } from '../types.js';
 import type { CinephageCore } from '../../core/CinephageCore.js';
@@ -14,7 +14,7 @@ import type {
 	StreamSource,
 	StreamSubtitle,
 	StreamType
-} from '$lib/server/streaming/types';
+} from '#lib/server/streaming/types.js';
 
 export const CINEPHAGE_STREAM_DEFINITION_ID = 'cinephage-stream';
 export const MODULE_ID = 'library-streaming';

@@ -1,17 +1,17 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
-	import { Plus } from 'lucide-svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { Plus } from '@lucide/svelte';
 	import { resolve } from '$app/paths';
-	import { resolvePath } from '$lib/utils/routing';
-	import type { UnifiedActivity } from '$lib/types/activity';
+	import { resolvePath } from '#lib/utils/routing.js';
+	import type { UnifiedActivity } from '#lib/types/activity.js';
 	import type {
 		RecentlyAddedData,
 		MissingEpisode,
 		UpcomingItem,
 		DashboardStats
-	} from '$lib/types/dashboard.js';
-	import { createSSE } from '$lib/sse';
-	import { layoutState, deriveMobileSseStatus } from '$lib/layout.svelte';
+	} from '#lib/types/dashboard.js';
+	import { createSSE } from '#lib/sse/index.js';
+	import { layoutState, deriveMobileSseStatus } from '#lib/layout.svelte.js';
 	import {
 		DashboardStatsGrid,
 		QuickActions,
@@ -21,7 +21,7 @@
 		ComingUpList,
 		RecentHistorySidebar,
 		DashboardEmptyState
-	} from '$lib/components/dashboard';
+	} from '#lib/components/dashboard/index.js';
 
 	let { data } = $props();
 
@@ -153,10 +153,9 @@
 			<p class="text-base-content/70">{m.dashboard_subtitle()}</p>
 		</div>
 		<div class="flex items-center gap-2">
-			<a href={resolve('/discover')} class="btn gap-2 btn-primary btn-sm sm:w-auto">
-				<Plus class="h-4 w-4" />
-				{m.dashboard_addContent()}
-			</a>
+			<a href={resolve('discover')} class="btn gap-2 btn-primary btn-sm sm:w-auto"
+				><Plus class="h-4 w-4" />{m.dashboard_addContent()}</a
+			>
 		</div>
 	</div>
 

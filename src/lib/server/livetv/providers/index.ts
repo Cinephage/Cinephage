@@ -5,7 +5,11 @@
  */
 
 export type { LiveTvProvider } from './LiveTvProvider';
-export type { AuthResult, StreamResolutionResult, ProviderCapabilities } from '$lib/types/livetv';
+export type {
+	AuthResult,
+	StreamResolutionResult,
+	ProviderCapabilities
+} from '#lib/types/livetv.js';
 export { StalkerProvider, getStalkerProvider } from './StalkerProvider';
 export { XstreamProvider, getXstreamProvider } from './XstreamProvider';
 export { M3uProvider, getM3uProvider } from './M3uProvider';
@@ -16,7 +20,7 @@ import { getStalkerProvider } from './StalkerProvider';
 import { getXstreamProvider } from './XstreamProvider';
 import { getM3uProvider } from './M3uProvider';
 import { getCinephageIptvProvider } from './CinephageIptvProvider';
-import type { LiveTvProviderType, LiveTvAccount } from '$lib/types/livetv';
+import type { LiveTvProviderType, LiveTvAccount } from '#lib/types/livetv.js';
 
 /**
  * Get the appropriate provider for a given type

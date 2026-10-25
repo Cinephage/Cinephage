@@ -1,10 +1,10 @@
-import type { LibraryBreakdownItem } from '$lib/components/storage/utils.js';
+import type { LibraryBreakdownItem } from '#lib/components/storage/utils.js';
 import { sql } from 'drizzle-orm';
-import { getRootFolderService } from '$lib/server/downloadClients/RootFolderService';
-import { getEffectiveAnimeRootFolderEnforcement } from '$lib/server/library/anime-root-enforcement-settings.js';
-import { getFileManagementSettings } from '$lib/server/settings/file-management.js';
-import { getLibraryEntityService } from '$lib/server/library/LibraryEntityService';
-import { db } from '$lib/server/db';
+import { getRootFolderService } from '#lib/server/downloadClients/RootFolderService.js';
+import { getEffectiveAnimeRootFolderEnforcement } from '#lib/server/library/anime-root-enforcement-settings.js';
+import { getFileManagementSettings } from '#lib/server/settings/file-management.js';
+import { getLibraryEntityService } from '#lib/server/library/LibraryEntityService.js';
+import { db } from '#lib/server/db/index.js';
 import {
 	episodeFiles,
 	libraryScanHistory,
@@ -13,7 +13,7 @@ import {
 	series,
 	subtitles,
 	unmatchedFiles
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 
 type StorageBreakdownItem = {
 	id: string;

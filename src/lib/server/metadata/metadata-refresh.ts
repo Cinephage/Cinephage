@@ -1,9 +1,9 @@
-import { db } from '$lib/server/db/index.js';
-import { movies, series, episodes } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { movies, series, episodes } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { tmdb } from '$lib/server/tmdb.js';
+import { tmdb } from '#lib/server/tmdb.js';
 import { isGeneratedEpisodeTitle } from './episode-title.js';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 
@@ -349,12 +349,17 @@ async function refreshEpisodeMetadata(
 			if (name !== undefined && !isGeneratedEpisodeTitle(name)) epUpdate.title = name;
 			if (overview) epUpdate.overview = overview;
 
+			if (typeof ed.air_date === 'string' && ed.air_date) epUpdate.airDate = ed.air_date;
+			if (typeof ed.runtime === 'number') epUpdate.runtime = ed.runtime;
+
 			if (Object.keys(epUpdate).length > 0) {
 				await db.update(episodes).set(epUpdate).where(eq(episodes.id, ep.id));
 			}
 		} catch {
 			// skip individual episode failures
 		}
+
+		await new Promise((resolve) => setTimeout(resolve, 250));
 	}
 
 	logger.info({ seriesId, episodeCount: epList.length }, 'Refreshed episode metadata');

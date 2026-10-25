@@ -1,7 +1,6 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { computeMovieFileScore } from '$lib/server/scoring/file-scorer.js';
-import { createChildLogger } from '$lib/logging';
+import { computeMovieFileScore } from '#lib/server/scoring/file-scorer.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LibraryMovieScoreApi', logDomain: 'scans' });
 
@@ -14,7 +13,7 @@ export const GET: RequestHandler = async ({ params }) => {
 		const result = await computeMovieFileScore(params.id);
 
 		if (!result) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: 'Movie not found or has no files'
@@ -23,13 +22,13 @@ export const GET: RequestHandler = async ({ params }) => {
 			);
 		}
 
-		return json({
+		return Response.json({
 			success: true,
 			score: result
 		});
 	} catch (error) {
 		logger.error('[API] Error computing movie score', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to compute score'

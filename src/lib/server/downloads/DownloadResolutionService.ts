@@ -11,14 +11,14 @@
  * from info hashes only contain public trackers, which breaks private trackers.
  */
 
-import { getIndexerManager } from '$lib/server/indexers/IndexerManager';
+import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
 import {
 	parseTorrentFile,
 	extractInfoHashFromMagnet,
 	buildMagnetFromInfoHash
-} from '$lib/server/downloadClients/utils/torrentParser';
-import { createChildLogger } from '$lib/logging';
-import { redactUrl } from '$lib/server/utils/urlSecurity';
+} from '#lib/server/downloadClients/utils/torrentParser.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { redactUrl } from '#lib/server/utils/urlSecurity.js';
 
 const logger = createChildLogger({ module: 'DownloadResolutionService' });
 

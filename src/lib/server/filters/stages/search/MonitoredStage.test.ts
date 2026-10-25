@@ -4,7 +4,7 @@ import { makeSearchEligibilityContext } from '../../../../../test/fixtures/filte
 
 const mockFindFirst = vi.hoisted(() => vi.fn());
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	db: {
 		query: {
 			seasons: { findFirst: mockFindFirst }
@@ -12,7 +12,7 @@ vi.mock('$lib/server/db/index.js', () => ({
 	}
 }));
 
-vi.mock('$lib/server/db/schema.js', () => ({
+vi.mock('#lib/server/db/schema.js', () => ({
 	seasons: { id: 'id' }
 }));
 

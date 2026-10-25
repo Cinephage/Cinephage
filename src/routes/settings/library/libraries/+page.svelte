@@ -1,21 +1,21 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
-	import { Plus } from 'lucide-svelte';
-	import { SettingsPage, SettingsSection } from '$lib/components/ui/settings';
-	import { goto, invalidateAll } from '$app/navigation';
+	import * as m from '#lib/paraglide/messages.js';
+	import { Plus } from '@lucide/svelte';
+	import { SettingsPage, SettingsSection } from '#lib/components/ui/settings/index.js';
+	import { goto, refreshAll } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import type { PageData } from './$types';
-	import { LibraryList, LibraryEditModal } from '$lib/components/libraries';
-	import { ModalWrapper, ModalHeader } from '$lib/components/ui/modal';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import { deleteLibrary } from '$lib/api/settings.js';
+	import { LibraryList, LibraryEditModal } from '#lib/components/libraries/index.js';
+	import { ModalWrapper, ModalHeader } from '#lib/components/ui/modal/index.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { deleteLibrary } from '#lib/api/settings.js';
 	import {
 		getScanSettings,
 		saveScanSettings,
 		type ScanSettings
-	} from '$lib/api/library-settings.js';
-	import { formatBytes } from '$lib/utils/format.js';
+	} from '#lib/api/library-settings.js';
+	import { formatBytes } from '#lib/utils/format.js';
 
 	type RootFolderRef = {
 		id: string;
@@ -72,10 +72,10 @@
 	}
 
 	async function clearEditQueryParam() {
-		const url = new URL(page.url);
+		const url = new URL(page.url.href);
 		if (!url.searchParams.has('edit')) return;
 		url.searchParams.delete('edit');
-		await goto(url.toString(), { replaceState: true, noScroll: true, keepFocus: true });
+		await goto(url.toString(), { replace: true, reset: false });
 	}
 
 	function openAddLibraryModal() {
@@ -164,7 +164,7 @@
 
 			toasts.success('Library deleted');
 			confirmLibraryDeleteOpen = false;
-			await invalidateAll();
+			await refreshAll();
 		} catch (error) {
 			toasts.error(error instanceof Error ? error.message : 'Failed to delete library');
 		} finally {

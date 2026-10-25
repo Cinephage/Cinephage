@@ -113,11 +113,32 @@ describe('debrid download-client definitions and serialization', () => {
 			seedRatioLimit: null,
 			seedTimeLimit: null,
 			sequentialDownload: false,
+			// Untouched legacy forms keep the historical auto-removal behavior.
+			removeAfterImport: true,
 			downloadPathLocal: '/downloads',
 			downloadPathRemote: '/remote',
 			tempPathLocal: '/incomplete',
 			tempPathRemote: '/remote-incomplete',
 			priority: 2
+		});
+	});
+
+	it('serializes seed goals and removal policy for torrent clients', () => {
+		const data = serializeDownloadClientForm(
+			{
+				...formState(),
+				seedRatioLimit: ' 1.5 ',
+				seedTimeLimit: ' 4320 ',
+				removeAfterImport: false
+			},
+			false,
+			'edit'
+		);
+
+		expect(data).toMatchObject({
+			seedRatioLimit: '1.5',
+			seedTimeLimit: 4320,
+			removeAfterImport: false
 		});
 	});
 });

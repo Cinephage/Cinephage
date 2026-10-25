@@ -17,7 +17,7 @@ import type {
 	ProviderSearchOptions,
 	LanguageCode
 } from '../../types';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'subtitles' as const });
 import * as cheerio from 'cheerio';
@@ -363,7 +363,7 @@ export class YIFYSubtitlesProvider extends BaseSubtitleProvider {
 	): Promise<string | undefined> {
 		// Try TMDB external IDs first (most reliable)
 		try {
-			const { tmdb } = await import('$lib/server/tmdb');
+			const { tmdb } = await import('#lib/server/tmdb.js');
 			const searchResult = await tmdb.searchMovies(title, year);
 			if (searchResult.results?.length > 0) {
 				const match = searchResult.results[0];

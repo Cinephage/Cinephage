@@ -5,12 +5,12 @@
  * Runs hourly to check which lists need to be refreshed based on their individual intervals.
  */
 
-import { getSmartListService } from '$lib/server/smartlists/index.js';
-import { createChildLogger } from '$lib/logging';
+import { getSmartListService } from '#lib/server/smartlists/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'monitoring' as const });
 import type { TaskResult } from '../MonitoringScheduler.js';
-import type { TaskExecutionContext } from '$lib/server/tasks/TaskExecutionContext.js';
+import type { TaskExecutionContext } from '#lib/server/tasks/TaskExecutionContext.js';
 
 /**
  * Execute smart list refresh task

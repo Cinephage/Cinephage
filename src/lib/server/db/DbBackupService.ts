@@ -14,11 +14,11 @@
 import Database from 'better-sqlite3';
 import { mkdir, readdir, stat, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
-import { db } from '$lib/server/db/index.js';
-import { settings } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { settings } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
-import { resolveAppVersion } from '$lib/server/version.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { resolveAppVersion } from '#lib/server/version.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 

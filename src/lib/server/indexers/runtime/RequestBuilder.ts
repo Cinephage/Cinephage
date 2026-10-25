@@ -10,10 +10,10 @@ import type {
 } from '../schema/yamlDefinition';
 import { resolveCategoryId } from '../schema/yamlDefinition';
 import type { SearchCriteria } from '../types';
-import { getCategoriesForSearchType, isMovieSearch } from '../types';
+import { getCategoriesForSearchType, isMovieSearch, isTvSearch } from '../types';
 import { TemplateEngine } from '../engine/TemplateEngine';
 import { FilterEngine } from '../engine/FilterEngine';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'indexers' as const });
 import { encodeUrlParam } from '../http/EncodingUtils';
@@ -190,7 +190,18 @@ export class CategoryMapper {
 			}
 		}
 
-		return trackerIds.length > 0 ? trackerIds : this.defaultCategories;
+		if (trackerIds.length > 0) return trackerIds;
+
+		// None of the requested categories are mapped for this indexer. Falling back
+		// to every `default: true` category is wrong when they span more than one
+		// content type (e.g. a generic Movies default AND a generic TV default) - it
+		// would silently widen a TV-scoped search into also querying Movies (or vice
+		// versa). Only keep defaults whose own Newznab range matches what was
+		// actually requested; if none match either, omit the filter entirely rather
+		// than guess a wrong content type.
+		return this.defaultCategories.filter((trackerId) =>
+			newznabIds.some((id) => this.categoryMatchesParent(trackerId, id))
+		);
 	}
 
 	/**
@@ -300,6 +311,7 @@ export class RequestBuilder {
 		this.templateEngine.setVariable('.Query.Keywords', queryKeywords);
 		this.templateEngine.setVariable('.Keywords', this.applyKeywordsFilters(queryKeywords, search));
 		this.templateEngine.setVariable('.Categories', catTrackerIds);
+		this.templateEngine.setVariable('.Query.IdTokens', this.buildIdTokens(pathCriteria));
 
 		// Get search paths — filtered by content-type, not by the category restriction
 		const paths = this.getSearchPaths(search);
@@ -351,8 +363,9 @@ export class RequestBuilder {
 		criteria: SearchCriteria,
 		trackerCategories: string[]
 	): SearchPathBlock[] {
+		const hadRequestedCategories = (criteria.categories ?? []).length > 0;
 		const matchingPaths = paths.filter((path) =>
-			this.pathMatchesCategories(path, trackerCategories)
+			this.pathMatchesCategories(path, trackerCategories, hadRequestedCategories)
 		);
 
 		if (criteria.searchType === 'basic') {
@@ -411,6 +424,48 @@ export class RequestBuilder {
 	}
 
 	/**
+	 * Build Prowlarr query tokens ("{ImdbId:tt0111161} {Season:1} {Episode:5}") for
+	 * the criteria's IDs.
+	 *
+	 * Prowlarr's search API ignores separate imdbId/tmdbId params and only reads
+	 * IDs embedded in the query as tokens. It also skips a tracker outright when
+	 * asked for an ID the tracker doesn't support, so only IDs confirmed by live
+	 * caps are emitted — and none at all when the supported params are unknown.
+	 * Season/episode tokens only accompany an ID; on their own they are not an
+	 * ID search. Returns '' when there is nothing to emit.
+	 */
+	private buildIdTokens(criteria: SearchCriteria): string {
+		const isMovie = isMovieSearch(criteria);
+		const isTv = isTvSearch(criteria);
+		if (!isMovie && !isTv) return '';
+		const supported = this.supportedParams.get(isMovie ? 'movie' : 'tvsearch');
+		if (!supported) return '';
+
+		const tokens: string[] = [];
+		const addToken = (param: string, token: string, value: string | number | undefined) => {
+			if (value === undefined || value === '' || !supported.includes(param)) return;
+			tokens.push(`{${token}:${value}}`);
+		};
+
+		if (criteria.imdbId) {
+			const imdbId = criteria.imdbId.startsWith('tt') ? criteria.imdbId : `tt${criteria.imdbId}`;
+			addToken('imdbid', 'ImdbId', imdbId);
+		}
+		addToken('tmdbid', 'TmdbId', criteria.tmdbId);
+		if (isTv) {
+			addToken('tvdbid', 'TvdbId', criteria.tvdbId);
+			addToken('tvmazeid', 'TvMazeId', criteria.tvMazeId);
+		}
+		if (tokens.length === 0) return '';
+
+		if (isTv) {
+			addToken('season', 'Season', criteria.season);
+			addToken('ep', 'Episode', criteria.episode);
+		}
+		return tokens.join(' ');
+	}
+
+	/**
 	 * Apply keywords filters from search definition.
 	 */
 	private applyKeywordsFilters(keywords: string, search: SearchBlock): string {
@@ -446,13 +501,27 @@ export class RequestBuilder {
 	 * Check if path categories match the requested categories.
 	 * Handles both numeric category IDs and category names (like "Movies", "TV").
 	 */
-	private pathMatchesCategories(path: SearchPathBlock, trackerCategories: string[]): boolean {
+	private pathMatchesCategories(
+		path: SearchPathBlock,
+		trackerCategories: string[],
+		hadRequestedCategories: boolean
+	): boolean {
 		if (!path.categories || path.categories.length === 0) {
 			return true; // No category restriction
 		}
 
 		if (trackerCategories.length === 0) {
-			return true; // No categories requested, match all
+			// Two different situations collapse to the same empty array here:
+			//  - No categories were requested at all (basic/open search) -> match
+			//    every path, including category-scoped ones.
+			//  - A typed search DID request categories (e.g. TV_CATEGORIES), but
+			//    this indexer has no mapping for any of them - CategoryMapper's
+			//    own fallback already came up empty. That's "this indexer doesn't
+			//    support the requested content type", not "no restriction"; a
+			//    category-scoped path (e.g. a Movies-only path) must not be
+			//    treated as a match just because nothing else fit, or a TV search
+			//    ends up firing against a movie-only indexer/path.
+			return !hadRequestedCategories;
 		}
 
 		// Check for exclusion (category list starting with "!")
@@ -540,9 +609,10 @@ export class RequestBuilder {
 		}
 
 		// Filter inputs by supported params (for Newznab)
-		// Uses the 't' param value to determine search mode (e.g., 'movie', 'tvsearch')
-		const searchMode = inputs['t'] || 'search';
-		const filteredInputs = this.filterBySupportedParams(inputs, searchMode);
+		// Uses the 't' param value to determine search mode (e.g., 'movie', 'tvsearch').
+		// Without a 't' param the inputs aren't Newznab params (e.g. Prowlarr's JSON
+		// API, which carries IDs as query tokens), so there is nothing to filter.
+		const filteredInputs = inputs['t'] ? this.filterBySupportedParams(inputs, inputs['t']) : inputs;
 
 		// Skip paths that have no meaningful search criteria after filtering
 		// (only standard params like t, apikey, limit, cat remain - no actual search params)

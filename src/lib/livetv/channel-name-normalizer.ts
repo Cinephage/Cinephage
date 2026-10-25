@@ -1,4 +1,4 @@
-import type { LiveTvProviderType } from '$lib/types/livetv';
+import type { LiveTvProviderType } from '#lib/types/livetv.js';
 
 const REGION_PREFIXES = new Set([
 	'US',

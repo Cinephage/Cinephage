@@ -1,5 +1,5 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import { onMount } from 'svelte';
 	import { SvelteMap } from 'svelte/reactivity';
 	import {
@@ -9,10 +9,10 @@
 		ChevronRight,
 		Link,
 		Loader2
-	} from 'lucide-svelte';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import type { LibraryIssue, RootFolderOption } from '$lib/types/unmatched.js';
-	import { getUnmatchedIssues, updateMovie, updateSeries } from '$lib/api/library.js';
+	} from '@lucide/svelte';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import type { LibraryIssue, RootFolderOption } from '#lib/types/unmatched.js';
+	import { getUnmatchedIssues, updateMovie, updateSeries } from '#lib/api/library.js';
 
 	interface Props {
 		unmatchedFileCount?: number;

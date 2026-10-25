@@ -4,22 +4,28 @@
  * POST /api/livetv/accounts/test - Test a new account configuration (without saving)
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getProvider } from '$lib/server/livetv/providers';
-import { createChildLogger } from '$lib/logging';
-import { toFriendlyLiveTvTestError } from '$lib/livetv/errorMessages';
-import { probeStalkerEndpoint } from '$lib/server/livetv/stalker/StalkerPortalClient';
-import { stalkerLanguageSchema } from '$lib/validation/schemas.js';
+import { getProvider } from '#lib/server/livetv/providers/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { toFriendlyLiveTvTestError } from '#lib/livetv/errorMessages.js';
+import { probeStalkerEndpoint } from '#lib/server/livetv/stalker/StalkerPortalClient.js';
+import { getLiveTvAccountManager } from '#lib/server/livetv/LiveTvAccountManager.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { REDACTED_VALUE } from '#lib/shared/sensitiveSettings.js';
+import { stalkerLanguageSchema } from '#lib/server/validation/schemas.js';
 import { z } from 'zod';
-import { ValidationError } from '$lib/errors';
-import type { LiveTvAccount } from '$lib/types/livetv';
+import { ValidationError } from '#lib/errors/index.js';
+import type { LiveTvAccount } from '#lib/types/livetv.js';
 
 const logger = createChildLogger({ module: 'LiveTvAccountsTest', logDomain: 'livetv' });
 
 // Validation schema for testing Live TV accounts
 const liveTvAccountTestSchema = z.object({
 	providerType: z.enum(['stalker', 'xstream', 'm3u', 'cinephage-iptv']),
+	// When set, [REDACTED]/blank secrets above are resolved from this stored
+	// account server-side so edit-mode tests work without the API ever
+	// shipping the real credential to the client.
+	accountId: z.string().optional(),
 	// Stalker-specific config
 	stalkerConfig: z
 		.object({
@@ -44,12 +50,15 @@ const liveTvAccountTestSchema = z.object({
 			epgUrl: z.string().url().optional()
 		})
 		.optional(),
-	// M3U-specific config
+	// M3U-specific config (url/epgUrl accept the [REDACTED] marker echoed by
+	// the edit form; headers can carry per-header redacted values)
 	m3uConfig: z
 		.object({
-			url: z.string().url().optional(),
+			url: z.union([z.string().url(), z.literal(REDACTED_VALUE)]).optional(),
 			fileContent: z.string().optional(),
-			epgUrl: z.string().url().optional()
+			epgUrl: z.union([z.string().url(), z.literal(REDACTED_VALUE)]).optional(),
+			headers: z.record(z.string(), z.string()).optional(),
+			userAgent: z.string().optional()
 		})
 		.optional(),
 	// Cinephage IPTV config
@@ -121,11 +130,14 @@ function getFriendlyValidationMessage(error: ValidationError): string {
  * Test a Live TV account configuration without saving
  * Useful for validating credentials before creating an account
  */
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async (event) => {
+	const authError = requireAdmin(event);
+	if (authError) return authError;
+
 	let providerType: LiveTvAccount['providerType'] | undefined;
 
 	try {
-		const body = await request.json();
+		const body = await event.request.json();
 		providerType =
 			typeof body === 'object' && body && 'providerType' in body
 				? ((body as { providerType?: LiveTvAccount['providerType'] }).providerType ?? undefined)
@@ -137,6 +149,45 @@ export const POST: RequestHandler = async ({ request }) => {
 			throw new ValidationError('Validation failed', {
 				details: parsed.error.flatten()
 			});
+		}
+
+		// Resolve [REDACTED] secrets from the stored account: edit-mode tests
+		// arrive with the redaction marker in place of the credential.
+		if (parsed.data.accountId) {
+			const manager = getLiveTvAccountManager();
+			const stored = await manager.getAccount(parsed.data.accountId);
+			if (!stored) {
+				return Response.json({ success: false, error: 'Account not found' }, { status: 404 });
+			}
+			if (
+				parsed.data.xstreamConfig &&
+				(!parsed.data.xstreamConfig.password ||
+					parsed.data.xstreamConfig.password === REDACTED_VALUE)
+			) {
+				parsed.data.xstreamConfig.password = stored.xstreamConfig?.password ?? '';
+			}
+			if (parsed.data.xstreamConfig && parsed.data.xstreamConfig.epgUrl === REDACTED_VALUE) {
+				parsed.data.xstreamConfig.epgUrl = stored.xstreamConfig?.epgUrl;
+			}
+			if (
+				parsed.data.stalkerConfig &&
+				(!parsed.data.stalkerConfig.password ||
+					parsed.data.stalkerConfig.password === REDACTED_VALUE)
+			) {
+				parsed.data.stalkerConfig.password = stored.stalkerConfig?.password;
+			}
+			if (parsed.data.m3uConfig) {
+				if (parsed.data.m3uConfig.url === REDACTED_VALUE) {
+					parsed.data.m3uConfig.url = stored.m3uConfig?.url;
+				}
+				if (parsed.data.m3uConfig.epgUrl === REDACTED_VALUE) {
+					parsed.data.m3uConfig.epgUrl = stored.m3uConfig?.epgUrl;
+				}
+				const headers = parsed.data.m3uConfig.headers;
+				if (headers && Object.values(headers).some((v) => v === REDACTED_VALUE)) {
+					parsed.data.m3uConfig.headers = stored.m3uConfig?.headers;
+				}
+			}
 		}
 
 		// Build temporary account for testing
@@ -187,7 +238,7 @@ export const POST: RequestHandler = async ({ request }) => {
 					error: toFriendlyLiveTvTestError(providerResult.error, parsed.data.providerType)
 				};
 
-		return json({
+		return Response.json({
 			success: true,
 			result
 		});
@@ -202,7 +253,7 @@ export const POST: RequestHandler = async ({ request }) => {
 				'[API] Live TV account test rejected due to invalid input'
 			);
 
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: getFriendlyValidationMessage(error),
@@ -218,7 +269,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			error instanceof Error ? error : undefined
 		);
 
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: toFriendlyLiveTvTestError(

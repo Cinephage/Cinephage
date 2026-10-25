@@ -10,13 +10,12 @@
  * Use GET /api/livetv/epg/status to check sync progress.
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getEpgService, getEpgScheduler } from '$lib/server/livetv/epg';
-import { EPG_SYNC_CANCELLED_MESSAGE } from '$lib/server/livetv/epg/EpgService';
-import { getEpgSyncState } from '$lib/server/livetv/epg/EpgSyncState';
-import { liveTvEvents } from '$lib/server/livetv/LiveTvEvents';
-import { createChildLogger } from '$lib/logging';
+import { getEpgService, getEpgScheduler } from '#lib/server/livetv/epg/index.js';
+import { EPG_SYNC_CANCELLED_MESSAGE } from '#lib/server/livetv/epg/EpgService.js';
+import { getEpgSyncState } from '#lib/server/livetv/epg/EpgSyncState.js';
+import { liveTvEvents } from '#lib/server/livetv/LiveTvEvents.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LiveTvEpgSync', logDomain: 'livetv' });
 
@@ -27,7 +26,7 @@ export const POST: RequestHandler = async ({ url }) => {
 	const schedulerStatus = epgScheduler.getStatus();
 
 	if (schedulerStatus.isSyncing) {
-		return json(
+		return Response.json(
 			{
 				success: true,
 				started: false,
@@ -40,7 +39,7 @@ export const POST: RequestHandler = async ({ url }) => {
 
 	if (accountId) {
 		if (!syncState.tryStartAccount(accountId)) {
-			return json(
+			return Response.json(
 				{
 					success: true,
 					started: false,
@@ -51,7 +50,7 @@ export const POST: RequestHandler = async ({ url }) => {
 			);
 		}
 	} else if (!syncState.tryStartAll()) {
-		return json(
+		return Response.json(
 			{
 				success: true,
 				started: false,
@@ -139,7 +138,7 @@ export const POST: RequestHandler = async ({ url }) => {
 		}
 	});
 
-	return json({
+	return Response.json({
 		success: true,
 		started: true,
 		alreadyRunning: false,
@@ -158,7 +157,7 @@ export const DELETE: RequestHandler = async ({ url }) => {
 		: syncState.requestCancelAll();
 
 	if (!cancelRequested) {
-		return json(
+		return Response.json(
 			{
 				success: true,
 				cancelRequested: false,
@@ -179,7 +178,7 @@ export const DELETE: RequestHandler = async ({ url }) => {
 
 	liveTvEvents.emitEpgSyncFailed(accountId ?? undefined, EPG_SYNC_CANCELLED_MESSAGE);
 
-	return json(
+	return Response.json(
 		{
 			success: true,
 			cancelRequested: true,

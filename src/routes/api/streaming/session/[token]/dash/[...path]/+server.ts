@@ -1,5 +1,5 @@
 import type { RequestHandler } from './$types';
-import { getPlaybackSessionStore, getSessionProxyService } from '$lib/server/streaming';
+import { getPlaybackSessionStore, getSessionProxyService } from '#lib/server/streaming/index.js';
 
 /**
  * GET /api/streaming/session/{token}/dash/[...path]

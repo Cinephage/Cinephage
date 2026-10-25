@@ -1,8 +1,7 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { getCinephageSettingsService } from '$lib/server/cinephage/settings/CinephageSettingsService.js';
-import { cinephageModuleUpdateSchema } from '$lib/validation/schemas.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { getCinephageSettingsService } from '#lib/server/cinephage/settings/CinephageSettingsService.js';
+import { cinephageModuleUpdateSchema } from '#lib/validation/schemas.js';
 
 /**
  * PUT /api/cinephage/modules/[moduleId]
@@ -18,14 +17,14 @@ export const PUT: RequestHandler = async (event) => {
 	const body = await request.json();
 	const parsedResult = cinephageModuleUpdateSchema.safeParse(body);
 	if (!parsedResult.success) {
-		return json(
+		return Response.json(
 			{ error: 'Invalid request', details: parsedResult.error.flatten() },
 			{ status: 400 }
 		);
 	}
 
 	if (parsedResult.data.moduleId !== params.moduleId) {
-		return json({ error: 'Module ID in body must match the URL path' }, { status: 400 });
+		return Response.json({ error: 'Module ID in body must match the URL path' }, { status: 400 });
 	}
 
 	const settings = getCinephageSettingsService();
@@ -39,5 +38,5 @@ export const PUT: RequestHandler = async (event) => {
 	}
 
 	const updated = await settings.getModuleConfig(params.moduleId);
-	return json({ success: true, module: updated });
+	return Response.json({ success: true, module: updated });
 };

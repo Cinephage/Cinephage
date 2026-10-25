@@ -10,7 +10,7 @@
  */
 
 import { eq, and, inArray, gt } from 'drizzle-orm';
-import { db } from '$lib/server/db/index.js';
+import { db } from '#lib/server/db/index.js';
 import {
 	movies,
 	movieFiles,
@@ -19,8 +19,8 @@ import {
 	episodes,
 	episodeFiles,
 	rootFolders
-} from '$lib/server/db/schema.js';
-import { createChildLogger } from '$lib/logging';
+} from '#lib/server/db/schema.js';
+import { createChildLogger } from '#lib/logging/index.js';
 import { getSidecarSettings } from './sidecarSettings.js';
 import {
 	buildMovieNfo,

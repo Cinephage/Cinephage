@@ -7,15 +7,15 @@
  * POST /api/streaming/strm/reprobe
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { db } from '$lib/server/db';
-import { movieFiles, movies, episodeFiles, series, rootFolders } from '$lib/server/db/schema';
-import { mediaInfoService } from '$lib/server/library/media-info';
-import { createChildLogger } from '$lib/logging';
+import { db } from '#lib/server/db/index.js';
+import { movieFiles, movies, episodeFiles, series, rootFolders } from '#lib/server/db/schema.js';
+import { mediaInfoService } from '#lib/server/library/media-info.js';
+import { createChildLogger } from '#lib/logging/index.js';
 import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 
 const logger = createChildLogger({ module: 'StrmReprobeAPI' });
 
@@ -47,7 +47,12 @@ function resolveMediaPath(
 	return join(rootPath, cleanedParent, relativePath);
 }
 
-export const POST: RequestHandler = async () => {
+export const POST: RequestHandler = async (event) => {
+	// Defense-in-depth: the hooks viewer gate confines this route; this
+	// guard keeps it admin-only even if the gate is ever refactored.
+	const authError = requireAdmin(event);
+	if (authError) return authError;
+
 	try {
 		const result: ReprobeResult = {
 			success: true,
@@ -214,11 +219,11 @@ export const POST: RequestHandler = async () => {
 		);
 
 		result.distinctTotal = distinctPaths.size;
-		return json(result);
+		return Response.json(result);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Unknown error';
 		logger.error({ error: message }, '[StrmReprobeAPI] Failed');
-		return json(
+		return Response.json(
 			{
 				success: false,
 				total: 0,

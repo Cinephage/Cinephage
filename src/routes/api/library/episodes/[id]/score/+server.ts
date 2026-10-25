@@ -1,7 +1,6 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { computeEpisodeFileScore } from '$lib/server/scoring/file-scorer.js';
-import { createChildLogger } from '$lib/logging';
+import { computeEpisodeFileScore } from '#lib/server/scoring/file-scorer.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LibraryEpisodeScoreApi', logDomain: 'scans' });
 
@@ -14,7 +13,7 @@ export const GET: RequestHandler = async ({ params }) => {
 		const result = await computeEpisodeFileScore(params.id);
 
 		if (!result) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: 'Episode not found or has no file'
@@ -23,13 +22,13 @@ export const GET: RequestHandler = async ({ params }) => {
 			);
 		}
 
-		return json({
+		return Response.json({
 			success: true,
 			score: result
 		});
 	} catch (error) {
 		logger.error('[API] Error computing episode score', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to compute score'

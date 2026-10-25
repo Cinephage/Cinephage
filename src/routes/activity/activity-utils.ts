@@ -9,8 +9,8 @@ import type {
 	ActivityFilters as FiltersType,
 	ActivityStatus,
 	UnifiedActivity
-} from '$lib/types/activity';
-import { isActiveActivity } from '$lib/types/activity';
+} from '#lib/types/activity.js';
+import { isActiveActivity } from '#lib/types/activity.js';
 import {
 	ACTIVE_TAB_STATUSES,
 	BASE_FILTERS,
@@ -57,25 +57,6 @@ export function isHistoryActivity(activity: UnifiedActivity): boolean {
 
 export function isQueueActivityId(activityId: string): boolean {
 	return activityId.startsWith('queue-');
-}
-
-export function shouldSyncSelectedActivity(
-	selected: UnifiedActivity,
-	incoming: Pick<UnifiedActivity, 'id' | 'queueItemId' | 'status'>
-): boolean {
-	if (selected.id === incoming.id) return true;
-	if (!selected.queueItemId || !incoming.queueItemId) return false;
-	if (selected.queueItemId !== incoming.queueItemId) return false;
-
-	const selectedIsQueue = isQueueActivityId(selected.id);
-	const incomingIsQueue = isQueueActivityId(incoming.id);
-
-	// While queue and history rows may coexist briefly, prefer queue-origin updates.
-	if (selectedIsQueue && !incomingIsQueue && incoming.status === 'failed') {
-		return false;
-	}
-
-	return true;
 }
 
 // ── Normalization ─────────────────────────────────────────────────────

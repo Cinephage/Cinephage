@@ -8,10 +8,10 @@
 
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { join, dirname, resolve, relative } from 'path';
-import { createChildLogger } from '$lib/logging';
-import { todayDateString } from '$lib/utils/format.js';
-import { getRecoverableApiKeyByType } from '$lib/server/auth/index.js';
-import { db } from '$lib/server/db';
+import { createChildLogger } from '#lib/logging/index.js';
+import { todayDateString } from '#lib/utils/format.js';
+import { getOwnerStreamingApiKey } from '#lib/server/auth/index.js';
+import { db } from '#lib/server/db/index.js';
 import {
 	movies,
 	series,
@@ -19,11 +19,11 @@ import {
 	rootFolders,
 	movieFiles,
 	episodeFiles
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 import { eq, and, sql, inArray } from 'drizzle-orm';
-import { NamingService, type MediaNamingInfo } from '$lib/server/library/naming/NamingService.js';
-import { namingSettingsService } from '$lib/server/library/naming/NamingSettingsService.js';
-import { resolveLocalizedTitlesForFormats } from '$lib/server/library/naming/localization.js';
+import { NamingService, type MediaNamingInfo } from '#lib/server/library/naming/NamingService.js';
+import { namingSettingsService } from '#lib/server/library/naming/NamingSettingsService.js';
+import { resolveLocalizedTitlesForFormats } from '#lib/server/library/naming/localization.js';
 
 const logger = createChildLogger({ module: 'StrmService' });
 
@@ -196,11 +196,12 @@ export class StrmService {
 	/**
 	 * Fetch the Media Streaming API Key from the database
 	 * This key is used for authenticating streaming requests from media servers
-	 * Queries directly from database to work in background contexts without user session
+	 * Queries directly from database to work in background contexts without user session;
+	 * always resolves to the owner admin's key so multi-user instances stay deterministic.
 	 */
 	private async getMediaStreamingApiKey(): Promise<string | null> {
 		try {
-			const key = await getRecoverableApiKeyByType('streaming');
+			const key = await getOwnerStreamingApiKey();
 
 			if (!key) {
 				logger.debug('[StrmService] No Media Streaming API Key found in database');
@@ -509,7 +510,7 @@ export class StrmService {
 		const relativePath =
 			(show.seasonFolder ?? true)
 				? join(
-						namingService.generateSeasonFolderName(seasonNumber),
+						namingService.generateSeasonFolderName(seasonNumber, seriesInfo),
 						namingService.generateEpisodeFileName(episodeInfo)
 					)
 				: namingService.generateEpisodeFileName(episodeInfo);

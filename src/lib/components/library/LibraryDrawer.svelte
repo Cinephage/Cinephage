@@ -1,7 +1,7 @@
 <script lang="ts">
-	import Drawer from '$lib/components/ui/Drawer.svelte';
-	import { ArrowUpDown, Filter, X } from 'lucide-svelte';
-	import * as m from '$lib/paraglide/messages.js';
+	import Drawer from '#lib/components/ui/Drawer.svelte';
+	import { ArrowUpDown, Filter, X } from '@lucide/svelte';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface SortOption {
 		value: string;

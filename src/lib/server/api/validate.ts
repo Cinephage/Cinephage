@@ -6,7 +6,7 @@
  */
 
 import type { z } from 'zod';
-import { NotFoundError, ValidationError } from '$lib/errors';
+import { NotFoundError, ValidationError } from '#lib/errors/index.js';
 
 /**
  * Assert that a value exists, throwing NotFoundError if null/undefined.

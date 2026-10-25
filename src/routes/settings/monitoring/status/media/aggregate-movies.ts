@@ -1,5 +1,5 @@
-import { selectBestFile, type BucketFile } from '$lib/server/quality/buckets.js';
-import type { movieFiles } from '$lib/server/db/schema.js';
+import { selectBestFile, type BucketFile } from '#lib/server/quality/buckets.js';
+import type { movieFiles } from '#lib/server/db/schema.js';
 
 export interface MovieJoinedRow {
 	id: string;

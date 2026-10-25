@@ -1,4 +1,4 @@
-import type { LiveTvProviderType } from '$lib/types/livetv';
+import type { LiveTvProviderType } from '#lib/types/livetv.js';
 
 /**
  * Live TV Provider Definition
@@ -14,7 +14,7 @@ export interface LiveTvProviderDefinition {
 	/** Description of the provider type */
 	description: string;
 
-	/** Icon name (from lucide-svelte) */
+	/** Icon name (from @lucide/svelte) */
 	icon: 'Tv' | 'Radio' | 'List' | 'Globe';
 
 	/** Whether authentication is required */

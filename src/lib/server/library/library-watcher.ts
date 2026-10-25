@@ -18,16 +18,16 @@
 
 import { promises as fsPromises } from 'node:fs';
 import watcher, { type AsyncSubscription, type Event as ParcelEvent } from '@parcel/watcher';
-import { db } from '$lib/server/db/index.js';
-import { rootFolders, librarySettings } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { rootFolders, librarySettings } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { diskScanService } from './disk-scan.js';
 import { libraryOperationLock } from './library-operation-lock.js';
 import { mediaMatcherService } from './media-matcher.js';
-import { scheduleReconcileRootFolder } from '$lib/server/subtitles/services/subtitle-reconcile-hooks.js';
+import { scheduleReconcileRootFolder } from '#lib/server/subtitles/services/subtitle-reconcile-hooks.js';
 import { isVideoFile } from './media-info.js';
 import { EventEmitter } from 'events';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'scans' as const });
 

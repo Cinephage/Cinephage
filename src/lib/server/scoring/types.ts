@@ -262,7 +262,7 @@ export interface FormatScore {
 /**
  * Profile category for UI grouping and styling
  */
-export type ProfileCategory = 'quality' | 'efficient' | 'micro' | 'streaming' | 'custom';
+export type ProfileCategory = 'quality' | 'efficient' | 'micro' | 'streaming' | 'anime' | 'custom';
 
 /**
  * A scoring profile that defines how formats are scored

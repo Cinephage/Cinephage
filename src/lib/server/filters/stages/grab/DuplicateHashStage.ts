@@ -1,10 +1,10 @@
 import type { DecisionStage, StageResult } from '../../types.js';
 import type { GrabDecisionContext } from './types.js';
-import { db } from '$lib/server/db/index.js';
-import { downloadHistory, downloadQueue } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { downloadHistory, downloadQueue } from '#lib/server/db/schema.js';
 import { and, eq, notInArray, or } from 'drizzle-orm';
-import { resolveInfoHash } from '$lib/server/downloadClients/utils/hashUtils.js';
-import { POST_IMPORT_QUEUE_STATUSES, TERMINAL_QUEUE_STATUSES } from '$lib/types/queue.js';
+import { resolveInfoHash } from '#lib/server/downloadClients/utils/hashUtils.js';
+import { POST_IMPORT_QUEUE_STATUSES, TERMINAL_QUEUE_STATUSES } from '#lib/types/queue.js';
 
 /**
  * Queue statuses that must NOT block a re-grab: failed attempts are retryable

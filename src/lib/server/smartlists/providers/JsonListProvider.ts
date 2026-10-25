@@ -9,7 +9,7 @@
  * - Mixed format with minimal data: [{ imdb_id, title }]
  */
 
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'monitoring' as const });
 import type {

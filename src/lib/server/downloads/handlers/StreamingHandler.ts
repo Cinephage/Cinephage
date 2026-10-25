@@ -1,17 +1,17 @@
-import { strmService, StrmService, getStreamingBaseUrl } from '$lib/server/streaming/index.js';
-import { getRecoverableApiKeyByType } from '$lib/server/auth/index.js';
-import { ReleaseParser } from '$lib/server/indexers/parser/ReleaseParser.js';
-import { mediaInfoService } from '$lib/server/library/media-info.js';
-import { getLibraryRelativePath } from '$lib/server/library/media-paths.js';
-import { monitoringScheduler } from '$lib/server/monitoring/MonitoringScheduler.js';
-import { searchSubtitlesForNewMedia } from '$lib/server/subtitles/services/SubtitleImportService.js';
-import { fileExists, importService } from '$lib/server/downloadClients/import/index.js';
-import { deletePhysicalFile } from '$lib/server/downloadClients/import/FileTransfer.js';
-import { getFileManagementSettings } from '$lib/server/settings/file-management.js';
-import { eventBuffer } from '$lib/server/sse/EventBuffer.js';
-import { libraryMediaEvents } from '$lib/server/library/LibraryMediaEvents.js';
-import { createChildLogger } from '$lib/logging/index.js';
-import { db } from '$lib/server/db/index.js';
+import { strmService, StrmService, getStreamingBaseUrl } from '#lib/server/streaming/index.js';
+import { getOwnerStreamingApiKey } from '#lib/server/auth/index.js';
+import { ReleaseParser } from '#lib/server/indexers/parser/ReleaseParser.js';
+import { mediaInfoService } from '#lib/server/library/media-info.js';
+import { getLibraryRelativePath } from '#lib/server/library/media-paths.js';
+import { monitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.js';
+import { searchSubtitlesForNewMedia } from '#lib/server/subtitles/services/SubtitleImportService.js';
+import { fileExists, importService } from '#lib/server/downloadClients/import/index.js';
+import { deletePhysicalFile } from '#lib/server/downloadClients/import/FileTransfer.js';
+import { getFileManagementSettings } from '#lib/server/settings/file-management.js';
+import { eventBuffer } from '#lib/server/sse/EventBuffer.js';
+import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { db } from '#lib/server/db/index.js';
 import {
 	movies,
 	movieFiles,
@@ -19,18 +19,18 @@ import {
 	episodes,
 	episodeFiles,
 	downloadHistory
-} from '$lib/server/db/schema.js';
+} from '#lib/server/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { statSync } from 'node:fs';
 import { unlink } from 'node:fs/promises';
 import { join } from 'node:path';
-import { resolveMovieMultiQuality } from '$lib/server/quality/movie-buckets.js';
+import { resolveMovieMultiQuality } from '#lib/server/quality/movie-buckets.js';
 import {
 	computeMovieReplacement,
 	computeEpisodeReplacement
-} from '$lib/server/downloadClients/import/replacement.js';
-import type { Resolution } from '$lib/server/indexers/parser/types.js';
+} from '#lib/server/downloadClients/import/replacement.js';
+import type { Resolution } from '#lib/server/indexers/parser/types.js';
 import type { GrabRequest, ResolvedContext, HandlerResult } from '../grab-types.js';
 
 const logger = createChildLogger({ module: 'StreamingHandler' });
@@ -80,7 +80,7 @@ export class StreamingHandler {
 		}
 
 		try {
-			const key = await getRecoverableApiKeyByType('streaming');
+			const key = await getOwnerStreamingApiKey();
 			const available = !!key;
 			this.streamingKeyCache = { available, checkedAt: now };
 			if (available) {

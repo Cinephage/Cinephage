@@ -1,8 +1,7 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { monitoringScheduler } from '$lib/server/monitoring/MonitoringScheduler.js';
-import { createChildLogger } from '$lib/logging';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
+import { monitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 
 const logger = createChildLogger({
 	module: 'MonitoringSearchPendingReleasesApi',
@@ -20,7 +19,7 @@ export const POST: RequestHandler = async (event) => {
 	try {
 		const result = await monitoringScheduler.runPendingReleaseProcessing();
 
-		return json({
+		return Response.json({
 			success: true,
 			message: 'Pending release processing completed',
 			result
@@ -30,7 +29,7 @@ export const POST: RequestHandler = async (event) => {
 			'[API] Failed to run pending release processing',
 			error instanceof Error ? error : undefined
 		);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: 'Failed to run pending release processing',

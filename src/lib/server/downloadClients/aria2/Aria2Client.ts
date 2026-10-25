@@ -5,7 +5,7 @@
  * https://aria2.github.io/manual/en/html/aria2c.html#rpc-interface
  */
 
-import type { ConnectionTestResult } from '$lib/types/downloadClient';
+import type { ConnectionTestResult } from '#lib/types/downloadClient.js';
 import type {
 	AddDownloadOptions,
 	DownloadClientConfig,
@@ -240,7 +240,10 @@ export class Aria2Client implements IDownloadClient {
 			addedOn: toDate(undefined),
 			completedOn: undefined,
 			canMoveFiles: status !== 'downloading' && status !== 'seeding' && status !== 'queued',
-			canBeRemoved: status !== 'downloading',
+			// aria2 keeps finished torrents in 'active' (seeding) until their seed
+			// limits are met, then moves them to 'complete'. Only then are they
+			// safe to remove from the client.
+			canBeRemoved: status === 'completed',
 			errorMessage: item.errorMessage
 		};
 	}

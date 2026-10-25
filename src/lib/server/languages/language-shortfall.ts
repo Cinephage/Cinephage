@@ -17,12 +17,12 @@
  * Never throws; a failed recalculation leaves the flag untouched.
  */
 
-import { db } from '$lib/server/db';
-import { episodeFiles, episodes, movieFiles, movies, series } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { episodeFiles, episodes, movieFiles, movies, series } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { languageMatches, type EffectiveAudioPreference } from './audio-preference';
 import { resolveAudioPreferenceForItem } from './audio-preference-resolver';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'scans' as const });
 

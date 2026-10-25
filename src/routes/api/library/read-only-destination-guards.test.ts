@@ -6,7 +6,7 @@ import {
 	type TestDatabase
 } from '../../../test/db-helper.js';
 import { api } from '../../../test/api-helper.js';
-import { movies, series } from '$lib/server/db/schema.js';
+import { movies, series } from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 const mocks = vi.hoisted(() => ({
@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
 	tmdbGetCollection: vi.fn()
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -26,7 +26,7 @@ vi.mock('$lib/server/db/index.js', () => ({
 	},
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
-vi.mock('$lib/server/library/LibraryAddService.js', () => ({
+vi.mock('#lib/server/library/LibraryAddService.js', () => ({
 	validateRootFolder: mocks.validateRootFolder,
 	fetchMovieDetails: mocks.fetchMovieDetails,
 	fetchSeriesDetails: mocks.fetchSeriesDetails,
@@ -38,34 +38,34 @@ vi.mock('$lib/server/library/LibraryAddService.js', () => ({
 	triggerMovieSearch: vi.fn(),
 	triggerSeriesSearch: vi.fn()
 }));
-vi.mock('$lib/server/tmdb.js', () => ({ tmdb: { getCollection: mocks.tmdbGetCollection } }));
-vi.mock('$lib/server/services/AlternateTitleService.js', () => ({
+vi.mock('#lib/server/tmdb.js', () => ({ tmdb: { getCollection: mocks.tmdbGetCollection } }));
+vi.mock('#lib/server/services/AlternateTitleService.js', () => ({
 	fetchAndStoreMovieAlternateTitles: vi.fn(),
 	fetchAndStoreSeriesAlternateTitles: vi.fn()
 }));
-vi.mock('$lib/server/library/LibraryEntityService.js', () => ({
+vi.mock('#lib/server/library/LibraryEntityService.js', () => ({
 	getLibraryEntityService: vi.fn(() => ({
 		resolveOwningLibraryForRootFolder: vi.fn()
 	}))
 }));
-vi.mock('$lib/server/library/LibraryMediaEvents.js', () => ({
+vi.mock('#lib/server/library/LibraryMediaEvents.js', () => ({
 	libraryMediaEvents: { emitLibraryDataChanged: vi.fn() }
 }));
-vi.mock('$lib/server/metadata/EpisodeGroupService.js', () => ({
+vi.mock('#lib/server/metadata/EpisodeGroupService.js', () => ({
 	getEffectiveEpisodeGroup: vi.fn(),
 	buildSeasonsAndEpisodesFromGroup: vi.fn()
 }));
-vi.mock('$lib/server/naming/NamingSettingsService.js', () => ({
+vi.mock('#lib/server/naming/NamingSettingsService.js', () => ({
 	namingSettingsService: {
 		getConfigSync: vi.fn(() => ({ movieFolderFormat: '', movieFileFormat: '' }))
 	}
 }));
-vi.mock('$lib/server/library/naming/NamingSettingsService.js', () => ({
+vi.mock('#lib/server/library/naming/NamingSettingsService.js', () => ({
 	namingSettingsService: {
 		getConfigSync: vi.fn(() => ({ movieFolderFormat: '', movieFileFormat: '' }))
 	}
 }));
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), child: vi.fn() },
 	createChildLogger: vi.fn(() => ({
 		info: vi.fn(),

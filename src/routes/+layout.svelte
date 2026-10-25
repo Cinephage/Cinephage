@@ -1,19 +1,21 @@
 <script lang="ts">
 	import './layout.css';
-	import { browser } from '$app/environment';
-	import { goto, invalidateAll } from '$app/navigation';
-	import { ThemeSelector, LanguageSelector } from '$lib/components/ui';
-	import Toasts from '$lib/components/ui/Toasts.svelte';
-	import { layoutState, type ScanProgressPayload } from '$lib/layout.svelte';
-	import * as m from '$lib/paraglide/messages.js';
-	import { createSSE } from '$lib/sse';
-	import { toasts } from '$lib/stores/toast.svelte';
+	import { browser } from '$app/env';
+	import { goto, refreshAll } from '$app/navigation';
+	import type { ReadonlyURL } from '$app/state';
+	import { ThemeSelector, LanguageSelector, UserAvatar } from '#lib/components/ui/index.js';
+	import { NotificationBell } from '#lib/components/requests/index.js';
+	import Toasts from '#lib/components/ui/Toasts.svelte';
+	import { layoutState, type ScanProgressPayload } from '#lib/layout.svelte.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import { createSSE } from '#lib/sse/index.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
 
 	import { page } from '$app/state';
-	import { resolvePath } from '$lib/utils/routing';
-	import { authClient } from '$lib/auth/client.js';
-	import { getSystemStatus } from '$lib/api/settings.js';
-	import { PLACEHOLDER_PACKAGE_VERSION } from '$lib/version.js';
+	import { resolvePath } from '#lib/utils/routing.js';
+	import { authClient } from '#lib/auth/client.js';
+	import { getSystemStatus } from '#lib/api/settings.js';
+	import { PLACEHOLDER_PACKAGE_VERSION } from '#lib/version.js';
 	import {
 		Menu,
 		Home,
@@ -40,20 +42,23 @@
 		Puzzle,
 		FolderCog,
 		Ban,
+		Users,
 		Globe,
 		Palette,
-		Pin
-	} from 'lucide-svelte';
+		Pin,
+		Inbox
+	} from '@lucide/svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 
-	const GITHUB_URL = 'https://github.com/MoldyTaint/Cinephage';
+	const GITHUB_URL = 'https://github.com/cinephage/cinephage';
 	const DISCORD_URL = 'https://discord.gg/scGCBTSWEt';
 
 	type MenuChildItem = {
 		href: string;
 		label: () => string;
 		icon?: typeof Home;
-		match?: (url: URL) => boolean;
+		// Matches against the readonly page.url shape (SvelteKit 3).
+		match?: (url: ReadonlyURL) => boolean;
 		isSubtype?: boolean;
 	};
 
@@ -85,6 +90,18 @@
 	let isLoggingOut = $state(false);
 	let expandedMenuSection = $state<string | null>(null);
 	let pinnedMenuSections = $state<Set<string>>(new Set());
+
+	// Which header's notification bell keeps its SSE stream open. The
+	// headers themselves swap via CSS (no SSR flash); this state only picks
+	// the active bell so a single stream exists per tab.
+	let isDesktopLayout = $state(false);
+	$effect(() => {
+		const mq = window.matchMedia('(min-width: 1024px)');
+		isDesktopLayout = mq.matches;
+		const onChange = (e: MediaQueryListEvent) => (isDesktopLayout = e.matches);
+		mq.addEventListener('change', onChange);
+		return () => mq.removeEventListener('change', onChange);
+	});
 	const SIDEBAR_EXPANDED_STORAGE_KEY = 'cinephage.sidebar.expanded';
 	const PINNED_SECTIONS_STORAGE_KEY = 'cinephage.sidebar.pinned';
 
@@ -198,6 +215,9 @@
 		isLoggingOut = true;
 		try {
 			await authClient.signOut();
+			// Drop all server-loaded state (the root layout carries user
+			// identity) before leaving the app.
+			await refreshAll();
 			await goto('/login');
 		} catch {
 			// Error handled by auth client
@@ -206,7 +226,9 @@
 		}
 	}
 
-	// Menu items using translation functions
+	// Menu items using translation functions. Viewer accounts see the shared
+	// browsing surfaces only (Discover, Library, Calendar); everything
+	// operational (dashboard, import, activity, Live TV, settings) is admin.
 	const menuItems = $derived.by<MenuItem[]>(() => {
 		const movieLibraries = data.libraryNav?.movieLibraries ?? [];
 		const tvLibraries = data.libraryNav?.tvLibraries ?? [];
@@ -218,13 +240,14 @@
 			(library: LibraryNavItem) => !library.isDefault
 		);
 		const tvSubLibraries = tvLibraries.filter((library: LibraryNavItem) => !library.isDefault);
+		const isAdmin = data.user?.role === 'admin';
 
 		const libraryChildren: MenuChildItem[] = [
 			{
 				href: '/library/movies',
 				label: m.nav_movies,
 				icon: Clapperboard,
-				match: (url: URL) => {
+				match: (url: ReadonlyURL) => {
 					if (url.pathname.startsWith('/library/movie/')) return true;
 					if (url.pathname !== '/library/movies') return false;
 					const currentLibrarySlug = url.searchParams.get('library')?.trim() ?? '';
@@ -236,7 +259,7 @@
 				href: `/library/movies?library=${encodeURIComponent(library.slug)}`,
 				label: () => library.name,
 				isSubtype: true,
-				match: (url: URL) =>
+				match: (url: ReadonlyURL) =>
 					url.pathname === '/library/movies' &&
 					(url.searchParams.get('library')?.trim() ?? '') === library.slug
 			})),
@@ -244,7 +267,7 @@
 				href: '/library/tv',
 				label: m.nav_tvShows,
 				icon: Tv,
-				match: (url: URL) => {
+				match: (url: ReadonlyURL) => {
 					if (url.pathname.startsWith('/library/tv/')) return true;
 					if (url.pathname !== '/library/tv') return false;
 					const currentLibrarySlug = url.searchParams.get('library')?.trim() ?? '';
@@ -256,24 +279,42 @@
 				href: `/library/tv?library=${encodeURIComponent(library.slug)}`,
 				label: () => library.name,
 				isSubtype: true,
-				match: (url: URL) =>
+				match: (url: ReadonlyURL) =>
 					url.pathname === '/library/tv' &&
 					(url.searchParams.get('library')?.trim() ?? '') === library.slug
 			})),
-			{ href: '/library/import', label: m.nav_import, icon: Download },
-			{ href: '/library/unmatched', label: m.nav_unmatchedFiles, icon: FileQuestion }
+			...(isAdmin
+				? [
+						{ href: '/library/import', label: m.nav_import, icon: Download },
+						{ href: '/library/unmatched', label: m.nav_unmatchedFiles, icon: FileQuestion }
+					]
+				: [])
 		];
+
+		const discoverItem: MenuItem = { href: '/discover', label: m.nav_discover, icon: Compass };
+		const libraryItem: MenuItem = {
+			label: m.nav_library,
+			icon: Library,
+			children: libraryChildren
+		};
+		const calendarItem: MenuItem = { href: '/calendar', label: m.nav_calendar, icon: Calendar };
+		const requestsItem: MenuItem = {
+			href: '/requests',
+			label: m.nav_requests,
+			icon: Inbox
+		};
+
+		if (!isAdmin) {
+			return [discoverItem, libraryItem, calendarItem, requestsItem];
+		}
 
 		return [
 			{ href: '/', label: m.nav_home, icon: Home },
-			{ href: '/discover', label: m.nav_discover, icon: Compass },
-			{
-				label: m.nav_library,
-				icon: Library,
-				children: libraryChildren
-			},
+			discoverItem,
+			libraryItem,
 			{ href: '/activity', label: m.nav_activity, icon: Activity },
-			{ href: '/calendar', label: m.nav_calendar, icon: Calendar },
+			calendarItem,
+			requestsItem,
 			{
 				label: m.nav_liveTv,
 				icon: Radio,
@@ -292,31 +333,37 @@
 						href: '/settings/library/libraries',
 						label: m.nav_libraryStorage,
 						icon: FolderCog,
-						match: (url: URL) => url.pathname.startsWith('/settings/library')
+						match: (url: ReadonlyURL) => url.pathname.startsWith('/settings/library')
 					},
 					{
 						href: '/settings/integrations/indexers',
 						label: m.nav_integrations,
 						icon: Puzzle,
-						match: (url: URL) => url.pathname.startsWith('/settings/integrations')
+						match: (url: ReadonlyURL) => url.pathname.startsWith('/settings/integrations')
+					},
+					{
+						href: '/settings/users',
+						label: m.nav_users,
+						icon: Users,
+						match: (url: ReadonlyURL) => url.pathname.startsWith('/settings/users')
 					},
 					{
 						href: '/settings/system/general',
 						label: m.nav_system,
 						icon: Server,
-						match: (url: URL) => url.pathname.startsWith('/settings/system')
+						match: (url: ReadonlyURL) => url.pathname.startsWith('/settings/system')
 					},
 					{
 						href: '/settings/blocklist/releases',
 						label: m.nav_blocklist,
 						icon: Ban,
-						match: (url: URL) => url.pathname.startsWith('/settings/blocklist')
+						match: (url: ReadonlyURL) => url.pathname.startsWith('/settings/blocklist')
 					},
 					{
 						href: '/settings/monitoring/status',
 						label: m.nav_monitoring,
 						icon: Activity,
-						match: (url: URL) => url.pathname.startsWith('/settings/monitoring')
+						match: (url: ReadonlyURL) => url.pathname.startsWith('/settings/monitoring')
 					}
 				]
 			}
@@ -419,54 +466,65 @@
 	// Global scan SSE - lives in the root layout so toast notifications fire
 	// regardless of which page the user is on when a scan completes.
 	// The monitoring/status sub-layout keeps its own SSE for the progress bar.
-	const _scanSse = createSSE<{
-		status: { scanning?: boolean };
-		progress: ScanProgressPayload;
-		scanStart: Record<string, unknown>;
-		scanComplete: { type?: string; results?: unknown[] };
-		scanError: { error?: { message?: string } };
-	}>('/api/library/scan/status', {
-		status: (payload) => {
-			const inProgress = Boolean(payload.scanning ?? false);
-			layoutState.setScanState(inProgress, inProgress ? layoutState.scanProgress : null);
-		},
-		progress: (payload) => {
-			layoutState.setScanState(true, payload);
-		},
-		scanStart: () => {
-			layoutState.setScanState(true, layoutState.scanProgress);
-		},
-		scanComplete: (payload) => {
-			layoutState.setScanState(false, null);
-			const count = payload.results?.length ?? 0;
-			toasts.success(m.settings_general_scanCompleteFoldersScanned({ count }));
-			void invalidateAll();
-		},
-		scanError: () => {
-			layoutState.setScanState(false, null);
-			toasts.error(m.settings_general_scanFailed());
-		}
-	});
+	// Operational streams are admin-only; viewer accounts never connect.
+	const isAdminUser = $derived(data.user?.role === 'admin');
+	// Connections are opened once per component lifetime; a role change
+	// requires a full re-authentication and page load, so the initial value
+	// is deliberate.
+	// svelte-ignore state_referenced_locally
+	const _scanSse =
+		isAdminUser &&
+		createSSE<{
+			status: { scanning?: boolean };
+			progress: ScanProgressPayload;
+			scanStart: Record<string, unknown>;
+			scanComplete: { type?: string; results?: unknown[] };
+			scanError: { error?: { message?: string } };
+		}>('/api/library/scan/status', {
+			status: (payload) => {
+				const inProgress = Boolean(payload.scanning ?? false);
+				layoutState.setScanState(inProgress, inProgress ? layoutState.scanProgress : null);
+			},
+			progress: (payload) => {
+				layoutState.setScanState(true, payload);
+			},
+			scanStart: () => {
+				layoutState.setScanState(true, layoutState.scanProgress);
+			},
+			scanComplete: (payload) => {
+				layoutState.setScanState(false, null);
+				const count = payload.results?.length ?? 0;
+				toasts.success(m.settings_general_scanCompleteFoldersScanned({ count }));
+				void refreshAll();
+			},
+			scanError: () => {
+				layoutState.setScanState(false, null);
+				toasts.error(m.settings_general_scanFailed());
+			}
+		});
 
 	// Global sync SSE — shows start/complete toasts from any page.
-	const _syncSse = createSSE<{
-		status: { inProgress?: boolean };
-		syncStart: { timestamp?: string };
-		syncStop: { timestamp?: string };
-	}>('/api/media-server-stats/sync/status', {
-		status: (payload) => {
-			layoutState.setMediaServerSyncing(Boolean(payload.inProgress ?? false));
-		},
-		syncStart: () => {
-			layoutState.setMediaServerSyncing(true);
-			toasts.info(m.settings_monitoring_mediaServerSyncStarted());
-		},
-		syncStop: () => {
-			layoutState.setMediaServerSyncing(false);
-			toasts.success(m.settings_monitoring_mediaServerSyncComplete());
-			void invalidateAll();
-		}
-	});
+	// svelte-ignore state_referenced_locally
+	const _syncSse =
+		isAdminUser &&
+		createSSE<{
+			status: { inProgress?: boolean };
+			syncStart: { timestamp?: string };
+			syncStop: { timestamp?: string };
+		}>('/api/media-server-stats/sync/status', {
+			status: (payload) => {
+				layoutState.setMediaServerSyncing(Boolean(payload.inProgress ?? false));
+			},
+			syncStart: () => {
+				layoutState.setMediaServerSyncing(true);
+				toasts.info(m.settings_monitoring_mediaServerSyncStarted());
+			},
+			syncStop: () => {
+				layoutState.setMediaServerSyncing(false);
+				toasts.success(m.settings_monitoring_mediaServerSyncComplete());
+				void refreshAll();
+			}
+		});
 </script>
 
 <svelte:head>
@@ -484,6 +542,9 @@
 			bind:checked={isMobileDrawerOpen}
 		/>
 		<div class="drawer-content flex min-h-screen flex-col bg-base-100 text-base-content">
+			<!-- Both headers render and swap via CSS (SSR ships the right one
+			     with no hydration flash); the notification bell mounts in each
+			     but only the breakpoint-active instance opens its SSE stream. -->
 			<!-- Mobile Header -->
 			<header class="navbar sticky top-0 z-50 bg-base-200 shadow-sm lg:hidden">
 				<div class="flex-none">
@@ -501,6 +562,7 @@
 						<span class="block truncate pr-10 text-xl leading-tight font-bold"
 							>{m.common_appName()}</span
 						>
+
 						<span
 							class="absolute -top-1 right-0 badge h-4 min-h-4 px-1 badge-xs font-semibold badge-warning"
 						>
@@ -509,6 +571,7 @@
 					</div>
 				</div>
 				<div class="flex flex-none items-center gap-2 pr-2">
+					<NotificationBell enabled={!isDesktopLayout} />
 					{#if layoutState.mobileSseStatus === 'connected'}
 						<span class="badge shrink-0 gap-1 badge-success">
 							<Wifi class="h-3 w-3" />
@@ -526,6 +589,12 @@
 						</span>
 					{/if}
 				</div>
+			</header>
+			<!-- Desktop top bar -->
+			<header
+				class="sticky top-0 z-30 hidden h-12 items-center justify-end border-b border-base-300/60 bg-base-100/90 px-4 backdrop-blur lg:flex"
+			>
+				<NotificationBell enabled={isDesktopLayout} />
 			</header>
 
 			<!-- Page Content -->
@@ -557,6 +626,7 @@
 								<span class="block truncate pr-10 text-xl leading-tight font-bold"
 									>{m.common_appName()}</span
 								>
+
 								<span
 									class="absolute -top-1 right-0 badge h-4 min-h-4 px-1 badge-xs font-semibold badge-warning"
 								>
@@ -725,21 +795,21 @@
 											>
 												<path
 													d="M20.317 4.492c-1.53-.69-3.17-1.2-4.885-1.49a.075.075 0 0 0-.079.036c-.21.369-.444.85-.608 1.23a18.566 18.566 0 0 0-5.487 0 12.36 12.36 0 0 0-.617-1.23A.077.077 0 0 0 8.562 3c-1.714.29-3.354.8-4.885 1.491a.07.07 0 0 0-.032.027C.533 9.093-.32 13.555.099 17.961a.08.08 0 0 0 .031.055 20.03 20.03 0 0 0 5.993 2.98.078.078 0 0 0 .084-.026 13.83 13.83 0 0 0 1.226-1.963.074.074 0 0 0-.041-.104 13.175 13.175 0 0 1-1.872-.878.075.075 0 0 1-.008-.125c.126-.093.252-.19.372-.287a.075.075 0 0 1 .078-.01c3.927 1.764 8.18 1.764 12.061 0a.075.075 0 0 1 .079.009c.12.098.245.195.372.288a.075.075 0 0 1-.006.125c-.598.344-1.22.635-1.873.877a.075.075 0 0 0-.041.105c.36.687.772 1.341 1.225 1.962a.077.077 0 0 0 .084.028 19.963 19.963 0 0 0 6.002-2.981.076.076 0 0 0 .032-.054c.5-5.094-.838-9.52-3.549-13.442a.06.06 0 0 0-.031-.028z"
-												/>
+												></path>
 												<ellipse
 													cx="8.5"
 													cy="12.5"
 													rx="1.5"
 													ry="1.65"
 													fill="var(--discord-eye, white)"
-												/>
+												></ellipse>
 												<ellipse
 													cx="15.5"
 													cy="12.5"
 													rx="1.5"
 													ry="1.65"
 													fill="var(--discord-eye, white)"
-												/>
+												></ellipse>
 											</svg>
 										</a>
 										<a
@@ -757,7 +827,7 @@
 											>
 												<path
 													d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2z"
-												/>
+												></path>
 											</svg>
 										</a>
 									</div>
@@ -794,6 +864,32 @@
 								/>
 							</div>
 							<div class="mt-2 border-t border-base-300/70 pt-2">
+								{#if data.user}
+									<a
+										href="/profile"
+										class="mb-1 flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-base-200"
+										title={m.nav_profile()}
+										onclick={closeMobileDrawer}
+									>
+										<UserAvatar
+											name={data.user.displayUsername || data.user.username || '?'}
+											src={data.user.image ??
+												(data.user.mediaServerId
+													? `/api/user/media-server/avatar/${data.user.mediaServerId}`
+													: null)}
+										/>
+										<span class="min-w-0 flex-1">
+											<span class="block truncate text-sm font-medium">
+												{data.user.displayUsername || data.user.username}
+											</span>
+											{#if data.user.sidebarShowUsername && data.user.username}
+												<span class="block truncate text-xs text-base-content/50">
+													{data.user.username}
+												</span>
+											{/if}
+										</span>
+									</a>
+								{/if}
 								<div class="flex items-center gap-1">
 									<button
 										class="btn flex-1 justify-start btn-ghost text-error btn-sm hover:bg-error/10"
@@ -824,21 +920,21 @@
 											>
 												<path
 													d="M20.317 4.492c-1.53-.69-3.17-1.2-4.885-1.49a.075.075 0 0 0-.079.036c-.21.369-.444.85-.608 1.23a18.566 18.566 0 0 0-5.487 0 12.36 12.36 0 0 0-.617-1.23A.077.077 0 0 0 8.562 3c-1.714.29-3.354.8-4.885 1.491a.07.07 0 0 0-.032.027C.533 9.093-.32 13.555.099 17.961a.08.08 0 0 0 .031.055 20.03 20.03 0 0 0 5.993 2.98.078.078 0 0 0 .084-.026 13.83 13.83 0 0 0 1.226-1.963.074.074 0 0 0-.041-.104 13.175 13.175 0 0 1-1.872-.878.075.075 0 0 1-.008-.125c.126-.093.252-.19.372-.287a.075.075 0 0 1 .078-.01c3.927 1.764 8.18 1.764 12.061 0a.075.075 0 0 1 .079.009c.12.098.245.195.372.288a.075.075 0 0 1-.006.125c-.598.344-1.22.635-1.873.877a.075.075 0 0 0-.041.105c.36.687.772 1.341 1.225 1.962a.077.077 0 0 0 .084.028 19.963 19.963 0 0 0 6.002-2.981.076.076 0 0 0 .032-.054c.5-5.094-.838-9.52-3.549-13.442a.06.06 0 0 0-.031-.028z"
-												/>
+												></path>
 												<ellipse
 													cx="8.5"
 													cy="12.5"
 													rx="1.5"
 													ry="1.65"
 													fill="var(--discord-eye, white)"
-												/>
+												></ellipse>
 												<ellipse
 													cx="15.5"
 													cy="12.5"
 													rx="1.5"
 													ry="1.65"
 													fill="var(--discord-eye, white)"
-												/>
+												></ellipse>
 											</svg>
 										</a>
 										<a
@@ -856,7 +952,7 @@
 											>
 												<path
 													d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2z"
-												/>
+												></path>
 											</svg>
 										</a>
 									</div>

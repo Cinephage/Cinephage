@@ -4,16 +4,15 @@
  * GET /api/tasks - Returns all tasks with their current status
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import {
 	UNIFIED_TASK_DEFINITIONS,
 	type UnifiedTask,
 	type UnifiedTaskDefinition
-} from '$lib/server/tasks/UnifiedTaskRegistry';
-import { monitoringScheduler } from '$lib/server/monitoring/MonitoringScheduler';
-import { taskHistoryService } from '$lib/server/tasks/TaskHistoryService';
-import { taskSettingsService } from '$lib/server/tasks/TaskSettingsService';
+} from '#lib/server/tasks/UnifiedTaskRegistry.js';
+import { monitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.js';
+import { taskHistoryService } from '#lib/server/tasks/TaskHistoryService.js';
+import { taskSettingsService } from '#lib/server/tasks/TaskSettingsService.js';
 
 /**
  * GET /api/tasks
@@ -64,7 +63,7 @@ export const GET: RequestHandler = async () => {
 		})
 	);
 
-	return json({
+	return Response.json({
 		success: true,
 		tasks
 	});

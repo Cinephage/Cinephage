@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Loader2, Package, RefreshCw, X } from 'lucide-svelte';
+	import { Loader2, Package, RefreshCw, X } from '@lucide/svelte';
 
 	type SearchMode = 'all' | 'multiSeasonPack';
 

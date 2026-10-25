@@ -1,5 +1,5 @@
 import type { PageServerLoad } from './$types';
-import { getNntpServerService } from '$lib/server/streaming/nzb/NntpServerService';
+import { getNntpServerService } from '#lib/server/streaming/nzb/NntpServerService.js';
 
 export const load: PageServerLoad = async () => {
 	const nntpService = getNntpServerService();

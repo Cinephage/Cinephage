@@ -1,6 +1,6 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
-	import { CheckCircle, XCircle, Loader2 } from 'lucide-svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { CheckCircle, XCircle, Loader2 } from '@lucide/svelte';
 
 	type Status = 'idle' | 'searching' | 'success' | 'failed';
 

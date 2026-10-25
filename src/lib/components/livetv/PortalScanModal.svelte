@@ -1,13 +1,13 @@
 <script lang="ts">
-	import { X, Loader2, Search, ChevronRight, ChevronLeft, Radio } from 'lucide-svelte';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
-	import * as m from '$lib/paraglide/messages.js';
+	import { X, Loader2, Search, ChevronRight, ChevronLeft, Radio } from '@lucide/svelte';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
+	import * as m from '#lib/paraglide/messages.js';
 	import {
 		getPortals,
 		detectPortal as detectPortalApi,
 		createPortal,
 		scanPortal as scanPortalApi
-	} from '$lib/api/livetv.js';
+	} from '#lib/api/livetv.js';
 
 	interface StalkerPortal {
 		id: string;

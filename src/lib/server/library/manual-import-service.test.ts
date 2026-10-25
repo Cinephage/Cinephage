@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
-import { parseRelease } from '$lib/server/indexers/parser/ReleaseParser.js';
+import { parseRelease } from '#lib/server/indexers/parser/ReleaseParser.js';
 import {
 	manualImportService,
 	type ManualImportDetectionGroup,

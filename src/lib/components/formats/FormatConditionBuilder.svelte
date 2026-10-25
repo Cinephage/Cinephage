@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { ALL_LANGUAGE_OPTIONS } from '$lib/shared/languages';
-	import * as m from '$lib/paraglide/messages.js';
+	import { ALL_LANGUAGE_OPTIONS } from '#lib/shared/languages.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import { SvelteMap } from 'svelte/reactivity';
-	import type { FormatCondition, ConditionType } from '$lib/types/format';
+	import type { FormatCondition, ConditionType } from '#lib/types/format.js';
 	import {
 		CONDITION_TYPE_LABELS,
 		CONDITION_TYPE_DESCRIPTIONS,
@@ -23,8 +23,8 @@
 		AVAILABLE_FLAGS,
 		FLAG_LABELS,
 		FLAG_DESCRIPTIONS
-	} from '$lib/types/format';
-	import { Plus, Trash2, Info, AlertCircle } from 'lucide-svelte';
+	} from '#lib/types/format.js';
+	import { Plus, Trash2, Info, AlertCircle } from '@lucide/svelte';
 
 	interface Props {
 		conditions: FormatCondition[];

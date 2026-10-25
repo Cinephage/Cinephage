@@ -1,7 +1,6 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { db } from '$lib/server/db';
-import { subtitles, movies, episodes } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { subtitles, movies, episodes } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 
 /**
@@ -13,7 +12,7 @@ export const GET: RequestHandler = async ({ url }) => {
 	const episodeId = url.searchParams.get('episodeId');
 
 	if (!movieId && !episodeId) {
-		return json(
+		return Response.json(
 			{ error: 'Either movieId or episodeId query parameter is required' },
 			{ status: 400 }
 		);
@@ -27,7 +26,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			});
 
 			if (!movie) {
-				return json({ error: 'Movie not found' }, { status: 404 });
+				return Response.json({ error: 'Movie not found' }, { status: 404 });
 			}
 
 			// Get all subtitles for this movie
@@ -49,7 +48,7 @@ export const GET: RequestHandler = async ({ url }) => {
 				.from(subtitles)
 				.where(eq(subtitles.movieId, movieId));
 
-			return json({
+			return Response.json({
 				success: true,
 				subtitles: movieSubtitles
 			});
@@ -62,7 +61,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			});
 
 			if (!episode) {
-				return json({ error: 'Episode not found' }, { status: 404 });
+				return Response.json({ error: 'Episode not found' }, { status: 404 });
 			}
 
 			// Get all subtitles for this episode
@@ -84,15 +83,15 @@ export const GET: RequestHandler = async ({ url }) => {
 				.from(subtitles)
 				.where(eq(subtitles.episodeId, episodeId));
 
-			return json({
+			return Response.json({
 				success: true,
 				subtitles: episodeSubtitles
 			});
 		}
 
-		return json({ error: 'Either movieId or episodeId is required' }, { status: 400 });
+		return Response.json({ error: 'Either movieId or episodeId is required' }, { status: 400 });
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Unknown error';
-		return json({ error: message }, { status: 500 });
+		return Response.json({ error: message }, { status: 500 });
 	}
 };

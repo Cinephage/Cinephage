@@ -6,12 +6,12 @@
  * episode group on TMDB, use it automatically to split seasons correctly.
  */
 
-import { tmdb } from '$lib/server/tmdb.js';
-import { db } from '$lib/server/db/index.js';
-import { seasons, episodes } from '$lib/server/db/schema.js';
+import { tmdb } from '#lib/server/tmdb.js';
+import { db } from '#lib/server/db/index.js';
+import { seasons, episodes } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import type { EpisodeGroup, EpisodeGroupSummary, EpisodeGroupsResponse } from '$lib/types/tmdb';
-import { createChildLogger } from '$lib/logging';
+import type { EpisodeGroup, EpisodeGroupSummary, EpisodeGroupsResponse } from '#lib/types/tmdb.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 

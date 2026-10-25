@@ -9,5 +9,5 @@ export {
 	checkNzbAvailability,
 	type AvailabilityResult,
 	type AvailabilityCheckOptions
-} from '$lib/server/downloads/nzb';
+} from '#lib/server/downloads/nzb/index.js';
 export * from './types';

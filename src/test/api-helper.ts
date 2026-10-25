@@ -4,11 +4,9 @@
  * Provides utilities for testing SvelteKit API endpoints directly.
  * Creates mock Request objects and parses Response objects for assertions.
  */
-
-import { json, type RequestEvent, type RequestHandler } from '@sveltejs/kit';
-
-import { isAppError } from '$lib/errors';
-import { logger } from '$lib/logging';
+import { type RequestEvent, type RequestHandler } from '@sveltejs/kit';
+import { isAppError } from '#lib/errors/index.js';
+import { logger } from '#lib/logging/index.js';
 
 type AnyRequestHandler = RequestHandler<any, any>;
 type TestAuthMode = 'admin' | 'user' | false;
@@ -17,6 +15,11 @@ interface RequestOptions {
 	url?: string;
 	headers?: Record<string, string>;
 	auth?: TestAuthMode;
+	/**
+	 * When set alongside auth, locals.session carries this token for the same
+	 * synthetic user — for endpoints that reason about the current session.
+	 */
+	sessionToken?: string;
 }
 
 interface HandlerOptions extends RequestOptions {
@@ -24,19 +27,19 @@ interface HandlerOptions extends RequestOptions {
 }
 
 function createTestUser(role: 'admin' | 'user'): App.Locals['user'] {
-	const now = new Date().toISOString();
+	const now = new Date();
 
 	return {
 		id: `test-${role}-user`,
 		name: `${role} tester`,
 		email: `${role}@example.com`,
-		emailVerified: 1,
+		emailVerified: false,
 		image: null,
 		username: `${role}_tester`,
 		displayUsername: `${role}_tester`,
 		role,
 		language: 'en',
-		banned: 0,
+		banned: false,
 		banReason: null,
 		banExpires: null,
 		createdAt: now,
@@ -44,14 +47,32 @@ function createTestUser(role: 'admin' | 'user'): App.Locals['user'] {
 	};
 }
 
-function createTestLocals(auth: TestAuthMode): App.Locals {
+function createTestSession(user: NonNullable<App.Locals['user']>, token: string) {
+	const now = new Date();
+
+	return {
+		id: `test-session-${user.role}`,
+		userId: user.id,
+		token,
+		expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
+		ipAddress: null,
+		userAgent: null,
+		impersonatedBy: null,
+		createdAt: now,
+		updatedAt: now
+	};
+}
+
+function createTestLocals(options: RequestOptions): App.Locals {
+	const user = options.auth ? createTestUser(options.auth) : null;
+
 	return {
 		correlationId: 'test-correlation-id',
 		requestId: 'test-correlation-id',
 		supportId: 'test-support-id',
 		logger,
-		user: auth ? createTestUser(auth) : null,
-		session: null,
+		user,
+		session: user && options.sessionToken ? createTestSession(user, options.sessionToken) : null,
 		apiKey: null,
 		apiKeyPermissions: null
 	};
@@ -91,7 +112,7 @@ export function createRequestEvent(
 		request,
 		params,
 		url: new URL(request.url),
-		locals: createTestLocals(options?.auth ?? false),
+		locals: createTestLocals(options ?? {}),
 		platform: undefined,
 		cookies: {
 			get: () => undefined,
@@ -99,13 +120,39 @@ export function createRequestEvent(
 			set: () => {},
 			delete: () => {},
 			serialize: () => ''
-		} as RequestEvent['cookies'],
+		} as unknown as RequestEvent['cookies'],
 		fetch: globalThis.fetch,
 		getClientAddress: () => '127.0.0.1',
 		setHeaders: () => {},
 		isDataRequest: false,
 		isSubRequest: false
 	};
+}
+
+/**
+ * Call an API handler and get the raw Response (for binary bodies/headers).
+ */
+export async function callHandlerRaw(
+	handler: AnyRequestHandler,
+	method: string,
+	body?: unknown,
+	options?: HandlerOptions
+): Promise<{ status: number; response: Response }> {
+	const request = createRequest(method, body, options);
+	const event = createRequestEvent(request, options?.params, options);
+
+	let response: Response;
+	try {
+		response = await handler(event as RequestEvent);
+	} catch (error) {
+		if (isAppError(error)) {
+			response = Response.json({ success: false, ...error.toJSON() }, { status: error.statusCode });
+		} else {
+			throw error;
+		}
+	}
+
+	return { status: response.status, response };
 }
 
 /**
@@ -117,22 +164,10 @@ export async function callHandler<T = unknown>(
 	body?: unknown,
 	options?: HandlerOptions
 ): Promise<{ status: number; data: T }> {
-	const request = createRequest(method, body, options);
-	const event = createRequestEvent(request, options?.params, options);
-
-	let response: Response;
-	try {
-		response = await handler(event as RequestEvent);
-	} catch (error) {
-		if (isAppError(error)) {
-			response = json({ success: false, ...error.toJSON() }, { status: error.statusCode });
-		} else {
-			throw error;
-		}
-	}
+	const { status, response } = await callHandlerRaw(handler, method, body, options);
 	const data = (await response.json()) as T;
 
-	return { status: response.status, data };
+	return { status, data };
 }
 
 /**

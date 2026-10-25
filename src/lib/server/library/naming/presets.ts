@@ -10,7 +10,7 @@ import {
 	type NamingPreset,
 	type NamingServerPreset,
 	type NamingStylePreset
-} from '$lib/naming/setup-presets';
+} from '#lib/naming/setup-presets.js';
 
 export {
 	BUILT_IN_PRESETS,

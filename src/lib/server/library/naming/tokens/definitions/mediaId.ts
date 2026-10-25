@@ -53,14 +53,16 @@ export const mediaIdTokens: TokenDefinition[] = [
 		name: 'MediaId',
 		aliases: ['MovieId'],
 		category: 'mediaId',
-		description: 'Media server ID (format based on setting)',
+		description:
+			'Media server ID with braces included (Plex/Emby: {tmdb-12345}, Jellyfin: [tmdbid-12345]); use TmdbId for the bare number',
 		applicability: ['movie'],
 		render: (info, config) => formatMediaId(info.tmdbId, 'tmdb', config)
 	},
 	{
 		name: 'SeriesId',
 		category: 'mediaId',
-		description: 'Media server ID (TVDB preferred)',
+		description:
+			'Media server ID with braces included, TVDB preferred (Plex/Emby: {tvdb-12345}, Jellyfin: [tvdbid-12345]); use TvdbId for the bare number',
 		applicability: ['series'],
 		render: (info, config) => {
 			// Prefer TVDB for series, fall back to TMDB

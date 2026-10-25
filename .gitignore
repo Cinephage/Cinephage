@@ -37,6 +37,7 @@ vite.config.ts.timestamp-*
 # Runtime logs and local app data
 /logs/
 /data/logs/
+/data/avatars/
 /config/
 *.log
 
@@ -71,6 +72,7 @@ settings.json.orig
 
 # ZCode local session artifacts
 .zcode/
+.zcodeignore
 
 # Backup files
 *.bak
@@ -114,8 +116,10 @@ cine-local.yaml
 data/indexers/definitions/custom/
 data/external-lists/presets/custom/
 data/reports/
+data/test/
 
 # Local notes
 docs/
 docs/notes/
 .worktrees/
+

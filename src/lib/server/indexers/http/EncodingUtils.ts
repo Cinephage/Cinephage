@@ -6,7 +6,7 @@
  */
 
 import iconv from 'iconv-lite';
-import { createChildLogger } from '$lib/logging/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'EncodingUtils', logDomain: 'indexers' });
 

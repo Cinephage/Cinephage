@@ -3,7 +3,7 @@
  * Defines the core types for the task worker infrastructure.
  */
 
-import type { LogDomain } from '$lib/logging';
+import type { LogDomain } from '#lib/logging/index.js';
 
 /**
  * Types of workers supported by the system.

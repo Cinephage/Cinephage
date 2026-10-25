@@ -1,12 +1,12 @@
-import { getIndexerManager } from '$lib/server/indexers/IndexerManager.js';
-import { evaluateIndexerSearchAvailability } from '$lib/server/indexers/search/availability.js';
-import { db } from '$lib/server/db/index.js';
-import { episodes, series } from '$lib/server/db/schema.js';
+import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
+import { evaluateIndexerSearchAvailability } from '#lib/server/indexers/search/availability.js';
+import { db } from '#lib/server/db/index.js';
+import { episodes, series } from '#lib/server/db/schema.js';
 import { eq, inArray } from 'drizzle-orm';
-import type { EpisodeToSearch } from '$lib/server/downloads/index.js';
+import type { EpisodeToSearch } from '#lib/server/downloads/index.js';
 import type { AutoSearchItemResult, MultiSearchResult } from './types.js';
 import { AltTitleRefresher } from './alt-titles.js';
-import { createChildLogger } from '$lib/logging/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'SearchBulk', logDomain: 'scans' });
 
@@ -96,7 +96,7 @@ export async function searchBulkEpisodes(
 		let totalIndividualGrabbed = 0;
 
 		const { getMultiSeasonSearchStrategy } =
-			await import('$lib/server/downloads/MultiSeasonSearchStrategy.js');
+			await import('#lib/server/downloads/MultiSeasonSearchStrategy.js');
 		const multiSeasonStrategy = getMultiSeasonSearchStrategy();
 
 		// Process each series separately

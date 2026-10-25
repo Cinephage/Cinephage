@@ -1,7 +1,7 @@
 import { beforeEach, afterAll, describe, expect, it, vi } from 'vitest';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../../../../test/db-helper';
 import { api } from '../../../../../../test/api-helper';
-import { epgPrograms, livetvAccounts, livetvChannels } from '$lib/server/db/schema';
+import { epgPrograms, livetvAccounts, livetvChannels } from '#lib/server/db/schema.js';
 
 /**
  * In-memory database so the route reads real epg_programs rows written with
@@ -9,7 +9,7 @@ import { epgPrograms, livetvAccounts, livetvChannels } from '$lib/server/db/sche
  */
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},

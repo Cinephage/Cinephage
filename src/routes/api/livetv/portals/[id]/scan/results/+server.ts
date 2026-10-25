@@ -5,10 +5,9 @@
  * DELETE /api/livetv/portals/[id]/scan/results - Clear scan results
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getPortalScannerService, type ScanResult } from '$lib/server/livetv/stalker';
-import { createChildLogger } from '$lib/logging';
+import { getPortalScannerService, type ScanResult } from '#lib/server/livetv/stalker/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LiveTvPortalScanResults', logDomain: 'livetv' });
 
@@ -22,14 +21,14 @@ export const GET: RequestHandler = async ({ params, url }) => {
 		const scannerService = getPortalScannerService();
 		const results = await scannerService.getScanResults(params.id, status || undefined);
 
-		return json({
+		return Response.json({
 			success: true,
 			results
 		});
 	} catch (error) {
 		logger.error('[API] Failed to get scan results', error instanceof Error ? error : undefined);
 
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to get scan results'
@@ -49,14 +48,14 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 		const scannerService = getPortalScannerService();
 		const deleted = await scannerService.clearResults(params.id, status || undefined);
 
-		return json({
+		return Response.json({
 			success: true,
 			deleted
 		});
 	} catch (error) {
 		logger.error('[API] Failed to clear scan results', error instanceof Error ? error : undefined);
 
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to clear scan results'

@@ -1,4 +1,4 @@
-import { resolvePath } from '$lib/utils/routing.js';
+import { resolvePath } from '#lib/utils/routing.js';
 
 /**
  * Build a TVDB series URL using a slug derived from the title.

@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { X, Loader2 } from 'lucide-svelte';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
-	import * as m from '$lib/paraglide/messages.js';
+	import { X, Loader2 } from '@lucide/svelte';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
 		open: boolean;

@@ -19,7 +19,7 @@ import { matchFormats, extractAttributes } from './matcher.js';
 import { getActiveFormats } from './formats/registry.js';
 import { ReleaseParser } from '../indexers/parser/ReleaseParser.js';
 import { RESOLUTION_ORDER } from '../indexers/parser/types.js';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'indexers' as const });
 

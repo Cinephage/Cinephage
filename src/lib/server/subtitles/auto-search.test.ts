@@ -7,7 +7,7 @@ import {
 	summarizeAutoSearchReason
 } from './auto-search.js';
 import type { MovieLike, EpisodeLike, SeriesLike } from './auto-search.js';
-import type { SubtitleRequirement } from '$lib/shared/language-profile.js';
+import type { SubtitleRequirement } from '#lib/shared/language-profile.js';
 
 const { searchService, downloadService, profileState } = vi.hoisted(() => {
 	const searchService = {
@@ -72,7 +72,7 @@ vi.mock('./services/LanguageProfileService.js', async (importOriginal) => {
 	};
 });
 
-vi.mock('$lib/logging/index.js', () => {
+vi.mock('#lib/logging/index.js', () => {
 	const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 	return { createChildLogger: vi.fn(() => logger) };
 });
@@ -133,7 +133,7 @@ beforeAll(async () => {
 	// subtitle-search-state.js, which hits the real singleton db (unmocked).
 	// Ensure its schema is synced before any test in this file runs — CI runs
 	// from a fresh, unmigrated database.
-	const { initializeDatabase } = await import('$lib/server/db/index.js');
+	const { initializeDatabase } = await import('#lib/server/db/index.js');
 	await initializeDatabase();
 });
 
@@ -365,8 +365,8 @@ describe('requirement-targeted search (Search now)', () => {
 
 	beforeEach(async () => {
 		// State persists across tests in the shared backing DB — start clean.
-		const { subtitleSearchState } = await import('$lib/server/db/schema.js');
-		const { db } = await import('$lib/server/db/index.js');
+		const { subtitleSearchState } = await import('#lib/server/db/schema.js');
+		const { db } = await import('#lib/server/db/index.js');
 		db.delete(subtitleSearchState).run();
 		profileState.profile = {
 			id: 'p1',

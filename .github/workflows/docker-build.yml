@@ -97,7 +97,7 @@ jobs:
         run: echo "IMAGE_NAME_LC=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Log in to Container Registry
         if: needs.prepare.outputs.should_publish == 'true'
@@ -112,10 +112,15 @@ jobs:
 
       - name: Test Docker image
         run: |
+          # CAMOUFOX_AUTO_FETCH=false: the entrypoint provisions the ~1.4GB
+          # Camoufox browser synchronously before starting the server, and a
+          # throwaway CI container is always a first run - the health window
+          # would expire mid-download. Real deployments exercise that path.
           docker run -d --name cinephage-test \
             -p 3000:3000 \
             -e ORIGIN=http://localhost:3000 \
             -e BETTER_AUTH_SECRET=ci-healthcheck-secret-change-in-production \
+            -e CAMOUFOX_AUTO_FETCH=false \
             cinephage:test
 
           for i in {1..12}; do
@@ -137,7 +142,7 @@ jobs:
 
       - name: Build and push Docker image
         id: build-push
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           platforms: linux/amd64
@@ -171,7 +176,7 @@ jobs:
         run: echo "IMAGE_NAME_LC=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Log in to Container Registry
         if: needs.prepare.outputs.should_publish == 'true'
@@ -183,7 +188,7 @@ jobs:
 
       - name: Build and push Docker image
         id: build-push
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           platforms: linux/arm64
@@ -217,7 +222,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Extract Docker metadata
         id: meta

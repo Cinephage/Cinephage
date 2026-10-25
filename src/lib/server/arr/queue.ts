@@ -7,8 +7,8 @@
  */
 
 import { and, isNotNull, isNull, not, inArray } from 'drizzle-orm';
-import { db } from '$lib/server/db/index.js';
-import { downloadQueue, downloadClients } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { downloadQueue, downloadClients } from '#lib/server/db/schema.js';
 import { getOrAssignArrId, getOrAssignArrIds } from './ArrIdMappingService.js';
 import type { ArrAppName } from './systemStatus.js';
 

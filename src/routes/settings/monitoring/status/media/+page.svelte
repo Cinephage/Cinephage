@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { Search, HardDrive, Film, Tv, X, SlidersHorizontal, ChevronDown } from 'lucide-svelte';
-	import { SettingsPage } from '$lib/components/ui/settings';
-	import { MediaExplorerTable } from '$lib/components/status';
-	import { createProgressiveRenderer } from '$lib/utils/progressive-render.svelte.ts';
-	import { formatBytes } from '$lib/utils/format';
+	import { Search, HardDrive, Film, Tv, X, SlidersHorizontal, ChevronDown } from '@lucide/svelte';
+	import { SettingsPage } from '#lib/components/ui/settings/index.js';
+	import { MediaExplorerTable } from '#lib/components/status/index.js';
+	import { createProgressiveRenderer } from '#lib/utils/progressive-render.svelte.ts';
+	import { formatBytes } from '#lib/utils/format.js';
 	import type { PageData } from './$types';
-	import * as m from '$lib/paraglide/messages.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	let { data }: { data: PageData } = $props();
 
@@ -45,13 +45,13 @@
 	);
 
 	function updateUrlParam(key: string, value: string) {
-		const url = new URL(page.url);
+		const url = new URL(page.url.href);
 		if (value === 'all' || (key === 'sort' && value === 'title-asc')) {
 			url.searchParams.delete(key);
 		} else {
 			url.searchParams.set(key, value);
 		}
-		goto(url.pathname + url.search, { keepFocus: true, noScroll: true });
+		goto(url.pathname + url.search, { reset: false });
 	}
 
 	function handleSortChange(sort: string) {
@@ -60,7 +60,13 @@
 
 	function handleClearAll() {
 		searchQuery = '';
-		goto(page.url.pathname, { keepFocus: true, noScroll: true });
+		goto(page.url.pathname, { reset: false });
+	}
+
+	function clearInsightScope() {
+		const url = new URL(page.url.href);
+		url.searchParams.delete('insightId');
+		goto(url.pathname + url.search, { reset: false });
 	}
 </script>
 
@@ -68,7 +74,12 @@
 	<title>{m.nav_mediaExplorer()}</title>
 </svelte:head>
 
-<SettingsPage title={m.status_media_title()} subtitle={m.status_media_subtitle()}>
+<SettingsPage
+	title={m.status_media_title()}
+	subtitle={m.status_media_subtitle()}
+	backHref="/settings/monitoring/status"
+	backLabel={m.nav_storageMaintenance()}
+>
 	{#snippet actions()}
 		<div class="group relative w-56">
 			<Search
@@ -92,6 +103,24 @@
 		</div>
 	{/snippet}
 
+	{#if data.insightContext}
+		<div
+			class="alert flex items-center justify-between gap-2 border border-info/20 bg-info/10 py-2 text-sm"
+		>
+			<span>
+				{m.status_media_insightScope({
+					count: data.totalCount,
+					rawCount: data.insightContext.rawItemCount,
+					title: data.insightContext.title
+				})}
+			</span>
+			<button class="btn gap-1 btn-ghost btn-xs" onclick={clearInsightScope}>
+				<X class="h-3 w-3" />
+				{m.action_clear()}
+			</button>
+		</div>
+	{/if}
+
 	<!-- Stats bar -->
 	<div class="flex flex-wrap items-center gap-3 text-sm text-base-content/70">
 		<span class="badge badge-ghost badge-sm">
@@ -105,11 +134,11 @@
 		{/if}
 		<span class="badge badge-ghost badge-sm">
 			<Film class="h-3 w-3" />
-			{data.movieCount} movie{data.movieCount !== 1 ? 's' : ''}
+			{data.movieCount} Movie{data.movieCount !== 1 ? 's' : ''}
 		</span>
 		<span class="badge badge-ghost badge-sm">
 			<Tv class="h-3 w-3" />
-			{data.seriesCount} series
+			{data.seriesCount} Series
 		</span>
 		{#if hasActiveFilters}
 			<button class="btn gap-1 btn-ghost text-base-content/50 btn-xs" onclick={handleClearAll}>

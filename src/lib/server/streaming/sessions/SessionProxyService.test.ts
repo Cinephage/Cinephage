@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const resolveAndValidateUrlMock = vi.fn(async () => ({ safe: true }));
 const fetchWithTimeoutMock = vi.fn();
 
-vi.mock('$lib/server/http/ssrf-protection', () => ({
+vi.mock('#lib/server/http/ssrf-protection.js', () => ({
 	resolveAndValidateUrl: resolveAndValidateUrlMock,
 	fetchWithTimeout: fetchWithTimeoutMock,
 	MAX_REDIRECTS: 5

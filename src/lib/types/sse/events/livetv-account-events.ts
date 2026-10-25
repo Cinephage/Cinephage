@@ -4,7 +4,7 @@
  * Shared types for the /api/livetv/accounts/stream endpoint
  */
 
-import type { LiveTvAccount } from '$lib/types/livetv';
+import type { LiveTvAccount } from '#lib/types/livetv.js';
 
 /**
  * accounts:initial event - Full accounts list

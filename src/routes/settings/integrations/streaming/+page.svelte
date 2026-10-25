@@ -1,9 +1,9 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
-	import { HardDrive, Trash2, RefreshCw, Archive, Clock } from 'lucide-svelte';
-	import { cleanupStreamingCache } from '$lib/api/settings.js';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import { SettingsPage, SettingsSection } from '$lib/components/ui/settings';
+	import * as m from '#lib/paraglide/messages.js';
+	import { HardDrive, Trash2, RefreshCw, Archive, Clock } from '@lucide/svelte';
+	import { cleanupStreamingCache } from '#lib/api/settings.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { SettingsPage, SettingsSection } from '#lib/components/ui/settings/index.js';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();

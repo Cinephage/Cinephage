@@ -1,10 +1,9 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
-import { captchaSolverSettingsService, getCaptchaSolver } from '$lib/server/captcha';
-import { createChildLogger } from '$lib/logging';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { resolveAppVersion } from '$lib/server/version.js';
+import { captchaSolverSettingsService, getCaptchaSolver } from '#lib/server/captcha/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { resolveAppVersion } from '#lib/server/version.js';
 
 const logger = createChildLogger({ module: 'CaptchaBypassApi', logDomain: 'indexers' });
 
@@ -33,7 +32,7 @@ export const POST: RequestHandler = async (event) => {
 		const parsed = requestSchema.safeParse(body);
 
 		if (!parsed.success) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					message: 'Invalid request',
@@ -58,7 +57,7 @@ export const POST: RequestHandler = async (event) => {
 		const solverAvailable = solver.isAvailable();
 
 		if (!solverEnabled) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					message: 'Captcha bypass is disabled',
@@ -76,7 +75,7 @@ export const POST: RequestHandler = async (event) => {
 		}
 
 		if (!solverAvailable) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					message: 'Browser not available',
@@ -100,7 +99,7 @@ export const POST: RequestHandler = async (event) => {
 
 		const endTimestamp = Date.now();
 
-		return json({
+		return Response.json({
 			success: fetchResult.success,
 			message: fetchResult.success ? 'Success' : (fetchResult.error ?? 'Request failed'),
 			error: fetchResult.success ? null : (fetchResult.error ?? 'Request failed'),
@@ -125,7 +124,7 @@ export const POST: RequestHandler = async (event) => {
 		logger.error('[API] Captcha bypass request failed', error instanceof Error ? error : undefined);
 		const startTimestamp = Date.now();
 		const endTimestamp = Date.now();
-		return json(
+		return Response.json(
 			{
 				success: false,
 				message: error instanceof Error ? error.message : 'Request failed',

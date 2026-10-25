@@ -1,19 +1,19 @@
-import { getInstantFileEvidence } from '$lib/server/languages/debrid-evidence';
+import { getInstantFileEvidence } from '#lib/server/languages/debrid-evidence.js';
 import { and, eq, ne } from 'drizzle-orm';
-import { db } from '$lib/server/db/index.js';
-import { downloadQueue, episodes } from '$lib/server/db/schema.js';
-import { getDownloadClientManager } from '$lib/server/downloadClients/DownloadClientManager.js';
+import { db } from '#lib/server/db/index.js';
+import { downloadQueue, episodes } from '#lib/server/db/schema.js';
+import { getDownloadClientManager } from '#lib/server/downloadClients/DownloadClientManager.js';
 import {
 	isDebridError,
 	type DebridAdapter,
 	type SubmissionInput
-} from '$lib/server/downloadClients/debrid/debrid-adapter.js';
-import { downloadMonitor } from '$lib/server/downloadClients/monitoring/index.js';
-import { acquisitionService } from '$lib/server/acquisition/AcquisitionService.js';
+} from '#lib/server/downloadClients/debrid/debrid-adapter.js';
+import { downloadMonitor } from '#lib/server/downloadClients/monitoring/index.js';
+import { acquisitionService } from '#lib/server/acquisition/AcquisitionService.js';
 import { recheckResolvedIdentity } from '../identity-recheck.js';
-import { isImportedQueueStatus } from '$lib/types/queue.js';
-import { ReleaseParser } from '$lib/server/indexers/parser/ReleaseParser.js';
-import { createChildLogger } from '$lib/logging/index.js';
+import { isImportedQueueStatus } from '#lib/types/queue.js';
+import { ReleaseParser } from '#lib/server/indexers/parser/ReleaseParser.js';
+import { createChildLogger } from '#lib/logging/index.js';
 import { getDownloadResolutionService } from '../DownloadResolutionService.js';
 import type { GrabRequest, HandlerResult, ResolvedContext } from '../grab-types.js';
 

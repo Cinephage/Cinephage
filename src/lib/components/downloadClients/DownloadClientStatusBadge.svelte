@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { AlertTriangle, CheckCircle, XCircle } from 'lucide-svelte';
-	import type { DownloadClientHealth } from '$lib/types/downloadClient';
-	import * as m from '$lib/paraglide/messages.js';
-	import { formatDisplayDate } from '$lib/utils/format.js';
+	import { AlertTriangle, CheckCircle, XCircle } from '@lucide/svelte';
+	import type { DownloadClientHealth } from '#lib/types/downloadClient.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import { formatDisplayDate } from '#lib/utils/format.js';
 
 	interface Props {
 		enabled: boolean | null;

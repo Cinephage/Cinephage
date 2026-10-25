@@ -6,12 +6,12 @@ import {
 	downloadQueue,
 	movieFiles,
 	movies
-} from '$lib/server/db/schema.js';
+} from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -23,7 +23,7 @@ vi.mock('$lib/server/db/index.js', () => ({
 
 // Scoring is not under test here; return an always-acceptable result whose
 // resolution is taken from the real ReleaseParser output ScoringStage passes in.
-vi.mock('$lib/server/quality/QualityFilter.js', () => ({
+vi.mock('#lib/server/quality/QualityFilter.js', () => ({
 	qualityFilter: {
 		getProfile: vi.fn().mockResolvedValue(null),
 		getDefaultScoringProfile: vi.fn().mockResolvedValue({
@@ -64,9 +64,9 @@ vi.mock('./handlers/TorrentHandler.js', () => ({
 			resolved: { movieId?: string }
 		) {
 			await new Promise((resolve) => setTimeout(resolve, 10));
-			const { db } = await import('$lib/server/db/index.js');
-			const { downloadQueue } = await import('$lib/server/db/schema.js');
-			const { ReleaseParser } = await import('$lib/server/indexers/parser/ReleaseParser.js');
+			const { db } = await import('#lib/server/db/index.js');
+			const { downloadQueue } = await import('#lib/server/db/schema.js');
+			const { ReleaseParser } = await import('#lib/server/indexers/parser/ReleaseParser.js');
 			const parser = new ReleaseParser();
 			const parsed = parser.parse(request.release.title);
 			const id = `queue-${resolved.movieId}-${parsed.resolution}`;

@@ -6,13 +6,13 @@
  * effective language profile's v2 `audio` object.
  */
 
-import { db } from '$lib/server/db';
-import { movies, series } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { movies, series } from '#lib/server/db/schema.js';
 import { and, eq } from 'drizzle-orm';
-import { getLanguageProfileService } from '$lib/server/subtitles/services/LanguageProfileService';
-import { logger } from '$lib/logging';
-import { materializeAudioPreference } from '$lib/server/languages/audio-preference-resolver';
-import type { SubtitleRequirement } from '$lib/shared/language-profile';
+import { getLanguageProfileService } from '#lib/server/subtitles/services/LanguageProfileService.js';
+import { logger } from '#lib/logging/index.js';
+import { materializeAudioPreference } from '#lib/server/languages/audio-preference-resolver.js';
+import type { SubtitleRequirement } from '#lib/shared/language-profile.js';
 import {
 	DEFAULT_EFFECTIVE_AUDIO_PREFERENCE,
 	type EffectiveAudioPreference
@@ -158,7 +158,7 @@ export async function getPreferredSubtitleRequirementsFor(
 		)[0];
 		if (!show || season === undefined || episode === undefined) return [];
 
-		const { episodes } = await import('$lib/server/db/schema');
+		const { episodes } = await import('#lib/server/db/schema.js');
 		const episodeRow = (
 			await db
 				.select({ id: episodes.id, wantsSubtitlesOverride: episodes.wantsSubtitlesOverride })

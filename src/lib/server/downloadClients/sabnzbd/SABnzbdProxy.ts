@@ -8,7 +8,7 @@
  * - Implements exponential backoff for retries
  */
 
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'imports' as const });
 import { randomUUID } from 'node:crypto';
@@ -39,6 +39,19 @@ import type {
 	SabnzbdWarning,
 	SabnzbdWarningsResponse
 } from './types';
+
+/**
+ * Multipart part headers are line-based, so CR/LF or an unescaped quote in a
+ * name or filename would let a release-derived value inject or truncate parts.
+ */
+function sanitizeMultipartToken(value: string): string {
+	return value.replace(/[\r\n"]/g, '_');
+}
+
+/** Part values are body content; only line breaks can inject a new part. */
+function sanitizeMultipartValue(value: string): string {
+	return value.replace(/[\r\n]/g, ' ');
+}
 
 /**
  * Error thrown when SABnzbd API returns an error.
@@ -619,8 +632,8 @@ export class SABnzbdProxy {
 		parts.push(
 			Buffer.from(
 				`--${boundary}\r\n` +
-					`Content-Disposition: form-data; name="${file.name}"; filename="${file.filename}"\r\n` +
-					`Content-Type: ${file.contentType}\r\n\r\n`
+					`Content-Disposition: form-data; name="${sanitizeMultipartToken(file.name)}"; filename="${sanitizeMultipartToken(file.filename)}"\r\n` +
+					`Content-Type: ${sanitizeMultipartToken(file.contentType)}\r\n\r\n`
 			)
 		);
 		parts.push(file.data);
@@ -632,8 +645,8 @@ export class SABnzbdProxy {
 				parts.push(
 					Buffer.from(
 						`--${boundary}\r\n` +
-							`Content-Disposition: form-data; name="${key}"\r\n\r\n` +
-							`${value}\r\n`
+							`Content-Disposition: form-data; name="${sanitizeMultipartToken(key)}"\r\n\r\n` +
+							`${sanitizeMultipartValue(value)}\r\n`
 					)
 				);
 			}

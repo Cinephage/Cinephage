@@ -6,18 +6,22 @@
  */
 
 import { eq, and, inArray, desc } from 'drizzle-orm';
-import { db } from '$lib/server/db';
+import { db } from '#lib/server/db/index.js';
 import {
 	portalScanResults,
 	portalScanHistory,
 	livetvAccounts,
 	type PortalScanResultRecord,
 	type PortalScanHistoryRecord
-} from '$lib/server/db/schema';
-import { createChildLogger } from '$lib/logging';
+} from '#lib/server/db/schema.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'livetv' as const });
-import { workerManager, PortalScanWorker, type PortalScanOptions } from '$lib/server/workers';
+import {
+	workerManager,
+	PortalScanWorker,
+	type PortalScanOptions
+} from '#lib/server/workers/index.js';
 import { getStalkerPortalManager } from './StalkerPortalManager';
 import { getLiveTvAccountManager } from '../LiveTvAccountManager';
 import { getLiveTvChannelService } from '../LiveTvChannelService';

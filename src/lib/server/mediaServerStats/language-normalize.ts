@@ -11,7 +11,7 @@
  *   dropped. Unknown non-empty values therefore survive here only.
  */
 
-import { normalizeLanguageTag } from '$lib/server/languages/normalize.js';
+import { normalizeLanguageTag } from '#lib/server/languages/normalize.js';
 
 export interface NormalizedLanguageLists {
 	/** Canonical tags, first-seen order, deduped; empty and `und` results dropped. */

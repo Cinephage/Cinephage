@@ -1,18 +1,18 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { goto, beforeNavigate, afterNavigate, invalidateAll } from '$app/navigation';
+	import { goto, beforeNavigate, afterNavigate, refreshAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { resolvePath } from '$lib/utils/routing';
+	import { resolvePath } from '#lib/utils/routing.js';
 	import { SvelteSet } from 'svelte/reactivity';
-	import LibraryMediaCard from '$lib/components/library/LibraryMediaCard.svelte';
-	import LibraryMediaTable from '$lib/components/library/LibraryMediaTable.svelte';
-	import LibraryDrawer from '$lib/components/library/LibraryDrawer.svelte';
-	import LibraryBulkActionBar from '$lib/components/library/LibraryBulkActionBar.svelte';
-	import BulkQualityProfileModal from '$lib/components/library/BulkQualityProfileModal.svelte';
-	import BulkLanguageProfileModal from '$lib/components/library/BulkLanguageProfileModal.svelte';
-	import BulkDeleteModal from '$lib/components/library/BulkDeleteModal.svelte';
-	import DeleteConfirmationModal from '$lib/components/ui/modal/DeleteConfirmationModal.svelte';
-	import { MediaSearchModal } from '$lib/components/search';
+	import LibraryMediaCard from '#lib/components/library/LibraryMediaCard.svelte';
+	import LibraryMediaTable from '#lib/components/library/LibraryMediaTable.svelte';
+	import LibraryDrawer from '#lib/components/library/LibraryDrawer.svelte';
+	import LibraryBulkActionBar from '#lib/components/library/LibraryBulkActionBar.svelte';
+	import BulkQualityProfileModal from '#lib/components/library/BulkQualityProfileModal.svelte';
+	import BulkLanguageProfileModal from '#lib/components/library/BulkLanguageProfileModal.svelte';
+	import BulkDeleteModal from '#lib/components/library/BulkDeleteModal.svelte';
+	import DeleteConfirmationModal from '#lib/components/ui/modal/DeleteConfirmationModal.svelte';
+	import { MediaSearchModal } from '#lib/components/search/index.js';
 	import {
 		Clapperboard,
 		X,
@@ -29,28 +29,39 @@
 		HardDrive,
 		Captions,
 		Loader2
-	} from 'lucide-svelte';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import { viewPreferences } from '$lib/stores/view-preferences.svelte';
+	} from '@lucide/svelte';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { viewPreferences } from '#lib/stores/view-preferences.svelte.js';
 	import { enhance } from '$app/forms';
 	import {
 		batchMovies,
 		batchDeleteMovieFiles,
 		updateMovie,
 		deleteMovie
-	} from '$lib/api/library.js';
-	import { ApiError } from '$lib/api/client.js';
-	import { createSearchProgress } from '$lib/stores/searchProgress.svelte';
-	import { createSubtitleProgress } from '$lib/stores/subtitleProgress.svelte';
-	import { getPrimaryAutoSearchIssue } from '$lib/utils/autoSearchIssues';
-	import { createProgressiveRenderer } from '$lib/utils/progressive-render.svelte.js';
-	import * as m from '$lib/paraglide/messages.js';
+	} from '#lib/api/library.js';
+	import { ApiError } from '#lib/api/client.js';
+	import { createSearchProgress } from '#lib/stores/searchProgress.svelte.js';
+	import { createSubtitleProgress } from '#lib/stores/subtitleProgress.svelte.js';
+	import { getPrimaryAutoSearchIssue } from '#lib/utils/autoSearchIssues.js';
+	import { createProgressiveRenderer } from '#lib/utils/progressive-render.svelte.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	let { data } = $props();
 
+	// Viewer accounts browse a read-only library; admin controls stay hidden.
+	const isAdminUser = $derived(data.user?.role === 'admin');
+
+	function clearInsightScope() {
+		const url = new URL(page.url.href);
+		url.searchParams.delete('insightId');
+		goto(url.pathname + url.search, { reset: false });
+	}
+
 	const SCROLL_KEY = 'cinephage:library:movies:scrollY';
 
-	beforeNavigate(({ to }) => {
+	beforeNavigate(({ to, shallow, type }) => {
+		if (shallow && type === 'goto') return;
+
 		try {
 			if (to?.url.pathname.startsWith('/library/movie/')) {
 				localStorage.setItem(SCROLL_KEY, String(window.scrollY));
@@ -62,7 +73,9 @@
 		}
 	});
 
-	afterNavigate(({ from }) => {
+	afterNavigate(({ from, shallow, type }) => {
+		if (shallow && type === 'goto') return;
+
 		try {
 			if (from?.url.pathname.startsWith('/library/movie/')) {
 				const saved = localStorage.getItem(SCROLL_KEY);
@@ -260,7 +273,7 @@
 	async function handleBulkLanguageApplied(updated: number) {
 		selectedMovies.clear();
 		toasts.success(m.toast_library_movies_qualityUpdatedCount({ count: updated }));
-		await invalidateAll();
+		await refreshAll();
 	}
 
 	async function handleBulkDelete(deleteFiles: boolean, removeFromLibrary: boolean) {
@@ -434,7 +447,11 @@
 								m2.id === movieId ? { ...m2, hasFile: false, files: [] } : m2
 							)
 						};
-						toasts.success(m.toast_library_movies_filesDeleted({ title: movie.title }));
+						toasts.success(
+							deleteFiles
+								? m.toast_library_movies_filesDeleted({ title: movie.title })
+								: m.toast_library_movies_unmatched({ title: movie.title })
+						);
 					}
 					isDeleteModalOpen = false;
 					pendingDeleteMovieId = null;
@@ -555,7 +572,7 @@
 	]);
 
 	function updateUrlParam(key: string, value: string) {
-		const url = new URL(page.url);
+		const url = new URL(page.url.href);
 		const query = searchQuery.trim();
 		if (query) url.searchParams.set('q', query);
 		else url.searchParams.delete('q');
@@ -570,17 +587,17 @@
 		} else {
 			url.searchParams.set(key, value);
 		}
-		goto(resolvePath(url.pathname + url.search), { keepFocus: true, noScroll: true });
+		goto(resolvePath(url.pathname + url.search), { reset: false });
 	}
 
 	function clearFilters() {
 		searchQuery = '';
-		const url = new URL(resolve('/library/movies'), page.url.origin);
+		const url = new URL(resolve('library/movies'), page.url.origin);
 		if (data.libraryScope?.isSubLibraryScope && data.libraryScope?.selected?.slug) {
 			url.searchParams.set('library', data.libraryScope.selected.slug);
 		}
 		url.searchParams.delete('q');
-		goto(resolvePath(url.pathname + url.search), { keepFocus: true, noScroll: true });
+		goto(resolvePath(url.pathname + url.search), { reset: false });
 	}
 
 	function handleMonitorAll() {
@@ -622,10 +639,7 @@
 	const bulkHasActiveDownloads = $derived(bulkActiveDownloadCount > 0);
 </script>
 
-<svelte:head>
-	<title>{m.library_movies_pageTitle()}</title>
-</svelte:head>
-
+<svelte:head><title>{m.library_movies_pageTitle()}</title></svelte:head>
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="min-h-screen bg-base-100 pb-20">
@@ -700,49 +714,53 @@
 				{/if}
 
 				<div class="dropdown dropdown-end">
-					<div
-						tabindex="0"
-						role="button"
-						class="btn gap-1.5 btn-ghost btn-xs sm:btn-sm"
-						aria-label="Monitoring actions"
-					>
-						<Eye class="h-4 w-4" />
-						<span class="hidden xl:inline">Monitoring</span>
-						<ChevronDown class="hidden h-3 w-3 sm:block" />
-					</div>
-					<ul
-						class="menu dropdown-content z-50 mt-2 w-44 rounded-box border border-base-300 bg-base-100 p-2 shadow-xl"
-					>
-						<li>
-							<button onclick={handleMonitorAll}>
-								<Eye class="h-4 w-4" />
-								{m.library_movies_monitorAll()}
-							</button>
-						</li>
-						<li>
-							<button onclick={handleUnmonitorAll}>
-								<EyeOff class="h-4 w-4" />
-								{m.library_movies_unmonitorAll()}
-							</button>
-						</li>
-					</ul>
+					{#if isAdminUser}
+						<div
+							tabindex="0"
+							role="button"
+							class="btn gap-1.5 btn-ghost btn-xs sm:btn-sm"
+							aria-label="Monitoring actions"
+						>
+							<Eye class="h-4 w-4" />
+							<span class="hidden xl:inline">Monitoring</span>
+							<ChevronDown class="hidden h-3 w-3 sm:block" />
+						</div>
+						<ul
+							class="menu dropdown-content z-50 mt-2 w-44 rounded-box border border-base-300 bg-base-100 p-2 shadow-xl"
+						>
+							<li>
+								<button onclick={handleMonitorAll}>
+									<Eye class="h-4 w-4" />
+									{m.library_movies_monitorAll()}
+								</button>
+							</li>
+							<li>
+								<button onclick={handleUnmonitorAll}>
+									<EyeOff class="h-4 w-4" />
+									{m.library_movies_unmonitorAll()}
+								</button>
+							</li>
+						</ul>
+					{/if}
 				</div>
 
-				<button
-					class="btn gap-1.5 btn-ghost btn-xs sm:btn-sm {showCheckboxes ? 'btn-primary' : ''}"
-					onclick={handleSelectToggle}
-				>
-					{#if !showCheckboxes}
-						<CheckSquare class="h-4 w-4" />
-						<span class="hidden sm:inline">{m.library_movies_select()}</span>
-					{:else if !allSelected}
-						<CheckSquare class="h-4 w-4" />
-						<span class="hidden sm:inline">{m.library_movies_selectAll()}</span>
-					{:else}
-						<XSquare class="h-4 w-4" />
-						<span class="hidden sm:inline">{m.library_movies_done()}</span>
-					{/if}
-				</button>
+				{#if isAdminUser}
+					<button
+						class="btn gap-1.5 btn-ghost btn-xs sm:btn-sm {showCheckboxes ? 'btn-primary' : ''}"
+						onclick={handleSelectToggle}
+					>
+						{#if !showCheckboxes}
+							<CheckSquare class="h-4 w-4" />
+							<span class="hidden sm:inline">{m.library_movies_select()}</span>
+						{:else if !allSelected}
+							<CheckSquare class="h-4 w-4" />
+							<span class="hidden sm:inline">{m.library_movies_selectAll()}</span>
+						{:else}
+							<XSquare class="h-4 w-4" />
+							<span class="hidden sm:inline">{m.library_movies_done()}</span>
+						{/if}
+					</button>
+				{/if}
 
 				<!-- View Toggle -->
 				<button
@@ -805,6 +823,23 @@
 
 	<!-- Main Content -->
 	<main class="w-full px-4 py-8 lg:px-8">
+		{#if data.insightContext}
+			<div
+				class="mb-4 alert flex items-center justify-between gap-2 border border-info/20 bg-info/10 py-2 text-sm"
+			>
+				<span>
+					{m.library_movies_insightScope({
+						count: data.total,
+						rawCount: data.insightContext.rawItemCount,
+						title: data.insightContext.title
+					})}
+				</span>
+				<button class="btn gap-1 btn-ghost btn-xs" onclick={clearInsightScope}>
+					<X class="h-3 w-3" />
+					{m.action_clear()}
+				</button>
+			</div>
+		{/if}
 		{#if data.error}
 			<div role="alert" class="alert alert-error">
 				<svg
@@ -818,7 +853,7 @@
 						stroke-linejoin="round"
 						stroke-width="2"
 						d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
-					/>
+					></path>
 				</svg>
 				<span>{data.error}</span>
 			</div>
@@ -831,9 +866,10 @@
 					<p class="mt-2">{m.library_movies_tryDifferentSearch()}</p>
 				</div>
 				<div class="mt-6 flex gap-3">
-					<button class="btn btn-ghost" onclick={() => (searchQuery = '')}>
-						{m.library_movies_clearSearchBtn()}
-					</button>
+					<button class="btn btn-ghost" onclick={() => (searchQuery = '')}
+						>{m.library_movies_clearSearchBtn()}</button
+					>
+
 					<a
 						href={resolvePath(`/discover?type=movie&q=${encodeURIComponent(searchQuery)}`)}
 						class="btn btn-primary"
@@ -890,7 +926,7 @@
 												fill-rule="evenodd"
 												d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
 												clip-rule="evenodd"
-											/>
+											></path>
 										</svg>
 										<div class="flex min-w-0 flex-1 items-center gap-2">
 											<h3 class="min-w-0 truncate text-lg font-semibold">
@@ -914,7 +950,7 @@
 											</span>
 										</span>
 									</button>
-									{#if group.collectionId}
+									{#if isAdminUser && group.collectionId}
 										<button
 											class="btn shrink-0 btn-ghost btn-sm"
 											onclick={() =>
@@ -956,10 +992,10 @@
 												downloadingIds={downloadingMovieIdSet}
 												{autoSearchingIds}
 												onSelectChange={handleItemSelectChange}
-												onMonitorToggle={handleMonitorToggle}
-												onDelete={handleDeleteMovie}
-												onAutoGrab={handleAutoGrab}
-												onManualGrab={handleManualGrab}
+												onMonitorToggle={isAdminUser ? handleMonitorToggle : undefined}
+												onDelete={isAdminUser ? handleDeleteMovie : undefined}
+												onAutoGrab={isAdminUser ? handleAutoGrab : undefined}
+												onManualGrab={isAdminUser ? handleManualGrab : undefined}
 												preferOriginalTitleDefault={data.preferOriginalTitleDefault}
 											/>
 										</div>
@@ -992,10 +1028,10 @@
 								downloadingIds={downloadingMovieIdSet}
 								{autoSearchingIds}
 								onSelectChange={handleItemSelectChange}
-								onMonitorToggle={handleMonitorToggle}
-								onDelete={handleDeleteMovie}
-								onAutoGrab={handleAutoGrab}
-								onManualGrab={handleManualGrab}
+								onMonitorToggle={isAdminUser ? handleMonitorToggle : undefined}
+								onDelete={isAdminUser ? handleDeleteMovie : undefined}
+								onAutoGrab={isAdminUser ? handleAutoGrab : undefined}
+								onManualGrab={isAdminUser ? handleManualGrab : undefined}
 								preferOriginalTitleDefault={data.preferOriginalTitleDefault}
 							/>
 						{/if}
@@ -1050,19 +1086,21 @@
 	/>
 </div>
 
-<!-- Bulk Action Bar -->
-<LibraryBulkActionBar
-	{selectedCount}
-	loading={bulkLoading}
-	currentAction={currentBulkAction}
-	mediaType="movie"
-	onMonitor={() => handleBulkMonitor(true)}
-	onUnmonitor={() => handleBulkMonitor(false)}
-	onChangeQuality={() => (isQualityModalOpen = true)}
-	onLanguage={() => (isLanguageModalOpen = true)}
-	onDelete={() => (isDeleteModalOpen = true)}
-	onClear={clearSelection}
-/>
+<!-- Bulk Action Bar (admin only) -->
+{#if isAdminUser}
+	<LibraryBulkActionBar
+		{selectedCount}
+		loading={bulkLoading}
+		currentAction={currentBulkAction}
+		mediaType="movie"
+		onMonitor={() => handleBulkMonitor(true)}
+		onUnmonitor={() => handleBulkMonitor(false)}
+		onChangeQuality={() => (isQualityModalOpen = true)}
+		onLanguage={() => (isLanguageModalOpen = true)}
+		onDelete={() => (isDeleteModalOpen = true)}
+		onClear={clearSelection}
+	/>
+{/if}
 
 <!-- Bulk Quality Profile Modal -->
 <BulkQualityProfileModal

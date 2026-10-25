@@ -5,11 +5,11 @@ import {
 	clearTestDb,
 	type TestDatabase
 } from '../../../../../test/db-helper.js';
-import { movies, movieFiles, scoringProfiles } from '$lib/server/db/schema';
+import { movies, movieFiles, scoringProfiles } from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -19,7 +19,7 @@ vi.mock('$lib/server/db', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -72,6 +72,11 @@ describe('QualityBelowCutoffRule', () => {
 		expect(findings).toHaveLength(1);
 		expect(findings[0].itemCount).toBe(1);
 		expect(findings[0].severity).toBe('info');
+		// itemType must travel with each item - movie and series tmdbIds are
+		// independent namespaces, so the resolver needs this to pick the right
+		// library page instead of guessing from tmdbId alone (#601).
+		const items = (findings[0].details as { items: Array<{ itemType: string }> }).items;
+		expect(items[0].itemType).toBe('movie');
 	});
 
 	it('does not flag movies at or above cutoff', async () => {

@@ -10,12 +10,12 @@
 		Loader2,
 		Trash2,
 		Captions
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 	import EpisodeRow from './EpisodeRow.svelte';
 	import AutoSearchStatus from './AutoSearchStatus.svelte';
-	import { formatBytes, todayDateString } from '$lib/utils/format.js';
-	import { calculateEpisodeStats } from '$lib/utils/episode-stats.svelte';
-	import * as m from '$lib/paraglide/messages.js';
+	import { formatBytes, todayDateString } from '#lib/utils/format.js';
+	import { calculateEpisodeStats } from '#lib/utils/episode-stats.svelte.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface Subtitle {
 		id: string;
@@ -83,6 +83,8 @@
 		seriesMonitored: boolean;
 		isStreamerProfile?: boolean;
 		wantsSubtitles?: boolean;
+		/** Viewer mode: hide monitor/search/delete controls, keep browsing. */
+		readOnly?: boolean;
 		defaultOpen?: boolean;
 		selectedEpisodes?: Set<string>;
 		showCheckboxes?: boolean;
@@ -120,6 +122,7 @@
 		seriesMonitored,
 		isStreamerProfile = false,
 		wantsSubtitles = false,
+		readOnly = false,
 		defaultOpen = false,
 		selectedEpisodes = new Set(),
 		showCheckboxes = false,
@@ -323,25 +326,27 @@
 
 			<!-- Action buttons -->
 			<div class="mx-auto flex shrink-0 items-center gap-2 sm:mx-0 sm:ml-auto">
-				<!-- Season monitor toggle -->
-				<button
-					class="btn btn-ghost btn-sm {seasonPartiallyMonitored
-						? 'text-warning'
-						: season.monitored
-							? 'text-success'
-							: 'text-base-content/40'} {seasonMonitorDisabled ? 'opacity-40' : ''}"
-					onclick={handleSeasonMonitorToggle}
-					disabled={seasonMonitorDisabled}
-					title={seasonMonitorTooltip}
-				>
-					{#if seasonMonitorDisabled}
-						<Lock size={16} />
-					{:else if seasonPartiallyMonitored || season.monitored}
-						<Eye size={16} />
-					{:else}
-						<EyeOff size={16} />
-					{/if}
-				</button>
+				{#if !readOnly}
+					<!-- Season monitor toggle -->
+					<button
+						class="btn btn-ghost btn-sm {seasonPartiallyMonitored
+							? 'text-warning'
+							: season.monitored
+								? 'text-success'
+								: 'text-base-content/40'} {seasonMonitorDisabled ? 'opacity-40' : ''}"
+						onclick={handleSeasonMonitorToggle}
+						disabled={seasonMonitorDisabled}
+						title={seasonMonitorTooltip}
+					>
+						{#if seasonMonitorDisabled}
+							<Lock size={16} />
+						{:else if seasonPartiallyMonitored || season.monitored}
+							<Eye size={16} />
+						{:else}
+							<EyeOff size={16} />
+						{/if}
+					</button>
+				{/if}
 
 				<!-- Auto-search status indicator -->
 				<AutoSearchStatus
@@ -351,59 +356,61 @@
 					size="sm"
 				/>
 
-				<!-- Auto-grab season pack -->
-				<button
-					class="btn btn-ghost btn-sm"
-					onclick={handleAutoSearchSeason}
-					disabled={autoSearchingSeason}
-					title={m.library_seasonAccordion_autoGrabSeasonPack()}
-				>
-					{#if autoSearchingSeason}
-						<Loader2 size={16} class="animate-spin" />
-					{:else}
-						<Zap size={16} />
-					{/if}
-				</button>
-
-				<!-- Auto-download subtitles for season -->
-				{#if onSubtitleAutoSearchSeason}
+				{#if !readOnly}
+					<!-- Auto-grab season pack -->
 					<button
 						class="btn btn-ghost btn-sm"
-						onclick={handleSubtitleAutoSearchSeason}
-						disabled={subtitleAutoSearchingSeason}
-						title={m.library_seasonAccordion_autoDownloadSubs()}
+						onclick={handleAutoSearchSeason}
+						disabled={autoSearchingSeason}
+						title={m.library_seasonAccordion_autoGrabSeasonPack()}
 					>
-						{#if subtitleAutoSearchingSeason}
+						{#if autoSearchingSeason}
 							<Loader2 size={16} class="animate-spin" />
 						{:else}
-							<Captions size={16} />
+							<Zap size={16} />
 						{/if}
 					</button>
-				{/if}
 
-				<!-- Interactive search season -->
-				<button
-					class="btn btn-ghost btn-sm"
-					onclick={handleSeasonSearch}
-					title={m.library_seasonAccordion_searchSeason()}
-				>
-					<Search size={16} />
-				</button>
+					<!-- Auto-download subtitles for season -->
+					{#if onSubtitleAutoSearchSeason}
+						<button
+							class="btn btn-ghost btn-sm"
+							onclick={handleSubtitleAutoSearchSeason}
+							disabled={subtitleAutoSearchingSeason}
+							title={m.library_seasonAccordion_autoDownloadSubs()}
+						>
+							{#if subtitleAutoSearchingSeason}
+								<Loader2 size={16} class="animate-spin" />
+							{:else}
+								<Captions size={16} />
+							{/if}
+						</button>
+					{/if}
 
-				<!-- Delete season -->
-				{#if onSeasonDelete}
+					<!-- Interactive search season -->
 					<button
-						class="btn btn-ghost btn-sm {downloadedCount === 0
-							? 'text-base-content/30'
-							: 'text-error'}"
-						onclick={handleSeasonDelete}
-						disabled={downloadedCount === 0}
-						title={downloadedCount === 0
-							? m.library_seasonAccordion_noFilesToDelete()
-							: m.library_seasonAccordion_deleteSeason()}
+						class="btn btn-ghost btn-sm"
+						onclick={handleSeasonSearch}
+						title={m.library_seasonAccordion_searchSeason()}
 					>
-						<Trash2 size={16} />
+						<Search size={16} />
 					</button>
+
+					<!-- Delete season -->
+					{#if onSeasonDelete}
+						<button
+							class="btn btn-ghost btn-sm {downloadedCount === 0
+								? 'text-base-content/30'
+								: 'text-error'}"
+							onclick={handleSeasonDelete}
+							disabled={downloadedCount === 0}
+							title={downloadedCount === 0
+								? m.library_seasonAccordion_noFilesToDelete()
+								: m.library_seasonAccordion_deleteSeason()}
+						>
+							<Trash2 size={16} />
+						</button>
+					{/if}
 				{/if}
 			</div>
 		</div>
@@ -453,6 +460,7 @@
 									{seriesMonitored}
 									{isStreamerProfile}
 									{wantsSubtitles}
+									{readOnly}
 									selected={selectedEpisodes.has(episode.id)}
 									showCheckbox={showCheckboxes}
 									isDownloading={downloadingEpisodeIds.has(episode.id) ||

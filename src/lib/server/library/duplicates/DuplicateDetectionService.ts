@@ -8,8 +8,8 @@
  *   - both: filename OR filehash match
  */
 
-import { db } from '$lib/server/db/index.js';
-import { movieFiles, episodeFiles, duplicateGroupSuppression } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { movieFiles, episodeFiles, duplicateGroupSuppression } from '#lib/server/db/schema.js';
 import { eq, and, isNotNull, sql } from 'drizzle-orm';
 
 export type DupMode = 'off' | 'filename' | 'filehash' | 'both';

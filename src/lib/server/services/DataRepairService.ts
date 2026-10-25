@@ -9,12 +9,12 @@
  */
 
 import type { BackgroundService, ServiceStatus } from './background-service.js';
-import { db } from '$lib/server/db/index.js';
-import { settings, series, seasons, episodes, episodeFiles } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { settings, series, seasons, episodes, episodeFiles } from '#lib/server/db/schema.js';
 import { eq, like, and } from 'drizzle-orm';
-import { tmdb } from '$lib/server/tmdb.js';
-import { createChildLogger } from '$lib/logging/index.js';
-import { todayDateString } from '$lib/utils/format.js';
+import { tmdb } from '#lib/server/tmdb.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { todayDateString } from '#lib/utils/format.js';
 
 const logger = createChildLogger({ module: 'DataRepairService', logDomain: 'system' });
 

@@ -1,6 +1,5 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getSubtitleDownloadService } from '$lib/server/subtitles/services/SubtitleDownloadService';
+import { getSubtitleDownloadService } from '#lib/server/subtitles/services/SubtitleDownloadService.js';
 
 /**
  * DELETE /api/subtitles/[id]
@@ -15,7 +14,7 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 	const { id } = params;
 
 	if (!id) {
-		return json({ error: 'Subtitle ID is required' }, { status: 400 });
+		return Response.json({ error: 'Subtitle ID is required' }, { status: 400 });
 	}
 
 	const addToBlacklist = url.searchParams.get('blacklist') === 'true';
@@ -26,5 +25,5 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 
 	await downloadService.delete(id, addToBlacklist, addToBlacklist && reason ? reason : undefined);
 
-	return json({ success: true });
+	return Response.json({ success: true });
 };

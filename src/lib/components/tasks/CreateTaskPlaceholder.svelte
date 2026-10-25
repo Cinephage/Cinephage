@@ -1,6 +1,6 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
 
 	interface Props {
 		isOpen: boolean;

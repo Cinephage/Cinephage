@@ -10,10 +10,10 @@
 
 import { EventEmitter } from 'events';
 import { stat } from 'fs/promises';
-import { join, basename, dirname, extname } from 'path';
+import { join, basename, dirname, extname, resolve } from 'path';
 import { randomUUID } from 'node:crypto';
-import { db } from '$lib/server/db';
-import { eventBuffer } from '$lib/server/sse/EventBuffer.js';
+import { db } from '#lib/server/db/index.js';
+import { eventBuffer } from '#lib/server/sse/EventBuffer.js';
 import {
 	downloadQueue,
 	downloadHistory,
@@ -27,13 +27,14 @@ import {
 	downloadClients,
 	importFailures,
 	importOperations
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 import { eq, and, or, inArray, gte } from 'drizzle-orm';
 import { downloadMonitor } from '../monitoring/DownloadMonitorService';
-import { resolveMovieMultiQuality } from '$lib/server/quality/movie-buckets.js';
+import { resolveMovieMultiQuality } from '#lib/server/quality/movie-buckets.js';
 import { computeMovieReplacement, computeEpisodeReplacement } from './replacement.js';
-import { normalizeFilename } from '$lib/server/library/duplicates/DuplicateDetectionService.js';
-import type { Resolution } from '$lib/server/indexers/parser/types.js';
+import { normalizeFilename } from '#lib/server/library/duplicates/DuplicateDetectionService.js';
+import { contentAlreadyPresent } from '#lib/server/library/content-identity.js';
+import type { Resolution } from '#lib/server/indexers/parser/types.js';
 import {
 	transferFileWithMode,
 	findVideoFiles,
@@ -46,49 +47,52 @@ import {
 	deletePhysicalFile,
 	copyExtraFiles,
 	applyFilePermissions,
-	ImportMode
+	ImportMode,
+	type TransferResult,
+	type TransferMode
 } from './FileTransfer';
 import { getDownloadClientManager } from '../DownloadClientManager';
+import { joinCategoryPath } from '../core/client-utils.js';
 import { unlink, rm, writeFile } from 'fs/promises';
 import { unlinkSync } from 'node:fs';
-import { ReleaseParser } from '$lib/server/indexers/parser/ReleaseParser';
-import { mediaInfoService, MediaInfoService } from '$lib/server/library/media-info';
+import { ReleaseParser } from '#lib/server/indexers/parser/ReleaseParser.js';
+import { mediaInfoService, MediaInfoService } from '#lib/server/library/media-info.js';
 import {
 	recalculateMovieShortfall,
 	recalculateShortfallForEpisode
-} from '$lib/server/languages/language-shortfall';
+} from '#lib/server/languages/language-shortfall.js';
 import {
 	NamingService,
 	releaseToNamingInfo,
 	type MediaNamingInfo
-} from '$lib/server/library/naming/NamingService';
-import { namingSettingsService } from '$lib/server/library/naming/NamingSettingsService';
-import { resolveAudioLanguages } from '$lib/server/library/naming/preview-metadata.js';
-import { resolveLocalizedTitlesForFormats } from '$lib/server/library/naming/localization.js';
-import { createChildLogger, runWithLogContext } from '$lib/logging';
-import { todayDateString } from '$lib/utils/format.js';
+} from '#lib/server/library/naming/NamingService.js';
+import { namingSettingsService } from '#lib/server/library/naming/NamingSettingsService.js';
+import { resolveAudioLanguages } from '#lib/server/library/naming/preview-metadata.js';
+import { resolveLocalizedTitlesForFormats } from '#lib/server/library/naming/localization.js';
+import { createChildLogger, runWithLogContext } from '#lib/logging/index.js';
+import { todayDateString, formatBytes } from '#lib/utils/format.js';
 import {
 	DOWNLOAD,
 	EXCLUDED_FILE_PATTERNS,
 	DANGEROUS_EXTENSIONS,
 	EXECUTABLE_EXTENSIONS
-} from '$lib/config/constants';
-import { ImportWorker, workerManager } from '$lib/server/workers';
-import { monitoringScheduler } from '$lib/server/monitoring/MonitoringScheduler.js';
-import { getFileManagementSettings } from '$lib/server/settings/file-management.js';
-import { searchSubtitlesForNewMedia } from '$lib/server/subtitles/services/SubtitleImportService.js';
-import { libraryMediaEvents } from '$lib/server/library/LibraryMediaEvents';
-import { getMediaBrowserNotifier } from '$lib/server/notifications/mediabrowser';
-import { notifyMovieDownload, notifySeriesDownload } from '$lib/server/arr/notifications.js';
-import { getOrAssignArrId } from '$lib/server/arr/ArrIdMappingService.js';
-import { getSidecarSettings } from '$lib/server/library/sidecar/sidecarSettings.js';
+} from '#lib/config/constants.js';
+import { ImportWorker, workerManager } from '#lib/server/workers/index.js';
+import { monitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.js';
+import { getFileManagementSettings } from '#lib/server/settings/file-management.js';
+import { searchSubtitlesForNewMedia } from '#lib/server/subtitles/services/SubtitleImportService.js';
+import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
+import { getMediaBrowserNotifier } from '#lib/server/notifications/mediabrowser/index.js';
+import { notifyMovieDownload, notifySeriesDownload } from '#lib/server/arr/notifications.js';
+import { getOrAssignArrId } from '#lib/server/arr/ArrIdMappingService.js';
+import { getSidecarSettings } from '#lib/server/library/sidecar/sidecarSettings.js';
 import {
 	buildMovieNfo,
 	buildSeriesNfo,
 	buildSeasonNfo,
 	buildEpisodeNfo,
 	nfoPathFor
-} from '$lib/server/library/sidecar/NfoGenerator.js';
+} from '#lib/server/library/sidecar/NfoGenerator.js';
 import {
 	downloadSidecarImage,
 	shouldWriteSidecar,
@@ -97,15 +101,15 @@ import {
 	seriesArtworkPaths,
 	seasonArtworkPath,
 	folderOf
-} from '$lib/server/library/sidecar/SidecarImageService.js';
-import { getMediaParseStem } from '$lib/server/library/media-utils.js';
+} from '#lib/server/library/sidecar/SidecarImageService.js';
+import { getMediaParseStem } from '#lib/server/library/media-utils.js';
 import {
 	matchEpisodesByIdentifier,
 	matchEpisodesFromQueueContext as matchEpisodesFromQueueContextShared,
 	resolveEpisodeIdentifierWithFallback as resolveEpisodeIdentifierWithFallbackShared,
 	type ResolvedTvEpisodeIdentifier
-} from '$lib/server/library/tv-episode-resolver.js';
-import { isImportedQueueStatus, type QueueStatus } from '$lib/types/queue';
+} from '#lib/server/library/tv-episode-resolver.js';
+import { isImportedQueueStatus, type QueueStatus } from '#lib/types/queue.js';
 
 const logger = createChildLogger({ logDomain: 'imports' as const });
 
@@ -127,6 +131,34 @@ type ImportFailureReason =
 	| 'transfer_failed'
 	| 'max_retries_exceeded'
 	| 'no_linked_media';
+
+/**
+ * Surface a silent hardlink->copy fallback on the job's Activity log.
+ *
+ * transferFile() already warns at the file-log level (FileTransfer.ts), but
+ * that's invisible from the Activity page; a copy instead of a hardlink
+ * duplicates the file's full size on disk, so it needs to reach the same
+ * place the user is already watching (GitHub #597).
+ */
+function warnIfHardlinkFellBackToCopy(
+	worker: ImportWorker,
+	transferResult: TransferResult,
+	preferHardlink: boolean | undefined,
+	sourcePath: string,
+	destPath: string
+): void {
+	if (transferResult.mode !== 'copy' || !(preferHardlink ?? true)) return;
+
+	worker.log(
+		'warn',
+		`Copied instead of hardlinked: ${basename(sourcePath)} (hardlink requested but unavailable on this filesystem; duplicates ${formatBytes(transferResult.sizeBytes ?? 0)} of disk space)`,
+		{
+			sourceDir: dirname(sourcePath),
+			destDir: dirname(destPath),
+			sizeBytes: transferResult.sizeBytes
+		}
+	);
+}
 
 async function recordImportFailure(opts: {
 	releaseTitle: string;
@@ -183,6 +215,8 @@ export interface ImportResult {
 		codec?: string;
 		hdr?: string;
 	};
+	/** How the file reached its destination (hardlink/copy/move/symlink). */
+	transferMode?: TransferMode;
 }
 
 /**
@@ -654,6 +688,15 @@ export class ImportService extends EventEmitter {
 			}
 		}
 
+		// Defence in depth for #532: the download and temp roots and their
+		// per-category staging roots are never a single download's import
+		// source. Importing from one would scan (and move) every other
+		// download under it.
+		if (client && this.isRootLevelImportPath(queueItem.outputPath, client.client)) {
+			this.trackPendingImport(queueItemId, 'Invalid path - waiting for download client');
+			return { status: 'pending_retry', reason: 'Path not ready yet' };
+		}
+
 		// Path is valid, clear from pending and queue the import
 		this.pendingImports.delete(queueItemId);
 
@@ -668,6 +711,34 @@ export class ImportService extends EventEmitter {
 
 		this.queueImport(queueItemId);
 		return { status: 'queued' };
+	}
+
+	/**
+	 * True when the import path is a download-client root or one of its
+	 * per-category staging roots - directories shared by many downloads that
+	 * must never be treated as one download's import source (#532).
+	 */
+	private isRootLevelImportPath(
+		outputPath: string,
+		clientConfig: {
+			downloadPathLocal?: string | null;
+			tempPathLocal?: string | null;
+			movieCategory?: string | null;
+			tvCategory?: string | null;
+		}
+	): boolean {
+		const roots: string[] = [];
+		for (const base of [clientConfig.downloadPathLocal, clientConfig.tempPathLocal]) {
+			if (!base) continue;
+			roots.push(base);
+			for (const category of [clientConfig.movieCategory, clientConfig.tvCategory]) {
+				if (!category) continue;
+				const joined = joinCategoryPath(base, category);
+				if (joined) roots.push(joined);
+			}
+		}
+		const target = resolve(outputPath.replace(/\/+$/, ''));
+		return roots.some((root) => resolve(root.replace(/\/+$/, '')) === target);
 	}
 
 	/**
@@ -1197,14 +1268,40 @@ export class ImportService extends EventEmitter {
 		const movieFolder = join(rootFolder.path, movie.path);
 		const allowStrmProbe = movie.scoringProfileId !== 'streamer';
 		const mediaInfo = await mediaInfoService.extractMediaInfo(mainFile.path, { allowStrmProbe });
+		// A file ffprobe cannot read is not importable: it is still
+		// downloading, corrupt, or a fragment adopted by mistake (#532).
+		// STRM placeholders never reach here - they get synthetic info.
+		const probeFailure = this.getMediaProbeFailure(mainFile.path, mediaInfo);
+		if (probeFailure) {
+			result.failedFiles.push(probeFailure);
+			result.error = probeFailure.error;
+			result.failureStage = 'path_resolution';
+			result.failureReason = 'path_unavailable';
+			worker.fileProcessed(basename(mainFile.path), false, probeFailure.error);
+			await downloadMonitor.markFailed(queueItem.id, probeFailure.error!);
+			return result;
+		}
 		const destFileName = await this.buildMovieFileName(movie, mainFile.path, queueItem, mediaInfo);
-		const destPath = join(movieFolder, destFileName);
+		let destPath = join(movieFolder, destFileName);
 
 		// Check for existing file (upgrade scenario)
 		const existingFiles = await db
 			.select()
 			.from(movieFiles)
 			.where(eq(movieFiles.movieId, movie.id));
+
+		// Content-identity guard (#598): the library may already have this
+		// exact content under a different path/name (e.g. a re-grab, or an
+		// unmatched download enrolled against a title it's already in).
+		// Skip the physical transfer entirely and point the record at the
+		// file that's already there instead of writing a duplicate.
+		const isStrmFile = extname(mainFile.path).toLowerCase() === '.strm';
+		const duplicateOf = existingFiles.find((file) =>
+			contentAlreadyPresent(file, queueItem.infoHash, mainFile.size, mediaInfo, isStrmFile)
+		);
+		if (duplicateOf) {
+			destPath = join(movieFolder, duplicateOf.relativePath);
+		}
 
 		// Grab-time upgrade flag is advisory only; the actual replacement is
 		// recomputed from current state after the transfer (below).
@@ -1221,93 +1318,121 @@ export class ImportService extends EventEmitter {
 			);
 		}
 
-		// Check minimum free space on the destination before transferring
-		const minFreeGb = importOptions.minimumFreeSpaceGb ?? 0;
-		if (minFreeGb > 0) {
-			const hasSpace = await hasSufficientDiskSpace(rootFolder.path, minFreeGb);
-			if (!hasSpace) {
-				const msg = `Insufficient disk space on destination: less than ${minFreeGb} GB free`;
-				result.error = msg;
-				result.failureStage = 'disk_space';
-				result.failureReason = 'insufficient_disk_space';
-				worker.log('error', msg);
-				await downloadMonitor.markFailed(queueItem.id, msg);
+		let transferResult: TransferResult;
+		if (duplicateOf) {
+			logger.info(
+				{ movieId: movie.id, queueId: queueItem.id, existingFileId: duplicateOf.id },
+				'Skipping transfer - identical content already in the library (#598)'
+			);
+			worker.log('info', `Already in library as ${basename(destPath)} - skipping transfer`);
+			transferResult = {
+				success: true,
+				sourcePath: mainFile.path,
+				destPath,
+				mode: 'skip-duplicate',
+				sizeBytes: duplicateOf.size ?? mainFile.size
+			};
+			worker.fileProcessed(basename(mainFile.path), true);
+			worker.setDestinationPath(destPath);
+		} else {
+			// Check minimum free space on the destination before transferring
+			const minFreeGb = importOptions.minimumFreeSpaceGb ?? 0;
+			if (minFreeGb > 0) {
+				const hasSpace = await hasSufficientDiskSpace(rootFolder.path, minFreeGb);
+				if (!hasSpace) {
+					const msg = `Insufficient disk space on destination: less than ${minFreeGb} GB free`;
+					result.error = msg;
+					result.failureStage = 'disk_space';
+					result.failureReason = 'insufficient_disk_space';
+					worker.log('error', msg);
+					await downloadMonitor.markFailed(queueItem.id, msg);
+					return result;
+				}
+			}
+
+			// Transfer the file FIRST (keep old file until new one is successfully imported)
+			// Use ImportMode.Auto to decide based on canMoveFiles:
+			// - Seeding torrents (canMoveFiles=false): Use hardlink/copy to preserve source
+			// - Usenet/completed (canMoveFiles=true): Use move for efficiency
+			worker.log('info', `Transferring file to: ${destPath} (canMoveFiles=${canMoveFiles})`);
+			const preserveSymlinks = rootFolder.preserveSymlinks ?? false;
+			transferResult = await transferFileWithMode(mainFile.path, destPath, {
+				importMode: importOptions.effectiveImportMode ?? ImportMode.Auto,
+				canMoveFiles,
+				preserveSymlinks,
+				preferHardlink: importOptions.preferHardlink ?? true
+			});
+
+			if (!transferResult.success) {
+				result.failedFiles.push({
+					success: false,
+					sourcePath: mainFile.path,
+					error: transferResult.error
+				});
+				result.error = `Failed to transfer file: ${transferResult.error}`;
+				result.failureStage = 'transfer';
+				result.failureReason = 'transfer_failed';
+				worker.fileProcessed(basename(mainFile.path), false, transferResult.error);
+				await downloadMonitor.markFailed(queueItem.id, result.error);
 				return result;
 			}
-		}
 
-		// Transfer the file FIRST (keep old file until new one is successfully imported)
-		// Use ImportMode.Auto to decide based on canMoveFiles:
-		// - Seeding torrents (canMoveFiles=false): Use hardlink/copy to preserve source
-		// - Usenet/completed (canMoveFiles=true): Use move for efficiency
-		worker.log('info', `Transferring file to: ${destPath} (canMoveFiles=${canMoveFiles})`);
-		const preserveSymlinks = rootFolder.preserveSymlinks ?? false;
-		const transferResult = await transferFileWithMode(mainFile.path, destPath, {
-			importMode: importOptions.effectiveImportMode ?? ImportMode.Auto,
-			canMoveFiles,
-			preserveSymlinks,
-			preferHardlink: importOptions.preferHardlink ?? true
-		});
-
-		if (!transferResult.success) {
-			result.failedFiles.push({
-				success: false,
-				sourcePath: mainFile.path,
-				error: transferResult.error
-			});
-			result.error = `Failed to transfer file: ${transferResult.error}`;
-			result.failureStage = 'transfer';
-			result.failureReason = 'transfer_failed';
-			worker.fileProcessed(basename(mainFile.path), false, transferResult.error);
-			await downloadMonitor.markFailed(queueItem.id, result.error);
-			return result;
-		}
-
-		worker.fileTransferred(
-			basename(mainFile.path),
-			transferResult.mode === 'symlink'
-				? 'symlink'
-				: transferResult.mode === 'hardlink'
-					? 'hardlink'
-					: transferResult.mode === 'move'
-						? 'move'
-						: 'copy'
-		);
-		worker.setDestinationPath(destPath);
-
-		if (importOptions.deleteEmptyFolders && transferResult.mode === 'move') {
-			await removeEmptyDirectories(dirname(mainFile.path), downloadPath);
-		}
-
-		if (transferResult.mode !== 'symlink') {
-			await applyFilePermissions(
-				destPath,
+			worker.fileTransferred(
+				basename(mainFile.path),
+				transferResult.mode === 'symlink'
+					? 'symlink'
+					: transferResult.mode === 'hardlink'
+						? 'hardlink'
+						: transferResult.mode === 'move'
+							? 'move'
+							: 'copy'
+			);
+			warnIfHardlinkFellBackToCopy(
+				worker,
+				transferResult,
+				importOptions.preferHardlink,
 				mainFile.path,
-				importOptions.preservePermissions ?? false,
-				importOptions.chmodFile ?? ''
+				destPath
 			);
-		}
+			worker.setDestinationPath(destPath);
 
-		if (importOptions.extraFileExtensions?.length) {
-			await copyExtraFiles(
-				dirname(mainFile.path),
-				dirname(destPath),
-				importOptions.extraFileExtensions,
-				transferResult.mode === 'move',
-				{
-					preservePermissions: importOptions.preservePermissions ?? false,
-					chmodFile: importOptions.chmodFile ?? ''
-				}
-			);
+			if (importOptions.deleteEmptyFolders && transferResult.mode === 'move') {
+				await removeEmptyDirectories(dirname(mainFile.path), downloadPath);
+			}
+
+			if (transferResult.mode !== 'symlink') {
+				await applyFilePermissions(
+					destPath,
+					mainFile.path,
+					importOptions.preservePermissions ?? false,
+					importOptions.chmodFile ?? ''
+				);
+			}
+
+			if (importOptions.extraFileExtensions?.length) {
+				await copyExtraFiles(
+					dirname(mainFile.path),
+					dirname(destPath),
+					importOptions.extraFileExtensions,
+					transferResult.mode === 'move',
+					{
+						preservePermissions: importOptions.preservePermissions ?? false,
+						chmodFile: importOptions.chmodFile ?? ''
+					}
+				);
+			}
 		}
 
 		const importedMetadata = this.buildImportedMetadata(queueItem, mainFile.path, mediaInfo);
 
-		// Create or update file record (deduplication)
-		const relativePath = destFileName;
+		// Create or update file record (deduplication). A content-identity
+		// match reuses the existing row's path, not the freshly computed name.
+		const relativePath = duplicateOf ? duplicateOf.relativePath : destFileName;
 
 		// Check if a file record already exists for this path (prevent duplicates)
-		const existingFileRecord = existingFiles.filter((file) => file.relativePath === relativePath);
+		const existingFileRecord = duplicateOf
+			? [duplicateOf]
+			: existingFiles.filter((file) => file.relativePath === relativePath);
 
 		const fileData = {
 			movieId: movie.id,
@@ -1459,6 +1584,7 @@ export class ImportService extends EventEmitter {
 			replacedFileIds: deletedFileIds.length > 0 ? deletedFileIds : undefined,
 			sceneName: fileData.sceneName,
 			releaseGroup: fileData.releaseGroup,
+			transferMode: transferResult.mode,
 			quality: fileData.quality
 		});
 
@@ -1473,7 +1599,8 @@ export class ImportService extends EventEmitter {
 			movieFileId: fileId,
 			title: fileData.sceneName,
 			releaseGroup: fileData.releaseGroup,
-			quality: fileData.quality
+			quality: fileData.quality,
+			transferMode: transferResult.mode
 		});
 
 		logger.info(
@@ -1836,8 +1963,15 @@ export class ImportService extends EventEmitter {
 		}
 
 		if (result.success) {
-			// Mark as imported (protocol determines if it shows as 'seeding-imported' or 'imported')
-			const importedPath = result.importedFiles[0]?.destPath || downloadPath;
+			// Mark as imported (protocol determines if it shows as 'seeding-imported' or 'imported').
+			// A single imported file is referenced directly; a multi-file batch
+			// (season pack) reports the series folder instead of an arbitrary
+			// one of its files, which would otherwise read as "imported to
+			// episode 1" even when every episode imported successfully.
+			const importedPath =
+				result.importedFiles.length === 1
+					? (result.importedFiles[0]?.destPath ?? downloadPath)
+					: join(rootFolder.path, seriesData.path);
 			const representativeImport = result.importedFiles.find((file) => file.success);
 			await downloadMonitor.markImported(
 				queueItem.id,
@@ -1851,7 +1985,8 @@ export class ImportService extends EventEmitter {
 				episodeFileIds: importedFileIds,
 				title: representativeImport?.sceneName,
 				releaseGroup: representativeImport?.releaseGroup,
-				quality: representativeImport?.quality
+				quality: representativeImport?.quality,
+				transferMode: representativeImport?.transferMode
 			});
 
 			logger.info(
@@ -1999,6 +2134,7 @@ export class ImportService extends EventEmitter {
 
 		const seasonNum = matchingEpisodes[0].seasonNumber;
 		const episodeNums = matchingEpisodes.map((episode) => episode.episodeNumber);
+		const episodeIds = matchingEpisodes.map((episode) => episode.id);
 		const firstEpisode = matchingEpisodes[0];
 		const absoluteNumber =
 			firstEpisode?.absoluteEpisodeNumber ??
@@ -2009,6 +2145,18 @@ export class ImportService extends EventEmitter {
 
 		const allowStrmProbe = seriesData.scoringProfileId !== 'streamer';
 		const mediaInfo = await mediaInfoService.extractMediaInfo(videoFile.path, { allowStrmProbe });
+		// See importMovie: an unreadable file is a failed file, never an import.
+		const probeFailure = this.getMediaProbeFailure(videoFile.path, mediaInfo);
+		if (probeFailure) return probeFailure;
+
+		// Check for existing files covering these episodes (upgrade scenario).
+		// Hoisted ahead of the transfer so the content-identity guard (#598)
+		// below can decide whether to skip it before anything touches disk.
+		const existingFiles = await db
+			.select()
+			.from(episodeFiles)
+			.where(eq(episodeFiles.seriesId, seriesData.id));
+
 		const destFileName = await this.buildEpisodeFileName(
 			seriesData,
 			seasonNum,
@@ -2020,82 +2168,125 @@ export class ImportService extends EventEmitter {
 			firstEpisode?.airDate ?? undefined,
 			mediaInfo
 		);
-		const relativePath = this.buildEpisodeRelativePath(
+		let relativePath = this.buildEpisodeRelativePath(
 			seriesData.seasonFolder ?? true,
 			seasonNum,
-			destFileName
+			destFileName,
+			{
+				title: seriesData.title,
+				originalTitle: seriesData.originalTitle ?? undefined,
+				year: seriesData.year ?? undefined,
+				tmdbId: seriesData.tmdbId,
+				tvdbId: seriesData.tvdbId ?? undefined,
+				imdbId: seriesData.imdbId ?? undefined
+			}
 		);
-		const destPath = join(seriesFolder, relativePath);
+		let destPath = join(seriesFolder, relativePath);
 
-		// Ensure season folder exists
-		await ensureDirectory(dirname(destPath));
-
-		// Transfer file using mode based on seeding state
-		const preserveSymlinks = rootFolder.preserveSymlinks ?? false;
-		const transferResult = await transferFileWithMode(videoFile.path, destPath, {
-			importMode: importOptions?.effectiveImportMode ?? ImportMode.Auto,
-			canMoveFiles,
-			preserveSymlinks,
-			preferHardlink: importOptions?.preferHardlink ?? true
-		});
-
-		if (!transferResult.success) {
-			return {
-				success: false,
-				sourcePath: videoFile.path,
-				error: transferResult.error
-			};
+		// Content-identity guard (#598): see importMovie for the full
+		// rationale. Reuse the existing row's path instead of transferring
+		// a byte-identical duplicate. Restricted to files that already cover
+		// one of THIS file's episodes - infoHash is release-level, not
+		// file-level, and identical across every file of a multi-episode
+		// acquisition, so without this an unrelated episode from the same
+		// batch would be misread as a duplicate and have its row's
+		// episodeIds clobbered onto this file's episode (issue #637).
+		const isStrmFile = extname(videoFile.path).toLowerCase() === '.strm';
+		const duplicateOf = existingFiles.find(
+			(file) =>
+				file.episodeIds?.some((id) => episodeIds.includes(id)) &&
+				contentAlreadyPresent(file, queueItem.infoHash, videoFile.size, mediaInfo, isStrmFile)
+		);
+		if (duplicateOf) {
+			relativePath = duplicateOf.relativePath;
+			destPath = join(seriesFolder, relativePath);
 		}
 
-		worker.fileTransferred(
-			basename(videoFile.path),
-			transferResult.mode === 'symlink'
-				? 'symlink'
-				: transferResult.mode === 'hardlink'
-					? 'hardlink'
-					: transferResult.mode === 'move'
-						? 'move'
-						: 'copy'
-		);
+		let transferResult: TransferResult;
+		if (duplicateOf) {
+			logger.info(
+				{ seriesId: seriesData.id, queueId: queueItem.id, existingFileId: duplicateOf.id },
+				'Skipping transfer - identical content already in the library (#598)'
+			);
+			worker.log('info', `Already in library as ${basename(destPath)} - skipping transfer`);
+			transferResult = {
+				success: true,
+				sourcePath: videoFile.path,
+				destPath,
+				mode: 'skip-duplicate',
+				sizeBytes: duplicateOf.size ?? videoFile.size
+			};
+			worker.fileProcessed(basename(videoFile.path), true);
+		} else {
+			// Ensure season folder exists
+			await ensureDirectory(dirname(destPath));
 
-		if (importOptions?.deleteEmptyFolders && transferResult.mode === 'move') {
-			const downloadPath = queueItem.outputPath ?? queueItem.clientDownloadPath ?? '';
-			if (downloadPath) {
-				await removeEmptyDirectories(dirname(videoFile.path), downloadPath);
+			// Transfer file using mode based on seeding state
+			const preserveSymlinks = rootFolder.preserveSymlinks ?? false;
+			transferResult = await transferFileWithMode(videoFile.path, destPath, {
+				importMode: importOptions?.effectiveImportMode ?? ImportMode.Auto,
+				canMoveFiles,
+				preserveSymlinks,
+				preferHardlink: importOptions?.preferHardlink ?? true
+			});
+
+			if (!transferResult.success) {
+				return {
+					success: false,
+					sourcePath: videoFile.path,
+					error: transferResult.error
+				};
+			}
+
+			worker.fileTransferred(
+				basename(videoFile.path),
+				transferResult.mode === 'symlink'
+					? 'symlink'
+					: transferResult.mode === 'hardlink'
+						? 'hardlink'
+						: transferResult.mode === 'move'
+							? 'move'
+							: 'copy'
+			);
+			warnIfHardlinkFellBackToCopy(
+				worker,
+				transferResult,
+				importOptions?.preferHardlink,
+				videoFile.path,
+				destPath
+			);
+
+			if (importOptions?.deleteEmptyFolders && transferResult.mode === 'move') {
+				const downloadPath = queueItem.outputPath ?? queueItem.clientDownloadPath ?? '';
+				if (downloadPath) {
+					await removeEmptyDirectories(dirname(videoFile.path), downloadPath);
+				}
+			}
+
+			if (transferResult.mode !== 'symlink') {
+				await applyFilePermissions(
+					destPath,
+					videoFile.path,
+					importOptions?.preservePermissions ?? false,
+					importOptions?.chmodFile ?? ''
+				);
+			}
+
+			if (importOptions?.extraFileExtensions?.length) {
+				await copyExtraFiles(
+					dirname(videoFile.path),
+					dirname(destPath),
+					importOptions.extraFileExtensions,
+					transferResult.mode === 'move',
+					{
+						preservePermissions: importOptions?.preservePermissions ?? false,
+						chmodFile: importOptions?.chmodFile ?? ''
+					}
+				);
 			}
 		}
 
-		if (transferResult.mode !== 'symlink') {
-			await applyFilePermissions(
-				destPath,
-				videoFile.path,
-				importOptions?.preservePermissions ?? false,
-				importOptions?.chmodFile ?? ''
-			);
-		}
-
-		if (importOptions?.extraFileExtensions?.length) {
-			await copyExtraFiles(
-				dirname(videoFile.path),
-				dirname(destPath),
-				importOptions.extraFileExtensions,
-				transferResult.mode === 'move',
-				{
-					preservePermissions: importOptions?.preservePermissions ?? false,
-					chmodFile: importOptions?.chmodFile ?? ''
-				}
-			);
-		}
-
 		const importedMetadata = this.buildImportedMetadata(queueItem, videoFile.path, mediaInfo);
-
-		const episodeIds = matchingEpisodes.map((ep) => ep.id);
-
-		// Check for existing files covering these episodes (upgrade scenario)
-		const existingFiles = await db
-			.select()
-			.from(episodeFiles)
-			.where(eq(episodeFiles.seriesId, seriesData.id));
 
 		// Check for existing files covering these episodes (upgrade scenario).
 		// Coverage rule (acquisition redesign): a multi-episode file is only
@@ -2426,7 +2617,8 @@ export class ImportService extends EventEmitter {
 			replacedFileId: filesToReplace.length > 0 ? filesToReplace[0] : undefined,
 			sceneName: fileData.sceneName,
 			releaseGroup: fileData.releaseGroup,
-			quality: fileData.quality
+			quality: fileData.quality,
+			transferMode: transferResult.mode
 		};
 	}
 
@@ -2699,7 +2891,7 @@ export class ImportService extends EventEmitter {
 
 		if (blockedExtensions.length === 0) {
 			const { getBlockedVideoExtensions } =
-				await import('$lib/server/settings/blocked-extensions.js');
+				await import('#lib/server/settings/blocked-extensions.js');
 			const global = await getBlockedVideoExtensions();
 			blockedExtensions = global.extensions;
 		}
@@ -2729,7 +2921,7 @@ export class ImportService extends EventEmitter {
 
 		try {
 			const { blocklistService } =
-				await import('$lib/server/monitoring/specifications/BlocklistSpecification.js');
+				await import('#lib/server/monitoring/specifications/BlocklistSpecification.js');
 			await blocklistService.addToBlocklist(
 				{
 					title: queueItem.title,
@@ -2851,17 +3043,18 @@ export class ImportService extends EventEmitter {
 		return new NamingService(config);
 	}
 
-	private buildSeasonFolderName(seasonNumber: number): string {
-		return this.getNamingService().generateSeasonFolderName(seasonNumber);
+	private buildSeasonFolderName(seasonNumber: number, series?: Partial<MediaNamingInfo>): string {
+		return this.getNamingService().generateSeasonFolderName(seasonNumber, series);
 	}
 
 	private buildEpisodeRelativePath(
 		useSeasonFolders: boolean,
 		seasonNumber: number,
-		destFileName: string
+		destFileName: string,
+		series?: Partial<MediaNamingInfo>
 	): string {
 		return useSeasonFolders
-			? join(this.buildSeasonFolderName(seasonNumber), destFileName)
+			? join(this.buildSeasonFolderName(seasonNumber, series), destFileName)
 			: destFileName;
 	}
 
@@ -2869,6 +3062,25 @@ export class ImportService extends EventEmitter {
 		if (!channels) return undefined;
 		const map: Record<number, string> = { 1: '1.0', 2: '2.0', 6: '5.1', 8: '7.1' };
 		return map[channels] ?? `${channels}.0`;
+	}
+
+	/**
+	 * A file ffprobe cannot read is not importable. Without this check a
+	 * corrupt fragment or a still-downloading file adopted by mistake would
+	 * be renamed into the library as a successful import (#532). STRM
+	 * placeholders never produce null - extractMediaInfo returns synthetic
+	 * info for those.
+	 */
+	private getMediaProbeFailure(
+		sourcePath: string,
+		mediaInfo: Awaited<ReturnType<typeof mediaInfoService.extractMediaInfo>>
+	): ImportResult | null {
+		if (mediaInfo) return null;
+		return {
+			success: false,
+			sourcePath,
+			error: 'Media validation failed: ffprobe could not read the file'
+		};
 	}
 
 	private async buildMovieFileName(
@@ -3303,6 +3515,18 @@ export class ImportService extends EventEmitter {
 				};
 			}
 
+			// Best-effort: remove the .nfo sidecar too, so retiring this file
+			// (e.g. an upgrade bringing in a differently-named replacement)
+			// doesn't leave a stale, orphaned .nfo sitting under the old name.
+			try {
+				await deletePhysicalFile(nfoPathFor(fullPath), !!recycleEnabled, rootFolder.path);
+			} catch (error) {
+				logger.warn(
+					{ fileId, path: nfoPathFor(fullPath), err: error },
+					'Failed to delete/recycle .nfo sidecar (non-fatal)'
+				);
+			}
+
 			// Delete database record
 			await db.delete(movieFiles).where(eq(movieFiles.id, fileId));
 
@@ -3391,6 +3615,25 @@ export class ImportService extends EventEmitter {
 					success: false,
 					error: `Physical delete failed: ${message} (row kept)`
 				};
+			}
+
+			// Best-effort: remove the .nfo sidecar too, so retiring this file
+			// (e.g. an upgrade bringing in a differently-named replacement)
+			// doesn't leave a stale, orphaned .nfo sitting under the old name.
+			try {
+				const nfoPath = nfoPathFor(fullPath);
+				if (await fileExists(nfoPath)) {
+					if (recycleEnabled) {
+						await moveToRecycleBin(nfoPath, rootFolder.path);
+					} else {
+						await unlink(nfoPath);
+					}
+				}
+			} catch (error) {
+				logger.warn(
+					{ fileId, path: nfoPathFor(fullPath), err: error },
+					'Failed to delete/recycle .nfo sidecar (non-fatal)'
+				);
 			}
 
 			// Delete database record
@@ -3553,6 +3796,7 @@ export class ImportService extends EventEmitter {
 			title?: string;
 			releaseGroup?: string;
 			quality?: typeof downloadQueue.$inferSelect.quality;
+			transferMode?: TransferMode;
 		} = {}
 	): Promise<void> {
 		// Get download client name
@@ -3592,6 +3836,7 @@ export class ImportService extends EventEmitter {
 			importedPath: extras.importedPath,
 			movieFileId: extras.movieFileId,
 			episodeFileIds: extras.episodeFileIds,
+			transferMode: extras.transferMode,
 			grabbedAt: queueItem.addedAt,
 			completedAt: queueItem.completedAt,
 			releaseGroup: extras.releaseGroup ?? queueItem.releaseGroup,

@@ -13,27 +13,27 @@
  * cannot replace a forced one and vice versa, even when it scores higher.
  */
 
-import { db } from '$lib/server/db/index.js';
-import { movies, series, episodes, subtitles, monitoringHistory } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { movies, series, episodes, subtitles, monitoringHistory } from '#lib/server/db/schema.js';
 import { eq, and, isNotNull, asc, inArray, or, isNull } from 'drizzle-orm';
-import { getSubtitleSearchService } from '$lib/server/subtitles/services/SubtitleSearchService.js';
-import { getSubtitleDownloadService } from '$lib/server/subtitles/services/SubtitleDownloadService.js';
-import { getSubtitleProviderManager } from '$lib/server/subtitles/services/SubtitleProviderManager.js';
-import { LanguageProfileService } from '$lib/server/subtitles/services/LanguageProfileService.js';
-import { selectCandidates } from '$lib/server/subtitles/acquisition.js';
-import { matchesRequirement } from '$lib/server/subtitles/requirement-matcher.js';
+import { getSubtitleSearchService } from '#lib/server/subtitles/services/SubtitleSearchService.js';
+import { getSubtitleDownloadService } from '#lib/server/subtitles/services/SubtitleDownloadService.js';
+import { getSubtitleProviderManager } from '#lib/server/subtitles/services/SubtitleProviderManager.js';
+import { LanguageProfileService } from '#lib/server/subtitles/services/LanguageProfileService.js';
+import { selectCandidates } from '#lib/server/subtitles/acquisition.js';
+import { matchesRequirement } from '#lib/server/subtitles/requirement-matcher.js';
 import {
 	filterSearchEligible,
 	recordSearchFailure,
 	resetSearchFailure
-} from '$lib/server/subtitles/subtitle-search-state.js';
-import { createChildLogger } from '$lib/logging/index.js';
-import { normalizeLanguageCode } from '$lib/shared/languages';
-import { requirementKey } from '$lib/shared/language-profile.js';
-import type { SubtitleRequirement } from '$lib/shared/language-profile.js';
+} from '#lib/server/subtitles/subtitle-search-state.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { normalizeLanguageCode } from '#lib/shared/languages.js';
+import { requirementKey } from '#lib/shared/language-profile.js';
+import type { SubtitleRequirement } from '#lib/shared/language-profile.js';
 import type { TaskResult } from '../MonitoringScheduler.js';
-import type { TaskExecutionContext } from '$lib/server/tasks/TaskExecutionContext.js';
-import { isMovieMonitored } from '$lib/server/monitoring/specifications/MonitoredSpecification.js';
+import type { TaskExecutionContext } from '#lib/server/tasks/TaskExecutionContext.js';
+import { isMovieMonitored } from '#lib/server/monitoring/specifications/MonitoredSpecification.js';
 
 const logger = createChildLogger({ module: 'SubtitleUpgradeTask', logDomain: 'monitoring' });
 

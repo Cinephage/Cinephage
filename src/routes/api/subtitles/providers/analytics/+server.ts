@@ -8,10 +8,9 @@
  * Clear throttle for a specific provider
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
-import { getSubtitleProviderManager } from '$lib/server/subtitles/services/SubtitleProviderManager';
-import { assertFound } from '$lib/server/api/validate.js';
+import { getSubtitleProviderManager } from '#lib/server/subtitles/services/SubtitleProviderManager.js';
+import { assertFound } from '#lib/server/api/validate.js';
 
 export interface ProviderAnalyticsResponse {
 	/** Provider ID */
@@ -83,7 +82,7 @@ export async function GET(): Promise<Response> {
 		timestamp: new Date().toISOString()
 	};
 
-	return json(response);
+	return Response.json(response);
 }
 
 /**
@@ -96,7 +95,7 @@ export async function DELETE({ url }: RequestEvent): Promise<Response> {
 	const providerId = url.searchParams.get('provider');
 
 	if (!providerId) {
-		return json({ error: 'Missing provider parameter' }, { status: 400 });
+		return Response.json({ error: 'Missing provider parameter' }, { status: 400 });
 	}
 
 	const providerManager = getSubtitleProviderManager();
@@ -107,7 +106,7 @@ export async function DELETE({ url }: RequestEvent): Promise<Response> {
 	// Clear throttle by recording a "success" which resets all error state
 	await providerManager.recordSuccess(providerId);
 
-	return json({
+	return Response.json({
 		success: true,
 		message: `Throttle cleared for ${config.name}`
 	});

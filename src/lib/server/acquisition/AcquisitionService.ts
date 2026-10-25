@@ -1,15 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, isNull, like, sql } from 'drizzle-orm';
-import { db } from '$lib/server/db/index.js';
+import { db } from '#lib/server/db/index.js';
 import {
 	acquisitionIntents,
 	acquisitionReservations,
 	downloadQueue,
 	movies
-} from '$lib/server/db/schema.js';
+} from '#lib/server/db/schema.js';
 import { computeMovieQualitySlot } from './slot-keys.js';
-import type { Resolution } from '$lib/server/indexers/parser/types.js';
-import { createChildLogger } from '$lib/logging';
+import type { Resolution } from '#lib/server/indexers/parser/types.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'AcquisitionService', logDomain: 'downloads' });
 
@@ -259,6 +259,53 @@ export class AcquisitionService {
 	cancelByQueueId(queueId: string, reason?: string): void {
 		const intent = this.findActiveByQueueId(queueId);
 		if (intent) this.cancelIntent(intent.id, reason);
+	}
+
+	/**
+	 * Release download_queue rows created by the Unmatched-tab track/enroll
+	 * flow for a movie/series being unmatched, so the torrent resurfaces in
+	 * Unmatched. Only rows explicitly stamped with `origin` qualify - NOT
+	 * "indexerId is null", which also matches legitimate arr_push-pushed
+	 * grabs and would wrongly release those too.
+	 *
+	 * Rows actively `importing`/`postprocessing` are left alone rather than
+	 * cancelled+deleted: ImportService holds an in-memory snapshot of the
+	 * row and never re-queries it, so deleting it mid-import wouldn't stop
+	 * the import - it would just silently orphan the queue row while the
+	 * import completes anyway, and releasing the acquisition slot early
+	 * could let a duplicate grab start concurrently. Those rows are left for
+	 * the import to finish/fail naturally; the caller's `heldBack` count
+	 * still counts them as "something to release" for guard purposes.
+	 */
+	releaseUnmatchedQueueItems(
+		target: { movieId: string } | { seriesId: string },
+		reason: string
+	): { released: number; heldBack: number } {
+		const mediaFilter =
+			'movieId' in target
+				? eq(downloadQueue.movieId, target.movieId)
+				: eq(downloadQueue.seriesId, target.seriesId);
+
+		const rows = db
+			.select({ id: downloadQueue.id, status: downloadQueue.status })
+			.from(downloadQueue)
+			.where(
+				and(mediaFilter, inArray(downloadQueue.origin, ['unmatched_track', 'unmatched_enroll']))
+			)
+			.all();
+
+		let released = 0;
+		let heldBack = 0;
+		for (const row of rows) {
+			if (row.status === 'importing' || row.status === 'postprocessing') {
+				heldBack++;
+				continue;
+			}
+			this.cancelByQueueId(row.id, reason);
+			db.delete(downloadQueue).where(eq(downloadQueue.id, row.id)).run();
+			released++;
+		}
+		return { released, heldBack };
 	}
 
 	findActiveByQueueId(queueId: string) {

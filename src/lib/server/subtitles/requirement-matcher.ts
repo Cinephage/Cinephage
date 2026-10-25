@@ -23,8 +23,8 @@
  * this function for hash matches.
  */
 
-import { canonicalizeLanguageTag } from '$lib/shared/languages.js';
-import type { SubtitleRequirement } from '$lib/shared/language-profile.js';
+import { canonicalizeLanguageTag } from '#lib/shared/languages.js';
+import type { SubtitleRequirement } from '#lib/shared/language-profile.js';
 
 /** Minimal subtitle shape needed to evaluate a requirement. */
 export interface SubtitleLike {

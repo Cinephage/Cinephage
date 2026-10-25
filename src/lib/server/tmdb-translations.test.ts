@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Minimal db mock: loadTmdbSettings reads tmdb_api_key/global_filters from
 // settings and the language_settings singleton. A bare key keeps the fetch
 // path free of filter injection; the network layer is stubbed below.
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	db: {
 		query: {
 			settings: {

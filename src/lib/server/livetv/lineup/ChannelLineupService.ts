@@ -4,7 +4,7 @@
  * Updated for multi-provider support (Stalker, XStream, M3U).
  */
 
-import { db } from '$lib/server/db';
+import { db } from '#lib/server/db/index.js';
 import {
 	channelLineupItems,
 	channelLineupBackups,
@@ -15,14 +15,14 @@ import {
 	type ChannelLineupItemRecord,
 	type ChannelCategoryRecord,
 	type LivetvChannelRecord
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 import { eq, asc, inArray, sql, and } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'livetv' as const });
 import { randomUUID } from 'node:crypto';
-import { normalizeLiveTvChannelName } from '$lib/livetv/channel-name-normalizer';
+import { normalizeLiveTvChannelName } from '#lib/livetv/channel-name-normalizer.js';
 import { liveTvEvents } from '../LiveTvEvents';
 import type {
 	ChannelLineupItemWithDetails,
@@ -33,7 +33,7 @@ import type {
 	AddToLineupRequest,
 	UpdateChannelRequest,
 	LiveTvProviderType
-} from '$lib/types/livetv';
+} from '#lib/types/livetv.js';
 
 /**
  * Convert category record to API response format

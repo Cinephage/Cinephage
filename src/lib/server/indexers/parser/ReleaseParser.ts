@@ -368,9 +368,10 @@ export class ReleaseParser {
 		// Also apply to TV shows to avoid duplicate years
 		if (context.year) {
 			const yearStr = String(context.year);
-			// Match year with optional parentheses: "(2025)" or just "2025"
+			// Match year with optional edition: "(2025)", "(2025-Director's Cut)",
+			// "(2025 Director's Cut)", or "2025"
 			const yearPatterns = [
-				new RegExp(`\\s*\\(${yearStr}\\)\\s*`), // (2025)
+				new RegExp(`\\s*\\(${yearStr}(?:[- ][^)]*)?\\)\\s*`), // (2025), (2025-Edition), (2025 Edition)
 				new RegExp(`\\s+${yearStr}(?:\\s|$)`) // 2025 at word boundary
 			];
 			for (const pattern of yearPatterns) {

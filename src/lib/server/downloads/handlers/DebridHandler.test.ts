@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
 	updatedValues: vi.fn()
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	db: {
 		select: vi.fn(() => ({
 			from: vi.fn(() => ({
@@ -21,7 +21,7 @@ vi.mock('$lib/server/db/index.js', () => ({
 	}
 }));
 
-vi.mock('$lib/logging/index.js', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	createChildLogger: vi.fn(() => ({ warn: vi.fn() }))
 }));
 

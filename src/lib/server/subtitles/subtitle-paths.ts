@@ -19,7 +19,7 @@
  * paths while retaining its multi-quality file lookup behavior.
  */
 
-import { db } from '$lib/server/db';
+import { db } from '#lib/server/db/index.js';
 import {
 	episodeFiles,
 	episodes,
@@ -27,7 +27,7 @@ import {
 	rootFolders,
 	series,
 	subtitles
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 import { inArray } from 'drizzle-orm';
 import { constants } from 'node:fs';
 import { lstat, open, realpath } from 'node:fs/promises';

@@ -19,10 +19,10 @@
  */
 
 import type { RequestHandler } from './$types';
-import { channelLineupService } from '$lib/server/livetv/lineup/ChannelLineupService';
-import { getBaseUrlAsync } from '$lib/server/streaming/url';
-import { createChildLogger } from '$lib/logging';
-import type { ChannelLineupItemWithDetails } from '$lib/types/livetv';
+import { channelLineupService } from '#lib/server/livetv/lineup/ChannelLineupService.js';
+import { getBaseUrlAsync } from '#lib/server/streaming/url.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import type { ChannelLineupItemWithDetails } from '#lib/types/livetv.js';
 
 const logger = createChildLogger({ module: 'LiveTvPlaylistM3u', logDomain: 'livetv' });
 

@@ -17,13 +17,13 @@
  * produced no acceptable candidate; they reset on a successful download.
  */
 
-import { db } from '$lib/server/db/index.js';
-import { subtitleSearchState } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { subtitleSearchState } from '#lib/server/db/schema.js';
 import { and, eq } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging/index.js';
-import { requirementKey } from '$lib/shared/language-profile.js';
-import type { SubtitleRequirement } from '$lib/shared/language-profile.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { requirementKey } from '#lib/shared/language-profile.js';
+import type { SubtitleRequirement } from '#lib/shared/language-profile.js';
 
 const logger = createChildLogger({ module: 'SubtitleSearchState', logDomain: 'subtitles' });
 

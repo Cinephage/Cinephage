@@ -8,12 +8,15 @@
 
 import type { IIndexer, IIndexerFactory, IndexerConfig } from '../types';
 import type { YamlDefinition } from '../schema/yamlDefinition';
-import type { IndexerRecord } from '$lib/server/db/schema';
+import type { IndexerRecord } from '#lib/server/db/schema.js';
 import { UnifiedIndexer } from '../runtime/UnifiedIndexer';
 import { YamlDefinitionLoader, getYamlDefinitionLoader } from './YamlDefinitionLoader';
 import { yamlToUnifiedDefinition } from './types';
-import { createChildLogger } from '$lib/logging';
-import { getNewznabCapabilitiesProvider } from '../newznab/NewznabCapabilitiesProvider';
+import { createChildLogger } from '#lib/logging/index.js';
+import {
+	DEFAULT_CAPABILITIES,
+	getNewznabCapabilitiesProvider
+} from '../newznab/NewznabCapabilitiesProvider';
 
 const log = createChildLogger({ module: 'YamlIndexerFactory' });
 
@@ -76,6 +79,7 @@ export class YamlIndexerFactory implements IIndexerFactory {
 			baseUrl: config.baseUrl,
 			alternateUrls: config.alternateUrls ?? null,
 			priority: config.priority ?? 25,
+			rateLimitPerMinute: config.rateLimitPerMinute ?? null,
 			enableAutomaticSearch: config.enableAutomaticSearch,
 			enableInteractiveSearch: config.enableInteractiveSearch,
 			settings: cleanSettings,
@@ -136,6 +140,33 @@ export class YamlIndexerFactory implements IIndexerFactory {
 					'Failed to fetch Newznab/Torznab capabilities, using defaults'
 				);
 			}
+		} else if (config.definitionId === 'prowlarr' && cleanSettings?.aggregate !== true) {
+			// Each imported Prowlarr indexer exposes its tracker's real caps on
+			// Prowlarr's per-indexer Newznab endpoint ({baseUrl}/api?t=caps). They decide
+			// which IDs are sent as query tokens. The aggregate indexer has no single set
+			// of caps and stays on the definition's text-only baseline.
+			const rawApiKey = cleanSettings?.apikey;
+			const apiKey = typeof rawApiKey === 'string' ? rawApiKey.trim() : undefined;
+			const caps = await getNewznabCapabilitiesProvider().getCapabilities(config.baseUrl, apiKey);
+			// getCapabilities() returns generic Newznab defaults when the fetch fails.
+			// Those claim ID support the tracker may lack (and Prowlarr skips a tracker
+			// asked for an unsupported ID), so keep the text-only baseline instead.
+			if (caps !== DEFAULT_CAPABILITIES) {
+				liveCapabilities = caps;
+				log.info(
+					{
+						indexerId: config.id,
+						movieSearch: caps.searching.movieSearch.supportedParams,
+						tvSearch: caps.searching.tvSearch.supportedParams
+					},
+					'Fetched Prowlarr indexer capabilities'
+				);
+			} else {
+				log.warn(
+					{ indexerId: config.id },
+					'Could not fetch Prowlarr indexer capabilities, searching by title only'
+				);
+			}
 		}
 
 		// Create indexer using UnifiedIndexer
@@ -144,9 +175,11 @@ export class YamlIndexerFactory implements IIndexerFactory {
 			settings: cleanSettings ?? {},
 			protocolSettings,
 			definition,
-			rateLimit: definition.requestdelay
-				? { requests: 1, periodMs: definition.requestdelay * 1000 }
-				: undefined,
+			rateLimit: config.rateLimitPerMinute
+				? { requests: config.rateLimitPerMinute, periodMs: 60_000 }
+				: definition.requestdelay
+					? { requests: 1, periodMs: definition.requestdelay * 1000 }
+					: undefined,
 			liveCapabilities,
 			additionalCategories: config.additionalCategories
 		});

@@ -4,11 +4,10 @@
  * GET /api/livetv/channels - List cached channels with filtering and pagination
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getLiveTvChannelService } from '$lib/server/livetv/LiveTvChannelService';
-import { createChildLogger } from '$lib/logging';
-import type { ChannelQueryOptions } from '$lib/types/livetv';
+import { getLiveTvChannelService } from '#lib/server/livetv/LiveTvChannelService.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import type { ChannelQueryOptions } from '#lib/types/livetv.js';
 
 const logger = createChildLogger({ module: 'LiveTvChannels', logDomain: 'livetv' });
 
@@ -74,7 +73,7 @@ export const GET: RequestHandler = async ({ url }) => {
 
 	try {
 		const result = await channelService.getChannels(options);
-		return json({
+		return Response.json({
 			success: true,
 			channels: result.items,
 			total: result.total,
@@ -84,7 +83,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		});
 	} catch (error) {
 		logger.error('[API] Failed to get channels', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to get channels'

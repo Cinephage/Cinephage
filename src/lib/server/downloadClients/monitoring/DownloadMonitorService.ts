@@ -8,22 +8,34 @@
 
 import { EventEmitter } from 'events';
 import { randomUUID } from 'node:crypto';
-import { stat } from 'fs/promises';
-import { db } from '$lib/server/db';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { readdir, stat } from 'fs/promises';
+import type { Dirent } from 'node:fs';
+import { db } from '#lib/server/db/index.js';
 import {
 	downloadQueue,
 	downloadHistory,
 	downloadClients,
 	monitoringSettings,
 	movies,
+	movieFiles,
+	series,
+	episodeFiles,
 	episodes,
 	stalledOrphanTracking
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 import { eq, and, or, inArray, not, notInArray, isNull, isNotNull, desc, sql } from 'drizzle-orm';
 import { getDownloadClientManager } from '../DownloadClientManager';
+import { joinCategoryPath, sanitizeCategorySegment } from '../core/client-utils.js';
 import { mapClientPathToLocal } from './PathMapping';
 import { resolveInfoHash } from '../utils/hashUtils';
-import { ReleaseParser } from '$lib/server/indexers/parser/ReleaseParser';
+import { ReleaseParser } from '#lib/server/indexers/parser/ReleaseParser.js';
+import {
+	findSuggestedMatches,
+	type SuggestedMatch
+} from '#lib/server/library/suggested-matches.js';
+import { isPathInsideManagedRoot } from '#lib/server/filesystem/path-guard.js';
+import { isVideoFile } from '#lib/config/constants.js';
 import {
 	cleanupExpiredQueueTombstones,
 	extendQueueTombstonesFromDownloads,
@@ -31,14 +43,14 @@ import {
 	isQueueItemSuppressed,
 	upsertQueueTombstoneFromQueueItem
 } from './QueueTombstoneService';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'imports' as const });
 
 const releaseParser = new ReleaseParser();
-import type { BackgroundService, ServiceStatus } from '$lib/server/services/background-service.js';
+import type { BackgroundService, ServiceStatus } from '#lib/server/services/background-service.js';
 import type { IDownloadClient, DownloadInfo } from '../core/interfaces';
-import type { DownloadClient } from '$lib/types/downloadClient';
+import type { DownloadClient } from '#lib/types/downloadClient.js';
 import {
 	isImportedQueueStatus,
 	POST_IMPORT_QUEUE_STATUSES,
@@ -47,10 +59,10 @@ import {
 	type QueueItem,
 	type QueueStats,
 	type QueueEvent
-} from '$lib/types/queue';
-import { parseEpisodePointerFromTitle } from '$lib/server/downloads/episode-pointer.js';
-import { activityStreamEvents } from '$lib/server/activity/ActivityStreamEvents.js';
-import { acquisitionService } from '$lib/server/acquisition/AcquisitionService.js';
+} from '#lib/types/queue.js';
+import { parseEpisodePointerFromTitle } from '#lib/server/downloads/episode-pointer.js';
+import { activityStreamEvents } from '#lib/server/activity/ActivityStreamEvents.js';
+import { acquisitionService } from '#lib/server/acquisition/AcquisitionService.js';
 
 // Import service is loaded lazily to avoid circular dependencies
 let importServiceInstance: import('../import').ImportService | null = null;
@@ -120,6 +132,10 @@ const MISSING_GRACE_PERIOD_MS = 30_000; // 30 seconds
 const TORRENT_MISSING_GRACE_PERIOD_MS = 180_000; // 3 minutes
 const TORRENT_MAGNET_METADATA_GRACE_PERIOD_MS = 600_000; // 10 minutes
 
+/** Bounds for the unmatched content scan; an unfinished scan counts as acceptable. */
+const MAX_CONTENT_SCAN_ENTRIES = 5_000;
+const MAX_CONTENT_SCAN_DEPTH = 6;
+
 /**
  * Terminal statuses - items that are completely done and hidden from queue UI.
  * Failed items stay visible for user action and should not be treated as terminal.
@@ -145,11 +161,198 @@ export function buildTorrentRecoveryPath(
 	category: string
 ): string | null {
 	const normalizedBase = downloadPathLocal.replace(/\/+$/, '');
-	const normalizedCategory = category.replace(/\/+$/, '').replace(/^\//, '');
+	const normalizedCategory = sanitizeCategorySegment(category);
 	const parts = outputPath.replace(/\\/g, '/').split('/').filter(Boolean);
 	const lastComponent = parts[parts.length - 1];
 	if (!lastComponent) return null;
 	return `${normalizedBase}/${normalizedCategory}/${lastComponent}`;
+}
+
+/** Client config subset needed to judge a recovery candidate path. */
+type RecoveryClientConfig = {
+	downloadPathLocal?: string | null;
+	tempPathLocal?: string | null;
+	downloadPathRemote?: string | null;
+	tempPathRemote?: string | null;
+	movieCategory?: string | null;
+	tvCategory?: string | null;
+};
+
+/**
+ * Resolve the per-download content path clients report for imports.
+ *
+ * Torrent clients report an empty contentPath until a magnet's metadata
+ * resolves; falling back to savePath there stores the save root (or the
+ * per-category root) as outputPath, which recovery must never treat as a
+ * completed download's own files (#532). Usenet clients only report
+ * savePath, so the fallback stays for that protocol.
+ */
+function getDownloadContentPath(
+	download: Pick<DownloadInfo, 'contentPath' | 'savePath'>,
+	protocol: string
+): string | null {
+	if (download.contentPath) return download.contentPath;
+	return protocol === 'torrent' ? null : download.savePath || null;
+}
+
+function isSamePath(firstPath: string, secondPath: string): boolean {
+	return relative(resolve(firstPath), resolve(secondPath)) === '';
+}
+
+function isSameOrDescendant(candidatePath: string, parentPath: string): boolean {
+	const pathFromParent = relative(resolve(parentPath), resolve(candidatePath));
+	return (
+		pathFromParent === '' ||
+		(!pathFromParent.startsWith(`..${sep}`) &&
+			pathFromParent !== '..' &&
+			!isAbsolute(pathFromParent))
+	);
+}
+
+/**
+ * Recursively measure what is actually on disk for a recovery candidate.
+ * allocatedBytes (blocks * 512) exposes pre-allocated but unwritten
+ * (sparse/partial) content that logical size alone cannot.
+ */
+async function getPathFootprint(candidatePath: string): Promise<{
+	logicalBytes: number;
+	allocatedBytes: number;
+	fileCount: number;
+}> {
+	const stats = await stat(candidatePath);
+	if (!stats.isDirectory()) {
+		return {
+			logicalBytes: stats.size,
+			allocatedBytes: stats.blocks * 512,
+			fileCount: stats.isFile() ? 1 : 0
+		};
+	}
+
+	let logicalBytes = 0;
+	let allocatedBytes = 0;
+	let fileCount = 0;
+	for (const entry of await readdir(candidatePath, { withFileTypes: true })) {
+		if (entry.isSymbolicLink()) continue;
+		const footprint = await getPathFootprint(join(candidatePath, entry.name));
+		logicalBytes += footprint.logicalBytes;
+		allocatedBytes += footprint.allocatedBytes;
+		fileCount += footprint.fileCount;
+	}
+
+	return { logicalBytes, allocatedBytes, fileCount };
+}
+
+/** Download-client roots and per-category staging roots, never valid as a
+ * single download's recovery candidate. */
+function getUnsafeRecoveryRoots(client: RecoveryClientConfig): string[] {
+	const roots: string[] = [];
+	for (const base of [client.downloadPathLocal, client.tempPathLocal]) {
+		if (!base) continue;
+		roots.push(base);
+		for (const category of [client.movieCategory, client.tvCategory]) {
+			if (!category) continue;
+			const joined = joinCategoryPath(base, category);
+			if (joined) roots.push(joined);
+		}
+	}
+	return roots;
+}
+
+/**
+ * Guard every recovery stat() site: existing on disk is not evidence that a
+ * vanished download completed there. Rejects download-client and category
+ * roots (a metadata-less magnet's outputPath degrades to one), paths
+ * overlapping another active download (both directions, so a broad path
+ * cannot adopt another torrent's in-progress files), torrents never
+ * observed complete, and sparse or undersized footprints (#532).
+ */
+export async function isSafeRecoveryCandidate(
+	candidatePath: string,
+	queueItem: typeof downloadQueue.$inferSelect,
+	client: RecoveryClientConfig,
+	allDownloads: DownloadInfo[]
+): Promise<boolean> {
+	if (getUnsafeRecoveryRoots(client).some((root) => isSamePath(root, candidatePath))) {
+		logger.warn(
+			{ title: queueItem.title, candidatePath },
+			'Refusing recovery from a download-client root directory'
+		);
+		return false;
+	}
+
+	const activeOwner = allDownloads.find((download) => {
+		if (download.hash === queueItem.downloadId || download.hash === queueItem.infoHash)
+			return false;
+		if (download.progress >= 1 || download.status === 'error') return false;
+		const clientPath = download.contentPath || download.savePath;
+		if (!clientPath) return false;
+		const ownedPath = mapClientPathToLocal(
+			clientPath,
+			client.downloadPathLocal ?? null,
+			client.downloadPathRemote ?? null,
+			client.tempPathLocal ?? null,
+			client.tempPathRemote ?? null
+		);
+		return (
+			isSameOrDescendant(candidatePath, ownedPath) || isSameOrDescendant(ownedPath, candidatePath)
+		);
+	});
+
+	if (activeOwner) {
+		logger.warn(
+			{ title: queueItem.title, candidatePath, owningHash: activeOwner.hash },
+			'Refusing recovery from a path claimed by an active download'
+		);
+		return false;
+	}
+
+	const progress = Number(queueItem.progress ?? 0);
+	if (queueItem.protocol === 'torrent' && progress < 1) {
+		logger.warn(
+			{ title: queueItem.title, candidatePath, progress },
+			'Refusing recovery of a torrent that was not observed complete'
+		);
+		return false;
+	}
+
+	try {
+		const footprint = await getPathFootprint(candidatePath);
+		if (footprint.fileCount === 0) return false;
+
+		const expectedSize = queueItem.size ?? 0;
+		if (expectedSize > 0 && footprint.logicalBytes < expectedSize * 0.98) {
+			logger.warn(
+				{
+					title: queueItem.title,
+					candidatePath,
+					expectedSize,
+					actualSize: footprint.logicalBytes
+				},
+				'Refusing recovery because downloaded content is smaller than expected'
+			);
+			return false;
+		}
+
+		if (
+			footprint.logicalBytes >= 1024 * 1024 &&
+			footprint.allocatedBytes < footprint.logicalBytes * 0.98
+		) {
+			logger.warn(
+				{
+					title: queueItem.title,
+					candidatePath,
+					logicalBytes: footprint.logicalBytes,
+					allocatedBytes: footprint.allocatedBytes
+				},
+				'Refusing recovery of sparse, incomplete content'
+			);
+			return false;
+		}
+
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 /**
@@ -273,6 +476,63 @@ export interface DownloadMonitorEvents {
 }
 
 /**
+ * A download present in a client under a Cinephage-managed label with no
+ * corresponding download_queue row. Monitor-only: matching and importing
+ * live in the import wizard (see resolveUnmatchedEntries), so the listing
+ * carries no suggestions. `attachable` is the strong path only: the
+ * torrent's infohash byte-matches a library file, so one click attaches it
+ * with no fuzzy matching.
+ */
+export interface UnmatchedDownload {
+	hash: string;
+	name: string;
+	size: number;
+	status: DownloadInfo['status'];
+	progress: number;
+	category?: string;
+	savePath: string;
+	clientId: string;
+	clientName: string;
+	attachable: {
+		mediaType: 'movie' | 'tv';
+		tmdbId: number;
+		title: string;
+	} | null;
+	suggestion: {
+		mediaType: 'movie' | 'tv';
+		tmdbId: number;
+		title: string;
+		year?: number;
+		confidence: number;
+	} | null;
+}
+
+/**
+ * Index of live client downloads shared by the unmatched flows.
+ */
+interface ClientDownloadIndex {
+	byClient: Map<string, { client: DownloadClient; byHash: Map<string, DownloadInfo> }>;
+	fetchFailed: boolean;
+}
+
+// Keyed in the process-wide global symbol registry (not a plain module-level
+// variable) so the singleton survives Vite/SvelteKit dev-mode SSR module
+// re-evaluation. A plain `static instance` field lives on the class, and the
+// class itself gets redefined whenever this module is re-executed - editing
+// any file this service transitively imports can trigger that in dev. Each
+// re-evaluation would otherwise silently create a second DownloadMonitorService
+// with its own live poll loop and its own independent 10-minute orphan-cleanup
+// timer, left running forever with nothing left in the app to stop it -
+// manifesting as duplicate, overlapping background activity (e.g. the same
+// "orphaned" download being rediscovered and removed repeatedly) that looks
+// like a single runaway process but is actually several accumulated ones.
+const DOWNLOAD_MONITOR_GLOBAL_KEY = Symbol.for('cinephage.downloadMonitorService');
+
+interface GlobalWithDownloadMonitor {
+	[DOWNLOAD_MONITOR_GLOBAL_KEY]?: DownloadMonitorService;
+}
+
+/**
  * Download Monitor Service
  *
  * Singleton service that continuously monitors download clients and updates
@@ -280,8 +540,6 @@ export interface DownloadMonitorEvents {
  * lifecycle management via ServiceManager.
  */
 export class DownloadMonitorService extends EventEmitter implements BackgroundService {
-	private static instance: DownloadMonitorService | null = null;
-
 	readonly name = 'DownloadMonitor';
 	private _status: ServiceStatus = 'pending';
 	private _error?: Error;
@@ -318,17 +576,20 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 	}
 
 	static getInstance(): DownloadMonitorService {
-		if (!DownloadMonitorService.instance) {
-			DownloadMonitorService.instance = new DownloadMonitorService();
+		const g = globalThis as GlobalWithDownloadMonitor;
+		if (!g[DOWNLOAD_MONITOR_GLOBAL_KEY]) {
+			g[DOWNLOAD_MONITOR_GLOBAL_KEY] = new DownloadMonitorService();
 		}
-		return DownloadMonitorService.instance;
+		return g[DOWNLOAD_MONITOR_GLOBAL_KEY];
 	}
 
 	/** Reset the singleton instance (for testing) */
 	static async resetInstance(): Promise<void> {
-		if (DownloadMonitorService.instance) {
-			await DownloadMonitorService.instance.stop();
-			DownloadMonitorService.instance = null;
+		const g = globalThis as GlobalWithDownloadMonitor;
+		const existing = g[DOWNLOAD_MONITOR_GLOBAL_KEY];
+		if (existing) {
+			await existing.stop();
+			delete g[DOWNLOAD_MONITOR_GLOBAL_KEY];
 		}
 	}
 
@@ -391,6 +652,27 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			const reconciled = acquisitionService.reconcileStaleIntents();
 			if (reconciled > 0) {
 				logger.info({ reconciled }, 'Reconciled stale acquisition intents at startup');
+			}
+
+			// Recover queue rows stuck in 'importing' from a crash or ungraceful
+			// restart mid-import. Nothing can legitimately still be importing
+			// immediately after a fresh startup - the in-memory worker/
+			// processingQueue state that would have completed it is gone, and
+			// markImporting()'s atomic guard treats 'importing' as "another
+			// process already has this," so without this reset a row stuck
+			// here never gets picked up again and just shows as permanently
+			// "active" with nothing actually processing it. Reset to
+			// 'completed' so the normal poll-driven import check reconsiders it.
+			const stuckImporting = await db
+				.update(downloadQueue)
+				.set({ status: 'completed' })
+				.where(eq(downloadQueue.status, 'importing'))
+				.returning({ id: downloadQueue.id, title: downloadQueue.title });
+			if (stuckImporting.length > 0) {
+				logger.warn(
+					{ count: stuckImporting.length, items: stuckImporting },
+					'Recovered queue item(s) stuck in importing status at startup'
+				);
 			}
 
 			const manager = getDownloadClientManager();
@@ -878,7 +1160,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 		// Blocklist the hash so it isn't immediately re-grabbed (permanent when configured).
 		try {
 			const { blocklistService } =
-				await import('$lib/server/monitoring/specifications/BlocklistSpecification.js');
+				await import('#lib/server/monitoring/specifications/BlocklistSpecification.js');
 			blocklistService.addToBlocklist(
 				{ title: download.name, infoHash: download.hash, protocol: 'torrent' },
 				{
@@ -1267,10 +1549,13 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			return;
 		}
 
-		// Create a map of clients for quick lookup
+		// Maps for quick lookup: the instance for client calls, and the hydrated
+		// config for the per-client removal policy.
 		const clientMap = new Map<string, IDownloadClient>();
+		const clientConfigMap = new Map<string, DownloadClient>();
 		for (const { client, instance } of enabledClients) {
 			clientMap.set(client.id, instance);
+			clientConfigMap.set(client.id, client);
 		}
 
 		for (const item of importedItems) {
@@ -1278,6 +1563,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			if (!clientInstance) {
 				continue;
 			}
+			const clientConfig = clientConfigMap.get(item.downloadClientId);
 
 			try {
 				// Check if the download still exists and can be removed
@@ -1300,8 +1586,9 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 					continue;
 				}
 
-				if (download.canBeRemoved) {
+				if (download.canBeRemoved && (clientConfig?.removeAfterImport ?? true)) {
 					// Download has met requirements (seeding limits for torrents, completed for usenet)
+					// and the client's remove-after-import policy allows removal.
 					logger.info(
 						{
 							title: item.title,
@@ -1333,6 +1620,18 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 
 					this.emit('queue:removed', item.id);
 					this.emitSSE('queue:removed', { id: item.id });
+				} else if (download.canBeRemoved) {
+					// Goals met, but this client's remove-after-import policy keeps
+					// the torrent in the client (user opted out of auto-removal).
+					logger.debug(
+						{
+							title: item.title,
+							hash: downloadHash,
+							ratio: download.ratio,
+							status: download.status
+						},
+						'Download met seed goals but client policy keeps it'
+					);
 				} else {
 					// Still seeding/processing, leave it alone
 					logger.debug(
@@ -1520,15 +1819,21 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 
 		// Use contentPath (full path to torrent folder/file) for import
 		// contentPath is the actual location of the downloaded files
-		// savePath is just the parent directory
+		// savePath is just the parent directory, and for a metadata-less
+		// magnet it is the save/category root. Storing that as outputPath
+		// would let recovery adopt every other torrent under it (#532), so
+		// torrents without a contentPath keep a null outputPath instead.
 		// Use user-configured path mappings for both completed and temp folders
-		const outputPath = mapClientPathToLocal(
-			download.contentPath || download.savePath,
-			client.downloadPathLocal,
-			client.downloadPathRemote ?? null,
-			client.tempPathLocal,
-			client.tempPathRemote
-		);
+		const newClientDownloadPath = getDownloadContentPath(download, queueItem.protocol);
+		const outputPath = newClientDownloadPath
+			? mapClientPathToLocal(
+					newClientDownloadPath,
+					client.downloadPathLocal,
+					client.downloadPathRemote ?? null,
+					client.tempPathLocal,
+					client.tempPathRemote
+				)
+			: null;
 
 		// Determine new status
 		const newStatus = mapDownloadStatusToQueueStatus(download.status, download.progress);
@@ -1537,7 +1842,6 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 		const oldProgress = parseFloat(queueItem.progress || '0');
 		const progressChanged = Math.abs(download.progress - oldProgress) > 0.001;
 		const statusChanged = queueItem.status !== newStatus;
-		const newClientDownloadPath = download.contentPath || download.savePath;
 		const pathChanged =
 			queueItem.clientDownloadPath !== newClientDownloadPath || queueItem.outputPath !== outputPath;
 
@@ -1651,16 +1955,47 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 				const transitionedToFailed =
 					queueItem.status !== 'failed' && updatedItem.status === 'failed';
 				if (transitionedToFailed) {
-					await this.createFailedHistoryRecord(
-						updatedItem,
-						updatedItem.errorMessage ?? 'Download client reported an error'
-					);
+					const failureMessage = updatedItem.errorMessage ?? 'Download client reported an error';
+					await this.createFailedHistoryRecord(updatedItem, failureMessage);
 					// Terminal queue state must release the acquisition intent
 					// (slot + identity), or the target stays wedged until restart.
-					acquisitionService.failByQueueId(
-						updatedItem.id,
-						updatedItem.errorMessage ?? 'Download client reported an error'
-					);
+					acquisitionService.failByQueueId(updatedItem.id, failureMessage);
+
+					// Auto-blocklist the failed release so future searches don't
+					// re-grab it (issue #618).
+					try {
+						const blocklistHours = await this.getStalledBlocklistHours();
+						const { blocklistService } =
+							await import('#lib/server/monitoring/specifications/BlocklistSpecification.js');
+						await blocklistService.addToBlocklist(
+							{
+								title: updatedItem.title,
+								infoHash: updatedItem.infoHash ?? undefined,
+								indexerId: updatedItem.indexerId ?? undefined,
+								quality: updatedItem.quality ?? undefined,
+								size: updatedItem.size ?? undefined,
+								protocol: updatedItem.protocol
+							},
+							{
+								movieId: updatedItem.movieId ?? undefined,
+								seriesId: updatedItem.seriesId ?? undefined,
+								episodeIds: updatedItem.episodeIds ?? undefined,
+								reason: 'download_failed',
+								message: failureMessage,
+								expiresInHours: blocklistHours > 0 ? blocklistHours : undefined
+							}
+						);
+					} catch (blocklistError) {
+						logger.warn(
+							{
+								title: updatedItem.title,
+								error:
+									blocklistError instanceof Error ? blocklistError.message : String(blocklistError)
+							},
+							'Failed to add failed release to blocklist'
+						);
+					}
+
 					this.emit('queue:failed', updatedItem);
 					this.emitSSE('queue:failed', updatedItem);
 					return;
@@ -1775,14 +2110,12 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			// (e.g. Syncthing/Resilio) where the completed files appear at the
 			// original path after the client already dropped the download. This
 			// works even when the client has no downloadPathLocal configured.
-			if (queueItem.outputPath) {
-				try {
-					await stat(queueItem.outputPath);
-					await this.completeRecoveredDownload(queueItem.id, { completedAtFallback });
-					return;
-				} catch {
-					// Not there yet, try Tier 2
-				}
+			if (
+				queueItem.outputPath &&
+				(await isSafeRecoveryCandidate(queueItem.outputPath, queueItem, client, allDownloads))
+			) {
+				await this.completeRecoveredDownload(queueItem.id, { completedAtFallback });
+				return;
 			}
 
 			// Tier 2: re-check the reconstructed completed path.
@@ -1793,17 +2126,15 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 					client.downloadPathLocal,
 					category
 				);
-				if (recoveryPath) {
-					try {
-						await stat(recoveryPath);
-						await this.completeRecoveredDownload(queueItem.id, {
-							outputPath: recoveryPath,
-							completedAtFallback
-						});
-						return;
-					} catch {
-						// Still not there, increment and continue
-					}
+				if (
+					recoveryPath &&
+					(await isSafeRecoveryCandidate(recoveryPath, queueItem, client, allDownloads))
+				) {
+					await this.completeRecoveredDownload(queueItem.id, {
+						outputPath: recoveryPath,
+						completedAtFallback
+					});
+					return;
 				}
 			}
 
@@ -1960,55 +2291,29 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 		}
 
 		// Protocol-agnostic recovery: the download vanished from the client.
-		// Tier 1: try stat() on the stored outputPath.
-		if (queueItem.outputPath) {
-			try {
-				await stat(queueItem.outputPath);
+		// Tier 1: validate the stored outputPath before trusting it. Existing
+		// on disk is not completion - the path may be a client/category root
+		// or another download's still-active directory (#532).
+		if (
+			queueItem.outputPath &&
+			(await isSafeRecoveryCandidate(queueItem.outputPath, queueItem, client, allDownloads))
+		) {
+			logger.info(
+				{
+					title: queueItem.title,
+					clientName: client.name,
+					outputPath: queueItem.outputPath
+				},
+				'Download missing from client but output path exists, queueing import'
+			);
 
-				logger.info(
-					{
-						title: queueItem.title,
-						clientName: client.name,
-						outputPath: queueItem.outputPath
-					},
-					'Download missing from client but output path exists, queueing import'
-				);
-
-				const now = new Date().toISOString();
-				await db
-					.update(downloadQueue)
-					.set({
-						status: 'completed',
-						completedAt: queueItem.completedAt ?? now,
-						errorMessage: null
-					})
-					.where(eq(downloadQueue.id, queueItem.id));
-
-				const recoveredItem = await this.getQueueItem(queueItem.id);
-				if (recoveredItem) {
-					this.emit('queue:completed', recoveredItem);
-					this.emitSSE('queue:completed', recoveredItem);
-
-					const importService = await getImportService();
-					importService.requestImport(recoveredItem.id).catch((err) => {
-						logger.error(
-							{
-								queueId: recoveredItem.id,
-								title: recoveredItem.title,
-								error: err instanceof Error ? err.message : String(err)
-							},
-							'Failed to request import for recovered download'
-						);
-					});
-				}
-
-				return;
-			} catch {
-				// Path doesn't exist, try Tier 2
-			}
+			await this.completeRecoveredDownload(queueItem.id, {
+				completedAtFallback: queueItem.completedAt ?? new Date().toISOString()
+			});
+			return;
 		}
 
-		// Tier 2: compute recovery path from client config and stat it
+		// Tier 2: compute recovery path from client config and validate it
 		const category = queueItem.seriesId ? client.tvCategory : client.movieCategory;
 		if (client.downloadPathLocal) {
 			const recoveryPath = buildTorrentRecoveryPath(
@@ -2016,53 +2321,25 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 				client.downloadPathLocal,
 				category
 			);
-			if (recoveryPath) {
-				try {
-					await stat(recoveryPath);
+			if (
+				recoveryPath &&
+				(await isSafeRecoveryCandidate(recoveryPath, queueItem, client, allDownloads))
+			) {
+				logger.info(
+					{
+						title: queueItem.title,
+						clientName: client.name,
+						recoveryPath,
+						originalOutputPath: queueItem.outputPath
+					},
+					'Download recovered via client path reconstruction'
+				);
 
-					logger.info(
-						{
-							title: queueItem.title,
-							clientName: client.name,
-							recoveryPath,
-							originalOutputPath: queueItem.outputPath
-						},
-						'Download recovered via client path reconstruction'
-					);
-
-					const now = new Date().toISOString();
-					await db
-						.update(downloadQueue)
-						.set({
-							outputPath: recoveryPath,
-							status: 'completed',
-							completedAt: queueItem.completedAt ?? now,
-							errorMessage: null
-						})
-						.where(eq(downloadQueue.id, queueItem.id));
-
-					const recoveredItem = await this.getQueueItem(queueItem.id);
-					if (recoveredItem) {
-						this.emit('queue:completed', recoveredItem);
-						this.emitSSE('queue:completed', recoveredItem);
-
-						const importService = await getImportService();
-						importService.requestImport(recoveredItem.id).catch((err) => {
-							logger.error(
-								{
-									queueId: recoveredItem.id,
-									title: recoveredItem.title,
-									error: err instanceof Error ? err.message : String(err)
-								},
-								'Failed to request import for recovered download'
-							);
-						});
-					}
-
-					return;
-				} catch {
-					// Recovery path doesn't exist either
-				}
+				await this.completeRecoveredDownload(queueItem.id, {
+					outputPath: recoveryPath,
+					completedAtFallback: queueItem.completedAt ?? new Date().toISOString()
+				});
+				return;
 			}
 		}
 
@@ -2155,6 +2432,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 					stats.awaitingCount++;
 					break;
 				case 'seeding':
+				case 'seeding-imported':
 					stats.seedingCount++;
 					break;
 				case 'paused':
@@ -2953,7 +3231,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			// A configured duration of 0 means a permanent ban (no expiry).
 			try {
 				const { blocklistService } =
-					await import('$lib/server/monitoring/specifications/BlocklistSpecification.js');
+					await import('#lib/server/monitoring/specifications/BlocklistSpecification.js');
 				await blocklistService.addToBlocklist(
 					{
 						title: item.title,
@@ -3102,9 +3380,9 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 
 			try {
 				const { resolveBlockedExtensionsForQueueItem } =
-					await import('$lib/server/settings/blocked-extensions.js');
+					await import('#lib/server/settings/blocked-extensions.js');
 				const { DANGEROUS_EXTENSIONS, EXECUTABLE_EXTENSIONS } =
-					await import('$lib/config/constants.js');
+					await import('#lib/config/constants.js');
 				const userBlocked = await resolveBlockedExtensionsForQueueItem({
 					movieId: item.movieId,
 					seriesId: item.seriesId
@@ -3211,7 +3489,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 
 				try {
 					const { blocklistService } =
-						await import('$lib/server/monitoring/specifications/BlocklistSpecification.js');
+						await import('#lib/server/monitoring/specifications/BlocklistSpecification.js');
 					await blocklistService.addToBlocklist(
 						{
 							title: item.title,
@@ -3458,13 +3736,22 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 				const now = new Date().toISOString();
 				const id = randomUUID();
 
-				const outputPath = mapClientPathToLocal(
-					download.contentPath || download.savePath,
-					client.downloadPathLocal,
-					client.downloadPathRemote ?? null,
-					client.tempPathLocal,
-					client.tempPathRemote
+				// Same rule as updateQueueItem: a metadata-less torrent's
+				// savePath is a root, not this download's content - store null
+				// rather than a path recovery could mistake for its files.
+				const clientDownloadPath = getDownloadContentPath(
+					download,
+					historyRecord.protocol || 'torrent'
 				);
+				const outputPath = clientDownloadPath
+					? mapClientPathToLocal(
+							clientDownloadPath,
+							client.downloadPathLocal,
+							client.downloadPathRemote ?? null,
+							client.tempPathLocal,
+							client.tempPathRemote
+						)
+					: null;
 
 				await db.insert(downloadQueue).values({
 					id,
@@ -3484,7 +3771,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 					releaseGroup: historyRecord.releaseGroup,
 					status: 'queued',
 					progress: download.progress.toString(),
-					clientDownloadPath: download.contentPath || download.savePath,
+					clientDownloadPath,
 					outputPath,
 					addedAt: historyRecord.grabbedAt || now,
 					isAutomatic: false,
@@ -3520,6 +3807,846 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			{ relinked: result.relinked.length, skipped: result.skipped.length },
 			'Orphan relink complete'
 		);
+
+		return result;
+	}
+
+	/**
+	 * Shared prelude for the unmatched flows: fetch every enabled client's
+	 * downloads once (bounded like startup sync so a dead client can't hang
+	 * the caller) and index them by lower-cased hash. List, resolve, track
+	 * and enroll all share it — one copy.
+	 */
+	private async fetchClientDownloadIndex(
+		context: 'listing' | 'resolve' | 'track' | 'enroll',
+		clientId?: string
+	): Promise<ClientDownloadIndex> {
+		const manager = getDownloadClientManager();
+		const enabledClients = await manager.getEnabledClients();
+		const clients = clientId
+			? enabledClients.filter(({ client }) => client.id === clientId)
+			: enabledClients;
+
+		const byClient = new Map<
+			string,
+			{ client: DownloadClient; byHash: Map<string, DownloadInfo> }
+		>();
+		let fetchFailed = false;
+		for (const { client, instance } of clients) {
+			try {
+				const downloads: DownloadInfo[] = await Promise.race([
+					instance.getDownloads(),
+					new Promise<never>((_, reject) =>
+						setTimeout(() => reject(new Error('Unmatched sync timeout')), STARTUP_SYNC_TIMEOUT_MS)
+					)
+				]);
+				const byHash = new Map<string, DownloadInfo>();
+				for (const download of downloads) {
+					byHash.set(download.hash.toLowerCase(), download);
+				}
+				byClient.set(client.id, { client, byHash });
+			} catch (error) {
+				fetchFailed = true;
+				logger.warn(
+					{
+						clientName: client.name,
+						error: error instanceof Error ? error.message : String(error)
+					},
+					`Failed to fetch downloads for unmatched ${context}`
+				);
+			}
+		}
+
+		return { byClient, fetchFailed };
+	}
+
+	/**
+	 * The relink tracked-set rule: anything with a non-terminal,
+	 * non-debrid queue row is managed, not unmatched.
+	 */
+	private async fetchTrackedIds(): Promise<Set<string>> {
+		const activeQueueItems = await db
+			.select({ downloadId: downloadQueue.downloadId, infoHash: downloadQueue.infoHash })
+			.from(downloadQueue)
+			.where(
+				and(
+					not(inArray(downloadQueue.status, TERMINAL_STATUSES)),
+					not(eq(downloadQueue.protocol, 'debrid'))
+				)
+			);
+
+		const trackedIds = new Set<string>();
+		for (const item of activeQueueItems) {
+			trackedIds.add(item.downloadId.toLowerCase());
+			if (item.infoHash) trackedIds.add(item.infoHash.toLowerCase());
+		}
+		return trackedIds;
+	}
+
+	/**
+	 * A torrent counts as ours when it carries no label at all, or one of the
+	 * client's configured movie/tv labels. Absent labels count as ours:
+	 * manually-added torrents never carry our labels. Foreign labels stay
+	 * excluded. The relink paths deliberately keep a stricter rule (they also
+	 * require a label); do not fold them in here.
+	 */
+	private isManagedCategory(client: DownloadClient, download: DownloadInfo): boolean {
+		return (
+			!client.tvCategory ||
+			!download.category ||
+			download.category === client.tvCategory ||
+			download.category === client.movieCategory
+		);
+	}
+
+	/**
+	 * Find a download by hash in the fetched client index. Track and enroll
+	 * share one lookup and one not-found reason.
+	 */
+	private findDownloadByHash(
+		byClient: ClientDownloadIndex['byClient'],
+		hashLower: string
+	): { client: DownloadClient; download: DownloadInfo } | null {
+		for (const { client, byHash } of byClient.values()) {
+			const download = byHash.get(hashLower);
+			if (download) return { client, download };
+		}
+		return null;
+	}
+
+	/**
+	 * Resolve a library row from the wizard's TMDB match. One query shape for
+	 * the several call sites that need movie-or-series.
+	 */
+	private async findMediaByTmdbId(
+		mediaType: 'movie' | 'tv',
+		tmdbId: number
+	): Promise<{ movieId: string | null; seriesId: string | null } | null> {
+		if (mediaType === 'movie') {
+			const [row] = await db
+				.select({ id: movies.id })
+				.from(movies)
+				.where(eq(movies.tmdbId, tmdbId))
+				.limit(1);
+			return row ? { movieId: row.id, seriesId: null } : null;
+		}
+		const [row] = await db
+			.select({ id: series.id })
+			.from(series)
+			.where(eq(series.tmdbId, tmdbId))
+			.limit(1);
+		return row ? { movieId: null, seriesId: row.id } : null;
+	}
+
+	/**
+	 * Whether this torrent's content is something Cinephage can import: a
+	 * video file, or a folder holding at least one. Single non-video files
+	 * (.exe, .iso, .rar …) and folders with no video are refused so they
+	 * never reach the Unmatched view or the import flow. The path is
+	 * stat()'d rather than read by name: a folder called
+	 * `Movie.2026.1080p` is not an extension.
+	 *
+	 * shortcut: an unreadable path, a path not yet on disk, or a scan cut
+	 * short by the bounds counts as acceptable — never hide a download on a
+	 * guess. Upgrade to the client's file list if a bounded tree walk proves
+	 * too slow on network mounts.
+	 */
+	private async isAcceptableContent(
+		client: DownloadClient,
+		download: DownloadInfo
+	): Promise<boolean> {
+		const clientDownloadPath = getDownloadContentPath(download, 'torrent');
+		if (!clientDownloadPath) return true;
+		const localPath = mapClientPathToLocal(
+			clientDownloadPath,
+			client.downloadPathLocal,
+			client.downloadPathRemote ?? null,
+			client.tempPathLocal,
+			client.tempPathRemote
+		);
+		if (!localPath) return true;
+		try {
+			const stats = await stat(localPath);
+			if (!stats.isDirectory()) return isVideoFile(localPath);
+			return await this.folderHasVideo(localPath, 0, { left: MAX_CONTENT_SCAN_ENTRIES });
+		} catch {
+			// Not on disk yet (still downloading): the wizard and the import
+			// pipeline decide once the files exist.
+			return true;
+		}
+	}
+
+	/**
+	 * True when the tree holds an importable video, or when the walk ran out
+	 * of budget or depth (see the shortcut note above). Symlinks are skipped:
+	 * they are not directories, which also stops cycles.
+	 */
+	private async folderHasVideo(
+		dir: string,
+		depth: number,
+		budget: { left: number }
+	): Promise<boolean> {
+		if (depth > MAX_CONTENT_SCAN_DEPTH || budget.left <= 0) return true;
+
+		let entries: Dirent[];
+		try {
+			entries = await readdir(dir, { withFileTypes: true });
+		} catch {
+			return true;
+		}
+		budget.left -= entries.length;
+
+		for (const entry of entries) {
+			if (entry.isFile() && isVideoFile(entry.name)) return true;
+		}
+		for (const entry of entries) {
+			if (!entry.isDirectory()) continue;
+			if (await this.folderHasVideo(join(dir, entry.name), depth + 1, budget)) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * List downloads present in clients under a Cinephage-managed label with
+	 * no corresponding download_queue row ("unmatched"). Read-only: listing
+	 * never mutates anything. Monitor-only — matching and importing live in
+	 * the import wizard, so items carry no suggestions.
+	 */
+	async listUnmatchedDownloads(options?: {
+		clientId?: string;
+		page?: number;
+		limit?: number;
+		search?: string;
+	}): Promise<{ items: UnmatchedDownload[]; total: number; page: number; limit: number }> {
+		const page = Math.max(1, Math.floor(options?.page ?? 1));
+		const limit = Math.min(100, Math.max(1, Math.floor(options?.limit ?? 25)));
+		const search = options?.search?.trim().toLowerCase() || '';
+
+		const { byClient: clientDownloads } = await this.fetchClientDownloadIndex(
+			'listing',
+			options?.clientId
+		);
+
+		if (clientDownloads.size === 0) {
+			return { items: [], total: 0, page, limit };
+		}
+
+		// Same tracked-set rule as relink: anything with a non-terminal,
+		// non-debrid queue row is managed, not unmatched.
+		const trackedIds = await this.fetchTrackedIds();
+
+		const unmatched: {
+			client: DownloadClient;
+			download: DownloadInfo;
+		}[] = [];
+
+		for (const { client, byHash } of clientDownloads.values()) {
+			for (const download of byHash.values()) {
+				if (trackedIds.has(download.hash.toLowerCase())) continue;
+
+				// Only downloads in Cinephage-managed categories. No progress
+				// gate: still-downloading items list as live statuses.
+				if (!this.isManagedCategory(client, download)) continue;
+				if (!(await this.isAcceptableContent(client, download))) continue;
+				// Filter before total/slice (issue #628): otherwise search only
+				// ever sees whatever page happened to already be loaded, and
+				// total/pagination stay keyed to the unfiltered count.
+				if (search && !download.name.toLowerCase().includes(search)) continue;
+
+				unmatched.push({ client, download });
+			}
+		}
+
+		const total = unmatched.length;
+		const pageItems = unmatched.slice((page - 1) * limit, page * limit);
+
+		// Strong-path attach lookup: exact infohash hits across library
+		// files, both cases (clients and the library disagree on hex case).
+		// No TMDB, no fuzzy — a hit means identical bytes.
+		const pageHashes = [...new Set(pageItems.map(({ download }) => download.hash.toLowerCase()))];
+		const hashVariants = [...new Set(pageHashes.flatMap((h) => [h, h.toUpperCase()]))];
+		const attachMap = new Map<string, NonNullable<UnmatchedDownload['attachable']>>();
+		if (hashVariants.length > 0) {
+			const [movieHits, episodeHits] = await Promise.all([
+				db
+					.select({
+						infoHash: movieFiles.infoHash,
+						tmdbId: movies.tmdbId,
+						title: movies.title
+					})
+					.from(movieFiles)
+					.innerJoin(movies, eq(movieFiles.movieId, movies.id))
+					.where(inArray(movieFiles.infoHash, hashVariants)),
+				db
+					.select({
+						infoHash: episodeFiles.infoHash,
+						tmdbId: series.tmdbId,
+						title: series.title
+					})
+					.from(episodeFiles)
+					.innerJoin(series, eq(episodeFiles.seriesId, series.id))
+					.where(inArray(episodeFiles.infoHash, hashVariants))
+			]);
+			for (const hit of movieHits) {
+				if (!hit.infoHash) continue;
+				attachMap.set(hit.infoHash.toLowerCase(), {
+					mediaType: 'movie',
+					tmdbId: hit.tmdbId,
+					title: hit.title
+				});
+			}
+			for (const hit of episodeHits) {
+				if (!hit.infoHash) continue;
+				const key = hit.infoHash.toLowerCase();
+				if (!attachMap.has(key)) {
+					attachMap.set(key, { mediaType: 'tv', tmdbId: hit.tmdbId, title: hit.title });
+				}
+			}
+		}
+
+		// TMDB suggestions, skipped for items that already have a confirmed
+		// infohash attach - a probabilistic guess next to a sure match is just
+		// noise. Cache keyed by title+year+mediaType so a page of items
+		// sharing a title (season packs, a show's episodes) hits TMDB once.
+		const suggestionCache = new Map<string, SuggestedMatch[]>();
+		const suggestions = new Map<string, UnmatchedDownload['suggestion']>();
+		for (const { download } of pageItems) {
+			const hashLower = download.hash.toLowerCase();
+			if (attachMap.has(hashLower)) continue;
+
+			const parsed = releaseParser.parse(download.name);
+			if (!parsed.cleanTitle) continue;
+			const mediaType: 'movie' | 'tv' = parsed.episode ? 'tv' : 'movie';
+
+			const matches = await findSuggestedMatches(
+				[parsed.cleanTitle],
+				parsed.year,
+				mediaType,
+				download.name,
+				suggestionCache
+			);
+			const top = matches[0];
+			if (!top) continue;
+
+			suggestions.set(hashLower, {
+				mediaType: top.mediaType,
+				tmdbId: top.tmdbId,
+				title: top.title,
+				year: top.year,
+				confidence: top.confidence
+			});
+		}
+
+		const items: UnmatchedDownload[] = pageItems.map(({ client, download }) => ({
+			hash: download.hash,
+			name: download.name,
+			size: download.size ?? 0,
+			status: download.status,
+			progress: download.progress,
+			category: download.category,
+			savePath: download.savePath,
+			clientId: client.id,
+			clientName: client.name,
+			attachable: attachMap.get(download.hash.toLowerCase()) ?? null,
+			suggestion: suggestions.get(download.hash.toLowerCase()) ?? null
+		}));
+
+		return { items, total, page, limit };
+	}
+
+	/**
+	 * Resolve unmatched client hashes to server-local source paths for the
+	 * import wizard. Read-only: never mutates. Entries whose torrent vanished
+	 * report as missing, already-tracked ones as alreadyTracked — the wizard
+	 * skips both with distinct messages.
+	 */
+	async resolveUnmatchedEntries(entries: { clientId: string; hash: string }[]): Promise<{
+		resolved: {
+			clientId: string;
+			hash: string;
+			name: string;
+			size: number;
+			progress: number;
+			localPath: string | null;
+			insideManagedRoot: boolean;
+			searchHint: string;
+		}[];
+		missing: { clientId: string; hash: string; reason: string }[];
+		alreadyTracked: { clientId: string; hash: string }[];
+	}> {
+		const resolved: {
+			clientId: string;
+			hash: string;
+			name: string;
+			size: number;
+			progress: number;
+			localPath: string | null;
+			insideManagedRoot: boolean;
+			searchHint: string;
+		}[] = [];
+		const missing: { clientId: string; hash: string; reason: string }[] = [];
+		const alreadyTracked: { clientId: string; hash: string }[] = [];
+
+		const wanted = entries
+			.filter((e) => e.clientId && e.hash)
+			.slice(0, 100)
+			.map((e) => ({ clientId: e.clientId, key: e.hash.trim().toLowerCase() }));
+		if (wanted.length === 0) return { resolved, missing, alreadyTracked };
+
+		const { byClient, fetchFailed } = await this.fetchClientDownloadIndex('resolve');
+		// Same rule as the listing: tracked torrents are managed, not
+		// unmatched. Without this, a finished wizard flow that resets with
+		// ?unmatched= still in the URL would resurrect the same rows.
+		const trackedIds = await this.fetchTrackedIds();
+
+		for (const { clientId, key } of wanted) {
+			if (trackedIds.has(key)) {
+				alreadyTracked.push({ clientId, hash: key });
+				continue;
+			}
+			const entry = byClient.get(clientId);
+			const download = entry?.byHash.get(key);
+			if (!download || !entry) {
+				missing.push({
+					clientId,
+					hash: key,
+					reason: fetchFailed ? 'client_unreachable' : 'not_in_client'
+				});
+				continue;
+			}
+			const clientDownloadPath = getDownloadContentPath(download, 'torrent');
+			const localPath = clientDownloadPath
+				? mapClientPathToLocal(
+						clientDownloadPath,
+						entry.client.downloadPathLocal,
+						entry.client.downloadPathRemote ?? null,
+						entry.client.tempPathLocal,
+						entry.client.tempPathRemote
+					)
+				: null;
+			resolved.push({
+				clientId,
+				hash: download.hash,
+				name: download.name,
+				size: download.size ?? 0,
+				progress: download.progress,
+				localPath,
+				insideManagedRoot: localPath ? await isPathInsideManagedRoot(localPath) : false,
+				searchHint: releaseParser.parse(download.name).cleanTitle?.trim() || download.name
+			});
+		}
+
+		return { resolved, missing, alreadyTracked };
+	}
+
+	/**
+	 * Insert a download_queue row recording what an imported client torrent
+	 * belongs to. The torrent stays in the client for seeding; the row is
+	 * always seeding-imported — the files are already in the library by the
+	 * time this runs.
+	 */
+	private async createLinkedQueueRow(input: {
+		client: DownloadClient;
+		download: DownloadInfo;
+		movieId?: string | null;
+		seriesId?: string | null;
+		seasonNumber?: number | null;
+		status: QueueStatus;
+		importedAt?: string | null;
+		errorMessage?: string | null;
+		origin: 'unmatched_track' | 'unmatched_enroll';
+	}): Promise<string> {
+		const { client, download } = input;
+		const now = new Date().toISOString();
+		const id = randomUUID();
+		const parsed = releaseParser.parse(download.name);
+
+		// Same path rule as relink: a metadata-less torrent's savePath is a
+		// root, not this download's content — store null rather than a path
+		// recovery could mistake for its files.
+		const clientDownloadPath = getDownloadContentPath(download, 'torrent');
+		const outputPath = clientDownloadPath
+			? mapClientPathToLocal(
+					clientDownloadPath,
+					client.downloadPathLocal,
+					client.downloadPathRemote ?? null,
+					client.tempPathLocal,
+					client.tempPathRemote
+				)
+			: null;
+
+		await db.insert(downloadQueue).values({
+			id,
+			downloadClientId: client.id,
+			downloadId: download.hash,
+			infoHash: download.hash,
+			title: download.name,
+			protocol: 'torrent',
+			movieId: input.movieId ?? null,
+			seriesId: input.seriesId ?? null,
+			seasonNumber: input.seasonNumber ?? parsed.episode?.season ?? null,
+			status: input.status,
+			progress: String(download.progress),
+			size: download.size || null,
+			quality: {
+				resolution: parsed.resolution ?? undefined,
+				source: parsed.source ?? undefined,
+				codec: parsed.codec ?? undefined,
+				hdr: parsed.hdr ?? undefined,
+				languages: parsed.languages.length > 0 ? parsed.languages : undefined
+			},
+			releaseGroup: parsed.releaseGroup ?? undefined,
+			clientDownloadPath,
+			outputPath,
+			completedAt: download.progress >= 1 ? now : null,
+			importedAt: input.importedAt ?? null,
+			errorMessage: input.errorMessage ?? null,
+			addedAt: now,
+			isAutomatic: false,
+			isUpgrade: false,
+			origin: input.origin
+		});
+
+		return id;
+	}
+
+	/**
+	 * Track an unmatched download after the import wizard imported its
+	 * files. Single path, called once per successful wizard import: the
+	 * torrent stays in the client for seeding while the queue row records
+	 * what it belongs to. The wizard's match (mediaType + TMDB id) resolves
+	 * the library row server-side; pairs for media with no library file are
+	 * rejected — a seeding-imported marker without bytes on disk would be
+	 * false. Idempotent.
+	 */
+	async trackUnmatchedDownloads(
+		pairs: {
+			hash: string;
+			mediaType: 'movie' | 'tv';
+			tmdbId: number;
+			seasonNumber?: number | null;
+			episodeNumber?: number | null;
+		}[]
+	): Promise<{
+		tracked: { hash: string; queueId: string }[];
+		skipped: { hash: string; reason: string }[];
+	}> {
+		const result: {
+			tracked: { hash: string; queueId: string }[];
+			skipped: { hash: string; reason: string }[];
+		} = {
+			tracked: [],
+			skipped: []
+		};
+
+		const { byClient: clientDownloads, fetchFailed } = await this.fetchClientDownloadIndex('track');
+		if (pairs.length === 0 || clientDownloads.size === 0) return result;
+
+		const trackedIds = await this.fetchTrackedIds();
+
+		for (const pair of pairs.slice(0, 100)) {
+			const hashLower = pair.hash?.trim().toLowerCase();
+			if (
+				!hashLower ||
+				(pair.mediaType !== 'movie' && pair.mediaType !== 'tv') ||
+				!Number.isInteger(pair.tmdbId)
+			) {
+				result.skipped.push({ hash: pair.hash, reason: 'invalid_pair' });
+				continue;
+			}
+
+			const media = await this.findMediaByTmdbId(pair.mediaType, pair.tmdbId);
+			if (!media) {
+				result.skipped.push({ hash: pair.hash, reason: 'not_in_library' });
+				continue;
+			}
+
+			// Never record a seeding-imported row for media with no library
+			// file: without bytes on disk the history marker would be false.
+			// For TV, check the specific episode when we know which one this
+			// torrent covers - a file for some other episode in the series (or
+			// even the same season) doesn't mean this episode is on disk.
+			const hasLibraryFile =
+				media.movieId != null
+					? (
+							await db
+								.select({ id: movieFiles.id })
+								.from(movieFiles)
+								.where(eq(movieFiles.movieId, media.movieId))
+								.limit(1)
+						).length > 0
+					: pair.seasonNumber != null && pair.episodeNumber != null
+						? (
+								await db
+									.select({ hasFile: episodes.hasFile })
+									.from(episodes)
+									.where(
+										and(
+											eq(episodes.seriesId, media.seriesId as string),
+											eq(episodes.seasonNumber, pair.seasonNumber),
+											eq(episodes.episodeNumber, pair.episodeNumber)
+										)
+									)
+									.limit(1)
+							).at(0)?.hasFile === true
+						: (
+								await db
+									.select({ id: episodeFiles.id })
+									.from(episodeFiles)
+									.where(eq(episodeFiles.seriesId, media.seriesId as string))
+									.limit(1)
+							).length > 0;
+			if (!hasLibraryFile) {
+				result.skipped.push({ hash: pair.hash, reason: 'no_library_file' });
+				continue;
+			}
+
+			const found = this.findDownloadByHash(clientDownloads, hashLower);
+			if (!found) {
+				result.skipped.push({
+					hash: pair.hash,
+					reason: fetchFailed ? 'client_unreachable' : 'not_in_client'
+				});
+				continue;
+			}
+
+			const { client, download } = found;
+			if (!this.isManagedCategory(client, download)) {
+				result.skipped.push({ hash: pair.hash, reason: 'foreign_category' });
+				continue;
+			}
+			if (!(await this.isAcceptableContent(client, download))) {
+				result.skipped.push({ hash: pair.hash, reason: 'unsupported_filetype' });
+				continue;
+			}
+
+			// Attaching records a fully-seeding torrent: partial content
+			// cannot back a seeding-imported marker.
+			if (download.progress < 1) {
+				result.skipped.push({ hash: pair.hash, reason: 'incomplete' });
+				continue;
+			}
+
+			const now = new Date().toISOString();
+			if (trackedIds.has(hashLower)) {
+				result.skipped.push({ hash: pair.hash, reason: 'already_tracked' });
+				continue;
+			}
+			// Claim the hash so a duplicate pair later in this batch skips
+			// instead of inserting a second row.
+			trackedIds.add(hashLower);
+
+			const queueId = await this.createLinkedQueueRow({
+				client,
+				download,
+				movieId: media.movieId,
+				seriesId: media.seriesId,
+				seasonNumber: pair.seasonNumber,
+				status: 'seeding-imported',
+				importedAt: now,
+				origin: 'unmatched_track'
+			});
+			const linkedItem = await this.getQueueItem(queueId);
+			if (linkedItem) {
+				this.emit('queue:added', linkedItem);
+				this.emitSSE('queue:added', linkedItem);
+			}
+
+			await db.insert(downloadHistory).values({
+				downloadClientId: client.id,
+				downloadClientName: client.name,
+				downloadId: download.hash,
+				infoHash: download.hash,
+				title: download.name,
+				protocol: 'torrent',
+				movieId: media.movieId,
+				seriesId: media.seriesId,
+				seasonNumber: pair.seasonNumber ?? null,
+				status: 'imported',
+				statusReason: 'Tracked from Unmatched tab after import wizard',
+				size: download.size || null,
+				grabbedAt: now,
+				completedAt: now,
+				importedAt: now
+			});
+
+			result.tracked.push({ hash: download.hash, queueId });
+			logger.info(
+				{ hash: download.hash, mediaType: pair.mediaType, tmdbId: pair.tmdbId, queueId },
+				'Tracked unmatched download after import'
+			);
+		}
+
+		return result;
+	}
+
+	/**
+	 * Client status → queue status mirror for enrolled rows. Every client
+	 * status has a queue equivalent except 'error', which becomes 'failed'.
+	 */
+	private mirrorUnmatchedStatus(status: DownloadInfo['status']): QueueStatus {
+		switch (status) {
+			case 'error':
+				return 'failed';
+			default:
+				return status;
+		}
+	}
+
+	/**
+	 * Enroll an unmatched download for monitor-driven import. The wizard
+	 * matched it, but its files live inside a managed root so the wizard
+	 * cannot execute the import itself. Enrollment creates a normal tracked
+	 * row at the mirrored live status; the monitor's ImportService moves the
+	 * files on completion. No history marker until the import lands.
+	 * Matches new to the library are added automatically (unmonitored, no
+	 * search — the file is already in hand) when rootFolderId is provided.
+	 */
+	async enrollUnmatchedDownloads(
+		pairs: {
+			hash: string;
+			mediaType: 'movie' | 'tv';
+			tmdbId: number;
+			seasonNumber?: number | null;
+			rootFolderId?: string | null;
+		}[]
+	): Promise<{
+		enrolled: { hash: string; queueId: string }[];
+		skipped: { hash: string; reason: string }[];
+	}> {
+		const result: {
+			enrolled: { hash: string; queueId: string }[];
+			skipped: { hash: string; reason: string }[];
+		} = { enrolled: [], skipped: [] };
+
+		const { byClient: clientDownloads, fetchFailed } =
+			await this.fetchClientDownloadIndex('enroll');
+		if (pairs.length === 0 || clientDownloads.size === 0) return result;
+
+		const trackedIds = await this.fetchTrackedIds();
+
+		for (const pair of pairs.slice(0, 100)) {
+			const hashLower = pair.hash?.trim().toLowerCase();
+			if (
+				!hashLower ||
+				(pair.mediaType !== 'movie' && pair.mediaType !== 'tv') ||
+				!Number.isInteger(pair.tmdbId)
+			) {
+				result.skipped.push({ hash: pair.hash, reason: 'invalid_pair' });
+				continue;
+			}
+
+			// Verify the torrent itself before touching the library: a
+			// vanished, foreign or already-tracked hash must never leave a
+			// stray library row behind.
+			const found = this.findDownloadByHash(clientDownloads, hashLower);
+			if (!found) {
+				result.skipped.push({
+					hash: pair.hash,
+					reason: fetchFailed ? 'client_unreachable' : 'not_in_client'
+				});
+				continue;
+			}
+
+			const { client, download } = found;
+			if (!this.isManagedCategory(client, download)) {
+				result.skipped.push({ hash: pair.hash, reason: 'foreign_category' });
+				continue;
+			}
+			if (!(await this.isAcceptableContent(client, download))) {
+				result.skipped.push({ hash: pair.hash, reason: 'unsupported_filetype' });
+				continue;
+			}
+
+			if (trackedIds.has(hashLower)) {
+				result.skipped.push({ hash: pair.hash, reason: 'already_tracked' });
+				continue;
+			}
+			trackedIds.add(hashLower);
+
+			let media = await this.findMediaByTmdbId(pair.mediaType, pair.tmdbId);
+			if (!media) {
+				// New to the library: add it unmonitored (the file is in
+				// hand — monitoring would only trigger a redundant grab).
+				if (!pair.rootFolderId) {
+					result.skipped.push({ hash: pair.hash, reason: 'not_in_library' });
+					continue;
+				}
+				try {
+					// Lazy-loaded: the add modules pull a heavy graph (TMDB,
+					// naming, metadata) that must not weigh down this
+					// module's import — see the recovery suite timeout.
+					if (pair.mediaType === 'movie') {
+						const { addMovieToLibrary } = await import('#lib/server/library/add/add-movie.js');
+						await addMovieToLibrary({
+							tmdbId: pair.tmdbId,
+							rootFolderId: pair.rootFolderId,
+							monitored: false,
+							minimumAvailability: 'released',
+							availabilityDelay: 0,
+							searchOnAdd: false,
+							wantsSubtitles: true
+						});
+					} else {
+						const { addSeriesToLibrary } = await import('#lib/server/library/add/add-series.js');
+						await addSeriesToLibrary({
+							tmdbId: pair.tmdbId,
+							rootFolderId: pair.rootFolderId,
+							monitored: false,
+							seasonFolder: true,
+							seriesType: 'standard',
+							monitorType: 'none',
+							monitorNewItems: 'all',
+							monitorSpecials: false,
+							searchOnAdd: false,
+							wantsSubtitles: true
+						});
+					}
+				} catch (error) {
+					logger.warn(
+						{
+							hash: pair.hash,
+							tmdbId: pair.tmdbId,
+							error: error instanceof Error ? error.message : String(error)
+						},
+						'Auto-add for unmatched enroll failed'
+					);
+					result.skipped.push({ hash: pair.hash, reason: 'add_failed' });
+					continue;
+				}
+				media = await this.findMediaByTmdbId(pair.mediaType, pair.tmdbId);
+				if (!media) {
+					result.skipped.push({ hash: pair.hash, reason: 'add_failed' });
+					continue;
+				}
+			}
+
+			const status = this.mirrorUnmatchedStatus(download.status);
+			const queueId = await this.createLinkedQueueRow({
+				client,
+				download,
+				movieId: media.movieId,
+				seriesId: media.seriesId,
+				seasonNumber: pair.seasonNumber,
+				status,
+				errorMessage:
+					status === 'failed'
+						? (download.errorMessage ?? 'Reported as error by download client')
+						: null,
+				origin: 'unmatched_enroll'
+			});
+			const enrolledItem = await this.getQueueItem(queueId);
+			if (enrolledItem) {
+				this.emit('queue:added', enrolledItem);
+				this.emitSSE('queue:added', enrolledItem);
+			}
+
+			result.enrolled.push({ hash: download.hash, queueId });
+			logger.info(
+				{ hash: download.hash, mediaType: pair.mediaType, tmdbId: pair.tmdbId, queueId, status },
+				'Enrolled unmatched download for monitor import'
+			);
+		}
 
 		return result;
 	}

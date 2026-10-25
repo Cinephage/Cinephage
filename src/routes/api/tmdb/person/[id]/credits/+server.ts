@@ -1,9 +1,8 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { tmdb } from '$lib/server/tmdb';
-import { enrichWithLibraryStatus, filterBlockedMedia } from '$lib/server/library/status';
-import { createChildLogger } from '$lib/logging';
-import type { PersonCastCredit, PersonCrewCredit } from '$lib/types/tmdb';
+import { tmdb } from '#lib/server/tmdb.js';
+import { enrichWithLibraryStatus, filterBlockedMedia } from '#lib/server/library/status.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import type { PersonCastCredit, PersonCrewCredit } from '#lib/types/tmdb.js';
 
 const PAGE_SIZE = 20;
 
@@ -31,7 +30,7 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
 
 	const personId = parseInt(params.id);
 	if (isNaN(personId)) {
-		return json({ error: 'Invalid person ID' }, { status: 400 });
+		return Response.json({ error: 'Invalid person ID' }, { status: 400 });
 	}
 
 	const type = url.searchParams.get('type');
@@ -80,7 +79,7 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
 				'Returning batch person credits'
 			);
 
-			return json({
+			return Response.json({
 				movies: {
 					results: enrichedMovies,
 					page: 1,
@@ -104,7 +103,7 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
 
 		// Paginated mode: single type with page number
 		if (!['movie', 'tv', 'crew'].includes(type)) {
-			return json({ error: 'Invalid type. Must be movie, tv, or crew' }, { status: 400 });
+			return Response.json({ error: 'Invalid type. Must be movie, tv, or crew' }, { status: 400 });
 		}
 
 		let filteredCredits: (PersonCastCredit | PersonCrewCredit)[];
@@ -140,7 +139,7 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
 			'Returning person credits'
 		);
 
-		return json({
+		return Response.json({
 			results: enrichedCredits,
 			page,
 			total_pages: totalPages,
@@ -148,6 +147,6 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
 		});
 	} catch (e) {
 		log.error({ err: e, ...{ personId, type, page } }, 'Failed to fetch person credits');
-		return json({ error: 'Failed to fetch credits' }, { status: 500 });
+		return Response.json({ error: 'Failed to fetch credits' }, { status: 500 });
 	}
 };

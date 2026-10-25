@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { SectionHeader } from '$lib/components/ui/modal';
+	import { SectionHeader } from '#lib/components/ui/modal/index.js';
 	import DownloadClientSettings from './forms/DownloadClientSettings.svelte';
-	import * as m from '$lib/paraglide/messages.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
 		name: string;

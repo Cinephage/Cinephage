@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { createFocusTrap, lockBodyScroll } from '$lib/utils/focus';
-	import * as m from '$lib/paraglide/messages.js';
+	import { createFocusTrap, lockBodyScroll } from '#lib/utils/focus.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
 		open: boolean;

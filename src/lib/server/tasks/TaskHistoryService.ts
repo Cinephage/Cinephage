@@ -5,11 +5,11 @@
  * Tracks when tasks started, completed, failed, and their results.
  */
 
-import { db } from '$lib/server/db';
-import { taskHistory } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { taskHistory } from '#lib/server/db/schema.js';
 import { eq, desc, inArray, sql, and, ne, lt } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
-import type { TaskHistoryEntry } from '$lib/types/task';
+import { createChildLogger } from '#lib/logging/index.js';
+import type { TaskHistoryEntry } from '#lib/types/task.js';
 import { TaskExecutionContext } from './TaskExecutionContext.js';
 
 const logger = createChildLogger({ module: 'TaskHistoryService' });

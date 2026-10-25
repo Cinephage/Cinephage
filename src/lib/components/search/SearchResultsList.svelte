@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { SvelteSet, SvelteMap } from 'svelte/reactivity';
-	import { Loader2, Package, Search } from 'lucide-svelte';
+	import { Loader2, Package, Search } from '@lucide/svelte';
 	import SearchResultRow, { type Release } from './SearchResultRow.svelte';
 
 	type SearchMode = 'all' | 'multiSeasonPack';

@@ -51,6 +51,30 @@ describe('StreamingDiskScanner', () => {
 		await cleanup(root);
 	});
 
+	it('traverses an excluded dot-prefixed folder when it contains a tracked movie path', async () => {
+		const root = await createTempDir();
+		const movieFolder = join(root, '...And Justice for All (1979)');
+		const moviePath = join(movieFolder, '...And Justice for All (1979).mkv');
+		await mkdir(movieFolder, { recursive: true });
+		await writeFile(moviePath, fakeVideo);
+		await writeFile(join(movieFolder, 'sample.mkv'), fakeVideo);
+
+		await mkdir(join(root, '.hidden'), { recursive: true });
+		await writeFile(join(root, '.hidden', 'secret.mkv'), fakeVideo);
+
+		const scanner = new StreamingDiskScanner({ alwaysScanPaths: [moviePath] });
+		const allFiles: Array<{ relativePath: string }> = [];
+		for await (const batch of scanner.scan(root)) {
+			allFiles.push(...batch);
+		}
+
+		expect(allFiles.map((file) => file.relativePath)).toEqual([
+			join('...And Justice for All (1979)', '...And Justice for All (1979).mkv')
+		]);
+
+		await cleanup(root);
+	});
+
 	it('excludes samples and extras folders', async () => {
 		const root = await createTempDir();
 		await mkdir(join(root, 'Season 1'), { recursive: true });

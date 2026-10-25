@@ -9,15 +9,19 @@
  */
 
 import type { RequestHandler } from './$types';
-import { channelLineupService } from '$lib/server/livetv/lineup/ChannelLineupService';
-import { getEpgService } from '$lib/server/livetv/epg/EpgService';
+import { channelLineupService } from '#lib/server/livetv/lineup/ChannelLineupService.js';
+import { getEpgService } from '#lib/server/livetv/epg/EpgService.js';
 import {
 	buildResolvedPlanForLineup,
 	mapGuideDataToRequestedChannels
-} from '$lib/server/livetv/epg/epg-utils';
-import { createChildLogger } from '$lib/logging';
-import type { ChannelLineupItemWithDetails, EpgLocalizedText, EpgProgram } from '$lib/types/livetv';
-import { normalizeLanguageTag } from '$lib/server/languages/normalize.js';
+} from '#lib/server/livetv/epg/epg-utils.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import type {
+	ChannelLineupItemWithDetails,
+	EpgLocalizedText,
+	EpgProgram
+} from '#lib/types/livetv.js';
+import { normalizeLanguageTag } from '#lib/server/languages/normalize.js';
 
 const logger = createChildLogger({ module: 'LiveTvEpgXml', logDomain: 'livetv' });
 

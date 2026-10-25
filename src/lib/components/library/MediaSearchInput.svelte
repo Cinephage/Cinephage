@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Search, Loader2, X } from 'lucide-svelte';
-	import * as m from '$lib/paraglide/messages.js';
-	import { searchTmdb } from '$lib/api/discover.js';
+	import { Search, Loader2, X } from '@lucide/svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { searchTmdb } from '#lib/api/discover.js';
 
 	export interface TmdbSearchResult {
 		id: number;

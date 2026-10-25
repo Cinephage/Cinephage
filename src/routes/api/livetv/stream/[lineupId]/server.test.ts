@@ -4,7 +4,7 @@ const handleStreamHeadMock = vi.hoisted(() =>
 	vi.fn().mockResolvedValue(new Response(null, { status: 200 }))
 );
 
-vi.mock('$lib/server/livetv/streaming/StreamRequestHandler', () => ({
+vi.mock('#lib/server/livetv/streaming/StreamRequestHandler.js', () => ({
 	handleStreamHead: handleStreamHeadMock
 }));
 

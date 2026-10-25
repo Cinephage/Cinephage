@@ -23,12 +23,36 @@ import {
 	type AssrtSearchResponse,
 	type AssrtDetailResponse
 } from './types';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'subtitles' as const });
 import { extractFromZip } from '../mixins';
 import { languageSatisfies } from '../../requirement-matcher';
 import { ConfigurationError } from '../../errors/ProviderErrors';
+import { normalizeLanguageTag } from '#lib/server/languages/normalize.js';
+
+/**
+ * Resolve an Assrt subtitle's language from its metadata list.
+ *
+ * Assrt reports ISO-639-3 style codes ('eng', 'cht', 'jpn', …), so they run
+ * through the canonical registry. A subtitle carrying one of the requested
+ * languages is labelled with it; otherwise the first recognized language
+ * wins. Assrt is a Chinese provider, so an empty or unrecognized list
+ * defaults to Chinese.
+ */
+export function mapAssrtLanguage(
+	langlist: readonly string[],
+	requested: readonly string[]
+): LanguageCode {
+	const candidates = langlist
+		.map((lang) => normalizeLanguageTag(lang))
+		.filter((tag) => tag !== 'und');
+	return (
+		candidates.find((tag) => requested.some((req) => languageSatisfies(tag, req))) ??
+		candidates[0] ??
+		'zh'
+	);
+}
 
 /**
  * Assrt Provider
@@ -119,20 +143,10 @@ export class AssrtProvider extends BaseSubtitleProvider implements ISubtitleProv
 			// Skip meaningless video names
 			if (sub.videoname === '不知道') continue;
 
-			// Determine language from metadata
-			let langCode: LanguageCode = 'zh';
-			if (sub.lang?.langlist) {
-				for (const lang of sub.lang.langlist) {
-					if (lang.lang === 'eng') {
-						langCode = 'en';
-						break;
-					}
-					if (lang.lang === 'cht') {
-						langCode = 'zh-tw';
-						break;
-					}
-				}
-			}
+			const langCode = mapAssrtLanguage(
+				sub.lang?.langlist?.map((lang) => lang.lang) ?? [],
+				languages
+			);
 
 			if (!languages.some((requested) => languageSatisfies(langCode, requested))) {
 				continue;

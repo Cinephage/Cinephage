@@ -6,13 +6,13 @@
  */
 
 import { EventEmitter } from 'events';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'EpgScheduler' });
-import { db } from '$lib/server/db';
-import { settings } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { settings } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import type { BackgroundService, ServiceStatus } from '$lib/server/services/background-service';
+import type { BackgroundService, ServiceStatus } from '#lib/server/services/background-service.js';
 import { getEpgService } from './EpgService';
 import { getEpgSyncState } from './EpgSyncState';
 import { liveTvEvents } from '../LiveTvEvents';

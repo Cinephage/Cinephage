@@ -2,12 +2,12 @@
  * Subtitle Management System - Core Types
  */
 
-import type { LanguageTag } from '$lib/shared/languages.js';
-import type { SubtitleRequirement } from '$lib/shared/language-profile.js';
+import type { LanguageTag } from '#lib/shared/languages.js';
+import type { SubtitleRequirement } from '#lib/shared/language-profile.js';
 
 /**
  * Canonical language code.
- * @see $lib/shared/languages for the single language registry.
+ * @see #lib/shared/languages for the single language registry.
  */
 export type LanguageCode = LanguageTag;
 
@@ -69,6 +69,8 @@ export interface SubtitleSearchCriteria {
 	tvdbId?: number; // For TV show lookups
 	title: string;
 	originalTitle?: string;
+	/** Canonical tag of the media's original language, when known. */
+	originalLanguage?: LanguageCode;
 	year?: number;
 
 	// For TV episodes

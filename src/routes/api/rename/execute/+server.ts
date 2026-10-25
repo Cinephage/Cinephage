@@ -1,14 +1,13 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { RenamePreviewService } from '$lib/server/library/naming/RenamePreviewService';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { parseBody } from '$lib/server/api/validate.js';
-import { ValidationError } from '$lib/errors';
-import { diskScanService } from '$lib/server/library/disk-scan.js';
-import { libraryMediaEvents } from '$lib/server/library/LibraryMediaEvents.js';
-import { renamePreviewCache } from '$lib/server/library/naming/RenamePreviewCache.js';
-import { renameExecuteSchema } from '$lib/server/library/naming/rename-execute-schema.js';
-import { createChildLogger } from '$lib/logging';
+import { RenamePreviewService } from '#lib/server/library/naming/RenamePreviewService.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { parseBody } from '#lib/server/api/validate.js';
+import { ValidationError } from '#lib/errors/index.js';
+import { diskScanService } from '#lib/server/library/disk-scan.js';
+import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
+import { renamePreviewCache } from '#lib/server/library/naming/RenamePreviewCache.js';
+import { renameExecuteSchema } from '#lib/server/library/naming/rename-execute-schema.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'RenameExecuteApi', logDomain: 'scans' });
 
@@ -17,7 +16,7 @@ export const POST: RequestHandler = async (event) => {
 	if (authError) return authError;
 
 	if (diskScanService.scanning) {
-		return json(
+		return Response.json(
 			{ error: 'A library scan is in progress. Wait for it to finish, then retry the rename.' },
 			{ status: 409 }
 		);
@@ -56,14 +55,14 @@ export const POST: RequestHandler = async (event) => {
 			renamePreviewCache.invalidateAll();
 		}
 
-		return json(result);
+		return Response.json(result);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		if (/scan is in progress/i.test(message)) {
-			return json({ error: message }, { status: 409 });
+			return Response.json({ error: message }, { status: 409 });
 		}
 		if (error instanceof ValidationError) {
-			return json({ error: message }, { status: 400 });
+			return Response.json({ error: message }, { status: 400 });
 		}
 
 		logger.error(
@@ -73,7 +72,7 @@ export const POST: RequestHandler = async (event) => {
 			'[RenameExecute API] Failed to execute renames'
 		);
 
-		return json(
+		return Response.json(
 			{
 				error: 'Failed to execute renames',
 				details: error instanceof Error ? error.message : 'Unknown error'

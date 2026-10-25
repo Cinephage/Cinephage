@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { ComponentType } from 'svelte';
+	import type { Component } from 'svelte';
 
 	interface MiniSegment {
 		value: number;
@@ -7,7 +7,7 @@
 	}
 
 	interface Props {
-		icon: ComponentType;
+		icon: Component<{ class?: string }>;
 		iconClass?: string;
 		label: string;
 		value: string;

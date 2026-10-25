@@ -13,11 +13,11 @@ import {
 	renamingFailures,
 	unmatchedFiles,
 	downloadClients
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -35,7 +35,7 @@ const mockLogger = vi.hoisted(() => ({
 	child: vi.fn().mockReturnThis()
 }));
 
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	logger: mockLogger,
 	createChildLogger: vi.fn(() => mockLogger)
 }));
@@ -51,7 +51,7 @@ function makeUrl(type: string, params: Record<string, string> = {}): string {
 }
 
 function opts(type: string, params: Record<string, string> = {}) {
-	return { url: makeUrl(type, params), params: { type } };
+	return { url: makeUrl(type, params), params: { type }, auth: 'admin' as const };
 }
 
 describe('Reports [type] API', () => {

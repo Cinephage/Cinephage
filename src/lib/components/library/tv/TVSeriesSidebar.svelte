@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { LibrarySeries } from '$lib/types/library';
-	import * as m from '$lib/paraglide/messages.js';
+	import type { LibrarySeries } from '#lib/types/library.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
 		series: LibrarySeries;

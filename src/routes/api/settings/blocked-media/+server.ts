@@ -1,9 +1,13 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { blockedMediaService } from '$lib/server/blocked-media/index.js';
-import { blockMediaSchema, unblockMediaSchema } from '$lib/validation/schemas.js';
+import { blockedMediaService } from '#lib/server/blocked-media/index.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { blockMediaSchema, unblockMediaSchema } from '#lib/validation/schemas.js';
 
-export const GET: RequestHandler = async ({ url }) => {
+export const GET: RequestHandler = async (event) => {
+	const authError = requireAdmin(event);
+	if (authError) return authError;
+
+	const { url } = event;
 	const search = url.searchParams.get('search') ?? undefined;
 	const mediaType = url.searchParams.get('mediaType') ?? undefined;
 	const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '100') || 100, 200);
@@ -16,15 +20,18 @@ export const GET: RequestHandler = async ({ url }) => {
 		offset
 	});
 
-	return json(result);
+	return Response.json(result);
 };
 
-export const POST: RequestHandler = async ({ request }) => {
-	const body = await request.json();
+export const POST: RequestHandler = async (event) => {
+	const authError = requireAdmin(event);
+	if (authError) return authError;
+
+	const body = await event.request.json();
 	const parsed = blockMediaSchema.safeParse(body);
 
 	if (!parsed.success) {
-		return json(
+		return Response.json(
 			{ error: 'Invalid request body', details: parsed.error.flatten() },
 			{ status: 400 }
 		);
@@ -32,15 +39,18 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	const entry = await blockedMediaService.blockMedia(parsed.data);
 
-	return json({ success: true, entry });
+	return Response.json({ success: true, entry });
 };
 
-export const DELETE: RequestHandler = async ({ request }) => {
-	const body = await request.json();
+export const DELETE: RequestHandler = async (event) => {
+	const authError = requireAdmin(event);
+	if (authError) return authError;
+
+	const body = await event.request.json();
 	const parsed = unblockMediaSchema.safeParse(body);
 
 	if (!parsed.success) {
-		return json(
+		return Response.json(
 			{ error: 'Invalid request body', details: parsed.error.flatten() },
 			{ status: 400 }
 		);
@@ -48,5 +58,5 @@ export const DELETE: RequestHandler = async ({ request }) => {
 
 	await blockedMediaService.unblockMedia(parsed.data.ids);
 
-	return json({ success: true, removed: parsed.data.ids.length });
+	return Response.json({ success: true, removed: parsed.data.ids.length });
 };

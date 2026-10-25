@@ -1,12 +1,11 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { db } from '$lib/server/db/index.js';
-import { seasons, episodes, episodeFiles, series, rootFolders } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { seasons, episodes, episodeFiles, series, rootFolders } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { unlink, rmdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { libraryMediaEvents } from '$lib/server/library/LibraryMediaEvents';
-import { createChildLogger } from '$lib/logging';
+import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LibrarySeasonByIdApi', logDomain: 'scans' });
 
@@ -23,7 +22,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 		const [season] = await db.select().from(seasons).where(eq(seasons.id, params.id)).limit(1);
 
 		if (!season) {
-			return json({ success: false, error: 'Season not found' }, { status: 404 });
+			return Response.json({ success: false, error: 'Season not found' }, { status: 404 });
 		}
 
 		const updateData: Record<string, unknown> = {};
@@ -33,7 +32,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 		}
 
 		if (Object.keys(updateData).length === 0) {
-			return json({ success: false, error: 'No valid fields to update' }, { status: 400 });
+			return Response.json({ success: false, error: 'No valid fields to update' }, { status: 400 });
 		}
 
 		// Update season
@@ -46,10 +45,10 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 
 		libraryMediaEvents.emitSeriesUpdated(season.seriesId);
 
-		return json({ success: true });
+		return Response.json({ success: true });
 	} catch (error) {
 		logger.error('[API] Error updating season', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to update season'
@@ -86,7 +85,7 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 			.where(eq(seasons.id, params.id));
 
 		if (!season) {
-			return json({ success: false, error: 'Season not found' }, { status: 404 });
+			return Response.json({ success: false, error: 'Season not found' }, { status: 404 });
 		}
 
 		// Get all episode files for this season
@@ -98,12 +97,15 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 		const seasonFiles = allFiles.filter((f) => f.seasonNumber === season.seasonNumber);
 
 		if (seasonFiles.length === 0) {
-			return json({ success: false, error: 'Season has no files to delete' }, { status: 400 });
+			return Response.json(
+				{ success: false, error: 'Season has no files to delete' },
+				{ status: 400 }
+			);
 		}
 
 		// Block file deletion from read-only folders
 		if (deleteFiles && season.rootFolderReadOnly) {
-			return json(
+			return Response.json(
 				{ success: false, error: 'Cannot delete files from read-only folder' },
 				{ status: 400 }
 			);
@@ -164,10 +166,10 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 		libraryMediaEvents.emitSeriesUpdated(season.seriesId);
 
 		// Note: Season and episode metadata is kept - episodes will show as "missing"
-		return json({ success: true });
+		return Response.json({ success: true });
 	} catch (error) {
 		logger.error('[API] Error deleting season files', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to delete season files'

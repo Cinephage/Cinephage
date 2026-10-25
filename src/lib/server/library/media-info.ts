@@ -24,9 +24,9 @@ import {
 	type FFprobeOutput
 } from './ffprobe.js';
 import { readFile } from 'node:fs/promises';
-import type { movieFiles } from '$lib/server/db/schema.js';
-import { createChildLogger } from '$lib/logging';
-import { isVideoFile as isBaseVideoFile } from '$lib/config/constants.js';
+import type { movieFiles } from '#lib/server/db/schema.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { isVideoFile as isBaseVideoFile } from '#lib/config/constants.js';
 
 const logger = createChildLogger({ logDomain: 'scans' as const });
 

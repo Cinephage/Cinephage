@@ -1,5 +1,5 @@
-import * as m from '$lib/paraglide/messages.js';
-import type { SubtitleAccessibility, SubtitleVariant } from '$lib/shared/language-profile.js';
+import * as m from '#lib/paraglide/messages.js';
+import type { SubtitleAccessibility, SubtitleVariant } from '#lib/shared/language-profile.js';
 
 /** Localized display label for a subtitle variant. */
 export function variantLabel(variant: SubtitleVariant): string {

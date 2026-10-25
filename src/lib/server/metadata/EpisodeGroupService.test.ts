@@ -4,7 +4,7 @@ import {
 	buildSeasonsAndEpisodesFromGroup,
 	buildEpisodeGroupInfoList
 } from './EpisodeGroupService';
-import type { EpisodeGroup, EpisodeGroupSummary, EpisodeGroupsResponse } from '$lib/types/tmdb';
+import type { EpisodeGroup, EpisodeGroupSummary, EpisodeGroupsResponse } from '#lib/types/tmdb.js';
 
 function makeSummary(overrides: Partial<EpisodeGroupSummary> = {}): EpisodeGroupSummary {
 	return {

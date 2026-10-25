@@ -1,12 +1,12 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
-	import type { TVShowDetails } from '$lib/types/tmdb';
-	import { displayTitle } from '$lib/types/library';
-	import TmdbImage from '$lib/components/tmdb/TmdbImage.svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import type { TVShowDetails } from '#lib/types/tmdb.js';
+	import { displayTitle } from '#lib/types/library.js';
+	import TmdbImage from '#lib/components/tmdb/TmdbImage.svelte';
 	import SubtitleRequirementBadge from './SubtitleRequirementBadge.svelte';
-	import type { SubtitleRequirementProgress } from '$lib/utils/subtitle-status-display.js';
-	import CrewList from '$lib/components/tmdb/CrewList.svelte';
-	import WatchProviders from '$lib/components/tmdb/WatchProviders.svelte';
+	import type { SubtitleRequirementProgress } from '#lib/utils/subtitle-status-display.js';
+	import CrewList from '#lib/components/tmdb/CrewList.svelte';
+	import WatchProviders from '#lib/components/tmdb/WatchProviders.svelte';
 	import MonitorToggle from './MonitorToggle.svelte';
 	import {
 		Settings,
@@ -22,20 +22,21 @@
 		MoreHorizontal,
 		ArrowLeft,
 		Eye,
-		EyeOff
-	} from 'lucide-svelte';
+		EyeOff,
+		Replace
+	} from '@lucide/svelte';
 	import {
 		formatLanguage,
 		formatDisplayDateShort,
 		getStatusColor,
 		formatBytes
-	} from '$lib/utils/format.js';
-	import { formatSeriesStatus } from '$lib/utils/format-status.js';
-	import { ConfirmationModal } from '$lib/components/ui/modal';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import { blockMedia } from '$lib/api/settings.js';
-	import { TMDB } from '$lib/config/constants.js';
-	import { resolvePath } from '$lib/utils/routing.js';
+	} from '#lib/utils/format.js';
+	import { formatSeriesStatus } from '#lib/utils/format-status.js';
+	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { blockMedia } from '#lib/api/settings.js';
+	import { TMDB } from '#lib/config/constants.js';
+	import { resolvePath } from '#lib/utils/routing.js';
 
 	interface SeriesData {
 		tmdbId: number;
@@ -105,6 +106,9 @@
 		onEdit?: () => void;
 		onDelete?: () => void;
 		onRefresh?: () => void;
+		onChangeMatch?: () => void;
+		/** Viewer mode: hide acquisition/edit controls, keep the informational header. */
+		readOnly?: boolean;
 	}
 
 	let {
@@ -137,7 +141,9 @@
 		onImport,
 		onEdit,
 		onDelete,
-		onRefresh
+		onRefresh,
+		onChangeMatch,
+		readOnly = false
 	}: Props = $props();
 
 	let showBlockConfirm = $state(false);
@@ -227,93 +233,103 @@
 			>
 		</a>
 		<div class="flex shrink-0 items-center gap-1 sm:gap-2">
-			<!-- MonitorToggle hidden on mobile (shown in bottom bar) -->
-			<div class="hidden sm:block">
-				<MonitorToggle
-					monitored={series.monitored ?? false}
-					{partiallyMonitored}
-					onToggle={onMonitorToggle}
-					size="md"
-				/>
-			</div>
-			<!-- Auto-grab (desktop) -->
-			<button
-				class="btn hidden gap-1.5 btn-primary btn-sm sm:flex"
-				onclick={onSearchMissing}
-				disabled={searchingMissing || missingEpisodeCount === 0}
-			>
-				{#if searchingMissing}
-					<span class="loading loading-xs loading-spinner"></span>
-				{:else}
-					<Zap size={14} />
-				{/if}
-				{m.library_seriesHeader_autoGrab()}
-				{#if missingEpisodeCount > 0}
-					<span class="badge badge-sm">{missingEpisodeCount}</span>
-				{/if}
-			</button>
-			<!-- Season Packs (desktop) -->
-			<button class="btn hidden gap-1.5 btn-ghost btn-sm sm:flex" onclick={onSearch}>
-				<Package size={14} />
-				{m.library_seriesHeader_seasonPacks()}
-			</button>
-			<!-- Overflow menu (desktop only) -->
-			<div class="dropdown dropdown-end hidden sm:block">
-				<button tabindex="0" class="btn btn-ghost btn-sm">
-					<MoreHorizontal size={18} />
-				</button>
-				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-				<ul
-					tabindex="0"
-					class="menu dropdown-content z-50 w-56 rounded-box border border-base-content/10 bg-base-200 p-2 shadow-lg"
+			{#if !readOnly}
+				<!-- MonitorToggle hidden on mobile (shown in bottom bar) -->
+				<div class="hidden sm:block">
+					<MonitorToggle
+						monitored={series.monitored ?? false}
+						{partiallyMonitored}
+						onToggle={onMonitorToggle}
+						size="md"
+					/>
+				</div>
+				<!-- Auto-grab (desktop) -->
+				<button
+					class="btn hidden gap-1.5 btn-primary btn-sm sm:flex"
+					onclick={onSearchMissing}
+					disabled={searchingMissing || missingEpisodeCount === 0}
 				>
-					{#if onImport}
+					{#if searchingMissing}
+						<span class="loading loading-xs loading-spinner"></span>
+					{:else}
+						<Zap size={14} />
+					{/if}
+					{m.library_seriesHeader_autoGrab()}
+					{#if missingEpisodeCount > 0}
+						<span class="badge badge-sm">{missingEpisodeCount}</span>
+					{/if}
+				</button>
+				<!-- Season Packs (desktop) -->
+				<button class="btn hidden gap-1.5 btn-ghost btn-sm sm:flex" onclick={onSearch}>
+					<Package size={14} />
+					{m.library_seriesHeader_seasonPacks()}
+				</button>
+				<!-- Overflow menu (desktop only) -->
+				<div class="dropdown dropdown-end hidden sm:block">
+					<button tabindex="0" class="btn btn-ghost btn-sm">
+						<MoreHorizontal size={18} />
+					</button>
+					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+					<ul
+						tabindex="0"
+						class="menu dropdown-content z-50 w-56 rounded-box border border-base-content/10 bg-base-200 p-2 shadow-lg"
+					>
+						{#if onImport}
+							<li>
+								<button onclick={onImport}>
+									<Download size={16} />
+									{m.action_import()}
+								</button>
+							</li>
+						{/if}
 						<li>
-							<button onclick={onImport}>
-								<Download size={16} />
-								{m.action_import()}
+							<button onclick={onRefresh} disabled={refreshing}>
+								<RefreshCw size={16} />
+								{#if refreshing}
+									{m.common_loading()}
+								{:else}
+									{m.library_seriesHeader_refreshTooltip()}
+								{/if}
 							</button>
 						</li>
-					{/if}
-					<li>
-						<button onclick={onRefresh} disabled={refreshing}>
-							<RefreshCw size={16} />
-							{#if refreshing}
-								{m.common_loading()}
-							{:else}
-								{m.library_seriesHeader_refreshTooltip()}
-							{/if}
-						</button>
-					</li>
-					{#if onSubtitleAutoSearch}
+						{#if onSubtitleAutoSearch}
+							<li>
+								<button onclick={onSubtitleAutoSearch} disabled={subtitleAutoSearching}>
+									<Captions size={16} />
+									{m.library_seriesHeader_autoDownloadSubs()}
+								</button>
+							</li>
+						{/if}
+						<div class="divider my-1"></div>
+						{#if onChangeMatch}
+							<li>
+								<button onclick={onChangeMatch}>
+									<Replace size={16} />
+									{m.library_changeMatch_menuLabel()}
+								</button>
+							</li>
+						{/if}
 						<li>
-							<button onclick={onSubtitleAutoSearch} disabled={subtitleAutoSearching}>
-								<Captions size={16} />
-								{m.library_seriesHeader_autoDownloadSubs()}
+							<button onclick={onEdit}>
+								<Settings size={16} />
+								{m.action_edit()}
 							</button>
 						</li>
-					{/if}
-					<div class="divider my-1"></div>
-					<li>
-						<button onclick={onEdit}>
-							<Settings size={16} />
-							{m.action_edit()}
-						</button>
-					</li>
-					<li>
-						<button class="text-error" onclick={onDelete}>
-							<Trash2 size={16} />
-							{m.action_delete()}
-						</button>
-					</li>
-					<li>
-						<button class="text-error" onclick={() => (showBlockConfirm = true)}>
-							<Ban size={16} />
-							{m.library_blockMediaTooltip()}
-						</button>
-					</li>
-				</ul>
-			</div>
+						<li>
+							<button class="text-error" onclick={onDelete}>
+								<Trash2 size={16} />
+								{m.action_delete()}
+							</button>
+						</li>
+						<li>
+							<button class="text-error" onclick={() => (showBlockConfirm = true)}>
+								<Ban size={16} />
+								{m.library_blockMediaTooltip()}
+							</button>
+						</li>
+					</ul>
+				</div>
+			{/if}
 		</div>
 	</div>
 
@@ -350,21 +366,23 @@
 							class="h-auto w-full object-cover"
 						/>
 					</div>
-					<button
-						class="flex w-full items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-colors
-							{series.monitored
-							? 'bg-success/10 text-success hover:bg-success/20'
-							: 'bg-base-content/5 text-base-content/40 hover:bg-base-content/10'}"
-						onclick={() => onMonitorToggle?.(!series.monitored)}
-					>
-						{#if series.monitored}
-							<Eye size={13} />
-							Monitored
-						{:else}
-							<EyeOff size={13} />
-							Unmonitored
-						{/if}
-					</button>
+					{#if !readOnly}
+						<button
+							class="flex w-full items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-colors
+								{series.monitored
+								? 'bg-success/10 text-success hover:bg-success/20'
+								: 'bg-base-content/5 text-base-content/40 hover:bg-base-content/10'}"
+							onclick={() => onMonitorToggle?.(!series.monitored)}
+						>
+							{#if series.monitored}
+								<Eye size={13} />
+								Monitored
+							{:else}
+								<EyeOff size={13} />
+								Unmonitored
+							{/if}
+						</button>
+					{/if}
 				</div>
 
 				<!-- Main Info -->
@@ -676,112 +694,122 @@
 	confirmVariant="error"
 />
 
-<!-- Mobile action bar -->
-<div
-	class="fixed right-0 bottom-0 left-0 z-40 border-t border-base-content/6 bg-base-100/75 backdrop-blur-xl sm:hidden"
-	style="padding-bottom: env(safe-area-inset-bottom)"
->
-	<div class="flex items-stretch justify-around">
-		<!-- Monitor -->
-		<button
-			class="flex flex-1 flex-col items-center gap-1 py-3 transition-colors
-				{series.monitored ? 'text-success' : 'text-base-content/55'}"
-			onclick={() => onMonitorToggle?.(!series.monitored)}
-		>
-			{#if series.monitored}
-				<Eye size={20} />
-			{:else}
-				<EyeOff size={20} />
-			{/if}
-			<span class="text-[10px] tracking-wide">{series.monitored ? 'Monitored' : 'Off'}</span>
-		</button>
-
-		<!-- Auto-grab -->
-		<button
-			class="flex flex-1 flex-col items-center gap-1 py-3 transition-colors
-				{searchingMissing || missingEpisodeCount === 0 ? 'text-primary/40' : 'text-primary'}"
-			onclick={onSearchMissing}
-			disabled={searchingMissing || missingEpisodeCount === 0}
-		>
-			{#if searchingMissing}
-				<span class="loading loading-xs loading-spinner"></span>
-			{:else}
-				<Zap size={20} />
-			{/if}
-			<span class="text-[10px] tracking-wide">{m.library_seriesHeader_autoGrab()}</span>
-		</button>
-
-		<!-- Season Packs -->
-		<button
-			class="flex flex-1 flex-col items-center gap-1 py-3 text-base-content/55 transition-colors active:text-base-content/90"
-			onclick={onSearch}
-		>
-			<Package size={20} />
-			<span class="text-[10px] tracking-wide">{m.library_seriesHeader_seasonPacks()}</span>
-		</button>
-
-		<!-- Edit -->
-		<button
-			class="flex flex-1 flex-col items-center gap-1 py-3 text-base-content/55 transition-colors active:text-base-content/90"
-			onclick={onEdit}
-		>
-			<Settings size={20} />
-			<span class="text-[10px] tracking-wide">{m.action_edit()}</span>
-		</button>
-
-		<!-- Overflow (dropdown-top) -->
-		<div class="dropdown dropdown-end dropdown-top flex flex-1">
+<!-- Mobile action bar (admin only: every entry mutates or acquires) -->
+{#if !readOnly}
+	<div
+		class="fixed right-0 bottom-0 left-0 z-40 border-t border-base-content/6 bg-base-100/75 backdrop-blur-xl sm:hidden"
+		style="padding-bottom: env(safe-area-inset-bottom)"
+	>
+		<div class="flex items-stretch justify-around">
+			<!-- Monitor -->
 			<button
-				tabindex="0"
-				class="flex flex-1 flex-col items-center gap-1 py-3 text-error/60 transition-colors active:text-error"
+				class="flex flex-1 flex-col items-center gap-1 py-3 transition-colors
+				{series.monitored ? 'text-success' : 'text-base-content/55'}"
+				onclick={() => onMonitorToggle?.(!series.monitored)}
 			>
-				<MoreHorizontal size={20} />
-				<span class="text-[10px] tracking-wide">More</span>
+				{#if series.monitored}
+					<Eye size={20} />
+				{:else}
+					<EyeOff size={20} />
+				{/if}
+				<span class="text-[10px] tracking-wide">{series.monitored ? 'Monitored' : 'Off'}</span>
 			</button>
-			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-			<ul
-				tabindex="0"
-				class="menu dropdown-content z-50 mb-2 w-52 rounded-box border border-base-content/10 bg-base-200 p-2 shadow-lg"
+
+			<!-- Auto-grab -->
+			<button
+				class="flex flex-1 flex-col items-center gap-1 py-3 transition-colors
+				{searchingMissing || missingEpisodeCount === 0 ? 'text-primary/40' : 'text-primary'}"
+				onclick={onSearchMissing}
+				disabled={searchingMissing || missingEpisodeCount === 0}
 			>
-				<li>
-					<button onclick={onRefresh} disabled={refreshing}>
-						<RefreshCw size={16} />
-						{#if refreshing}
-							{m.common_loading()}
-						{:else}
-							{m.library_seriesHeader_refreshTooltip()}
-						{/if}
-					</button>
-				</li>
-				{#if onImport}
+				{#if searchingMissing}
+					<span class="loading loading-xs loading-spinner"></span>
+				{:else}
+					<Zap size={20} />
+				{/if}
+				<span class="text-[10px] tracking-wide">{m.library_seriesHeader_autoGrab()}</span>
+			</button>
+
+			<!-- Season Packs -->
+			<button
+				class="flex flex-1 flex-col items-center gap-1 py-3 text-base-content/55 transition-colors active:text-base-content/90"
+				onclick={onSearch}
+			>
+				<Package size={20} />
+				<span class="text-[10px] tracking-wide">{m.library_seriesHeader_seasonPacks()}</span>
+			</button>
+
+			<!-- Edit -->
+			<button
+				class="flex flex-1 flex-col items-center gap-1 py-3 text-base-content/55 transition-colors active:text-base-content/90"
+				onclick={onEdit}
+			>
+				<Settings size={20} />
+				<span class="text-[10px] tracking-wide">{m.action_edit()}</span>
+			</button>
+
+			<!-- Overflow (dropdown-top) -->
+			<div class="dropdown dropdown-end dropdown-top flex flex-1">
+				<button
+					tabindex="0"
+					class="flex flex-1 flex-col items-center gap-1 py-3 text-error/60 transition-colors active:text-error"
+				>
+					<MoreHorizontal size={20} />
+					<span class="text-[10px] tracking-wide">More</span>
+				</button>
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+				<ul
+					tabindex="0"
+					class="menu dropdown-content z-50 mb-2 w-52 rounded-box border border-base-content/10 bg-base-200 p-2 shadow-lg"
+				>
 					<li>
-						<button onclick={onImport}>
-							<Download size={16} />
-							{m.action_import()}
+						<button onclick={onRefresh} disabled={refreshing}>
+							<RefreshCw size={16} />
+							{#if refreshing}
+								{m.common_loading()}
+							{:else}
+								{m.library_seriesHeader_refreshTooltip()}
+							{/if}
 						</button>
 					</li>
-				{/if}
-				{#if onSubtitleAutoSearch}
+					{#if onImport}
+						<li>
+							<button onclick={onImport}>
+								<Download size={16} />
+								{m.action_import()}
+							</button>
+						</li>
+					{/if}
+					{#if onSubtitleAutoSearch}
+						<li>
+							<button onclick={onSubtitleAutoSearch} disabled={subtitleAutoSearching}>
+								<Captions size={16} />
+								{m.library_seriesHeader_autoDownloadSubs()}
+							</button>
+						</li>
+					{/if}
+					{#if onChangeMatch}
+						<li>
+							<button onclick={onChangeMatch}>
+								<Replace size={16} />
+								{m.library_changeMatch_menuLabel()}
+							</button>
+						</li>
+					{/if}
 					<li>
-						<button onclick={onSubtitleAutoSearch} disabled={subtitleAutoSearching}>
-							<Captions size={16} />
-							{m.library_seriesHeader_autoDownloadSubs()}
+						<button class="text-error" onclick={onDelete}>
+							<Trash2 size={16} />
+							{m.action_delete()}
 						</button>
 					</li>
-				{/if}
-				<li>
-					<button class="text-error" onclick={onDelete}>
-						<Trash2 size={16} />
-						{m.action_delete()}
-					</button>
-				</li>
-				<li>
-					<button class="text-error" onclick={() => (showBlockConfirm = true)}>
-						<Ban size={16} />
-						{m.library_blockMediaTooltip()}
-					</button>
-				</li>
-			</ul>
+					<li>
+						<button class="text-error" onclick={() => (showBlockConfirm = true)}>
+							<Ban size={16} />
+							{m.library_blockMediaTooltip()}
+						</button>
+					</li>
+				</ul>
+			</div>
 		</div>
 	</div>
-</div>
+{/if}

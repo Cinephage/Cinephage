@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../../test/db-helper';
-import { movies, subtitles, languageProfiles } from '$lib/server/db/schema';
+import { movies, subtitles, languageProfiles } from '#lib/server/db/schema.js';
 import { eq, isNull } from 'drizzle-orm';
 
 const testDb: TestDatabase = createTestDb();
@@ -57,7 +57,7 @@ const { searchService, downloadService, providerManager, profileService, profile
 		return { searchService, downloadService, providerManager, profileService, profileState };
 	});
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -67,7 +67,7 @@ vi.mock('$lib/server/db', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -85,24 +85,24 @@ const mockLogger = vi.hoisted(() => ({
 	child: vi.fn().mockReturnThis()
 }));
 
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	logger: mockLogger,
 	createChildLogger: vi.fn(() => mockLogger)
 }));
 
-vi.mock('$lib/server/subtitles/services/SubtitleSearchService.js', () => ({
+vi.mock('#lib/server/subtitles/services/SubtitleSearchService.js', () => ({
 	getSubtitleSearchService: () => searchService
 }));
-vi.mock('$lib/server/subtitles/services/SubtitleDownloadService.js', () => ({
+vi.mock('#lib/server/subtitles/services/SubtitleDownloadService.js', () => ({
 	getSubtitleDownloadService: () => downloadService
 }));
-vi.mock('$lib/server/subtitles/services/SubtitleProviderManager.js', () => ({
+vi.mock('#lib/server/subtitles/services/SubtitleProviderManager.js', () => ({
 	getSubtitleProviderManager: () => providerManager
 }));
-vi.mock('$lib/server/subtitles/services/LanguageProfileService.js', async (importOriginal) => {
+vi.mock('#lib/server/subtitles/services/LanguageProfileService.js', async (importOriginal) => {
 	const actual =
 		await importOriginal<
-			typeof import('$lib/server/subtitles/services/LanguageProfileService.js')
+			typeof import('#lib/server/subtitles/services/LanguageProfileService.js')
 		>();
 	return {
 		...actual,

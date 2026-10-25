@@ -8,7 +8,7 @@
  * - Map byte offsets to segments for Range request support
  */
 
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 import type { NzbSegment, SegmentDecodeInfo } from './types';
 
 const logger = createChildLogger({ logDomain: 'streams' as const });

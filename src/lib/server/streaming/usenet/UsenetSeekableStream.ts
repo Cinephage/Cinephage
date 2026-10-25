@@ -9,7 +9,7 @@
  */
 
 import { Readable, type ReadableOptions } from 'node:stream';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 import type { NntpManager } from './NntpManager';
 
 const logger = createChildLogger({

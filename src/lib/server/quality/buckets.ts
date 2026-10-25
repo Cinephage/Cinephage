@@ -10,7 +10,7 @@
  * resolutions clamped to the scoring profile's min/max range). With fewer,
  * existing single-quality behavior is preserved exactly.
  */
-import { RESOLUTION_ORDER, type Resolution } from '$lib/server/indexers/parser/types.js';
+import { RESOLUTION_ORDER, type Resolution } from '#lib/server/indexers/parser/types.js';
 
 /** Minimum effective buckets to activate multi-quality behavior. */
 export const MULTI_QUALITY_MIN_BUCKETS = 2;

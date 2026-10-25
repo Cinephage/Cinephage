@@ -1,10 +1,10 @@
-import { error, json } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { requireArrCompatEnabled } from '$lib/server/arr/requireArrCompatEnabled.js';
-import { buildSeriesByArrId } from '$lib/server/arr/series.js';
-import { updateSeriesFromArr, deleteSeriesFromArr } from '$lib/server/arr/libraryWrite.js';
-import { withForwardedApiKey } from '$lib/server/arr/internalFetch.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { requireArrCompatEnabled } from '#lib/server/arr/requireArrCompatEnabled.js';
+import { buildSeriesByArrId } from '#lib/server/arr/series.js';
+import { updateSeriesFromArr, deleteSeriesFromArr } from '#lib/server/arr/libraryWrite.js';
+import { withForwardedApiKey } from '#lib/server/arr/internalFetch.js';
 
 /** GET /api/sonarr/api/v3/series/{id} */
 export const GET: RequestHandler = async (event) => {
@@ -20,7 +20,7 @@ export const GET: RequestHandler = async (event) => {
 	const item = await buildSeriesByArrId(id);
 	if (!item) error(404, 'Series not found');
 
-	return json(item);
+	return Response.json(item);
 };
 
 /** PUT /api/sonarr/api/v3/series/{id} - update monitored/quality profile/type. */
@@ -36,7 +36,7 @@ export const PUT: RequestHandler = async (event) => {
 
 	const body = await event.request.json().catch(() => ({}));
 	const result = await updateSeriesFromArr(withForwardedApiKey(event), id, body);
-	return json(result.body, { status: result.status });
+	return Response.json(result.body, { status: result.status });
 };
 
 /** DELETE /api/sonarr/api/v3/series/{id}?deleteFiles=true - remove from library. */
@@ -52,5 +52,5 @@ export const DELETE: RequestHandler = async (event) => {
 
 	const deleteFiles = event.url.searchParams.get('deleteFiles') === 'true';
 	const result = await deleteSeriesFromArr(withForwardedApiKey(event), id, { deleteFiles });
-	return json(result.body, { status: result.status });
+	return Response.json(result.body, { status: result.status });
 };

@@ -1,6 +1,6 @@
-import type { BackgroundService, ServiceStatus } from '$lib/server/services/background-service.js';
+import type { BackgroundService, ServiceStatus } from '#lib/server/services/background-service.js';
 import { getProwlarrConnection, syncProwlarrIndexers } from './ProwlarrConnectionService.js';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'indexers' as const });
 

@@ -5,7 +5,7 @@ import {
 	type ActivitySortOptions,
 	type ActivityScope,
 	type ActivitySummary
-} from '$lib/types/activity';
+} from '#lib/types/activity.js';
 
 export const DEFAULT_ACTIVITY_RETENTION_DAYS = 90;
 export const MAX_ACTIVITY_RETENTION_DAYS = 90;

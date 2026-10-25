@@ -1,4 +1,4 @@
-import { filterBlockedMedia } from '$lib/server/library/status.js';
+import { filterBlockedMedia } from '#lib/server/library/status.js';
 import type { FilterStage, FilterContext } from '../types.js';
 
 export class BlockedMediaStage implements FilterStage<

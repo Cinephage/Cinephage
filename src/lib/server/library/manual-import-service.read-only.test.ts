@@ -8,7 +8,7 @@ import {
 	clearTestDb,
 	type TestDatabase
 } from '../../../test/db-helper.js';
-import { movies, rootFolders, series } from '$lib/server/db/schema.js';
+import { movies, rootFolders, series } from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 const mocks = vi.hoisted(() => ({
@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
 	transferFileWithMode: vi.fn()
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -26,17 +26,17 @@ vi.mock('$lib/server/db/index.js', () => ({
 	},
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
-vi.mock('$lib/server/tmdb.js', () => ({ tmdb: { getMovie: mocks.getMovie } }));
-vi.mock('$lib/server/library/LibraryAddService.js', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/server/library/LibraryAddService.js')>();
+vi.mock('#lib/server/tmdb.js', () => ({ tmdb: { getMovie: mocks.getMovie } }));
+vi.mock('#lib/server/library/LibraryAddService.js', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/server/library/LibraryAddService.js')>();
 	return { ...actual, validateRootFolder: mocks.validateRootFolder };
 });
-vi.mock('$lib/server/downloadClients/import/FileTransfer.js', async (importOriginal) => {
+vi.mock('#lib/server/downloadClients/import/FileTransfer.js', async (importOriginal) => {
 	const actual =
-		await importOriginal<typeof import('$lib/server/downloadClients/import/FileTransfer.js')>();
+		await importOriginal<typeof import('#lib/server/downloadClients/import/FileTransfer.js')>();
 	return { ...actual, transferFileWithMode: mocks.transferFileWithMode };
 });
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), child: vi.fn() },
 	createChildLogger: vi.fn(() => ({
 		info: vi.fn(),

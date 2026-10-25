@@ -5,19 +5,22 @@
  */
 
 import { XMLParser } from 'fast-xml-parser';
-import type { ConnectionTestResult } from '$lib/types/downloadClient';
+import type { ConnectionTestResult } from '#lib/types/downloadClient.js';
 import type {
 	AddDownloadOptions,
 	DownloadClientConfig,
 	DownloadInfo,
 	IDownloadClient
 } from '../core/interfaces';
-import { getBasicAuthHeader } from '../core/client-utils.js';
+import { getBasicAuthHeader, joinCategoryPath } from '../core/client-utils.js';
 import {
 	buildMagnetFromInfoHash,
 	extractInfoHashFromMagnet,
 	parseTorrentFile
 } from '../utils/torrentParser';
+import { createChildLogger } from '#lib/logging/index.js';
+
+const logger = createChildLogger({ logDomain: 'imports' as const });
 
 type RTorrentStatus = DownloadInfo['status'];
 
@@ -141,6 +144,20 @@ function escapeXml(value: string): string {
 		.replace(/>/g, '&gt;')
 		.replace(/"/g, '&quot;')
 		.replace(/'/g, '&apos;');
+}
+
+/**
+ * Quote a value for embedding inside an rTorrent command string (e.g. the
+ * extra commands ridden on `load.start`/`load.raw_start`). rTorrent's own
+ * command parser treats `,` as an argument separator and `;` as a command
+ * separator within a single string; unrelated to XML escaping, which only
+ * protects the surrounding XML-RPC envelope. Without quoting, a category or
+ * default save path containing `,`, `;`, `"`, or `\` can break the command
+ * parse or splice in a second command.
+ * https://rtorrent-docs.readthedocs.io/en/latest/cmd-ref.html
+ */
+function quoteRtorrentArg(value: string): string {
+	return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
 export class RTorrentClient implements IDownloadClient {
@@ -487,7 +504,8 @@ export class RTorrentClient implements IDownloadClient {
 			basePath,
 			category,
 			ratio,
-			createdAt
+			createdAt,
+			finishedTs
 		] = await Promise.all([
 			this.getTorrentField<string>(hash, ['d.name', 'd.get_name'], hash),
 			this.getTorrentField<number | string>(hash, ['d.size_bytes', 'd.get_size_bytes'], 0),
@@ -505,7 +523,8 @@ export class RTorrentClient implements IDownloadClient {
 			this.getTorrentField<string>(hash, ['d.base_path', 'd.get_base_path'], ''),
 			this.getTorrentField<string>(hash, ['d.custom1', 'd.get_custom1'], ''),
 			this.getTorrentField<number | string>(hash, ['d.ratio', 'd.get_ratio'], 0),
-			this.getTorrentField<number | string>(hash, ['d.creation_date', 'd.get_creation_date'], 0)
+			this.getTorrentField<number | string>(hash, ['d.creation_date', 'd.get_creation_date'], 0),
+			this.getTorrentField<number | string>(hash, ['d.timestamp.finished'], 0)
 		]);
 
 		const size = toNumber(sizeBytes);
@@ -532,6 +551,9 @@ export class RTorrentClient implements IDownloadClient {
 			typeof category === 'string' && category.trim().length > 0 ? category.trim() : undefined;
 		const normalizedName = typeof name === 'string' ? name : hash;
 		const contentPath = resolveContentPath(savePath, basePath, normalizedName);
+		const finishedAt = toNumber(finishedTs);
+		const secondsSinceFinished =
+			finishedAt > 0 ? Math.max(0, Math.floor(Date.now() / 1000) - finishedAt) : 0;
 
 		return {
 			id: hash,
@@ -547,10 +569,42 @@ export class RTorrentClient implements IDownloadClient {
 			category: normalizedCategory,
 			ratio: normalizedRatio,
 			addedOn: toDate(toNumber(createdAt)),
-			completedOn: undefined,
+			completedOn: finishedAt > 0 ? new Date(finishedAt * 1000) : undefined,
+			seedingTime: completeFlag > 0 && finishedAt > 0 ? secondsSinceFinished : undefined,
+			ratioLimit: this.config.seedRatioLimit,
+			seedingTimeLimit: this.config.seedTimeLimit,
 			canMoveFiles: status !== 'downloading' && status !== 'seeding' && status !== 'queued',
-			canBeRemoved: status !== 'downloading'
+			// 'completed' means the torrent finished downloading and has no active
+			// transfer or upload — an actively seeding torrent is never removable.
+			// On top of that, the client-level seed goals must be met (evaluated
+			// app-side; rTorrent has no per-torrent stop-at-ratio command).
+			canBeRemoved:
+				status === 'completed' && this.hasReachedSeedLimit(normalizedRatio, secondsSinceFinished)
 		};
+	}
+
+	/**
+	 * Seed goals come from the client's own configuration (seedRatioLimit as a
+	 * decimal, seedTimeLimit in minutes), parsed once in DownloadClientManager.
+	 * With no limits configured a torrent is never removable, matching the
+	 * Transmission/qBittorrent behavior.
+	 */
+	private hasReachedSeedLimit(ratio: number, secondsSinceFinished: number): boolean {
+		const ratioLimit = this.config.seedRatioLimit;
+		if (typeof ratioLimit === 'number' && ratioLimit > 0 && ratio >= ratioLimit) {
+			return true;
+		}
+
+		const seedTimeLimit = this.config.seedTimeLimit;
+		if (
+			typeof seedTimeLimit === 'number' &&
+			seedTimeLimit > 0 &&
+			secondsSinceFinished >= seedTimeLimit * 60
+		) {
+			return true;
+		}
+
+		return false;
 	}
 
 	async test(): Promise<ConnectionTestResult> {
@@ -603,10 +657,34 @@ export class RTorrentClient implements IDownloadClient {
 			? null
 			: new Set((await this.getTorrentHashes()).map((hash) => hash.toLowerCase()));
 
+		// Derive a per-category directory atomically at load time. Post-hoc
+		// d.directory.set does not move existing data, so the directory and
+		// label must ride along with load.start/load.raw_start.
+		let effectiveSavePath = options.savePath?.trim() || '';
+		if (!effectiveSavePath && options.category?.trim()) {
+			try {
+				effectiveSavePath = joinCategoryPath(await this.getDefaultSavePath(), options.category);
+			} catch (error) {
+				effectiveSavePath = '';
+				logger.warn(
+					{ err: error, category: options.category },
+					'[rTorrent] Failed to resolve default save path; falling back to label-only'
+				);
+			}
+		}
+		const normalizedCategory = options.category?.trim() || '';
+		const extraCommands: string[] = [];
+		if (effectiveSavePath) {
+			extraCommands.push(`d.directory.set=${quoteRtorrentArg(effectiveSavePath)}`);
+		}
+		if (normalizedCategory) {
+			extraCommands.push(`d.custom1.set=${quoteRtorrentArg(normalizedCategory)}`);
+		}
+
 		if (options.torrentFile) {
 			await this.callFirstSuccess<unknown>([
-				{ method: 'load.raw_start', params: ['', options.torrentFile] },
-				{ method: 'load_raw_start', params: ['', options.torrentFile] }
+				{ method: 'load.raw_start', params: ['', options.torrentFile, ...extraCommands] },
+				{ method: 'load_raw_start', params: ['', options.torrentFile, ...extraCommands] }
 			]);
 		} else {
 			let source = options.magnetUri;
@@ -621,8 +699,8 @@ export class RTorrentClient implements IDownloadClient {
 			}
 
 			await this.callFirstSuccess<unknown>([
-				{ method: 'load.start', params: ['', source] },
-				{ method: 'load_start', params: ['', source] }
+				{ method: 'load.start', params: ['', source, ...extraCommands] },
+				{ method: 'load_start', params: ['', source, ...extraCommands] }
 			]);
 		}
 
@@ -746,7 +824,11 @@ export class RTorrentClient implements IDownloadClient {
 		_id: string,
 		_config: { ratioLimit?: number; seedingTimeLimit?: number }
 	): Promise<void> {
-		// Not implemented for rTorrent yet. Global rTorrent settings are typically used.
+		// Deliberately not implemented: rTorrent has no per-torrent stop-at-ratio
+		// XMLRPC command, so seed goals cannot be pushed into the client (Radarr
+		// evaluates them app-side for the same reason). This client reads the
+		// client-level seedRatioLimit/seedTimeLimit from its own config instead.
+		// Known limitation: indexer-level per-grab overrides are not honored here.
 	}
 
 	async getBasePath(): Promise<string | undefined> {

@@ -102,18 +102,6 @@ export function isMovieSearching(movieId: string): boolean {
 }
 
 /**
- * Get all active searches (for debugging)
- */
-export function getActiveSearches(): Array<{ id: string } & ActiveSearch> {
-	cleanupExpiredSearches();
-
-	return Array.from(activeSearches.entries()).map(([id, search]) => ({
-		id,
-		...search
-	}));
-}
-
-/**
  * Clean up expired searches (older than timeout)
  */
 function cleanupExpiredSearches(): void {
@@ -123,22 +111,6 @@ function cleanupExpiredSearches(): void {
 			activeSearches.delete(id);
 		}
 	}
-}
-
-/**
- * Clear all searches (for testing)
- */
-export function clearAllSearches(): void {
-	activeSearches.clear();
-}
-
-/**
- * Get the progress of an active search
- */
-export function getSearchProgress(id: string): SearchProgress | null {
-	cleanupExpiredSearches();
-	const search = activeSearches.get(id);
-	return search?.progress ?? null;
 }
 
 /**
