@@ -136,6 +136,12 @@ const TORRENT_MAGNET_METADATA_GRACE_PERIOD_MS = 600_000; // 10 minutes
 /** Bounds for the unmatched content scan; an unfinished scan counts as acceptable. */
 const MAX_CONTENT_SCAN_ENTRIES = 5_000;
 const MAX_CONTENT_SCAN_DEPTH = 6;
+// .strm placeholder files (WebDAV/Mounts, e.g. NZBDav) are a real,
+// intentional content type elsewhere in the app (media-info.ts,
+// FileTransfer.ts both add it) - without this, isAcceptableContent's video
+// check never recognizes them and silently excludes every .strm-based
+// download from Unmatched.
+const CONTENT_SCAN_EXTRA_EXTENSIONS = ['.strm'] as const;
 
 /**
  * Terminal statuses - items that are completely done and hidden from queue UI.
@@ -512,6 +518,13 @@ export interface UnmatchedDownload {
 	status: DownloadInfo['status'];
 	progress: number;
 	category?: string;
+	/**
+	 * Movie vs TV, resolved from which of the client's configured
+	 * movie/tv categories this download's category matches. Null when the
+	 * download has no category or matches neither (isManagedCategory still
+	 * lets uncategorized downloads through, so this can't always resolve).
+	 */
+	mediaType: 'movie' | 'tv' | null;
 	savePath: string;
 	clientId: string;
 	clientName: string;
@@ -3922,6 +3935,23 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 	}
 
 	/**
+	 * Movie vs TV for an unmatched download, resolved the same way
+	 * isManagedCategory decides "is this ours": by which of the client's
+	 * configured categories the download's own category matches. Null when
+	 * the download carries no category or matches neither - isManagedCategory
+	 * still lets those through, so this can't always resolve.
+	 */
+	private resolveUnmatchedMediaType(
+		client: DownloadClient,
+		download: DownloadInfo
+	): 'movie' | 'tv' | null {
+		if (!download.category) return null;
+		if (download.category === client.movieCategory) return 'movie';
+		if (download.category === client.tvCategory) return 'tv';
+		return null;
+	}
+
+	/**
 	 * Find a download by hash in the fetched client index. Track and enroll
 	 * share one lookup and one not-found reason.
 	 */
@@ -3992,11 +4022,39 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 		if (!localPath) return true;
 		try {
 			const stats = await stat(localPath);
-			if (!stats.isDirectory()) return isVideoFile(localPath);
-			return await this.folderHasVideo(localPath, 0, { left: MAX_CONTENT_SCAN_ENTRIES });
-		} catch {
+			const accepted = stats.isDirectory()
+				? await this.folderHasVideo(localPath, 0, { left: MAX_CONTENT_SCAN_ENTRIES })
+				: isVideoFile(localPath, CONTENT_SCAN_EXTRA_EXTENSIONS);
+			if (!accepted) {
+				// This is the only place a real, present download silently drops
+				// out of Unmatched - log the path actually scanned so a rejection
+				// can be told apart from a genuine mapping/extension gap instead
+				// of just disappearing with no trace.
+				logger.debug(
+					{
+						clientName: client.name,
+						downloadName: download.name,
+						clientDownloadPath,
+						localPath,
+						isDirectory: stats.isDirectory()
+					},
+					'Excluding unmatched download - no importable video found at resolved path'
+				);
+			}
+			return accepted;
+		} catch (error) {
 			// Not on disk yet (still downloading): the wizard and the import
 			// pipeline decide once the files exist.
+			logger.debug(
+				{
+					clientName: client.name,
+					downloadName: download.name,
+					clientDownloadPath,
+					localPath,
+					error: error instanceof Error ? error.message : String(error)
+				},
+				'Content path not reachable yet - accepting as unmatched anyway'
+			);
 			return true;
 		}
 	}
@@ -4022,7 +4080,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 		budget.left -= entries.length;
 
 		for (const entry of entries) {
-			if (entry.isFile() && isVideoFile(entry.name)) return true;
+			if (entry.isFile() && isVideoFile(entry.name, CONTENT_SCAN_EXTRA_EXTENSIONS)) return true;
 		}
 		for (const entry of entries) {
 			if (!entry.isDirectory()) continue;
@@ -4042,10 +4100,12 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 		page?: number;
 		limit?: number;
 		search?: string;
+		mediaType?: 'movie' | 'tv';
 	}): Promise<{ items: UnmatchedDownload[]; total: number; page: number; limit: number }> {
 		const page = Math.max(1, Math.floor(options?.page ?? 1));
 		const limit = Math.min(100, Math.max(1, Math.floor(options?.limit ?? 25)));
 		const search = options?.search?.trim().toLowerCase() || '';
+		const mediaType = options?.mediaType;
 
 		const { byClient: clientDownloads } = await this.fetchClientDownloadIndex(
 			'listing',
@@ -4063,22 +4123,44 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 		const unmatched: {
 			client: DownloadClient;
 			download: DownloadInfo;
+			mediaType: 'movie' | 'tv' | null;
 		}[] = [];
 
 		for (const { client, byHash } of clientDownloads.values()) {
 			for (const download of byHash.values()) {
-				if (trackedIds.has(download.hash.toLowerCase())) continue;
+				if (trackedIds.has(download.hash.toLowerCase())) {
+					logger.debug(
+						{ clientName: client.name, downloadName: download.name, hash: download.hash },
+						'Excluding from unmatched listing - already tracked by a queue row'
+					);
+					continue;
+				}
 
 				// Only downloads in Cinephage-managed categories. No progress
 				// gate: still-downloading items list as live statuses.
-				if (!this.isManagedCategory(client, download)) continue;
+				if (!this.isManagedCategory(client, download)) {
+					logger.debug(
+						{
+							clientName: client.name,
+							downloadName: download.name,
+							downloadCategory: download.category,
+							configuredMovieCategory: client.movieCategory,
+							configuredTvCategory: client.tvCategory
+						},
+						'Excluding from unmatched listing - category matches neither configured movie nor tv category'
+					);
+					continue;
+				}
 				if (!(await this.isAcceptableContent(client, download))) continue;
 				// Filter before total/slice (issue #628): otherwise search only
 				// ever sees whatever page happened to already be loaded, and
 				// total/pagination stay keyed to the unfiltered count.
 				if (search && !download.name.toLowerCase().includes(search)) continue;
 
-				unmatched.push({ client, download });
+				const itemMediaType = this.resolveUnmatchedMediaType(client, download);
+				if (mediaType && itemMediaType !== mediaType) continue;
+
+				unmatched.push({ client, download, mediaType: itemMediaType });
 			}
 		}
 
@@ -4162,19 +4244,22 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			});
 		}
 
-		const items: UnmatchedDownload[] = pageItems.map(({ client, download }) => ({
-			hash: download.hash,
-			name: download.name,
-			size: download.size ?? 0,
-			status: download.status,
-			progress: download.progress,
-			category: download.category,
-			savePath: download.savePath,
-			clientId: client.id,
-			clientName: client.name,
-			attachable: attachMap.get(download.hash.toLowerCase()) ?? null,
-			suggestion: suggestions.get(download.hash.toLowerCase()) ?? null
-		}));
+		const items: UnmatchedDownload[] = pageItems.map(
+			({ client, download, mediaType: itemMediaType }) => ({
+				hash: download.hash,
+				name: download.name,
+				size: download.size ?? 0,
+				status: download.status,
+				progress: download.progress,
+				category: download.category,
+				mediaType: itemMediaType,
+				savePath: download.savePath,
+				clientId: client.id,
+				clientName: client.name,
+				attachable: attachMap.get(download.hash.toLowerCase()) ?? null,
+				suggestion: suggestions.get(download.hash.toLowerCase()) ?? null
+			})
+		);
 
 		return { items, total, page, limit };
 	}

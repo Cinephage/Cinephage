@@ -13,12 +13,15 @@
 	} from '#lib/api/downloads.js';
 	import { ApiError } from '#lib/api/client.js';
 	import { formatBytes } from '#lib/utils/format.js';
+	import type { ActivityFilters } from '#lib/types/activity.js';
 
 	interface Props {
 		downloadClients?: { id: string; name: string }[];
+		filters: ActivityFilters;
+		onFiltersChange: (filters: ActivityFilters) => void;
 	}
 
-	let { downloadClients = [] }: Props = $props();
+	let { downloadClients = [], filters, onFiltersChange }: Props = $props();
 
 	const PAGE_LIMIT = 25;
 	// Suggestions at or above this confidence are trusted enough to
@@ -31,9 +34,35 @@
 	let loading = $state(false);
 	let loadError = $state<string | null>(null);
 	let clientId = $state('');
+	let mediaType = $state<'all' | 'movie' | 'tv'>('all');
 	let search = $state('');
 	let selected = new SvelteSet<string>();
 	let searchDebounce: ReturnType<typeof setTimeout> | undefined;
+	let lastExternalClientId = $state('');
+	let lastExternalMediaType = $state<'all' | 'movie' | 'tv'>('all');
+	let lastExternalSearch = $state('');
+
+	$effect(() => {
+		const incoming = filters.downloadClientId ?? '';
+		if (incoming !== lastExternalClientId) {
+			lastExternalClientId = incoming;
+			clientId = incoming;
+		}
+	});
+	$effect(() => {
+		const incoming = filters.mediaType ?? 'all';
+		if (incoming !== lastExternalMediaType) {
+			lastExternalMediaType = incoming;
+			mediaType = incoming;
+		}
+	});
+	$effect(() => {
+		const incoming = filters.search ?? '';
+		if (incoming !== lastExternalSearch) {
+			lastExternalSearch = incoming;
+			search = incoming;
+		}
+	});
 
 	const selectableHashes = $derived(items.map((item) => item.hash));
 	const allSelected = $derived(
@@ -105,7 +134,8 @@
 				clientId: clientId || undefined,
 				page,
 				limit: PAGE_LIMIT,
-				search: search.trim() || undefined
+				search: search.trim() || undefined,
+				mediaType: mediaType === 'all' ? undefined : mediaType
 			});
 			items = res.items;
 			total = res.total;
@@ -142,7 +172,10 @@
 	function onSearchInput(value: string) {
 		search = value;
 		clearTimeout(searchDebounce);
-		searchDebounce = setTimeout(() => void load(true), 300);
+		searchDebounce = setTimeout(() => {
+			onFiltersChange({ ...filters, search: value || undefined });
+			void load(true);
+		}, 300);
 	}
 
 	function toggleSelect(hash: string) {
@@ -263,6 +296,12 @@
 	}
 
 	onMount(() => {
+		clientId = filters.downloadClientId ?? '';
+		mediaType = filters.mediaType ?? 'all';
+		search = filters.search ?? '';
+		lastExternalClientId = clientId;
+		lastExternalMediaType = mediaType;
+		lastExternalSearch = search;
 		void load(true);
 	});
 </script>
@@ -286,11 +325,48 @@
 					/>
 				</div>
 			</div>
+			<span class="h-4 w-px bg-base-content/15"></span>
+			<div class="join">
+				<button
+					class="btn join-item btn-sm {mediaType === 'all' ? 'btn-primary' : 'btn-ghost'}"
+					onclick={() => {
+						mediaType = 'all';
+						onFiltersChange({ ...filters, mediaType: 'all' });
+						load(true);
+					}}
+				>
+					{m.common_all()}
+				</button>
+				<button
+					class="btn join-item btn-sm {mediaType === 'movie' ? 'btn-primary' : 'btn-ghost'}"
+					onclick={() => {
+						mediaType = 'movie';
+						onFiltersChange({ ...filters, mediaType: 'movie' });
+						load(true);
+					}}
+				>
+					{m.common_movies()}
+				</button>
+				<button
+					class="btn join-item btn-sm {mediaType === 'tv' ? 'btn-primary' : 'btn-ghost'}"
+					onclick={() => {
+						mediaType = 'tv';
+						onFiltersChange({ ...filters, mediaType: 'tv' });
+						load(true);
+					}}
+				>
+					{m.common_tvShows()}
+				</button>
+			</div>
 			{#if downloadClients.length > 0}
+				<span class="h-4 w-px bg-base-content/15"></span>
 				<select
 					class="select w-38 border-base-content/20 bg-base-200 select-sm sm:w-auto"
 					bind:value={clientId}
-					onchange={() => load(true)}
+					onchange={() => {
+						onFiltersChange({ ...filters, downloadClientId: clientId || undefined });
+						load(true);
+					}}
 					aria-label={m.activity_unmatched_clientFilter()}
 				>
 					<option value="">{m.activity_unmatched_allClients()}</option>

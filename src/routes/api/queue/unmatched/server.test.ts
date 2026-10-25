@@ -163,6 +163,35 @@ describe('GET /api/queue/unmatched', () => {
 		expect(body.items[0].hash).toBe(HASH_A);
 		expect(body.page).toBe(1);
 	});
+
+	it('resolves mediaType from the client category mapping', async () => {
+		const { data } = await callHandler(
+			GET,
+			'GET',
+			undefined,
+			adminOpts('http://localhost/api/queue/unmatched')
+		);
+		const body = data as { items: { mediaType: 'movie' | 'tv' | null }[] };
+		expect(body.items[0].mediaType).toBe('movie');
+	});
+
+	it('filters by mediaType', async () => {
+		const movieResult = await callHandler(
+			GET,
+			'GET',
+			undefined,
+			adminOpts('http://localhost/api/queue/unmatched?mediaType=movie')
+		);
+		expect((movieResult.data as { total: number }).total).toBe(1);
+
+		const tvResult = await callHandler(
+			GET,
+			'GET',
+			undefined,
+			adminOpts('http://localhost/api/queue/unmatched?mediaType=tv')
+		);
+		expect((tvResult.data as { total: number }).total).toBe(0);
+	});
 });
 describe('GET /api/queue/unmatched/resolve', () => {
 	it('requires admin', async () => {

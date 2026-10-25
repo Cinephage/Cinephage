@@ -241,6 +241,13 @@ export class SABnzbdProxy {
 		const params = new URLSearchParams();
 		params.set('start', start.toString());
 		params.set('limit', limit.toString());
+		// Without this, SABnzbd's history API only returns items it hasn't
+		// auto-archived yet - completed downloads older than its archive
+		// threshold vanish from mode=history entirely (slots: [] with no
+		// error) even though they're still real, present history entries
+		// (confirmed via the SABnzbd web UI's own "Show Archive" toggle,
+		// which sends this same param).
+		params.set('archive', '1');
 
 		if (category) {
 			params.set('category', category);

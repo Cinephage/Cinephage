@@ -326,6 +326,23 @@ describe('listUnmatchedDownloads', () => {
 		await rm(root, { recursive: true, force: true });
 	});
 
+	it('accepts .strm placeholder files (WebDAV/debrid mounts, e.g. NZBDav)', async () => {
+		const root = await mkdtemp(join(tmpdir(), 'unmatched-strm-'));
+		const strmFolder = join(root, 'Movie.2026.REMUX');
+		await mkdir(strmFolder, { recursive: true });
+		await writeFile(join(strmFolder, 'Movie.2026.REMUX.mkv.strm'), 'x');
+		clientPaths.local = root;
+		clientPaths.remote = root;
+		getDownloads.mockResolvedValue([
+			makeDownload({ hash: HASH_A, name: 'Movie.2026.REMUX', contentPath: strmFolder })
+		]);
+
+		const res = await getDownloadMonitor().listUnmatchedDownloads();
+
+		expect(res.items.map((item) => item.hash)).toEqual([HASH_A]);
+		await rm(root, { recursive: true, force: true });
+	});
+
 	it('attaches a TMDB suggestion for a well-formed release name', async () => {
 		getDownloads.mockResolvedValue([makeDownload()]);
 		tmdbSearchMovies.mockResolvedValue({

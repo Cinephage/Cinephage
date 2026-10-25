@@ -1291,6 +1291,15 @@
 		}
 	}
 
+	// Unmatched has no queue/history fetch pipeline of its own (it reads
+	// live client state directly - see switchTab's comment below), so unlike
+	// applyFilters this only lifts state + syncs the URL; ActivityUnmatchedCard
+	// does its own fetch.
+	function applyUnmatchedFilters(newFilters: FiltersType): void {
+		setFiltersForTab('unmatched', newFilters);
+		syncActivityUrl(newFilters, 'unmatched');
+	}
+
 	async function switchTab(tab: ActivityTab): Promise<void> {
 		if (tab === activityTab) return;
 
@@ -1550,7 +1559,11 @@
 	</div>
 
 	{#if activityTab === 'unmatched'}
-		<ActivityUnmatchedCard downloadClients={data.filterOptions.downloadClients} />
+		<ActivityUnmatchedCard
+			downloadClients={data.filterOptions.downloadClients}
+			filters={unmatchedTabFilters}
+			onFiltersChange={applyUnmatchedFilters}
+		/>
 	{:else}
 		<!-- Unified Toolbar -->
 		<ActivityFilters
