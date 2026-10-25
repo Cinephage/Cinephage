@@ -5,6 +5,9 @@ import type {
 	MetadataSearchResult,
 	MetadataTitleVariant
 } from './types.js';
+import { createChildLogger } from '#lib/logging/index.js';
+
+const logger = createChildLogger({ module: 'MalProvider', logDomain: 'system' });
 
 // Jikan v4 shapes (unofficial MAL mirror, no auth required)
 interface JikanTitle {
@@ -153,9 +156,31 @@ export class MalProvider implements MetadataProvider {
 		url.searchParams.set('limit', '10');
 		url.searchParams.set('sfw', 'false');
 
-		const res = await jikanFetch(url.toString()).catch(() => null);
-		if (!res?.ok) return [];
-		const body = (await res.json().catch(() => null)) as JikanSearchResponse | null;
+		// Previously a bare `.catch(() => null)` with no logging at all - any
+		// failure (network error, timeout, rate limit) looked identical to a
+		// genuine "no results", with nothing in the logs to tell them apart.
+		const res = await jikanFetch(url.toString()).catch((err) => {
+			logger.warn(
+				{ query, error: err instanceof Error ? err.message : String(err) },
+				'[MAL] Search request failed'
+			);
+			return null;
+		});
+		if (!res) return [];
+		if (!res.ok) {
+			logger.warn(
+				{ query, status: res.status, statusText: res.statusText },
+				res.status === 429 ? '[MAL] Search rate-limited by Jikan' : '[MAL] Search request not ok'
+			);
+			return [];
+		}
+		const body = (await res.json().catch((err) => {
+			logger.warn(
+				{ query, error: err instanceof Error ? err.message : String(err) },
+				'[MAL] Failed to parse search response'
+			);
+			return null;
+		})) as JikanSearchResponse | null;
 		const items = body?.data ?? [];
 
 		return items.map((item) => ({

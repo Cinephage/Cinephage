@@ -123,16 +123,27 @@
 		}
 	});
 
-	// AniList/MAL provider refs resolve in the background (see +page.server.ts,
-	// not awaited there, so a slow/unmatched provider never blocks first
-	// paint). Merge them in once they land; guard against having navigated to
-	// a different series in the meantime.
+	// AniList/MAL provider refs are resolved client-side after the page has
+	// already rendered, not in the page load - a slow/rate-limited upstream
+	// must never delay first paint. (An earlier version streamed this lookup
+	// as an unawaited promise from +page.server.ts, but that still visibly
+	// delayed first paint in practice.) Skip the fetch entirely when nothing
+	// is missing - most series already have their refs stored from the last
+	// visit. Merge the result in once it lands; guard against having
+	// navigated to a different series in the meantime.
 	$effect(() => {
 		const forSeriesId = data.series.id;
-		data.animeProviderRefsPromise
-			?.then((refs) => {
-				if (seriesState && seriesState.id === forSeriesId) {
-					seriesState.providerRefs = refs;
+		const providers = data.configuredMetadataProviders;
+		const refs = data.series.providerRefs ?? {};
+		const missingEnabledProvider =
+			(providers.anilist && !refs.anilist) || (providers.mal && !refs.mal);
+		if (!missingEnabledProvider) return;
+
+		fetch(`/api/library/series/${forSeriesId}/anime-refs`)
+			.then((res) => (res.ok ? res.json() : null))
+			.then((body: { providerRefs?: Record<string, string> } | null) => {
+				if (body?.providerRefs && seriesState && seriesState.id === forSeriesId) {
+					seriesState.providerRefs = body.providerRefs;
 				}
 			})
 			.catch(() => {
@@ -570,7 +581,11 @@
 	}
 
 	function buildProviderSearchLink(provider: 'anilist' | 'mal'): string {
-		const query = `${series.title}${series.year ? ` ${series.year}` : ''}`;
+		// Title only - AniList/MAL's own search often returns nothing when the
+		// year is appended to the query text (e.g. "Series Title 1992" frequently
+		// fails where "Series Title" alone succeeds). The year is shown alongside
+		// the results for the user to confirm visually instead.
+		const query = series.title;
 		if (provider === 'anilist') {
 			return `https://anilist.co/search/anime?search=${encodeURIComponent(query)}`;
 		}

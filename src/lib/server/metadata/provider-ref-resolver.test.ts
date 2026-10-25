@@ -73,4 +73,59 @@ describe('resolveMissingAnimeProviderRefs', () => {
 		expect(result).toEqual({});
 		expect(buildMetadataProviderRegistryMock).not.toHaveBeenCalled();
 	});
+
+	it("matches via the candidate's native/original title even when the English title differs", async () => {
+		// Real-world case: our stored title has no leading "The", MAL's
+		// title_english does ("The Afterglow Of Zeon"). The native Japanese
+		// title is identical on both sides and should be trusted on its own.
+		const provider = makeProvider(async () => [
+			{
+				id: '906',
+				title: 'Mobile Suit Gundam 0083: The Afterglow Of Zeon',
+				originalTitle: '機動戦士ガンダム0083 ジオンの残光',
+				year: 1992
+			}
+		]);
+		buildMetadataProviderRegistryMock.mockResolvedValue({
+			providers: new Map([['mal', provider]])
+		});
+
+		const result = await resolveMissingAnimeProviderRefs({
+			title: 'Mobile Suit Gundam 0083: Afterglow of Zeon',
+			aliases: ['機動戦士ガンダム0083 ジオンの残光'],
+			year: 1992,
+			isAnime: true,
+			configured: { anilist: false, mal: true }
+		});
+
+		expect(result.mal).toBe('906');
+	});
+
+	it('does not treat two different anime as a match just because their native titles share a number', async () => {
+		// Regression guard for the Unicode-normalize fix: a naive ASCII-only
+		// character filter strips all Japanese text down to whatever digits
+		// survive, which would make any two titles sharing a number (here,
+		// "0083") look identical regardless of the actual Japanese text.
+		const provider = makeProvider(async () => [
+			{
+				id: '999',
+				title: 'Some Unrelated Show 0083',
+				originalTitle: '全く関係のない別の作品0083',
+				year: 1992
+			}
+		]);
+		buildMetadataProviderRegistryMock.mockResolvedValue({
+			providers: new Map([['mal', provider]])
+		});
+
+		const result = await resolveMissingAnimeProviderRefs({
+			title: 'Mobile Suit Gundam 0083: Afterglow of Zeon',
+			aliases: ['機動戦士ガンダム0083 ジオンの残光'],
+			year: 1992,
+			isAnime: true,
+			configured: { anilist: false, mal: true }
+		});
+
+		expect(result.mal).toBeUndefined();
+	});
 });
