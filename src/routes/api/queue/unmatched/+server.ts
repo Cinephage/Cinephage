@@ -6,7 +6,9 @@
  *
  * Query params: clientId?, page? (default 1), limit? (default 25, max 100),
  * search? (case-insensitive contains on the release name, applied before
- * total/pagination so results outside the current page are still found).
+ * total/pagination so results outside the current page are still found),
+ * mediaType? ('movie' | 'tv', resolved from the client's configured
+ * category mapping — see DownloadMonitorService.resolveUnmatchedMediaType).
  */
 
 import { json } from '@sveltejs/kit';
@@ -32,11 +34,15 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	try {
 		const clientId = url.searchParams.get('clientId') ?? undefined;
 		const search = url.searchParams.get('search') ?? undefined;
+		const mediaTypeParam = url.searchParams.get('mediaType');
+		const mediaType =
+			mediaTypeParam === 'movie' || mediaTypeParam === 'tv' ? mediaTypeParam : undefined;
 		const result = await downloadMonitor.listUnmatchedDownloads({
 			clientId,
 			page: toOptionalInt(url.searchParams.get('page')),
 			limit: toOptionalInt(url.searchParams.get('limit')),
-			search
+			search,
+			mediaType
 		});
 
 		return json({ success: true, ...result });

@@ -25,6 +25,8 @@ export interface UnmatchedDownloadItem {
 	status: string;
 	progress: number;
 	category?: string;
+	/** Movie vs TV, resolved from the client's configured category mapping. */
+	mediaType: 'movie' | 'tv' | null;
 	savePath: string;
 	clientId: string;
 	clientName: string;
@@ -133,12 +135,14 @@ export async function getUnmatched(params?: {
 	page?: number;
 	limit?: number;
 	search?: string;
+	mediaType?: 'movie' | 'tv';
 }): Promise<ApiResponse<QueueUnmatchedListResponse>> {
 	const query: Record<string, string> = {};
 	if (params?.clientId) query.clientId = params.clientId;
 	if (params?.page !== undefined) query.page = String(params.page);
 	if (params?.limit !== undefined) query.limit = String(params.limit);
 	if (params?.search) query.search = params.search;
+	if (params?.mediaType) query.mediaType = params.mediaType;
 	return apiGet<QueueUnmatchedListResponse>(`/api/queue/unmatched${buildQuery(query)}`);
 }
 
