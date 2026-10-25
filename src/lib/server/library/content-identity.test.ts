@@ -95,4 +95,28 @@ describe('contentAlreadyPresent', () => {
 			})
 		).toBe(false);
 	});
+
+	it('skips the size/mediaInfo fallback for .strm candidates even when they match exactly', () => {
+		expect(
+			contentAlreadyPresent(
+				{ infoHash: null, size: 100, mediaInfo: MEDIA_INFO },
+				null,
+				100,
+				MEDIA_INFO,
+				true
+			)
+		).toBe(false);
+	});
+
+	it('still trusts an infoHash match for .strm candidates', () => {
+		expect(
+			contentAlreadyPresent(
+				{ infoHash: 'abc123', size: 100, mediaInfo: MEDIA_INFO },
+				'abc123',
+				999,
+				null,
+				true
+			)
+		).toBe(true);
+	});
 });

@@ -1090,6 +1090,8 @@ export class MediaMatcherService {
 					backdropPath: tmdbMovie.backdrop_path,
 					runtime: tmdbMovie.runtime,
 					genres: tmdbMovie.genres?.map((g) => g.name),
+					tmdbCollectionId: tmdbMovie.belongs_to_collection?.id ?? null,
+					collectionName: tmdbMovie.belongs_to_collection?.name ?? null,
 					path: movieFolder || fileName,
 					libraryId: owningLibrary.id,
 					rootFolderId: rootFolder.id,
@@ -1300,6 +1302,16 @@ export class MediaMatcherService {
 				);
 				continue;
 			}
+			// Best-effort: the displaced file's .nfo would otherwise be left
+			// behind as a stale orphan under the old name.
+			try {
+				await deletePhysicalFile(nfoPathFor(oldFilePath), recycleEnabled, rootFolder.path);
+			} catch (err) {
+				logger.warn(
+					{ movieId, fileId: oldFile.id, err: err instanceof Error ? err.message : String(err) },
+					'[MediaMatcher] Failed to delete displaced movie .nfo sidecar (non-fatal)'
+				);
+			}
 			await db.delete(movieFiles).where(eq(movieFiles.id, oldFile.id));
 			logger.info(
 				{ movieId, fileId: oldFile.id, relativePath: oldFile.relativePath },
@@ -1356,6 +1368,16 @@ export class MediaMatcherService {
 					'[MediaMatcher] Failed to delete displaced episode file (issue #627)'
 				);
 				continue;
+			}
+			// Best-effort: the displaced file's .nfo would otherwise be left
+			// behind as a stale orphan under the old name.
+			try {
+				await deletePhysicalFile(nfoPathFor(oldFilePath), recycleEnabled, rootFolder.path);
+			} catch (err) {
+				logger.warn(
+					{ seriesId, fileId: oldFile.id, err: err instanceof Error ? err.message : String(err) },
+					'[MediaMatcher] Failed to delete displaced episode .nfo sidecar (non-fatal)'
+				);
 			}
 			await db.delete(episodeFiles).where(eq(episodeFiles.id, oldFile.id));
 			logger.info(

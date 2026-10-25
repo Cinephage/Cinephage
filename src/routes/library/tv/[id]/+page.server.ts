@@ -19,7 +19,6 @@ import { ACTIVE_DOWNLOAD_STATUSES } from '#lib/types/queue.js';
 import type { QualityProfileSummary } from '#lib/types/library.js';
 import type { TVShowDetails } from '#lib/types/tmdb.js';
 import { tmdb } from '#lib/server/tmdb.js';
-import { resolveMissingAnimeProviderRefs } from '#lib/server/metadata/provider-ref-resolver.js';
 import { getMetadataProviderConfig } from '#lib/server/metadata/provider-settings.js';
 import { getLanguageProfileService } from '#lib/server/subtitles/services/LanguageProfileService.js';
 import { getLanguageSettingsService } from '#lib/server/subtitles/services/LanguageSettingsService.js';
@@ -155,12 +154,6 @@ export interface LibrarySeriesPageData {
 		metadataLanguage?: string | null;
 		preferOriginalTitle?: boolean | null;
 	};
-	/**
-	 * Not awaited by load(), streamed so a slow/unmatched AniList/MAL lookup
-	 * never blocks first paint. series.providerRefs above carries whatever was
-	 * already stored; +page.svelte merges this in once it resolves.
-	 */
-	animeProviderRefsPromise: Promise<Partial<Record<'tmdb' | 'anilist' | 'mal', string>>>;
 	tmdbDetails: TVShowDetails | null;
 	seasons: SeasonWithEpisodes[];
 	qualityProfiles: QualityProfileSummary[];
@@ -456,50 +449,18 @@ export const load: PageServerLoad = async ({ params }): Promise<LibrarySeriesPag
 		mal: providerConfig.animeEnrichmentEnabled
 	};
 
+	// AniList/Jikan(MAL) enrichment is NOT looked up here. It used to be
+	// (first awaited directly, then streamed as an unawaited promise), but
+	// even streamed it still visibly delayed first paint in practice -
+	// something between this app and the browser (proxy, adapter, or
+	// SvelteKit's own streaming semantics) wasn't actually deferring it the
+	// way the "don't await" pattern assumes. Moved to a dedicated endpoint
+	// (/api/library/series/[id]/anime-refs) that the client calls after the
+	// page has already rendered - see +page.svelte. This page only ever
+	// shows whatever provider refs are already stored.
 	const existingProviderRefs =
 		(seriesData.providerRefs as Partial<Record<'tmdb' | 'anilist' | 'mal', string>> | null) ??
 		undefined;
-
-	// Deliberately not awaited: AniList/Jikan enrichment (gated behind the
-	// shared animeEnrichmentEnabled toggle) is a best-effort background
-	// lookup, not something the page should block its first paint on. A
-	// provider that never finds a confident match for this title (common on
-	// MAL/Jikan even when AniList matches fine) would otherwise re-run the
-	// same slow external lookup on every single page view forever, nothing
-	// in the response distinguishes "never attempted" from "attempted, no
-	// match", so there's no reliable signal to cache a negative result on.
-	// Streaming it instead means a stuck/slow/permanently-unmatched provider
-	// only ever costs background time, never page-load time; +page.svelte
-	// merges the refs in once they arrive. See provider-ref-resolver.ts for
-	// the per-fetch and per-provider timeouts that still bound how long this
-	// takes to settle.
-	const animeProviderRefsPromise = resolveMissingAnimeProviderRefs({
-		title: seriesData.title,
-		aliases: [seriesData.originalTitle ?? ''],
-		year: seriesData.year,
-		isAnime: (seriesData.seriesType ?? '').toLowerCase() === 'anime',
-		configured: configuredMetadataProviders,
-		existingRefs: existingProviderRefs
-	}).then((refs) => {
-		// Persist any newly-resolved refs so a successful match, once found,
-		// doesn't need to be re-resolved on a future view either.
-		const hasNewProviderRefs = (['anilist', 'mal'] as const).some(
-			(providerId) => refs[providerId] && !existingProviderRefs?.[providerId]
-		);
-		if (hasNewProviderRefs) {
-			void db
-				.update(series)
-				.set({ providerRefs: refs })
-				.where(eq(series.id, id))
-				.catch((err) => {
-					logger.warn(
-						{ seriesId: id, error: err instanceof Error ? err.message : String(err) },
-						'[LibrarySeries] Failed to persist resolved anime provider refs'
-					);
-				});
-		}
-		return refs;
-	});
 
 	const tmdbDetails = await tmdb.getTVShow(seriesData.tmdbId).catch((err) => {
 		logger.warn(
@@ -525,7 +486,6 @@ export const load: PageServerLoad = async ({ params }): Promise<LibrarySeriesPag
 			added: seriesData.added ?? new Date().toISOString(),
 			percentComplete
 		},
-		animeProviderRefsPromise,
 		tmdbDetails,
 		seasons: seasonsWithEpisodes,
 		qualityProfiles: allQualityProfiles,

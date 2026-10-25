@@ -11,6 +11,10 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtemp, rm, access } from 'node:fs/promises';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createTestDb, clearTestDb, type TestDatabase } from '../../../test/db-helper';
 import { eq, and } from 'drizzle-orm';
 import {
@@ -1307,6 +1311,54 @@ describe('duplicate-file replacement on deliberate (re-)match (issue #627)', () 
 		expect(files[0].relativePath).toBe('Movie X (2020) (Bluray-2160p-x265 DTS7.1).mkv');
 	});
 
+	it("also removes the displaced file's .nfo sidecar, not just the video (no stale orphan)", async () => {
+		const tmpRoot = await mkdtemp(join(tmpdir(), 'cinephage-627-nfo-'));
+		try {
+			await insertRootFolder('rf-627nfo', tmpRoot, 'movie');
+			await testDb.db.insert(movies).values({
+				id: 'm627nfo',
+				tmdbId: 62710,
+				title: 'Movie Nfo (2020)',
+				path: 'Movie Nfo (2020)',
+				rootFolderId: 'rf-627nfo',
+				libraryId: 'lib-1',
+				hasFile: true
+			});
+			const oldRelativePath = 'Movie Nfo (2020) (Bluray-2160p-HDR10 DTS-X-7.1 x265).mkv';
+			await testDb.db.insert(movieFiles).values({
+				id: 'mf627nfo-old',
+				movieId: 'm627nfo',
+				relativePath: oldRelativePath,
+				size: 1000,
+				quality: { resolution: '2160p' }
+			});
+			const movieDir = join(tmpRoot, 'Movie Nfo (2020)');
+			const oldFilePath = join(movieDir, oldRelativePath);
+			const oldNfoPath = join(movieDir, 'Movie Nfo (2020) (Bluray-2160p-HDR10 DTS-X-7.1 x265).nfo');
+			mkdirSync(movieDir, { recursive: true });
+			writeFileSync(oldFilePath, 'old video bytes');
+			writeFileSync(oldNfoPath, '<movie></movie>');
+
+			await insertUnmatchedFile({
+				id: 'uf627nfo',
+				path: join(movieDir, 'Movie Nfo (2020) (Bluray-2160p-x265 DTS7.1).mkv'),
+				rootFolderId: 'rf-627nfo',
+				mediaType: 'movie'
+			});
+			mocks.getMovie.mockResolvedValue({
+				id: 62710,
+				title: 'Movie Nfo (2020)',
+				release_date: '2020-01-01'
+			});
+
+			await mediaMatcherService.acceptMatch('uf627nfo', 62710, 'movie', { allowReplace: true });
+
+			await expect(access(oldNfoPath)).rejects.toThrow();
+		} finally {
+			await rm(tmpRoot, { recursive: true, force: true });
+		}
+	});
+
 	it('does not retire a different resolution bucket in multi-quality mode', async () => {
 		await insertRootFolder('rf-627b', '/mnt/movies-627b', 'movie');
 		await testDb.db.insert(movies).values({
@@ -1447,5 +1499,51 @@ describe('duplicate-file replacement on deliberate (re-)match (issue #627)', () 
 			.where(eq(episodeFiles.seriesId, 's627d'));
 		expect(files).toHaveLength(1);
 		expect(files[0].relativePath).toBe('Season 1/Show X - S01E01 - New Name.mkv');
+	});
+});
+
+describe('collection tagging on manual match', () => {
+	it('tags a newly-created movie with its TMDB collection', async () => {
+		await insertRootFolder('rf-coll', '/mnt/movies-coll', 'movie');
+		await insertUnmatchedFile({
+			id: 'uf-coll',
+			path: '/mnt/movies-coll/Weapons Collection/Weapons (2025)/Weapons (2025).mkv',
+			rootFolderId: 'rf-coll',
+			mediaType: 'movie'
+		});
+		mocks.getMovie.mockResolvedValue({
+			id: 7001,
+			title: 'Weapons',
+			release_date: '2025-08-08',
+			belongs_to_collection: { id: 999, name: 'Weapons Collection' }
+		});
+
+		await mediaMatcherService.acceptMatch('uf-coll', 7001, 'movie');
+
+		const [movie] = await testDb.db.select().from(movies).where(eq(movies.tmdbId, 7001));
+		expect(movie.tmdbCollectionId).toBe(999);
+		expect(movie.collectionName).toBe('Weapons Collection');
+	});
+
+	it('leaves collection fields null when the movie has no TMDB collection', async () => {
+		await insertRootFolder('rf-nocoll', '/mnt/movies-nocoll', 'movie');
+		await insertUnmatchedFile({
+			id: 'uf-nocoll',
+			path: '/mnt/movies-nocoll/Standalone (2024)/Standalone (2024).mkv',
+			rootFolderId: 'rf-nocoll',
+			mediaType: 'movie'
+		});
+		mocks.getMovie.mockResolvedValue({
+			id: 7002,
+			title: 'Standalone',
+			release_date: '2024-01-01',
+			belongs_to_collection: null
+		});
+
+		await mediaMatcherService.acceptMatch('uf-nocoll', 7002, 'movie');
+
+		const [movie] = await testDb.db.select().from(movies).where(eq(movies.tmdbId, 7002));
+		expect(movie.tmdbCollectionId).toBeNull();
+		expect(movie.collectionName).toBeNull();
 	});
 });

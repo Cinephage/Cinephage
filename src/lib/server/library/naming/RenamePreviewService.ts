@@ -39,6 +39,7 @@ import {
 } from '#lib/server/notifications/mediabrowser/index.js';
 import { syncSubtitleRowsForRenames } from '#lib/server/subtitles/subtitle-rename-sync.js';
 import { isSubtitleExtension } from '#lib/server/subtitles/subtitle-content.js';
+import { nfoPathFor } from '#lib/server/library/sidecar/NfoGenerator.js';
 
 const logger = createChildLogger({ logDomain: 'scans' as const });
 
@@ -1712,6 +1713,15 @@ export class RenamePreviewService {
 				mediaId: item.mediaId
 			});
 
+			// Carry the generated .nfo along too, same-folder or cross-folder -
+			// its path is a deterministic stem match (no directory scan needed,
+			// unlike subtitles), so unlike renameSubtitleCompanions this isn't
+			// restricted to same-directory renames. Without this the old .nfo
+			// is orphaned under the stale name while nothing regenerates a new
+			// one to match - at best a missing sidecar, at worst a stale
+			// duplicate sitting next to the renamed video.
+			await this.renameNfoCompanion(item.currentFullPath, item.newFullPath, warnings);
+
 			return {
 				fileId: item.fileId,
 				mediaType: item.mediaType,
@@ -1804,6 +1814,51 @@ export class RenamePreviewService {
 				logger.warn(
 					{ err, mediaType: context.mediaType, mediaId: context.mediaId },
 					'[RenamePreviewService] Failed to sync subtitle rows after companion rename'
+				);
+			}
+		}
+	}
+
+	/**
+	 * Move the generated .nfo sidecar to match the renamed video's new stem
+	 * and/or folder. Best-effort: failures produce a warning, never fail the
+	 * rename - the video file itself already moved successfully by this point.
+	 */
+	private async renameNfoCompanion(
+		oldVideoPath: string,
+		newVideoPath: string,
+		warnings: string[]
+	): Promise<void> {
+		const oldNfoPath = nfoPathFor(oldVideoPath);
+		const newNfoPath = nfoPathFor(newVideoPath);
+		if (oldNfoPath === newNfoPath) return;
+		if (!(await fileExists(oldNfoPath))) return;
+		if (await fileExists(newNfoPath)) {
+			// A .nfo already exists at the destination (e.g. from an earlier
+			// partial rename) - leave both alone rather than overwrite it.
+			return;
+		}
+
+		try {
+			await rename(oldNfoPath, newNfoPath);
+			logger.info(
+				{ from: oldNfoPath, to: newNfoPath },
+				'[RenamePreviewService] Renamed .nfo companion'
+			);
+		} catch {
+			try {
+				const moveResult = await moveFile(oldNfoPath, newNfoPath);
+				if (!moveResult.success) throw new Error(moveResult.error);
+				logger.info(
+					{ from: oldNfoPath, to: newNfoPath },
+					'[RenamePreviewService] Moved .nfo companion (cross-filesystem)'
+				);
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				warnings.push(`.nfo sidecar could not be renamed: ${message}`);
+				logger.warn(
+					{ err, from: oldNfoPath, to: newNfoPath },
+					'[RenamePreviewService] .nfo companion rename failed'
 				);
 			}
 		}

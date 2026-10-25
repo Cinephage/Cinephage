@@ -1302,8 +1302,9 @@ export class ImportService extends EventEmitter {
 		// unmatched download enrolled against a title it's already in).
 		// Skip the physical transfer entirely and point the record at the
 		// file that's already there instead of writing a duplicate.
+		const isStrmFile = extname(mainFile.path).toLowerCase() === '.strm';
 		const duplicateOf = existingFiles.find((file) =>
-			contentAlreadyPresent(file, queueItem.infoHash, mainFile.size, mediaInfo)
+			contentAlreadyPresent(file, queueItem.infoHash, mainFile.size, mediaInfo, isStrmFile)
 		);
 		if (duplicateOf) {
 			destPath = join(movieFolder, duplicateOf.relativePath);
@@ -1969,8 +1970,15 @@ export class ImportService extends EventEmitter {
 		}
 
 		if (result.success) {
-			// Mark as imported (protocol determines if it shows as 'seeding-imported' or 'imported')
-			const importedPath = result.importedFiles[0]?.destPath || downloadPath;
+			// Mark as imported (protocol determines if it shows as 'seeding-imported' or 'imported').
+			// A single imported file is referenced directly; a multi-file batch
+			// (season pack) reports the series folder instead of an arbitrary
+			// one of its files, which would otherwise read as "imported to
+			// episode 1" even when every episode imported successfully.
+			const importedPath =
+				result.importedFiles.length === 1
+					? (result.importedFiles[0]?.destPath ?? downloadPath)
+					: join(rootFolder.path, seriesData.path);
 			const representativeImport = result.importedFiles.find((file) => file.success);
 			await downloadMonitor.markImported(
 				queueItem.id,
@@ -2133,6 +2141,7 @@ export class ImportService extends EventEmitter {
 
 		const seasonNum = matchingEpisodes[0].seasonNumber;
 		const episodeNums = matchingEpisodes.map((episode) => episode.episodeNumber);
+		const episodeIds = matchingEpisodes.map((episode) => episode.id);
 		const firstEpisode = matchingEpisodes[0];
 		const absoluteNumber =
 			firstEpisode?.absoluteEpisodeNumber ??
@@ -2183,9 +2192,17 @@ export class ImportService extends EventEmitter {
 
 		// Content-identity guard (#598): see importMovie for the full
 		// rationale. Reuse the existing row's path instead of transferring
-		// a byte-identical duplicate.
-		const duplicateOf = existingFiles.find((file) =>
-			contentAlreadyPresent(file, queueItem.infoHash, videoFile.size, mediaInfo)
+		// a byte-identical duplicate. Restricted to files that already cover
+		// one of THIS file's episodes - infoHash is release-level, not
+		// file-level, and identical across every file of a multi-episode
+		// acquisition, so without this an unrelated episode from the same
+		// batch would be misread as a duplicate and have its row's
+		// episodeIds clobbered onto this file's episode (issue #637).
+		const isStrmFile = extname(videoFile.path).toLowerCase() === '.strm';
+		const duplicateOf = existingFiles.find(
+			(file) =>
+				file.episodeIds?.some((id) => episodeIds.includes(id)) &&
+				contentAlreadyPresent(file, queueItem.infoHash, videoFile.size, mediaInfo, isStrmFile)
 		);
 		if (duplicateOf) {
 			relativePath = duplicateOf.relativePath;
@@ -2277,8 +2294,6 @@ export class ImportService extends EventEmitter {
 		}
 
 		const importedMetadata = this.buildImportedMetadata(queueItem, videoFile.path, mediaInfo);
-
-		const episodeIds = matchingEpisodes.map((ep) => ep.id);
 
 		// Check for existing files covering these episodes (upgrade scenario).
 		// Coverage rule (acquisition redesign): a multi-episode file is only
@@ -3531,6 +3546,18 @@ export class ImportService extends EventEmitter {
 				};
 			}
 
+			// Best-effort: remove the .nfo sidecar too, so retiring this file
+			// (e.g. an upgrade bringing in a differently-named replacement)
+			// doesn't leave a stale, orphaned .nfo sitting under the old name.
+			try {
+				await deletePhysicalFile(nfoPathFor(fullPath), !!recycleEnabled, rootFolder.path);
+			} catch (error) {
+				logger.warn(
+					{ fileId, path: nfoPathFor(fullPath), err: error },
+					'Failed to delete/recycle .nfo sidecar (non-fatal)'
+				);
+			}
+
 			// Delete database record
 			await db.delete(movieFiles).where(eq(movieFiles.id, fileId));
 
@@ -3619,6 +3646,25 @@ export class ImportService extends EventEmitter {
 					success: false,
 					error: `Physical delete failed: ${message} (row kept)`
 				};
+			}
+
+			// Best-effort: remove the .nfo sidecar too, so retiring this file
+			// (e.g. an upgrade bringing in a differently-named replacement)
+			// doesn't leave a stale, orphaned .nfo sitting under the old name.
+			try {
+				const nfoPath = nfoPathFor(fullPath);
+				if (await fileExists(nfoPath)) {
+					if (recycleEnabled) {
+						await moveToRecycleBin(nfoPath, rootFolder.path);
+					} else {
+						await unlink(nfoPath);
+					}
+				}
+			} catch (error) {
+				logger.warn(
+					{ fileId, path: nfoPathFor(fullPath), err: error },
+					'Failed to delete/recycle .nfo sidecar (non-fatal)'
+				);
 			}
 
 			// Delete database record
