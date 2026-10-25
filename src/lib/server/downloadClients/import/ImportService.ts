@@ -3515,6 +3515,18 @@ export class ImportService extends EventEmitter {
 				};
 			}
 
+			// Best-effort: remove the .nfo sidecar too, so retiring this file
+			// (e.g. an upgrade bringing in a differently-named replacement)
+			// doesn't leave a stale, orphaned .nfo sitting under the old name.
+			try {
+				await deletePhysicalFile(nfoPathFor(fullPath), !!recycleEnabled, rootFolder.path);
+			} catch (error) {
+				logger.warn(
+					{ fileId, path: nfoPathFor(fullPath), err: error },
+					'Failed to delete/recycle .nfo sidecar (non-fatal)'
+				);
+			}
+
 			// Delete database record
 			await db.delete(movieFiles).where(eq(movieFiles.id, fileId));
 
@@ -3603,6 +3615,25 @@ export class ImportService extends EventEmitter {
 					success: false,
 					error: `Physical delete failed: ${message} (row kept)`
 				};
+			}
+
+			// Best-effort: remove the .nfo sidecar too, so retiring this file
+			// (e.g. an upgrade bringing in a differently-named replacement)
+			// doesn't leave a stale, orphaned .nfo sitting under the old name.
+			try {
+				const nfoPath = nfoPathFor(fullPath);
+				if (await fileExists(nfoPath)) {
+					if (recycleEnabled) {
+						await moveToRecycleBin(nfoPath, rootFolder.path);
+					} else {
+						await unlink(nfoPath);
+					}
+				}
+			} catch (error) {
+				logger.warn(
+					{ fileId, path: nfoPathFor(fullPath), err: error },
+					'Failed to delete/recycle .nfo sidecar (non-fatal)'
+				);
 			}
 
 			// Delete database record
