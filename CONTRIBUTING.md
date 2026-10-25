@@ -6,7 +6,7 @@ Want to contribute? Here's how to get set up.
 
 ### Prerequisites
 
-- Node.js 20 or higher
+- Node.js 22.17.0 or higher
 - npm 10 or higher
 - Optional: A running download client for integration testing (qBittorrent, Transmission, etc.)
 
@@ -15,20 +15,26 @@ Want to contribute? Here's how to get set up.
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/cinephage/cinephage.git
+   git clone --branch dev https://github.com/cinephage/cinephage.git
    cd cinephage
    ```
 
 2. Install dependencies:
 
    ```bash
-   npm install
+   npm ci
    ```
 
 3. Copy the environment example and configure:
 
    ```bash
    cp .env.example .env
+   ```
+
+   Set `BETTER_AUTH_SECRET` in `.env` to a random value generated with:
+
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
    ```
 
 4. Start the development server:
@@ -84,8 +90,8 @@ Default sidecar ports:
 ### Running Tests
 
 ```bash
-npm run test        # Run all tests
-npm run test:watch  # Run tests in watch mode
+npm run test                # Run all tests
+npm run test:unit -- --watch # Run tests in watch mode
 ```
 
 ### Type Checking
