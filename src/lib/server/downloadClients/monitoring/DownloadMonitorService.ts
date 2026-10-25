@@ -515,6 +515,23 @@ interface ClientDownloadIndex {
 	fetchFailed: boolean;
 }
 
+// Keyed in the process-wide global symbol registry (not a plain module-level
+// variable) so the singleton survives Vite/SvelteKit dev-mode SSR module
+// re-evaluation. A plain `static instance` field lives on the class, and the
+// class itself gets redefined whenever this module is re-executed - editing
+// any file this service transitively imports can trigger that in dev. Each
+// re-evaluation would otherwise silently create a second DownloadMonitorService
+// with its own live poll loop and its own independent 10-minute orphan-cleanup
+// timer, left running forever with nothing left in the app to stop it -
+// manifesting as duplicate, overlapping background activity (e.g. the same
+// "orphaned" download being rediscovered and removed repeatedly) that looks
+// like a single runaway process but is actually several accumulated ones.
+const DOWNLOAD_MONITOR_GLOBAL_KEY = Symbol.for('cinephage.downloadMonitorService');
+
+interface GlobalWithDownloadMonitor {
+	[DOWNLOAD_MONITOR_GLOBAL_KEY]?: DownloadMonitorService;
+}
+
 /**
  * Download Monitor Service
  *
@@ -523,8 +540,6 @@ interface ClientDownloadIndex {
  * lifecycle management via ServiceManager.
  */
 export class DownloadMonitorService extends EventEmitter implements BackgroundService {
-	private static instance: DownloadMonitorService | null = null;
-
 	readonly name = 'DownloadMonitor';
 	private _status: ServiceStatus = 'pending';
 	private _error?: Error;
@@ -561,17 +576,20 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 	}
 
 	static getInstance(): DownloadMonitorService {
-		if (!DownloadMonitorService.instance) {
-			DownloadMonitorService.instance = new DownloadMonitorService();
+		const g = globalThis as GlobalWithDownloadMonitor;
+		if (!g[DOWNLOAD_MONITOR_GLOBAL_KEY]) {
+			g[DOWNLOAD_MONITOR_GLOBAL_KEY] = new DownloadMonitorService();
 		}
-		return DownloadMonitorService.instance;
+		return g[DOWNLOAD_MONITOR_GLOBAL_KEY];
 	}
 
 	/** Reset the singleton instance (for testing) */
 	static async resetInstance(): Promise<void> {
-		if (DownloadMonitorService.instance) {
-			await DownloadMonitorService.instance.stop();
-			DownloadMonitorService.instance = null;
+		const g = globalThis as GlobalWithDownloadMonitor;
+		const existing = g[DOWNLOAD_MONITOR_GLOBAL_KEY];
+		if (existing) {
+			await existing.stop();
+			delete g[DOWNLOAD_MONITOR_GLOBAL_KEY];
 		}
 	}
 
@@ -634,6 +652,27 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			const reconciled = acquisitionService.reconcileStaleIntents();
 			if (reconciled > 0) {
 				logger.info({ reconciled }, 'Reconciled stale acquisition intents at startup');
+			}
+
+			// Recover queue rows stuck in 'importing' from a crash or ungraceful
+			// restart mid-import. Nothing can legitimately still be importing
+			// immediately after a fresh startup - the in-memory worker/
+			// processingQueue state that would have completed it is gone, and
+			// markImporting()'s atomic guard treats 'importing' as "another
+			// process already has this," so without this reset a row stuck
+			// here never gets picked up again and just shows as permanently
+			// "active" with nothing actually processing it. Reset to
+			// 'completed' so the normal poll-driven import check reconsiders it.
+			const stuckImporting = await db
+				.update(downloadQueue)
+				.set({ status: 'completed' })
+				.where(eq(downloadQueue.status, 'importing'))
+				.returning({ id: downloadQueue.id, title: downloadQueue.title });
+			if (stuckImporting.length > 0) {
+				logger.warn(
+					{ count: stuckImporting.length, items: stuckImporting },
+					'Recovered queue item(s) stuck in importing status at startup'
+				);
 			}
 
 			const manager = getDownloadClientManager();

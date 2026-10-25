@@ -22,15 +22,30 @@ export interface ExistingFileIdentity {
  * size plus full `mediaInfo` field equality - good enough to tell a
  * genuine re-grab of the same release apart from a real upgrade, without
  * needing a file-content hash.
+ *
+ * The fallback is skipped entirely for `.strm` files. Mount-backed `.strm`
+ * (e.g. NZBDav) can be genuinely probed and the result is meaningful, but
+ * MediaInfoService.extractMediaInfo silently degrades to the exact same
+ * hardcoded synthetic mediaInfo (getStrmMediaInfo) on *any* probe hiccup -
+ * mount not ready yet, a timeout, an unreachable URL - which a size+
+ * mediaInfo comparison can't tell apart from a real match. Writing a
+ * `.strm` file is a few bytes, not a real transfer, so there's nothing to
+ * save by risking a false positive here; only a real infoHash match
+ * (genuinely the same grab) is trustworthy enough to skip it.
  */
 export function contentAlreadyPresent(
 	existingFile: ExistingFileIdentity,
 	candidateInfoHash: string | null | undefined,
 	candidateSize: number | null | undefined,
-	candidateMediaInfo: MediaInfo | null | undefined
+	candidateMediaInfo: MediaInfo | null | undefined,
+	isStrm = false
 ): boolean {
 	if (candidateInfoHash && existingFile.infoHash && candidateInfoHash === existingFile.infoHash) {
 		return true;
+	}
+
+	if (isStrm) {
+		return false;
 	}
 
 	if (
