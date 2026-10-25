@@ -26,6 +26,7 @@ import {
 } from '#lib/server/db/schema.js';
 import { eq, and, or, inArray, not, notInArray, isNull, isNotNull, desc, sql } from 'drizzle-orm';
 import { getDownloadClientManager } from '../DownloadClientManager';
+import type { DownloadClientProtocol } from '../DownloadClientManager';
 import { joinCategoryPath, sanitizeCategorySegment } from '../core/client-utils.js';
 import { mapClientPathToLocal } from './PathMapping';
 import { resolveInfoHash } from '../utils/hashUtils';
@@ -193,6 +194,27 @@ function getDownloadContentPath(
 ): string | null {
 	if (download.contentPath) return download.contentPath;
 	return protocol === 'torrent' ? null : download.savePath || null;
+}
+
+// Mirrors DownloadClientManager's IMPLEMENTATION_PROTOCOL_MAP. Kept as a
+// local copy rather than importing the class itself: many existing tests
+// mock '../DownloadClientManager' with only `getDownloadClientManager`, and
+// pulling in the class export here would make those mocks throw.
+const CLIENT_IMPLEMENTATION_PROTOCOL: Record<string, DownloadClientProtocol> = {
+	qbittorrent: 'torrent',
+	transmission: 'torrent',
+	deluge: 'torrent',
+	rtorrent: 'torrent',
+	aria2: 'torrent',
+	sabnzbd: 'usenet',
+	nzbget: 'usenet',
+	realdebrid: 'debrid',
+	torbox: 'debrid'
+};
+
+function getClientProtocol(implementation: string | null | undefined): DownloadClientProtocol {
+	if (!implementation) return 'torrent';
+	return CLIENT_IMPLEMENTATION_PROTOCOL[implementation.toLowerCase()] ?? 'torrent';
 }
 
 function isSamePath(firstPath: string, secondPath: string): boolean {
@@ -3955,7 +3977,10 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 		client: DownloadClient,
 		download: DownloadInfo
 	): Promise<boolean> {
-		const clientDownloadPath = getDownloadContentPath(download, 'torrent');
+		const clientDownloadPath = getDownloadContentPath(
+			download,
+			getClientProtocol(client.implementation)
+		);
 		if (!clientDownloadPath) return true;
 		const localPath = mapClientPathToLocal(
 			clientDownloadPath,
@@ -4214,7 +4239,10 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 				});
 				continue;
 			}
-			const clientDownloadPath = getDownloadContentPath(download, 'torrent');
+			const clientDownloadPath = getDownloadContentPath(
+				download,
+				getClientProtocol(entry.client.implementation)
+			);
 			const localPath = clientDownloadPath
 				? mapClientPathToLocal(
 						clientDownloadPath,
@@ -4260,11 +4288,12 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 		const now = new Date().toISOString();
 		const id = randomUUID();
 		const parsed = releaseParser.parse(download.name);
+		const protocol = getClientProtocol(client.implementation);
 
 		// Same path rule as relink: a metadata-less torrent's savePath is a
 		// root, not this download's content — store null rather than a path
 		// recovery could mistake for its files.
-		const clientDownloadPath = getDownloadContentPath(download, 'torrent');
+		const clientDownloadPath = getDownloadContentPath(download, protocol);
 		const outputPath = clientDownloadPath
 			? mapClientPathToLocal(
 					clientDownloadPath,
@@ -4281,7 +4310,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			downloadId: download.hash,
 			infoHash: download.hash,
 			title: download.name,
-			protocol: 'torrent',
+			protocol,
 			movieId: input.movieId ?? null,
 			seriesId: input.seriesId ?? null,
 			seasonNumber: input.seasonNumber ?? parsed.episode?.season ?? null,
