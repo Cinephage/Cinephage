@@ -483,15 +483,13 @@ describe('ImportService content-identity guard end-to-end (#598)', () => {
 			seasonFolder: true
 		});
 		await testDb.db.insert(seasons).values({ seriesId, seasonNumber: 1 });
-		await testDb.db
-			.insert(episodes)
-			.values({
-				seriesId,
-				seasonNumber: 1,
-				episodeNumber: 1,
-				title: "I'm Used to It",
-				hasFile: false
-			});
+		await testDb.db.insert(episodes).values({
+			seriesId,
+			seasonNumber: 1,
+			episodeNumber: 1,
+			title: "I'm Used to It",
+			hasFile: false
+		});
 
 		const queueItem = makeQueueItem({
 			title: 'Solo.Leveling.S01E01.1080p.CR.WEB-DL.AAC2.0.H.264-OldT',
