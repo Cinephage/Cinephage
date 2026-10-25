@@ -11,6 +11,7 @@ import {
 } from './hdr.js';
 
 function createRelease(overrides: Partial<ReleaseAttributes> = {}): ReleaseAttributes {
+	const hdr = overrides.hdr ?? null;
 	return {
 		title: 'Movie.2024.2160p.WEB-DL.H.265-GROUP',
 		cleanTitle: 'Movie',
@@ -18,7 +19,8 @@ function createRelease(overrides: Partial<ReleaseAttributes> = {}): ReleaseAttri
 		resolution: '2160p',
 		source: 'webdl',
 		codec: 'h265',
-		hdr: null,
+		hdr,
+		hdrFormats: overrides.hdrFormats ?? (hdr ? [hdr] : []),
 		audioCodec: 'unknown',
 		audioChannels: 'unknown',
 		hasAtmos: false,

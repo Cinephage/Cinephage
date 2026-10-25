@@ -80,8 +80,14 @@ export interface FormatCondition {
 	/** For audio channel conditions */
 	audioChannels?: AudioChannels;
 
-	/** For HDR conditions */
-	hdr?: HdrFormat;
+	/**
+	 * For HDR conditions.
+	 *
+	 * `null` intentionally means "no HDR / SDR" — the format builder stores it
+	 * that way. The parser's HdrFormat no longer carries null so that detected
+	 * sets stay free of sentinel values.
+	 */
+	hdr?: HdrFormat | null;
 
 	/** For streaming service conditions */
 	streamingService?: string;
@@ -196,7 +202,17 @@ export interface ReleaseAttributes {
 	resolution: Resolution;
 	source: Source;
 	codec: Codec;
-	hdr: HdrFormat;
+	/**
+	 * Every HDR format detected in the release, best-first.
+	 *
+	 * Requirement and ban matching reads this; scoring collapses it to one
+	 * format so a DV+HDR10+ release is not counted twice.
+	 */
+	hdrFormats: HdrFormat[];
+	/**
+	 * Best detected HDR format (derived from `hdrFormats`), or null for SDR.
+	 */
+	hdr: HdrFormat | null;
 	audioCodec: AudioCodec;
 	audioChannels: AudioChannels;
 	hasAtmos: boolean;

@@ -11,6 +11,7 @@
  */
 
 import type { AudioCodec, AudioChannels, HdrFormat } from '../types.js';
+import { sortHdrFormats } from '../types.js';
 
 interface EnhancedAudioMatch {
 	/** Base audio codec (without Atmos modifier) */
@@ -25,7 +26,7 @@ interface EnhancedAudioMatch {
 	index: number;
 }
 
-interface HdrMatch {
+export interface HdrMatch {
 	hdr: HdrFormat;
 	matchedText: string;
 	index: number;
@@ -180,83 +181,50 @@ const CHANNEL_PATTERNS: Array<{ pattern: RegExp; channels: AudioChannels }> = [
 // =============================================================================
 
 /**
- * HDR format patterns
- * Based on Profilarr patterns with enhancements for DV profile detection
+ * HDR format detectors.
+ *
+ * Each format is detected independently: a release legitimately carries more
+ * than one HDR format at once (Dolby Vision is routinely muxed over an HDR10
+ * or HDR10+ base layer), and the previous first-match-wins list silently
+ * discarded everything after the first hit (#640).
+ *
+ * Order here is irrelevant to detection — it exists only so `extractHdr` can
+ * report the best match. Canonical priority lives in HDR_FORMAT_ORDER.
  */
-const HDR_PATTERNS: Array<{ pattern: RegExp; hdr: NonNullable<HdrFormat> }> = [
-	// =========================================================================
-	// Dolby Vision
-	// =========================================================================
-
-	// DV + HDR10+ (combo format)
+const HDR_DETECTORS: Array<{ hdr: HdrFormat; patterns: RegExp[] }> = [
 	{
-		pattern: /\b(DV|DoVi|Dolby[ ._-]?Vision)[ ._-]?HDR10(?:\+|P|Plus)\b/i,
-		hdr: 'dolby-vision'
+		// Dolby Vision. `\bDV\b` already rejects DVD/DVDRip because a word
+		// boundary cannot exist between two word characters; the old
+		// `(?!D)` guard was over-broad and dropped DV before DTS/DDP/DoVi.
+		hdr: 'dolby-vision',
+		patterns: [/\bDolby[ ._-]?Vision\b/i, /\bDoVi\b/i, /\bDV\b/i]
 	},
 	{
-		pattern: /\bHDR10(?:\+|P|Plus)[ ._-]?(DV|DoVi|Dolby[ ._-]?Vision)\b/i,
-		hdr: 'dolby-vision'
+		// Separators are allowed on both sides of the number because
+		// ReleaseParser normalizes dots to spaces, so "HDR.10.Plus" reaches
+		// here as "HDR 10 Plus".
+		//
+		// `\+` has no trailing `\b`: "+" is a non-word character, so a word
+		// boundary after it exists only when followed by a word character.
+		// Requiring one made "HDR10+" (end of string) fail to match at all.
+		hdr: 'hdr10+',
+		patterns: [/\bHDR[ ._-]?10[ ._-]?\+/i, /\bHDR[ ._-]?10[ ._-]?Plus\b/i, /\bHDR10P\b/i]
 	},
-
-	// DV + HDR10
-	{ pattern: /\b(DV|DoVi|Dolby[ ._-]?Vision)[ ._-]?HDR10\b/i, hdr: 'dolby-vision' },
-	{ pattern: /\bHDR10[ ._-]?(DV|DoVi|Dolby[ ._-]?Vision)\b/i, hdr: 'dolby-vision' },
-
-	// DV + HDR
-	{ pattern: /\b(DV|DoVi|Dolby[ ._-]?Vision)[ ._-]?HDR\b/i, hdr: 'dolby-vision' },
-	{ pattern: /\bHDR[ ._-]?(DV|DoVi|Dolby[ ._-]?Vision)\b/i, hdr: 'dolby-vision' },
-
-	// DV + HLG
-	{ pattern: /\b(DV|DoVi|Dolby[ ._-]?Vision)[ ._-]?HLG\b/i, hdr: 'dolby-vision' },
-	{ pattern: /\bDV[ ._]HLG\b/i, hdr: 'dolby-vision' },
-
-	// DV + SDR
-	{ pattern: /\b(DV|DoVi|Dolby[ ._-]?Vision)[ ._-]?SDR\b/i, hdr: 'dolby-vision' },
-	{ pattern: /\bDV[ ._]SDR\b/i, hdr: 'dolby-vision' },
-
-	// Generic Dolby Vision
-	// Profilarr pattern: \b(dv(?![ .](HLG|SDR))|dovi|dolby[ .]?vision)\b
-	{ pattern: /\bDolby[ ._-]?Vision\b/i, hdr: 'dolby-vision' },
-	{ pattern: /\bDoVi\b/i, hdr: 'dolby-vision' },
-	// DV but not followed by HLG or SDR (those are handled above)
-	{ pattern: /\bDV\b(?![ ._-]?(HLG|SDR|D))/i, hdr: 'dolby-vision' },
-
-	// =========================================================================
-	// HDR10+ (Samsung dynamic HDR)
-	// Pattern: \bHDR10.?(\+|P(lus)?\b)
-	// =========================================================================
-	{ pattern: /\bHDR10[ ._-]?\+/i, hdr: 'hdr10+' },
-	{ pattern: /\bHDR10[ ._-]?Plus\b/i, hdr: 'hdr10+' },
-	{ pattern: /\bHDR10P\b/i, hdr: 'hdr10+' },
-
-	// =========================================================================
-	// HDR10 (static HDR)
-	// Pattern: \bHDR10(?!\+|Plus)\b
-	// =========================================================================
-	{ pattern: /\bHDR10\b(?![ ._-]?\+|Plus)/i, hdr: 'hdr10' },
-	{ pattern: /\bHDR[ ._-]?10\b/i, hdr: 'hdr10' },
-
-	// =========================================================================
-	// HLG (Hybrid Log-Gamma, broadcast HDR)
-	// =========================================================================
-	{ pattern: /\bHLG\b/i, hdr: 'hlg' },
-
-	// =========================================================================
-	// PQ (Perceptual Quantizer)
-	// =========================================================================
-	{ pattern: /\bPQ\b/i, hdr: 'pq' },
-
-	// =========================================================================
-	// SDR (explicit Standard Dynamic Range)
-	// Pattern: \b(SDR)\b
-	// =========================================================================
-	{ pattern: /\bSDR\b/i, hdr: 'sdr' },
-
-	// =========================================================================
-	// Generic HDR (unspecified type, assume basic HDR)
-	// Must be last to not override specific formats
-	// =========================================================================
-	{ pattern: /\bHDR\b(?!10)/i, hdr: 'hdr' }
+	{
+		// Static HDR10 must not also claim HDR10+.
+		hdr: 'hdr10',
+		patterns: [/\bHDR[ ._-]?10\b(?![ ._-]?(?:\+|Plus))/i]
+	},
+	{ hdr: 'hlg', patterns: [/\bHLG\b/i] },
+	// PQ10 is the label used by MediaInfo/probing tools for PQ without a
+	// specific format; `\bPQ\b` alone cannot match it (no boundary at "Q1").
+	{ hdr: 'pq', patterns: [/\bPQ(?:10)?\b/i] },
+	{ hdr: 'sdr', patterns: [/\bSDR\b/i] },
+	{
+		// Generic HDR only when no specific HDR10 variant was named.
+		hdr: 'hdr',
+		patterns: [/\bHDR\b(?![\s._-]*10)/i]
+	}
 ];
 
 // =============================================================================
@@ -308,23 +276,53 @@ export function extractEnhancedAudio(title: string): EnhancedAudioMatch {
 }
 
 /**
- * Extract HDR format from a release title
+ * Extract every HDR format named in a release title, best-first.
+ *
+ * Combo releases return more than one entry. Generic `hdr` is only reported
+ * when no specific variant was named, preserving its "unspecified HDR"
+ * meaning instead of double-reporting alongside HDR10/HLG/PQ.
  *
  * @param title - The release title to parse
- * @returns HDR match info or null if not found
+ * @returns Detected HDR formats in canonical priority order (possibly empty)
  */
-export function extractHdr(title: string): HdrMatch | null {
-	for (const { pattern, hdr } of HDR_PATTERNS) {
-		const match = title.match(pattern);
-		if (match) {
-			return {
-				hdr,
-				matchedText: match[0],
-				index: match.index ?? 0
-			};
+export function extractHdrFormats(title: string): HdrMatch[] {
+	const found = new Map<HdrFormat, HdrMatch>();
+
+	for (const { hdr, patterns } of HDR_DETECTORS) {
+		for (const pattern of patterns) {
+			const match = pattern.exec(title);
+			if (match) {
+				found.set(hdr, { hdr, matchedText: match[0], index: match.index });
+				break;
+			}
 		}
 	}
-	return null;
+
+	// `hdr` and `sdr` are fallback labels, not additional formats. Drop them
+	// once a specific format is present so "DV.HDR10+", "HDR10 HDR" and
+	// "DV.SDR" report what the release actually is instead of contradicting
+	// themselves.
+	if (found.size > 1) {
+		found.delete('hdr');
+	}
+	if (found.size > 1) {
+		found.delete('sdr');
+	}
+
+	return sortHdrFormats(found.keys()).map((format) => found.get(format)!);
+}
+
+/**
+ * Extract the best HDR format from a release title.
+ *
+ * Use {@link extractHdrFormats} when every format matters (requirement and ban
+ * matching); this is the headline-format convenience for naming and display.
+ *
+ * @param title - The release title to parse
+ * @returns Best HDR match info or null if not found
+ */
+export function extractHdr(title: string): HdrMatch | null {
+	return extractHdrFormats(title)[0] ?? null;
 }
 
 /**
@@ -360,7 +358,7 @@ export function hasAudioInfo(title: string): boolean {
  * Check if a string likely contains HDR info
  */
 export function hasHdrInfo(title: string): boolean {
-	return HDR_PATTERNS.some(({ pattern }) => pattern.test(title));
+	return HDR_DETECTORS.some(({ patterns }) => patterns.some((pattern) => pattern.test(title)));
 }
 
 /**

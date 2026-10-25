@@ -12,6 +12,7 @@ export function createReleaseAttributes(overrides?: Partial<ReleaseAttributes>):
 		source: 'remux',
 		codec: 'h265',
 		hdr: null,
+		hdrFormats: [],
 		audioCodec: 'truehd',
 		audioChannels: '7.1',
 		hasAtmos: true,
@@ -156,12 +157,14 @@ export interface ScoringProfileFixture {
 	description: string;
 	tags: string[];
 	upgradesAllowed: boolean;
+	preventDowngrades: boolean;
 	minScore: number;
 	upgradeUntilScore: number;
 	minScoreIncrement: number;
 	resolutionOrder: string[];
 	formatScores: Record<string, number>;
 	allowedProtocols: string[];
+	requiredFormats: { id: string; op: 'AND' | 'OR' }[];
 	isDefault: boolean;
 	movieMinSizeGb: number | null;
 	movieMaxSizeGb: number | null;
@@ -185,12 +188,14 @@ export function createScoringProfile(
 		description: 'Balanced quality profile',
 		tags: [],
 		upgradesAllowed: true,
+		preventDowngrades: false,
 		minScore: 0,
 		upgradeUntilScore: -1,
 		minScoreIncrement: 10,
 		resolutionOrder: ['2160p', '1080p', '720p', '480p'],
 		formatScores: {},
 		allowedProtocols: ['torrent', 'usenet'],
+		requiredFormats: [],
 		isDefault: false,
 		movieMinSizeGb: null,
 		movieMaxSizeGb: null,

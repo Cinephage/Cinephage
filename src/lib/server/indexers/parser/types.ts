@@ -40,7 +40,86 @@ export type BitDepth = '8' | '10' | '12' | 'unknown';
  * - pq: Perceptual Quantizer
  * - sdr: Standard Dynamic Range (explicit)
  */
-export type HdrFormat = 'dolby-vision' | 'hdr10+' | 'hdr10' | 'hdr' | 'hlg' | 'pq' | 'sdr' | null;
+export type HdrFormat = 'dolby-vision' | 'hdr10+' | 'hdr10' | 'hdr' | 'hlg' | 'pq' | 'sdr';
+
+/**
+ * HDR formats ordered best-first. A release can legitimately carry several at
+ * once (DV is routinely muxed over an HDR10/HDR10+ base layer), so detection
+ * returns a set rather than a single value.
+ */
+export const HDR_FORMAT_ORDER: readonly HdrFormat[] = [
+	'dolby-vision',
+	'hdr10+',
+	'hdr10',
+	'hdr',
+	'hlg',
+	'pq',
+	'sdr'
+];
+
+/**
+ * Sort HDR formats into canonical best-first order and drop duplicates.
+ */
+export function sortHdrFormats(formats: Iterable<HdrFormat>): HdrFormat[] {
+	const seen = new Set<HdrFormat>();
+	for (const format of formats) {
+		seen.add(format);
+	}
+	return HDR_FORMAT_ORDER.filter((format) => seen.has(format));
+}
+
+/**
+ * Pick the best HDR format from a set, or null when none were detected.
+ */
+export function bestHdrFormat(formats: readonly HdrFormat[]): HdrFormat | null {
+	return formats.length > 0 ? sortHdrFormats(formats)[0] : null;
+}
+
+/**
+ * Type guard for a canonical HDR format value. Persisted quality and API
+ * payloads carry plain strings, so they need validating before use.
+ */
+export function isHdrFormat(value: unknown): value is HdrFormat {
+	return typeof value === 'string' && (HDR_FORMAT_ORDER as readonly string[]).includes(value);
+}
+
+/**
+ * Extract every HDR format named by a MediaInfo-style label.
+ *
+ * Probe tools report combos in one string ("Dolby Vision HDR10+", "Dolby
+ * Vision HDR10"), so labels are scanned for every format rather than mapped
+ * to a single value. Returns canonical best-first order, empty when nothing
+ * was recognised.
+ */
+export function hdrFormatsFromLabel(label: string | null | undefined): HdrFormat[] {
+	if (!label) return [];
+	const normalized = label.toLowerCase();
+	const found: HdrFormat[] = [];
+
+	if (normalized.includes('dolby') && normalized.includes('vision')) {
+		found.push('dolby-vision');
+	}
+	if (normalized.includes('hdr10+') || normalized.includes('hdr10plus')) {
+		found.push('hdr10+');
+	} else if (normalized.includes('hdr10')) {
+		found.push('hdr10');
+	}
+	if (normalized.includes('hlg')) {
+		found.push('hlg');
+	}
+	if (normalized.includes('pq')) {
+		found.push('pq');
+	}
+	if (normalized.includes('sdr')) {
+		found.push('sdr');
+	}
+	// Bare "HDR" means unspecified HDR; only meaningful on its own.
+	if (found.length === 0 && normalized.includes('hdr')) {
+		found.push('hdr');
+	}
+
+	return sortHdrFormats(found);
+}
 
 /**
  * Audio Codec Types (base codec, not including Atmos modifier)
@@ -108,7 +187,20 @@ export interface ParsedRelease {
 	resolution: Resolution;
 	source: Source;
 	codec: Codec;
-	hdr: HdrFormat;
+	/**
+	 * Every HDR format detected in the title, best-first.
+	 *
+	 * Combo releases (DV over an HDR10+ or HDR10 base layer) legitimately carry
+	 * more than one format. Requirements, bans and the UI must see the whole
+	 * set; scoring picks one via HDR_FORMAT_ORDER to avoid double-counting.
+	 */
+	hdrFormats: HdrFormat[];
+	/**
+	 * Best detected HDR format, or null when none was detected.
+	 * Derived from `hdrFormats` — kept for consumers that only need the
+	 * headline format (naming, display, persisted quality).
+	 */
+	hdr: HdrFormat | null;
 	bitDepth: BitDepth;
 
 	// Canonical audio attributes
@@ -233,17 +325,13 @@ export const AUDIO_CODEC_ORDER: Record<AudioCodec, number> = {
 };
 
 /**
- * HDR format quality hierarchy (higher = better/more capable)
+ * HDR format quality hierarchy (higher = better/more capable).
+ *
+ * Derived from HDR_FORMAT_ORDER so priority is declared in exactly one place.
  */
-export const HDR_ORDER: Record<NonNullable<HdrFormat>, number> = {
-	'dolby-vision': 9, // Dolby Vision
-	'hdr10+': 7, // Samsung dynamic HDR
-	hdr10: 6, // Static HDR
-	hdr: 5, // Generic HDR
-	hlg: 4, // Broadcast HDR
-	pq: 3, // PQ transfer function
-	sdr: 0 // Standard Dynamic Range
-};
+export const HDR_ORDER: Record<HdrFormat, number> = Object.fromEntries(
+	HDR_FORMAT_ORDER.map((format, index) => [format, HDR_FORMAT_ORDER.length - index])
+) as Record<HdrFormat, number>;
 
 /**
  * Audio channel configuration hierarchy (higher = more channels)

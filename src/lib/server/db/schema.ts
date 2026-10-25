@@ -778,6 +778,8 @@ export const movieFiles = sqliteTable(
 			source?: string;
 			codec?: string;
 			hdr?: string;
+			/** Every detected HDR format, best-first (#640). */
+			hdrFormats?: string[];
 		}>(),
 		// MediaInfo extracted data
 		mediaInfo: text('media_info', { mode: 'json' }).$type<{
@@ -1015,6 +1017,8 @@ export const episodeFiles = sqliteTable(
 			source?: string;
 			codec?: string;
 			hdr?: string;
+			/** Every detected HDR format, best-first (#640). */
+			hdrFormats?: string[];
 		}>(),
 		// MediaInfo extracted data (same structure as movieFiles)
 		mediaInfo: text('media_info', { mode: 'json' }).$type<{
@@ -1412,6 +1416,8 @@ export const downloadQueue = sqliteTable(
 			source?: string;
 			codec?: string;
 			hdr?: string;
+			/** Every detected HDR format, best-first (#640). */
+			hdrFormats?: string[];
 			languages?: string[];
 			fileLanguages?: string[];
 		}>(),
@@ -1720,6 +1726,8 @@ export const downloadHistory = sqliteTable('download_history', {
 		source?: string;
 		codec?: string;
 		hdr?: string;
+		/** Every detected HDR format, best-first (#640). */
+		hdrFormats?: string[];
 	}>(),
 
 	// Release group (extracted from release title at grab time)
@@ -1818,6 +1826,8 @@ export const blocklist = sqliteTable(
 			source?: string;
 			codec?: string;
 			hdr?: string;
+			/** Every detected HDR format, best-first (#640). */
+			hdrFormats?: string[];
 		}>(),
 		size: integer('size'),
 		protocol: text('protocol'), // 'torrent' | 'usenet' | 'streaming'
@@ -1926,6 +1936,8 @@ export const pendingReleases = sqliteTable('pending_releases', {
 		source?: string;
 		codec?: string;
 		hdr?: string;
+		/** Every detected HDR format, best-first (#640). */
+		hdrFormats?: string[];
 	}>(),
 	// Delay tracking
 	delayProfileId: text('delay_profile_id').references(() => delayProfiles.id, {

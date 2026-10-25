@@ -17,6 +17,7 @@
 	import { getContext } from 'svelte';
 	import { formatBytes } from '#lib/utils/format.js';
 	import type { ScoreComponents } from '#lib/server/quality/types.js';
+	import { formatHdrFormats } from '#lib/types/format.js';
 	import * as m from '#lib/paraglide/messages.js';
 
 	export interface Release {
@@ -46,6 +47,8 @@
 			source?: string;
 			codec?: string;
 			hdr?: string;
+			/** Every detected HDR format, best-first (#640). */
+			hdrFormats?: string[];
 			releaseGroup?: string;
 			audioCodec?: string;
 			audioChannels?: string;
@@ -168,7 +171,24 @@
 		addTag(release.parsed?.codec);
 		addTag(release.parsed?.audioCodec ? release.parsed.audioCodec.toUpperCase() : undefined);
 		addTag(release.parsed?.hdr);
+		for (const format of release.parsed?.hdrFormats ?? []) {
+			if (format !== release.parsed?.hdr) addTag(format);
+		}
 		return tags;
+	}
+
+	/**
+	 * Every detected HDR format for the Technical Details row, e.g.
+	 * "Dolby Vision + HDR10+". Falls back to the headline `hdr` value for
+	 * responses produced before `hdrFormats` existed.
+	 */
+	function formatHdr(): string | null {
+		const formats = release.parsed?.hdrFormats?.length
+			? release.parsed.hdrFormats
+			: release.parsed?.hdr
+				? [release.parsed.hdr]
+				: [];
+		return formatHdrFormats(formats);
 	}
 
 	/**
@@ -643,10 +663,10 @@
 							<dt class="text-base-content/60">{m.search_labelAudioCodec()}</dt>
 							<dd class="font-medium">{formatAudioSummary() ?? m.common_unknown()}</dd>
 						</div>
-						{#if release.parsed?.hdr}
+						{#if release.parsed?.hdr || release.parsed?.hdrFormats?.length}
 							<div class="flex justify-between">
 								<dt class="text-base-content/60">{m.search_labelHdr()}</dt>
-								<dd class="font-medium">{release.parsed.hdr}</dd>
+								<dd class="font-medium">{formatHdr() ?? m.common_unknown()}</dd>
 							</div>
 						{/if}
 						{#if release.parsed?.edition}

@@ -15,7 +15,7 @@ import type {
 	MatchedFormat,
 	ReleaseAttributes
 } from './types.js';
-
+import type { HdrFormat } from '../indexers/parser/types.js';
 // =============================================================================
 // Regex Pattern Cache
 // =============================================================================
@@ -98,14 +98,22 @@ export function evaluateCondition(
 			rawMatch = release.hasAtmos === true;
 			break;
 
-		case 'hdr':
-			// Handle null HDR (SDR) matching
-			if (condition.hdr === null || condition.hdr === 'sdr') {
-				rawMatch = release.hdr === null || release.hdr === 'sdr';
+		case 'hdr': {
+			// Match against every detected format, not just the headline one: a
+			// DV+HDR10+ release must satisfy an HDR10+ requirement even though
+			// scoring counts it as Dolby Vision.
+			const detected = release.hdrFormats ?? (release.hdr ? [release.hdr] : []);
+			const expected = condition.hdr;
+			if (expected === null || expected === 'sdr') {
+				rawMatch = detected.length === 0 || detected.includes('sdr');
+			} else if (expected === undefined) {
+				// Malformed condition: no format asserted, so it cannot match.
+				rawMatch = false;
 			} else {
-				rawMatch = condition.hdr === release.hdr;
+				rawMatch = detected.includes(expected);
 			}
 			break;
+		}
 
 		case 'streaming_service':
 			rawMatch =
@@ -259,6 +267,7 @@ export function extractAttributes(parsed: {
 	source: string;
 	codec: string;
 	hdr: string | null;
+	hdrFormats?: string[];
 	audioCodec: string;
 	audioChannels: string;
 	hasAtmos: boolean;
@@ -283,6 +292,7 @@ export function extractAttributes(parsed: {
 		source: parsed.source as ReleaseAttributes['source'],
 		codec: parsed.codec as ReleaseAttributes['codec'],
 		hdr: parsed.hdr as ReleaseAttributes['hdr'],
+		hdrFormats: (parsed.hdrFormats ?? (parsed.hdr ? [parsed.hdr] : [])) as HdrFormat[],
 		audioCodec: parsed.audioCodec as ReleaseAttributes['audioCodec'],
 		audioChannels: parsed.audioChannels as ReleaseAttributes['audioChannels'],
 		hasAtmos: parsed.hasAtmos,

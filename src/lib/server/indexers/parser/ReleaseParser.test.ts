@@ -5,7 +5,8 @@ import { isTvRelease } from './patterns/episode';
 import { extractResolution } from './patterns/resolution';
 import { extractSource } from './patterns/source';
 import { extractBitDepth, extractCodec } from './patterns/codec';
-import { extractEnhancedAudio, extractHdr } from './patterns/audio';
+import { extractEnhancedAudio, extractHdr, extractHdrFormats } from './patterns/audio';
+import { hdrFormatsFromLabel } from './types';
 import { extractReleaseGroup } from './patterns/releaseGroup';
 
 describe('ReleaseParser', () => {
@@ -801,6 +802,80 @@ describe('ReleaseParser', () => {
 			expect(extractHdr('HDR')?.hdr).toBe('hdr'); // Generic HDR without version
 			expect(extractHdr('HLG')?.hdr).toBe('hlg');
 		});
+
+		it('should report every HDR format in a combo release (#640)', () => {
+			expect(extractHdrFormats('DV HDR10+').map((m) => m.hdr)).toEqual(['dolby-vision', 'hdr10+']);
+			expect(extractHdrFormats('HDR10+ DV').map((m) => m.hdr)).toEqual(['dolby-vision', 'hdr10+']);
+			expect(extractHdrFormats('DoVi HDR10Plus').map((m) => m.hdr)).toEqual([
+				'dolby-vision',
+				'hdr10+'
+			]);
+			expect(extractHdrFormats('Dolby Vision HDR10').map((m) => m.hdr)).toEqual([
+				'dolby-vision',
+				'hdr10'
+			]);
+			expect(extractHdrFormats('DV HLG').map((m) => m.hdr)).toEqual(['dolby-vision', 'hlg']);
+			// Static and dynamic HDR10 layers are both genuinely present.
+			expect(extractHdrFormats('HDR10 HDR10+').map((m) => m.hdr)).toEqual(['hdr10+', 'hdr10']);
+		});
+
+		it('should keep fallback HDR labels from contradicting a specific format (#640)', () => {
+			// A specific format wins; the generic "HDR" label is not an extra format.
+			expect(extractHdrFormats('DV HDR').map((m) => m.hdr)).toEqual(['dolby-vision']);
+			expect(extractHdrFormats('HDR10 HDR').map((m) => m.hdr)).toEqual(['hdr10']);
+			// Explicit SDR alongside a real HDR format is noise, not a second format.
+			expect(extractHdrFormats('DV SDR').map((m) => m.hdr)).toEqual(['dolby-vision']);
+			// Bare labels still work on their own.
+			expect(extractHdrFormats('HDR').map((m) => m.hdr)).toEqual(['hdr']);
+			expect(extractHdrFormats('SDR').map((m) => m.hdr)).toEqual(['sdr']);
+		});
+
+		it('should not let the DV guard swallow DV before audio tokens (#640)', () => {
+			// The old `(?!D)` lookahead rejected DV followed by DTS/DDP/DoVi.
+			for (const title of [
+				'Movie.2024.2160p.DV.DTS-HD.MA.5.1.H.265-GRP',
+				'Movie.2024.2160p.DV.DDP5.1.H.265-GRP',
+				'Movie.2024.2160p.DV.DoVi-GRP'
+			]) {
+				expect(parseRelease(title).hdrFormats).toEqual(['dolby-vision']);
+			}
+			// ...while still rejecting DVD/DVDRip.
+			expect(parseRelease('Movie.2005.DVDRip.XviD-GRP').hdrFormats).toEqual([]);
+		});
+
+		it('should detect HDR10Plus/HDR10P and PQ10 label variants (#640)', () => {
+			expect(extractHdrFormats('HDR10Plus').map((m) => m.hdr)).toEqual(['hdr10+']);
+			expect(extractHdrFormats('HDR10P').map((m) => m.hdr)).toEqual(['hdr10+']);
+			expect(extractHdrFormats('PQ10').map((m) => m.hdr)).toEqual(['pq']);
+		});
+
+		it('should keep the headline hdr field aligned with hdrFormats (#640)', () => {
+			const parsed = parseRelease('Movie.2024.2160p.DV.HDR10Plus.H.265-GRP');
+			expect(parsed.hdrFormats).toEqual(['dolby-vision', 'hdr10+']);
+			expect(parsed.hdr).toBe(parsed.hdrFormats[0]);
+		});
+
+		it('should detect HDR10+ across separator and suffix spellings (#640)', () => {
+			// "HDR10+" at end of string has no word boundary after "+", so the
+			// pattern must not require one. Dots normalize to spaces, so the
+			// spaced forms reach the detector too.
+			for (const title of [
+				'HDR10+',
+				'HDR10 +',
+				'HDR 10+',
+				'HDR 10 +',
+				'HDR.10+',
+				'HDR-10+',
+				'HDR10Plus',
+				'HDR 10 Plus',
+				'HDR10P'
+			]) {
+				expect(extractHdrFormats(title).map((m) => m.hdr)).toEqual(['hdr10+']);
+			}
+			// ...and static HDR10 is still not promoted to HDR10+.
+			expect(extractHdrFormats('HDR 10').map((m) => m.hdr)).toEqual(['hdr10']);
+			expect(extractHdrFormats('HDR.10').map((m) => m.hdr)).toEqual(['hdr10']);
+		});
 	});
 
 	describe('Release Group Detection', () => {
@@ -1424,5 +1499,31 @@ describe('parseRelease Cyrillic season patterns', () => {
 		const p = parseRelease('Кухня Сезон 1 Серия 5 1080p WEB-DL');
 		expect(p.episode?.season).toBe(1);
 		expect(p.episode?.episodes).toContain(5);
+	});
+});
+
+describe('hdrFormatsFromLabel (#640)', () => {
+	it('reads probe combo labels as a set', () => {
+		expect(hdrFormatsFromLabel('Dolby Vision HDR10+')).toEqual(['dolby-vision', 'hdr10+']);
+		expect(hdrFormatsFromLabel('Dolby Vision HDR10')).toEqual(['dolby-vision', 'hdr10']);
+		expect(hdrFormatsFromLabel('Dolby Vision HLG')).toEqual(['dolby-vision', 'hlg']);
+	});
+
+	it('reads single-format labels', () => {
+		expect(hdrFormatsFromLabel('HDR10+')).toEqual(['hdr10+']);
+		expect(hdrFormatsFromLabel('HDR10')).toEqual(['hdr10']);
+		expect(hdrFormatsFromLabel('HLG')).toEqual(['hlg']);
+		expect(hdrFormatsFromLabel('PQ10')).toEqual(['pq']);
+	});
+
+	it('only reports generic HDR when nothing specific was named', () => {
+		expect(hdrFormatsFromLabel('HDR')).toEqual(['hdr']);
+		expect(hdrFormatsFromLabel('HDR10 HDR')).toEqual(['hdr10']);
+	});
+
+	it('returns an empty set for missing or unrecognised labels', () => {
+		expect(hdrFormatsFromLabel(undefined)).toEqual([]);
+		expect(hdrFormatsFromLabel('')).toEqual([]);
+		expect(hdrFormatsFromLabel('SDR')).toEqual(['sdr']);
 	});
 });

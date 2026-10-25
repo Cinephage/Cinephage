@@ -1295,7 +1295,8 @@ export class DiskScanService extends EventEmitter {
 					resolution: parsed.resolution ?? undefined,
 					source: parsed.source ?? undefined,
 					codec: parsed.codec ?? undefined,
-					hdr: parsed.hdr ?? undefined
+					hdr: parsed.hdr ?? undefined,
+					hdrFormats: parsed.hdrFormats.length > 0 ? parsed.hdrFormats : undefined
 				};
 
 				await db.transaction((tx) => {

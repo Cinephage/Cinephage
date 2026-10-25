@@ -34,7 +34,12 @@ import { resolveMovieMultiQuality } from '#lib/server/quality/movie-buckets.js';
 import { computeMovieReplacement, computeEpisodeReplacement } from './replacement.js';
 import { normalizeFilename } from '#lib/server/library/duplicates/DuplicateDetectionService.js';
 import { contentAlreadyPresent } from '#lib/server/library/content-identity.js';
-import type { Resolution } from '#lib/server/indexers/parser/types.js';
+import type { HdrFormat, Resolution } from '#lib/server/indexers/parser/types.js';
+import {
+	hdrFormatsFromLabel,
+	isHdrFormat,
+	sortHdrFormats
+} from '#lib/server/indexers/parser/types.js';
 import {
 	transferFileWithMode,
 	findVideoFiles,
@@ -214,6 +219,8 @@ export interface ImportResult {
 		source?: string;
 		codec?: string;
 		hdr?: string;
+		/** Every detected HDR format, best-first (#640). */
+		hdrFormats?: string[];
 	};
 	/** How the file reached its destination (hardlink/copy/move/symlink). */
 	transferMode?: TransferMode;
@@ -3299,19 +3306,36 @@ export class ImportService extends EventEmitter {
 		return undefined;
 	}
 
+	/**
+	 * Headline HDR format from a MediaInfo label.
+	 *
+	 * The label parser returns the full set; persisted `hdr` keeps the best
+	 * entry so existing scalar consumers keep working.
+	 */
 	private mapMediaInfoHdr(hdr?: string): string | undefined {
-		const normalized = this.normalizeUnknownValue(hdr)?.toLowerCase();
-		if (!normalized) return undefined;
+		return hdrFormatsFromLabel(this.normalizeUnknownValue(hdr))[0];
+	}
 
-		if (normalized.includes('dolby') && normalized.includes('vision')) return 'dolby-vision';
-		if (normalized.includes('hdr10+')) return 'hdr10+';
-		if (normalized.includes('hdr10')) return 'hdr10';
-		if (normalized.includes('hlg')) return 'hlg';
-		if (normalized.includes('pq')) return 'pq';
-		if (normalized.includes('sdr')) return 'sdr';
-		if (normalized.includes('hdr')) return 'hdr';
+	/**
+	 * Merge every available HDR source into the canonical format set.
+	 *
+	 * Stored queue metadata wins when present (it was resolved at grab time);
+	 * otherwise parsed titles and the MediaInfo label are combined, because a
+	 * single source can miss a format the others saw.
+	 */
+	private resolveHdrFormats(sources: {
+		stored?: string[] | null;
+		parsed?: HdrFormat[][];
+		mediaInfoLabel?: string;
+	}): HdrFormat[] | undefined {
+		const stored = (sources.stored ?? []).filter(isHdrFormat);
+		if (stored.length > 0) {
+			return sortHdrFormats(stored);
+		}
 
-		return undefined;
+		const combined = (sources.parsed ?? []).flat();
+		const resolved = sortHdrFormats([...combined, ...hdrFormatsFromLabel(sources.mediaInfoLabel)]);
+		return resolved.length > 0 ? resolved : undefined;
 	}
 
 	private buildImportedMetadata(
@@ -3332,6 +3356,8 @@ export class ImportService extends EventEmitter {
 			source?: string;
 			codec?: string;
 			hdr?: string;
+			/** Every detected HDR format, best-first (#640). */
+			hdrFormats?: string[];
 		};
 	} {
 		const queueParsed = this.parser.parse(queueItem.title);
@@ -3379,7 +3405,12 @@ export class ImportService extends EventEmitter {
 					queueParsed.hdr ?? undefined,
 					sourceParsed.hdr ?? undefined,
 					this.mapMediaInfoHdr(mediaInfo?.videoHdrFormat)
-				)
+				),
+				hdrFormats: this.resolveHdrFormats({
+					stored: queueQuality?.hdrFormats,
+					parsed: [queueParsed.hdrFormats, sourceParsed.hdrFormats],
+					mediaInfoLabel: mediaInfo?.videoHdrFormat
+				})
 			}
 		};
 	}

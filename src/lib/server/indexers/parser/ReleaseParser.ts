@@ -13,7 +13,7 @@ import type { ParsedRelease } from './types.js';
 import { extractResolution } from './patterns/resolution.js';
 import { extractSource } from './patterns/source.js';
 import { extractBitDepth, extractCodec } from './patterns/codec.js';
-import { extractEnhancedAudio, extractHdr } from './patterns/audio.js';
+import { extractEnhancedAudio, extractHdrFormats } from './patterns/audio.js';
 import { extractLanguages } from './patterns/language.js';
 import { extractEpisode, extractTitleBeforeEpisode } from './patterns/episode.js';
 import { extractReleaseGroup } from './patterns/releaseGroup.js';
@@ -125,7 +125,8 @@ export class ReleaseParser {
 		const codecMatch = extractCodec(normalized);
 		const bitDepthMatch = extractBitDepth(normalized);
 		const enhancedAudio = extractEnhancedAudio(normalized);
-		const hdrMatch = extractHdr(normalized);
+		const hdrMatches = extractHdrFormats(normalized);
+		const hdrFormats = hdrMatches.map((match) => match.hdr);
 		const streamingService = this.extractStreamingService(normalized);
 
 		// Extract episode info (determines if TV release)
@@ -142,7 +143,7 @@ export class ReleaseParser {
 			codecMatch?.index,
 			bitDepthMatch?.index,
 			enhancedAudio.index,
-			hdrMatch?.index
+			hdrMatches[0]?.index
 		]);
 		const year = this.extractYear(normalized);
 		const edition = this.extractEdition(normalized);
@@ -184,7 +185,8 @@ export class ReleaseParser {
 			resolution: resolutionMatch?.resolution ?? 'unknown',
 			source: sourceMatch?.source ?? 'unknown',
 			codec: codecMatch?.codec ?? 'unknown',
-			hdr: hdrMatch?.hdr ?? null,
+			hdr: hdrFormats[0] ?? null,
+			hdrFormats,
 			bitDepth: bitDepthMatch?.bitDepth ?? 'unknown',
 			audioCodec: enhancedAudio.codec,
 			audioChannels: enhancedAudio.channels,

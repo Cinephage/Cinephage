@@ -17,6 +17,8 @@ import type {
 } from './types.js';
 import { matchFormats, extractAttributes } from './matcher.js';
 import { getActiveFormats } from './formats/registry.js';
+import { ALL_HDR_FORMATS } from './formats/hdr.js';
+import { BANNED_SCORE } from './types.js';
 import { ReleaseParser } from '../indexers/parser/ReleaseParser.js';
 import { RESOLUTION_ORDER } from '../indexers/parser/types.js';
 import { createChildLogger } from '#lib/logging/index.js';
@@ -54,14 +56,18 @@ export function scoreRelease(
 	// 1. Extract attributes if not provided
 	const attrs = attributes ?? parseRelease(releaseName);
 
-	// 2. Match all formats against the release
-	let matchedFormats = matchFormats(attrs, getActiveFormats());
+	// 2. Match all formats against the release. This is the full detection
+	//    set: required-format checks, bans and the UI all read it, so it must
+	//    not be collapsed.
+	const detectedFormats = matchFormats(attrs, getActiveFormats());
 
-	// 2.5 Apply mutual exclusivity rules (only count best format per category)
-	matchedFormats = applyMutualExclusivity(matchedFormats, profile);
+	// 3. Collapse mutually exclusive formats (HDR) for scoring only. A
+	//    DV+HDR10+ release is one HDR pick, not two — but collapsing the
+	//    detected set would hide an HDR10+ requirement or ban.
+	const scoredFormatSelection = applyMutualExclusivity(detectedFormats, profile);
 
-	// 3. Calculate scores based on profile
-	const scoredFormats = calculateFormatScores(matchedFormats, profile);
+	// 4. Calculate scores based on profile
+	const scoredFormats = calculateFormatScores(scoredFormatSelection, profile);
 
 	// Debug logging for scoring issues
 	const formatScoresCount = Object.keys(profile.formatScores).length;
@@ -74,7 +80,8 @@ export function scoreRelease(
 				profileName: profile.name,
 				formatScoresCount,
 				formatScoresKeys: Object.keys(profile.formatScores),
-				matchedFormatIds: matchedFormats.map((f) => f.format.id),
+				matchedFormatIds: detectedFormats.map((f) => f.format.id),
+				scoredFormatIds: scoredFormatSelection.map((f) => f.format.id),
 				scoredFormats: scoredFormats.map((f) => ({
 					id: f.format.id,
 					name: f.format.name,
@@ -86,17 +93,23 @@ export function scoreRelease(
 		);
 	}
 
-	// 4. Build score breakdown by category
+	// 5. Build score breakdown by category
 	const breakdown = buildBreakdown(scoredFormats);
 
-	// 5. Calculate total score
+	// 6. Calculate total score
 	const totalScore = scoredFormats.reduce((sum, f) => sum + f.score, 0);
 
-	// 6. Check for bans (any format with extremely negative score)
-	const isBanned = scoredFormats.some((f) => f.score <= -999999);
-	const bannedReasons = scoredFormats.filter((f) => f.score <= -999999).map((f) => f.format.name);
+	// 7. Check for bans. Bans are evaluated against every detected format, not
+	//    the scoring selection: a banned lower-priority format (HDR10+ banned,
+	//    release also has DV) must still ban the release rather than being
+	//    swallowed by mutual exclusivity.
+	const bannedFormats = detectedFormats.filter(
+		(f) => (profile.formatScores[f.format.id] ?? 0) <= BANNED_SCORE
+	);
+	const isBanned = bannedFormats.length > 0;
+	const bannedReasons = bannedFormats.map((f) => f.format.name);
 
-	// 7. Check file size limits (media-specific)
+	// 8. Check file size limits (media-specific)
 	let sizeRejected = false;
 	let sizeRejectionReason: string | undefined;
 
@@ -172,12 +185,22 @@ export function scoreRelease(
 	const meetsMinimum =
 		!isBanned && !sizeRejected && !protocolRejected && totalScore >= (profile.minScore ?? 0);
 
+	// Full detection set with the profile's scores attached. Scoring used a
+	// mutually-exclusive subset, so a format that was collapsed out for
+	// scoring still appears here with its configured score.
+	const formatScores = new Map(scoredFormats.map((f) => [f.format.id, f.score]));
+	const matchedFormats: ScoredFormat[] = detectedFormats.map((mf) => ({
+		format: mf.format,
+		conditionResults: mf.conditionResults,
+		score: formatScores.get(mf.format.id) ?? profile.formatScores[mf.format.id] ?? 0
+	}));
+
 	return {
 		releaseName,
 		profile: profile.name,
 		resolution: attrs.resolution,
 		totalScore: isBanned ? -Infinity : totalScore,
-		matchedFormats: scoredFormats,
+		matchedFormats,
 		breakdown,
 		meetsMinimum,
 		isBanned,
@@ -189,16 +212,13 @@ export function scoreRelease(
 	};
 }
 
-// HDR format priority order (most specific/best first)
-const HDR_PRIORITY = [
-	'hdr-dolby-vision', // Dolby Vision
-	'hdr-hdr10plus', // HDR10+ dynamic
-	'hdr-hdr10', // HDR10 static
-	'hdr-generic', // Generic HDR
-	'hdr-hlg', // HLG
-	'hdr-pq', // PQ
-	'hdr-sdr' // SDR (lowest)
-];
+/**
+ * HDR format ids in scoring priority order.
+ *
+ * ALL_HDR_FORMATS is already declared best-first, so this stays in sync with
+ * the format definitions rather than duplicating their ids here.
+ */
+const HDR_PRIORITY: string[] = ALL_HDR_FORMATS.map((format) => format.id);
 
 /**
  * Apply mutual exclusivity rules to prevent double-counting

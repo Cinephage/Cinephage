@@ -17,6 +17,7 @@ import {
 } from './audio.js';
 
 function createRelease(overrides: Partial<ReleaseAttributes> = {}): ReleaseAttributes {
+	const hdr = overrides.hdr ?? null;
 	return {
 		title: 'Movie.2024.2160p.UHD.BluRay.REMUX.HEVC.TrueHD.Atmos.7.1-GROUP',
 		cleanTitle: 'Movie',
@@ -24,7 +25,8 @@ function createRelease(overrides: Partial<ReleaseAttributes> = {}): ReleaseAttri
 		resolution: '2160p',
 		source: 'remux',
 		codec: 'h265',
-		hdr: null,
+		hdr,
+		hdrFormats: overrides.hdrFormats ?? (hdr ? [hdr] : []),
 		audioCodec: 'truehd',
 		audioChannels: '7.1',
 		hasAtmos: true,

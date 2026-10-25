@@ -81,24 +81,67 @@ function normalizeCodec(codec: string | null | undefined): string | undefined {
 }
 
 /**
- * Normalize HDR format names
+ * Normalize HDR format names to canonical parser values.
+ *
+ * Storage keeps canonical values ('dolby-vision', 'hdr10+'); display labels
+ * are applied at render time. Writing 'DV'/'HDR10+' here previously made the
+ * stored value unmatchable by format conditions, which compare canonically.
  */
 function normalizeHdr(hdr: string | null | undefined): string | undefined {
 	if (!hdr) return undefined;
 
 	const normalized = hdr.toLowerCase();
 	const hdrMap: Record<string, string> = {
-		hdr: 'HDR',
-		hdr10: 'HDR10',
-		'hdr10+': 'HDR10+',
-		hdr10plus: 'HDR10+',
-		dv: 'DV',
-		'dolby vision': 'DV',
-		dolbyvision: 'DV',
-		hlg: 'HLG'
+		hdr: 'hdr',
+		hdr10: 'hdr10',
+		'hdr10+': 'hdr10+',
+		hdr10plus: 'hdr10+',
+		dv: 'dolby-vision',
+		'dolby vision': 'dolby-vision',
+		dolbyvision: 'dolby-vision',
+		'dolby-vision': 'dolby-vision',
+		dovi: 'dolby-vision',
+		hlg: 'hlg',
+		pq: 'pq',
+		pq10: 'pq',
+		sdr: 'sdr'
 	};
 
-	return hdrMap[normalized] || hdr.toUpperCase();
+	return hdrMap[normalized];
+}
+
+/**
+ * Build the stored quality object from a parsed release name.
+ *
+ * Returns undefined when the name yielded no quality evidence at all.
+ */
+function buildQuality(
+	parsed: ReturnType<ReleaseParser['parse']>
+):
+	| { resolution?: string; source?: string; codec?: string; hdr?: string; hdrFormats?: string[] }
+	| undefined {
+	const resolution = parsed.resolution !== 'unknown' ? parsed.resolution : undefined;
+	const source = normalizeSource(parsed.source);
+	const codec = normalizeCodec(parsed.codec);
+
+	if (!resolution && !source && !codec) {
+		return undefined;
+	}
+
+	const hdrFormats =
+		parsed.hdrFormats.length > 0
+			? [...parsed.hdrFormats]
+			: parsed.hdr
+				? [normalizeHdr(parsed.hdr)].filter((value): value is string => Boolean(value))
+				: [];
+
+	return {
+		resolution,
+		source,
+		codec,
+		hdr: hdrFormats[0] as string | undefined,
+		hdrFormats: hdrFormats.length > 0 ? hdrFormats : undefined
+	};
 }
 
 export interface BackfillResult {
@@ -141,21 +184,11 @@ export async function backfillMissingQuality(): Promise<BackfillResult> {
 				const nameToparse =
 					file.sceneName || file.relativePath.split('/').pop() || file.relativePath;
 				const parsed = parser.parse(nameToparse);
-
-				// Normalize the values with proper capitalization
-				const resolution = parsed.resolution !== 'unknown' ? parsed.resolution : undefined;
-				const source = normalizeSource(parsed.source);
-				const codec = normalizeCodec(parsed.codec);
-				const hdr = normalizeHdr(parsed.hdr);
+				const quality = buildQuality(parsed);
 
 				// Only update if we parsed any quality info
-				if (resolution || source || codec) {
-					await db
-						.update(episodeFiles)
-						.set({
-							quality: { resolution, source, codec, hdr }
-						})
-						.where(eq(episodeFiles.id, file.id));
+				if (quality) {
+					await db.update(episodeFiles).set({ quality }).where(eq(episodeFiles.id, file.id));
 
 					result.episodeFilesUpdated++;
 				} else {
@@ -201,21 +234,11 @@ export async function backfillMissingQuality(): Promise<BackfillResult> {
 				const nameToParse =
 					file.sceneName || file.relativePath.split('/').pop() || file.relativePath;
 				const parsed = parser.parse(nameToParse);
-
-				// Normalize the values with proper capitalization
-				const resolution = parsed.resolution !== 'unknown' ? parsed.resolution : undefined;
-				const source = normalizeSource(parsed.source);
-				const codec = normalizeCodec(parsed.codec);
-				const hdr = normalizeHdr(parsed.hdr);
+				const quality = buildQuality(parsed);
 
 				// Only update if we parsed any quality info
-				if (resolution || source || codec) {
-					await db
-						.update(movieFiles)
-						.set({
-							quality: { resolution, source, codec, hdr }
-						})
-						.where(eq(movieFiles.id, file.id));
+				if (quality) {
+					await db.update(movieFiles).set({ quality }).where(eq(movieFiles.id, file.id));
 
 					result.movieFilesUpdated++;
 				} else {

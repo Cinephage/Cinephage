@@ -9,6 +9,7 @@ import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'scans' as const });
 import { parseRelease } from '#lib/server/indexers/parser/ReleaseParser.js';
+import { hdrFormatsFromLabel } from '#lib/server/indexers/parser/types.js';
 import { isVideoFile, mediaInfoService, MediaInfoService } from '#lib/server/library/media-info.js';
 import { unmatchedFileService } from '#lib/server/library/unmatched-file-service.js';
 import { namingSettingsService } from '#lib/server/library/naming/NamingSettingsService.js';
@@ -1721,19 +1722,14 @@ export class ManualImportService {
 		return undefined;
 	}
 
+	/**
+	 * Headline HDR format from a probe label.
+	 *
+	 * Shares the canonical label parser with the import service so probe
+	 * combos ("Dolby Vision HDR10+") are recognised identically in both paths.
+	 */
 	private mapMediaInfoHdr(hdr?: string): string | undefined {
-		const normalized = this.normalizeMetadataToken(hdr)?.toLowerCase();
-		if (!normalized) return undefined;
-
-		if (normalized.includes('dolby') && normalized.includes('vision')) return 'dolby-vision';
-		if (normalized.includes('hdr10+')) return 'hdr10+';
-		if (normalized.includes('hdr10')) return 'hdr10';
-		if (normalized.includes('hlg')) return 'hlg';
-		if (normalized.includes('pq')) return 'pq';
-		if (normalized.includes('sdr')) return 'sdr';
-		if (normalized.includes('hdr')) return 'hdr';
-
-		return undefined;
+		return hdrFormatsFromLabel(this.normalizeMetadataToken(hdr))[0];
 	}
 
 	private mapMediaInfoAudioChannels(channels?: number): string | undefined {

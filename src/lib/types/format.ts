@@ -305,6 +305,20 @@ export const HDR_LABELS: Record<NonNullable<HdrFormat> | 'sdr', string> = {
 };
 
 /**
+ * Render a set of detected HDR formats for display.
+ *
+ * Combo releases legitimately carry more than one format ("Dolby Vision +
+ * HDR10+"), so they are joined rather than collapsed to the headline format.
+ * Returns null when nothing was detected.
+ */
+export function formatHdrFormats(formats: readonly string[] | null | undefined): string | null {
+	if (!formats || formats.length === 0) return null;
+	return formats
+		.map((format) => HDR_LABELS[format as NonNullable<HdrFormat>] ?? format)
+		.join(' + ');
+}
+
+/**
  * Available streaming services for condition matching
  */
 export const AVAILABLE_STREAMING_SERVICES = [
