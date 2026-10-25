@@ -6,7 +6,7 @@ Want to contribute? Here's how to get set up.
 
 ### Prerequisites
 
-- Node.js 22 LTS (22.22.2+) or 24 LTS (24.15.0+)
+- Node.js 22.17.0 or higher
 - npm 10 or higher
 - Optional: A running download client for integration testing (qBittorrent, Transmission, etc.)
 
