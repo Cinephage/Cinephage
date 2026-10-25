@@ -100,6 +100,35 @@
 		}
 	});
 
+	// AniList/MAL provider refs are resolved client-side after the page has
+	// already rendered, not in the page load - a slow/rate-limited upstream
+	// must never delay first paint. (An earlier version streamed this lookup
+	// as an unawaited promise from +page.server.ts, but that still visibly
+	// delayed first paint in practice.) Skip the fetch entirely when nothing
+	// is missing - most movies already have their refs stored from the last
+	// visit. Merge the result in once it lands; guard against having
+	// navigated to a different movie in the meantime.
+	$effect(() => {
+		const forMovieId = data.movie.id;
+		const providers = data.configuredMetadataProviders;
+		const refs = data.movie.providerRefs ?? {};
+		const missingEnabledProvider =
+			(providers.anilist && !refs.anilist) || (providers.mal && !refs.mal);
+		if (!missingEnabledProvider) return;
+
+		fetch(`/api/library/movies/${forMovieId}/anime-refs`)
+			.then((res) => (res.ok ? res.json() : null))
+			.then((body: { providerRefs?: Record<string, string> } | null) => {
+				if (body?.providerRefs && movieState && movieState.id === forMovieId) {
+					movieState.providerRefs = body.providerRefs;
+				}
+			})
+			.catch(() => {
+				// Best-effort enrichment; the page already rendered with whatever
+				// refs were already stored.
+			});
+	});
+
 	// SSE Connection - internally handles browser/SSR
 	const sse = createDynamicSSE<{
 		'media:updated': { movie: LibraryMovie; queueItem: PageData['queueItem'] };
@@ -407,7 +436,11 @@
 	);
 
 	function buildProviderSearchLink(provider: 'anilist' | 'mal'): string {
-		const query = `${movie.title}${movie.year ? ` ${movie.year}` : ''}`;
+		// Title only - AniList/MAL's own search often returns nothing when the
+		// year is appended to the query text (e.g. "Movie Title 1992" frequently
+		// fails where "Movie Title" alone succeeds). The year is shown alongside
+		// the results for the user to confirm visually instead.
+		const query = movie.title;
 		if (provider === 'anilist') {
 			return `https://anilist.co/search/anime?search=${encodeURIComponent(query)}`;
 		}

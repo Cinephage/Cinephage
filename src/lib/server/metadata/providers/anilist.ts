@@ -5,6 +5,9 @@ import type {
 	MetadataSearchResult,
 	MetadataTitleVariant
 } from './types.js';
+import { createChildLogger } from '#lib/logging/index.js';
+
+const logger = createChildLogger({ module: 'AniListProvider', logDomain: 'system' });
 
 interface AniListTitle {
 	romaji?: string | null;
@@ -124,10 +127,29 @@ export class AniListProvider implements MetadataProvider {
 			// resolveMissingAnimeProviderRefs), so an unresponsive upstream here
 			// previously meant an unbounded page-load stall.
 			signal: AbortSignal.timeout(5000)
-		}).catch(() => null);
+		}).catch((err) => {
+			logger.warn(
+				{ query, error: err instanceof Error ? err.message : String(err) },
+				'[AniList] Search request failed'
+			);
+			return null;
+		});
 
-		if (!res?.ok) return [];
-		const data = (await res.json()) as { data?: { Page?: { media?: AniListMedia[] } } };
+		if (!res) return [];
+		if (!res.ok) {
+			logger.warn(
+				{ query, status: res.status, statusText: res.statusText },
+				res.status === 429 ? '[AniList] Search rate-limited' : '[AniList] Search request not ok'
+			);
+			return [];
+		}
+		const data = (await res.json().catch((err) => {
+			logger.warn(
+				{ query, error: err instanceof Error ? err.message : String(err) },
+				'[AniList] Failed to parse search response'
+			);
+			return { data: undefined };
+		})) as { data?: { Page?: { media?: AniListMedia[] } } };
 		const media = data.data?.Page?.media ?? [];
 
 		return media.map((item) => ({
