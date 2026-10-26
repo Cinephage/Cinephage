@@ -496,7 +496,8 @@ export class LibraryEntityService {
 			.select({
 				id: rootFolders.id,
 				mediaType: rootFolders.mediaType,
-				mediaSubType: rootFolders.mediaSubType
+				mediaSubType: rootFolders.mediaSubType,
+				isDefault: rootFolders.isDefault
 			})
 			.from(rootFolders)
 			.where(
@@ -551,7 +552,14 @@ export class LibraryEntityService {
 				.values({
 					libraryId: preferredLibraryId,
 					rootFolderId: folder.id,
-					isDefault: false,
+					// Mirror the root folder's own isDefault flag instead of
+					// hardcoding false - this delete+reinsert runs on every
+					// reconcile pass (after nearly every library/root-folder
+					// write) and was unconditionally wiping out whatever
+					// isDefault assignRootFoldersToLibrary had just set,
+					// leaving normalizeLibraryRootFolderState to fall back to
+					// "oldest attachment wins" instead of the real signal.
+					isDefault: folder.isDefault ?? false,
 					createdAt: now
 				})
 				.onConflictDoNothing();
@@ -661,13 +669,18 @@ export class LibraryEntityService {
 			await db
 				.delete(libraryRootFolders)
 				.where(inArray(libraryRootFolders.rootFolderId, rootFolderIds));
+
+			// isDefault here is provisional - the reconcileRootFolderAssignments()
+			// call below runs immediately after and re-derives it from each root
+			// folder's own isDefault flag (the real signal), so there's no need
+			// to compute it here. Plain false is fine as a starting value.
 			await db
 				.insert(libraryRootFolders)
 				.values(
-					rootFolderIds.map((rootFolderId, index) => ({
+					rootFolderIds.map((rootFolderId) => ({
 						libraryId,
 						rootFolderId,
-						isDefault: index === 0,
+						isDefault: false,
 						createdAt: new Date().toISOString()
 					}))
 				)

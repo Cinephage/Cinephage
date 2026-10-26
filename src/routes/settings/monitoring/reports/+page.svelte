@@ -869,7 +869,9 @@
 			root_folder: m.reports_stage_root_folder(),
 			library_entity: m.reports_stage_library_entity(),
 			transfer: m.reports_stage_transfer(),
-			max_retries: m.reports_stage_max_retries()
+			max_retries: m.reports_stage_max_retries(),
+			unmatched_accept: m.reports_stage_unmatched_accept(),
+			unmatched_attach: m.reports_stage_unmatched_attach()
 		};
 		return stage ? (map[stage] ?? stage) : '-';
 	}
@@ -2330,6 +2332,8 @@
 				<option value="library_entity">{m.reports_stage_library_entity()}</option>
 				<option value="transfer">{m.reports_stage_transfer()}</option>
 				<option value="max_retries">{m.reports_stage_max_retries()}</option>
+				<option value="unmatched_accept">{m.reports_stage_unmatched_accept()}</option>
+				<option value="unmatched_attach">{m.reports_stage_unmatched_attach()}</option>
 			</select>
 			<select
 				class="select w-full border-base-content/20 bg-base-200 select-sm sm:w-auto"

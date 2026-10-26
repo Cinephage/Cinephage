@@ -26,6 +26,7 @@
 			case 'mediaType':
 				return value === 'tv' ? m.common_tvShows() : m.common_movies();
 			case 'protocol':
+			case 'unmatchedStatus':
 				return String(value).charAt(0).toUpperCase() + String(value).slice(1);
 			case 'isUpgrade':
 				return m.activity_activeFilters_upgradesOnly();
@@ -50,6 +51,7 @@
 	function getFilterIcon(key: keyof ActivityFilters) {
 		switch (key) {
 			case 'status':
+			case 'unmatchedStatus':
 				return Monitor;
 			case 'mediaType':
 				return HardDrive;

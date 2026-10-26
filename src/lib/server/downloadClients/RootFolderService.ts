@@ -5,7 +5,7 @@
 
 import { db } from '#lib/server/db/index.js';
 import { rootFolders as rootFoldersTable } from '#lib/server/db/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, asc } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { ValidationError } from '#lib/errors/index.js';
 import { createChildLogger } from '#lib/logging/index.js';
@@ -241,6 +241,33 @@ export class RootFolderService {
 		// If this is being set as default, unset any existing defaults for this media type + subtype.
 		const mediaType = updates.mediaType ?? existing.mediaType;
 		const mediaSubType = updates.mediaSubType ?? existing.mediaSubType;
+
+		// A default must always exist for a media type + subtype as long as
+		// at least one root folder exists for it - unsetting the current
+		// default without designating a replacement is rejected outright
+		// rather than silently auto-recovered. The only way to change which
+		// folder is default is to set a different one, which already
+		// unsets this one as a side effect (see the isDefault branch below).
+		if (updates.isDefault === false && existing.isDefault) {
+			const siblings = await db
+				.select({ id: rootFoldersTable.id })
+				.from(rootFoldersTable)
+				.where(
+					and(
+						eq(rootFoldersTable.mediaType, existing.mediaType),
+						eq(rootFoldersTable.mediaSubType, existing.mediaSubType)
+					)
+				);
+			if (siblings.length <= 1) {
+				throw new ValidationError(
+					'This is the only root folder for this media type, so it must stay the default.'
+				);
+			}
+			throw new ValidationError(
+				'To change the default root folder, set a different one as default instead of unsetting this one.'
+			);
+		}
+
 		if (updates.isDefault) {
 			await db
 				.update(rootFoldersTable)
@@ -282,11 +309,95 @@ export class RootFolderService {
 			throw new Error('Failed to update root folder');
 		}
 
+		// Unsetting this folder's own default (or moving it to a different
+		// media type/subtype) can leave its old group with none at all -
+		// promote another folder of that group if so, for both the group it
+		// just left and the one it's now in (a no-op when they're the same
+		// and a default already exists). Exclude this folder itself from
+		// being re-picked: if the user just explicitly unset it, "promote
+		// whichever candidate is oldest" must not immediately re-select the
+		// one they just turned off.
+		const justUnsetDefault = updates.isDefault === false;
+		await this.promoteDefaultIfMissing(existing.mediaType, existing.mediaSubType, {
+			excludeId: justUnsetDefault ? id : undefined
+		});
+		await this.promoteDefaultIfMissing(mediaType, mediaSubType, {
+			excludeId: justUnsetDefault ? id : undefined
+		});
+
 		await this.syncSystemLibraries();
 
 		const autoDisabledAnimeEnforcement = await this.disableAnimeEnforcementIfNoAnimeFolders();
 
 		return { folder: updated, autoDisabledAnimeEnforcement };
+	}
+
+	/**
+	 * Scan every (media type, subtype) group that has root folders and
+	 * promote the oldest one as default wherever none is flagged. Covers
+	 * drift from before this auto-promotion existed (no migration needed -
+	 * this runs from the existing library-reconcile scheduled task, same as
+	 * LibraryEntityService.reconcileAll(), so it heals on its own within
+	 * that task's interval and immediately on the next root-folder write).
+	 */
+	async promoteAllMissingDefaults(): Promise<void> {
+		const groups = await db
+			.selectDistinct({
+				mediaType: rootFoldersTable.mediaType,
+				mediaSubType: rootFoldersTable.mediaSubType
+			})
+			.from(rootFoldersTable);
+
+		for (const group of groups) {
+			await this.promoteDefaultIfMissing(
+				group.mediaType as RootFolderMediaType,
+				group.mediaSubType as RootFolderMediaSubType
+			);
+		}
+	}
+
+	/**
+	 * If no root folder of this media type + subtype is flagged as default,
+	 * promote the oldest one (if any exist) so the group never sits without
+	 * one indefinitely - the library-level reconciliation
+	 * (LibraryEntityService.reconcileRootFolderAssignments) mirrors this flag
+	 * into libraries.defaultRootFolderId, and the Add-to-Library modal's
+	 * folder picker reads it directly, so leaving a group defaultless is a
+	 * real, user-visible gap, not just an internal bookkeeping detail.
+	 */
+	private async promoteDefaultIfMissing(
+		mediaType: RootFolderMediaType,
+		mediaSubType: RootFolderMediaSubType,
+		options?: { excludeId?: string }
+	): Promise<void> {
+		const rows = await db
+			.select({ id: rootFoldersTable.id, isDefault: rootFoldersTable.isDefault })
+			.from(rootFoldersTable)
+			.where(
+				and(
+					eq(rootFoldersTable.mediaType, mediaType),
+					eq(rootFoldersTable.mediaSubType, mediaSubType)
+				)
+			)
+			.orderBy(asc(rootFoldersTable.createdAt));
+		if (rows.some((row) => row.isDefault)) {
+			return;
+		}
+		const candidates = options?.excludeId
+			? rows.filter((row) => row.id !== options.excludeId)
+			: rows;
+		if (candidates.length === 0) {
+			return;
+		}
+
+		await db
+			.update(rootFoldersTable)
+			.set({ isDefault: true })
+			.where(eq(rootFoldersTable.id, candidates[0]!.id));
+		logger.info(
+			{ rootFolderId: candidates[0]!.id, mediaType, mediaSubType },
+			'Auto-promoted root folder to default (none existed for this media type/subtype)'
+		);
 	}
 
 	/**
@@ -303,6 +414,8 @@ export class RootFolderService {
 
 		await db.delete(rootFoldersTable).where(eq(rootFoldersTable.id, id));
 		logger.info({ id }, 'Root folder deleted');
+
+		await this.promoteDefaultIfMissing(existing.mediaType, existing.mediaSubType);
 
 		await this.syncSystemLibraries();
 
