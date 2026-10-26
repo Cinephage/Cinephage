@@ -224,6 +224,22 @@ function getClientProtocol(implementation: string | null | undefined): DownloadC
 	return CLIENT_IMPLEMENTATION_PROTOCOL[implementation.toLowerCase()] ?? 'torrent';
 }
 
+/**
+ * A download linked from the Unmatched tab never went through an indexer -
+ * there is no indexer name to show as its "source". Fall back to the
+ * protocol itself rather than leave it blank.
+ */
+function unmatchedSourceLabel(protocol: DownloadClientProtocol): string {
+	switch (protocol) {
+		case 'torrent':
+			return 'Torrent';
+		case 'usenet':
+			return 'NZB';
+		case 'debrid':
+			return 'Debrid';
+	}
+}
+
 function isSamePath(firstPath: string, secondPath: string): boolean {
 	return relative(resolve(firstPath), resolve(secondPath)) === '';
 }
@@ -3928,6 +3944,26 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			trackedIds.add(item.downloadId.toLowerCase());
 			if (item.infoHash) trackedIds.add(item.infoHash.toLowerCase());
 		}
+
+		// A torrent's infoHash can legitimately be re-added by the client
+		// later (a genuine new session the user may want tracked again), so
+		// the queue-row check above is the only signal for torrents. Usenet
+		// has no such case - SABnzbd/NZBGet never reuse a job id for a new
+		// download, so a usenet id can only reappear here because this
+		// exact job is still sitting in the client's history after its
+		// queue row was cleaned up (see removeCompletedDownloads). Without
+		// this, SAB/NZBGet history retention settings (or a failed
+		// client-side delete) would make an already-imported usenet item
+		// loop back into Unmatched indefinitely.
+		const importedUsenetHistory = await db
+			.select({ downloadId: downloadHistory.downloadId, infoHash: downloadHistory.infoHash })
+			.from(downloadHistory)
+			.where(and(eq(downloadHistory.status, 'imported'), eq(downloadHistory.protocol, 'usenet')));
+		for (const item of importedUsenetHistory) {
+			if (item.downloadId) trackedIds.add(item.downloadId.toLowerCase());
+			if (item.infoHash) trackedIds.add(item.infoHash.toLowerCase());
+		}
+
 		return trackedIds;
 	}
 
@@ -4494,6 +4530,9 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			infoHash: download.hash,
 			title: download.name,
 			protocol,
+			// No indexer found this - it came straight from the client - so
+			// show the protocol itself rather than leaving Source blank.
+			indexerName: unmatchedSourceLabel(protocol),
 			movieId: input.movieId ?? null,
 			seriesId: input.seriesId ?? null,
 			seasonNumber: input.seasonNumber ?? parsed.episode?.season ?? null,
@@ -4632,8 +4671,8 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 				continue;
 			}
 
-			// Attaching records a fully-seeding torrent: partial content
-			// cannot back a seeding-imported marker.
+			// Attaching records the download as the already-imported source:
+			// partial content cannot back an imported/seeding-imported marker.
 			if (download.progress < 1) {
 				result.skipped.push({ hash: pair.hash, reason: 'incomplete' });
 				continue;
@@ -4648,13 +4687,20 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			// instead of inserting a second row.
 			trackedIds.add(hashLower);
 
+			// Same rule as markImported: only torrents keep "seeding" in the
+			// client after import — usenet and debrid downloads are simply
+			// done, there is nothing left seeding.
+			const itemProtocol = getClientProtocol(client.implementation);
+			const status = itemProtocol === 'torrent' ? 'seeding-imported' : 'imported';
+			const parsedRelease = releaseParser.parse(download.name);
+
 			const queueId = await this.createLinkedQueueRow({
 				client,
 				download,
 				movieId: media.movieId,
 				seriesId: media.seriesId,
 				seasonNumber: pair.seasonNumber,
-				status: 'seeding-imported',
+				status,
 				importedAt: now,
 				origin: 'unmatched_track'
 			});
@@ -4670,12 +4716,20 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 				downloadId: download.hash,
 				infoHash: download.hash,
 				title: download.name,
-				protocol: 'torrent',
+				indexerName: unmatchedSourceLabel(itemProtocol),
+				protocol: itemProtocol,
 				movieId: media.movieId,
 				seriesId: media.seriesId,
 				seasonNumber: pair.seasonNumber ?? null,
 				status: 'imported',
-				statusReason: 'Tracked from Unmatched tab after import wizard',
+				statusReason: 'Already in library - linked from the Unmatched tab, no files moved',
+				quality: {
+					resolution: parsedRelease.resolution ?? undefined,
+					source: parsedRelease.source ?? undefined,
+					codec: parsedRelease.codec ?? undefined,
+					hdr: parsedRelease.hdr ?? undefined
+				},
+				releaseGroup: parsedRelease.releaseGroup ?? undefined,
 				size: download.size || null,
 				grabbedAt: now,
 				completedAt: now,

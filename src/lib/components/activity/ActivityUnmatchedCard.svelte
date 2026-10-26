@@ -38,9 +38,6 @@
 	let { downloadClients = [], filters, onFiltersChange }: Props = $props();
 
 	const PAGE_LIMIT = 25;
-	// Suggestions at or above this confidence are trusted enough to
-	// pre-check for bulk confirm.
-	const SUGGESTION_AUTO_SELECT_THRESHOLD = 0.8;
 
 	let items = $state<UnmatchedDownloadItem[]>([]);
 	let total = $state(0);
@@ -290,17 +287,6 @@
 			for (const hash of [...selected]) {
 				if (!live.has(hash)) selected.delete(hash);
 			}
-			// Pre-check high-confidence suggestions so a bulk confirm is one
-			// click away - the user can always uncheck ones they don't want.
-			for (const item of items) {
-				if (
-					!item.attachable &&
-					item.suggestion &&
-					item.suggestion.confidence >= SUGGESTION_AUTO_SELECT_THRESHOLD
-				) {
-					selected.add(item.hash);
-				}
-			}
 		} catch (error) {
 			loadError =
 				error instanceof ApiError
@@ -431,13 +417,26 @@
 		try {
 			const result = await enrollUnmatched(pairs);
 			if (result.enrolled > 0) {
-				toasts.success(m.activity_unmatched_enrolledToast());
+				// "Import will run on completion" is only true for a download
+				// still in progress - one that's already finished gets picked
+				// up on the very next poll, not "on completion" of anything.
+				const enrolledHashes = new Set(
+					result.details.filter((d) => d.queueId).map((d) => d.hash.toLowerCase())
+				);
+				const stillPending = itemsToConfirm.some(
+					(item) => enrolledHashes.has(item.hash.toLowerCase()) && item.progress < 1
+				);
+				toasts.success(
+					stillPending
+						? m.activity_unmatched_enrolledToast()
+						: m.activity_unmatched_enrolledToastComplete()
+				);
 			}
 			if (result.skipped.length > 0) {
 				const reasons = [...new Set(result.skipped.map((s) => s.reason))];
 				const hint = reasons.includes('no_default_root_folder')
 					? ' - set a default root folder for this media type in Settings > Libraries, or use Import'
-					: ' - use Import instead';
+					: ' - use the Import Wizard instead';
 				toasts.warning(`${result.skipped.length} skipped: ${reasons.join(', ')}${hint}`);
 			}
 			for (const item of itemsToConfirm) selected.delete(item.hash);

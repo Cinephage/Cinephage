@@ -2393,7 +2393,14 @@
 				}
 			]);
 			if (result.enrolled > 0) {
-				toasts.success(m.activity_unmatched_enrolledToast());
+				// "Import will run on completion" only holds for a download
+				// still in progress - an already-finished one is picked up on
+				// the very next poll, not "on completion" of anything.
+				toasts.success(
+					origin.progress < 1
+						? m.activity_unmatched_enrolledToast()
+						: m.activity_unmatched_enrolledToastComplete()
+				);
 				markGroupImported(selectedGroupId);
 				continueWithNextDetected();
 			} else {
