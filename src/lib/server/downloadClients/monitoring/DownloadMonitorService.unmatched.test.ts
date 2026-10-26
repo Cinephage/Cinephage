@@ -45,6 +45,9 @@ vi.mock('#lib/server/db/index.js', () => ({
 const getDownloads = vi.fn();
 /** Mutable so path-specific tests can point the client at a temp dir. */
 const clientPaths = { local: '/downloads', remote: '/remote/downloads' };
+/** Mutable so protocol-specific tests can swap the client's implementation
+ *  (e.g. 'sabnzbd') without a torrent client being assumed by default. */
+const clientImplementation = { value: undefined as string | undefined };
 vi.mock('../DownloadClientManager', () => ({
 	getDownloadClientManager: () => ({
 		getEnabledClients: () =>
@@ -53,6 +56,7 @@ vi.mock('../DownloadClientManager', () => ({
 					client: {
 						id: CLIENT_ID,
 						name: 'qbit',
+						implementation: clientImplementation.value,
 						movieCategory: 'movies',
 						tvCategory: 'tv',
 						downloadPathLocal: clientPaths.local,
@@ -155,6 +159,7 @@ beforeEach(async () => {
 	getDownloads.mockReset();
 	clientPaths.local = '/downloads';
 	clientPaths.remote = '/remote/downloads';
+	clientImplementation.value = undefined;
 	tmdbSearchMovies.mockReset().mockResolvedValue({ results: [] });
 	tmdbSearchTv.mockReset().mockResolvedValue({ results: [] });
 	vi.mocked(addMovieToLibrary).mockReset();
@@ -245,6 +250,30 @@ describe('listUnmatchedDownloads', () => {
 			protocol: 'torrent',
 			status: 'downloading',
 			addedAt: new Date().toISOString()
+		});
+
+		const result = await getDownloadMonitor().listUnmatchedDownloads();
+
+		expect(result.total).toBe(0);
+		expect(result.items).toHaveLength(0);
+	});
+
+	it('excludes an already-imported usenet download even after its queue row is gone', async () => {
+		// Mirrors what removeCompletedDownloads does once SABnzbd reports the
+		// job as removable: the download_queue row is cleaned up, but SAB's
+		// own history retention can keep showing the job indefinitely - a
+		// live queue row is not a reliable "already handled" signal for
+		// usenet the way it is for a still-seeding torrent.
+		getDownloads.mockResolvedValue([makeDownload({ status: 'completed' })]);
+		await testDb.db.insert(downloadHistory).values({
+			downloadClientId: CLIENT_ID,
+			downloadClientName: 'SABnzbd',
+			downloadId: HASH_A,
+			infoHash: HASH_A,
+			title: 'Test.Movie.2026.1080p.WEB-DL-GROUP',
+			protocol: 'usenet',
+			status: 'imported',
+			statusReason: 'Already in library - linked from the Unmatched tab, no files moved'
 		});
 
 		const result = await getDownloadMonitor().listUnmatchedDownloads();
@@ -522,6 +551,41 @@ describe('trackUnmatchedDownloads', () => {
 			.where(eq(downloadHistory.downloadId, HASH_A));
 		expect(history).toHaveLength(1);
 		expect(history[0].movieId).toBe(MOVIE_ID);
+		// Quality/group should parse the same as a normal import, and the
+		// Source column should read "Torrent" rather than sit blank - there
+		// is no indexer behind an Unmatched-tab link to show instead.
+		expect(history[0].quality).toMatchObject({ resolution: '1080p', source: 'webdl' });
+		expect(history[0].releaseGroup).toBe('DL-GROUP');
+		expect(history[0].indexerName).toBe('Torrent');
+		expect(history[0].statusReason).not.toMatch(/import wizard/i);
+	});
+
+	it('tracks a usenet movie as imported (no seeding state), not torrent-labeled', async () => {
+		clientImplementation.value = 'sabnzbd';
+		getDownloads.mockResolvedValue([makeDownload({ status: 'completed' })]);
+		await seedMovie();
+		await seedMovieFile();
+
+		const result = await getDownloadMonitor().trackUnmatchedDownloads([
+			{ hash: HASH_A, mediaType: 'movie', tmdbId: 42 }
+		]);
+
+		expect(result.tracked).toHaveLength(1);
+
+		const [row] = await testDb.db
+			.select()
+			.from(downloadQueue)
+			.where(eq(downloadQueue.downloadId, HASH_A));
+		// Usenet never "seeds" - a status of seeding-imported here would be
+		// torrent terminology leaking onto a usenet download.
+		expect(row.status).toBe('imported');
+
+		const history = await testDb.db
+			.select()
+			.from(downloadHistory)
+			.where(eq(downloadHistory.downloadId, HASH_A));
+		expect(history[0].protocol).toBe('usenet');
+		expect(history[0].indexerName).toBe('NZB');
 	});
 
 	it('tracks a series torrent with its season number', async () => {
