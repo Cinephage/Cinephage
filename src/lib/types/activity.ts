@@ -240,6 +240,14 @@ export interface ActivityFilters {
 	isUpgrade?: boolean;
 	downloadClientId?: string;
 	includeNoResults?: boolean;
+	/**
+	 * Unmatched tab only - a live download-client status (DownloadInfo['status']:
+	 * downloading/stalled/seeding/paused/completed/postprocessing/error/queued).
+	 * Deliberately separate from `status` above, which is ActivityStatus - a
+	 * completed-activity vocabulary that doesn't overlap cleanly (e.g. 'queued'
+	 * and 'stalled' have no ActivityStatus equivalent).
+	 */
+	unmatchedStatus?: string;
 }
 
 /**

@@ -8,16 +8,36 @@
  * search? (case-insensitive contains on the release name, applied before
  * total/pagination so results outside the current page are still found),
  * mediaType? ('movie' | 'tv', resolved from the client's configured
- * category mapping — see DownloadMonitorService.resolveUnmatchedMediaType).
+ * category mapping — see DownloadMonitorService.resolveUnmatchedMediaType),
+ * status? (DownloadInfo['status'], the client's live status), protocol?
+ * ('torrent' | 'usenet' | 'debrid'), resolution? (matched against the
+ * parsed release name), startDate?/endDate? (YYYY-MM-DD, filtered against
+ * each item's completedOn/addedOn - same date-filter convention as
+ * Activity).
  */
 
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { downloadMonitor } from '#lib/server/downloadClients/monitoring/index.js';
+import type { DownloadInfo } from '#lib/server/downloadClients/core/interfaces.js';
+import type { DownloadClientProtocol } from '#lib/server/downloadClients/DownloadClientManager.js';
 import { requireAdminLocals } from '#lib/server/auth/authorization.js';
 import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'QueueUnmatchedApi', logDomain: 'downloads' });
+
+const DOWNLOAD_STATUSES = new Set<DownloadInfo['status']>([
+	'downloading',
+	'stalled',
+	'seeding',
+	'paused',
+	'completed',
+	'postprocessing',
+	'error',
+	'queued'
+]);
+
+const PROTOCOLS = new Set<DownloadClientProtocol>(['torrent', 'usenet', 'debrid']);
 
 function toOptionalInt(value: string | null): number | undefined {
 	if (value === null || value.trim() === '') return undefined;
@@ -37,12 +57,22 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		const mediaTypeParam = url.searchParams.get('mediaType');
 		const mediaType =
 			mediaTypeParam === 'movie' || mediaTypeParam === 'tv' ? mediaTypeParam : undefined;
+		const statusParam = url.searchParams.get('status') as DownloadInfo['status'] | null;
+		const status = statusParam && DOWNLOAD_STATUSES.has(statusParam) ? statusParam : undefined;
+		const protocolParam = url.searchParams.get('protocol') as DownloadClientProtocol | null;
+		const protocol = protocolParam && PROTOCOLS.has(protocolParam) ? protocolParam : undefined;
+		const resolution = url.searchParams.get('resolution') ?? undefined;
 		const result = await downloadMonitor.listUnmatchedDownloads({
 			clientId,
 			page: toOptionalInt(url.searchParams.get('page')),
 			limit: toOptionalInt(url.searchParams.get('limit')),
 			search,
-			mediaType
+			mediaType,
+			status,
+			protocol,
+			resolution,
+			startDate: url.searchParams.get('startDate') ?? undefined,
+			endDate: url.searchParams.get('endDate') ?? undefined
 		});
 
 		return json({ success: true, ...result });

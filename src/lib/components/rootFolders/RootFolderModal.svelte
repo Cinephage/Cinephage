@@ -70,6 +70,12 @@
 		const subtypeLabel = mediaSubType === 'anime' ? 'Anime' : 'Standard';
 		return `${subtypeLabel} ${mediaLabel}`;
 	});
+	// This folder is already the default for its type - unsetting it here
+	// directly is rejected server-side (there must always be a default
+	// once any root folder exists for a type). The only way to change it is
+	// to open a different folder and mark that one as default instead, so
+	// disable the checkbox rather than let the user hit the rejection.
+	const isCurrentDefault = $derived(mode === 'edit' && (folder?.isDefault ?? false));
 
 	// Reset form when modal opens or folder changes
 	$effect(() => {
@@ -227,18 +233,28 @@
 				</div>
 			</div>
 
-			<label class="flex cursor-pointer items-center gap-3 py-2">
+			<label
+				class="flex items-center gap-3 py-2 {isCurrentDefault
+					? 'cursor-not-allowed'
+					: 'cursor-pointer'}"
+			>
 				<input
 					type="checkbox"
 					class="checkbox shrink-0 checkbox-sm checkbox-primary"
 					bind:checked={isDefault}
+					disabled={isCurrentDefault}
 				/>
-				<span class="text-sm"
+				<span class="text-sm {isCurrentDefault ? 'text-base-content/50' : ''}"
 					>{m.rootFolders_setAsDefault({
 						mediaType: defaultScopeLabel
 					})}</span
 				>
 			</label>
+			{#if isCurrentDefault}
+				<p class="-mt-1 pb-2 pl-9 text-xs text-base-content/50">
+					{m.rootFolders_unsetDefaultHint()}
+				</p>
+			{/if}
 
 			<label class="flex cursor-pointer items-center gap-3 py-2">
 				<input

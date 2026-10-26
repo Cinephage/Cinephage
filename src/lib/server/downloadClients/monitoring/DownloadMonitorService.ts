@@ -37,6 +37,7 @@ import {
 } from '#lib/server/library/suggested-matches.js';
 import { isPathInsideManagedRoot } from '#lib/server/filesystem/path-guard.js';
 import { isVideoFile } from '#lib/config/constants.js';
+import type { ImportFailureReason } from '../import/ImportService.js';
 import {
 	cleanupExpiredQueueTombstones,
 	extendQueueTombstonesFromDownloads,
@@ -525,6 +526,18 @@ export interface UnmatchedDownload {
 	 * lets uncategorized downloads through, so this can't always resolve).
 	 */
 	mediaType: 'movie' | 'tv' | null;
+	/** The client's protocol (torrent/usenet/debrid) - drives protocol-aware labeling in the UI (e.g. "Info Hash" vs "Download ID"). */
+	protocol: DownloadClientProtocol;
+	/** Parsed from the release name, same shape createLinkedQueueRow stores on download_queue. */
+	quality?: {
+		resolution?: string;
+		source?: string;
+		codec?: string;
+		hdr?: string;
+	};
+	releaseGroup?: string;
+	/** ISO timestamp (completedOn, falling back to addedOn) - null when the client reports neither. */
+	date: string | null;
 	savePath: string;
 	clientId: string;
 	clientName: string;
@@ -3991,6 +4004,36 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 	}
 
 	/**
+	 * Resolve a destination root folder for a new-to-library title, for the
+	 * Unmatched tab's one-click Accept action - it never asks the user to
+	 * pick one. Prefers whichever library is actually flagged isDefault for
+	 * this media type (the same flag seeded true on the system
+	 * movies_standard/tv_standard libraries and settable via Settings >
+	 * Libraries) - NOT just "first candidate in whatever order
+	 * listLibraries() happens to return," which has no guaranteed meaning.
+	 * Null if no library of this media type has a default root folder
+	 * configured at all - the caller skips with a clear reason rather than
+	 * guessing. RootFolderService's own auto-promotion (on root folder
+	 * create/update/delete, plus the library-reconcile scheduled task for
+	 * pre-existing data) keeps this resolvable in practice as long as at
+	 * least one root folder exists for the media type.
+	 */
+	private async resolveDefaultRootFolderId(mediaType: 'movie' | 'tv'): Promise<string | null> {
+		// Lazy-loaded for the same reason the add-movie/add-series imports
+		// below it are: keep this module's own import light.
+		const { getLibraryEntityService } = await import('#lib/server/library/LibraryEntityService.js');
+		const libraries = await getLibraryEntityService().listLibraries();
+		const candidates = libraries.filter(
+			(library) => library.mediaType === mediaType && library.defaultRootFolderId
+		);
+		const preferred =
+			candidates.find((library) => library.isDefault) ??
+			candidates.find((library) => library.mediaSubType === 'standard') ??
+			candidates[0];
+		return preferred?.defaultRootFolderId ?? null;
+	}
+
+	/**
 	 * Whether this torrent's content is something Cinephage can import: a
 	 * video file, or a folder holding at least one. Single non-video files
 	 * (.exe, .iso, .rar …) and folders with no video are refused so they
@@ -4101,11 +4144,23 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 		limit?: number;
 		search?: string;
 		mediaType?: 'movie' | 'tv';
+		status?: DownloadInfo['status'];
+		protocol?: DownloadClientProtocol;
+		resolution?: string;
+		startDate?: string;
+		endDate?: string;
 	}): Promise<{ items: UnmatchedDownload[]; total: number; page: number; limit: number }> {
 		const page = Math.max(1, Math.floor(options?.page ?? 1));
 		const limit = Math.min(100, Math.max(1, Math.floor(options?.limit ?? 25)));
 		const search = options?.search?.trim().toLowerCase() || '';
 		const mediaType = options?.mediaType;
+		const status = options?.status;
+		const protocolFilter = options?.protocol;
+		const resolutionFilter = options?.resolution;
+		// Same boundary convention as ActivityService's date filters: startDate
+		// compares as-is, endDate gets end-of-day so the whole day is included.
+		const startDate = options?.startDate ? new Date(options.startDate) : null;
+		const endDate = options?.endDate ? new Date(`${options.endDate}T23:59:59.999Z`) : null;
 
 		const { byClient: clientDownloads } = await this.fetchClientDownloadIndex(
 			'listing',
@@ -4124,6 +4179,9 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			client: DownloadClient;
 			download: DownloadInfo;
 			mediaType: 'movie' | 'tv' | null;
+			protocol: DownloadClientProtocol;
+			parsed: ReturnType<typeof releaseParser.parse>;
+			itemDate: Date | null;
 		}[] = [];
 
 		for (const { client, byHash } of clientDownloads.values()) {
@@ -4157,10 +4215,35 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 				// total/pagination stay keyed to the unfiltered count.
 				if (search && !download.name.toLowerCase().includes(search)) continue;
 
+				if (status && download.status !== status) continue;
+
+				const itemProtocol = getClientProtocol(client.implementation);
+				if (protocolFilter && itemProtocol !== protocolFilter) continue;
+
 				const itemMediaType = this.resolveUnmatchedMediaType(client, download);
 				if (mediaType && itemMediaType !== mediaType) continue;
 
-				unmatched.push({ client, download, mediaType: itemMediaType });
+				// Prefer completedOn (when it finished) over addedOn (when it
+				// started) as "the" date for an unmatched item - closer to what
+				// a user means by "when did this show up." Usenet clients only
+				// ever report completedOn; a still-downloading torrent only
+				// reports addedOn. Null when the client reports neither - never
+				// exclude on a guess, same rule isAcceptableContent follows.
+				const itemDate = download.completedOn ?? download.addedOn ?? null;
+				if (startDate && itemDate && itemDate < startDate) continue;
+				if (endDate && itemDate && itemDate > endDate) continue;
+
+				const parsed = releaseParser.parse(download.name);
+				if (resolutionFilter && parsed.resolution !== resolutionFilter) continue;
+
+				unmatched.push({
+					client,
+					download,
+					mediaType: itemMediaType,
+					protocol: itemProtocol,
+					parsed,
+					itemDate
+				});
 			}
 		}
 
@@ -4217,11 +4300,10 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 		// sharing a title (season packs, a show's episodes) hits TMDB once.
 		const suggestionCache = new Map<string, SuggestedMatch[]>();
 		const suggestions = new Map<string, UnmatchedDownload['suggestion']>();
-		for (const { download } of pageItems) {
+		for (const { download, parsed } of pageItems) {
 			const hashLower = download.hash.toLowerCase();
 			if (attachMap.has(hashLower)) continue;
 
-			const parsed = releaseParser.parse(download.name);
 			if (!parsed.cleanTitle) continue;
 			const mediaType: 'movie' | 'tv' = parsed.episode ? 'tv' : 'movie';
 
@@ -4245,7 +4327,14 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 		}
 
 		const items: UnmatchedDownload[] = pageItems.map(
-			({ client, download, mediaType: itemMediaType }) => ({
+			({
+				client,
+				download,
+				mediaType: itemMediaType,
+				protocol: itemProtocol,
+				parsed,
+				itemDate
+			}) => ({
 				hash: download.hash,
 				name: download.name,
 				size: download.size ?? 0,
@@ -4253,6 +4342,15 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 				progress: download.progress,
 				category: download.category,
 				mediaType: itemMediaType,
+				protocol: itemProtocol,
+				quality: {
+					resolution: parsed.resolution ?? undefined,
+					source: parsed.source ?? undefined,
+					codec: parsed.codec ?? undefined,
+					hdr: parsed.hdr ?? undefined
+				},
+				releaseGroup: parsed.releaseGroup ?? undefined,
+				date: itemDate ? itemDate.toISOString() : null,
 				savePath: download.savePath,
 				clientId: client.id,
 				clientName: client.name,
@@ -4591,7 +4689,35 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			);
 		}
 
+		await this.recordUnmatchedSkips(result.skipped, 'unmatched_attach');
+
 		return result;
+	}
+
+	/**
+	 * Persist every genuine skip (everything but already_tracked, which is
+	 * a no-op, not a failure) as an import_failures row so the Unmatched
+	 * tab's one-click Attach/Accept actions are visible on Reports instead
+	 * of only ever surfacing as a toast the user has to catch live.
+	 */
+	private async recordUnmatchedSkips(
+		skipped: { hash: string; reason: string }[],
+		stage: 'unmatched_attach' | 'unmatched_accept'
+	): Promise<void> {
+		if (skipped.length === 0) return;
+		// Lazy-loaded for the same reason the add-movie/add-series imports
+		// elsewhere in this file are: ImportService pulls a heavy graph that
+		// must not weigh down this module's own import.
+		const { recordImportFailure } = await import('../import/ImportService.js');
+		for (const skip of skipped) {
+			if (skip.reason === 'already_tracked') continue;
+			await recordImportFailure({
+				releaseTitle: skip.hash,
+				failureStage: stage,
+				reason: skip.reason as ImportFailureReason,
+				reasonDetail: `Unmatched tab ${stage === 'unmatched_accept' ? 'Accept' : 'Attach'} skipped: ${skip.reason}`
+			});
+		}
 	}
 
 	/**
@@ -4682,8 +4808,14 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			if (!media) {
 				// New to the library: add it unmonitored (the file is in
 				// hand — monitoring would only trigger a redundant grab).
-				if (!pair.rootFolderId) {
-					result.skipped.push({ hash: pair.hash, reason: 'not_in_library' });
+				// No explicit destination was given (the Unmatched tab's
+				// one-click Accept never asks) - resolve one instead of just
+				// giving up, so "not in library yet" doesn't always force a
+				// trip through the import wizard.
+				const rootFolderId =
+					pair.rootFolderId ?? (await this.resolveDefaultRootFolderId(pair.mediaType));
+				if (!rootFolderId) {
+					result.skipped.push({ hash: pair.hash, reason: 'no_default_root_folder' });
 					continue;
 				}
 				try {
@@ -4694,7 +4826,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 						const { addMovieToLibrary } = await import('#lib/server/library/add/add-movie.js');
 						await addMovieToLibrary({
 							tmdbId: pair.tmdbId,
-							rootFolderId: pair.rootFolderId,
+							rootFolderId,
 							monitored: false,
 							minimumAvailability: 'released',
 							availabilityDelay: 0,
@@ -4705,7 +4837,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 						const { addSeriesToLibrary } = await import('#lib/server/library/add/add-series.js');
 						await addSeriesToLibrary({
 							tmdbId: pair.tmdbId,
-							rootFolderId: pair.rootFolderId,
+							rootFolderId,
 							monitored: false,
 							seasonFolder: true,
 							seriesType: 'standard',
@@ -4761,6 +4893,8 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 				'Enrolled unmatched download for monitor import'
 			);
 		}
+
+		await this.recordUnmatchedSkips(result.skipped, 'unmatched_accept');
 
 		return result;
 	}

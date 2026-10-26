@@ -27,6 +27,16 @@ export interface UnmatchedDownloadItem {
 	category?: string;
 	/** Movie vs TV, resolved from the client's configured category mapping. */
 	mediaType: 'movie' | 'tv' | null;
+	protocol: 'torrent' | 'usenet' | 'debrid';
+	quality?: {
+		resolution?: string;
+		source?: string;
+		codec?: string;
+		hdr?: string;
+	};
+	releaseGroup?: string;
+	/** ISO timestamp (completedOn, falling back to addedOn) - null when the client reports neither. */
+	date: string | null;
 	savePath: string;
 	clientId: string;
 	clientName: string;
@@ -136,6 +146,11 @@ export async function getUnmatched(params?: {
 	limit?: number;
 	search?: string;
 	mediaType?: 'movie' | 'tv';
+	status?: string;
+	protocol?: 'torrent' | 'usenet' | 'debrid';
+	resolution?: string;
+	startDate?: string;
+	endDate?: string;
 }): Promise<ApiResponse<QueueUnmatchedListResponse>> {
 	const query: Record<string, string> = {};
 	if (params?.clientId) query.clientId = params.clientId;
@@ -143,6 +158,11 @@ export async function getUnmatched(params?: {
 	if (params?.limit !== undefined) query.limit = String(params.limit);
 	if (params?.search) query.search = params.search;
 	if (params?.mediaType) query.mediaType = params.mediaType;
+	if (params?.status) query.status = params.status;
+	if (params?.protocol) query.protocol = params.protocol;
+	if (params?.resolution) query.resolution = params.resolution;
+	if (params?.startDate) query.startDate = params.startDate;
+	if (params?.endDate) query.endDate = params.endDate;
 	return apiGet<QueueUnmatchedListResponse>(`/api/queue/unmatched${buildQuery(query)}`);
 }
 

@@ -254,6 +254,9 @@ export function buildFilterQueryString(f: FiltersType, tab: ActivityTab): string
 	if (f.downloadClientId) params.set('downloadClientId', f.downloadClientId);
 	if (f.startDate) params.set('startDate', f.startDate);
 	if (f.endDate) params.set('endDate', f.endDate);
+	if (f.unmatchedStatus && f.unmatchedStatus !== 'all') {
+		params.set('unmatchedStatus', f.unmatchedStatus);
+	}
 	return params.toString();
 }
 

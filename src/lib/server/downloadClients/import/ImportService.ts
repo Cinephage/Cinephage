@@ -118,16 +118,21 @@ import { isImportedQueueStatus, type QueueStatus } from '#lib/types/queue.js';
 
 const logger = createChildLogger({ logDomain: 'imports' as const });
 
-type ImportFailureStage =
+export type ImportFailureStage =
 	| 'path_resolution'
 	| 'dangerous_files'
 	| 'disk_space'
 	| 'root_folder'
 	| 'library_entity'
 	| 'transfer'
-	| 'max_retries';
+	| 'max_retries'
+	// Unmatched tab's one-click Accept/Attach actions (DownloadMonitorService
+	// enrollUnmatchedDownloads/trackUnmatchedDownloads) - distinct stages so
+	// Reports can tell the two apart.
+	| 'unmatched_accept'
+	| 'unmatched_attach';
 
-type ImportFailureReason =
+export type ImportFailureReason =
 	| 'path_unavailable'
 	| 'library_entity_missing'
 	| 'root_folder_unavailable'
@@ -135,7 +140,19 @@ type ImportFailureReason =
 	| 'dangerous_files_detected'
 	| 'transfer_failed'
 	| 'max_retries_exceeded'
-	| 'no_linked_media';
+	| 'no_linked_media'
+	// Unmatched tab skip reasons - see DownloadMonitorService's
+	// enrollUnmatchedDownloads/trackUnmatchedDownloads result.skipped reasons.
+	| 'no_default_root_folder'
+	| 'add_failed'
+	| 'not_in_client'
+	| 'client_unreachable'
+	| 'foreign_category'
+	| 'unsupported_filetype'
+	| 'invalid_pair'
+	| 'not_in_library'
+	| 'no_library_file'
+	| 'incomplete';
 
 /**
  * Surface a silent hardlink->copy fallback on the job's Activity log.
@@ -165,7 +182,7 @@ function warnIfHardlinkFellBackToCopy(
 	);
 }
 
-async function recordImportFailure(opts: {
+export async function recordImportFailure(opts: {
 	releaseTitle: string;
 	sourcePath?: string;
 	destinationPath?: string;

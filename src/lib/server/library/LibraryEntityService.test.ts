@@ -118,6 +118,90 @@ describe('LibraryEntityService.listLibraries (read-only regression)', () => {
 		await testDb.db.delete(libraries).where(eq(libraries.id, libraryId));
 		await testDb.db.delete(rootFolders).where(eq(rootFolders.id, rootFolderId));
 	});
+
+	it('reconcileAll re-promotes a remaining root folder after the default one is deleted', async () => {
+		// Simulates RootFolderService.deleteFolder()'s effect: the root folder row
+		// is gone, its libraryRootFolders attachment cascade-deleted (FK ON DELETE
+		// CASCADE, enforced in production - this test's db has no FK pragma, so we
+		// perform the same effect by hand), and libraries.defaultRootFolderId
+		// nulled (FK ON DELETE SET NULL). The question this answers: does calling
+		// the same reconciliation deleteFolder already triggers actually promote
+		// the remaining attached folder, or does the library stay defaultless?
+		const now = new Date().toISOString();
+		const keepRoot = await testDb.db
+			.insert(rootFolders)
+			.values({ name: 'Keep', path: '/tmp/test-root-keep', mediaType: 'movie' })
+			.returning({ id: rootFolders.id })
+			.all();
+		const deleteRoot = await testDb.db
+			.insert(rootFolders)
+			.values({ name: 'Delete', path: '/tmp/test-root-delete', mediaType: 'movie' })
+			.returning({ id: rootFolders.id })
+			.all();
+		const keepRootId = keepRoot[0]!.id;
+		const deleteRootId = deleteRoot[0]!.id;
+
+		const insertedLibrary = await testDb.db
+			.insert(libraries)
+			.values({
+				name: 'Library promote-test',
+				slug: 'library-promote-test',
+				mediaType: 'movie',
+				mediaSubType: 'standard',
+				isSystem: false,
+				defaultRootFolderId: deleteRootId,
+				sortOrder: 30,
+				createdAt: now,
+				updatedAt: now
+			})
+			.returning({ id: libraries.id })
+			.all();
+		const libraryId = insertedLibrary[0]!.id;
+
+		await testDb.db.insert(libraryRootFolders).values([
+			// Older attachment, currently the default.
+			{
+				libraryId,
+				rootFolderId: deleteRootId,
+				isDefault: true,
+				createdAt: '2020-01-01T00:00:00.000Z'
+			},
+			// Newer attachment, not currently the default.
+			{
+				libraryId,
+				rootFolderId: keepRootId,
+				isDefault: false,
+				createdAt: '2020-01-02T00:00:00.000Z'
+			}
+		]);
+
+		// Simulate RootFolderService.deleteFolder()'s DB effects by hand, since
+		// this test db has no FK pragma to cascade them automatically.
+		await testDb.db
+			.delete(libraryRootFolders)
+			.where(eq(libraryRootFolders.rootFolderId, deleteRootId));
+		await testDb.db.delete(rootFolders).where(eq(rootFolders.id, deleteRootId));
+		await testDb.db
+			.update(libraries)
+			.set({ defaultRootFolderId: null })
+			.where(eq(libraries.id, libraryId));
+
+		const service = new LibraryEntityService();
+		await service.reconcileAll();
+
+		const updatedLibrary = await testDb.db
+			.select({ defaultRootFolderId: libraries.defaultRootFolderId })
+			.from(libraries)
+			.where(eq(libraries.id, libraryId))
+			.get();
+
+		expect(updatedLibrary?.defaultRootFolderId).toBe(keepRootId);
+
+		// Cleanup.
+		await testDb.db.delete(libraryRootFolders).where(eq(libraryRootFolders.libraryId, libraryId));
+		await testDb.db.delete(libraries).where(eq(libraries.id, libraryId));
+		await testDb.db.delete(rootFolders).where(eq(rootFolders.id, keepRootId));
+	});
 });
 
 describe('LibraryEntityService quality profile per library', () => {
@@ -387,5 +471,89 @@ describe('LibraryEntityService language profile per library', () => {
 
 		await testDb.db.delete(libraries).where(eq(libraries.id, created.id));
 		await testDb.db.delete(languageProfiles).where(eq(languageProfiles.id, profileId));
+	});
+});
+
+describe('LibraryEntityService root folder default selection', () => {
+	it('prefers the root folder flagged isDefault over array position', async () => {
+		const first = await testDb.db
+			.insert(rootFolders)
+			.values({
+				name: 'First',
+				path: '/tmp/test-assign-first',
+				mediaType: 'movie',
+				isDefault: false
+			})
+			.returning({ id: rootFolders.id })
+			.all();
+		const flagged = await testDb.db
+			.insert(rootFolders)
+			.values({
+				name: 'Flagged',
+				path: '/tmp/test-assign-flagged',
+				mediaType: 'movie',
+				isDefault: true
+			})
+			.returning({ id: rootFolders.id })
+			.all();
+		const firstId = first[0]!.id;
+		const flaggedId = flagged[0]!.id;
+
+		const service = new LibraryEntityService();
+		// firstId is listed first - the old index === 0 behavior would have
+		// picked it regardless of either folder's own isDefault flag.
+		const created = await service.createLibrary({
+			name: 'Assign Default Library',
+			mediaType: 'movie',
+			mediaSubType: 'standard',
+			rootFolderIds: [firstId, flaggedId]
+		});
+
+		expect(created.defaultRootFolderId).toBe(flaggedId);
+
+		await testDb.db.delete(libraryRootFolders).where(eq(libraryRootFolders.libraryId, created.id));
+		await testDb.db.delete(libraries).where(eq(libraries.id, created.id));
+		await testDb.db.delete(rootFolders).where(eq(rootFolders.id, firstId));
+		await testDb.db.delete(rootFolders).where(eq(rootFolders.id, flaggedId));
+	});
+
+	it('falls back to the first selected root folder when none are flagged isDefault', async () => {
+		const first = await testDb.db
+			.insert(rootFolders)
+			.values({
+				name: 'First',
+				path: '/tmp/test-assign-first-2',
+				mediaType: 'movie',
+				isDefault: false
+			})
+			.returning({ id: rootFolders.id })
+			.all();
+		const second = await testDb.db
+			.insert(rootFolders)
+			.values({
+				name: 'Second',
+				path: '/tmp/test-assign-second-2',
+				mediaType: 'movie',
+				isDefault: false
+			})
+			.returning({ id: rootFolders.id })
+			.all();
+		const firstId = first[0]!.id;
+		const secondId = second[0]!.id;
+
+		const service = new LibraryEntityService();
+		const created = await service.createLibrary({
+			name: 'Assign Fallback Library',
+			mediaType: 'movie',
+			mediaSubType: 'standard',
+			rootFolderIds: [firstId, secondId]
+		});
+
+		expect(created.defaultRootFolderId).toBe(firstId);
+
+		await testDb.db.delete(libraryRootFolders).where(eq(libraryRootFolders.libraryId, created.id));
+		await testDb.db.delete(libraries).where(eq(libraries.id, created.id));
+		await testDb.db.delete(rootFolders).where(eq(rootFolders.id, firstId));
+		await testDb.db.delete(rootFolders).where(eq(rootFolders.id, secondId));
 	});
 });

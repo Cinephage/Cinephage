@@ -52,6 +52,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const isUpgrade = url.searchParams.get('isUpgrade') === 'true';
 	const includeNoResults = url.searchParams.get('includeNoResults') === 'true';
 	const downloadClientId = url.searchParams.get('downloadClientId') || '';
+	const unmatchedStatus = url.searchParams.get('unmatchedStatus') || '';
 
 	const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 	const dateSchema = z.object({
@@ -75,7 +76,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			includeNoResults: tab === 'history' && includeNoResults ? true : undefined,
 			downloadClientId: downloadClientId || undefined,
 			startDate: startDate || undefined,
-			endDate: endDate || undefined
+			endDate: endDate || undefined,
+			unmatchedStatus: unmatchedStatus || undefined
 		};
 	}
 

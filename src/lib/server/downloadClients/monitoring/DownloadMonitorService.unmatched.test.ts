@@ -23,7 +23,10 @@ import {
 	movieFiles,
 	series,
 	episodeFiles,
-	episodes
+	episodes,
+	libraries,
+	rootFolders,
+	importFailures
 } from '#lib/server/db/schema.js';
 import type { DownloadInfo } from '../core/interfaces';
 
@@ -298,6 +301,34 @@ describe('listUnmatchedDownloads', () => {
 		const page2 = await getDownloadMonitor().listUnmatchedDownloads({ page: 2, limit: 1 });
 		expect(page2.items).toHaveLength(1);
 		expect(page2.items[0].hash).not.toBe(page1.items[0].hash);
+	});
+
+	it('filters by date range, preferring completedOn over addedOn', async () => {
+		getDownloads.mockResolvedValue([
+			// Old item, outside the range.
+			makeDownload({
+				hash: HASH_A,
+				addedOn: new Date('2020-01-01T00:00:00.000Z'),
+				completedOn: new Date('2020-01-02T00:00:00.000Z')
+			}),
+			// Recent item, inside the range - only completedOn matters here,
+			// addedOn alone (if it were read instead) would fall outside it.
+			makeDownload({
+				hash: HASH_B,
+				name: 'Other.Movie.2025.720p.WEB-DL-GROUP',
+				addedOn: new Date('2020-01-01T00:00:00.000Z'),
+				completedOn: new Date('2026-06-15T00:00:00.000Z')
+			}),
+			// No date at all - never excluded on a guess.
+			makeDownload({ hash: HASH_C, name: 'Undated.Movie.2024.1080p.WEB-DL-GROUP' })
+		]);
+
+		const result = await getDownloadMonitor().listUnmatchedDownloads({
+			startDate: '2026-06-01',
+			endDate: '2026-06-30'
+		});
+
+		expect(result.items.map((i) => i.hash).sort()).toEqual([HASH_B, HASH_C].sort());
 	});
 
 	it('excludes single files and folders Cinephage cannot import', async () => {
@@ -797,14 +828,17 @@ describe('enrollUnmatchedDownloads', () => {
 		expect(await testDb.db.select().from(movies)).toHaveLength(0);
 	});
 
-	it('skips new matches without a destination, and failed adds', async () => {
+	it('skips new matches without a resolvable destination, and failed adds', async () => {
 		getDownloads.mockResolvedValue([makeDownload()]);
 
+		// No rootFolderId given and no library has a default root folder for
+		// 'movie' configured (none seeded in this test) -
+		// resolveDefaultRootFolderId falls through to null.
 		const noDest = await getDownloadMonitor().enrollUnmatchedDownloads([
 			{ hash: HASH_A, mediaType: 'movie', tmdbId: 777 }
 		]);
 		expect(noDest.enrolled).toHaveLength(0);
-		expect(noDest.skipped).toEqual([{ hash: HASH_A, reason: 'not_in_library' }]);
+		expect(noDest.skipped).toEqual([{ hash: HASH_A, reason: 'no_default_root_folder' }]);
 		expect(vi.mocked(addMovieToLibrary)).not.toHaveBeenCalled();
 
 		vi.mocked(addMovieToLibrary).mockRejectedValueOnce(new Error('TMDB down'));
@@ -814,5 +848,56 @@ describe('enrollUnmatchedDownloads', () => {
 		expect(failedAdd.enrolled).toHaveLength(0);
 		expect(failedAdd.skipped).toEqual([{ hash: HASH_A, reason: 'add_failed' }]);
 		expect(await testDb.db.select().from(downloadQueue)).toHaveLength(0);
+
+		// Both genuine skips (not just a toast) should be visible on Reports.
+		const failures = await testDb.db
+			.select({ failureStage: importFailures.failureStage, reason: importFailures.reason })
+			.from(importFailures);
+		expect(failures).toEqual(
+			expect.arrayContaining([
+				{ failureStage: 'unmatched_accept', reason: 'no_default_root_folder' },
+				{ failureStage: 'unmatched_accept', reason: 'add_failed' }
+			])
+		);
+	});
+
+	it('prefers the library flagged isDefault over whichever candidate lists first', async () => {
+		getDownloads.mockResolvedValue([makeDownload()]);
+		await testDb.db.insert(rootFolders).values([
+			{ id: 'rf-first', name: 'First', path: '/first', mediaType: 'movie' },
+			{ id: 'rf-default', name: 'Default', path: '/default', mediaType: 'movie' }
+		]);
+		// listLibraries() orders by sortOrder then name - "AAA" sorts ahead
+		// of "ZZZ" regardless of isDefault, so a name/order-based pick alone
+		// would wrongly choose the non-default one here. isDefault must win.
+		await testDb.db.insert(libraries).values([
+			{
+				id: 'lib-first',
+				name: 'AAA First Movies',
+				slug: 'first-movies',
+				mediaType: 'movie',
+				mediaSubType: 'standard',
+				isDefault: false,
+				defaultRootFolderId: 'rf-first'
+			},
+			{
+				id: 'lib-default',
+				name: 'ZZZ Default Movies',
+				slug: 'default-movies',
+				mediaType: 'movie',
+				mediaSubType: 'standard',
+				isDefault: true,
+				defaultRootFolderId: 'rf-default'
+			}
+		]);
+
+		const result = await getDownloadMonitor().enrollUnmatchedDownloads([
+			{ hash: HASH_A, mediaType: 'movie', tmdbId: 777 }
+		]);
+
+		expect(result.skipped).toHaveLength(0);
+		expect(vi.mocked(addMovieToLibrary)).toHaveBeenCalledWith(
+			expect.objectContaining({ rootFolderId: 'rf-default' })
+		);
 	});
 });
