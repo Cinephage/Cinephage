@@ -26,6 +26,7 @@ import { statSync } from 'node:fs';
 import { unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { resolveMovieMultiQuality } from '#lib/server/quality/movie-buckets.js';
+import { buildStreamingQuality } from './streaming-quality.js';
 import {
 	computeMovieReplacement,
 	computeEpisodeReplacement
@@ -166,12 +167,10 @@ export class StreamingHandler {
 			const mediaInfo = await mediaInfoService.extractMediaInfo(filePath, { allowStrmProbe });
 
 			const parsedRelease = parser.parse(release.title);
-			const quality = {
-				resolution: parsedRelease.resolution ?? '1080p',
-				source: 'Streaming',
-				codec: 'HLS',
-				hdr: undefined
-			};
+			// The stream's real ladder is only known at playback time, so the
+			// probed height outranks the release title and an unprobed .strm
+			// must not be labelled 1080p by default (4K sources are real now).
+			const quality = buildStreamingQuality(mediaInfo, parsedRelease);
 
 			if (mediaType === 'movie' && movieId) {
 				return this.importStreamingMovie(release, {
@@ -571,12 +570,9 @@ export class StreamingHandler {
 		}
 
 		const parsedRelease = parser.parse(release.title);
-		const quality = {
-			resolution: parsedRelease.resolution ?? '1080p',
-			source: 'Streaming',
-			codec: 'HLS',
-			hdr: undefined
-		};
+		// Per-episode rows carry their own probed height, so quality is resolved
+		// when each file is inspected rather than once for the whole pack.
+		const fallbackQuality = buildStreamingQuality(undefined, parsedRelease);
 
 		const episodeFileData: Array<{
 			episodeId: string;
@@ -585,6 +581,7 @@ export class StreamingHandler {
 			fileSize: number;
 			relativePath: string;
 			mediaInfo: Awaited<ReturnType<typeof mediaInfoService.extractMediaInfo>>;
+			quality: ReturnType<typeof buildStreamingQuality>;
 		}> = [];
 
 		for (const epResult of strmResult.results) {
@@ -607,7 +604,8 @@ export class StreamingHandler {
 					filePath: epResult.filePath,
 					fileSize: Number(stats.size),
 					relativePath,
-					mediaInfo
+					mediaInfo,
+					quality: buildStreamingQuality(mediaInfo, parsedRelease)
 				});
 			} catch (error) {
 				logger.error(
@@ -650,7 +648,7 @@ export class StreamingHandler {
 					dateAdded: new Date().toISOString(),
 					sceneName: release.title,
 					releaseGroup: parsedRelease.releaseGroup ?? 'Streaming',
-					quality,
+					quality: epData.quality,
 					mediaInfo: epData.mediaInfo
 				});
 
@@ -682,7 +680,7 @@ export class StreamingHandler {
 					seasonNumber,
 					status: 'streaming',
 					size: totalSize,
-					quality,
+					quality: fallbackQuality,
 					episodeFileIds: createdFileIds,
 					grabbedAt: new Date().toISOString(),
 					importedAt: new Date().toISOString()
