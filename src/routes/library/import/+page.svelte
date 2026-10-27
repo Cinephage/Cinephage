@@ -109,6 +109,7 @@
 		importedPath: string;
 		importedCount?: number;
 		importedPaths?: string[];
+		transferMode?: string;
 	}
 
 	interface ImportRouteContext {
@@ -2284,6 +2285,11 @@
 				return;
 			}
 		}
+		if (targetStep === 1 && unmatchedReturnUrl) {
+			pendingNavigation = { href: unmatchedReturnUrl, external: false };
+			leaveImportModalOpen = true;
+			return;
+		}
 		step = targetStep;
 	}
 
@@ -2339,9 +2345,14 @@
 	/**
 	 * Record unmatched tracking for a group whose import just landed.
 	 * No-op for non-prefill groups. Failures stay visible: files in the
-	 * library, client row still unmatched.
+	 * library, client row still unmatched. transferMode/importedPath (when
+	 * known) let the history row look like a normal import - "Import
+	 * Method" + "Imported to" - instead of a generic status-reason line.
 	 */
-	async function trackUnmatchedGroup(groupId: string) {
+	async function trackUnmatchedGroup(
+		groupId: string,
+		executed?: { transferMode?: string; importedPath?: string }
+	) {
 		const origin = unmatchedOrigins[groupId];
 		const state = groupReviewState[groupId];
 		const match = state?.selectedMatch;
@@ -2356,7 +2367,10 @@
 					mediaType: state.selectedMediaType,
 					tmdbId: match.tmdbId,
 					seasonNumber: state.selectedMediaType === 'tv' ? state.seasonNumber : null,
-					episodeNumber: isSingleEpisode ? state.episodeNumber : null
+					episodeNumber: isSingleEpisode ? state.episodeNumber : null,
+					viaWizardImport: true,
+					transferMode: executed?.transferMode,
+					importedPath: executed?.importedPath
 				}
 			]);
 			if (tracked.skipped.length > 0) {
@@ -2467,7 +2481,10 @@
 			bulkImportSummary = null;
 			if (selectedGroupId) {
 				markGroupImported(selectedGroupId);
-				await trackUnmatchedGroup(selectedGroupId);
+				await trackUnmatchedGroup(selectedGroupId, {
+					transferMode: result.transferMode,
+					importedPath: result.importedPath
+				});
 			}
 			if (isDirectLibraryImportContext && originLibraryLink) {
 				toasts.success(m.toast_library_import_importComplete());
@@ -2543,7 +2560,13 @@
 							| {
 									job?: {
 										status?: string;
-										metadata?: { result?: { libraryId?: string } } | null;
+										metadata?: {
+											result?: {
+												libraryId?: string;
+												transferMode?: string;
+												importedPaths?: string[];
+											};
+										} | null;
 									};
 							  }
 							| undefined
@@ -2556,7 +2579,10 @@
 						toasts.success(m.toast_library_import_importComplete());
 						if (groupId && groupId === selectedGroupId) {
 							markGroupImported(groupId);
-							await trackUnmatchedGroup(groupId);
+							await trackUnmatchedGroup(groupId, {
+								transferMode: job.metadata?.result?.transferMode,
+								importedPath: job.metadata?.result?.importedPaths?.[0]
+							});
 							const libraryId = job.metadata?.result?.libraryId;
 							if (libraryId) {
 								importedGroupLibraryIds = { ...importedGroupLibraryIds, [groupId]: libraryId };
@@ -2582,7 +2608,7 @@
 		errorMessage?: string | null;
 		metadata?: {
 			groupName?: string;
-			result?: { libraryId?: string };
+			result?: { libraryId?: string; transferMode?: string; importedPaths?: string[] };
 		} | null;
 	}
 
@@ -2592,7 +2618,10 @@
 		const groupId = groupIdMap[row.metadata?.groupName ?? ''];
 		if (!groupId) return;
 		markGroupImported(groupId);
-		void trackUnmatchedGroup(groupId);
+		void trackUnmatchedGroup(groupId, {
+			transferMode: row.metadata?.result?.transferMode,
+			importedPath: row.metadata?.result?.importedPaths?.[0]
+		});
 		const libraryId = row.metadata?.result?.libraryId;
 		if (libraryId) {
 			importedGroupLibraryIds = { ...importedGroupLibraryIds, [groupId]: libraryId };
@@ -3250,6 +3279,7 @@
 			{originLibraryLink}
 			backgroundProgress={bulkProgress}
 			backgroundCurrentItem={bulkCurrentGroup}
+			hideImportAnother={Boolean(unmatchedReturnUrl)}
 			onTryAgain={() => {
 				executeError = null;
 				step = 3;

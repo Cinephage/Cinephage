@@ -18,7 +18,17 @@ const unmatchedPairFields = {
 };
 
 export const trackBodySchema = z.object({
-	pairs: z.array(z.object(unmatchedPairFields)).min(1).max(100)
+	pairs: z
+		.array(
+			z.object({
+				...unmatchedPairFields,
+				viaWizardImport: z.boolean().optional(),
+				transferMode: z.string().optional(),
+				importedPath: z.string().optional()
+			})
+		)
+		.min(1)
+		.max(100)
 });
 
 export const enrollBodySchema = z.object({

@@ -209,7 +209,8 @@ export class LibraryJobWorker extends EventEmitter implements BackgroundService 
 							libraryId: result.libraryId,
 							mediaType: result.mediaType,
 							tmdbId: result.tmdbId,
-							importedPaths: result.importedPaths
+							importedPaths: result.importedPaths,
+							transferMode: result.transferMode
 						}
 					}
 				});

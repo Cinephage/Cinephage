@@ -203,6 +203,9 @@ export function trackUnmatched(
 		tmdbId: number;
 		seasonNumber?: number | null;
 		episodeNumber?: number | null;
+		viaWizardImport?: boolean;
+		transferMode?: string;
+		importedPath?: string;
 	}[]
 ): Promise<ApiResponse<TrackUnmatchedResponse>> {
 	return apiPost<TrackUnmatchedResponse>('/api/queue/unmatched/track', { pairs });

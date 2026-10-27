@@ -34,6 +34,7 @@
 		originLibraryLink = null,
 		backgroundProgress = null,
 		backgroundCurrentItem = null,
+		hideImportAnother = false,
 		onTryAgain = () => {},
 		onReset = () => {},
 		onContinueWithNext = () => {}
@@ -48,6 +49,7 @@
 		originLibraryLink: string | null;
 		backgroundProgress?: { completed: number; failed: number; total: number } | null;
 		backgroundCurrentItem?: string | null;
+		hideImportAnother?: boolean;
 		onTryAgain: () => void;
 		onReset: () => void;
 		onContinueWithNext: () => void;
@@ -199,9 +201,11 @@
 							{m.library_import_importNextDetected({ count: remainingGroupCount })}
 						</button>
 					{/if}
-					<button class="btn btn-ghost btn-sm" onclick={onReset}
-						>{m.library_import_importAnother()}</button
-					>
+					{#if !hideImportAnother}
+						<button class="btn btn-ghost btn-sm" onclick={onReset}
+							>{m.library_import_importAnother()}</button
+						>
+					{/if}
 				</div>
 			</div>
 		</div>
@@ -239,9 +243,11 @@
 					></progress>
 				{/if}
 				<div class="mt-4 flex flex-wrap gap-2">
-					<button class="btn btn-ghost btn-sm" onclick={onReset}>
-						{m.library_import_importAnother()}
-					</button>
+					{#if !hideImportAnother}
+						<button class="btn btn-ghost btn-sm" onclick={onReset}>
+							{m.library_import_importAnother()}
+						</button>
+					{/if}
 				</div>
 			</div>
 		</div>
