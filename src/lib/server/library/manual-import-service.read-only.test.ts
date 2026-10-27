@@ -8,7 +8,8 @@ import {
 	clearTestDb,
 	type TestDatabase
 } from '../../../test/db-helper.js';
-import { movies, rootFolders, series } from '#lib/server/db/schema.js';
+import { downloadHistory, movies, rootFolders, series } from '#lib/server/db/schema.js';
+import { eq } from 'drizzle-orm';
 
 const testDb: TestDatabase = createTestDb();
 const mocks = vi.hoisted(() => ({
@@ -125,6 +126,14 @@ describe('ManualImportService read-only destinations', () => {
 			).rejects.toThrow('Cannot import to read-only root folder');
 
 			expect(mocks.transferFileWithMode).not.toHaveBeenCalled();
+
+			const [history] = await testDb.db
+				.select()
+				.from(downloadHistory)
+				.where(eq(downloadHistory.movieId, 'movie-1'));
+			expect(history.status).toBe('failed');
+			expect(history.statusReason).toBe('Cannot import to read-only root folder');
+			expect(history.downloadClientName).toBe('Manual Import');
 		} finally {
 			await rm(sourceDir, { recursive: true, force: true });
 		}
@@ -160,8 +169,76 @@ describe('ManualImportService read-only destinations', () => {
 			).rejects.toThrow('Cannot import to read-only root folder');
 
 			expect(mocks.transferFileWithMode).not.toHaveBeenCalled();
+
+			const [history] = await testDb.db
+				.select()
+				.from(downloadHistory)
+				.where(eq(downloadHistory.seriesId, 'series-1'));
+			expect(history.status).toBe('failed');
+			expect(history.statusReason).toBe('Cannot import to read-only root folder');
 		} finally {
 			await rm(sourceDir, { recursive: true, force: true });
+		}
+	});
+
+	it('records a successful import as a two-state "imported" history row', async () => {
+		await testDb.db.insert(rootFolders).values({
+			id: 'success-root',
+			name: 'Movies',
+			path: '/movies',
+			mediaType: 'movie'
+		});
+		await testDb.db.insert(movies).values({
+			id: 'movie-success-1',
+			tmdbId: 777,
+			title: 'Imported Movie',
+			path: 'Imported Movie (2024)',
+			rootFolderId: 'success-root'
+		});
+		const service = manualImportService as unknown as {
+			recordImportHistory: (
+				request: { sourcePath?: string; mediaType: 'movie' | 'tv'; tmdbId: number },
+				outcome: { success: true; result: Record<string, unknown> }
+			) => Promise<void>;
+		};
+
+		const destDir = await mkdtemp(join(tmpdir(), 'cinephage-history-success-'));
+		const importedPath = join(destDir, 'Imported Movie (2024).mkv');
+		try {
+			await writeFile(importedPath, 'x'.repeat(1234));
+
+			await service.recordImportHistory(
+				{
+					sourcePath: '/downloads/Imported.Movie.2024.1080p.WEB-DL.x264-GROUP.mkv',
+					mediaType: 'movie',
+					tmdbId: 777
+				},
+				{
+					success: true,
+					result: {
+						mediaType: 'movie',
+						libraryId: 'movie-success-1',
+						importedPath,
+						importedPaths: [importedPath],
+						transferMode: 'hardlink'
+					}
+				}
+			);
+
+			const [history] = await testDb.db
+				.select()
+				.from(downloadHistory)
+				.where(eq(downloadHistory.movieId, 'movie-success-1'));
+			expect(history.status).toBe('imported');
+			expect(history.statusReason).toBeNull();
+			expect(history.transferMode).toBe('hardlink');
+			expect(history.downloadClientName).toBe('Manual Import');
+			expect(history.indexerName).toBe('Manual');
+			expect(history.size).toBe(1234);
+			expect(history.quality).toMatchObject({ resolution: '1080p', source: 'webdl' });
+			expect(history.releaseGroup).toBe('GROUP');
+		} finally {
+			await rm(destDir, { recursive: true, force: true });
 		}
 	});
 });

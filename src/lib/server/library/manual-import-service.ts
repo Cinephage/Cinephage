@@ -3,7 +3,14 @@ import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import { readdir, stat, unlink } from 'node:fs/promises';
 import { and, asc, eq, gt, inArray } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
-import { episodes, movies, rootFolders, series, unmatchedFiles } from '#lib/server/db/schema.js';
+import {
+	downloadHistory,
+	episodes,
+	movies,
+	rootFolders,
+	series,
+	unmatchedFiles
+} from '#lib/server/db/schema.js';
 import { tmdb } from '#lib/server/tmdb.js';
 import { createChildLogger } from '#lib/logging/index.js';
 
@@ -217,11 +224,20 @@ export class ManualImportService {
 				(!fileParsed.cleanTitle || isStrmFile)
 			) {
 				parsed = folderParsed;
-				tvIdentifier = resolveTvEpisodeIdentifier({
-					filePath: selectedFile.path,
-					fileName: parentFolderName,
-					parsed: folderParsed
-				});
+				// The file's own name may already carry a reliable per-file episode
+				// identifier (e.g. a .strm placeholder whose underlying filename
+				// still has real release info, like "Show.S02E02....mkv.strm").
+				// Only fall back to the shared parent folder's identifier when the
+				// file itself didn't resolve one - otherwise every file in the
+				// folder collapses to the same (or no) season/episode, since the
+				// folder name has no per-episode info to give.
+				if (!fileTvIdentifier) {
+					tvIdentifier = resolveTvEpisodeIdentifier({
+						filePath: selectedFile.path,
+						fileName: parentFolderName,
+						parsed: folderParsed
+					});
+				}
 			}
 		}
 
@@ -512,6 +528,105 @@ export class ManualImportService {
 	}
 
 	async executeImport(request: ExecuteManualImportRequest): Promise<ExecuteManualImportResult> {
+		try {
+			const result = await this.runImport(request);
+			await this.recordImportHistory(request, { success: true, result });
+			return result;
+		} catch (error) {
+			await this.recordImportHistory(request, { success: false, error }).catch((historyError) => {
+				logger.error(
+					'Failed to record manual import history',
+					historyError instanceof Error ? historyError : undefined
+				);
+			});
+			throw error;
+		}
+	}
+
+	/**
+	 * Writes an audit record for every wizard-driven import attempt (direct
+	 * wizard, Unmatched route, from-within-media route, foreground or
+	 * background).
+	 */
+	private async recordImportHistory(
+		request: ExecuteManualImportRequest,
+		outcome:
+			{ success: true; result: ExecuteManualImportResult } | { success: false; error: unknown }
+	): Promise<void> {
+		const now = new Date().toISOString();
+		const sourcePath = request.sourcePath ?? request.selectedFilePath;
+		const sourceBaseName = sourcePath ? getMediaParseStem(sourcePath) : `tmdb-${request.tmdbId}`;
+		const parsed = parseRelease(sourceBaseName);
+
+		let movieId: string | null;
+		let seriesId: string | null;
+		if (outcome.success) {
+			movieId = outcome.result.mediaType === 'movie' ? outcome.result.libraryId : null;
+			seriesId = outcome.result.mediaType === 'tv' ? outcome.result.libraryId : null;
+		} else {
+			const [movie] =
+				request.mediaType === 'movie'
+					? await db
+							.select({ id: movies.id })
+							.from(movies)
+							.where(eq(movies.tmdbId, request.tmdbId))
+							.limit(1)
+					: [];
+			const [show] =
+				request.mediaType === 'tv'
+					? await db
+							.select({ id: series.id })
+							.from(series)
+							.where(eq(series.tmdbId, request.tmdbId))
+							.limit(1)
+					: [];
+			movieId = movie?.id ?? null;
+			seriesId = show?.id ?? null;
+		}
+
+		let size: number | null = null;
+		if (outcome.success) {
+			const sizes = await Promise.all(
+				outcome.result.importedPaths.map((path) =>
+					stat(path).then(
+						(stats) => stats.size,
+						() => 0
+					)
+				)
+			);
+			size = sizes.reduce((total, fileSize) => total + fileSize, 0) || null;
+		}
+
+		await db.insert(downloadHistory).values({
+			downloadClientName: 'Manual Import',
+			indexerName: 'Manual',
+			title: sourceBaseName,
+			movieId,
+			seriesId,
+			size,
+			seasonNumber: request.seasonNumber ?? null,
+			status: outcome.success ? 'imported' : 'failed',
+			statusReason: outcome.success
+				? null
+				: outcome.error instanceof Error
+					? outcome.error.message
+					: String(outcome.error),
+			transferMode: outcome.success ? outcome.result.transferMode : null,
+			importedPath: outcome.success ? outcome.result.importedPath : null,
+			quality: {
+				resolution: parsed.resolution !== 'unknown' ? parsed.resolution : undefined,
+				source: parsed.source !== 'unknown' ? parsed.source : undefined,
+				codec: parsed.codec !== 'unknown' ? parsed.codec : undefined,
+				hdr: parsed.hdr ?? undefined
+			},
+			releaseGroup: parsed.releaseGroup ?? undefined,
+			grabbedAt: now,
+			completedAt: now,
+			importedAt: outcome.success ? now : null
+		});
+	}
+
+	private async runImport(request: ExecuteManualImportRequest): Promise<ExecuteManualImportResult> {
 		const importSourcePath = request.sourcePath ?? request.selectedFilePath;
 		if (!importSourcePath) {
 			throw new Error('A source path is required for import');
