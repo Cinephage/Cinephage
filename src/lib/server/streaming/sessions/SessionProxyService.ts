@@ -40,29 +40,58 @@ function isRangeHeaderName(name: string): boolean {
 	);
 }
 
-function buildUpstreamHeaders(session: PlaybackSession, request?: Request): Record<string, string> {
-	const headers: Record<string, string> = {
-		...session.requestHeaders,
-		'User-Agent':
-			session.requestHeaders['User-Agent'] ||
-			session.requestHeaders['user-agent'] ||
-			DEFAULT_USER_AGENT,
-		Accept: session.requestHeaders.Accept || session.requestHeaders.accept || '*/*',
-		'Accept-Encoding': 'identity'
-	};
-
-	if (!headers.Referer && !headers.referer && session.requestHeaders.referer) {
-		headers.Referer = session.requestHeaders.referer;
+/**
+ * A playable upstream URL must be absolute http(s).
+ *
+ * Provider error sentinels (`/video/error`) and other relative values cannot be
+ * fetched; treating one as a source produces a failed request at playback time.
+ */
+function isAbsoluteHttpUrl(value: string): boolean {
+	try {
+		const parsed = new URL(value);
+		return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+	} catch {
+		return false;
 	}
+}
 
-	// Origin is a browser-enforced CORS request header. Forwarding it to media
-	// origins triggers hotlink/anti-leech rules on some CDNs (observed: a
-	// subtitle segment returns 404 only when Origin is present) and is not
-	// needed for server-side media fetches.
-	for (const name of Object.keys(headers)) {
-		if (name.toLowerCase() === 'origin') {
-			delete headers[name];
-		}
+/** Header lookup that ignores case, without rewriting the stored key. */ function getHeaderValue(
+	headers: Record<string, string>,
+	name: string
+): string | undefined {
+	const lower = name.toLowerCase();
+	for (const [key, value] of Object.entries(headers)) {
+		if (key.toLowerCase() === lower) return value;
+	}
+	return undefined;
+}
+
+function hasHeader(headers: Record<string, string>, name: string): boolean {
+	return getHeaderValue(headers, name) !== undefined;
+}
+
+function buildUpstreamHeaders(session: PlaybackSession, request?: Request): Record<string, string> {
+	// The gateway's header object is authoritative and is copied verbatim, key
+	// casing included - including `Origin`, which some providers require
+	// (Cinemabz rejects a request without `Origin: https://cinema.army`).
+	// Defaults are only added for headers it did not supply; re-adding a
+	// canonical-cased duplicate would make fetch comma-join two values into a
+	// malformed header (seen with a lowercase `user-agent`).
+	//
+	// The one header that must never come from anywhere else is `Origin`: the
+	// loop below only copies range-conditional headers from the incoming
+	// request, so a browser's own Origin can never leak upstream. Providers
+	// that receive a foreign Origin reject the request (403 at the CDN).
+	const headers: Record<string, string> = { ...session.requestHeaders };
+
+	if (!hasHeader(headers, 'User-Agent')) {
+		headers['User-Agent'] = DEFAULT_USER_AGENT;
+	}
+	if (!hasHeader(headers, 'Accept')) {
+		headers.Accept = '*/*';
+	}
+	if (!hasHeader(headers, 'Accept-Encoding')) {
+		headers['Accept-Encoding'] = 'identity';
 	}
 
 	if (request) {
@@ -318,6 +347,28 @@ export class SessionProxyService {
 		apiKey: string | undefined,
 		request: Request
 	): Promise<Response> {
+		// Last line of defence: a session must never be served from an entry URL
+		// the upstream fetch cannot parse or that SSRF policy rejects. Without
+		// this, a provider error sentinel (e.g. "/video/error") reached
+		// fetchUpstream and escaped as an unhandled error surfaced as HTTP 500.
+		// A rejected source is an unavailable source: report 502 so clients
+		// (and the ?refresh=1 retry path) see a normal upstream failure.
+		if (!isAbsoluteHttpUrl(session.entryUrl)) {
+			logger.warn(
+				{
+					sessionToken: session.token,
+					provider: session.provider,
+					entryUrl: session.entryUrl,
+					...streamLog
+				},
+				'Playback session has a non-absolute entry URL'
+			);
+			return new Response(JSON.stringify({ error: 'Source URL is not playable' }), {
+				status: 502,
+				headers: { 'Content-Type': 'application/json' }
+			});
+		}
+
 		if (session.sourceType === 'dash') {
 			return this.renderDashManifestResponse(session, baseUrl, apiKey);
 		}
@@ -447,13 +498,35 @@ export class SessionProxyService {
 	 * Answer a HEAD probe from a media server without streaming the body.
 	 * Probes the upstream entry URL with a HEAD request and forwards its
 	 * status and the relevant headers (Content-Length, Content-Type, CORS).
+	 *
+	 * Some providers (Vidlove) answer a bare request with a small decoy and
+	 * only reveal the real object to a ranged request, so a progressive HEAD
+	 * that succeeds is verified with a 1 KB Range GET. The HEAD response still
+	 * supplies the reported headers: the ranged reply describes a slice and
+	 * would understate Content-Length.
 	 */
 	async renderHeadResponse(session: PlaybackSession, request: Request): Promise<Response> {
-		const response = await fetchUpstream(
-			session.entryUrl,
-			buildUpstreamHeaders(session, request),
-			'HEAD'
-		);
+		if (!isAbsoluteHttpUrl(session.entryUrl)) {
+			return new Response(JSON.stringify({ error: 'Source URL is not playable' }), {
+				status: 502,
+				headers: { 'Content-Type': 'application/json' }
+			});
+		}
+
+		const headers = buildUpstreamHeaders(session, request);
+		const response = await fetchUpstream(session.entryUrl, headers, 'HEAD');
+
+		const isProgressive = session.sourceType === 'mp4' || session.sourceType === 'file';
+		if (isProgressive && response.ok) {
+			const verdict = await this.probeRange(session.entryUrl, headers);
+			if (verdict === 'decoy') {
+				return new Response(JSON.stringify({ error: 'Upstream returned a decoy payload' }), {
+					status: 502,
+					headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+				});
+			}
+		}
+
 		const contentType =
 			session.sourceType === 'dash'
 				? 'application/dash+xml'
@@ -474,6 +547,40 @@ export class SessionProxyService {
 					isSuspiciousDirectContentType(response.headers.get('content-type'))
 			})
 		});
+	}
+
+	/**
+	 * Classify a progressive source with a 1 KB Range request.
+	 *
+	 * 'real'    — the source honours Range (206 with Content-Range, or an
+	 *             explicit Content-Range on a 200) or serves a whole object
+	 *             clearly larger than the ~31 KB decoy.
+	 * 'decoy'   — the source answered 200 with a body at or below the decoy
+	 *             size and no Content-Range.
+	 * 'unknown' — the probe failed or was inconclusive; callers must not treat
+	 *             a transient failure as proof the source is dead.
+	 */
+	private async probeRange(
+		url: string,
+		headers: Record<string, string>
+	): Promise<'real' | 'decoy' | 'unknown'> {
+		try {
+			const response = await fetchUpstream(url, { ...headers, Range: 'bytes=0-1023' });
+			await response.body?.cancel();
+
+			if (response.status === 206) {
+				return response.headers.get('content-range') ? 'real' : 'unknown';
+			}
+			if (response.status === 200) {
+				if (response.headers.get('content-range')) return 'real';
+				const contentLength = Number(response.headers.get('content-length') ?? '0');
+				if (!Number.isFinite(contentLength) || contentLength <= 0) return 'unknown';
+				return contentLength > 32 * 1024 ? 'real' : 'decoy';
+			}
+			return 'unknown';
+		} catch {
+			return 'unknown';
+		}
 	}
 
 	async renderSubtitlePlaylist(

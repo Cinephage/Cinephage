@@ -66,7 +66,7 @@ describe('SessionProxyService.renderLaunchMedia', () => {
 		expect(upstreamInit.headers.range).toBe('bytes=0-3');
 	});
 
-	it('does not forward the browser-only Origin header upstream', async () => {
+	it('forwards a gateway-supplied Origin but never a browser one', async () => {
 		fetchWithTimeoutMock.mockResolvedValue(
 			new Response(new Uint8Array([0x00, 0x01]), {
 				status: 200,
@@ -77,6 +77,7 @@ describe('SessionProxyService.renderLaunchMedia', () => {
 		const { getPlaybackSessionStore } = await import('./session-store');
 		const { getSessionProxyService } = await import('./SessionProxyService');
 
+		// Cinemabz shape: the gateway requires Origin: https://cinema.army.
 		const session = getPlaybackSessionStore().createSession({
 			mediaType: 'movie',
 			tmdbId: 541135,
@@ -94,14 +95,124 @@ describe('SessionProxyService.renderLaunchMedia', () => {
 			session,
 			BASE_URL,
 			'api-key',
-			new Request(`${BASE_URL}/api/streaming/session/movie/541135`)
+			new Request(`${BASE_URL}/api/streaming/session/movie/541135`, {
+				// The browser's own origin must never reach the CDN.
+				headers: { Origin: 'https://cinephage.example' }
+			})
+		);
+
+		const [, upstreamInit] = fetchWithTimeoutMock.mock.calls[0];
+		expect(upstreamInit.headers.Origin).toBe('https://cinema.army');
+		expect(upstreamInit.headers.Referer).toBe('https://cinema.army/');
+		expect(upstreamInit.headers['User-Agent']).toBe('player-agent');
+	});
+
+	it('never adds an Origin header when the gateway supplied none', async () => {
+		fetchWithTimeoutMock.mockResolvedValue(
+			new Response(new Uint8Array([0x00, 0x01]), {
+				status: 200,
+				headers: { 'Content-Type': 'video/mp4' }
+			})
+		);
+
+		const { getPlaybackSessionStore } = await import('./session-store');
+		const { getSessionProxyService } = await import('./SessionProxyService');
+
+		const session = getPlaybackSessionStore().createSession({
+			mediaType: 'movie',
+			tmdbId: 541138,
+			entryUrl: 'https://cdn.example.com/vidy.mp4',
+			sourceType: 'mp4',
+			requestHeaders: { Referer: 'https://www.vidy.st/' },
+			attempts: []
+		});
+
+		await getSessionProxyService().renderLaunchMedia(
+			session,
+			BASE_URL,
+			'api-key',
+			new Request(`${BASE_URL}/api/streaming/session/movie/541138`, {
+				headers: { Origin: 'https://cinephage.example' }
+			})
 		);
 
 		const [, upstreamInit] = fetchWithTimeoutMock.mock.calls[0];
 		expect(upstreamInit.headers.Origin).toBeUndefined();
 		expect(upstreamInit.headers.origin).toBeUndefined();
-		expect(upstreamInit.headers.Referer).toBe('https://cinema.army/');
-		expect(upstreamInit.headers['User-Agent']).toBe('player-agent');
+	});
+
+	it('passes gateway headers through verbatim without inventing a Referer', async () => {
+		fetchWithTimeoutMock.mockResolvedValue(
+			new Response(new Uint8Array([0x00, 0x01]), {
+				status: 200,
+				headers: { 'Content-Type': 'video/mp4' }
+			})
+		);
+
+		const { getPlaybackSessionStore } = await import('./session-store');
+		const { getSessionProxyService } = await import('./SessionProxyService');
+
+		// Vidlove shape: requiresProxy with no headers at all. The proxy must not
+		// add a Referer (or Origin) the gateway did not ask for.
+		const session = getPlaybackSessionStore().createSession({
+			mediaType: 'movie',
+			tmdbId: 541136,
+			entryUrl: 'https://cdn.example.com/vidlove.mp4',
+			sourceType: 'mp4',
+			requestHeaders: {},
+			attempts: []
+		});
+
+		await getSessionProxyService().renderLaunchMedia(
+			session,
+			BASE_URL,
+			'api-key',
+			new Request(`${BASE_URL}/api/streaming/session/movie/541136`, {
+				headers: { Origin: 'https://cinephage.example' }
+			})
+		);
+
+		const [, upstreamInit] = fetchWithTimeoutMock.mock.calls[0];
+		expect(upstreamInit.headers.Referer).toBeUndefined();
+		expect(upstreamInit.headers.referer).toBeUndefined();
+		expect(upstreamInit.headers.Origin).toBeUndefined();
+		expect(upstreamInit.headers.origin).toBeUndefined();
+	});
+
+	it('keeps a lowercase gateway user-agent without duplicating it', async () => {
+		fetchWithTimeoutMock.mockResolvedValue(
+			new Response(new Uint8Array([0x00, 0x01]), {
+				status: 200,
+				headers: { 'Content-Type': 'video/mp4' }
+			})
+		);
+
+		const { getPlaybackSessionStore } = await import('./session-store');
+		const { getSessionProxyService } = await import('./SessionProxyService');
+
+		const session = getPlaybackSessionStore().createSession({
+			mediaType: 'movie',
+			tmdbId: 541137,
+			entryUrl: 'https://cdn.example.com/cno.mp4',
+			sourceType: 'mp4',
+			requestHeaders: {
+				'user-agent': 'GatewayAgent/1.0',
+				Referer: 'https://cno.to/'
+			},
+			attempts: []
+		});
+
+		await getSessionProxyService().renderLaunchMedia(
+			session,
+			BASE_URL,
+			'api-key',
+			new Request(`${BASE_URL}/api/streaming/session/movie/541137`)
+		);
+
+		const [, upstreamInit] = fetchWithTimeoutMock.mock.calls[0];
+		expect(upstreamInit.headers['user-agent']).toBe('GatewayAgent/1.0');
+		expect(upstreamInit.headers['User-Agent']).toBeUndefined();
+		expect(upstreamInit.headers.Referer).toBe('https://cno.to/');
 	});
 
 	it('returns the upstream error when an mp4 source fails', async () => {
@@ -380,6 +491,36 @@ describe('SessionProxyService.renderLaunchMedia', () => {
 		expect(response.headers.get('ETag')).toBe('"stream-v1"');
 		expect(await response.text()).toBe('');
 	});
+
+	it('rejects a non-absolute entry URL with a 502 instead of throwing', async () => {
+		const { getPlaybackSessionStore } = await import('./session-store');
+		const { getSessionProxyService } = await import('./SessionProxyService');
+
+		// Regression: a provider sentinel ("/video/error") used to reach
+		// fetchUpstream, escape as an unhandled error, and surface as HTTP 500.
+		const session = getPlaybackSessionStore().createSession({
+			mediaType: 'tv',
+			tmdbId: 1769,
+			season: 6,
+			episode: 20,
+			provider: 'Xpass',
+			entryUrl: '/video/error',
+			sourceType: 'hls',
+			requestHeaders: {},
+			attempts: []
+		});
+
+		const response = await getSessionProxyService().renderLaunchMedia(
+			session,
+			BASE_URL,
+			'api-key',
+			new Request(`${BASE_URL}/api/streaming/session/tv/1769/6/20`)
+		);
+
+		expect(response.status).toBe(502);
+		expect(await response.json()).toEqual({ error: 'Source URL is not playable' });
+		expect(fetchWithTimeoutMock).not.toHaveBeenCalled();
+	});
 });
 
 describe('SessionProxyService.renderHeadResponse', () => {
@@ -403,16 +544,27 @@ describe('SessionProxyService.renderHeadResponse', () => {
 	}
 
 	it('probes the upstream with HEAD and returns status without a body', async () => {
-		fetchWithTimeoutMock.mockResolvedValue(
-			new Response(null, {
-				status: 200,
-				headers: {
-					'Content-Type': 'video/mp4',
-					'Content-Length': '12345',
-					'Accept-Ranges': 'bytes'
-				}
-			})
-		);
+		fetchWithTimeoutMock
+			.mockResolvedValueOnce(
+				new Response(null, {
+					status: 200,
+					headers: {
+						'Content-Type': 'video/mp4',
+						'Content-Length': '12345',
+						'Accept-Ranges': 'bytes'
+					}
+				})
+			)
+			// The progressive Range verification that follows the HEAD.
+			.mockResolvedValueOnce(
+				new Response(new Uint8Array([0]), {
+					status: 206,
+					headers: {
+						'Content-Type': 'video/mp4',
+						'Content-Range': 'bytes 0-1023/12345'
+					}
+				})
+			);
 
 		const { getSessionProxyService } = await import('./SessionProxyService');
 		const session = await createSession('mp4');
@@ -424,6 +576,7 @@ describe('SessionProxyService.renderHeadResponse', () => {
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Content-Type')).toBe('video/mp4');
+		// Headers come from the HEAD probe, not the 1 KB slice.
 		expect(response.headers.get('Content-Length')).toBe('12345');
 		expect(response.headers.get('Accept-Ranges')).toBe('bytes');
 		expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
@@ -431,6 +584,74 @@ describe('SessionProxyService.renderHeadResponse', () => {
 
 		const [, upstreamInit] = fetchWithTimeoutMock.mock.calls[0];
 		expect(upstreamInit.method).toBe('HEAD');
+	});
+
+	it('verifies a progressive source with a 1 KB Range request', async () => {
+		fetchWithTimeoutMock
+			.mockResolvedValueOnce(
+				new Response(null, { status: 200, headers: { 'Content-Type': 'video/mp4' } })
+			)
+			.mockResolvedValueOnce(
+				new Response(new Uint8Array([0]), {
+					status: 206,
+					headers: {
+						'Content-Type': 'video/mp4',
+						'Content-Range': 'bytes 0-1023/5000000',
+						'Accept-Ranges': 'bytes'
+					}
+				})
+			);
+
+		const { getSessionProxyService } = await import('./SessionProxyService');
+		const session = await createSession('mp4');
+
+		const response = await getSessionProxyService().renderHeadResponse(
+			session,
+			new Request(`${BASE_URL}/api/streaming/session/movie/541134`)
+		);
+
+		expect(response.status).toBe(200);
+		const [, rangeInit] = fetchWithTimeoutMock.mock.calls[1];
+		expect(rangeInit.headers.Range).toBe('bytes=0-1023');
+	});
+
+	it('treats a small 200 without Content-Range as a decoy', async () => {
+		fetchWithTimeoutMock
+			.mockResolvedValueOnce(
+				new Response(null, { status: 200, headers: { 'Content-Type': 'video/mp4' } })
+			)
+			.mockResolvedValueOnce(
+				new Response(new Uint8Array([0]), {
+					status: 200,
+					headers: { 'Content-Type': 'video/mp4', 'Content-Length': String(31 * 1024) }
+				})
+			);
+
+		const { getSessionProxyService } = await import('./SessionProxyService');
+		const session = await createSession('mp4');
+
+		const response = await getSessionProxyService().renderHeadResponse(
+			session,
+			new Request(`${BASE_URL}/api/streaming/session/movie/541134`)
+		);
+
+		// A decoy is not a playable source: report an upstream failure rather
+		// than handing the media server a bogus 1080p "success".
+		expect(response.status).toBe(502);
+	});
+
+	it('does not range-probe manifests', async () => {
+		fetchWithTimeoutMock.mockResolvedValue(new Response(null, { status: 200 }));
+
+		const { getSessionProxyService } = await import('./SessionProxyService');
+		const session = await createSession('hls');
+
+		await getSessionProxyService().renderHeadResponse(
+			session,
+			new Request(`${BASE_URL}/api/streaming/session/movie/541134`)
+		);
+
+		expect(fetchWithTimeoutMock).toHaveBeenCalledTimes(1);
 	});
 
 	it('sets the manifest content type for hls sources', async () => {
