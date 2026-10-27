@@ -219,6 +219,25 @@ function normalizeFutureExpiry(value: unknown): number | undefined {
 	return seconds > Math.floor(Date.now() / 1000) ? seconds : undefined;
 }
 
+/**
+ * A gateway source URL must be an absolute http(s) URL.
+ *
+ * Upstream pools have emitted error sentinels (`/video/error`) in the `url`
+ * field as if they were playable streams. Accepting one creates a playback
+ * session whose entry URL can never be fetched; the proxy then fails on the
+ * first request, which surfaced as an opaque HTTP 500. Dropping the candidate
+ * here lets the next-ranked source win, or turns the response into a clean
+ * "no playable streams" result.
+ */
+function isAbsoluteHttpUrl(value: string): boolean {
+	try {
+		const parsed = new URL(value);
+		return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+	} catch {
+		return false;
+	}
+}
+
 function extractStreams(payload: CinephageApiResponse): unknown[] {
 	if (typeof payload.url === 'string' && typeof payload.provider === 'string') return [payload];
 	if (Array.isArray(payload.streams)) return payload.streams;
@@ -250,17 +269,32 @@ function normalizeSource(entry: unknown, apiBaseUrl: string): StreamSource | nul
 		entry.playlist
 	);
 	if (!url) return null;
+	if (!isAbsoluteHttpUrl(url)) {
+		// Never build a session around an unplayable URL. Logged so a provider
+		// that starts emitting sentinels is visible rather than silent.
+		logger.warn(
+			{ ...streamLog, provider: getFirstString(entry.provider, entry.providerId), url },
+			'Discarding gateway stream source with a non-absolute URL'
+		);
+		return null;
+	}
 	const headerRefererKey = headers
 		? Object.keys(headers).find((key) => key.toLowerCase() === 'referer')
 		: undefined;
 	const headerReferer = headers && headerRefererKey ? headers[headerRefererKey] : undefined;
+	const requiresProxy = entry.requiresProxy === true;
 	// An explicit empty referer — top-level or inside headers — means "fetch
 	// this source without a Referer header": some CDNs reject any request
 	// carrying one. An empty headers entry is dropped so no empty Referer is
-	// transmitted; when the gateway stays silent, fall back as before.
+	// transmitted. A proxy-only source with no referer anywhere gets none
+	// either: the gateway's header set is authoritative, and adding a referer
+	// it omitted (e.g. Vidlove) is the same class of mistake as adding Origin.
+	// When the gateway stays silent for a plain source, fall back as before.
 	const explicitReferer = typeof entry.referer === 'string' ? entry.referer : headerReferer;
 	const referer =
-		explicitReferer !== undefined ? explicitReferer.trim() : headerReferer?.trim() || apiBaseUrl;
+		explicitReferer !== undefined
+			? explicitReferer.trim()
+			: headerReferer?.trim() || (requiresProxy ? '' : apiBaseUrl);
 	if (headers && headerRefererKey && headerReferer !== undefined && headerReferer.trim() === '') {
 		delete headers[headerRefererKey];
 	}
