@@ -636,23 +636,8 @@ export class UnifiedIndexer implements IIndexer {
 	 * Example: Newznab returns <error code="100" description="..." /> with HTTP 200.
 	 */
 	private detectProviderError(content: string): string | null {
-		// Both Newznab and Torznab use the same <error code="N" description="..."/> XML format.
 		const defId = this.definition.id;
-		if (defId === 'newznab' || defId === 'torznab') {
-			const errorMatch = content.match(/<error\b([^>]*)\/?>/i);
-			if (!errorMatch) return null;
-
-			const attrs = errorMatch[1] ?? '';
-			const codeMatch = attrs.match(/\bcode=(['"]?)([^'" >]+)\1/i);
-			const descQuotedMatch = attrs.match(/\bdescription=(['"])(.*?)\1/i);
-			const descBareMatch = attrs.match(/\bdescription=([^'" >]+)/i);
-
-			const code = codeMatch?.[2] ?? 'unknown';
-			const description = descQuotedMatch?.[2] ?? descBareMatch?.[1] ?? 'Unknown API error';
-			return `Indexer API error ${code}: ${description}`;
-		}
-
-		return null;
+		return detectNewznabApiError(content, defId === 'newznab' || defId === 'torznab');
 	}
 
 	/**
@@ -1448,6 +1433,48 @@ export class UnifiedIndexer implements IIndexer {
 	private delay(ms: number): Promise<void> {
 		return new Promise((resolve) => setTimeout(resolve, ms));
 	}
+}
+
+/**
+ * Detect a Newznab/Torznab `<error code="N" description="..."/>` response.
+ *
+ * Providers report these with HTTP 200, so without this check a rejected API key
+ * parses as an empty feed and looks like a successful search with no results.
+ * The generic newznab/torznab definitions are not the only ones that speak the
+ * protocol - site-specific usenet definitions use the same endpoints. A document
+ * whose ROOT element is `<error>` is unambiguous, so it is recognised for every
+ * definition; HTML scrapers never start with that element.
+ *
+ * @param content Raw response body.
+ * @param anyErrorPosition When true (generic newznab/torznab), accept an
+ *   `<error>` element anywhere in the document.
+ */
+export function detectNewznabApiError(
+	content: string,
+	anyErrorPosition: boolean = false
+): string | null {
+	if (!anyErrorPosition) {
+		// Skip the XML prolog and whitespace, then require the root element itself.
+		const rootElement = content
+			.replace(/^\uFEFF/, '')
+			.replace(/<\?xml[^>]*\?>/i, '')
+			.trimStart();
+		if (!/^<error\b/i.test(rootElement)) {
+			return null;
+		}
+	}
+
+	const errorMatch = content.match(/<error\b([^>]*)\/?>/i);
+	if (!errorMatch) return null;
+
+	const attrs = errorMatch[1] ?? '';
+	const codeMatch = attrs.match(/\bcode=(['"]?)([^'" >]+)\1/i);
+	const descQuotedMatch = attrs.match(/\bdescription=(['"])(.*?)\1/i);
+	const descBareMatch = attrs.match(/\bdescription=([^'" >]+)/i);
+
+	const code = codeMatch?.[2] ?? 'unknown';
+	const description = descQuotedMatch?.[2] ?? descBareMatch?.[1] ?? 'Unknown API error';
+	return `Indexer API error ${code}: ${description}`;
 }
 
 /**

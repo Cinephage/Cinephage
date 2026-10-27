@@ -1,0 +1,126 @@
+---
+# Usenet-Crawler Private Usenet Indexer (Newznab API)
+#
+# Auth is the account API key passed as a query parameter. Capabilities
+# verified live at /api?t=caps (limits max=100; movie-search supports
+# q,imdbid,tmdbid,genre; tv-search supports q,rid,tvdbid,imdbid,tvmazeid,
+# season,ep).
+#
+# Every search uses the generic t=search endpoint. Title queries against
+# t=movie / t=tvsearch returned no results for plain title searches, which is
+# why this definition does not use those endpoints even though the caps
+# advertise them. Two 100-result pages are requested because broad title
+# queries can match 700+ releases; add another offset/limit path if deeper
+# coverage is needed.
+id: usenet-crawler
+name: Usenet-Crawler
+description: 'A private usenet indexer (Newznab API). Title searches cover two 100-result pages, enough for broad queries that match 700+ releases.'
+language: en-US
+type: private
+protocol: usenet
+encoding: UTF-8
+requestdelay: 2
+
+links:
+  - https://www.usenet-crawler.com/
+
+settings:
+  - name: apikey
+    type: password
+    label: API Key
+    required: true
+  - name: info_key
+    type: info
+    label: About your API key
+    default: 'Find your API key on your Usenet-Crawler profile page.'
+
+caps:
+  categories:
+    '2000': Movies
+    '2010': Movies/Foreign
+    '2020': Movies/Other
+    '2030': Movies/SD
+    '2040': Movies/HD
+    '2045': Movies/UHD
+    '2050': Movies/BluRay
+    '2060': Movies/3D
+    '5000': TV
+    '5020': TV/Foreign
+    '5030': TV/SD
+    '5040': TV/HD
+    '5045': TV/UHD
+    '5060': TV/Sport
+    '5070': TV/Anime
+    '5080': TV/Documentary
+
+  categorymappings:
+    - { id: '2000', cat: Movies, desc: 'Movies', default: true }
+    - { id: '5000', cat: TV, desc: 'TV', default: true }
+
+  modes:
+    search: [q]
+    tv-search: [q, season, ep]
+    movie-search: [q]
+
+search:
+  paths:
+    # Page 1: items 1-100. cat= is omitted for open searches so the API never
+    # receives an empty category filter.
+    - path: api?t=search&apikey={{ .Config.apikey }}&q={{ .Keywords }}{{ if .Categories }}&cat={{ join .Categories "," }}{{ end }}&extended=1&o=xml&limit=100&offset=0{{ if .Query.Season }}&season={{ .Query.Season }}{{ end }}{{ if .Query.Ep }}&ep={{ .Query.Ep }}{{ end }}
+      method: get
+    # Page 2: items 101-200
+    - path: api?t=search&apikey={{ .Config.apikey }}&q={{ .Keywords }}{{ if .Categories }}&cat={{ join .Categories "," }}{{ end }}&extended=1&o=xml&limit=100&offset=100{{ if .Query.Season }}&season={{ .Query.Season }}{{ end }}{{ if .Query.Ep }}&ep={{ .Query.Ep }}{{ end }}
+      method: get
+
+  response:
+    type: xml
+
+  rows:
+    selector: rss channel item
+
+  fields:
+    title:
+      selector: title
+    details:
+      selector: comments
+      optional: true
+    download:
+      selector: link
+    guid:
+      selector: guid
+      optional: true
+    date:
+      selector: pubDate
+      optional: true
+    size:
+      selector: enclosure
+      attribute: length
+      optional: true
+    grabs:
+      selector: "newznab|attr[name='grabs']"
+      attribute: value
+      optional: true
+    category:
+      selector: "newznab|attr[name='category']"
+      attribute: value
+      optional: true
+    imdbid:
+      selector: "newznab|attr[name='imdb']"
+      attribute: value
+      optional: true
+    tmdbid:
+      selector: "newznab|attr[name='tmdbid']"
+      attribute: value
+      optional: true
+    tvdbid:
+      selector: "newznab|attr[name='tvdbid']"
+      attribute: value
+      optional: true
+    language:
+      selector: "newznab|attr[name='language']"
+      attribute: value
+      optional: true
+    subs:
+      selector: "newznab|attr[name='subs']"
+      attribute: value
+      optional: true
