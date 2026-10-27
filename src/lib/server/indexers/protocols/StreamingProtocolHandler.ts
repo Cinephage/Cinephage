@@ -21,6 +21,7 @@ import {
 } from './IProtocolHandler';
 import type { ReleaseResult, EnhancedReleaseResult } from '../types/release';
 import type { StreamingProtocolSettings } from '../types/protocol';
+import { providerMatches } from './providerName.js';
 
 // =============================================================================
 // CONSTANTS
@@ -243,7 +244,10 @@ export class StreamingProtocolHandler extends BaseProtocolHandler implements ISt
 		// Reject based on provider blacklist
 		if (settings.blockedProviders && settings.blockedProviders.length > 0) {
 			const provider = streaming?.providerName ?? this.extractProviderName(result.downloadUrl);
-			if (provider && settings.blockedProviders.includes(provider.toLowerCase())) {
+			if (
+				provider &&
+				settings.blockedProviders.some((blocked) => providerMatches(provider, blocked))
+			) {
 				return `Provider blocked: ${provider}`;
 			}
 		}
@@ -463,7 +467,7 @@ export class StreamingProtocolHandler extends BaseProtocolHandler implements ISt
 	 */
 	private isPremiumSource(provider: string | undefined): boolean {
 		if (!provider) return false;
-		return PREMIUM_SOURCES.includes(provider.toLowerCase());
+		return PREMIUM_SOURCES.some((premium) => providerMatches(provider, premium));
 	}
 
 	/**
