@@ -110,6 +110,7 @@ export interface ExecuteManualImportResult {
 	importedPath: string;
 	importedPaths: string[];
 	importedCount: number;
+	transferMode: string;
 }
 
 /**
@@ -527,6 +528,7 @@ export class ManualImportService {
 		const importedPaths: string[] = [];
 		const unmatchedIds: string[] = [];
 		const episodeMapping: Record<string, { season: number; episode: number }> = {};
+		let primaryTransferMode: string | undefined;
 
 		if (request.mediaType === 'movie') {
 			const movieContext = await this.resolveMovieContext(request);
@@ -550,13 +552,14 @@ export class ManualImportService {
 				extname(sourceFile.path)
 			);
 
-			await this.transferSourceFile(
+			const movieTransfer = await this.transferSourceFile(
 				sourceFile.path,
 				destinationPath,
 				rootFolder.preserveSymlinks ?? false,
 				request.importMode,
 				request.preferHardlink
 			);
+			primaryTransferMode ??= movieTransfer.transferMode;
 			const unmatchedId = await this.insertUnmatchedImportRecord({
 				destinationPath,
 				rootFolderId: rootFolder.id,
@@ -632,13 +635,14 @@ export class ManualImportService {
 				}
 				destinationSet.add(destinationPath);
 
-				await this.transferSourceFile(
+				const episodeTransfer = await this.transferSourceFile(
 					sourceFile.path,
 					destinationPath,
 					rootFolder.preserveSymlinks ?? false,
 					request.importMode,
 					request.preferHardlink
 				);
+				primaryTransferMode ??= episodeTransfer.transferMode;
 				const unmatchedId = await this.insertUnmatchedImportRecord({
 					destinationPath,
 					rootFolderId: rootFolder.id,
@@ -712,7 +716,8 @@ export class ManualImportService {
 				libraryId: movie.id,
 				importedPath: importedPaths[0],
 				importedPaths,
-				importedCount: importedPaths.length
+				importedCount: importedPaths.length,
+				transferMode: primaryTransferMode as string
 			};
 		}
 
@@ -733,7 +738,8 @@ export class ManualImportService {
 			libraryId: show.id,
 			importedPath: importedPaths[0],
 			importedPaths,
-			importedCount: importedPaths.length
+			importedCount: importedPaths.length,
+			transferMode: primaryTransferMode as string
 		};
 	}
 

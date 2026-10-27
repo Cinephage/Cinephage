@@ -560,6 +560,55 @@ describe('trackUnmatchedDownloads', () => {
 		expect(history[0].statusReason).not.toMatch(/import wizard/i);
 	});
 
+	it('records a wizard import with its real transfer mode/path, no status-reason line', async () => {
+		// trackUnmatchedGroup (the import wizard) calls this same endpoint
+		// right after its own transfer completes, purely to link the
+		// download client's job. With the wizard's transfer details in
+		// hand, the history row should look like any other successful
+		// import ("Import Method" / "Imported to"), not a status-reason
+		// sentence - that's reserved for the Unmatched tab's own Attach,
+		// where nothing is ever transferred.
+		getDownloads.mockResolvedValue([makeDownload()]);
+		await seedMovie();
+		await seedMovieFile();
+
+		await getDownloadMonitor().trackUnmatchedDownloads([
+			{
+				hash: HASH_A,
+				mediaType: 'movie',
+				tmdbId: 42,
+				viaWizardImport: true,
+				transferMode: 'hardlink',
+				importedPath: '/movies/Test Movie (2026)/Test Movie (2026).mkv'
+			}
+		]);
+
+		const [history] = await testDb.db
+			.select()
+			.from(downloadHistory)
+			.where(eq(downloadHistory.downloadId, HASH_A));
+		expect(history.statusReason).toBeNull();
+		expect(history.transferMode).toBe('hardlink');
+		expect(history.importedPath).toBe('/movies/Test Movie (2026)/Test Movie (2026).mkv');
+	});
+
+	it('falls back to a status-reason line for a wizard import with no transfer details', async () => {
+		getDownloads.mockResolvedValue([makeDownload({ hash: HASH_B })]);
+		await seedMovie();
+		await seedMovieFile();
+
+		await getDownloadMonitor().trackUnmatchedDownloads([
+			{ hash: HASH_B, mediaType: 'movie', tmdbId: 42, viaWizardImport: true }
+		]);
+
+		const [history] = await testDb.db
+			.select()
+			.from(downloadHistory)
+			.where(eq(downloadHistory.downloadId, HASH_B));
+		expect(history.statusReason).toMatch(/import wizard/i);
+		expect(history.statusReason).not.toMatch(/no file transfer/i);
+	});
+
 	it('tracks a usenet movie as imported (no seeding state), not torrent-labeled', async () => {
 		clientImplementation.value = 'sabnzbd';
 		getDownloads.mockResolvedValue([makeDownload({ status: 'completed' })]);

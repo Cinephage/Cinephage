@@ -4577,6 +4577,9 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			tmdbId: number;
 			seasonNumber?: number | null;
 			episodeNumber?: number | null;
+			viaWizardImport?: boolean;
+			transferMode?: string;
+			importedPath?: string;
 		}[]
 	): Promise<{
 		tracked: { hash: string; queueId: string }[];
@@ -4693,6 +4696,12 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			const itemProtocol = getClientProtocol(client.implementation);
 			const status = itemProtocol === 'torrent' ? 'seeding-imported' : 'imported';
 			const parsedRelease = releaseParser.parse(download.name);
+			const statusReason =
+				pair.viaWizardImport && pair.transferMode
+					? null
+					: pair.viaWizardImport
+						? 'Imported via the Import Wizard - download linked for tracking'
+						: 'Already in library - linked from the Unmatched tab, no file transfer';
 
 			const queueId = await this.createLinkedQueueRow({
 				client,
@@ -4722,7 +4731,9 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 				seriesId: media.seriesId,
 				seasonNumber: pair.seasonNumber ?? null,
 				status: 'imported',
-				statusReason: 'Already in library - linked from the Unmatched tab, no files moved',
+				statusReason,
+				transferMode: pair.transferMode ?? null,
+				importedPath: pair.importedPath ?? null,
 				quality: {
 					resolution: parsedRelease.resolution ?? undefined,
 					source: parsedRelease.source ?? undefined,

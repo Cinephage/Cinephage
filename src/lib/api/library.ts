@@ -162,6 +162,7 @@ export interface ImportExecuteResult {
 	importedPath: string;
 	importedPaths: string[];
 	importedCount: number;
+	transferMode: string;
 }
 
 export interface ImportExecuteResponse {
