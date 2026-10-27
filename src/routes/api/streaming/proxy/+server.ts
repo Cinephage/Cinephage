@@ -185,13 +185,17 @@ export const GET: RequestHandler = async ({ url, request }) => {
 			);
 		}
 
-		// Note: Don't send Origin header - some CDNs reject it
+		// Note: Don't send Origin header - some CDNs reject it. A Referer is only
+		// sent when the caller supplied one or the host has a known mapping;
+		// inventing one breaks providers that reject foreign referers.
 		const headers: HeadersInit = {
 			'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
 			Accept: '*/*',
-			'Accept-Encoding': 'identity',
-			Referer: referer
+			'Accept-Encoding': 'identity'
 		};
+		if (referer) {
+			headers.Referer = referer;
+		}
 
 		// Add cached Cloudflare cookies if available for this domain
 		try {

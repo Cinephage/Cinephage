@@ -78,6 +78,8 @@ export async function fetchWithTimeout(url: string, options: FetchOptions = {}):
  * Check if a stream URL is accessible.
  *
  * Performs a HEAD request with a short timeout to verify the stream is working.
+ * Progressive (mp4) liveness checks that must distinguish real media from a
+ * provider decoy should use the session proxy's ranged HEAD probe instead.
  *
  * @param url - The stream URL to check
  * @param referer - Optional referer header

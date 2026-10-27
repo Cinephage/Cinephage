@@ -35,14 +35,28 @@ export const PROXY_SEGMENT_MAX_SIZE = parseInt(
 /** Maximum retry attempts for proxy fetches on 5xx errors */
 export const PROXY_MAX_RETRIES = parseInt(process.env.PROXY_MAX_RETRIES || '2', 10);
 
-/** Default referer for proxy requests */
-export const DEFAULT_PROXY_REFERER = process.env.DEFAULT_PROXY_REFERER || 'https://videasy.net';
+/**
+ * Default referer for the legacy URL-based proxy.
+ *
+ * Empty means "send no Referer header". That is the safe default: the gateway
+ * supplies the exact per-provider header set, and newer providers reject a
+ * request carrying a Referer (or Origin) they did not ask for. Only set this
+ * when every proxied request genuinely needs one.
+ */
+export const DEFAULT_PROXY_REFERER = process.env.DEFAULT_PROXY_REFERER || '';
 
-/** Referer mappings for different stream domains */
+/**
+ * Referer mappings for the legacy proxy, matched by hostname substring.
+ *
+ * Deliberately limited to providers that require a Referer: adding one for a
+ * provider that does not is indistinguishable from inventing it. Dead
+ * providers (videasy) are not listed.
+ */
 export const PROXY_REFERER_MAP: Record<string, string> = {
 	vidlink: 'https://vidlink.pro',
 	vidsrc: 'https://vidsrc.to',
-	videasy: 'https://videasy.net',
+	cno: 'https://cno.to/',
+	vidy: 'https://www.vidy.st/',
 	hexa: 'https://hexawatch.to',
 	smashystream: 'https://smashystream.top',
 	xprime: 'https://xprime.tv'
