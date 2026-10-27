@@ -6,7 +6,6 @@
 		sortField: string;
 		sortDirection: 'asc' | 'desc';
 		onSort?: (field: string) => void;
-		showProgressDetail?: boolean;
 		allSelectableSelected: boolean;
 		someSelectableSelected: boolean;
 		selectableCount: number;
@@ -17,7 +16,6 @@
 		sortField,
 		sortDirection,
 		onSort,
-		showProgressDetail = true,
 		allSelectableSelected,
 		someSelectableSelected,
 		selectableCount,
@@ -120,7 +118,7 @@
 		onclick={() => handleSort('time')}
 	>
 		<span class="flex items-center gap-1">
-			{showProgressDetail ? 'Progress' : 'Time'}
+			{m.activity_table_time()}
 			{#if onSort}
 				{@const Icon = getSortIcon('time')}
 				<Icon class="h-3 w-3 opacity-50" />
