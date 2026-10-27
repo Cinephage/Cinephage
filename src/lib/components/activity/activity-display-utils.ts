@@ -260,7 +260,7 @@ export function getMobileCompactStatusLabel(
 }
 
 function getActivityCategoryTag(
-	activity: Pick<UnifiedActivity, 'taskType' | 'activitySource'>
+	activity: Pick<UnifiedActivity, 'taskType' | 'activitySource' | 'downloadClientId'>
 ): ActivityCategoryTag | null {
 	if (activity.taskType && SUBTITLE_TASK_TYPES.has(activity.taskType)) {
 		return { label: m.activity_tag_sub(), variant: 'badge-ghost badge-xs' };
@@ -274,9 +274,13 @@ function getActivityCategoryTag(
 	if (activity.taskType === 'media_move') {
 		return { label: m.activity_tag_move(), variant: 'badge-ghost badge-xs' };
 	}
+	// A manual-import history row (no download client involved) isn't a
+	// "Download" by any meaningful sense - tagging it that way reads as if a
+	// download client triggered the import, which it didn't.
 	if (
 		!activity.taskType &&
-		(activity.activitySource === 'queue' || activity.activitySource === 'download_history')
+		(activity.activitySource === 'queue' ||
+			(activity.activitySource === 'download_history' && activity.downloadClientId))
 	) {
 		return { label: m.activity_tag_download(), variant: 'badge-accent badge-xs' };
 	}
