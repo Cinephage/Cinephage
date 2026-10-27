@@ -1799,7 +1799,6 @@
 				onRemove={handleRemove}
 				onRetry={handleRetry}
 				onBlocklistHistory={handleBlocklistHistory}
-				showProgressDetail={activityTab !== 'history'}
 				onToggleSelection={activityTab === 'history'
 					? handleToggleSelection
 					: handleToggleActiveSelection}

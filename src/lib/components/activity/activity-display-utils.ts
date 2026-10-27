@@ -100,57 +100,6 @@ export function supportsQueuePauseResume(activity: Pick<UnifiedActivity, 'protoc
 }
 
 /**
- * Compact progress-cell text for table layouts.
- *
- * Failed queue items may carry very long client error messages which do not fit
- * well in summary tables. In those cases we surface a short status label and
- * leave the full reason for the expanded detail view / tooltip.
- */
-export function getCompactProgressLabel(activity: UnifiedActivity): string | null {
-	if (!activity.statusReason) {
-		return null;
-	}
-
-	if (activity.status === 'failed') {
-		return m.status_error();
-	}
-
-	if (activity.status === 'search_error') {
-		return m.status_searchError();
-	}
-
-	return activity.statusReason;
-}
-
-/**
- * Mobile-width progress-cell text.
- *
- * `statusReason` is free-form text (not a fixed set of reason codes), so unlike
- * `getMobileCompactStatusLabel` there's no small switch to hand-pick short copy
- * from - truncating it further would just cut words mid-way. Instead, narrow
- * widths fall back to the short status word alone (e.g. "No Results", "Paused");
- * the full reason stays available in the row's expanded detail view.
- */
-export function getMobileCompactProgressLabel(
-	activity: UnifiedActivity,
-	fallbackLabel: string
-): string | null {
-	if (!activity.statusReason) {
-		return null;
-	}
-
-	if (activity.status === 'failed') {
-		return m.status_error();
-	}
-
-	if (activity.status === 'search_error') {
-		return m.status_searchError();
-	}
-
-	return getStatusLabel(activity, fallbackLabel);
-}
-
-/**
  * Human-readable relative timestamp ("3m ago", "2d ago", etc.).
  *
  * Returns `'-'` when `dateStr` is null/undefined so callers don't need to

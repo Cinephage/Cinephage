@@ -21,7 +21,6 @@
 		) => Promise<void>;
 		onRetry?: (id: string) => Promise<void>;
 		onBlocklistHistory?: (historyId: string) => Promise<void>;
-		showProgressDetail?: boolean;
 		selectedIds?: Set<string>;
 		isSelectable?: (activity: UnifiedActivity) => boolean;
 		onToggleSelection?: (activityId: string, selected: boolean) => void;
@@ -41,7 +40,6 @@
 		onRemove,
 		onRetry,
 		onBlocklistHistory,
-		showProgressDetail = true,
 		selectedIds = new Set<string>(),
 		isSelectable = () => false,
 		onToggleSelection,
@@ -189,7 +187,6 @@
 					{sortField}
 					{sortDirection}
 					{onSort}
-					{showProgressDetail}
 					{allSelectableSelected}
 					{someSelectableSelected}
 					selectableCount={selectableIds.length}
@@ -200,7 +197,6 @@
 				{#each activities as activity (activity.id)}
 					<ActivityRow
 						{activity}
-						{showProgressDetail}
 						isSelected={isRowSelected(activity.id)}
 						isSelectable={isSelectable(activity)}
 						isExpanded={expandedId === activity.id}

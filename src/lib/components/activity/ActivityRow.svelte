@@ -19,11 +19,8 @@
 	import { formatBytes } from '#lib/utils/format.js';
 	import {
 		statusConfig,
-		getCompactProgressLabel,
-		getMobileCompactProgressLabel,
 		getCompactStatusLabel,
 		getMobileCompactStatusLabel,
-		getStatusLabel,
 		getResolutionBadge,
 		supportsQueuePauseResume,
 		formatRelativeTime,
@@ -34,7 +31,6 @@
 
 	interface Props {
 		activity: UnifiedActivity;
-		showProgressDetail?: boolean;
 		isSelected: boolean;
 		isSelectable: boolean;
 		isExpanded: boolean;
@@ -48,7 +44,6 @@
 
 	let {
 		activity,
-		showProgressDetail = true,
 		isSelected,
 		isSelectable,
 		isExpanded,
@@ -218,24 +213,6 @@
 	</td>
 
 	<td class="px-2">
-		{#if showProgressDetail}
-			{#if activity.status === 'downloading' && activity.downloadProgress !== undefined}
-				<div class="flex items-center gap-2">
-					<progress
-						class="progress w-10 progress-info sm:w-16"
-						value={activity.downloadProgress}
-						max="100"
-					></progress>
-				</div>
-			{:else if getCompactProgressLabel(activity)}
-				<span class="max-w-32 truncate text-sm text-base-content/60" title={activity.statusReason}>
-					<span class="sm:hidden">{getMobileCompactProgressLabel(activity, config.label)}</span>
-					<span class="hidden sm:inline">{getCompactProgressLabel(activity)}</span>
-				</span>
-			{:else}
-				<span class="text-sm">{getStatusLabel(activity, config.label)}</span>
-			{/if}
-		{/if}
 		<div class="text-xs text-base-content/50" title={getDisplayTime(activity)}>
 			{formatRelativeTime(getDisplayTime(activity))}
 		</div>
