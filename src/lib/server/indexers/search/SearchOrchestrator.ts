@@ -77,6 +77,7 @@ import { eq } from 'drizzle-orm';
 import { blocklistService } from '#lib/server/blocklist/BlocklistService.js';
 import { DANGEROUS_EXTENSIONS, EXECUTABLE_EXTENSIONS } from '#lib/config/constants.js';
 import { matchTitleContainment } from '#lib/server/releases/release-identity.js';
+import { resolveAllowedIndexerIds } from './profile-indexer-filter.js';
 
 /** Options for search orchestration */
 export interface SearchOrchestratorOptions {
@@ -96,6 +97,11 @@ export interface SearchOrchestratorOptions {
 	enrichment?: EnrichmentOptions;
 	/** Filter indexers by protocol (from scoring profile's allowedProtocols) */
 	protocolFilter?: string[];
+	/**
+	 * Restrict this search to these indexer IDs (from the scoring profile's
+	 * allowedIndexerIds). Empty/null means all indexers.
+	 */
+	allowedIndexerIds?: string[] | null;
 }
 
 /** Enhanced search result with enriched releases */
@@ -137,15 +143,22 @@ export interface EnhancedSearchResult {
 
 /** Resolved options after merging with defaults */
 type ResolvedSearchOptions = Required<
-	Omit<SearchOrchestratorOptions, 'enrichment' | 'searchSource' | 'protocolFilter'>
+	Omit<
+		SearchOrchestratorOptions,
+		'enrichment' | 'searchSource' | 'protocolFilter' | 'allowedIndexerIds'
+	>
 > & {
 	enrichment?: EnrichmentOptions;
 	searchSource?: 'interactive' | 'automatic';
 	protocolFilter?: string[];
+	allowedIndexerIds?: string[] | null;
 };
 
 const DEFAULT_OPTIONS: Required<
-	Omit<SearchOrchestratorOptions, 'enrichment' | 'searchSource' | 'protocolFilter'>
+	Omit<
+		SearchOrchestratorOptions,
+		'enrichment' | 'searchSource' | 'protocolFilter' | 'allowedIndexerIds'
+	>
 > = {
 	respectEnabled: true,
 	respectBackoff: true,
@@ -315,7 +328,7 @@ export class SearchOrchestrator {
 		let allReleases: ReleaseResult[] = [];
 		let fromCache = false;
 		if (opts.useCache) {
-			const cached = this.cache.get(enrichedCriteria);
+			const cached = this.cache.get(enrichedCriteria, this.cacheExtra(opts));
 			if (cached) {
 				logger.debug({ resultCount: cached.length }, 'Cache hit');
 				allReleases = [...cached];
@@ -357,7 +370,7 @@ export class SearchOrchestrator {
 			);
 
 			if (opts.useCache && allReleases.length > 0) {
-				this.cache.set(enrichedCriteria, [...allReleases]);
+				this.cache.set(enrichedCriteria, [...allReleases], this.cacheExtra(opts));
 			}
 		}
 
@@ -435,6 +448,16 @@ export class SearchOrchestrator {
 			? { ...criteria, searchSource: opts.searchSource }
 			: criteria;
 
+		// Callers that know the profile only pass `enrichment.scoringProfileId`;
+		// resolve its indexer allowlist here so every automatic search path
+		// (search-on-add, monitoring, cascading, multi-season) honours it without
+		// each site repeating the lookup. When no profile is named, the resolver
+		// falls back to the default profile — the same one the enricher scores
+		// with — so search scope and scoring never disagree.
+		if (opts.allowedIndexerIds === undefined && opts.enrichment) {
+			opts.allowedIndexerIds = await resolveAllowedIndexerIds(opts.enrichment.scoringProfileId);
+		}
+
 		logger.debug(
 			{
 				criteria: criteriaToString(criteriaWithSource),
@@ -458,9 +481,7 @@ export class SearchOrchestrator {
 		// re-run on every request, including cache hits.
 		const interactiveCacheKey =
 			opts.useCache && opts.searchSource === 'interactive'
-				? this.cache.generateKey(enrichedCriteria, {
-						pf: [...(opts.protocolFilter ?? [])].sort().join(',')
-					})
+				? this.cache.generateKey(enrichedCriteria, this.cacheExtra(opts))
 				: null;
 
 		let allReleases: ReleaseResult[] = [];
@@ -731,6 +752,18 @@ export class SearchOrchestrator {
 		return result;
 	}
 
+	/**
+	 * Extra cache-key components for anything that changes which indexers were
+	 * queried. Raw indexer results are cached, so a broader scope's results must
+	 * never be served for a narrower one.
+	 */
+	private cacheExtra(opts: ResolvedSearchOptions): Record<string, unknown> {
+		return {
+			pf: [...(opts.protocolFilter ?? [])].sort().join(','),
+			ix: [...(opts.allowedIndexerIds ?? [])].sort().join(',')
+		};
+	}
+
 	/** Filter indexers based on criteria and options, returning both eligible and rejected */
 	private filterIndexers(
 		indexers: IIndexer[],
@@ -837,6 +870,26 @@ export class SearchOrchestrator {
 					reason: 'indexerFilter',
 					message: 'Excluded by indexer filter'
 				});
+				continue;
+			}
+
+			// Check the scoring profile's indexer allowlist. This is a hard filter in
+			// both interactive and automatic searches: the point of the setting is to
+			// not query excluded indexers at all.
+			if (options.allowedIndexerIds?.length && !options.allowedIndexerIds.includes(indexer.id)) {
+				rejected.push({
+					indexerId: indexer.id,
+					indexerName: indexer.name,
+					reason: 'indexerFilter',
+					message: 'Excluded by the quality profile indexer selection'
+				});
+				logger.debug(
+					{
+						indexerId: indexer.id,
+						allowedIndexerIds: options.allowedIndexerIds
+					},
+					`Indexer ${indexer.name} rejected: not in profile indexer selection`
+				);
 				continue;
 			}
 

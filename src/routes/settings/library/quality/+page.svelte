@@ -330,6 +330,7 @@
 	profile={selectedProfile}
 	allProfiles={data.profiles.map((p) => ({ id: p.id, name: p.name, isBuiltIn: p.isBuiltIn }))}
 	allFormats={data.formats.map((f) => ({ id: f.id, name: f.name, category: f.category }))}
+	indexers={data.indexers}
 	defaultCopyFromId={data.defaultProfileId}
 	saving={profileSaving}
 	error={profileError}

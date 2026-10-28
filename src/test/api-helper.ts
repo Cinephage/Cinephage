@@ -226,6 +226,7 @@ export interface ProfilesListResponse {
 		isBuiltIn: boolean;
 		isDefault: boolean;
 		formatScores?: Record<string, number>;
+		allowedIndexerIds?: string[] | null;
 		movieMinSizeGb?: number | null;
 		movieMaxSizeGb?: number | null;
 		episodeMinSizeMb?: number | null;
@@ -240,6 +241,7 @@ export interface ProfileResponse {
 	name: string;
 	description?: string;
 	formatScores?: Record<string, number>;
+	allowedIndexerIds?: string[] | null;
 	isDefault?: boolean;
 	isBuiltIn?: boolean;
 	upgradesAllowed?: boolean;

@@ -10,6 +10,7 @@ export type RejectionType =
 	| 'banned'
 	| 'size_rejected'
 	| 'protocol_rejected'
+	| 'indexer_not_allowed'
 	| 'below_minimum'
 	| 'duplicate_hash'
 	| 'media_occupied'

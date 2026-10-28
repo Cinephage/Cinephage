@@ -179,8 +179,10 @@ import {
  * Version 165: Add `origin` column to `download_queue` (marks Unmatched-tab
  *   track/enroll rows so unmatching a movie/series can't mistake a legitimate
  *   arr_push-pushed grab for one of its own rows).
+ * Version 166: scoring_profiles.allowed_indexers — per-profile indexer allowlist
+ *   (NULL = all indexers, preserving pre-existing behavior).
  */
-export const CURRENT_SCHEMA_VERSION = 165;
+export const CURRENT_SCHEMA_VERSION = 166;
 
 export const SYSTEM_LIBRARY_SEEDS = [
 	{
@@ -263,6 +265,7 @@ const TABLE_DEFINITIONS: string[] = [
 		"excluded_sources" text,
 		"required_formats" text,
 		"prevent_downgrades" integer DEFAULT 0,
+		"allowed_indexers" text,
 		"created_at" text,
 		"updated_at" text
 	)`,

@@ -244,6 +244,8 @@ export type ScoringProfileSummary = {
 	minScoreIncrement: number;
 	formatScores: Record<string, number>;
 	requiredFormats: Array<{ id: string; op: 'AND' | 'OR' }>;
+	/** Indexer IDs this profile is restricted to; null means all indexers. */
+	allowedIndexerIds: string[] | null;
 	movieMinSizeGb: number | null;
 	movieMaxSizeGb: number | null;
 	episodeMinSizeMb: number | null;
@@ -283,6 +285,7 @@ export type ScoringProfileRecordResponse = {
 	allowedSources?: string[] | null;
 	excludedSources?: string[] | null;
 	requiredFormats: Array<{ id: string; op: 'AND' | 'OR' }> | null;
+	allowedIndexerIds?: string[] | null;
 	createdAt?: string;
 	updatedAt?: string;
 };
@@ -307,6 +310,7 @@ export type ScoringProfileBuiltInUpdateResponse = {
 	episodeMinSizeMb: number | null;
 	episodeMaxSizeMb: number | null;
 	formatScores: Record<string, number>;
+	allowedIndexerIds: string[] | null;
 	isBuiltIn: boolean;
 };
 

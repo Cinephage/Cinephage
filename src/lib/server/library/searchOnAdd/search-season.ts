@@ -3,6 +3,7 @@ import { series, episodes } from '#lib/server/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
 import { evaluateIndexerSearchAvailability } from '#lib/server/indexers/search/availability.js';
+import { resolveAllowedIndexerIds } from '#lib/server/indexers/search/profile-indexer-filter.js';
 import type { SearchCriteria } from '#lib/server/indexers/types/index.js';
 import { grabService } from '#lib/server/downloads/GrabService.js';
 import type { SearchForSeasonParams, GrabResult } from './types.js';
@@ -46,11 +47,13 @@ export async function searchForSeason(
 
 		const indexerManager = await getIndexerManager();
 		const searchSource: 'interactive' | 'automatic' = 'automatic';
+		const allowedIndexerIds = await resolveAllowedIndexerIds(seriesData.scoringProfileId);
 		const indexerAvailability = evaluateIndexerSearchAvailability(
 			await indexerManager.getIndexers(),
 			{
 				searchType: 'tv',
 				searchSource,
+				allowedIndexerIds,
 				scoringProfileId: seriesData.scoringProfileId ?? undefined,
 				getDefinitionCapabilities: (definitionId) =>
 					indexerManager.getDefinitionCapabilities(definitionId)

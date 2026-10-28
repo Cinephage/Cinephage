@@ -368,6 +368,12 @@ export const scoringProfiles = sqliteTable('scoring_profiles', {
 	requiredFormats: text('required_formats', { mode: 'json' }).$type<
 		{ id: string; op: 'AND' | 'OR' }[]
 	>(),
+	/**
+	 * Indexer IDs this profile may search. NULL means every enabled indexer
+	 * (the historical behavior); a non-empty array restricts searches and grabs
+	 * to those indexers. Never persisted as an empty array.
+	 */
+	allowedIndexerIds: text('allowed_indexers', { mode: 'json' }).$type<string[] | null>(),
 	createdAt: text('created_at').$defaultFn(() => new Date().toISOString()),
 	updatedAt: text('updated_at').$defaultFn(() => new Date().toISOString())
 });

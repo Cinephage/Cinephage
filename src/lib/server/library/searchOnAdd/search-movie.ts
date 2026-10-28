@@ -4,6 +4,7 @@ import { movieFiles, movies, scoringProfiles } from '#lib/server/db/schema.js';
 import { grabService } from '#lib/server/downloads/GrabService.js';
 import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
 import { evaluateIndexerSearchAvailability } from '#lib/server/indexers/search/availability.js';
+import { resolveAllowedIndexerIds } from '#lib/server/indexers/search/profile-indexer-filter.js';
 import {
 	effectiveBuckets,
 	getFilledResolutions,
@@ -97,11 +98,13 @@ export async function searchForMovie(
 
 		const indexerManager = await getIndexerManager();
 		const searchSource: 'interactive' | 'automatic' = 'automatic';
+		const allowedIndexerIds = await resolveAllowedIndexerIds(scoringProfileId);
 		const indexerAvailability = evaluateIndexerSearchAvailability(
 			await indexerManager.getIndexers(),
 			{
 				searchType: 'movie',
 				searchSource,
+				allowedIndexerIds,
 				scoringProfileId,
 				getDefinitionCapabilities: (definitionId) =>
 					indexerManager.getDefinitionCapabilities(definitionId)

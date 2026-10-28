@@ -12,7 +12,7 @@ import {
 	type ErrorResponse,
 	type DeleteResponse
 } from '../../../test/api-helper';
-import { scoringProfiles } from '#lib/server/db/schema.js';
+import { indexers, scoringProfiles } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { DEFAULT_PROFILES } from '#lib/server/scoring/index.js';
 
@@ -68,6 +68,23 @@ function seedBuiltInProfiles() {
 	}
 }
 
+/** Indexer rows are referenced by the profile allowlist validation. */
+function seedIndexers() {
+	for (const id of ['ix-a', 'ix-b']) {
+		testDb.db
+			.insert(indexers)
+			.values({
+				id,
+				name: `Indexer ${id}`,
+				definitionId: 'torznab',
+				baseUrl: 'https://example.test',
+				enabled: true
+			})
+			.onConflictDoNothing()
+			.run();
+	}
+}
+
 const { GET, POST, PUT, DELETE } = await import('./+server');
 
 describe('Scoring Profiles API', () => {
@@ -78,6 +95,7 @@ describe('Scoring Profiles API', () => {
 	beforeEach(() => {
 		clearTestDb(testDb);
 		seedBuiltInProfiles();
+		seedIndexers();
 	});
 
 	describe('GET /api/scoring-profiles', () => {
@@ -454,6 +472,148 @@ describe('Scoring Profiles API', () => {
 
 		it('requires profile ID', async () => {
 			const { status, data } = await api.delete<ErrorResponse>(DELETE, {});
+
+			expect(status).toBe(400);
+			expect(data.error).toContain('Validation failed');
+		});
+	});
+
+	describe('error status mapping', () => {
+		it('returns the AppError status instead of letting it fall through as a 500', async () => {
+			// api-helper converts thrown AppErrors itself, which would mask a route
+			// that forgets to map them. Call the handler directly to assert the
+			// route returns a 400 response rather than throwing.
+			const event = {
+				request: new Request('http://localhost/api/scoring-profiles', {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ name: 'QA', allowedIndexerIds: [] })
+				}),
+				url: new URL('http://localhost/api/scoring-profiles'),
+				locals: { user: { id: 'u1', role: 'admin' } }
+			};
+
+			const response = await POST(event as never);
+
+			expect(response.status).toBe(400);
+		});
+	});
+
+	describe('GET /api/scoring-profiles allowedIndexerIds', () => {
+		it('returns null for profiles with no indexer restriction', async () => {
+			const { status, data } = await api.get<ProfilesListResponse>(GET);
+
+			expect(status).toBe(200);
+			const balanced = data.profiles.find((p) => p.id === 'balanced');
+			expect(balanced?.allowedIndexerIds).toBeNull();
+		});
+
+		it('returns the stored allowlist for custom profiles', async () => {
+			await api.post(POST, {
+				name: 'Torrent Only',
+				allowedIndexerIds: ['ix-a']
+			});
+
+			const { data } = await api.get<ProfilesListResponse>(GET);
+			const created = data.profiles.find((p) => p.name === 'Torrent Only');
+			expect(created?.allowedIndexerIds).toEqual(['ix-a']);
+		});
+	});
+
+	describe('POST /api/scoring-profiles allowedIndexerIds', () => {
+		it('persists a non-empty indexer allowlist', async () => {
+			const { status, data } = await api.post<ProfileResponse>(POST, {
+				name: 'Scoped',
+				allowedIndexerIds: ['ix-a', 'ix-b']
+			});
+
+			expect(status).toBe(201);
+			expect(data.allowedIndexerIds).toEqual(['ix-a', 'ix-b']);
+		});
+
+		it('rejects an empty allowlist', async () => {
+			const { status, data } = await api.post<ErrorResponse>(POST, {
+				name: 'Empty List',
+				allowedIndexerIds: []
+			});
+
+			expect(status).toBe(400);
+			expect(data.error).toContain('Validation failed');
+		});
+
+		it('rejects unknown indexer IDs', async () => {
+			const { status, data } = await api.post<ErrorResponse>(POST, {
+				name: 'Ghost Indexer',
+				allowedIndexerIds: ['does-not-exist']
+			});
+
+			expect(status).toBe(400);
+			expect(data.error).toContain('Unknown indexer');
+		});
+
+		it('deduplicates repeated indexer IDs', async () => {
+			const { data } = await api.post<ProfileResponse>(POST, {
+				name: 'Dupes',
+				allowedIndexerIds: ['ix-a', 'ix-a']
+			});
+
+			expect(data.allowedIndexerIds).toEqual(['ix-a']);
+		});
+	});
+
+	describe('PUT /api/scoring-profiles allowedIndexerIds', () => {
+		it('updates the allowlist on a custom profile', async () => {
+			await api.post(POST, {
+				id: 'custom-scoped',
+				name: 'Custom Scoped',
+				allowedIndexerIds: ['ix-a']
+			});
+
+			const { status, data } = await api.put<ProfileResponse>(PUT, {
+				id: 'custom-scoped',
+				allowedIndexerIds: ['ix-b']
+			});
+
+			expect(status).toBe(200);
+			expect(data.allowedIndexerIds).toEqual(['ix-b']);
+		});
+
+		it('clears the allowlist by sending null', async () => {
+			await api.post(POST, {
+				id: 'custom-scoped',
+				name: 'Custom Scoped',
+				allowedIndexerIds: ['ix-a']
+			});
+
+			const { data } = await api.put<ProfileResponse>(PUT, {
+				id: 'custom-scoped',
+				allowedIndexerIds: null
+			});
+
+			expect(data.allowedIndexerIds).toBeNull();
+		});
+
+		it('allows setting the allowlist on a built-in profile', async () => {
+			const { status, data } = await api.put<ProfileResponse>(PUT, {
+				id: 'balanced',
+				allowedIndexerIds: ['ix-a']
+			});
+
+			expect(status).toBe(200);
+			expect(data.allowedIndexerIds).toEqual(['ix-a']);
+
+			// And it survives a GET, which merges code defaults with DB overrides.
+			const list = await api.get<ProfilesListResponse>(GET);
+			expect(list.data.profiles.find((p) => p.id === 'balanced')?.allowedIndexerIds).toEqual([
+				'ix-a'
+			]);
+		});
+
+		it('rejects an empty allowlist on update', async () => {
+			const { status, data } = await api.put<ErrorResponse>(PUT, {
+				id: 'balanced',
+				allowedIndexerIds: []
+			});
 
 			expect(status).toBe(400);
 			expect(data.error).toContain('Validation failed');

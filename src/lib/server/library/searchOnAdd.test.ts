@@ -22,6 +22,13 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('#lib/server/db/index.js', () => ({
 	db: {
+		// QualityFilter.getProfile reads scoring_profiles via select(); the indexer
+		// allowlist resolver tolerates a profile that is not found.
+		select: () => ({
+			from: () => ({
+				where: () => ({ get: async () => undefined })
+			})
+		}),
 		query: {
 			movieFiles: { findFirst: mocks.movieFilesFindFirst, findMany: mocks.movieFilesFindMany },
 			episodes: { findFirst: mocks.episodesFindFirst, findMany: mocks.episodesFindMany },

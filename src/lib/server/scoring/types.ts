@@ -390,6 +390,13 @@ export interface ScoringProfile {
 	 * Required format entries. AND entries must all match; OR entries need at least one match.
 	 */
 	requiredFormats?: { id: string; op: 'AND' | 'OR' }[];
+
+	/**
+	 * Indexer IDs this profile may search.
+	 * `null`/undefined means every enabled indexer. A non-empty array restricts
+	 * both indexer queries and grabs to those indexers.
+	 */
+	allowedIndexerIds?: string[] | null;
 }
 
 /**

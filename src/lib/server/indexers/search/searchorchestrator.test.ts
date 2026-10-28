@@ -110,6 +110,7 @@ type OrchestratorPrivateApi = {
 			useCache: boolean;
 			searchSource?: 'interactive' | 'automatic';
 			protocolFilter?: string[];
+			allowedIndexerIds?: string[] | null;
 		}
 	): { eligible: IIndexer[]; rejected: RejectedIndexer[] };
 	searchIndexer(
@@ -2197,5 +2198,105 @@ describe('SearchOrchestrator.searchIndexer — quota-exceeded detection', () => 
 
 		expect(recordFailure).toHaveBeenCalledWith('test-indexer', 'Connection refused');
 		expect(recordQuotaExceeded).not.toHaveBeenCalled();
+	});
+});
+
+describe('SearchOrchestrator.filterIndexers profile indexer allowlist', () => {
+	const baseOptions = {
+		respectEnabled: false,
+		respectBackoff: false,
+		useTieredSearch: false,
+		timeout: 30000,
+		useCache: false
+	} as const;
+
+	const movieCapabilities: IndexerCapabilities = {
+		...mockCapabilities,
+		categories: new Map([[Category.MOVIES_HD, 'Movies/HD']])
+	};
+
+	function buildIndexerWithId(id: string, name: string): IIndexer {
+		return _createMockIndexer({
+			id,
+			name,
+			protocol: 'torrent',
+			capabilities: movieCapabilities as unknown as Record<string, unknown>,
+			enableAutomaticSearch: true,
+			enableInteractiveSearch: true
+		}) as unknown as IIndexer;
+	}
+
+	const alpha = buildIndexerWithId('alpha', 'Alpha');
+	const beta = buildIndexerWithId('beta', 'Beta');
+
+	it('treats a null allowlist as unrestricted', () => {
+		const orchestrator = new SearchOrchestrator();
+
+		const result = privateApi(orchestrator).filterIndexers(
+			[alpha, beta],
+			createMovieCriteria({ query: 'Test' }),
+			{ ...baseOptions, allowedIndexerIds: null }
+		);
+
+		expect(result.eligible.map((i) => i.id).sort()).toEqual(['alpha', 'beta']);
+		expect(result.rejected).toHaveLength(0);
+	});
+
+	it('treats an absent allowlist as unrestricted', () => {
+		const orchestrator = new SearchOrchestrator();
+
+		const result = privateApi(orchestrator).filterIndexers(
+			[alpha, beta],
+			createMovieCriteria({ query: 'Test' }),
+			{ ...baseOptions }
+		);
+
+		expect(result.eligible).toHaveLength(2);
+	});
+
+	it('restricts to the listed indexers and reports the rest as indexerFilter', () => {
+		const orchestrator = new SearchOrchestrator();
+
+		const result = privateApi(orchestrator).filterIndexers(
+			[alpha, beta],
+			createMovieCriteria({ query: 'Test' }),
+			{ ...baseOptions, allowedIndexerIds: ['alpha'] }
+		);
+
+		expect(result.eligible.map((i) => i.id)).toEqual(['alpha']);
+		expect(result.rejected).toHaveLength(1);
+		expect(result.rejected[0]).toMatchObject({
+			indexerId: 'beta',
+			reason: 'indexerFilter'
+		});
+		expect(result.rejected[0].message).toMatch(/quality profile indexer selection/i);
+	});
+
+	it('applies in automatic search, not just interactive', () => {
+		const orchestrator = new SearchOrchestrator();
+
+		const result = privateApi(orchestrator).filterIndexers(
+			[alpha, beta],
+			createMovieCriteria({ query: 'Test' }),
+			{ ...baseOptions, searchSource: 'automatic', allowedIndexerIds: ['beta'] }
+		);
+
+		expect(result.eligible.map((i) => i.id)).toEqual(['beta']);
+		expect(result.rejected).toHaveLength(1);
+		expect(result.rejected[0].reason).toBe('indexerFilter');
+	});
+
+	it('composes with criteria.indexerIds (intersection)', () => {
+		const orchestrator = new SearchOrchestrator();
+
+		const result = privateApi(orchestrator).filterIndexers(
+			[alpha, beta],
+			createMovieCriteria({ query: 'Test', indexerIds: ['alpha', 'beta'] }),
+			{ ...baseOptions, allowedIndexerIds: ['alpha'] }
+		);
+
+		expect(result.eligible.map((i) => i.id)).toEqual(['alpha']);
+		expect(result.rejected).toHaveLength(1);
+		expect(result.rejected[0].indexerId).toBe('beta');
 	});
 });

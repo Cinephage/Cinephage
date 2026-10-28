@@ -2362,6 +2362,9 @@ export const scoringProfileCreateSchema = z.object({
 	minScoreIncrement: z.number().int().optional(),
 	formatScores: z.record(z.string(), z.number().int()).optional(),
 	requiredFormats: z.array(z.object({ id: z.string(), op: z.enum(['AND', 'OR']) })).optional(),
+	// Indexer allowlist: omit or null for "all indexers". An empty array is
+	// rejected so "restricted" always means at least one indexer.
+	allowedIndexerIds: z.array(z.string().min(1)).min(1).nullable().optional(),
 	movieMinSizeGb: z.number().nullable().optional(),
 	movieMaxSizeGb: z.number().nullable().optional(),
 	episodeMinSizeMb: z.number().nullable().optional(),

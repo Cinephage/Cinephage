@@ -7,10 +7,18 @@
 	import type { FormatCategory } from '#lib/types/format.js';
 	import * as m from '#lib/paraglide/messages.js';
 	import { groupFormatScoresByCategory, FORMAT_CATEGORY_LABELS } from '#lib/types/format.js';
-	import { X, Save, Info, Loader2, Settings, Layers, Search } from '@lucide/svelte';
+	import { X, Save, Info, Loader2, Settings, Layers, Search, Server } from '@lucide/svelte';
 	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
 	import { SectionHeader } from '#lib/components/ui/modal/index.js';
 	import FormatScoreAccordion from './FormatScoreAccordion.svelte';
+
+	/** A configured indexer, as offered in the profile indexer picker. */
+	export interface ProfileIndexerOption {
+		id: string;
+		name: string;
+		protocol: 'torrent' | 'usenet' | 'streaming';
+		enabled: boolean;
+	}
 
 	interface Props {
 		open: boolean;
@@ -20,6 +28,8 @@
 		allProfiles: { id: string; name: string; isBuiltIn?: boolean }[];
 		/** All available formats for score editing */
 		allFormats?: { id: string; name: string; category: FormatCategory }[];
+		/** Configured indexers available for the profile's indexer allowlist */
+		indexers?: ProfileIndexerOption[];
 		defaultCopyFromId?: string;
 		saving?: boolean;
 		error?: string | null;
@@ -38,6 +48,7 @@
 		profile = null,
 		allProfiles,
 		allFormats = [],
+		indexers = [],
 		defaultCopyFromId = 'balanced',
 		saving = false,
 		error = null,
@@ -50,7 +61,7 @@
 	}: Props = $props();
 
 	// Tab state
-	let activeTab = $state<'general' | 'formats'>('general');
+	let activeTab = $state<'general' | 'formats' | 'indexers'>('general');
 	let requiredFormats = $state<RequiredFormatEntry[]>([]);
 	let requiredFormatSearch = $state('');
 	// Modal title
@@ -78,6 +89,8 @@
 	let episodeMinSizeMbInput = $state('');
 	let episodeMaxSizeMbInput = $state('');
 	let isDefault = $state(false);
+	// Indexer allowlist: null = all indexers, array = only these
+	let allowedIndexerIds = $state<string[] | null>(null);
 	// Format scores state
 	let formatScores = $state<Record<string, number>>({});
 
@@ -116,6 +129,10 @@
 				episodeMinSizeMbInput = stringifyLimit(coerceLimit(profile.episodeMinSizeMb));
 				episodeMaxSizeMbInput = stringifyLimit(coerceLimit(profile.episodeMaxSizeMb));
 				isDefault = profile.isDefault;
+				// Initialize indexer allowlist from profile
+				allowedIndexerIds = profile.allowedIndexerIds?.length
+					? [...profile.allowedIndexerIds]
+					: null;
 				// Initialize format scores from profile
 				formatScores = { ...(profile.formatScores ?? {}) };
 				requiredFormats = [...(profile.requiredFormats ?? [])];
@@ -133,6 +150,7 @@
 				episodeMinSizeMbInput = '';
 				episodeMaxSizeMbInput = '';
 				isDefault = false;
+				allowedIndexerIds = null;
 				// For new profiles, start with empty scores (copyFrom is handled server-side)
 				formatScores = {};
 				requiredFormats = [];
@@ -145,6 +163,51 @@
 
 	const maxDescriptionLength = 70;
 	const descriptionTooLong = $derived(description.length > maxDescriptionLength);
+
+	// --- Indexer allowlist ---
+	const restrictIndexers = $derived(allowedIndexerIds !== null);
+	const selectedIndexerSet = $derived(new Set(allowedIndexerIds ?? []));
+	const configuredIndexerIds = $derived(new Set(indexers.map((i) => i.id)));
+	/** IDs kept from a deleted indexer, so the user can see and clear them. */
+	const missingIndexerIds = $derived(
+		(allowedIndexerIds ?? []).filter((id) => !configuredIndexerIds.has(id))
+	);
+	const selectedConfiguredCount = $derived(
+		(allowedIndexerIds ?? []).filter((id) => configuredIndexerIds.has(id)).length
+	);
+	const indexerSelectionInvalid = $derived(
+		restrictIndexers && (allowedIndexerIds?.length ?? 0) === 0
+	);
+
+	function setIndexerMode(restricted: boolean) {
+		if (restricted) {
+			// Seed with everything so "only selected" never starts empty.
+			allowedIndexerIds = indexers.map((i) => i.id);
+		} else {
+			allowedIndexerIds = null;
+		}
+	}
+
+	function toggleIndexer(id: string) {
+		const current = allowedIndexerIds ?? [];
+		allowedIndexerIds = current.includes(id)
+			? current.filter((existing) => existing !== id)
+			: [...current, id];
+	}
+
+	function selectAllIndexers() {
+		allowedIndexerIds = indexers.map((i) => i.id);
+	}
+
+	function clearAllIndexers() {
+		allowedIndexerIds = [];
+	}
+
+	function protocolLabel(protocol: ProfileIndexerOption['protocol']): string {
+		if (protocol === 'usenet') return m.profiles_indexers_protocolUsenet();
+		if (protocol === 'streaming') return m.profiles_indexers_protocolStreaming();
+		return m.profiles_indexers_protocolTorrent();
+	}
 
 	// Derived counts for tab badges and summary chip
 	const scoredFormatCount = $derived(Object.values(formatScores).filter((s) => s !== 0).length);
@@ -270,7 +333,7 @@
 	}
 
 	function handleSave() {
-		if (descriptionTooLong) {
+		if (descriptionTooLong || indexerSelectionInvalid) {
 			return;
 		}
 
@@ -287,7 +350,8 @@
 				episodeMaxSizeMb: normalizeMbLimit(episodeMaxSizeMbValue),
 				isDefault,
 				formatScores: filteredFormatScores,
-				requiredFormats
+				requiredFormats,
+				allowedIndexerIds: allowedIndexerIds?.length ? allowedIndexerIds : null
 			});
 			return;
 		}
@@ -306,7 +370,8 @@
 			episodeMaxSizeMb: normalizeMbLimit(episodeMaxSizeMbValue),
 			isDefault,
 			formatScores: filteredFormatScores,
-			requiredFormats
+			requiredFormats,
+			allowedIndexerIds: allowedIndexerIds?.length ? allowedIndexerIds : null
 		});
 	}
 
@@ -317,6 +382,9 @@
 
 	// Show Format Scores tab for all profiles except when in view mode
 	const showFormatsTab = $derived(mode !== 'view' && allFormats.length > 0);
+	// Show the Indexers tab whenever indexers exist, so the setting is discoverable.
+	const showIndexersTab = $derived(indexers.length > 0 || restrictIndexers);
+	const showTabBar = $derived(showFormatsTab || showIndexersTab);
 
 	// Separate built-in and custom profiles for the dropdown
 	const builtInProfiles = $derived(allProfiles.filter((p) => p.isBuiltIn));
@@ -342,8 +410,8 @@
 		</div>
 	{/if}
 
-	<!-- Tab Navigation (only show if formats tab is available) -->
-	{#if showFormatsTab}
+	<!-- Tab Navigation -->
+	{#if showTabBar}
 		<div class="tabs-bordered tabs mb-6 w-full">
 			<button
 				type="button"
@@ -354,15 +422,31 @@
 				<Settings class="h-4 w-4" />
 				{m.profiles_tab_general()}
 			</button>
-			<button
-				type="button"
-				class="tab-lg tab flex-1 gap-2"
-				class:tab-active={activeTab === 'formats'}
-				onclick={() => (activeTab = 'formats')}
-			>
-				<Layers class="h-4 w-4" />
-				{m.profiles_tab_formatScores()}
-			</button>
+			{#if showIndexersTab}
+				<button
+					type="button"
+					class="tab-lg tab flex-1 gap-2"
+					class:tab-active={activeTab === 'indexers'}
+					onclick={() => (activeTab = 'indexers')}
+				>
+					<Server class="h-4 w-4" />
+					{m.profiles_tab_indexers()}
+					{#if restrictIndexers}
+						<span class="badge badge-sm">{selectedConfiguredCount}</span>
+					{/if}
+				</button>
+			{/if}
+			{#if showFormatsTab}
+				<button
+					type="button"
+					class="tab-lg tab flex-1 gap-2"
+					class:tab-active={activeTab === 'formats'}
+					onclick={() => (activeTab = 'formats')}
+				>
+					<Layers class="h-4 w-4" />
+					{m.profiles_tab_formatScores()}
+				</button>
+			{/if}
 		</div>
 	{/if}
 
@@ -811,6 +895,110 @@
 				onScoreChange={handleScoreChange}
 			/>
 		</div>
+	{:else if activeTab === 'indexers'}
+		<div class="space-y-4 py-2">
+			<div>
+				<h4 class="text-sm font-medium">{m.profiles_section_indexers()}</h4>
+				<p class="mt-0.5 text-xs text-base-content/60">{m.profiles_indexers_desc()}</p>
+			</div>
+
+			<div class="flex flex-wrap gap-2">
+				<button
+					type="button"
+					class="btn btn-sm {!restrictIndexers ? 'btn-primary' : 'btn-outline'}"
+					disabled={isFullyReadonly}
+					onclick={() => setIndexerMode(false)}
+				>
+					{m.profiles_indexers_all()}
+				</button>
+				<button
+					type="button"
+					class="btn btn-sm {restrictIndexers ? 'btn-primary' : 'btn-outline'}"
+					disabled={isFullyReadonly || indexers.length === 0}
+					onclick={() => setIndexerMode(true)}
+				>
+					{m.profiles_indexers_selected()}
+				</button>
+			</div>
+
+			{#if restrictIndexers}
+				{#if indexers.length === 0}
+					<div class="rounded-lg bg-base-200 p-3 text-xs text-base-content/70">
+						<Info class="mr-1 inline h-3 w-3" />
+						{m.profiles_indexers_noneConfigured()}
+					</div>
+				{:else}
+					<div class="flex items-center justify-between gap-2">
+						<span class="text-xs text-base-content/60">
+							{m.profiles_indexers_selectedCount({
+								selected: selectedConfiguredCount,
+								total: indexers.length
+							})}
+						</span>
+						{#if !isFullyReadonly}
+							<div class="flex gap-1">
+								<button
+									type="button"
+									class="btn h-7 min-h-0 btn-ghost px-2 btn-xs"
+									onclick={selectAllIndexers}
+								>
+									{m.profiles_indexers_selectAll()}
+								</button>
+								<button
+									type="button"
+									class="btn h-7 min-h-0 btn-ghost px-2 btn-xs"
+									onclick={clearAllIndexers}
+								>
+									{m.profiles_indexers_clear()}
+								</button>
+							</div>
+						{/if}
+					</div>
+
+					<div class="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+						{#each indexers as indexer (indexer.id)}
+							<label
+								class="flex cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-1.5 transition-colors {selectedIndexerSet.has(
+									indexer.id
+								)
+									? 'border-primary/40 bg-primary/5'
+									: 'border-base-300 hover:bg-base-200'}"
+							>
+								<input
+									type="checkbox"
+									class="checkbox checkbox-sm checkbox-primary"
+									checked={selectedIndexerSet.has(indexer.id)}
+									disabled={isFullyReadonly}
+									onchange={() => toggleIndexer(indexer.id)}
+								/>
+								<span class="min-w-0 flex-1 truncate text-sm">{indexer.name}</span>
+								<span class="badge shrink-0 badge-ghost badge-xs"
+									>{protocolLabel(indexer.protocol)}</span
+								>
+								{#if !indexer.enabled}
+									<span class="badge shrink-0 badge-xs badge-warning">
+										{m.profiles_indexers_disabled()}
+									</span>
+								{/if}
+							</label>
+						{/each}
+					</div>
+
+					{#if indexerSelectionInvalid}
+						<div class="text-xs text-error">{m.profiles_indexers_noneSelected()}</div>
+					{/if}
+
+					{#if missingIndexerIds.length > 0}
+						<div class="flex items-start gap-1 text-xs text-warning">
+							<Info class="mt-0.5 h-3 w-3 flex-none" />
+							<span>
+								{m.profiles_indexers_missing({ names: missingIndexerIds.join(', ') })}
+							</span>
+						</div>
+					{/if}
+				{/if}
+			{/if}
+		</div>
 	{/if}
 
 	<!-- Footer -->
@@ -832,7 +1020,7 @@
 			<button
 				class="btn gap-2 btn-primary"
 				onclick={handleSave}
-				disabled={saving || !name || descriptionTooLong}
+				disabled={saving || !name || descriptionTooLong || indexerSelectionInvalid}
 			>
 				{#if saving}
 					<Loader2 class="h-4 w-4 animate-spin" />

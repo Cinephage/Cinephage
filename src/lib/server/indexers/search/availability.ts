@@ -6,6 +6,7 @@ export type IndexerAvailabilityCode =
 	| 'NO_INDEXER_CONFIGURED'
 	| 'NO_INDEXER_ENABLED'
 	| 'NO_INDEXER_SEARCH_DISABLED'
+	| 'NO_INDEXER_ALLOWED'
 	| 'NO_INDEXER_COMPATIBLE';
 
 export interface IndexerAvailabilityResult {
@@ -18,7 +19,10 @@ interface EvaluateIndexerAvailabilityOptions {
 	searchType: SearchType;
 	searchSource: 'interactive' | 'automatic';
 	protocolFilter?: string[];
+	/** Indexer allowlist from the scoring profile; null/empty means all indexers. */
+	allowedIndexerIds?: string[] | null;
 	scoringProfileId?: string | null;
+	profileName?: string;
 	getDefinitionCapabilities: (definitionId: string) => IndexerCapabilities | undefined;
 }
 
@@ -108,7 +112,22 @@ export function evaluateIndexerSearchAvailability(
 		};
 	}
 
-	const searchTypeCompatible = activelyEnabled.filter((config) =>
+	// Apply the scoring profile's indexer allowlist after protocol/streamer scoping
+	// so the message can point at the profile rather than blaming the indexers.
+	const allowlisted = options.allowedIndexerIds?.length
+		? activelyEnabled.filter((config) => options.allowedIndexerIds!.includes(config.id))
+		: activelyEnabled;
+
+	if (allowlisted.length === 0) {
+		const profileLabel = options.profileName ? `"${options.profileName}"` : 'this profile';
+		return {
+			ok: false,
+			code: 'NO_INDEXER_ALLOWED',
+			message: `None of the indexers selected in quality profile ${profileLabel} are enabled. Adjust the profile's indexer selection or enable one of those indexers in Settings -> Integrations -> Indexers.`
+		};
+	}
+
+	const searchTypeCompatible = allowlisted.filter((config) =>
 		supportsSearchType(options.getDefinitionCapabilities(config.definitionId), options.searchType)
 	);
 

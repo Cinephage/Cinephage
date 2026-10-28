@@ -1,7 +1,8 @@
 <script lang="ts">
 	import type { ScoringProfile } from '#lib/types/profile.js';
-	import { Settings, Trash2, Lock, Star, Check, Film, Tv, Sliders } from '@lucide/svelte';
+	import { Settings, Trash2, Lock, Star, Check, Film, Tv, Sliders, Server } from '@lucide/svelte';
 	import { toNullableNumber } from '#lib/utils/number.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
 		profiles: ScoringProfile[];
@@ -11,6 +12,14 @@
 	}
 
 	let { profiles, onEdit, onDelete, onSetDefault }: Props = $props();
+
+	/** Human-readable indexer scope: "All indexers" or "N indexers". */
+	function formatIndexerScope(profile: ScoringProfile): string {
+		const ids = profile.allowedIndexerIds;
+		if (!ids || ids.length === 0) return m.profiles_indexers_summaryAll();
+		if (ids.length === 1) return m.profiles_indexers_summaryCountOne({ count: ids.length });
+		return m.profiles_indexers_summaryCount({ count: ids.length });
+	}
 
 	// Format size limit display
 	function formatMovieSize(profile: ScoringProfile): string {
@@ -147,6 +156,12 @@
 						<span class="badge {profile.isBuiltIn ? 'badge-ghost' : 'badge-outline badge-primary'}">
 							{profile.isBuiltIn ? 'Built-in' : 'Custom'}
 						</span>
+						{#if profile.allowedIndexerIds?.length}
+							<span class="badge gap-1 badge-outline">
+								<Server class="h-3 w-3" />
+								{formatIndexerScope(profile)}
+							</span>
+						{/if}
 						{#if profile.isDefault}
 							<span class="badge gap-1 badge-success">
 								<Check class="h-3 w-3" />
@@ -214,7 +229,15 @@
 									<Settings class="h-4 w-4 text-base-content/40" />
 								{/if}
 								<div>
-									<div class="font-bold">{profile.name}</div>
+									<div class="flex flex-wrap items-center gap-2">
+										<span class="font-bold">{profile.name}</span>
+										{#if profile.allowedIndexerIds?.length}
+											<span class="badge gap-1 badge-outline badge-sm">
+												<Server class="h-3 w-3" />
+												{formatIndexerScope(profile)}
+											</span>
+										{/if}
+									</div>
 									{#if profile.description}
 										<div class="max-w-[70ch] text-sm wrap-break-word whitespace-normal opacity-50">
 											{profile.description}

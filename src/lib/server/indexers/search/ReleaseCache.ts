@@ -109,10 +109,14 @@ export class ReleaseCache {
 
 	/**
 	 * Gets cached results if available and not expired.
-	 * Updates LRU access order on hit.
+	 * Updates LRU access order.
+	 *
+	 * `extra` must carry anything that changes which indexers were queried
+	 * (protocol filter, profile indexer allowlist); otherwise a cached result
+	 * set from a broader scope could be served for a narrower one.
 	 */
-	get(criteria: SearchCriteria): ReleaseResult[] | null {
-		const key = this.generateKeyInternal(criteria);
+	get(criteria: SearchCriteria, extra?: Record<string, unknown>): ReleaseResult[] | null {
+		const key = this.generateKeyInternal(criteria, extra);
 		const entry = this.cache.get(key);
 
 		if (!entry) {
@@ -134,8 +138,8 @@ export class ReleaseCache {
 	/**
 	 * Sets cached results with LRU eviction if cache is full.
 	 */
-	set(criteria: SearchCriteria, results: ReleaseResult[]): void {
-		const key = this.generateKeyInternal(criteria);
+	set(criteria: SearchCriteria, results: ReleaseResult[], extra?: Record<string, unknown>): void {
+		const key = this.generateKeyInternal(criteria, extra);
 		const now = Date.now();
 
 		// Evict LRU entries if at capacity
@@ -160,15 +164,15 @@ export class ReleaseCache {
 	/**
 	 * Checks if a cache entry exists and is valid.
 	 */
-	has(criteria: SearchCriteria): boolean {
-		return this.get(criteria) !== null;
+	has(criteria: SearchCriteria, extra?: Record<string, unknown>): boolean {
+		return this.get(criteria, extra) !== null;
 	}
 
 	/**
 	 * Invalidates a specific cache entry.
 	 */
-	invalidate(criteria: SearchCriteria): boolean {
-		const key = this.generateKeyInternal(criteria);
+	invalidate(criteria: SearchCriteria, extra?: Record<string, unknown>): boolean {
+		const key = this.generateKeyInternal(criteria, extra);
 		this.removeFromAccessOrder(key);
 		return this.cache.delete(key);
 	}

@@ -14,6 +14,7 @@ import { db } from '#lib/server/db/index.js';
 import { movies, series, settings } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { evaluateIndexerSearchAvailability } from '#lib/server/indexers/search/availability.js';
+import { resolveProfileSearchScope } from '#lib/server/indexers/search/profile-indexer-filter.js';
 import {
 	getMovieSearchTitles,
 	getSeriesSearchTitles,
@@ -273,13 +274,15 @@ export const GET: RequestHandler = async ({ url }) => {
 			effectiveScoringProfileId = defaultScoringProfile.id;
 		}
 
-		// Load the scoring profile to get allowedProtocols for indexer filtering
+		// Load the scoring profile to get its protocol and indexer restrictions
 		let protocolFilter: string[] | undefined;
+		let allowedIndexerIds: string[] | null = null;
+		let profileName: string | undefined;
 		if (effectiveScoringProfileId) {
-			const profile = await qualityFilter.getProfile(effectiveScoringProfileId);
-			if (profile?.allowedProtocols && profile.allowedProtocols.length > 0) {
-				protocolFilter = profile.allowedProtocols;
-			}
+			const scope = await resolveProfileSearchScope(effectiveScoringProfileId);
+			protocolFilter = scope.protocolFilter;
+			allowedIndexerIds = scope.allowedIndexerIds;
+			profileName = scope.profileName;
 		}
 
 		// Debug logging for profile issues
@@ -312,7 +315,9 @@ export const GET: RequestHandler = async ({ url }) => {
 			searchType,
 			searchSource: 'interactive',
 			protocolFilter,
+			allowedIndexerIds,
 			scoringProfileId: effectiveScoringProfileId,
+			profileName,
 			getDefinitionCapabilities: (definitionId) => manager.getDefinitionCapabilities(definitionId)
 		});
 
@@ -330,6 +335,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			searchSource: 'interactive',
 			enrichment: enrichmentOpts,
 			protocolFilter,
+			allowedIndexerIds,
 			timeout: INTERACTIVE_SEARCH_TIMEOUT_MS
 		});
 
@@ -363,10 +369,18 @@ export const GET: RequestHandler = async ({ url }) => {
 		});
 	}
 
+	// Standard search without enrichment. The profile is still resolved here so a
+	// profile's indexer allowlist narrows the query set even without scoring.
+	// Protocol filtering is left out of this path deliberately: it was never
+	// applied here, and adding it would change behavior for profile-less searches.
+	const plainScope = await resolveProfileSearchScope(effectiveScoringProfileId);
+
 	const availability = evaluateIndexerSearchAvailability(configuredIndexers, {
 		searchType,
 		searchSource: 'interactive',
-		scoringProfileId: effectiveScoringProfileId,
+		allowedIndexerIds: plainScope.allowedIndexerIds,
+		scoringProfileId: plainScope.scoringProfileId,
+		profileName: plainScope.profileName,
 		getDefinitionCapabilities: (definitionId) => manager.getDefinitionCapabilities(definitionId)
 	});
 
@@ -383,6 +397,7 @@ export const GET: RequestHandler = async ({ url }) => {
 	// Standard search without enrichment (interactive)
 	const searchResult = await manager.search(criteria, {
 		searchSource: 'interactive',
+		allowedIndexerIds: plainScope.allowedIndexerIds,
 		timeout: INTERACTIVE_SEARCH_TIMEOUT_MS
 	});
 

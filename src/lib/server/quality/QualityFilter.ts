@@ -244,6 +244,10 @@ export class QualityFilter {
 					maxResolution: (profile.maxResolution as string | null) ?? null,
 					allowedSources: profile.allowedSources ?? null,
 					excludedSources: profile.excludedSources ?? null,
+					// Code profiles carry no indexer allowlist; NULL means all indexers.
+					// Deliberately not touched in the built-in update branch above either:
+					// this column is user-owned and must survive every startup sync.
+					allowedIndexerIds: null,
 					isBuiltIn: true,
 					isDefault: profile.id === 'balanced'
 				});
@@ -508,7 +512,8 @@ export class QualityFilter {
 			excludedSources: (row.excludedSources as Source[] | null) ?? null,
 			allowedProtocols: row.allowedProtocols ?? ['torrent', 'usenet'],
 			formatScores: row.formatScores ?? {},
-			requiredFormats: row.requiredFormats ?? []
+			requiredFormats: row.requiredFormats ?? [],
+			allowedIndexerIds: row.allowedIndexerIds ?? null
 		};
 	}
 }

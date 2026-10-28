@@ -722,7 +722,8 @@ export const MIGRATION_COLUMN_MAP: Record<number, Array<{ table: string; column:
 	],
 	154: [{ table: 'library_jobs', column: 'acknowledged_at' }],
 	155: [{ table: 'indexers', column: 'rate_limit_per_minute' }],
-	156: [{ table: 'indexer_status', column: 'disabled_reason' }]
+	156: [{ table: 'indexer_status', column: 'disabled_reason' }],
+	166: [{ table: 'scoring_profiles', column: 'allowed_indexers' }]
 };
 
 /**

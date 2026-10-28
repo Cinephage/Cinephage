@@ -265,6 +265,19 @@ export class ReleaseEnricher {
 			);
 		}
 
+		// Add indexer-allowlist rejection (soft — release stays visible as rejected)
+		const allowedIndexerIds = profile?.allowedIndexerIds;
+		if (
+			allowedIndexerIds &&
+			allowedIndexerIds.length > 0 &&
+			release.indexerId &&
+			!allowedIndexerIds.includes(release.indexerId)
+		) {
+			rejections.push(
+				`Indexer '${release.indexerName ?? release.indexerId}' is not selected in profile '${profile?.name || 'default'}'`
+			);
+		}
+
 		// Add protocol-specific rejection (dead torrents, seeder minimums, etc.)
 		if (protocolRejectionReason) {
 			rejections.push(protocolRejectionReason);

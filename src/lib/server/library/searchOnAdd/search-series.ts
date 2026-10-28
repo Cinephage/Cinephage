@@ -4,6 +4,7 @@
 
 import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
 import { evaluateIndexerSearchAvailability } from '#lib/server/indexers/search/availability.js';
+import { resolveAllowedIndexerIds } from '#lib/server/indexers/search/profile-indexer-filter.js';
 import { grabService } from '#lib/server/downloads/GrabService.js';
 import { db } from '#lib/server/db/index.js';
 import { episodes } from '#lib/server/db/schema.js';
@@ -50,11 +51,13 @@ export async function searchForSeries(
 	try {
 		const indexerManager = await getIndexerManager();
 		const searchSource: 'interactive' | 'automatic' = 'automatic';
+		const allowedIndexerIds = await resolveAllowedIndexerIds(scoringProfileId);
 		const indexerAvailability = evaluateIndexerSearchAvailability(
 			await indexerManager.getIndexers(),
 			{
 				searchType: 'tv',
 				searchSource,
+				allowedIndexerIds,
 				scoringProfileId: scoringProfileId ?? undefined,
 				getDefinitionCapabilities: (definitionId) =>
 					indexerManager.getDefinitionCapabilities(definitionId)

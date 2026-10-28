@@ -9,6 +9,7 @@ import {
 } from '#lib/server/scoring/index.js';
 import { toNullableNumber } from '#lib/utils/number.js';
 import { delayProfileService } from '#lib/server/monitoring/specifications/DelaySpecification.js';
+import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
 
 // Built-in profile IDs - derived from DEFAULT_PROFILES for single source of truth
 const BUILT_IN_PROFILE_IDS = DEFAULT_PROFILES.map((p) => p.id);
@@ -46,6 +47,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		resolutionOrder: (p.resolutionOrder as Resolution[] | null) ?? DEFAULT_RESOLUTION_ORDER,
 		formatScores: p.formatScores ?? {},
 		requiredFormats: p.requiredFormats ?? [],
+		allowedIndexerIds: p.allowedIndexerIds ?? null,
 		movieMinSizeGb: toNullableNumber(p.movieMinSizeGb),
 		movieMaxSizeGb: toNullableNumber(p.movieMaxSizeGb),
 		episodeMinSizeMb: toNullableNumber(p.episodeMinSizeMb),
@@ -63,6 +65,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			preventDowngrades: dbProfile?.preventDowngrades ?? p.preventDowngrades,
 			formatScores: dbProfile?.formatScores ?? p.formatScores ?? {},
 			requiredFormats: dbProfile?.requiredFormats ?? [],
+			allowedIndexerIds: dbProfile?.allowedIndexerIds ?? null,
 			movieMinSizeGb: toNullableNumber(dbProfile?.movieMinSizeGb),
 			movieMaxSizeGb: toNullableNumber(dbProfile?.movieMaxSizeGb),
 			episodeMinSizeMb: toNullableNumber(dbProfile?.episodeMinSizeMb),
@@ -116,11 +119,23 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	const delayProfiles = await delayProfileService.getProfiles();
 
+	// Indexers for the per-profile allowlist picker. Only identity fields are
+	// needed; settings/credentials stay server-side.
+	const indexerManager = await getIndexerManager();
+	const indexerList = (await indexerManager.getIndexers()).map((i) => ({
+		id: i.id,
+		name: i.name,
+		protocol: i.protocol,
+		enabled: i.enabled
+	}));
+
 	return {
 		activeTab,
 		// Profiles data
 		profiles: allProfiles,
 		defaultProfileId,
+		// Indexer picker data
+		indexers: indexerList,
 		// Formats data
 		formats: allFormats,
 		formatCounts: {

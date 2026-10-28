@@ -11,6 +11,13 @@ const { enrichMock, getBlockedIdentifiersMock, findMovieMock } = vi.hoisted(() =
 
 vi.mock('#lib/server/db/index.js', () => ({
 	db: {
+		// QualityFilter.getProfile reads scoring_profiles via select(); the indexer
+		// allowlist resolver tolerates a profile that is not found.
+		select: () => ({
+			from: () => ({
+				where: () => ({ get: async () => undefined })
+			})
+		}),
 		query: {
 			movies: { findFirst: findMovieMock },
 			series: { findFirst: vi.fn(async () => undefined) }

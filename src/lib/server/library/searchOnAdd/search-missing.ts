@@ -8,6 +8,7 @@ import { series, episodes } from '#lib/server/db/schema.js';
 import { eq, and, ne } from 'drizzle-orm';
 import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
 import { evaluateIndexerSearchAvailability } from '#lib/server/indexers/search/availability.js';
+import { resolveAllowedIndexerIds } from '#lib/server/indexers/search/profile-indexer-filter.js';
 import { type EpisodeToSearch } from '#lib/server/downloads/index.js';
 import type {
 	SearchForMissingEpisodesOptions,
@@ -64,9 +65,11 @@ export async function searchForMissingEpisodes(
 
 		const indexerManager = await getIndexerManager();
 		const indexerConfigs = await indexerManager.getIndexers();
+		const allowedIndexerIds = await resolveAllowedIndexerIds(seriesData.scoringProfileId);
 		const indexerAvailability = evaluateIndexerSearchAvailability(indexerConfigs, {
 			searchType: 'tv',
 			searchSource,
+			allowedIndexerIds,
 			scoringProfileId: seriesData.scoringProfileId ?? undefined,
 			getDefinitionCapabilities: (definitionId) =>
 				indexerManager.getDefinitionCapabilities(definitionId)
