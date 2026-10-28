@@ -1,7 +1,7 @@
 # ==========================================
 # Build-deps base (shared by builder + prod-deps to avoid duplicate apt layers)
 # ==========================================
-FROM node:24-trixie-slim AS build-deps-base
+FROM node:26-trixie-slim AS build-deps-base
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
 	python3 \
@@ -64,7 +64,7 @@ RUN npm ci --omit=dev --no-audit --no-fund \
 # ==========================================
 # Runtime Stage
 # ==========================================
-FROM node:24-trixie-slim AS runner
+FROM node:26-trixie-slim AS runner
 WORKDIR /app
 
 ARG APP_VERSION=dev
