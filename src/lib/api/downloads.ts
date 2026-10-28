@@ -151,6 +151,8 @@ export async function getUnmatched(params?: {
 	resolution?: string;
 	startDate?: string;
 	endDate?: string;
+	sort?: 'status' | 'name' | 'size' | 'match' | 'time';
+	order?: 'asc' | 'desc';
 }): Promise<ApiResponse<QueueUnmatchedListResponse>> {
 	const query: Record<string, string> = {};
 	if (params?.clientId) query.clientId = params.clientId;
@@ -163,6 +165,8 @@ export async function getUnmatched(params?: {
 	if (params?.resolution) query.resolution = params.resolution;
 	if (params?.startDate) query.startDate = params.startDate;
 	if (params?.endDate) query.endDate = params.endDate;
+	if (params?.sort) query.sort = params.sort;
+	if (params?.order) query.order = params.order;
 	return apiGet<QueueUnmatchedListResponse>(`/api/queue/unmatched${buildQuery(query)}`);
 }
 

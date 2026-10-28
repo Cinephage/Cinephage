@@ -13,7 +13,16 @@
 		Filter,
 		ChevronDown,
 		ChevronUp,
-		X
+		X,
+		ArrowUpDown,
+		ArrowUp,
+		ArrowDown,
+		CheckCircle2,
+		XCircle,
+		AlertCircle,
+		Pause,
+		Upload,
+		Minus
 	} from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
@@ -53,6 +62,8 @@
 	let protocol = $state<string>('all');
 	let resolution = $state<string>('');
 	let moreFiltersExpanded = $state(false);
+	let sortField = $state<'status' | 'name' | 'size' | 'match' | 'time'>('time');
+	let sortDirection = $state<'asc' | 'desc'>('desc');
 
 	const statusOptions = [
 		{ value: 'all', label: m.common_all() },
@@ -209,6 +220,7 @@
 	function statusBadge(status: string): string {
 		switch (status) {
 			case 'downloading':
+			case 'postprocessing':
 				return 'badge-info';
 			case 'seeding':
 			case 'completed':
@@ -220,23 +232,6 @@
 				return 'badge-error';
 			default:
 				return 'badge-ghost';
-		}
-	}
-
-	function statusProgress(status: string): string {
-		switch (status) {
-			case 'downloading':
-				return 'progress-info';
-			case 'seeding':
-			case 'completed':
-				return 'progress-success';
-			case 'paused':
-			case 'stalled':
-				return 'progress-warning';
-			case 'error':
-				return 'progress-error';
-			default:
-				return '';
 		}
 	}
 
@@ -276,7 +271,9 @@
 				protocol: protocol === 'all' ? undefined : (protocol as 'torrent' | 'usenet' | 'debrid'),
 				resolution: resolution || undefined,
 				startDate,
-				endDate
+				endDate,
+				sort: sortField,
+				order: sortDirection
 			});
 			items = res.items;
 			total = res.total;
@@ -307,6 +304,41 @@
 		await load(true);
 		if (loadError) toasts.error(m.toast_activity_failedToRefresh());
 		else toasts.success(m.toast_activity_refreshed());
+	}
+
+	function handleSort(field: 'status' | 'name' | 'size' | 'match' | 'time') {
+		if (sortField === field) {
+			sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+		} else {
+			sortField = field;
+			sortDirection = 'asc';
+		}
+		load(true);
+	}
+
+	function getSortIcon(field: string) {
+		if (sortField !== field) return ArrowUpDown;
+		return sortDirection === 'asc' ? ArrowUp : ArrowDown;
+	}
+
+	function statusIcon(status: string) {
+		switch (status) {
+			case 'downloading':
+			case 'postprocessing':
+				return Loader2;
+			case 'seeding':
+				return Upload;
+			case 'completed':
+				return CheckCircle2;
+			case 'paused':
+				return Pause;
+			case 'stalled':
+				return AlertCircle;
+			case 'error':
+				return XCircle;
+			default:
+				return Minus;
+		}
 	}
 
 	function onSearchInput(value: string) {
@@ -798,6 +830,27 @@
 			<span>{m.activity_unmatched_count({ count: total })}</span>
 		</div>
 
+		{#snippet sortIcon(field: 'status' | 'name' | 'size' | 'match' | 'time')}
+			{@const Icon = getSortIcon(field)}
+			<Icon class="h-3 w-3 opacity-50" />
+		{/snippet}
+
+		{#snippet statusCell(item: UnmatchedDownloadItem)}
+			{@const StatusIcon = statusIcon(item.status)}
+			<span class="badge gap-1 whitespace-nowrap {statusBadge(item.status)}">
+				<StatusIcon
+					class="h-3 w-3 {item.status === 'downloading' || item.status === 'postprocessing'
+						? 'animate-spin'
+						: ''}"
+				/>
+				{#if item.status === 'downloading'}
+					{Math.round(item.progress * 100)}%
+				{:else}
+					{statusLabel(item.status)}
+				{/if}
+			</span>
+		{/snippet}
+
 		<div class="overflow-x-auto rounded-lg border border-base-content/12 bg-base-100 shadow-sm">
 			<table class="table w-full table-sm">
 				<thead>
@@ -814,12 +867,54 @@
 							/>
 						</th>
 						<th class="w-8 px-1"><span class="sr-only">Expand</span></th>
-						<th>{m.activity_unmatched_colName()}</th>
+						<th
+							class="cursor-pointer px-2 select-none hover:bg-base-300/40"
+							onclick={() => handleSort('status')}
+						>
+							<span class="flex items-center gap-1">
+								{m.common_status()}
+								{@render sortIcon('status')}
+							</span>
+						</th>
+						<th
+							class="cursor-pointer select-none hover:bg-base-300/40"
+							onclick={() => handleSort('name')}
+						>
+							<span class="flex items-center gap-1">
+								{m.activity_unmatched_colName()}
+								{@render sortIcon('name')}
+							</span>
+						</th>
 						<th class="hidden lg:table-cell">{m.activity_table_quality()}</th>
 						<th class="hidden lg:table-cell">{m.activity_table_group()}</th>
-						<th class="hidden lg:table-cell">{m.activity_unmatched_colSize()}</th>
+						<th
+							class="hidden cursor-pointer select-none hover:bg-base-300/40 lg:table-cell"
+							onclick={() => handleSort('size')}
+						>
+							<span class="flex items-center gap-1">
+								{m.activity_unmatched_colSize()}
+								{@render sortIcon('size')}
+							</span>
+						</th>
 						<th class="hidden lg:table-cell">{m.activity_unmatched_colClient()}</th>
-						<th><span class="sr-only">{m.activity_unmatched_openImport()}</span></th>
+						<th
+							class="hidden cursor-pointer select-none hover:bg-base-300/40 lg:table-cell"
+							onclick={() => handleSort('match')}
+						>
+							<span class="flex items-center gap-1">
+								{m.activity_unmatched_colSuggestedMatch()}
+								{@render sortIcon('match')}
+							</span>
+						</th>
+						<th
+							class="cursor-pointer px-2 select-none hover:bg-base-300/40"
+							onclick={() => handleSort('time')}
+						>
+							<span class="flex items-center gap-1">
+								{m.activity_table_time()}
+								{@render sortIcon('time')}
+							</span>
+						</th>
 					</tr>
 				</thead>
 				<tbody class="divide-y divide-base-content/8">
@@ -849,37 +944,12 @@
 										: ''}"
 								/>
 							</td>
+							<td class="px-2">
+								{@render statusCell(item)}
+							</td>
 							<td>
-								<div class="max-w-xs truncate font-medium" title={item.name}>{item.name}</div>
-								<div class="mt-1 flex flex-wrap items-center gap-2">
-									<span class="badge badge-sm {statusBadge(item.status)}"
-										>{statusLabel(item.status)}</span
-									>
-									<progress
-										class="progress w-16 {statusProgress(item.status)}"
-										value={item.progress * 100}
-										max="100"
-									></progress>
-									<span class="text-xs text-base-content/60"
-										>{Math.round(item.progress * 100)}%</span
-									>
-									{#if item.date}
-										<span class="text-xs text-base-content/50" title={item.date}
-											>{formatRelativeTime(item.date)}</span
-										>
-									{/if}
-									{#if !item.attachable && item.suggestion}
-										<span
-											class="badge gap-1 badge-outline badge-sm"
-											title={m.activity_unmatched_suggestionBadgeTitle({
-												confidence: Math.round(item.suggestion.confidence * 100)
-											})}
-										>
-											{item.suggestion.title}
-											{#if item.suggestion.year}({item.suggestion.year}){/if}
-											· {Math.round(item.suggestion.confidence * 100)}%
-										</span>
-									{/if}
+								<div class="max-w-28 truncate font-medium sm:max-w-48" title={item.name}>
+									{item.name}
 								</div>
 							</td>
 							<td class="hidden lg:table-cell">
@@ -901,50 +971,30 @@
 								{item.clientName}
 								<span class="text-base-content/40">({protocolLabels[item.protocol]})</span>
 							</td>
-							<td onclick={(e) => e.stopPropagation()}>
-								<div class="flex items-center gap-1">
-									{#if item.attachable && item.progress >= 1}
-										<button
-											class="btn gap-1.5 border border-base-content/15 bg-base-100 btn-xs hover:bg-base-200"
-											onclick={() => attachItems([item])}
-											disabled={attaching}
-											aria-label={m.activity_unmatched_attach()}
-											title={m.activity_unmatched_attachTitle({
-												title: item.attachable.title
-											})}
-										>
-											<Link2 class="h-3 w-3" />
-											{m.activity_unmatched_attach()}
-										</button>
-									{:else if item.suggestion}
-										<button
-											class="btn gap-1.5 border border-base-content/15 bg-base-100 btn-xs hover:bg-base-200"
-											onclick={() => confirmSuggestions([item])}
-											disabled={confirming}
-											aria-label={m.activity_unmatched_confirm()}
-											title={m.activity_unmatched_confirmTitle({ title: item.suggestion.title })}
-										>
-											<Link2 class="h-3 w-3" />
-											{m.activity_unmatched_confirm()}
-										</button>
-									{/if}
-									{#if item.progress >= 1}
-										<button
-											class="btn gap-1.5 border border-base-content/15 bg-base-100 btn-xs hover:bg-base-200"
-											onclick={() => openWizardFor(item)}
-											aria-label={m.activity_unmatched_openImport()}
-											title={m.activity_unmatched_openImportTitle()}
-										>
-											<Download class="h-3 w-3" />
-											{m.activity_unmatched_openImport()}
-										</button>
-									{/if}
+							<td class="hidden lg:table-cell">
+								{#if item.attachable}
+									<span class="text-sm">{item.attachable.title}</span>
+								{:else if item.suggestion}
+									<span class="text-sm"
+										>{item.suggestion.title}{#if item.suggestion.year}
+											({item.suggestion.year}){/if}
+										<span class="text-base-content/50"
+											>· {Math.round(item.suggestion.confidence * 100)}%</span
+										></span
+									>
+								{:else}
+									<span class="text-base-content/40">{m.activity_unmatched_noMatch()}</span>
+								{/if}
+							</td>
+							<td class="px-2">
+								<div class="text-xs text-base-content/50" title={item.date}>
+									{item.date ? formatRelativeTime(item.date) : '-'}
 								</div>
 							</td>
 						</tr>
 						{#if expandedHash === item.hash}
 							<tr>
-								<td colspan={8} class="border-b border-base-content/10 p-0">
+								<td colspan={10} class="border-b border-base-content/10 p-0">
 									<div class="border-l-4 border-l-primary bg-base-200 py-3 pr-6 pl-10">
 										<div class="flex flex-wrap items-center gap-x-6 gap-y-2">
 											<div class="flex flex-wrap items-center gap-1.5 text-sm">
@@ -974,6 +1024,51 @@
 													<span class="rounded bg-base-100 px-2 py-1" title={item.date}
 														>{formatRelativeTime(item.date)}</span
 													>
+												</div>
+											{/if}
+
+											{#if item.suggestion || item.progress >= 1}
+												<div
+													class="order-first flex w-full flex-wrap items-center gap-2 sm:order-0 sm:ml-auto sm:w-auto"
+												>
+													{#if item.attachable && item.progress >= 1}
+														<button
+															class="btn gap-1.5 border border-base-content/15 bg-base-100 btn-xs hover:bg-base-200"
+															onclick={() => attachItems([item])}
+															disabled={attaching}
+															aria-label={m.activity_unmatched_attach()}
+															title={m.activity_unmatched_attachTitle({
+																title: item.attachable.title
+															})}
+														>
+															<Link2 class="h-3 w-3" />
+															{m.activity_unmatched_attach()}
+														</button>
+													{:else if item.suggestion}
+														<button
+															class="btn gap-1.5 border border-base-content/15 bg-base-100 btn-sm hover:bg-base-200"
+															onclick={() => confirmSuggestions([item])}
+															disabled={confirming}
+															aria-label={m.activity_unmatched_confirm()}
+															title={m.activity_unmatched_confirmTitle({
+																title: item.suggestion.title
+															})}
+														>
+															<Link2 class="h-3 w-3" />
+															{m.activity_unmatched_confirm()}
+														</button>
+													{/if}
+													{#if item.progress >= 1}
+														<button
+															class="btn gap-1.5 border border-base-content/15 bg-base-100 btn-sm hover:bg-base-200"
+															onclick={() => openWizardFor(item)}
+															aria-label={m.activity_unmatched_openImport()}
+															title={m.activity_unmatched_openImportTitle()}
+														>
+															<Download class="h-3 w-3" />
+															{m.activity_unmatched_openImport()}
+														</button>
+													{/if}
 												</div>
 											{/if}
 										</div>
@@ -1082,7 +1177,7 @@
 				{#if totalPages > 1}
 					<tfoot>
 						<tr>
-							<td colspan={8} class="border-t border-base-content/8 py-2">
+							<td colspan={10} class="border-t border-base-content/8 py-2">
 								<div class="flex items-center justify-center gap-2">
 									<button
 										class="btn btn-ghost btn-xs"

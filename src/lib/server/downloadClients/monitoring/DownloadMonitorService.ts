@@ -4185,6 +4185,8 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 		resolution?: string;
 		startDate?: string;
 		endDate?: string;
+		sort?: 'status' | 'name' | 'size' | 'match' | 'time';
+		order?: 'asc' | 'desc';
 	}): Promise<{ items: UnmatchedDownload[]; total: number; page: number; limit: number }> {
 		const page = Math.max(1, Math.floor(options?.page ?? 1));
 		const limit = Math.min(100, Math.max(1, Math.floor(options?.limit ?? 25)));
@@ -4284,13 +4286,17 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 		}
 
 		const total = unmatched.length;
-		const pageItems = unmatched.slice((page - 1) * limit, page * limit);
 
 		// Strong-path attach lookup: exact infohash hits across library
 		// files, both cases (clients and the library disagree on hex case).
-		// No TMDB, no fuzzy — a hit means identical bytes.
-		const pageHashes = [...new Set(pageItems.map(({ download }) => download.hash.toLowerCase()))];
-		const hashVariants = [...new Set(pageHashes.flatMap((h) => [h, h.toUpperCase()]))];
+		// No TMDB, no fuzzy — a hit means identical bytes. Computed over the
+		// whole filtered set (not just the current page) so a "suggested
+		// match" sort groups confirmed attaches correctly regardless of which
+		// page they land on.
+		const allHashesLower = [
+			...new Set(unmatched.map(({ download }) => download.hash.toLowerCase()))
+		];
+		const hashVariants = [...new Set(allHashesLower.flatMap((h) => [h, h.toUpperCase()]))];
 		const attachMap = new Map<string, NonNullable<UnmatchedDownload['attachable']>>();
 		if (hashVariants.length > 0) {
 			const [movieHits, episodeHits] = await Promise.all([
@@ -4329,6 +4335,45 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 				}
 			}
 		}
+
+		if (options?.sort) {
+			const direction = options.order === 'asc' ? 1 : -1;
+			const sortField = options.sort;
+			unmatched.sort((a, b) => {
+				let cmp = 0;
+				switch (sortField) {
+					case 'status':
+						cmp = a.download.status.localeCompare(b.download.status);
+						break;
+					case 'name':
+						cmp = a.download.name.localeCompare(b.download.name);
+						break;
+					case 'size':
+						cmp = (a.download.size ?? 0) - (b.download.size ?? 0);
+						break;
+					case 'time':
+						cmp = (a.itemDate?.getTime() ?? 0) - (b.itemDate?.getTime() ?? 0);
+						break;
+					case 'match': {
+						// Only the globally-computed infohash attach title is a
+						// reliable cross-page sort key - the TMDB suggestion below
+						// is deliberately computed per-page only, so items without
+						// a confirmed attach sort together (by name) rather than
+						// by a value that isn't known yet at sort time.
+						const aTitle = attachMap.get(a.download.hash.toLowerCase())?.title ?? '';
+						const bTitle = attachMap.get(b.download.hash.toLowerCase())?.title ?? '';
+						if (!aTitle && !bTitle) cmp = a.download.name.localeCompare(b.download.name);
+						else if (!aTitle) cmp = 1;
+						else if (!bTitle) cmp = -1;
+						else cmp = aTitle.localeCompare(bTitle);
+						break;
+					}
+				}
+				return direction * cmp;
+			});
+		}
+
+		const pageItems = unmatched.slice((page - 1) * limit, page * limit);
 
 		// TMDB suggestions, skipped for items that already have a confirmed
 		// infohash attach - a probabilistic guess next to a sure match is just

@@ -276,7 +276,9 @@
 					{/if}
 
 					{#if activity.queueItemId || canBlocklist}
-						<div class="ml-auto flex flex-wrap items-center gap-2">
+						<div
+							class="order-first flex w-full flex-wrap items-center gap-2 sm:order-0 sm:ml-auto sm:w-auto"
+						>
 							{#if activity.queueItemId}
 								{#if supportsQueuePauseResume(activity) && (activity.status === 'downloading' || activity.status === 'seeding')}
 									<button

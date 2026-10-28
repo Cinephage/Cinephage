@@ -13,7 +13,9 @@
  * ('torrent' | 'usenet' | 'debrid'), resolution? (matched against the
  * parsed release name), startDate?/endDate? (YYYY-MM-DD, filtered against
  * each item's completedOn/addedOn - same date-filter convention as
- * Activity).
+ * Activity). sort? ('status' | 'name' | 'size' | 'match' | 'time'), order?
+ * ('asc' | 'desc', default 'desc') - applied across the whole filtered set
+ * before pagination, not just the current page.
  */
 
 import { json } from '@sveltejs/kit';
@@ -62,6 +64,17 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		const protocolParam = url.searchParams.get('protocol') as DownloadClientProtocol | null;
 		const protocol = protocolParam && PROTOCOLS.has(protocolParam) ? protocolParam : undefined;
 		const resolution = url.searchParams.get('resolution') ?? undefined;
+		const sortParam = url.searchParams.get('sort');
+		const sort =
+			sortParam === 'status' ||
+			sortParam === 'name' ||
+			sortParam === 'size' ||
+			sortParam === 'match' ||
+			sortParam === 'time'
+				? sortParam
+				: undefined;
+		const orderParam = url.searchParams.get('order');
+		const order = orderParam === 'asc' || orderParam === 'desc' ? orderParam : undefined;
 		const result = await downloadMonitor.listUnmatchedDownloads({
 			clientId,
 			page: toOptionalInt(url.searchParams.get('page')),
@@ -72,7 +85,9 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 			protocol,
 			resolution,
 			startDate: url.searchParams.get('startDate') ?? undefined,
-			endDate: url.searchParams.get('endDate') ?? undefined
+			endDate: url.searchParams.get('endDate') ?? undefined,
+			sort,
+			order
 		});
 
 		return json({ success: true, ...result });
