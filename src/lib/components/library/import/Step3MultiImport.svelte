@@ -1,7 +1,10 @@
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
-	import { Check, Clock, Loader2 } from '@lucide/svelte';
-	import type { MediaType, DetectionGroup, DetectionSection, TvSeasonSection } from './types.js';
+	import { Check, ChevronDown, Clock, Loader2 } from '@lucide/svelte';
+	import ReviewItemList from './ReviewItemList.svelte';
+	import type { MediaType, DetectionGroup, DetectionSection } from './types.js';
+
+	type ReviewStatus = 'needsInput' | 'ready' | 'skipped' | 'imported';
 
 	interface DestinationLibrary {
 		id: string;
@@ -20,9 +23,8 @@
 	let {
 		importMovieSections = [],
 		importTvSections = [],
-		activeImportTvSection = null,
-		activeImportSeasonSection = null,
-		hasMultipleImportTvSeries = false,
+		hasSelectedImportMovies = false,
+		hasSelectedImportTv = false,
 		importMediaFilter = $bindable('all' as QueueMediaFilter),
 		importMode = $bindable('move' as 'move' | 'copy' | 'symlink'),
 		preferHardlink = $bindable(true),
@@ -35,26 +37,27 @@
 		executingImport = false,
 		canImport = (_group: DetectionGroup) => false,
 		getGroupActionLabel = (_group: DetectionGroup) => null as 'link' | 'enroll' | null,
-		getEffectiveMediaType = (_group: DetectionGroup) => 'movie' as MediaType,
-		getGroupEpisodeInfo = (_group: DetectionGroup) =>
-			null as { season: number; episode: number; title?: string } | null,
+		suggestsTvFromMovie = (_group: DetectionGroup) => false,
+		getSeriesSectionStatus = (_section: DetectionSection) => 'needsInput' as ReviewStatus,
+		getGroupSelectedMatch = (_group: DetectionGroup) =>
+			null as import('./types.js').MatchResult | null,
 		lockedMediaType = undefined as MediaType | undefined,
 		getSectionDestinations = (_section: DetectionSection): DestinationLibrary[] => [],
 		getSectionEligibleCount = (_section: DetectionSection) => 0,
 		canApplyDestination = (_section: DetectionSection) => false,
-		onSelectImportSeriesSection = (_id: string) => {},
-		onSelectImportSeasonSection = (_key: string) => {},
+		getMediaTypeDestinationOptions = (_mediaType: MediaType): DestinationLibrary[] => [],
 		onBulkImport = () => {},
 		onUpdateSectionDestination = (_sectionId: string, _value: string) => {},
 		onApplyDestination = (_section: DetectionSection) => {},
+		onBulkAssignMediaDestination = (_mediaType: MediaType, _libraryId: string) => {},
 		onReviewGroup = (_groupId: string) => {},
+		onReviewSeries = (_sectionId: string) => {},
 		onGoToStep = (_step: number) => {}
 	}: {
 		importMovieSections: DetectionSection[];
 		importTvSections: DetectionSection[];
-		activeImportTvSection: DetectionSection | null;
-		activeImportSeasonSection: TvSeasonSection | null;
-		hasMultipleImportTvSeries: boolean;
+		hasSelectedImportMovies?: boolean;
+		hasSelectedImportTv?: boolean;
 		importMediaFilter: QueueMediaFilter;
 		importMode: 'move' | 'copy' | 'symlink';
 		preferHardlink: boolean;
@@ -67,40 +70,49 @@
 		executingImport: boolean;
 		canImport: (group: DetectionGroup) => boolean;
 		getGroupActionLabel: (group: DetectionGroup) => 'link' | 'enroll' | null;
-		getEffectiveMediaType: (group: DetectionGroup) => MediaType;
-		getGroupEpisodeInfo: (group: DetectionGroup) => {
-			season: number;
-			episode: number;
-			title?: string;
-		} | null;
+		suggestsTvFromMovie: (group: DetectionGroup) => boolean;
+		getSeriesSectionStatus: (section: DetectionSection) => ReviewStatus;
+		getGroupSelectedMatch: (group: DetectionGroup) => import('./types.js').MatchResult | null;
 		lockedMediaType?: MediaType;
 		getSectionDestinations: (section: DetectionSection) => DestinationLibrary[];
 		getSectionEligibleCount: (section: DetectionSection) => number;
 		canApplyDestination: (section: DetectionSection) => boolean;
-		onSelectImportSeriesSection: (id: string) => void;
-		onSelectImportSeasonSection: (key: string) => void;
+		getMediaTypeDestinationOptions?: (mediaType: MediaType) => DestinationLibrary[];
 		onBulkImport: () => void;
 		onUpdateSectionDestination: (sectionId: string, value: string) => void;
 		onApplyDestination: (section: DetectionSection) => void;
+		onBulkAssignMediaDestination?: (mediaType: MediaType, libraryId: string) => void;
 		onReviewGroup: (groupId: string) => void;
+		onReviewSeries: (sectionId: string) => void;
 		onGoToStep: (step: number) => void;
 	} = $props();
 
-	function formatMediaTypeLabel(mediaType: MediaType): string {
-		return mediaType === 'movie' ? m.library_import_movieLabel() : m.library_import_tvShowLabel();
-	}
+	const destinationSections = $derived([...importMovieSections, ...importTvSections]);
+	const movieDestinationSections = $derived(
+		importMovieSections.filter((section) => getSectionDestinations(section).length > 0)
+	);
+	const tvDestinationSections = $derived(
+		importTvSections.filter((section) => getSectionDestinations(section).length > 0)
+	);
+	const alreadyMatchedCount = $derived(
+		destinationSections.filter((section) => getSectionEligibleCount(section) === 0).length
+	);
+	const movieBulkOptions = $derived(getMediaTypeDestinationOptions('movie'));
+	const tvBulkOptions = $derived(getMediaTypeDestinationOptions('tv'));
 
-	function formatEpisodePill(info: { season: number; episode: number }): string {
-		return `S${String(info.season).padStart(2, '0')}E${String(info.episode).padStart(2, '0')}`;
-	}
+	let movieBulkDestination = $state('');
+	let tvBulkDestination = $state('');
+	let moviePerItemExpanded = $state(false);
+	let tvPerItemExpanded = $state(false);
 
-	function getDetectedSeasonsLabel(section: DetectionSection): string {
-		if (!section.seasonSections || section.seasonSections.length === 0) return 'none';
-		const seasons = section.seasonSections
-			.filter((season) => season.seasonNumber !== null)
-			.map((season) => season.seasonNumber as number);
-		if (seasons.length === 0) return 'none';
-		return seasons.join(', ');
+	function getSectionDisplayLabel(section: DetectionSection): string {
+		if (section.mediaType === 'movie' && section.items.length === 1) {
+			const match = getGroupSelectedMatch(section.items[0]);
+			if (match) {
+				return match.year ? `${match.title} (${match.year})` : match.title;
+			}
+		}
+		return section.label;
 	}
 </script>
 
@@ -136,278 +148,248 @@
 		{#if !lockedMediaType}
 			<div class="mt-3 flex flex-wrap items-center justify-between gap-2">
 				<p class="text-xs text-base-content/70">{m.library_import_filterByMediaType()}</p>
-				<div class="join">
-					<button
-						type="button"
-						class="btn join-item btn-sm {importMediaFilter === 'all' ? 'btn-primary' : 'btn-ghost'}"
-						onclick={() => (importMediaFilter = 'all')}
-					>
-						{m.library_import_filterAllMedia()}
-					</button>
-					<button
-						type="button"
-						class="btn join-item btn-sm {importMediaFilter === 'movie'
-							? 'btn-primary'
-							: 'btn-ghost'}"
-						disabled={importMovieSections.length === 0}
-						onclick={() => (importMediaFilter = 'movie')}
-					>
-						{m.common_movies()}
-					</button>
-					<button
-						type="button"
-						class="btn join-item btn-sm {importMediaFilter === 'tv' ? 'btn-primary' : 'btn-ghost'}"
-						disabled={importTvSections.length === 0}
-						onclick={() => (importMediaFilter = 'tv')}
-					>
-						{m.common_tvShows()}
-					</button>
+				<div class="max-w-full scrollbar-none overflow-x-auto">
+					<div class="join">
+						<button
+							type="button"
+							class="btn join-item whitespace-nowrap btn-sm {importMediaFilter === 'all'
+								? 'btn-primary'
+								: 'btn-ghost'}"
+							onclick={() => (importMediaFilter = 'all')}
+						>
+							{m.library_import_filterAllMedia()}
+						</button>
+						<button
+							type="button"
+							class="btn join-item whitespace-nowrap btn-sm {importMediaFilter === 'movie'
+								? 'btn-primary'
+								: 'btn-ghost'}"
+							disabled={!hasSelectedImportMovies}
+							onclick={() => (importMediaFilter = 'movie')}
+						>
+							{m.common_movies()}
+						</button>
+						<button
+							type="button"
+							class="btn join-item whitespace-nowrap btn-sm {importMediaFilter === 'tv'
+								? 'btn-primary'
+								: 'btn-ghost'}"
+							disabled={!hasSelectedImportTv}
+							onclick={() => (importMediaFilter = 'tv')}
+						>
+							{m.common_tvShows()}
+						</button>
+					</div>
 				</div>
 			</div>
 		{/if}
 		{#if selectedImportGroupCount === 0}
 			<div
-				class="mt-3 rounded-lg border border-dashed border-base-300 p-4 text-sm text-base-content/60"
+				class="mt-3 rounded-lg border border-dashed border-base-300 p-4 text-sm text-base-content/90"
 			>
 				{m.library_import_noItemsSelected()}
 			</div>
 		{:else if importMovieSections.length === 0 && importTvSections.length === 0}
 			<div
-				class="mt-3 rounded-lg border border-dashed border-base-300 p-4 text-sm text-base-content/60"
+				class="mt-3 rounded-lg border border-dashed border-base-300 p-4 text-sm text-base-content/90"
 			>
 				{m.library_import_noItemsMatchFilter()}
 			</div>
 		{:else}
-			<div class="mt-3 space-y-3">
-				{#if importMovieSections.length > 0}
-					<div class="max-h-72 space-y-2 overflow-y-auto pr-1">
-						{#each importMovieSections as section (section.id)}
-							{#each section.items as group (group.id)}
-								<div class="rounded-lg border border-base-300 p-2">
-									<div
-										class="flex items-center justify-between gap-3 rounded-lg border border-base-300 p-3"
-									>
-										<div class="min-w-0">
-											<div class="truncate font-medium">{group.displayName}</div>
-											<div
-												class="mt-1 flex flex-wrap items-center gap-2 text-xs text-base-content/70"
-											>
-												<span>{formatMediaTypeLabel(getEffectiveMediaType(group))}</span>
-												<span>•</span>
-												<span
-													>{group.detectedFileCount === 1
-														? m.library_import_fileCountSingular({
-																count: group.detectedFileCount
-															})
-														: m.library_import_fileCount({
-																count: group.detectedFileCount
-															})}</span
-												>
-												{#if canImport(group)}
-													<span class="text-success">{m.library_import_ready()}</span>
-												{:else}
-													<span class="text-warning">{m.library_import_needsInput()}</span>
-												{/if}
-												{#if getGroupActionLabel(group) === 'link'}
-													<span class="badge badge-sm badge-info"
-														>{m.activity_unmatched_linkNow()}</span
-													>
-												{:else if getGroupActionLabel(group) === 'enroll'}
-													<span class="badge badge-outline badge-sm"
-														>{m.activity_unmatched_enrollAction()}</span
-													>
-												{/if}
-											</div>
-										</div>
-										<button class="btn btn-ghost btn-xs" onclick={() => onReviewGroup(group.id)}>
-											{m.library_import_review()}
-										</button>
-									</div>
-								</div>
-							{/each}
-						{/each}
-					</div>
-				{/if}
-
-				{#if importTvSections.length > 0}
-					<div class="overflow-hidden rounded-lg border border-base-300 p-2">
-						<div
-							class="grid gap-3 {hasMultipleImportTvSeries
-								? 'xl:grid-cols-[280px_minmax(0,1fr)]'
-								: ''}"
-						>
-							{#if hasMultipleImportTvSeries}
-								<div class="max-h-80 space-y-1 overflow-y-auto pr-1">
-									{#each importTvSections as section (section.id)}
-										<button
-											type="button"
-											class="w-full rounded-md border px-3 py-2 text-left transition-colors {activeImportTvSection?.id ===
-											section.id
-												? 'border-primary bg-primary/5'
-												: 'border-base-300 hover:bg-base-200/50'}"
-											onclick={() => onSelectImportSeriesSection(section.id)}
-										>
-											<div class="truncate text-sm font-medium">{section.label}</div>
-											<div class="mt-1 text-xs text-base-content/70">
-												{section.items.length === 1
-													? m.library_import_episodeCountSingular({
-															count: section.items.length
-														})
-													: m.library_import_episodeCount({ count: section.items.length })} • {m.library_import_seasonsLabel(
-													{ seasons: getDetectedSeasonsLabel(section) }
-												)}
-											</div>
-										</button>
-									{/each}
-								</div>
-							{/if}
-
-							<div class="min-w-0 overflow-hidden rounded-md border border-base-300 p-2">
-								{#if activeImportTvSection}
-									{@const mediaDestinationOptions = getSectionDestinations(activeImportTvSection)}
-									{@const mediaDestinationEligibleCount =
-										getSectionEligibleCount(activeImportTvSection)}
-									<div class="min-w-0">
-										<div class="truncate font-medium">{activeImportTvSection.label}</div>
-										<div class="text-xs text-base-content/70">
-											{activeImportTvSection.items.length === 1
-												? m.library_import_episodeCountSingular({
-														count: activeImportTvSection.items.length
-													})
-												: m.library_import_episodeCount({
-														count: activeImportTvSection.items.length
-													})}
-										</div>
-									</div>
-
-									{#if mediaDestinationOptions.length > 0}
-										<div
-											class="mt-2 flex flex-wrap items-end gap-2 rounded-md border border-base-300 bg-base-200/40 p-2"
-										>
-											<div class="min-w-64 flex-1">
-												<div class="pb-1 text-xs text-base-content/80">
-													{m.library_import_destinationRootFolder()}
-												</div>
-												<select
-													class="select-bordered select w-full select-xs"
-													value={bulkDestinationBySectionId[activeImportTvSection.id] ?? ''}
-													onchange={(event) =>
-														onUpdateSectionDestination(
-															activeImportTvSection.id,
-															(event.target as HTMLSelectElement).value
-														)}
-												>
-													<option disabled value="">{m.library_import_selectRootFolder()}</option>
-													{#each mediaDestinationOptions as folder (folder.id)}
-														<option value={folder.id}
-															>{folder.name}
-															{#if folder.defaultRootFolderPath}
-																- {folder.defaultRootFolderPath}
-															{/if}</option
-														>
-													{/each}
-												</select>
-											</div>
-											<button
-												type="button"
-												class="btn btn-ghost btn-xs"
-												disabled={!canApplyDestination(activeImportTvSection)}
-												onclick={() => onApplyDestination(activeImportTvSection)}
-											>
-												{m.library_import_applyDestinationToMedia()}
-											</button>
-										</div>
-									{:else}
-										<div
-											class="mt-2 rounded-md border border-base-300 bg-base-200/40 p-2 text-xs text-base-content/70"
-										>
-											{#if mediaDestinationEligibleCount === 0}
-												{m.library_import_destinationNotNeededForExistingMedia()}
-											{:else}
-												{m.library_import_noCommonDestinationForMedia()}
-											{/if}
-										</div>
-									{/if}
-
-									{#if activeImportTvSection.seasonSections}
-										<div class="mt-2 flex flex-wrap gap-2">
-											{#each activeImportTvSection.seasonSections as seasonSection (seasonSection.key)}
-												<button
-													type="button"
-													class="btn btn-xs {activeImportSeasonSection?.key === seasonSection.key
-														? 'btn-primary'
-														: 'btn-ghost'}"
-													onclick={() => onSelectImportSeasonSection(seasonSection.key)}
-												>
-													{seasonSection.label} ({seasonSection.items.length})
-												</button>
-											{/each}
-										</div>
-									{/if}
-
-									<div class="mt-2 max-h-72 space-y-2 overflow-y-auto pr-1">
-										{#each activeImportSeasonSection?.items ?? activeImportTvSection.items as group (group.id)}
-											{@const episodeInfo = getGroupEpisodeInfo(group)}
-											<div
-												class="flex items-center justify-between gap-3 rounded-lg border border-base-300 p-3"
-											>
-												<div class="min-w-0">
-													<div class="truncate font-medium">{group.displayName}</div>
-													<div
-														class="mt-1 flex flex-wrap items-center gap-2 text-xs text-base-content/70"
-													>
-														<span>{formatMediaTypeLabel(getEffectiveMediaType(group))}</span>
-														<span>•</span>
-														<span
-															>{group.detectedFileCount === 1
-																? m.library_import_fileCountSingular({
-																		count: group.detectedFileCount
-																	})
-																: m.library_import_fileCount({
-																		count: group.detectedFileCount
-																	})}</span
-														>
-														{#if canImport(group)}
-															<span class="text-success">{m.library_import_ready()}</span>
-														{:else}
-															<span class="text-warning">{m.library_import_needsInput()}</span>
-														{/if}
-														{#if getGroupActionLabel(group) === 'link'}
-															<span class="badge badge-sm badge-info"
-																>{m.activity_unmatched_linkNow()}</span
-															>
-														{:else if getGroupActionLabel(group) === 'enroll'}
-															<span class="badge badge-outline badge-sm"
-																>{m.activity_unmatched_enrollAction()}</span
-															>
-														{/if}
-														{#if episodeInfo}
-															<span class="badge badge-outline font-mono badge-xs badge-primary">
-																{formatEpisodePill(episodeInfo)}
-															</span>
-															{#if episodeInfo.title}
-																<span class="max-w-48 truncate italic">
-																	{episodeInfo.title}
-																</span>
-															{/if}
-														{/if}
-													</div>
-												</div>
-												<button
-													class="btn btn-ghost btn-xs"
-													onclick={() => onReviewGroup(group.id)}
-												>
-													{m.library_import_review()}
-												</button>
-											</div>
-										{/each}
-									</div>
-								{/if}
-							</div>
-						</div>
-					</div>
-				{/if}
+			<div class="mt-3">
+				<ReviewItemList
+					movieSections={importMovieSections}
+					tvSections={importTvSections}
+					canImportGroup={canImport}
+					{suggestsTvFromMovie}
+					{getSeriesSectionStatus}
+					{getGroupSelectedMatch}
+					{getGroupActionLabel}
+					onSelectGroup={onReviewGroup}
+					onSelectSeries={onReviewSeries}
+				/>
 			</div>
+
+			{#snippet destinationRow(section: DetectionSection)}
+				{@const destinationOptions = getSectionDestinations(section)}
+				<div
+					class="flex flex-wrap items-end gap-2 rounded-md border border-base-300 bg-base-200/40 p-2"
+				>
+					<div class="min-w-0 flex-1 text-xs font-medium text-base-content/80">
+						{getSectionDisplayLabel(section)}
+					</div>
+					<div class="min-w-64 flex-1">
+						<select
+							class="select-bordered select w-full select-xs"
+							value={bulkDestinationBySectionId[section.id] ?? ''}
+							onchange={(event) =>
+								onUpdateSectionDestination(section.id, (event.target as HTMLSelectElement).value)}
+						>
+							<option disabled value="">{m.library_import_selectRootFolder()}</option>
+							{#each destinationOptions as folder (folder.id)}
+								<option value={folder.id}
+									>{folder.name}
+									{#if folder.defaultRootFolderPath}
+										- {folder.defaultRootFolderPath}
+									{/if}</option
+								>
+							{/each}
+						</select>
+					</div>
+					<button
+						type="button"
+						class="btn btn-ghost btn-xs"
+						disabled={!canApplyDestination(section)}
+						onclick={() => onApplyDestination(section)}
+					>
+						{m.library_import_applyDestinationToMedia()}
+					</button>
+				</div>
+			{/snippet}
+
+			{#if movieDestinationSections.length > 0 || tvDestinationSections.length > 0 || alreadyMatchedCount > 0}
+				<div class="mt-3 space-y-3">
+					<h4 class="text-xs font-medium text-base-content/90 uppercase">
+						{m.library_import_destinationRootFolder()}
+					</h4>
+
+					{#if movieBulkOptions.length > 0 && movieDestinationSections.length > 0}
+						<div
+							class="flex flex-wrap items-end gap-2 rounded-md border border-primary/30 bg-primary/5 p-2"
+						>
+							<div class="min-w-0 flex-1 text-xs font-medium text-base-content/90">
+								{m.library_import_bulkAssignMovieDestination()}
+							</div>
+							<div class="min-w-64 flex-1">
+								<select
+									class="select-bordered select w-full select-xs"
+									bind:value={movieBulkDestination}
+								>
+									<option disabled value="">{m.library_import_selectRootFolder()}</option>
+									{#each movieBulkOptions as folder (folder.id)}
+										<option value={folder.id}
+											>{folder.name}
+											{#if folder.defaultRootFolderPath}
+												- {folder.defaultRootFolderPath}
+											{/if}</option
+										>
+									{/each}
+								</select>
+							</div>
+							<button
+								type="button"
+								class="btn btn-primary btn-xs"
+								disabled={!movieBulkDestination}
+								onclick={() => onBulkAssignMediaDestination('movie', movieBulkDestination)}
+							>
+								{m.library_import_applyToAllMovies()}
+							</button>
+						</div>
+					{/if}
+
+					{#if tvBulkOptions.length > 0 && tvDestinationSections.length > 0}
+						<div
+							class="flex flex-wrap items-end gap-2 rounded-md border border-primary/30 bg-primary/5 p-2"
+						>
+							<div class="min-w-0 flex-1 text-xs font-medium text-base-content/90">
+								{m.library_import_bulkAssignTvDestination()}
+							</div>
+							<div class="min-w-64 flex-1">
+								<select
+									class="select-bordered select w-full select-xs"
+									bind:value={tvBulkDestination}
+								>
+									<option disabled value="">{m.library_import_selectRootFolder()}</option>
+									{#each tvBulkOptions as folder (folder.id)}
+										<option value={folder.id}
+											>{folder.name}
+											{#if folder.defaultRootFolderPath}
+												- {folder.defaultRootFolderPath}
+											{/if}</option
+										>
+									{/each}
+								</select>
+							</div>
+							<button
+								type="button"
+								class="btn btn-primary btn-xs"
+								disabled={!tvBulkDestination}
+								onclick={() => onBulkAssignMediaDestination('tv', tvBulkDestination)}
+							>
+								{m.library_import_applyToAllTv()}
+							</button>
+						</div>
+					{/if}
+
+					{#if movieDestinationSections.length > 0}
+						<button
+							type="button"
+							class="flex w-full items-center justify-between rounded-md bg-base-200/60 px-2 py-1"
+							onclick={() => (moviePerItemExpanded = !moviePerItemExpanded)}
+						>
+							<span class="flex items-center gap-1.5">
+								<ChevronDown
+									class="h-3.5 w-3.5 text-base-content/60 transition-transform {moviePerItemExpanded
+										? ''
+										: '-rotate-90'}"
+								/>
+								<span class="text-[11px] font-bold tracking-widest text-base-content/90 uppercase"
+									>{m.common_movies()}</span
+								>
+								<span class="text-[11px] font-normal text-base-content/60 normal-case"
+									>({m.library_import_perItemOverrideHint()})</span
+								>
+							</span>
+							<span class="text-xs text-base-content/80">{movieDestinationSections.length}</span>
+						</button>
+						{#if moviePerItemExpanded}
+							<div class="space-y-2">
+								{#each movieDestinationSections as section (section.id)}
+									{@render destinationRow(section)}
+								{/each}
+							</div>
+						{/if}
+					{/if}
+
+					{#if tvDestinationSections.length > 0}
+						<button
+							type="button"
+							class="flex w-full items-center justify-between rounded-md bg-base-200/60 px-2 py-1"
+							onclick={() => (tvPerItemExpanded = !tvPerItemExpanded)}
+						>
+							<span class="flex items-center gap-1.5">
+								<ChevronDown
+									class="h-3.5 w-3.5 text-base-content/60 transition-transform {tvPerItemExpanded
+										? ''
+										: '-rotate-90'}"
+								/>
+								<span class="text-[11px] font-bold tracking-widest text-base-content/90 uppercase"
+									>{m.common_tvShows()}</span
+								>
+								<span class="text-[11px] font-normal text-base-content/60 normal-case"
+									>({m.library_import_perItemOverrideHint()})</span
+								>
+							</span>
+							<span class="text-xs text-base-content/80">{tvDestinationSections.length}</span>
+						</button>
+						{#if tvPerItemExpanded}
+							<div class="space-y-2">
+								{#each tvDestinationSections as section (section.id)}
+									{@render destinationRow(section)}
+								{/each}
+							</div>
+						{/if}
+					{/if}
+
+					{#if alreadyMatchedCount > 0}
+						<div
+							class="rounded-md border border-base-300 bg-base-200/40 p-2 text-xs text-base-content/80"
+						>
+							{m.library_import_destinationAlreadyMatchedSummary({ count: alreadyMatchedCount })}
+						</div>
+					{/if}
+				</div>
+			{/if}
 		{/if}
 	</div>
 

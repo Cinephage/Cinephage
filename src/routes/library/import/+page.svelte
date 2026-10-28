@@ -8,6 +8,7 @@
 	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
 	import {
 		Step1PathSelector,
+		ReviewToolbar,
 		DetectionGroupList,
 		GroupEditorPanel,
 		Step3MultiImport,
@@ -153,6 +154,7 @@
 	let detecting = $state(false);
 	let detection = $state<DetectionResult | null>(null);
 	let selectedGroupId = $state<string | null>(null);
+	let detailPanelEl: HTMLDivElement | undefined = $state();
 	let importedGroupIds = $state<string[]>([]);
 	// Maps groupId -> real library ID returned by the server after import completes.
 	let importedGroupLibraryIds = $state<Record<string, string>>({});
@@ -173,8 +175,6 @@
 	let importMediaFilter = $state<QueueMediaFilter>('all');
 	let reviewSelectedSeriesSectionId = $state<string | null>(null);
 	let reviewSelectedSeasonSectionKey = $state<string | null>(null);
-	let importSelectedSeriesSectionId = $state<string | null>(null);
-	let importSelectedSeasonSectionKey = $state<string | null>(null);
 	let tmdbSearchDebounce: ReturnType<typeof setTimeout> | null = null;
 
 	let selectedMediaType = $state<MediaType>('movie');
@@ -288,46 +288,22 @@
 	);
 	const remainingGroupCount = $derived.by(
 		() =>
-			detectionGroups.filter(
-				(group) => !importedGroupIds.includes(group.id) && !skippedGroupIds.includes(group.id)
-			).length
+			detectionGroups.filter((group) => ['ready', 'needsInput'].includes(getGroupStatus(group)))
+				.length
 	);
 	const pendingGroupCount = $derived.by(
-		() =>
-			detectionGroups.filter(
-				(group) =>
-					!importedGroupIds.includes(group.id) &&
-					!skippedGroupIds.includes(group.id) &&
-					!canImportGroup(group)
-			).length
+		() => detectionGroups.filter((group) => getGroupStatus(group) === 'needsInput').length
 	);
 	const skippedGroupCount = $derived.by(
-		() => detectionGroups.filter((group) => skippedGroupIds.includes(group.id)).length
+		() => detectionGroups.filter((group) => getGroupStatus(group) === 'skipped').length
 	);
 	const readyGroupCount = $derived.by(
-		() =>
-			detectionGroups.filter(
-				(group) =>
-					!importedGroupIds.includes(group.id) &&
-					!skippedGroupIds.includes(group.id) &&
-					canImportGroup(group)
-			).length
+		() => detectionGroups.filter((group) => getGroupStatus(group) === 'ready').length
 	);
 	const isMultiGroupReview = $derived(detectionGroups.length > 1);
-	const selectedImportGroupCount = $derived.by(
-		() =>
-			detectionGroups.filter(
-				(group) => !importedGroupIds.includes(group.id) && !skippedGroupIds.includes(group.id)
-			).length
-	);
+	const selectedImportGroupCount = $derived(remainingGroupCount);
 	const selectedNeedsInputCount = $derived.by(
-		() =>
-			detectionGroups.filter(
-				(group) =>
-					!importedGroupIds.includes(group.id) &&
-					!skippedGroupIds.includes(group.id) &&
-					!canImportGroup(group)
-			).length
+		() => detectionGroups.filter((group) => getGroupStatus(group) === 'needsInput').length
 	);
 	const canProceedFromReview = $derived.by(() => {
 		if (isMultiGroupReview) {
@@ -339,16 +315,12 @@
 		const query = detectedGroupQuery.trim().toLowerCase();
 
 		const filtered = detectionGroups.filter((group) => {
-			const isImported = importedGroupIds.includes(group.id);
-			const isSkipped = skippedGroupIds.includes(group.id);
-			const isRemaining = !isImported && !isSkipped;
-			const isReady = isRemaining && canImportGroup(group);
-			const isPending = isRemaining && !isReady;
+			const status = getGroupStatus(group);
 
-			if (detectedGroupFilter === 'imported' && !isImported) return false;
-			if (detectedGroupFilter === 'skipped' && !isSkipped) return false;
-			if (detectedGroupFilter === 'pending' && !isPending) return false;
-			if (detectedGroupFilter === 'ready' && !isReady) return false;
+			if (detectedGroupFilter === 'imported' && status !== 'imported') return false;
+			if (detectedGroupFilter === 'skipped' && status !== 'skipped') return false;
+			if (detectedGroupFilter === 'pending' && status !== 'needsInput') return false;
+			if (detectedGroupFilter === 'ready' && status !== 'ready') return false;
 
 			if (!query) return true;
 
@@ -425,7 +397,6 @@
 			getSkippableSeasonGroups(activeReviewSeasonSection).length > 0
 		)
 	);
-	const hasMultipleReviewTvSeries = $derived.by(() => reviewTvSections.length > 1);
 
 	const importMovieSections = $derived.by(() =>
 		importSelectionSections.filter((section) => section.mediaType === 'movie')
@@ -433,30 +404,12 @@
 	const importTvSections = $derived.by(() =>
 		importSelectionSections.filter((section) => section.mediaType === 'tv')
 	);
-	const activeImportTvSection = $derived.by(() => {
-		if (importTvSections.length === 0) return null;
-		if (!importSelectedSeriesSectionId) return importTvSections[0];
-
-		return (
-			importTvSections.find((section) => section.id === importSelectedSeriesSectionId) ??
-			importTvSections[0]
-		);
-	});
-	const activeImportSeasonSection = $derived.by(() => {
-		if (!activeImportTvSection?.seasonSections || activeImportTvSection.seasonSections.length === 0)
-			return null;
-		if (!importSelectedSeasonSectionKey) {
-			return activeImportTvSection.seasonSections[0];
-		}
-
-		return (
-			activeImportTvSection.seasonSections.find(
-				(seasonSection) => seasonSection.key === importSelectedSeasonSectionKey
-			) ?? activeImportTvSection.seasonSections[0]
-		);
-	});
-	const hasMultipleImportTvSeries = $derived.by(() => importTvSections.length > 1);
-
+	const hasSelectedImportMovies = $derived.by(() =>
+		selectedImportGroups.some((group) => getEffectiveMediaType(group) === 'movie')
+	);
+	const hasSelectedImportTv = $derived.by(() =>
+		selectedImportGroups.some((group) => getEffectiveMediaType(group) === 'tv')
+	);
 	const canProceedToImport = $derived.by(() => {
 		if (
 			!selectedMatch ||
@@ -679,21 +632,6 @@
 		if (step !== 3) {
 			return;
 		}
-		if (importTvSections.length === 0) {
-			importSelectedSeriesSectionId = null;
-			importSelectedSeasonSectionKey = null;
-			return;
-		}
-		if (!importTvSections.some((section) => section.id === importSelectedSeriesSectionId)) {
-			importSelectedSeriesSectionId = importTvSections[0].id;
-			importSelectedSeasonSectionKey = null;
-		}
-	});
-
-	$effect(() => {
-		if (step !== 3) {
-			return;
-		}
 
 		const nextSelections = { ...bulkDestinationBySectionId };
 		let changed = false;
@@ -717,29 +655,6 @@
 
 		if (changed) {
 			bulkDestinationBySectionId = nextSelections;
-		}
-	});
-
-	$effect(() => {
-		if (step !== 3) {
-			return;
-		}
-		const activeSection = activeImportTvSection;
-		if (
-			!activeSection ||
-			!activeSection.seasonSections ||
-			activeSection.seasonSections.length === 0
-		) {
-			importSelectedSeasonSectionKey = null;
-			return;
-		}
-		if (
-			!importSelectedSeasonSectionKey ||
-			!activeSection.seasonSections.some(
-				(seasonSection) => seasonSection.key === importSelectedSeasonSectionKey
-			)
-		) {
-			importSelectedSeasonSectionKey = activeSection.seasonSections[0].key;
 		}
 	});
 
@@ -1076,6 +991,19 @@
 		maybeAutoSearchUnmatchedShell(groupId);
 	}
 
+	// On narrow viewports the sidebar and detail panel stack vertically, so a
+	// selection made in the sidebar list would otherwise leave the user stuck
+	// looking at the (now stale-looking) list with the panel off-screen below.
+	function scrollDetailPanelIntoViewOnMobile() {
+		if (typeof window === 'undefined' || window.innerWidth >= 1024) return;
+		detailPanelEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+	}
+
+	function handleSidebarSwitchGroup(groupId: string) {
+		switchGroup(groupId);
+		scrollDetailPanelIntoViewOnMobile();
+	}
+
 	/**
 	 * Shell groups (unmatched in-root sources) arrive with no candidates:
 	 * run the prefilled clean-title search so the user reviews, not types.
@@ -1258,6 +1186,27 @@
 		return skippedGroupIds.includes(groupId);
 	}
 
+	type ReviewStatus = 'needsInput' | 'ready' | 'skipped' | 'imported';
+
+	function getGroupStatus(group: DetectionGroup): ReviewStatus {
+		if (isGroupImported(group.id)) return 'imported';
+		if (isGroupSkipped(group.id)) return 'skipped';
+		return canImportGroup(group) ? 'ready' : 'needsInput';
+	}
+
+	/**
+	 * A group classified as a movie whose filename still parsed a season/
+	 * episode (SxxExx-shaped) is probably a misclassified TV episode -
+	 * surfaced as a "Looks like TV" hint rather than silently imported wrong.
+	 */
+	function suggestsTvFromMovie(group: DetectionGroup): boolean {
+		return (
+			getEffectiveMediaType(group) === 'movie' &&
+			typeof group.parsedSeason === 'number' &&
+			typeof group.parsedEpisode === 'number'
+		);
+	}
+
 	/**
 	 * Action badge for unmatched in-root groups: 'link' when the library
 	 * already holds the complete file (the bulk/single dispatch will track),
@@ -1433,23 +1382,6 @@
 		return null;
 	}
 
-	function getDetectedSeasonsLabel(section: DetectionSection): string {
-		if (
-			section.mediaType !== 'tv' ||
-			!section.seasonSections ||
-			section.seasonSections.length === 0
-		) {
-			return 'none';
-		}
-		const seasons = section.seasonSections
-			.filter((season) => season.seasonNumber !== null)
-			.map((season) => season.seasonNumber as number);
-		if (seasons.length === 0) {
-			return 'none';
-		}
-		return seasons.join(', ');
-	}
-
 	function hasUnknownSeasonItems(section: DetectionSection): boolean {
 		if (section.mediaType !== 'tv' || !section.seasonSections) {
 			return false;
@@ -1493,15 +1425,34 @@
 	}
 
 	function selectReviewSeriesSection(sectionId: string) {
-		if (reviewSelectedSeriesSectionId === sectionId) {
-			return;
+		if (reviewSelectedSeriesSectionId !== sectionId) {
+			reviewSelectedSeriesSectionId = sectionId;
+			reviewSelectedSeasonSectionKey = null;
 		}
-		reviewSelectedSeriesSectionId = sectionId;
-		reviewSelectedSeasonSectionKey = null;
+		// The sidebar only lists one row per series now - keep the detail
+		// panel's single-group fields (media type, match search) pointed at a
+		// real group within that series instead of whatever was active before.
+		const section = reviewTvSections.find((item) => item.id === sectionId);
+		const firstGroup = section?.seasonSections?.[0]?.items[0] ?? section?.items[0];
+		if (firstGroup) {
+			switchGroup(firstGroup.id);
+		}
+	}
+
+	function handleSidebarSelectReviewSeriesSection(sectionId: string) {
+		selectReviewSeriesSection(sectionId);
+		scrollDetailPanelIntoViewOnMobile();
 	}
 
 	function selectReviewSeasonSection(seasonKey: string) {
 		reviewSelectedSeasonSectionKey = seasonKey;
+		const seasonSection = activeReviewTvSection?.seasonSections?.find(
+			(item) => item.key === seasonKey
+		);
+		const firstGroup = seasonSection?.items[0];
+		if (firstGroup) {
+			switchGroup(firstGroup.id);
+		}
 	}
 
 	function getSkippableSeasonGroups(
@@ -1615,6 +1566,127 @@
 		return true;
 	}
 
+	function getSkippableSeriesGroups(
+		section: DetectionSection | null | undefined
+	): DetectionGroup[] {
+		if (!section) return [];
+		return section.items.filter((group) => !isGroupImported(group.id));
+	}
+
+	function isSeriesSectionFullySkipped(section: DetectionSection | null | undefined): boolean {
+		const groups = getSkippableSeriesGroups(section);
+		return groups.length > 0 && groups.every((group) => isGroupSkipped(group.id));
+	}
+
+	function toggleSeriesSkipped(section: DetectionSection | null | undefined) {
+		if (!skipActionsEnabled || !section) return;
+
+		const groups = getSkippableSeriesGroups(section);
+		if (groups.length === 0) return;
+
+		if (isSeriesSectionFullySkipped(section)) {
+			const groupIds = groups.map((group) => group.id);
+			skippedGroupIds = skippedGroupIds.filter((groupId) => !groupIds.includes(groupId));
+			return;
+		}
+
+		const nextSkippedIds = [...skippedGroupIds];
+		for (const group of groups) {
+			if (!nextSkippedIds.includes(group.id)) {
+				nextSkippedIds.push(group.id);
+			}
+		}
+		skippedGroupIds = nextSkippedIds;
+	}
+
+	function canApplySelectedMatchToSeries(
+		section: DetectionSection | null | undefined,
+		match: MatchResult | null = selectedMatch
+	): boolean {
+		if (!section || !match) return false;
+		if (match.mediaType !== 'tv') return false;
+		return getSkippableSeriesGroups(section).length > 0;
+	}
+
+	function applySelectedMatchToAllSeasons(
+		section: DetectionSection | null | undefined,
+		matchToApply: MatchResult | null = selectedMatch
+	): boolean {
+		if (!section) return false;
+		if (!matchToApply || matchToApply.mediaType !== 'tv') {
+			toasts.warning(m.toast_library_import_selectTvMatchForSeasonApply());
+			return false;
+		}
+
+		const groups = getSkippableSeriesGroups(section);
+		if (groups.length === 0) return false;
+
+		const librariesForTv = getAvailableDestinationLibrariesForType('tv', matchToApply);
+		const recommendedRootFolder =
+			getRecommendedDestinationLibraryId(librariesForTv, {
+				preferAnime: matchToApply.isAnime === true
+			}) ?? '';
+		const nextState = { ...groupReviewState };
+
+		for (const group of groups) {
+			const state = getGroupState(group);
+			const hasSelectedMatch = state.matchCandidates.some(
+				(candidate) =>
+					candidate.mediaType === matchToApply.mediaType && candidate.tmdbId === matchToApply.tmdbId
+			);
+			const nextCandidates = hasSelectedMatch
+				? state.matchCandidates
+				: [matchToApply, ...state.matchCandidates];
+			const hasValidRootFolder =
+				state.selectedRootFolder.length > 0 &&
+				librariesForTv.some((library) => library.id === state.selectedRootFolder);
+
+			nextState[group.id] = {
+				...state,
+				selectedMediaType: 'tv',
+				selectedMatch: matchToApply,
+				searchQuery: matchToApply.title,
+				matchCandidates: nextCandidates,
+				importTarget: matchToApply.inLibrary ? 'existing' : 'new',
+				selectedRootFolder: matchToApply.inLibrary
+					? state.selectedRootFolder
+					: hasValidRootFolder
+						? state.selectedRootFolder
+						: recommendedRootFolder
+			};
+		}
+
+		groupReviewState = nextState;
+		if (activeGroup && nextState[activeGroup.id]) {
+			loadGroupState(activeGroup.id);
+		}
+
+		toasts.success(m.toast_library_import_appliedMatchToSeason({ count: groups.length }));
+		return true;
+	}
+
+	/** Aggregate status for a whole season tile/series row: ready/imported
+	 *  groups never block, any needsInput group makes the whole thing
+	 *  needsInput - matches the 2-color (ready/needs input) legend. */
+	function getGroupsAggregateStatus(groups: DetectionGroup[]): ReviewStatus {
+		if (groups.length === 0) return 'ready';
+		if (groups.every((group) => getGroupStatus(group) === 'imported')) return 'imported';
+		const blocking = groups.filter((group) => {
+			const status = getGroupStatus(group);
+			return status !== 'imported' && status !== 'skipped';
+		});
+		if (blocking.length === 0) return 'ready';
+		return blocking.every((group) => getGroupStatus(group) === 'ready') ? 'ready' : 'needsInput';
+	}
+
+	function getSeasonSectionStatus(seasonSection: TvSeasonSection): ReviewStatus {
+		return getGroupsAggregateStatus(seasonSection.items);
+	}
+
+	function getSeriesSectionStatus(section: DetectionSection): ReviewStatus {
+		return getGroupsAggregateStatus(section.items);
+	}
+
 	function getSectionDestinationGroups(section: DetectionSection): DetectionGroup[] {
 		return section.items.filter((group) => !isGroupImported(group.id) && !isGroupSkipped(group.id));
 	}
@@ -1691,16 +1763,10 @@
 		});
 	}
 
-	function applySelectedDestinationToMedia(section: DetectionSection) {
-		const selectedDestination = bulkDestinationBySectionId[section.id] ?? '';
-		if (!selectedDestination) {
-			toasts.warning(m.toast_library_import_selectDestinationFirst());
-			return;
-		}
-
-		const groups = getSectionDestinationEligibleGroups(section);
-		if (groups.length === 0) return;
-
+	function applyDestinationToGroups(
+		groups: DetectionGroup[],
+		selectedDestination: string
+	): { updatedCount: number; restrictedCount: number } {
 		let updatedCount = 0;
 		let restrictedCount = 0;
 		const nextState = { ...groupReviewState };
@@ -1738,6 +1804,24 @@
 			if (activeGroup && nextState[activeGroup.id]) {
 				loadGroupState(activeGroup.id);
 			}
+		}
+
+		return { updatedCount, restrictedCount };
+	}
+
+	function applySelectedDestinationToMedia(section: DetectionSection) {
+		const selectedDestination = bulkDestinationBySectionId[section.id] ?? '';
+		if (!selectedDestination) {
+			toasts.warning(m.toast_library_import_selectDestinationFirst());
+			return;
+		}
+
+		const groups = getSectionDestinationEligibleGroups(section);
+		if (groups.length === 0) return;
+
+		const { updatedCount, restrictedCount } = applyDestinationToGroups(groups, selectedDestination);
+
+		if (updatedCount > 0) {
 			toasts.success(m.toast_library_import_appliedDestinationToMedia({ count: updatedCount }));
 		}
 
@@ -1746,16 +1830,29 @@
 		}
 	}
 
-	function selectImportSeriesSection(sectionId: string) {
-		if (importSelectedSeriesSectionId === sectionId) {
-			return;
-		}
-		importSelectedSeriesSectionId = sectionId;
-		importSelectedSeasonSectionKey = null;
+	function getMediaTypeDestinationOptions(mediaType: MediaType): DestinationLibrary[] {
+		return getAvailableDestinationLibrariesForType(mediaType, null);
 	}
 
-	function selectImportSeasonSection(seasonKey: string) {
-		importSelectedSeasonSectionKey = seasonKey;
+	function applyBulkDestinationForMediaType(mediaType: MediaType, selectedDestination: string) {
+		if (!selectedDestination) {
+			toasts.warning(m.toast_library_import_selectDestinationFirst());
+			return;
+		}
+
+		const sections = mediaType === 'movie' ? importMovieSections : importTvSections;
+		const groups = sections.flatMap((section) => getSectionDestinationEligibleGroups(section));
+		if (groups.length === 0) return;
+
+		const { updatedCount, restrictedCount } = applyDestinationToGroups(groups, selectedDestination);
+
+		if (updatedCount > 0) {
+			toasts.success(m.toast_library_import_appliedDestinationToMedia({ count: updatedCount }));
+		}
+
+		if (restrictedCount > 0) {
+			toasts.warning(m.toast_library_import_destinationRestrictedForMediaItems());
+		}
 	}
 
 	function getGroupEpisodeInfo(
@@ -1926,8 +2023,6 @@
 		importMediaFilter = 'all';
 		reviewSelectedSeriesSectionId = null;
 		reviewSelectedSeasonSectionKey = null;
-		importSelectedSeriesSectionId = null;
-		importSelectedSeasonSectionKey = null;
 		if (tmdbSearchDebounce) {
 			clearTimeout(tmdbSearchDebounce);
 			tmdbSearchDebounce = null;
@@ -2333,8 +2428,6 @@
 		importMediaFilter = 'all';
 		reviewSelectedSeriesSectionId = null;
 		reviewSelectedSeasonSectionKey = null;
-		importSelectedSeriesSectionId = null;
-		importSelectedSeasonSectionKey = null;
 		if (tmdbSearchDebounce) {
 			clearTimeout(tmdbSearchDebounce);
 			tmdbSearchDebounce = null;
@@ -2942,10 +3035,6 @@
 		return resolvePath(path);
 	});
 
-	function formatMediaTypeLabel(mediaType: MediaType): string {
-		return mediaType === 'movie' ? m.library_import_movieLabel() : m.library_import_tvShowLabel();
-	}
-
 	function closeLeaveImportModal() {
 		leaveImportModalOpen = false;
 		pendingNavigation = null;
@@ -3008,82 +3097,104 @@
 	{#if step === 2 && detection && activeGroup}
 		<div class="space-y-4">
 			{#if detectionGroups.length > 1}
-				<DetectionGroupList
-					{reviewDetectionSections}
-					{reviewMovieSections}
-					{reviewTvSections}
-					{activeReviewTvSection}
-					{activeReviewSeasonSection}
-					{hasMultipleReviewTvSeries}
-					bind:detectedGroupQuery
-					bind:detectedGroupFilter
-					bind:detectedMediaFilter
-					{selectedGroupId}
-					{importedGroupIds}
-					{skippedGroupIds}
-					{pendingGroupCount}
-					{readyGroupCount}
-					{remainingGroupCount}
-					{skippedGroupCount}
-					{skipActionsEnabled}
-					{getEffectiveMediaType}
-					{formatMediaTypeLabel}
-					{canImportGroup}
-					getGroupSelectedMatch={(group) => getGroupState(group).selectedMatch}
-					getGroupActionLabel={getUnmatchedGroupAction}
-					{hasUnknownSeasonItems}
-					{getSectionSeasonOverride}
-					{getSkippableSeasonGroups}
-					{getSeasonSectionSkippedCount}
-					{isSeasonSectionFullySkipped}
-					{getDetectedSeasonsLabel}
-					{canApplySelectedMatchToSeason}
-					{getGroupEpisodeInfo}
+				<ReviewToolbar
+					bind:query={detectedGroupQuery}
+					bind:statusFilter={detectedGroupFilter}
+					bind:mediaFilter={detectedMediaFilter}
 					{lockedMediaType}
-					onSwitchGroup={switchGroup}
-					onSkipGroup={markGroupSkipped}
-					onUnskipGroup={unskipGroup}
-					onSelectReviewSeriesSection={selectReviewSeriesSection}
-					onSelectReviewSeasonSection={selectReviewSeasonSection}
-					onApplyMatchToSeason={applySelectedMatchToSeason}
-					onToggleSeasonSkipped={toggleSeasonSectionSkipped}
-					onSeasonOverrideChange={applySeasonOverrideToSection}
+					pendingCount={pendingGroupCount}
+					readyCount={readyGroupCount}
+					remainingCount={remainingGroupCount}
+					skippedCount={skippedGroupCount}
+					importedCount={importedGroupIds.length}
 				/>
 			{/if}
 
-			<GroupEditorPanel
-				{activeGroup}
-				{selectedMediaType}
-				{selectedMatch}
-				bind:searchQuery
-				{matchCandidates}
-				bind:importTarget
-				bind:seasonNumber
-				bind:episodeNumber
-				bind:batchSeasonOverride
-				bind:selectedRootFolder
-				{isMediaTypeLockedByContext}
-				{isBatchTvImport}
-				isGroupImported={isGroupImported(activeGroup?.id ?? '')}
-				isGroupSkipped={isGroupSkipped(activeGroup?.id ?? '')}
-				{skipActionsEnabled}
-				{searchingMatches}
-				{routeImportContext}
-				{selectedMatchContextMismatch}
-				{parsedSourceContextMismatch}
-				{canApplyMatchSelectionToActiveSeason}
-				bind:applyMatchToSeasonOnSelect={applySelectedMatchToSeasonOnSelect}
-				{canImportGroup}
-				{canApplyActiveSeasonOverride}
-				onSwitchMediaType={switchMediaType}
-				onChooseMatch={chooseMatch}
-				onSearchInput={handleMatchSearchInput}
-				onSearch={searchTmdb}
-				onClearSearch={clearMatchSearch}
-				onSeasonNumberChange={handleSeasonNumberChange}
-				onEpisodeNumberChange={persistActiveGroupState}
-				onToggleSkip={toggleSkipActiveGroup}
-			/>
+			<div
+				class="grid min-w-0 grid-cols-1 gap-4 {detectionGroups.length > 1
+					? 'lg:grid-cols-[360px_minmax(0,1fr)]'
+					: ''}"
+			>
+				{#if detectionGroups.length > 1}
+					<div class="min-w-0">
+						<DetectionGroupList
+							{reviewDetectionSections}
+							{reviewMovieSections}
+							{reviewTvSections}
+							{selectedGroupId}
+							{importedGroupIds}
+							{skippedGroupIds}
+							{canImportGroup}
+							{suggestsTvFromMovie}
+							{getSeriesSectionStatus}
+							getGroupSelectedMatch={(group) => getGroupState(group).selectedMatch}
+							getGroupActionLabel={getUnmatchedGroupAction}
+							onSwitchGroup={handleSidebarSwitchGroup}
+							onSelectReviewSeriesSection={handleSidebarSelectReviewSeriesSection}
+						/>
+					</div>
+				{/if}
+
+				<div bind:this={detailPanelEl} class="min-w-0">
+					<GroupEditorPanel
+						{activeGroup}
+						{selectedMediaType}
+						{selectedMatch}
+						bind:searchQuery
+						{matchCandidates}
+						bind:importTarget
+						bind:seasonNumber
+						bind:episodeNumber
+						{suggestsTvFromMovie}
+						{activeReviewTvSection}
+						{activeReviewSeasonSection}
+						{getGroupStatus}
+						{getSeriesSectionStatus}
+						{getSeasonSectionStatus}
+						{hasUnknownSeasonItems}
+						{getSectionSeasonOverride}
+						{getSkippableSeasonGroups}
+						{getSeasonSectionSkippedCount}
+						{isSeasonSectionFullySkipped}
+						{isSeriesSectionFullySkipped}
+						{canApplySelectedMatchToSeason}
+						{canApplySelectedMatchToSeries}
+						{getGroupEpisodeInfo}
+						onSwitchGroup={switchGroup}
+						onSkipGroup={markGroupSkipped}
+						onUnskipGroup={unskipGroup}
+						onSelectReviewSeasonSection={selectReviewSeasonSection}
+						onApplyMatchToSeason={applySelectedMatchToSeason}
+						onToggleSeasonSkipped={toggleSeasonSectionSkipped}
+						onApplyMatchToAllSeasons={applySelectedMatchToAllSeasons}
+						onToggleSeriesSkipped={toggleSeriesSkipped}
+						onSeasonOverrideChange={applySeasonOverrideToSection}
+						bind:batchSeasonOverride
+						bind:selectedRootFolder
+						{isMediaTypeLockedByContext}
+						{isBatchTvImport}
+						isGroupImported={isGroupImported(activeGroup?.id ?? '')}
+						isGroupSkipped={isGroupSkipped(activeGroup?.id ?? '')}
+						{skipActionsEnabled}
+						{searchingMatches}
+						{routeImportContext}
+						{selectedMatchContextMismatch}
+						{parsedSourceContextMismatch}
+						{canApplyMatchSelectionToActiveSeason}
+						bind:applyMatchToSeasonOnSelect={applySelectedMatchToSeasonOnSelect}
+						{canImportGroup}
+						{canApplyActiveSeasonOverride}
+						onSwitchMediaType={switchMediaType}
+						onChooseMatch={chooseMatch}
+						onSearchInput={handleMatchSearchInput}
+						onSearch={searchTmdb}
+						onClearSearch={clearMatchSearch}
+						onSeasonNumberChange={handleSeasonNumberChange}
+						onEpisodeNumberChange={persistActiveGroupState}
+						onToggleSkip={toggleSkipActiveGroup}
+					/>
+				</div>
+			</div>
 
 			<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 				<button class="btn btn-ghost" onclick={() => goToStep(1)}>{m.action_back()}</button>
@@ -3105,9 +3216,8 @@
 			bind:backgroundImport
 			{importMovieSections}
 			{importTvSections}
-			{activeImportTvSection}
-			{activeImportSeasonSection}
-			{hasMultipleImportTvSeries}
+			{hasSelectedImportMovies}
+			{hasSelectedImportTv}
 			bind:importMediaFilter
 			{bulkDestinationBySectionId}
 			{selectedImportGroupCount}
@@ -3117,19 +3227,24 @@
 			{executingImport}
 			canImport={canImportGroup}
 			getGroupActionLabel={getUnmatchedGroupAction}
-			{getEffectiveMediaType}
-			{getGroupEpisodeInfo}
+			{suggestsTvFromMovie}
+			{getSeriesSectionStatus}
+			getGroupSelectedMatch={(group) => getGroupState(group).selectedMatch}
 			{lockedMediaType}
 			getSectionDestinations={getSectionDestinationOptions}
 			getSectionEligibleCount={(section) => getSectionDestinationEligibleGroups(section).length}
 			canApplyDestination={canApplySelectedDestinationToMedia}
-			onSelectImportSeriesSection={selectImportSeriesSection}
-			onSelectImportSeasonSection={selectImportSeasonSection}
+			{getMediaTypeDestinationOptions}
 			onBulkImport={executeBulkImportFlow}
 			onUpdateSectionDestination={updateSectionDestination}
 			onApplyDestination={applySelectedDestinationToMedia}
+			onBulkAssignMediaDestination={applyBulkDestinationForMediaType}
 			onReviewGroup={(groupId) => {
 				switchGroup(groupId);
+				step = 2;
+			}}
+			onReviewSeries={(sectionId) => {
+				selectReviewSeriesSection(sectionId);
 				step = 2;
 			}}
 			onGoToStep={(s: number) => goToStep(s as WizardStep)}
