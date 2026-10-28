@@ -243,6 +243,8 @@
 	"activity_unmatched_colName": "Name",
 	"activity_unmatched_colSize": "Size",
 	"activity_unmatched_colClient": "Client",
+	"activity_unmatched_colSuggestedMatch": "Suggested Match",
+	"activity_unmatched_noMatch": "No Match",
 	"activity_unmatched_detailRelease": "Release",
 	"activity_unmatched_detailCategory": "Category",
 	"activity_unmatched_detailSavePath": "Save path",
