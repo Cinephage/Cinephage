@@ -34,7 +34,13 @@ describe('Live TV segment proxy', () => {
 	});
 
 	it('passes through a TS response body without buffering when the path looks like HLS', async () => {
-		const segment = new Uint8Array([0x47, 0x00, 0x01, 0x02]);
+		// Two well-formed TS packets — the smallest body the camo sniff chain
+		// accepts as valid MPEG-TS and streams through unmodified.
+		const segment = new Uint8Array(376);
+		for (let packet = 0; packet < 2; packet++) {
+			segment[packet * 188] = 0x47;
+			segment.fill(0x10, packet * 188 + 1, (packet + 1) * 188);
+		}
 		fetchWithTimeoutMock.mockResolvedValue(
 			new Response(segment, {
 				status: 200,
@@ -53,6 +59,53 @@ describe('Live TV segment proxy', () => {
 
 		expect(response.headers.get('Content-Type')).toBe('video/mp2t');
 		expect(new Uint8Array(await response.arrayBuffer())).toEqual(segment);
+	});
+
+	it('unwraps a camouflaged PNG-wrapped TS segment and reports video/mp2t', async () => {
+		const ts = new Uint8Array(376);
+		for (let packet = 0; packet < 2; packet++) {
+			ts[packet * 188] = 0x47;
+			ts.fill(0x20, packet * 188 + 1, (packet + 1) * 188);
+		}
+		const pngChunk = (type: string, data: Uint8Array) => {
+			const header = new Uint8Array(8);
+			header.set(new TextEncoder().encode(type), 4);
+			new DataView(header.buffer).setUint32(0, data.byteLength);
+			const out = new Uint8Array(12 + data.byteLength);
+			out.set(header, 0);
+			out.set(data, 8);
+			return out;
+		};
+		const ihdr = new Uint8Array(13);
+		new DataView(ihdr.buffer).setUint32(0, 4);
+		new DataView(ihdr.buffer).setUint32(4, 4);
+		ihdr[8] = 8;
+		ihdr[9] = 2;
+		const container = new Uint8Array(8 + 25 + 12 + ts.byteLength);
+		container.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+		container.set(pngChunk('IHDR', ihdr), 8);
+		container.set(pngChunk('IEND', new Uint8Array(0)), 8 + 25);
+		container.set(ts, 8 + 25 + 12);
+		fetchWithTimeoutMock.mockResolvedValue(
+			new Response(container, {
+				status: 200,
+				headers: { 'Content-Type': 'image/png' }
+			})
+		);
+
+		const { GET } = await import('./stream/[lineupId]/[...path]/+server');
+		const response = await GET({
+			params: { lineupId: 'lineup-1', path: 'segment.ts' },
+			url: new URL(
+				'http://cinephage.test/api/livetv/stream/lineup-1/segment.ts?url=https%3A%2F%2Fprovider.test%2Fsegment'
+			),
+			request: new Request('http://cinephage.test/api/livetv/stream/lineup-1/segment.ts')
+		} as Parameters<typeof GET>[0]);
+
+		// The upstream image/* content type must not leak through: the payload
+		// delivered is the unwrapped MPEG-TS.
+		expect(response.headers.get('Content-Type')).toBe('video/mp2t');
+		expect(new Uint8Array(await response.arrayBuffer())).toEqual(ts);
 	});
 
 	it('passes the incoming request signal to upstream segment fetches', async () => {

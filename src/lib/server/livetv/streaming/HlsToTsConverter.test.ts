@@ -4,6 +4,16 @@ const getStreamMock = vi.fn();
 const invalidateMock = vi.fn();
 const fetchFromUrlMock = vi.fn();
 const resolveAndValidateUrlMock = vi.fn();
+const loggingMocks = vi.hoisted(() => ({
+	debug: vi.fn(),
+	info: vi.fn(),
+	warn: vi.fn(),
+	error: vi.fn()
+}));
+
+vi.mock('#lib/logging/index.js', () => ({
+	createChildLogger: () => loggingMocks
+}));
 
 vi.mock('./StreamUrlCache.js', () => ({
 	getStreamUrlCache: () => ({ getStream: getStreamMock, invalidate: invalidateMock })
@@ -29,6 +39,17 @@ describe('HlsToTsConverter URL safety', () => {
 		resolveAndValidateUrlMock.mockResolvedValue({ safe: true });
 	});
 
+	/** Two well-formed TS packets (sync byte + filler), the smallest body the
+	 * segment sniff chain accepts as a valid MPEG-TS segment. */
+	function tsSegment(fill = 0x10): Uint8Array<ArrayBuffer> {
+		const out = new Uint8Array(376);
+		for (let packet = 0; packet < 2; packet++) {
+			out[packet * 188] = 0x47;
+			out.fill(fill, packet * 188 + 1, (packet + 1) * 188);
+		}
+		return out;
+	}
+
 	it('uses an inspected initial playlist body without fetching it again', async () => {
 		const controller = new AbortController();
 		const playlistBody = new ReadableStream<Uint8Array>({
@@ -39,9 +60,8 @@ describe('HlsToTsConverter URL safety', () => {
 				streamController.close();
 			}
 		});
-		const fetchMock = vi
-			.fn()
-			.mockResolvedValue(new Response(new Uint8Array([0x47, 0x00, 0x01]), { status: 200 }));
+		const segment = tsSegment();
+		const fetchMock = vi.fn().mockResolvedValue(new Response(segment, { status: 200 }));
 		vi.stubGlobal('fetch', fetchMock);
 
 		const { createHlsToTsStream } = await import('./HlsToTsConverter');
@@ -58,12 +78,89 @@ describe('HlsToTsConverter URL safety', () => {
 		const reader = stream.getReader();
 		await expect(reader.read()).resolves.toEqual({
 			done: false,
-			value: new Uint8Array([0x47, 0x00, 0x01])
+			value: segment
 		});
 		controller.abort();
 
 		expect(fetchFromUrlMock).not.toHaveBeenCalled();
 		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it('unwraps a camouflaged segment before delivering it as TS', async () => {
+		const controller = new AbortController();
+		const playlistBody = new ReadableStream<Uint8Array>({
+			start(streamController) {
+				streamController.enqueue(
+					new TextEncoder().encode('#EXTM3U\n#EXTINF:6,Channel\nhttps://cdn.test/segment.ts\n')
+				);
+				streamController.close();
+			}
+		});
+		const segment = tsSegment(0x20);
+		const wrapped = new Uint8Array(8 + segment.byteLength);
+		wrapped.set(new TextEncoder().encode('TIKTIRAW'), 0);
+		wrapped.set(segment, 8);
+		const fetchMock = vi.fn().mockResolvedValue(new Response(wrapped, { status: 200 }));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const { createHlsToTsStream } = await import('./HlsToTsConverter');
+		const stream = createHlsToTsStream({
+			lineupItemId: 'lineup-1',
+			signal: controller.signal,
+			initialPlaylist: {
+				body: playlistBody,
+				finalUrl: 'https://provider.test/live/channel/index',
+				providerHeaders: {}
+			}
+		});
+
+		const reader = stream.getReader();
+		await expect(reader.read()).resolves.toEqual({
+			done: false,
+			value: segment
+		});
+		controller.abort();
+	});
+
+	it('skips a segment whose container matches no known camo format', async () => {
+		const controller = new AbortController();
+		const playlistBody = new ReadableStream<Uint8Array>({
+			start(streamController) {
+				streamController.enqueue(
+					new TextEncoder().encode('#EXTM3U\n#EXTINF:6,Channel\nhttps://cdn.test/segment.ts\n')
+				);
+				streamController.close();
+			}
+		});
+		const padded = new Uint8Array(512);
+		padded.set(new TextEncoder().encode('<html>upstream error page</html>'), 0);
+		const fetchMock = vi.fn().mockResolvedValue(new Response(padded, { status: 200 }));
+		vi.stubGlobal('fetch', fetchMock);
+		loggingMocks.warn.mockClear();
+
+		const { createHlsToTsStream } = await import('./HlsToTsConverter');
+		const stream = createHlsToTsStream({
+			lineupItemId: 'lineup-1',
+			signal: controller.signal,
+			initialPlaylist: {
+				body: playlistBody,
+				finalUrl: 'https://provider.test/live/channel/index',
+				providerHeaders: {}
+			}
+		});
+
+		const reader = stream.getReader();
+		// The unreadable segment is skipped (not delivered, stream not killed).
+		const firstRead = await Promise.race([
+			reader.read(),
+			new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 3000))
+		]);
+		expect(firstRead).toBe('timeout');
+		expect(loggingMocks.warn).toHaveBeenCalledWith(
+			expect.objectContaining({ lineupItemId: 'lineup-1', sequence: 0 }),
+			'[HlsToTsConverter] Unrecognized camouflaged segment format'
+		);
+		controller.abort();
 	});
 
 	it('rejects a private HLS variant URL before fetching it', async () => {

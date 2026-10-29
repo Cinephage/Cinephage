@@ -50,6 +50,7 @@
 import { createChildLogger } from '#lib/logging/index.js';
 import { getStreamUrlCache } from './StreamUrlCache.js';
 import { getLiveTvStreamService } from './LiveTvStreamService.js';
+import { unwrapCamoSegment, CamoUnwrapError } from './camo-unwrap.js';
 import { resolveHlsUrl } from '#lib/server/streaming/utils/hls-rewrite.js';
 import { resolveAndValidateUrl } from '#lib/server/http/ssrf-protection.js';
 
@@ -545,7 +546,7 @@ export function createHlsToTsStream(options: HlsToTsConverterOptions): ReadableS
 					}
 
 					try {
-						const segmentData = await fetchSegment(
+						const rawSegment = await fetchSegment(
 							segment.url,
 							providerHeaders,
 							segmentFetchTimeoutMs,
@@ -553,6 +554,22 @@ export function createHlsToTsStream(options: HlsToTsConverterOptions): ReadableS
 						);
 
 						if (cancelled) break;
+
+						// Some upstreams camouflage segments as images/marker blobs;
+						// sniff and unwrap to raw TS before handing bytes downstream.
+						const { data: segmentData, format } = unwrapCamoSegment(rawSegment);
+						if (format !== 'plain-ts') {
+							logger.debug(
+								{
+									lineupItemId,
+									sequence: segment.sequence,
+									format,
+									rawSize: rawSegment.byteLength,
+									tsSize: segmentData.byteLength
+								},
+								'[HlsToTsConverter] Unwrapped camouflaged segment'
+							);
+						}
 
 						// Write segment data to the stream
 						controller.enqueue(segmentData);
@@ -572,6 +589,21 @@ export function createHlsToTsStream(options: HlsToTsConverterOptions): ReadableS
 					} catch (error) {
 						if (cancelled) break;
 						const msg = error instanceof Error ? error.message : String(error);
+						if (error instanceof CamoUnwrapError) {
+							// Unknown container magic — upstream rotates experiments, so
+							// surface the leading bytes for triage instead of failing
+							// silently as a generic segment error.
+							logger.warn(
+								{
+									lineupItemId,
+									sequence: segment.sequence,
+									url: segment.url.substring(0, 80),
+									byteLength: error.byteLength,
+									prefixHex: error.prefixHex
+								},
+								'[HlsToTsConverter] Unrecognized camouflaged segment format'
+							);
+						}
 						logger.warn(
 							{
 								lineupItemId,
