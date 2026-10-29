@@ -157,7 +157,7 @@ jobs:
 
   build-arm64:
     name: Build arm64
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     needs: [prepare]
     permissions:
       contents: read
