@@ -1,29 +1,44 @@
 <script lang="ts">
 	import { Search } from '@lucide/svelte';
 	import type { LiveTvAccount, LiveTvCategory } from '#lib/types/livetv.js';
+	import type { ChannelCountryFacet } from '#lib/api/livetv.js';
 	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
 		accounts: LiveTvAccount[];
 		categories: LiveTvCategory[];
+		countries: ChannelCountryFacet[];
 		selectedAccountId: string;
 		selectedCategoryId: string;
+		selectedCountryCode: string;
 		searchQuery: string;
 		onAccountChange: (accountId: string) => void;
 		onCategoryChange: (categoryId: string) => void;
+		onCountryChange: (countryCode: string) => void;
 		onSearchInput: (value: string) => void;
 	}
 
 	let {
 		accounts,
 		categories,
+		countries,
 		selectedAccountId,
 		selectedCategoryId,
+		selectedCountryCode,
 		searchQuery,
 		onAccountChange,
 		onCategoryChange,
+		onCountryChange,
 		onSearchInput
 	}: Props = $props();
+
+	// With "All accounts" every provider's categories are shown; picking an
+	// account narrows the options to that account's taxonomy.
+	const visibleCategories = $derived(
+		selectedAccountId
+			? categories.filter((category) => category.accountId === selectedAccountId)
+			: categories
+	);
 </script>
 
 <div class="mb-4 flex flex-wrap items-center gap-3">
@@ -45,10 +60,9 @@
 		class="select-bordered select w-full select-sm sm:w-48"
 		value={selectedCategoryId}
 		onchange={(e) => onCategoryChange(e.currentTarget.value)}
-		disabled={!selectedAccountId}
 	>
 		<option value="">{m.livetv_channelBrowserModal_allCategories()}</option>
-		{#each categories as category (category.id)}
+		{#each visibleCategories as category (category.id)}
 			<option value={category.id}>
 				{category.title}
 				({category.channelCount})
@@ -56,7 +70,23 @@
 		{/each}
 	</select>
 
-	<div class="relative flex-1">
+	{#if countries.length > 0}
+		<select
+			class="select-bordered select w-full select-sm sm:w-36"
+			value={selectedCountryCode}
+			onchange={(e) => onCountryChange(e.currentTarget.value)}
+			aria-label={m.livetv_channelBrowserModal_countryFilter()}
+		>
+			<option value="">{m.livetv_channelBrowserModal_allCountries()}</option>
+			{#each countries as country (country.code)}
+				<option value={country.code}>
+					{country.code} ({country.channelCount.toLocaleString(undefined)})
+				</option>
+			{/each}
+		</select>
+	{/if}
+
+	<div class="relative min-w-48 flex-1">
 		<Search
 			class="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-base-content/40"
 		/>

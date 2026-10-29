@@ -1709,6 +1709,8 @@
 	"livetv_channelBrowserModal_added": "Añadido",
 	"livetv_channelBrowserModal_allAccounts": "Todas las cuentas",
 	"livetv_channelBrowserModal_allCategories": "Todas las categorías",
+	"livetv_channelBrowserModal_allCountries": "Todos los países",
+	"livetv_channelBrowserModal_countryFilter": "Filtrar por país",
 	"livetv_channelBrowserModal_allChannelsAdded": "Todos los canales añadidos",
 	"livetv_channelBrowserModal_clear": "Limpiar",
 	"livetv_channelBrowserModal_columnAccount": "Cuenta",

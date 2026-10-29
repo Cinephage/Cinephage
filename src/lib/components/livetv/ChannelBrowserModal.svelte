@@ -2,6 +2,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import { X } from '@lucide/svelte';
 	import type { LiveTvAccount, LiveTvCategory, CachedChannel } from '#lib/types/livetv.js';
+	import type { ChannelCountryFacet } from '#lib/api/livetv.js';
 	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import * as m from '#lib/paraglide/messages.js';
@@ -12,6 +13,7 @@
 	import {
 		getAccounts,
 		getCategories,
+		getChannelCountries,
 		getChannels,
 		addToLineup,
 		getChannelCategories,
@@ -47,12 +49,14 @@
 
 	let accounts = $state<LiveTvAccount[]>([]);
 	let categories = $state<LiveTvCategory[]>([]);
+	let countries = $state<ChannelCountryFacet[]>([]);
 	let channels = $state<CachedChannel[]>([]);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
 
 	let selectedAccountId = $state('');
 	let selectedCategoryId = $state('');
+	let selectedCountryCode = $state('');
 	let searchQuery = $state('');
 	let debouncedSearch = $state('');
 	let showAdded = $state(false);
@@ -109,6 +113,7 @@
 			selectedIds.clear();
 			selectedAccountId = '';
 			selectedCategoryId = '';
+			selectedCountryCode = '';
 			searchQuery = '';
 			debouncedSearch = '';
 			page = 1;
@@ -145,12 +150,9 @@
 
 	$effect(() => {
 		if (open) {
-			if (selectedAccountId) {
-				loadCategories(selectedAccountId);
-			} else {
-				categories = [];
-				selectedCategoryId = '';
-			}
+			void selectedAccountId;
+			loadCategories(selectedAccountId);
+			loadCountries(selectedAccountId);
 		}
 	});
 
@@ -158,6 +160,7 @@
 		if (open) {
 			void selectedAccountId;
 			void selectedCategoryId;
+			void selectedCountryCode;
 			void debouncedSearch;
 			void page;
 			loadChannels();
@@ -192,6 +195,20 @@
 		}
 	}
 
+	async function loadCountries(accountId: string) {
+		try {
+			const params: Record<string, string> = {};
+			if (accountId) {
+				params.accountIds = accountId;
+			}
+			const data = await getChannelCountries(params);
+			countries = data.countries || [];
+		} catch {
+			// The country facet is optional filtering; degrade silently.
+			countries = [];
+		}
+	}
+
 	async function loadChannels() {
 		loading = true;
 		error = null;
@@ -205,6 +222,9 @@
 		}
 		if (selectedCategoryId) {
 			params.categoryIds = selectedCategoryId;
+		}
+		if (selectedCountryCode) {
+			params.country = selectedCountryCode;
 		}
 		if (debouncedSearch) {
 			params.search = debouncedSearch;
@@ -431,11 +451,19 @@
 
 	function onAccountChange(accountId: string) {
 		selectedAccountId = accountId;
+		// The category/country facets are account-scoped; reset stale picks.
+		selectedCategoryId = '';
+		selectedCountryCode = '';
 		handleFilterChange();
 	}
 
 	function onCategoryChange(categoryId: string) {
 		selectedCategoryId = categoryId;
+		handleFilterChange();
+	}
+
+	function onCountryChange(countryCode: string) {
+		selectedCountryCode = countryCode;
 		handleFilterChange();
 	}
 
@@ -481,11 +509,14 @@
 	<ChannelBrowserFilters
 		{accounts}
 		{categories}
+		{countries}
 		{selectedAccountId}
 		{selectedCategoryId}
+		{selectedCountryCode}
 		{searchQuery}
 		{onAccountChange}
 		{onCategoryChange}
+		{onCountryChange}
 		{onSearchInput}
 	/>
 

@@ -18,6 +18,7 @@ export const GET: RequestHandler = async ({ url }) => {
 	const accountIdsParam = url.searchParams.get('accountIds');
 	const categoryIdsParam = url.searchParams.get('categoryIds');
 	const providerTypesParam = url.searchParams.get('providerTypes');
+	const countryParam = url.searchParams.get('country');
 	const search = url.searchParams.get('search');
 	const hasArchiveParam = url.searchParams.get('hasArchive');
 	const pageParam = url.searchParams.get('page');
@@ -33,6 +34,10 @@ export const GET: RequestHandler = async ({ url }) => {
 
 	if (categoryIdsParam) {
 		options.categoryIds = categoryIdsParam.split(',').filter(Boolean);
+	}
+
+	if (countryParam) {
+		options.countryCodes = countryParam.split(',').filter(Boolean);
 	}
 
 	if (providerTypesParam) {

@@ -39,6 +39,18 @@ export interface LiveTvChannelsResponse {
 	totalPages: number;
 }
 
+/** A country facet of the cached channel catalog. */
+export interface ChannelCountryFacet {
+	/** ISO 3166-1 alpha-2 code from Cinephage Live metadata. */
+	code: string;
+	channelCount: number;
+}
+
+/** Response of GET /api/livetv/channels/countries. */
+export interface ChannelCountriesResponse {
+	countries: ChannelCountryFacet[];
+}
+
 /** Response of POST /api/livetv/channels/sync, keyed by account ID. */
 export interface ChannelSyncResponse {
 	results: Record<string, ChannelSyncResult>;
@@ -379,6 +391,10 @@ export function storeEpgDisplayLanguage(language: string): void {
 
 export async function getChannels(params?: Record<string, string>) {
 	return apiGet<LiveTvChannelsResponse>('/api/livetv/channels', params);
+}
+
+export async function getChannelCountries(params?: Record<string, string>) {
+	return apiGet<ChannelCountriesResponse>('/api/livetv/channels/countries', params);
 }
 
 export async function syncChannels(payload?: { accountIds?: string[] }) {

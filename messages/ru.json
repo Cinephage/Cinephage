@@ -1709,6 +1709,8 @@
 	"livetv_channelBrowserModal_added": "Добавлено",
 	"livetv_channelBrowserModal_allAccounts": "Все аккаунты",
 	"livetv_channelBrowserModal_allCategories": "Все категории",
+	"livetv_channelBrowserModal_allCountries": "Все страны",
+	"livetv_channelBrowserModal_countryFilter": "Фильтр по стране",
 	"livetv_channelBrowserModal_allChannelsAdded": "Все каналы добавлены",
 	"livetv_channelBrowserModal_clear": "Очистить",
 	"livetv_channelBrowserModal_columnAccount": "Аккаунт",
