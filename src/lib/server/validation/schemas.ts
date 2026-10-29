@@ -156,7 +156,7 @@ export const stalkerLanguageSchema = z
 
 export const liveTvAccountCreateSchema = z.object({
 	name: z.string().min(1).max(100),
-	providerType: z.enum(['stalker', 'xstream', 'm3u', 'cinephage-iptv']),
+	providerType: z.enum(['stalker', 'xstream', 'm3u', 'cinephage-iptv', 'cinephage-live']),
 	enabled: z.boolean().optional(),
 	stalkerConfig: z
 		.object({

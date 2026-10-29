@@ -91,6 +91,20 @@ export const providerDefinitions: LiveTvProviderDefinition[] = [
 			supportsCategories: true,
 			supportsAutoRefresh: false
 		}
+	},
+	{
+		id: 'cinephage-live',
+		name: 'Cinephage Live',
+		description: 'Live sports and events from the Cinephage network',
+		icon: 'Tv',
+		requiresAuth: false,
+		authDescription: 'Automatic (Cinephage account)',
+		features: {
+			supportsEpg: true,
+			supportsArchive: false,
+			supportsCategories: true,
+			supportsAutoRefresh: false
+		}
 	}
 ];
 

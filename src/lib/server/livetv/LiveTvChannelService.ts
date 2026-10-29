@@ -47,6 +47,7 @@ function recordToChannel(record: LivetvChannelRecord): LiveTvChannel {
 		stalker: record.stalkerData ?? undefined,
 		xstream: record.xstreamData ?? undefined,
 		m3u: record.m3uData ?? undefined,
+		cinephageLive: record.cinephageData ?? undefined,
 		epgId: record.epgId,
 		createdAt: record.createdAt ?? new Date().toISOString(),
 		updatedAt: record.updatedAt ?? new Date().toISOString(),
@@ -76,6 +77,7 @@ function recordToCachedChannel(
 		stalker: record.stalkerData ?? undefined,
 		xstream: record.xstreamData ?? undefined,
 		m3u: record.m3uData ?? undefined,
+		cinephageLive: record.cinephageData ?? undefined,
 		createdAt: record.createdAt ?? new Date().toISOString(),
 		updatedAt: record.updatedAt ?? new Date().toISOString(),
 		accountName
@@ -137,6 +139,7 @@ export class LiveTvChannelService implements BackgroundService {
 			accountIds,
 			categoryIds,
 			providerTypes,
+			countryCodes,
 			search,
 			page = 1,
 			pageSize = 50,
@@ -189,6 +192,15 @@ export class LiveTvChannelService implements BackgroundService {
 		}
 		if (providerTypes && providerTypes.length > 0) {
 			conditions.push(inArray(livetvChannels.providerType, providerTypes));
+		}
+		if (countryCodes && countryCodes.length > 0) {
+			// Country lives in the Cinephage Live JSON metadata column.
+			conditions.push(
+				sql`json_extract(${livetvChannels.cinephageData}, '$.countryCode') in (${sql.join(
+					countryCodes.map((code) => sql`${code}`),
+					sql`, `
+				)})`
+			);
 		}
 		if (search) {
 			// Sanitize search input to escape SQL LIKE special characters
@@ -307,6 +319,37 @@ export class LiveTvChannelService implements BackgroundService {
 			.where(eq(livetvChannels.accountId, accountId));
 
 		return records.map(recordToChannel);
+	}
+
+	/**
+	 * Distinct country codes present in Cinephage Live channel metadata, with
+	 * channel counts — powers the channel browser's country filter.
+	 */
+	async getChannelCountries(
+		accountIds?: string[]
+	): Promise<Array<{ code: string; channelCount: number }>> {
+		const normalizedAccountIds = accountIds?.filter(Boolean) ?? [];
+
+		const rows = await db
+			.select({
+				code: sql<string>`json_extract(${livetvChannels.cinephageData}, '$.countryCode')`,
+				count: sql<number>`count(*)`
+			})
+			.from(livetvChannels)
+			.where(
+				and(
+					normalizedAccountIds.length > 0
+						? inArray(livetvChannels.accountId, normalizedAccountIds)
+						: sql`1=1`,
+					sql`json_extract(${livetvChannels.cinephageData}, '$.countryCode') is not null`
+				)
+			)
+			.groupBy(sql`json_extract(${livetvChannels.cinephageData}, '$.countryCode')`)
+			.orderBy(sql`json_extract(${livetvChannels.cinephageData}, '$.countryCode') asc`);
+
+		return rows
+			.filter((row) => typeof row.code === 'string' && row.code.length > 0)
+			.map((row) => ({ code: row.code, channelCount: row.count ?? 0 }));
 	}
 
 	/**

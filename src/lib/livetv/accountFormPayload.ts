@@ -58,6 +58,9 @@ export function buildAccountRequestBody(
 				body.cinephageIptvConfig = data.cinephageIptvConfig;
 			}
 			break;
+		case 'cinephage-live':
+			// No provider config: catalog + streams use the instance identity.
+			break;
 	}
 
 	return body;
@@ -102,6 +105,9 @@ export function buildAccountTestRequestBody(config: TestConfig): Record<string, 
 			if (config.cinephageIptvConfig) {
 				body.cinephageIptvConfig = config.cinephageIptvConfig;
 			}
+			break;
+		case 'cinephage-live':
+			// No provider config: catalog + streams use the instance identity.
 			break;
 	}
 

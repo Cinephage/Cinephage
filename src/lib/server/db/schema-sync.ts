@@ -181,8 +181,10 @@ import {
  *   arr_push-pushed grab for one of its own rows).
  * Version 166: scoring_profiles.allowed_indexers — per-profile indexer allowlist
  *   (NULL = all indexers, preserving pre-existing behavior).
+ * Version 167: livetv_channels.cinephage_data — Cinephage Live channel metadata
+ *   (taxonomy category + country code from the Cinephage API).
  */
-export const CURRENT_SCHEMA_VERSION = 166;
+export const CURRENT_SCHEMA_VERSION = 167;
 
 export const SYSTEM_LIBRARY_SEEDS = [
 	{

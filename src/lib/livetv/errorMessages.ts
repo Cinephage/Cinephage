@@ -15,6 +15,8 @@ function getProviderLabel(providerType?: LiveTvProviderType): string {
 			return 'XStream server';
 		case 'stalker':
 			return 'Stalker portal';
+		case 'cinephage-live':
+			return 'Cinephage Live API';
 		default:
 			return 'provider';
 	}

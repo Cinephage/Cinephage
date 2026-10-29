@@ -7,6 +7,7 @@
 	import XstreamAccountForm from './forms/XstreamAccountForm.svelte';
 	import M3uAccountForm from './forms/M3uAccountForm.svelte';
 	import CinephageIptvAccountForm from './forms/CinephageIptvAccountForm.svelte';
+	import CinephageLiveAccountForm from './forms/CinephageLiveAccountForm.svelte';
 	import { getProviderDefinition } from './providerDefinitions';
 	import type {
 		LiveTvAccount,
@@ -177,6 +178,8 @@
 
 	const isCinephageIptvValid = $derived(name.trim().length > 0 && selectedCountries.length > 0);
 
+	const isCinephageLiveValid = $derived(name.trim().length > 0);
+
 	const canSubmit = $derived(() => {
 		switch (selectedProvider) {
 			case 'stalker':
@@ -187,6 +190,8 @@
 				return isM3uValid();
 			case 'cinephage-iptv':
 				return isCinephageIptvValid;
+			case 'cinephage-live':
+				return isCinephageLiveValid;
 			default:
 				return false;
 		}
@@ -223,6 +228,9 @@
 				break;
 			case 'cinephage-iptv':
 				data.cinephageIptvConfig = { countries: selectedCountries };
+				break;
+			case 'cinephage-live':
+				// No provider config: catalog + streams use the instance identity.
 				break;
 		}
 
@@ -267,6 +275,9 @@
 				break;
 			case 'cinephage-iptv':
 				config.cinephageIptvConfig = { countries: selectedCountries };
+				break;
+			case 'cinephage-live':
+				// No provider config: catalog + streams use the instance identity.
 				break;
 		}
 
@@ -377,6 +388,8 @@
 							<List class="h-5 w-5 text-primary" />
 						{:else if selectedProvider === 'cinephage-iptv'}
 							<Globe class="h-5 w-5 text-primary" />
+						{:else if selectedProvider === 'cinephage-live'}
+							<Tv class="h-5 w-5 text-primary" />
 						{/if}
 					</div>
 					<div>
@@ -463,6 +476,14 @@
 				{mode}
 				onNameChange={(v) => (name = v)}
 				onCountriesChange={(v) => (selectedCountries = v)}
+				onEnabledChange={(v) => (enabled = v)}
+			/>
+		{:else if selectedProvider === 'cinephage-live'}
+			<CinephageLiveAccountForm
+				{name}
+				{enabled}
+				{mode}
+				onNameChange={(v) => (name = v)}
 				onEnabledChange={(v) => (enabled = v)}
 			/>
 		{/if}

@@ -73,6 +73,8 @@
 					icon: List,
 					label: m.livetv_channelBrowserModal_providerM3u()
 				};
+			case 'cinephage-live':
+				return { class: 'badge-info', icon: Tv, label: 'Cinephage Live' };
 			default:
 				return { class: 'badge-ghost', icon: Tv, label: type };
 		}

@@ -63,6 +63,8 @@
 				return { class: 'badge-accent', text: m.livetv_accountTable_providerM3u(), icon: List };
 			case 'cinephage-iptv':
 				return { class: 'badge-info', text: 'Cinephage IPTV', icon: Globe };
+			case 'cinephage-live':
+				return { class: 'badge-info', text: 'Cinephage Live', icon: Tv };
 			default:
 				return { class: 'badge-ghost', text: type, icon: Tv };
 		}

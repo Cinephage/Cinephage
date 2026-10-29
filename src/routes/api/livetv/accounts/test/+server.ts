@@ -21,7 +21,7 @@ const logger = createChildLogger({ module: 'LiveTvAccountsTest', logDomain: 'liv
 
 // Validation schema for testing Live TV accounts
 const liveTvAccountTestSchema = z.object({
-	providerType: z.enum(['stalker', 'xstream', 'm3u', 'cinephage-iptv']),
+	providerType: z.enum(['stalker', 'xstream', 'm3u', 'cinephage-iptv', 'cinephage-live']),
 	// When set, [REDACTED]/blank secrets above are resolved from this stored
 	// account server-side so edit-mode tests work without the API ever
 	// shipping the real credential to the client.

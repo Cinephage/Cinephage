@@ -3886,7 +3886,13 @@ export type NewEpgProgramRecord = typeof epgPrograms.$inferInsert;
 // LIVE TV - UNIFIED PROVIDER ACCOUNTS (Multi-provider support: Stalker, XStream, M3U, Cinephage)
 // ============================================================================
 
-export const livetvProviderTypeEnum = ['stalker', 'xstream', 'm3u', 'cinephage-iptv'] as const;
+export const livetvProviderTypeEnum = [
+	'stalker',
+	'xstream',
+	'm3u',
+	'cinephage-iptv',
+	'cinephage-live'
+] as const;
 export type LiveTvProviderType = (typeof livetvProviderTypeEnum)[number];
 
 /**
@@ -4044,6 +4050,11 @@ export const livetvChannels = sqliteTable(
 			url: string;
 			tvgLogo?: string;
 			attributes?: Record<string, string>;
+		}>(),
+
+		cinephageData: text('cinephage_data', { mode: 'json' }).$type<{
+			category?: string;
+			countryCode?: string;
 		}>(),
 
 		// EPG mapping
