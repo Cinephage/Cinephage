@@ -106,7 +106,7 @@
 		"minimatch": "^10.2.6",
 		"parse-torrent": "^11.0.24",
 		"pino": "^10.4.0",
-		"playwright-core": "~1.64.0",
+		"playwright-core": "~1.62.0",
 		"zod": "^4.6.5"
 	},
 	"imports": {
