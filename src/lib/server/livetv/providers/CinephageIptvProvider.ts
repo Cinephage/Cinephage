@@ -11,11 +11,6 @@ import { and, eq, inArray, notInArray } from 'drizzle-orm';
 import { createChildLogger } from '#lib/logging/index.js';
 import { getStreamingIndexerSettings } from '#lib/server/streaming/settings.js';
 import { getCinephageCore } from '#lib/server/cinephage/core/CinephageCore.js';
-import {
-	getSignatureHeaders,
-	isGatewaySignatureRejection,
-	signedGatewayFetch
-} from '#lib/server/cinephage/core/signing.js';
 import { randomUUID } from 'node:crypto';
 
 const logger = createChildLogger({ logDomain: 'livetv' as const });
@@ -96,28 +91,26 @@ export class CinephageIptvProvider implements LiveTvProvider {
 				};
 			}
 
+			const headers = await this.getAuthHeaders();
+
 			const params = new URLSearchParams();
 			params.set('limit', '1');
 			if (config.countries && config.countries.length > 0) {
 				params.set('country', config.countries[0]);
 			}
 
-			const url = `${CINEPHAGE_API_BASE}/api/v1/iptv/channels?${params.toString()}`;
-			const response = await signedGatewayFetch(
-				url,
-				{ accept: 'application/json', timeoutMs: 30_000 },
-				async () => ({
-					...(await this.getAuthHeaders()),
-					...getSignatureHeaders({ method: 'GET', url })
-				})
+			const response = await fetch(
+				`${CINEPHAGE_API_BASE}/api/v1/iptv/channels?${params.toString()}`,
+				{
+					headers: { ...headers, Accept: 'application/json' },
+					signal: AbortSignal.timeout(30000)
+				}
 			);
 
 			if (response.status === 401) {
 				return {
 					success: false,
-					error: (await isGatewaySignatureRejection(response))
-						? 'Gateway rejected the request signature. Verify CINEPHAGE_SIGNING_SECRET matches this build.'
-						: 'Cinephage API rejected authentication. Verify version and commit.'
+					error: 'Cinephage API rejected authentication. Verify version and commit.'
 				};
 			}
 
@@ -490,26 +483,18 @@ export class CinephageIptvProvider implements LiveTvProvider {
 		}
 
 		const url = `${CINEPHAGE_API_BASE}/api/v1/iptv/playlist.m3u?${params.toString()}`;
+		const headers = await this.getAuthHeaders();
 
-		const response = await signedGatewayFetch(
-			url,
-			{ accept: 'audio/x-mpegurl, text/plain, */*', timeoutMs: 60_000 },
-			async () => ({
-				...(await this.getAuthHeaders()),
-				...getSignatureHeaders({ method: 'GET', url })
-			})
-		);
+		const response = await fetch(url, {
+			headers: {
+				...headers,
+				Accept: 'audio/x-mpegurl, text/plain, */*'
+			},
+			signal: AbortSignal.timeout(60000)
+		});
 
 		if (!response.ok) {
 			if (response.status === 401) {
-				if (await isGatewaySignatureRejection(response)) {
-					// Signature-specific: the identity pair is fine, the
-					// signature is missing or wrong — an identity re-sync
-					// cannot heal this.
-					throw new Error(
-						'Gateway rejected the request signature. Verify CINEPHAGE_SIGNING_SECRET matches this build.'
-					);
-				}
 				// The gateway rejected our identity (likely stale release
 				// pair). Kick off a self-heal refresh so the next request
 				// authenticates with the latest release.

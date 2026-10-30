@@ -8,11 +8,6 @@ import type { RequestHandler } from './$types';
 import { createChildLogger } from '#lib/logging/index.js';
 import { getStreamingIndexerSettings } from '#lib/server/streaming/settings.js';
 import { getCinephageCore } from '#lib/server/cinephage/core/CinephageCore.js';
-import {
-	getSignatureHeaders,
-	isGatewaySignatureRejection,
-	signedGatewayFetch
-} from '#lib/server/cinephage/core/signing.js';
 
 const logger = createChildLogger({ module: 'LiveTvCinephageIptvCountries', logDomain: 'livetv' });
 
@@ -50,26 +45,15 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 }
 
 async function fetchCinephageCountries(): Promise<CinephageCountry[]> {
-	const url = `${CINEPHAGE_API_BASE}/api/v1/iptv/countries`;
+	const headers = await getAuthHeaders();
 
-	const response = await signedGatewayFetch(
-		url,
-		{ accept: 'application/json', timeoutMs: 30_000 },
-		async () => ({
-			...(await getAuthHeaders()),
-			...getSignatureHeaders({ method: 'GET', url })
-		})
-	);
+	const response = await fetch(`${CINEPHAGE_API_BASE}/api/v1/iptv/countries`, {
+		headers: { ...headers, Accept: 'application/json' },
+		signal: AbortSignal.timeout(30000)
+	});
 
 	if (!response.ok) {
 		if (response.status === 401) {
-			if (await isGatewaySignatureRejection(response)) {
-				// Signature-specific: the identity pair is fine, the signature
-				// is missing or wrong — an identity re-sync cannot heal this.
-				throw new Error(
-					'Gateway rejected the request signature. Verify CINEPHAGE_SIGNING_SECRET matches this build.'
-				);
-			}
 			// The gateway rejected our identity (likely stale release pair).
 			// Kick off a self-heal refresh so the next request authenticates
 			// with the latest release.

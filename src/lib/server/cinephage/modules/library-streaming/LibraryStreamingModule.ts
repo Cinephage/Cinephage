@@ -468,10 +468,7 @@ export class LibraryStreamingModule extends BaseCinephageModule {
 
 		try {
 			let response = await this.core.getHttpClient().get(url.toString(), {
-				headers: {
-					Accept: 'application/json',
-					...(await this.core.getAuthHeaders({ method: 'GET', url: url.toString() }))
-				},
+				headers: { Accept: 'application/json', ...(await this.core.getAuthHeaders()) },
 				signal: params.signal
 			});
 
@@ -482,10 +479,7 @@ export class LibraryStreamingModule extends BaseCinephageModule {
 				const toggled = await this.core.toggleVersionFormat();
 				if (toggled?.isConfigured) {
 					response = await this.core.getHttpClient().get(url.toString(), {
-						headers: {
-							Accept: 'application/json',
-							...(await this.core.getAuthHeaders({ method: 'GET', url: url.toString() }))
-						},
+						headers: { Accept: 'application/json', ...(await this.core.getAuthHeaders()) },
 						signal: params.signal
 					});
 				}
@@ -584,12 +578,8 @@ export class LibraryStreamingModule extends BaseCinephageModule {
 		}
 		try {
 			const baseUrl = await this.core.getBaseUrl();
-			const healthUrl = `${baseUrl}/api/v1/health`;
-			const response = await this.core.getHttpClient().get(healthUrl, {
-				headers: {
-					Accept: 'application/json',
-					...(await this.core.getAuthHeaders({ method: 'GET', url: healthUrl }))
-				}
+			const response = await this.core.getHttpClient().get(`${baseUrl}/api/v1/health`, {
+				headers: { Accept: 'application/json', ...(await this.core.getAuthHeaders()) }
 			});
 			if (response.status >= 200 && response.status < 300) return { success: true };
 			return { success: false, error: `Cinephage API returned HTTP ${response.status}` };

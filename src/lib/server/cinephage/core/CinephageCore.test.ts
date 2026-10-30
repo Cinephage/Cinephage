@@ -1,7 +1,5 @@
-import { createHmac } from 'node:crypto';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { CinephageSettingsService } from '../settings/CinephageSettingsService.js';
-import { resetGatewaySigningState } from './signing.js';
 
 function createMockSettings(
 	overrides: Partial<{
@@ -39,8 +37,6 @@ function createMockSettings(
 afterEach(() => {
 	delete process.env.APP_VERSION;
 	delete process.env.APP_COMMIT;
-	delete process.env.CINEPHAGE_SIGNING_SECRET;
-	resetGatewaySigningState();
 });
 
 describe('CinephageCore', () => {
@@ -304,91 +300,6 @@ describe('CinephageCore', () => {
 			const core = new CinephageCore(createMockSettings());
 			const headers = await core.getAuthHeaders();
 			expect(headers).toEqual({});
-		});
-	});
-
-	describe('gateway request signing', () => {
-		const SECRET = 'a'.repeat(64);
-		const URL_WITH_QUERY = 'https://api.cinephage.net/api/v1/stream/123?type=movie';
-
-		function expectedSignature(path: string, ts: number): string {
-			return createHmac('sha256', SECRET).update(`v1:GET:${path}:${ts}`).digest('hex');
-		}
-
-		it('merges signature headers when a request is given and the secret is set', async () => {
-			process.env.APP_VERSION = '2.0.0';
-			process.env.APP_COMMIT = 'feedface';
-			process.env.CINEPHAGE_SIGNING_SECRET = SECRET;
-			const { CinephageCore } = await import('./CinephageCore.js');
-			const core = new CinephageCore(createMockSettings());
-
-			const headers = await core.getAuthHeaders({ method: 'GET', url: URL_WITH_QUERY });
-
-			expect(headers['X-Cinephage-Version']).toBe('2.0.0');
-			expect(headers['X-Cinephage-Commit']).toBe('feedface');
-			expect(headers['X-Cinephage-Timestamp']).toMatch(/^\d+$/);
-			const ts = Number(headers['X-Cinephage-Timestamp']);
-			expect(headers['X-Cinephage-Signature']).toBe(expectedSignature('/api/v1/stream/123', ts));
-		});
-
-		it('signs even when the identity is unresolved', async () => {
-			delete process.env.APP_COMMIT;
-			process.env.CINEPHAGE_SIGNING_SECRET = SECRET;
-			const { CinephageCore } = await import('./CinephageCore.js');
-			const core = new CinephageCore(createMockSettings());
-
-			const headers = await core.getAuthHeaders({ method: 'GET', url: URL_WITH_QUERY });
-
-			expect(headers['X-Cinephage-Version']).toBeUndefined();
-			expect(headers['X-Cinephage-Signature']).toMatch(/^[0-9a-f]{64}$/);
-		});
-
-		it('omits signature headers without a request argument', async () => {
-			process.env.APP_VERSION = '2.0.0';
-			process.env.APP_COMMIT = 'feedface';
-			process.env.CINEPHAGE_SIGNING_SECRET = SECRET;
-			const { CinephageCore } = await import('./CinephageCore.js');
-			const core = new CinephageCore(createMockSettings());
-
-			const headers = await core.getAuthHeaders();
-
-			expect(headers['X-Cinephage-Version']).toBe('2.0.0');
-			expect(headers['X-Cinephage-Signature']).toBeUndefined();
-			expect(headers['X-Cinephage-Timestamp']).toBeUndefined();
-		});
-
-		it('omits signature headers when no secret is configured', async () => {
-			process.env.APP_VERSION = '2.0.0';
-			process.env.APP_COMMIT = 'feedface';
-			const { CinephageCore } = await import('./CinephageCore.js');
-			const core = new CinephageCore(createMockSettings());
-
-			const headers = await core.getAuthHeaders({ method: 'GET', url: URL_WITH_QUERY });
-
-			expect(headers['X-Cinephage-Signature']).toBeUndefined();
-			expect(headers['X-Cinephage-Timestamp']).toBeUndefined();
-		});
-
-		it('get() sends identity + signature headers on the outbound request', async () => {
-			process.env.APP_VERSION = '2.0.0';
-			process.env.APP_COMMIT = 'feedface';
-			process.env.CINEPHAGE_SIGNING_SECRET = SECRET;
-			const fetchMock = vi
-				.spyOn(globalThis, 'fetch')
-				.mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
-			const { CinephageCore } = await import('./CinephageCore.js');
-			const core = new CinephageCore(createMockSettings());
-
-			const response = await core.get('/api/v1/health');
-			expect(response.status).toBe(200);
-
-			expect(fetchMock.mock.calls[0][0]).toBe('https://api.cinephage.net/api/v1/health');
-			const headers = (fetchMock.mock.calls[0][1]?.headers ?? {}) as Record<string, string>;
-			expect(headers['X-Cinephage-Version']).toBe('2.0.0');
-			expect(headers['X-Cinephage-Commit']).toBe('feedface');
-			const ts = Number(headers['X-Cinephage-Timestamp']);
-			expect(headers['X-Cinephage-Signature']).toBe(expectedSignature('/api/v1/health', ts));
-			fetchMock.mockRestore();
 		});
 	});
 

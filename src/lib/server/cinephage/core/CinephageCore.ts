@@ -4,7 +4,6 @@ import { createChildLogger } from '#lib/logging/index.js';
 import type { CinephageSettingsService } from '../settings/CinephageSettingsService.js';
 import { getCinephageSettingsService } from '../settings/CinephageSettingsService.js';
 import { getServerIdentity, type CinephageServerIdentity } from './version.js';
-import { getSignatureHeaders } from './signing.js';
 
 /**
  * CinephageCore — the single owner of the api.cinephage.net connection.
@@ -87,28 +86,21 @@ export class CinephageCore {
 	}
 
 	/**
-	 * Build the gateway auth headers. Identity resolution per field:
-	 * manual override → auto-synced latest release → APP_VERSION/APP_COMMIT.
-	 *
-	 * When `request` is given, the per-release gateway signature headers
-	 * (X-Cinephage-Timestamp / X-Cinephage-Signature) are merged in —
-	 * independent of identity resolution, so a signed build still signs
-	 * even while its identity is unresolved. Without `request` (or with no
-	 * signing secret configured) the headers are the legacy pair only.
+	 * Build the X-Cinephage-* auth headers. Empty object when identity is
+	 * not fully resolvable (e.g. APP_COMMIT missing in a dev checkout).
 	 */
-	async getAuthHeaders(request?: { method: string; url: string }): Promise<Record<string, string>> {
+	async getAuthHeaders(): Promise<Record<string, string>> {
 		const identity = await this.getIdentity();
 		if (!identity.isConfigured || !identity.commit) {
 			logger.debug(
 				{ version: identity.version, commit: identity.commit },
 				'CinephageCore identity not fully configured — omitting auth headers'
 			);
-			return request ? getSignatureHeaders(request) : {};
+			return {};
 		}
 		return {
 			'X-Cinephage-Version': identity.version,
-			'X-Cinephage-Commit': identity.commit,
-			...(request ? getSignatureHeaders(request) : {})
+			'X-Cinephage-Commit': identity.commit
 		};
 	}
 
@@ -172,18 +164,16 @@ export class CinephageCore {
 
 	/**
 	 * Issue a GET request to a path under the configured base URL with the
-	 * gateway auth headers (identity pair + request signature) automatically
-	 * injected. Callers pass a path like '/api/v1/iptv/countries'; the base
-	 * URL prefix is added here.
+	 * X-Cinephage-* auth headers automatically injected. Callers pass a path
+	 * like '/api/v1/iptv/countries'; the base URL prefix is added here.
 	 *
 	 * For requests that need custom auth, query params, or non-GET methods,
-	 * call getHttpClient() directly and assemble headers via getAuthHeaders()
-	 * with the target request ({ method, url }) so it gets signed.
+	 * call getHttpClient() directly and assemble headers via getAuthHeaders().
 	 */
 	async get(path: string, init?: { headers?: Record<string, string>; signal?: AbortSignal }) {
 		const baseUrl = await this.getBaseUrl();
+		const authHeaders = await this.getAuthHeaders();
 		const url = new URL(path, baseUrl + (baseUrl.endsWith('/') ? '' : '/')).toString();
-		const authHeaders = await this.getAuthHeaders({ method: 'GET', url });
 		return this.http.get(url, {
 			headers: { Accept: 'application/json', ...authHeaders, ...(init?.headers ?? {}) },
 			signal: init?.signal

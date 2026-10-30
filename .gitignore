@@ -118,9 +118,6 @@ data/external-lists/presets/custom/
 data/reports/
 data/test/
 
-# Gateway signing secret (default drop location; never commit)
-/data/gateway-signing.secret
-
 # Local notes
 docs/
 docs/notes/
