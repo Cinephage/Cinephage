@@ -105,6 +105,12 @@ export const POST: RequestHandler = async ({ url }) => {
 					liveTvEvents.emitEpgSyncCompleted();
 					const successful = results.filter((r) => r.success).length;
 					const totalAdded = results.reduce((sum, r) => sum + r.programsAdded, 0);
+					// A successful manual sync counts toward the schedule, so the
+					// scheduler doesn't fire a redundant pass at the stale due time
+					// and "next sync" reflects reality.
+					if (successful > 0) {
+						epgScheduler.markSyncedAt();
+					}
 					logger.info(
 						{
 							accounts: results.length,

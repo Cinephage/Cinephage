@@ -536,8 +536,10 @@ export class StalkerProvider implements LiveTvProvider {
 
 			return programs;
 		} catch (error) {
+			// Rethrow so EpgService records the failure on the account instead of
+			// reporting a clean "no data" sync while cached programs age out.
 			logger.error({ accountId: account.id, err: error }, '[StalkerProvider] EPG fetch failed');
-			return [];
+			throw error instanceof Error ? error : new Error(String(error));
 		}
 	}
 

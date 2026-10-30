@@ -237,6 +237,23 @@ describe('CinephageLiveProvider.syncChannels', () => {
 	});
 });
 
+describe('CinephageLiveProvider.fetchEpg failures', () => {
+	it('throws when every schedule day fetch fails instead of reporting clean data', async () => {
+		await insertAccountRow();
+		await insertChannelRow('44', 'ESPN USA');
+
+		coreMocks.get.mockRejectedValue(new HttpError(503, 'Service Unavailable', new Headers()));
+
+		await expect(
+			new CinephageLiveProvider().fetchEpg(
+				makeAccount(),
+				new Date('2026-10-29T00:00:00Z'),
+				new Date('2026-10-29T23:59:59Z')
+			)
+		).rejects.toThrow('schedule unavailable');
+	});
+});
+
 describe('CinephageLiveProvider.fetchEpg', () => {
 	it('maps schedule events to programs chained per channel', async () => {
 		await insertAccountRow();

@@ -9,6 +9,7 @@ import type { RequestHandler } from './$types';
 import { getLiveTvAccountManager } from '#lib/server/livetv/LiveTvAccountManager.js';
 import { redactAccountSecrets } from '#lib/server/livetv/accountRedaction.js';
 import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { queueAccountEpgSync } from '#lib/server/livetv/epg/trigger.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { liveTvAccountCreateSchema } from '#lib/server/validation/schemas.js';
 import { isAppError } from '#lib/errors/index.js';
@@ -56,6 +57,12 @@ export const POST: RequestHandler = async (event) => {
 
 	try {
 		const account = await manager.createAccount(parsed.data, testFirst);
+
+		// New accounts shouldn't wait out the global EPG interval before their
+		// guide exists.
+		if (account.enabled) {
+			queueAccountEpgSync(account.id, 'account-created');
+		}
 
 		return Response.json(
 			{

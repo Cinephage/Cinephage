@@ -419,97 +419,93 @@ export class CinephageLiveProvider implements LiveTvProvider {
 	}
 
 	async fetchEpg(account: LiveTvAccount, startTime: Date, endTime: Date): Promise<EpgProgram[]> {
-		try {
-			const events = await this.fetchScheduleEvents(startTime, endTime);
-			if (events.length === 0) return [];
+		// Failures propagate: EpgService records them on the account, so a broken
+		// upstream shows up in the EPG status panel instead of silently keeping
+		// stale data until retention expires it.
+		const events = await this.fetchScheduleEvents(startTime, endTime);
+		if (events.length === 0) return [];
 
-			// Map upstream channel ids to internal channel rows
-			const channels = await db
-				.select()
-				.from(livetvChannels)
-				.where(eq(livetvChannels.accountId, account.id));
+		// Map upstream channel ids to internal channel rows
+		const channels = await db
+			.select()
+			.from(livetvChannels)
+			.where(eq(livetvChannels.accountId, account.id));
 
-			const channelMap = new Map(channels.map((c) => [c.externalId, c]));
+		const channelMap = new Map(channels.map((c) => [c.externalId, c]));
 
-			// Expand events to (channelId, event) pairs; EPG-only events (no
-			// channels yet) cannot be linked and are skipped.
-			interface ChannelEvent {
-				channelExternalId: string;
-				start: Date;
-				title: string;
-				category: string | null;
-			}
-			const channelEvents: ChannelEvent[] = [];
-			for (const event of events) {
-				const start = new Date(event.starts_at);
-				if (Number.isNaN(start.getTime()) || event.channels.length === 0) continue;
-				for (const channelRef of event.channels) {
-					channelEvents.push({
-						channelExternalId: channelRef.id,
-						start,
-						title: event.title,
-						category: event.category
-					});
-				}
-			}
-
-			// End each program at the next event on the same channel; the last
-			// event of the window gets the default sports-event duration.
-			const byChannel = new Map<string, ChannelEvent[]>();
-			for (const entry of channelEvents) {
-				const list = byChannel.get(entry.channelExternalId);
-				if (list) {
-					list.push(entry);
-				} else {
-					byChannel.set(entry.channelExternalId, [entry]);
-				}
-			}
-
-			const programs: EpgProgram[] = [];
-			const now = new Date().toISOString();
-
-			for (const [channelExternalId, entries] of byChannel) {
-				const channel = channelMap.get(channelExternalId);
-				if (!channel) continue;
-
-				entries.sort((a, b) => a.start.getTime() - b.start.getTime());
-
-				for (let i = 0; i < entries.length; i++) {
-					const entry = entries[i];
-					const next = entries[i + 1];
-					const end = next
-						? next.start
-						: new Date(entry.start.getTime() + DEFAULT_EVENT_DURATION_MS);
-					if (end.getTime() <= entry.start.getTime()) continue;
-					// Keep any programme that overlaps the requested window.
-					if (end < startTime || entry.start > endTime) continue;
-
-					programs.push({
-						id: randomUUID(),
-						channelId: channel.id,
-						externalChannelId: channelExternalId,
-						accountId: account.id,
-						providerType: 'cinephage-live',
-						title: entry.title,
-						description: null,
-						category: entry.category,
-						director: null,
-						actor: null,
-						startTime: entry.start.toISOString(),
-						endTime: end.toISOString(),
-						duration: Math.round((end.getTime() - entry.start.getTime()) / 1000),
-						hasArchive: false,
-						cachedAt: now,
-						updatedAt: now
-					});
-				}
-			}
-
-			return programs;
-		} catch (error) {
-			logger.error({ accountId: account.id, err: error }, '[CinephageLive] EPG fetch failed');
-			return [];
+		// Expand events to (channelId, event) pairs; EPG-only events (no
+		// channels yet) cannot be linked and are skipped.
+		interface ChannelEvent {
+			channelExternalId: string;
+			start: Date;
+			title: string;
+			category: string | null;
 		}
+		const channelEvents: ChannelEvent[] = [];
+		for (const event of events) {
+			const start = new Date(event.starts_at);
+			if (Number.isNaN(start.getTime()) || event.channels.length === 0) continue;
+			for (const channelRef of event.channels) {
+				channelEvents.push({
+					channelExternalId: channelRef.id,
+					start,
+					title: event.title,
+					category: event.category
+				});
+			}
+		}
+
+		// End each program at the next event on the same channel; the last
+		// event of the window gets the default sports-event duration.
+		const byChannel = new Map<string, ChannelEvent[]>();
+		for (const entry of channelEvents) {
+			const list = byChannel.get(entry.channelExternalId);
+			if (list) {
+				list.push(entry);
+			} else {
+				byChannel.set(entry.channelExternalId, [entry]);
+			}
+		}
+
+		const programs: EpgProgram[] = [];
+		const now = new Date().toISOString();
+
+		for (const [channelExternalId, entries] of byChannel) {
+			const channel = channelMap.get(channelExternalId);
+			if (!channel) continue;
+
+			entries.sort((a, b) => a.start.getTime() - b.start.getTime());
+
+			for (let i = 0; i < entries.length; i++) {
+				const entry = entries[i];
+				const next = entries[i + 1];
+				const end = next ? next.start : new Date(entry.start.getTime() + DEFAULT_EVENT_DURATION_MS);
+				if (end.getTime() <= entry.start.getTime()) continue;
+				// Keep any programme that overlaps the requested window.
+				if (end < startTime || entry.start > endTime) continue;
+
+				programs.push({
+					id: randomUUID(),
+					channelId: channel.id,
+					externalChannelId: channelExternalId,
+					accountId: account.id,
+					providerType: 'cinephage-live',
+					title: entry.title,
+					description: null,
+					category: entry.category,
+					director: null,
+					actor: null,
+					startTime: entry.start.toISOString(),
+					endTime: end.toISOString(),
+					duration: Math.round((end.getTime() - entry.start.getTime()) / 1000),
+					hasArchive: false,
+					cachedAt: now,
+					updatedAt: now
+				});
+			}
+		}
+
+		return programs;
 	}
 
 	// ============================================================================
@@ -562,6 +558,8 @@ export class CinephageLiveProvider implements LiveTvProvider {
 	private async fetchScheduleEvents(startTime: Date, endTime: Date): Promise<LiveScheduleEvent[]> {
 		const core = getCinephageCore();
 		const events: LiveScheduleEvent[] = [];
+		let dayAttempts = 0;
+		let dayFailures = 0;
 
 		// One request per UTC day covering the window.
 		const cursor = new Date(
@@ -573,18 +571,27 @@ export class CinephageLiveProvider implements LiveTvProvider {
 
 		for (let i = 0; cursor <= lastDay && i < MAX_SCHEDULE_DAYS; i++) {
 			const day = cursor.toISOString().slice(0, 10);
+			dayAttempts++;
 			try {
 				const response = await core.get(`${LIVE_API_BASE}/schedule?day=${day}`);
 				const data = JSON.parse(response.body) as LiveScheduleResponse;
 				if (Array.isArray(data.events)) events.push(...data.events);
 			} catch (error) {
 				// A single bad day must not take down the whole EPG sync.
+				dayFailures++;
 				logger.warn(
 					{ day, err: error instanceof Error ? error.message : String(error) },
 					'[CinephageLive] Schedule day fetch failed; skipping'
 				);
 			}
 			cursor.setUTCDate(cursor.getUTCDate() + 1);
+		}
+
+		// Every day failing is an upstream outage, not an empty schedule — throw
+		// so the sync is recorded as failed instead of silently keeping stale
+		// data until retention expires it.
+		if (dayAttempts > 0 && dayFailures === dayAttempts && events.length === 0) {
+			throw new Error(`Cinephage Live schedule unavailable: all ${dayAttempts} day fetches failed`);
 		}
 
 		return events;

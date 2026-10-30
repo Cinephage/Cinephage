@@ -21,12 +21,15 @@
 	import {
 		getLineup,
 		getEpgNow,
+		getEpgStatus,
 		syncEpg,
 		syncEpgForAccount,
 		cancelEpgSync,
 		cancelEpgSyncForAccount,
-		updateLineupItem
+		updateLineupItem,
+		updateEpgSettings
 	} from '#lib/api/index.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
 
 	type TabId = 'status' | 'coverage' | 'guide';
 
@@ -174,6 +177,19 @@
 		}
 	}
 
+	async function handleSaveEpgSettings(settings: {
+		syncIntervalHours: number;
+		retentionHours: number;
+	}) {
+		const result = await updateEpgSettings(settings);
+		if (!result.success) {
+			throw new Error(result.error || m.livetv_epgSettings_saveFailed());
+		}
+		const refreshed = await getEpgStatus();
+		epgStatus = refreshed;
+		toasts.success(m.livetv_epgSettings_saved());
+	}
+
 	async function triggerEpgSync() {
 		if (epgSyncingAny) return;
 		epgCancelRequestedAll = false;
@@ -300,6 +316,7 @@
 			onSyncAccount={triggerAccountSync}
 			onCancel={handleCancelEpgSync}
 			onCancelAccount={cancelAccountSync}
+			onSaveSettings={handleSaveEpgSettings}
 		/>
 	{:else if activeTab === 'coverage'}
 		<EpgCoverageTable

@@ -286,6 +286,16 @@ export class EpgService {
 			throwIfCancelled();
 
 			if (epgPrograms.length === 0) {
+				// Newly added lineup items can still be matched against programs
+				// that are already cached — don't skip auto-attach just because
+				// this sync fetched nothing new.
+				const autoAttachedCount = await this.autoAttachMissingLineupEpgSources(accountId);
+				if (autoAttachedCount > 0) {
+					logger.info(
+						{ accountId, autoAttachedCount },
+						'Auto-attached lineup EPG sources from cached programs'
+					);
+				}
 				const accountStats = await this.getAccountEpgStats(accountId);
 				logger.info(
 					{

@@ -373,6 +373,39 @@ export class EpgScheduler extends EventEmitter implements BackgroundService {
 		}
 		await this.runSync();
 	}
+
+	/**
+	 * Update the EPG sync interval (hours). Takes effect on the next
+	 * isSyncDue() evaluation — no restart needed.
+	 */
+	setSyncIntervalHours(hours: number): void {
+		if (!Number.isFinite(hours) || hours < 1 || hours > 168) {
+			throw new Error('Sync interval must be between 1 and 168 hours');
+		}
+		this.setSetting(SETTINGS_KEYS.syncIntervalHours, String(Math.round(hours)));
+		logger.info({ syncIntervalHours: Math.round(hours) }, 'EPG sync interval updated');
+	}
+
+	/**
+	 * Update the EPG retention period (hours). Applies to the next cleanup run.
+	 */
+	setRetentionHours(hours: number): void {
+		if (!Number.isFinite(hours) || hours < 24 || hours > 720) {
+			throw new Error('Retention must be between 24 and 720 hours');
+		}
+		this.setSetting(SETTINGS_KEYS.retentionHours, String(Math.round(hours)));
+		logger.info({ retentionHours: Math.round(hours) }, 'EPG retention updated');
+	}
+
+	/**
+	 * Record that a full EPG sync just completed. Manual (non-scheduler) syncs
+	 * previously never advanced epg_last_sync_at, so the scheduler fired a
+	 * redundant sync at the old due time and "next sync" display ignored
+	 * manual syncs entirely.
+	 */
+	markSyncedAt(syncedAt: Date = new Date()): void {
+		this.setSetting(SETTINGS_KEYS.lastSyncAt, syncedAt.toISOString());
+	}
 }
 
 // Export singleton getter

@@ -405,8 +405,8 @@ export async function getChannelSyncStatus() {
 	return apiGet<ChannelSyncStatusResponse>('/api/livetv/channels/sync/status');
 }
 
-export async function getChannelsWithEpg() {
-	return apiGet<ChannelsWithEpgResponse>('/api/livetv/channels/with-epg');
+export async function getChannelsWithEpg(params?: Record<string, string>) {
+	return apiGet<ChannelsWithEpgResponse>('/api/livetv/channels/with-epg', params);
 }
 
 export async function getEpgGuide(params?: Record<string, string>) {
@@ -435,6 +435,23 @@ export async function cancelEpgSyncForAccount(accountId: string) {
 
 export async function getEpgStatus() {
 	return apiGet<EpgStatus>('/api/livetv/epg/status');
+}
+
+/** Response of GET/PUT /api/livetv/epg/settings. */
+export interface EpgSettingsResponse {
+	success: boolean;
+	syncIntervalHours: number;
+	retentionHours: number;
+	lastSyncAt: string | null;
+	nextSyncAt: string | null;
+}
+
+/** Update EPG scheduler settings (sync interval / retention hours). */
+export async function updateEpgSettings(payload: {
+	syncIntervalHours?: number;
+	retentionHours?: number;
+}) {
+	return apiPut<EpgSettingsResponse>('/api/livetv/epg/settings', payload);
 }
 
 export async function getEpgChannel(id: string, params?: Record<string, string>) {

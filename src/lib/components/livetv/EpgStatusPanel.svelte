@@ -23,6 +23,10 @@
 		onSyncAccount: (accountId: string) => void;
 		onCancel: () => void;
 		onCancelAccount: (accountId: string) => void;
+		onSaveSettings?: (settings: {
+			syncIntervalHours: number;
+			retentionHours: number;
+		}) => Promise<void>;
 	}
 
 	let {
@@ -35,8 +39,52 @@
 		onSync,
 		onSyncAccount,
 		onCancel,
-		onCancelAccount
+		onCancelAccount,
+		onSaveSettings
 	}: Props = $props();
+
+	// Scheduler settings (sync interval / retention), editable inline.
+	let settingsIntervalHours = $state(6);
+	let settingsRetentionHours = $state(48);
+	let settingsDirty = $state(false);
+	let settingsSaving = $state(false);
+	let settingsJustSaved = $state(false);
+	let settingsError = $state<string | null>(null);
+
+	$effect(() => {
+		if (!settingsDirty && status) {
+			settingsIntervalHours = status.syncIntervalHours;
+			settingsRetentionHours = status.retentionHours;
+		}
+	});
+
+	const settingsValid = $derived(
+		Number.isInteger(settingsIntervalHours) &&
+			settingsIntervalHours >= 1 &&
+			settingsIntervalHours <= 168 &&
+			Number.isInteger(settingsRetentionHours) &&
+			settingsRetentionHours >= 24 &&
+			settingsRetentionHours <= 720
+	);
+
+	async function handleSaveSettings() {
+		if (!onSaveSettings || !settingsValid) return;
+		settingsSaving = true;
+		settingsError = null;
+		try {
+			await onSaveSettings({
+				syncIntervalHours: settingsIntervalHours,
+				retentionHours: settingsRetentionHours
+			});
+			settingsDirty = false;
+			settingsJustSaved = true;
+			setTimeout(() => (settingsJustSaved = false), 2500);
+		} catch (e) {
+			settingsError = e instanceof Error ? e.message : String(e);
+		} finally {
+			settingsSaving = false;
+		}
+	}
 
 	function formatRelativeTime(isoDate: string | null): string {
 		if (!isoDate) return m.livetv_epgStatus_never();
@@ -177,6 +225,69 @@
 				</div>
 			</div>
 		</div>
+
+		{#if onSaveSettings}
+			<div class="card bg-base-200">
+				<div class="card-body gap-3 p-4">
+					<div class="font-medium">{m.livetv_epgSettings_heading()}</div>
+					<div class="flex flex-wrap items-end gap-3">
+						<label class="form-control">
+							<span class="label-text pb-1 text-xs text-base-content/60">
+								{m.livetv_epgSettings_syncInterval()}
+							</span>
+							<input
+								type="number"
+								class="input-bordered input w-24 input-sm"
+								min="1"
+								max="168"
+								bind:value={settingsIntervalHours}
+								oninput={() => {
+									settingsDirty = true;
+									settingsJustSaved = false;
+								}}
+							/>
+						</label>
+						<label class="form-control">
+							<span class="label-text pb-1 text-xs text-base-content/60">
+								{m.livetv_epgSettings_retention()}
+							</span>
+							<input
+								type="number"
+								class="input-bordered input w-24 input-sm"
+								min="24"
+								max="720"
+								bind:value={settingsRetentionHours}
+								oninput={() => {
+									settingsDirty = true;
+									settingsJustSaved = false;
+								}}
+							/>
+						</label>
+						<button
+							type="button"
+							class="btn btn-primary btn-sm"
+							disabled={!settingsDirty || !settingsValid || settingsSaving}
+							onclick={handleSaveSettings}
+						>
+							{#if settingsSaving}
+								<Loader2 class="h-4 w-4 animate-spin" />
+							{/if}
+							{m.livetv_epgSettings_save()}
+						</button>
+						{#if settingsJustSaved}
+							<span class="text-sm text-success">{m.livetv_epgSettings_saved()}</span>
+						{/if}
+						{#if !settingsValid}
+							<span class="text-sm text-error">{m.livetv_epgSettings_invalid()}</span>
+						{/if}
+						{#if settingsError}
+							<span class="text-sm text-error">{settingsError}</span>
+						{/if}
+					</div>
+					<p class="text-xs text-base-content/60">{m.livetv_epgSettings_hint()}</p>
+				</div>
+			</div>
+		{/if}
 
 		{#if syncErrors.length > 0 || syncWarnings.length > 0}
 			<div class="space-y-2">

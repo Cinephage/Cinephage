@@ -6,6 +6,7 @@
 
 import type { RequestHandler } from './$types';
 import { getLiveTvChannelService, getLiveTvAccountManager } from '#lib/server/livetv/index.js';
+import { queueAccountEpgSync } from '#lib/server/livetv/epg/trigger.js';
 import { liveTvEvents } from '#lib/server/livetv/LiveTvEvents.js';
 import { createChildLogger } from '#lib/logging/index.js';
 
@@ -30,6 +31,11 @@ export const POST: RequestHandler = async ({ request }) => {
 					const result = await channelService.syncChannels(account.id);
 					results[account.id] = result;
 					liveTvEvents.emitChannelsSyncCompleted(account.id, result);
+					if (result.success) {
+						// Channel ids changed — refresh the guide for this account
+						// instead of waiting out the global EPG interval.
+						queueAccountEpgSync(account.id, 'channel-sync');
+					}
 				} catch (err) {
 					liveTvEvents.emitChannelsSyncFailed(
 						account.id,
@@ -67,6 +73,9 @@ export const POST: RequestHandler = async ({ request }) => {
 				const result = await channelService.syncChannels(accountId);
 				results[accountId] = result;
 				liveTvEvents.emitChannelsSyncCompleted(accountId, result);
+				if (result.success) {
+					queueAccountEpgSync(accountId, 'channel-sync');
+				}
 			} catch (err) {
 				liveTvEvents.emitChannelsSyncFailed(
 					accountId,

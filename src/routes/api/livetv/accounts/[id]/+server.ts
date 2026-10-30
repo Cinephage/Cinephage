@@ -10,9 +10,7 @@ import type { RequestHandler } from './$types';
 import { getLiveTvAccountManager } from '#lib/server/livetv/LiveTvAccountManager.js';
 import { redactAccountSecrets } from '#lib/server/livetv/accountRedaction.js';
 import { requireAdmin } from '#lib/server/auth/authorization.js';
-import { getEpgService, getEpgScheduler } from '#lib/server/livetv/epg/index.js';
-import { getEpgSyncState } from '#lib/server/livetv/epg/EpgSyncState.js';
-import { liveTvEvents } from '#lib/server/livetv/LiveTvEvents.js';
+import { queueAccountEpgSync } from '#lib/server/livetv/epg/trigger.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { z } from 'zod';
 import { ValidationError } from '#lib/errors/index.js';
@@ -79,65 +77,6 @@ const liveTvAccountUpdateSchema = z.object({
 		})
 		.optional()
 });
-
-function queueAccountEpgSync(accountId: string): void {
-	const syncState = getEpgSyncState();
-	const epgScheduler = getEpgScheduler();
-
-	if (epgScheduler.getStatus().isSyncing) {
-		logger.info(
-			{
-				accountId
-			},
-			'[API] Skipping account EPG sync trigger because scheduler sync is already running'
-		);
-		return;
-	}
-
-	if (!syncState.tryStartAccount(accountId)) {
-		logger.info(
-			{
-				accountId
-			},
-			'[API] Skipping account EPG sync trigger because another EPG sync is already running'
-		);
-		return;
-	}
-
-	setImmediate(async () => {
-		try {
-			const epgService = getEpgService();
-			liveTvEvents.emitEpgSyncStarted(accountId);
-			const result = await epgService.syncAccount(accountId, {
-				shouldCancel: () => syncState.isCancelRequestedForAccount(accountId)
-			});
-
-			if (result.success) {
-				liveTvEvents.emitEpgSyncCompleted(accountId);
-				logger.info({ accountId }, '[API] Background EPG sync complete after account update');
-			} else {
-				const errorMessage = result.error ?? 'EPG sync failed';
-				liveTvEvents.emitEpgSyncFailed(accountId, errorMessage);
-				logger.warn(
-					{ accountId, error: errorMessage },
-					'[API] Background EPG sync finished with failure after account update'
-				);
-			}
-		} catch (error) {
-			const message = error instanceof Error ? error.message : 'Unknown error';
-			liveTvEvents.emitEpgSyncFailed(accountId, message);
-			logger.error(
-				{
-					accountId,
-					error: message
-				},
-				'[API] Background EPG sync failed after account update'
-			);
-		} finally {
-			syncState.finishAccount(accountId);
-		}
-	});
-}
 
 /**
  * Get a Live TV account by ID
@@ -322,7 +261,7 @@ export const PUT: RequestHandler = async (event) => {
 		}
 
 		if (shouldTriggerAccountEpgSync && account.enabled) {
-			queueAccountEpgSync(account.id);
+			queueAccountEpgSync(account.id, 'epg-source-changed');
 		}
 
 		return Response.json({
