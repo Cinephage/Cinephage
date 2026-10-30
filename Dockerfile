@@ -71,8 +71,17 @@ ARG APP_VERSION=dev
 ARG APP_SOURCE=https://github.com/Cinephage/Cinephage
 ARG VCS_REF=unknown
 ARG BUILD_CREATED=unknown
-ENV APP_VERSION=${APP_VERSION}
-ENV APP_COMMIT=${VCS_REF}
+# Per-release gateway signing secret, issued by the Cinephage build API at
+# publish time. Official release images intentionally carry the secret issued
+# for their own build (it is extractable from any published image by design —
+# that is the gateway's distribution model; the value enables attribution and
+# per-release revocation, not secrecy from image users). Dev/PR builds and
+# bare-metal installs leave it empty, which keeps legacy unsigned gateway
+# access until the gateway flips enforcement.
+ARG CINEPHAGE_SIGNING_SECRET=""
+ENV APP_VERSION=${APP_VERSION} \
+	APP_COMMIT=${VCS_REF} \
+	CINEPHAGE_SIGNING_SECRET=${CINEPHAGE_SIGNING_SECRET}
 RUN printf '%s\n' "$APP_VERSION" > /app/version.txt
 
 LABEL org.opencontainers.image.title='Cinephage' \

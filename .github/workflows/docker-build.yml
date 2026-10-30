@@ -26,6 +26,10 @@ on:
         required: false
         type: string
         default: ''
+    secrets:
+      signing_secret:
+        description: 'Per-release gateway signing secret (passed only by the release workflow)'
+        required: false
   push:
     branches: [dev]
   pull_request:
@@ -152,6 +156,7 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}:${{ needs.prepare.outputs.arch_tag_amd64 }}
           build-args: |
             APP_VERSION=${{ needs.prepare.outputs.app_version }}
+            CINEPHAGE_SIGNING_SECRET=${{ secrets.signing_secret }}
           cache-from: type=gha,scope=amd64
           cache-to: type=gha,mode=max,scope=amd64
 
@@ -198,6 +203,7 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}:${{ needs.prepare.outputs.arch_tag_arm64 }}
           build-args: |
             APP_VERSION=${{ needs.prepare.outputs.app_version }}
+            CINEPHAGE_SIGNING_SECRET=${{ secrets.signing_secret }}
           cache-from: type=gha,scope=arm64
           cache-to: type=gha,mode=max,scope=arm64
 

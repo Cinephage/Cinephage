@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       release_tag: ${{ steps.release-tag.outputs.release_tag }}
+      signing_secret: ${{ steps.publish-api.outputs.signing_secret }}
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -46,6 +47,7 @@ jobs:
         run: echo "release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Publish to Cinephage API
+        id: publish-api
         if: env.RELEASE_TAG
         run: |
           VERSION="${RELEASE_TAG#v}"
@@ -57,7 +59,7 @@ jobs:
             -X POST "${{ secrets.CINEPHAGE_BUILD_URL }}" \
             -H "Content-Type: application/json" \
             -H "X-API-Key: ${{ secrets.CINEPHAGE_BUILD_KEY }}" \
-            -d "{\"version\":\"${VERSION}\",\"commit\":\"${COMMIT}\",\"platform\":\"cinephage\"}")
+            -d "{\"version\":\"${VERSION}\",\"commit\":\"${COMMIT}\",\"platform\":\"cinephage\",\"requires_signature\":true}")
 
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
           BODY=$(echo "$RESPONSE" | sed '$d')
@@ -65,11 +67,25 @@ jobs:
           echo "HTTP ${HTTP_CODE}"
 
           if [ "$HTTP_CODE" != "201" ]; then
-            echo "::error::API returned HTTP ${HTTP_CODE}, expected 201: ${BODY}"
+            echo "::error::API returned HTTP ${HTTP_CODE}, expected 201: $(echo "$BODY" | jq -c 'del(.signing_secret)' 2>/dev/null || echo '<unparseable body>')"
             exit 1
           fi
 
-          echo "Published successfully: ${BODY}"
+          SIGNING_SECRET=$(echo "$BODY" | jq -r '.signing_secret // empty')
+
+          if ! echo "$SIGNING_SECRET" | grep -Eq '^[0-9a-fA-F]{64}$'; then
+            echo "::error::API response has no valid 64-hex signing_secret; signed builds cannot ship without one"
+            exit 1
+          fi
+
+          echo "::add-mask::${SIGNING_SECRET}"
+
+          {
+            echo "signing_secret=${SIGNING_SECRET}"
+          } >> "$GITHUB_OUTPUT"
+
+          # Log the response without the secret (it is masked above regardless).
+          echo "Published successfully: $(echo "$BODY" | jq -c 'del(.signing_secret)')"
 
   docker-release:
     name: Publish Stable Docker Images
@@ -79,4 +95,5 @@ jobs:
     with:
       release_tag: ${{ needs.release.outputs.release_tag }}
       checkout_ref: ${{ needs.release.outputs.release_tag }}
-    secrets: inherit
+    secrets:
+      signing_secret: ${{ needs.release.outputs.signing_secret }}

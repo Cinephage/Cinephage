@@ -25,8 +25,12 @@ export const POST: RequestHandler = async (event) => {
 
 	try {
 		const baseUrl = await core.getBaseUrl();
-		const response = await core.getHttpClient().get(`${baseUrl}/api/v1/health`, {
-			headers: { Accept: 'application/json', ...(await core.getAuthHeaders()) }
+		const healthUrl = `${baseUrl}/api/v1/health`;
+		const response = await core.getHttpClient().get(healthUrl, {
+			headers: {
+				Accept: 'application/json',
+				...(await core.getAuthHeaders({ method: 'GET', url: healthUrl }))
+			}
 		});
 
 		if (response.status >= 200 && response.status < 300) {
