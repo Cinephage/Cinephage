@@ -1,4 +1,7 @@
 import { createHmac } from 'node:crypto';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	buildSignatureHeaders,
@@ -8,7 +11,9 @@ import {
 	readGatewaySigningSecret,
 	resetGatewaySigningState,
 	signedGatewayFetch,
-	SIGNING_SECRET_ENV_VAR
+	DEFAULT_SIGNING_SECRET_FILENAME,
+	SIGNING_SECRET_ENV_VAR,
+	SIGNING_SECRET_FILE_ENV_VAR
 } from './signing.js';
 
 const TEST_SECRET = 'a'.repeat(64);
@@ -26,13 +31,23 @@ async function jsonResponse(body: unknown, status: number, date?: string): Promi
 }
 
 describe('gateway request signing', () => {
+	let dataDir: string;
+
 	beforeEach(() => {
 		resetGatewaySigningState();
+		// Point the default-file lookup at a scratch dir; the explicit-file
+		// tests create their own. process.env.DATA_DIR is snapshotted/restored
+		// because other suites in this project rely on it.
+		dataDir = mkdtempSync(join(tmpdir(), 'cphg-signing-'));
+		vi.stubEnv('DATA_DIR', dataDir);
 		process.env[SIGNING_SECRET_ENV_VAR] = TEST_SECRET;
 	});
 
 	afterEach(() => {
 		delete process.env[SIGNING_SECRET_ENV_VAR];
+		delete process.env[SIGNING_SECRET_FILE_ENV_VAR];
+		vi.unstubAllEnvs();
+		rmSync(dataDir, { recursive: true, force: true });
 		vi.restoreAllMocks();
 		resetGatewaySigningState();
 	});
@@ -51,6 +66,57 @@ describe('gateway request signing', () => {
 		it('returns undefined when the variable is absent', () => {
 			delete process.env[SIGNING_SECRET_ENV_VAR];
 			expect(readGatewaySigningSecret()).toBeUndefined();
+		});
+
+		it('reads the secret file named by CINEPHAGE_SIGNING_SECRET_FILE', () => {
+			delete process.env[SIGNING_SECRET_ENV_VAR];
+			const secretFile = join(dataDir, 'explicit.secret');
+			writeFileSync(secretFile, `${'c'.repeat(64)}\n`);
+			process.env[SIGNING_SECRET_FILE_ENV_VAR] = secretFile;
+			expect(readGatewaySigningSecret()).toBe('c'.repeat(64));
+		});
+
+		it('falls back to {DATA_DIR}/gateway-signing.secret by default', () => {
+			delete process.env[SIGNING_SECRET_ENV_VAR];
+			writeFileSync(join(dataDir, DEFAULT_SIGNING_SECRET_FILENAME), `  ${'d'.repeat(64)}  `);
+			expect(readGatewaySigningSecret()).toBe('d'.repeat(64));
+		});
+
+		it('prefers the env var over both file channels', () => {
+			writeFileSync(join(dataDir, DEFAULT_SIGNING_SECRET_FILENAME), 'e'.repeat(64));
+			process.env[SIGNING_SECRET_FILE_ENV_VAR] = join(dataDir, DEFAULT_SIGNING_SECRET_FILENAME);
+			process.env[SIGNING_SECRET_ENV_VAR] = TEST_SECRET;
+			expect(readGatewaySigningSecret()).toBe(TEST_SECRET);
+		});
+
+		it('prefers the explicit file over the default file', () => {
+			delete process.env[SIGNING_SECRET_ENV_VAR];
+			writeFileSync(join(dataDir, DEFAULT_SIGNING_SECRET_FILENAME), 'f'.repeat(64));
+			const explicit = join(dataDir, 'explicit.secret');
+			writeFileSync(explicit, 'a'.repeat(64));
+			process.env[SIGNING_SECRET_FILE_ENV_VAR] = explicit;
+			expect(readGatewaySigningSecret()).toBe('a'.repeat(64));
+		});
+
+		it('treats empty/missing files as unset', () => {
+			delete process.env[SIGNING_SECRET_ENV_VAR];
+			writeFileSync(join(dataDir, DEFAULT_SIGNING_SECRET_FILENAME), '   \n');
+			process.env[SIGNING_SECRET_FILE_ENV_VAR] = join(dataDir, 'does-not-exist.secret');
+			expect(readGatewaySigningSecret()).toBeUndefined();
+		});
+
+		it('signs requests with the file-provided secret', () => {
+			delete process.env[SIGNING_SECRET_ENV_VAR];
+			const fileSecret = '0'.repeat(64);
+			writeFileSync(join(dataDir, DEFAULT_SIGNING_SECRET_FILENAME), fileSecret);
+			const headers = getSignatureHeaders({
+				method: 'GET',
+				url: 'https://api.cinephage.net/api/v1/health'
+			});
+			const ts = Number(headers['X-Cinephage-Timestamp']);
+			expect(headers['X-Cinephage-Signature']).toBe(
+				createHmac('sha256', fileSecret).update(`v1:GET:/api/v1/health:${ts}`).digest('hex')
+			);
 		});
 	});
 
