@@ -2351,6 +2351,16 @@ export const cinephageApiConfig = sqliteTable('cinephage_api_config', {
 	autoUpdate: integer('auto_update', { mode: 'boolean' }).notNull().default(true),
 	latestVersion: text('latest_version'),
 	latestCommit: text('latest_commit'),
+	// Per-install gateway identity. One installId per app database, generated
+	// on first registration and kept forever; re-registering the same id
+	// rotates the key. api_key holds the encrypted envelope (covered by
+	// SECRET_FIELD_SPECS); api_key_prefix is the plaintext display form
+	// (e.g. "ck_abc12"). All nullable — an install is unregistered until the
+	// user clicks register.
+	installId: text('install_id'),
+	apiKey: text('api_key'),
+	apiKeyPrefix: text('api_key_prefix'),
+	registrationEmail: text('registration_email'),
 	updatedAt: text('updated_at').$defaultFn(() => new Date().toISOString())
 });
 

@@ -638,10 +638,15 @@ export class CinephageLiveProvider implements LiveTvProvider {
 	private toProviderError(error: unknown): string {
 		if (error instanceof HttpError) {
 			if (error.status === 401) {
-				// The gateway rejected our identity (stale release pair). Kick off
-				// a self-heal refresh so the next request authenticates freshly.
+				// The gateway rejected our identity (stale release pair, or —
+				// once install-key enforcement flips on — an unregistered
+				// install). Kick off a self-heal refresh; if that is not the
+				// cause, registering the install is the other fix.
 				void getCinephageCore().refreshLatestIdentity(true);
-				return 'Cinephage API rejected authentication. Verify version and commit.';
+				return (
+					'Cinephage API rejected authentication. Verify the configured version and ' +
+					'commit, or register this install under Settings → Cinephage Network.'
+				);
 			}
 			if (error.status === 404) {
 				return 'Channel not found or currently offline on Cinephage Live.';

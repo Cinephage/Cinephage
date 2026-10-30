@@ -81,6 +81,14 @@ export const SECRET_FIELD_SPECS: SecretFieldSpec[] = [
 		jsonFields: [{ column: 'settings' }]
 	},
 	{
+		purpose: 'cinephage-install-key',
+		table: 'cinephage_api_config',
+		idColumn: 'id',
+		// Per-install gateway API key (ck_...). Encrypted at rest; the
+		// plaintext prefix column next to it is display-only.
+		scalarFields: ['api_key']
+	},
+	{
 		purpose: 'livetv-config',
 		table: 'livetv_accounts',
 		idColumn: 'id',

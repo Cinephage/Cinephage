@@ -1232,7 +1232,19 @@ export const cinephageSubsystemUpdateSchema = z.object({
 	baseUrl: z.string().trim().min(1).optional(),
 	versionOverride: z.string().trim().nullable().optional(),
 	commitOverride: z.string().trim().nullable().optional(),
-	autoUpdate: z.boolean().optional()
+	autoUpdate: z.boolean().optional(),
+	/**
+	 * Manual install-key paste (recovery when registration is IP-limited).
+	 * Blank/[REDACTED] keeps the stored key; a real `ck_...` value replaces
+	 * it. The stored key itself is never echoed back by GET.
+	 */
+	apiKey: z.string().trim().optional()
+});
+
+/** Register this install with the gateway for a per-install API key. */
+export const cinephageRegisterSchema = z.object({
+	email: z.string().trim().toLowerCase().email(),
+	label: z.string().trim().max(100).optional()
 });
 
 export type CinephageSubsystemUpdate = z.infer<typeof cinephageSubsystemUpdateSchema>;

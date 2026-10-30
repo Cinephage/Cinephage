@@ -1,6 +1,13 @@
+import { randomUUID } from 'node:crypto';
 import { db } from '#lib/server/db/index.js';
 import { cinephageApiConfig, cinephageApiModules } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
+import { decryptCredential, encryptCredential } from '#lib/server/crypto/credentialsCrypto.js';
+
+/** AAD purpose binding for the install key envelope (see SECRET_FIELD_SPECS). */
+const INSTALL_KEY_PURPOSE = 'cinephage-install-key';
+/** The singleton row's fixed record id, used as the envelope AAD record id. */
+const CONFIG_ROW_ID = '1';
 
 /**
  * Default subsystem configuration. Returned from getConfig() when no row
@@ -27,6 +34,15 @@ export interface CinephageSubsystemConfig {
 	autoUpdate: boolean;
 	latestVersion: string | null;
 	latestCommit: string | null;
+	/** Install key state for display. The key itself is never included. */
+	installKey: {
+		installId: string | null;
+		/** True when an encrypted key envelope is stored. */
+		registered: boolean;
+		/** Plaintext display prefix, e.g. "ck_abc12". */
+		keyPrefix: string | null;
+		registrationEmail: string | null;
+	};
 }
 
 export interface CinephageModuleState {
@@ -66,7 +82,15 @@ export class CinephageSettingsService {
 			.limit(1);
 
 		if (rows.length === 0) {
-			return { ...DEFAULT_CINEPHAGE_CONFIG };
+			return {
+				...DEFAULT_CINEPHAGE_CONFIG,
+				installKey: {
+					installId: null,
+					registered: false,
+					keyPrefix: null,
+					registrationEmail: null
+				}
+			};
 		}
 
 		const row = rows[0];
@@ -77,8 +101,86 @@ export class CinephageSettingsService {
 			commitOverride: row.commitOverride,
 			autoUpdate: row.autoUpdate,
 			latestVersion: row.latestVersion,
-			latestCommit: row.latestCommit
+			latestCommit: row.latestCommit,
+			installKey: {
+				installId: row.installId,
+				registered: row.apiKey !== null && row.apiKey !== '',
+				keyPrefix: row.apiKeyPrefix,
+				registrationEmail: row.registrationEmail
+			}
 		};
+	}
+
+	/**
+	 * The plaintext install API key, or null when unregistered. Decrypts the
+	 * stored envelope; callers must never log the result. Hot path safe: the
+	 * derived key is cached by credentialsCrypto.
+	 */
+	async getInstallApiKey(): Promise<string | null> {
+		const rows = await db
+			.select({ apiKey: cinephageApiConfig.apiKey })
+			.from(cinephageApiConfig)
+			.where(eq(cinephageApiConfig.id, 1))
+			.limit(1);
+		const stored = rows[0]?.apiKey;
+		if (!stored) {
+			return null;
+		}
+		return decryptCredential(INSTALL_KEY_PURPOSE, CONFIG_ROW_ID, stored, 'cinephage api key');
+	}
+
+	/**
+	 * The persistent installId, generating and persisting one on first call.
+	 * Kept forever (re-registration rotates keys against the same id); only a
+	 * wiped database produces a fresh install identity.
+	 */
+	async getOrCreateInstallId(): Promise<string> {
+		const rows = await db
+			.select({ installId: cinephageApiConfig.installId })
+			.from(cinephageApiConfig)
+			.where(eq(cinephageApiConfig.id, 1))
+			.limit(1);
+		if (rows[0]?.installId) {
+			return rows[0].installId;
+		}
+
+		const installId = randomUUID();
+		await db
+			.insert(cinephageApiConfig)
+			.values({ id: 1, installId })
+			.onConflictDoUpdate({
+				target: cinephageApiConfig.id,
+				set: { installId, updatedAt: new Date().toISOString() }
+			});
+		return installId;
+	}
+
+	/**
+	 * Persist a gateway install key (encrypted at rest) plus its display
+	 * prefix and the registration email (reused as the default for rotation).
+	 */
+	async storeInstallApiKey(key: string, keyPrefix: string, email: string | null): Promise<void> {
+		const envelope = encryptCredential(INSTALL_KEY_PURPOSE, CONFIG_ROW_ID, key);
+		const now = new Date().toISOString();
+		await db
+			.insert(cinephageApiConfig)
+			.values({ id: 1, apiKey: envelope, apiKeyPrefix: keyPrefix, registrationEmail: email })
+			.onConflictDoUpdate({
+				target: cinephageApiConfig.id,
+				set: { apiKey: envelope, apiKeyPrefix: keyPrefix, registrationEmail: email, updatedAt: now }
+			});
+	}
+
+	/** Drop the stored key (after revoke or manual clear). Keeps the installId. */
+	async clearInstallApiKey(): Promise<void> {
+		const now = new Date().toISOString();
+		await db
+			.insert(cinephageApiConfig)
+			.values({ id: 1 })
+			.onConflictDoUpdate({
+				target: cinephageApiConfig.id,
+				set: { apiKey: null, apiKeyPrefix: null, updatedAt: now }
+			});
 	}
 
 	/** Update the subsystem config. Creates the singleton row on first write. */

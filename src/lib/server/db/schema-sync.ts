@@ -184,7 +184,7 @@ import {
  * Version 167: livetv_channels.cinephage_data — Cinephage Live channel metadata
  *   (taxonomy category + country code from the Cinephage API).
  */
-export const CURRENT_SCHEMA_VERSION = 167;
+export const CURRENT_SCHEMA_VERSION = 168;
 
 export const SYSTEM_LIBRARY_SEEDS = [
 	{

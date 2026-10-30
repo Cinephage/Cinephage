@@ -2,14 +2,14 @@
  * Cinephage IPTV Provider
  *
  * Implements the LiveTvProvider interface for the Cinephage API IPTV service.
- * Fetches free IPTV channels from https://api.cinephage.net/api/v1/iptv/*
+ * Fetches free IPTV channels from the gateway's /api/v1/iptv/* endpoints via
+ * CinephageCore (configurable base URL, shared auth headers + install key).
  */
 
 import { db } from '#lib/server/db/index.js';
 import { livetvAccounts, livetvChannels, livetvCategories } from '#lib/server/db/schema.js';
 import { and, eq, inArray, notInArray } from 'drizzle-orm';
 import { createChildLogger } from '#lib/logging/index.js';
-import { getStreamingIndexerSettings } from '#lib/server/streaming/settings.js';
 import { getCinephageCore } from '#lib/server/cinephage/core/CinephageCore.js';
 import { randomUUID } from 'node:crypto';
 
@@ -30,7 +30,8 @@ import type {
 } from '#lib/types/livetv.js';
 import { recordToAccount } from '../LiveTvAccountManager.js';
 
-const CINEPHAGE_API_BASE = 'https://api.cinephage.net';
+/** Gateway IPTV path prefix; CinephageCore supplies the configured base URL. */
+const IPTV_API_PATH = '/api/v1/iptv';
 
 /** Parsed playlist entry before grouping */
 interface RawPlaylistEntry {
@@ -91,37 +92,15 @@ export class CinephageIptvProvider implements LiveTvProvider {
 				};
 			}
 
-			const headers = await this.getAuthHeaders();
-
+			const core = getCinephageCore();
 			const params = new URLSearchParams();
 			params.set('limit', '1');
 			if (config.countries && config.countries.length > 0) {
 				params.set('country', config.countries[0]);
 			}
 
-			const response = await fetch(
-				`${CINEPHAGE_API_BASE}/api/v1/iptv/channels?${params.toString()}`,
-				{
-					headers: { ...headers, Accept: 'application/json' },
-					signal: AbortSignal.timeout(30000)
-				}
-			);
-
-			if (response.status === 401) {
-				return {
-					success: false,
-					error: 'Cinephage API rejected authentication. Verify version and commit.'
-				};
-			}
-
-			if (!response.ok) {
-				return {
-					success: false,
-					error: `Cinephage API returned HTTP ${response.status}`
-				};
-			}
-
-			const data = (await response.json()) as { channels?: unknown[]; total?: number };
+			const response = await core.get(`${IPTV_API_PATH}/channels?${params.toString()}`);
+			const data = JSON.parse(response.body) as { channels?: unknown[]; total?: number };
 
 			return {
 				success: true,
@@ -135,10 +114,10 @@ export class CinephageIptvProvider implements LiveTvProvider {
 				}
 			};
 		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
+			const core = getCinephageCore();
 			return {
 				success: false,
-				error: message
+				error: await core.toGatewayErrorMessage(error)
 			};
 		}
 	}
@@ -452,21 +431,6 @@ export class CinephageIptvProvider implements LiveTvProvider {
 	// Private Helpers
 	// ============================================================================
 
-	private async getAuthHeaders(): Promise<Record<string, string>> {
-		const settings = await getStreamingIndexerSettings();
-		const version = settings?.cinephageVersion;
-		const commit = settings?.cinephageCommit;
-
-		if (!version || !commit) {
-			throw new Error('Cinephage API not configured: missing cinephageVersion or cinephageCommit');
-		}
-
-		return {
-			'X-Cinephage-Version': version,
-			'X-Cinephage-Commit': commit
-		};
-	}
-
 	private async fetchPlaylist(config: CinephageIptvConfig): Promise<string> {
 		const params = new URLSearchParams();
 
@@ -482,32 +446,16 @@ export class CinephageIptvProvider implements LiveTvProvider {
 			}
 		}
 
-		const url = `${CINEPHAGE_API_BASE}/api/v1/iptv/playlist.m3u?${params.toString()}`;
-		const headers = await this.getAuthHeaders();
-
-		const response = await fetch(url, {
-			headers: {
-				...headers,
-				Accept: 'audio/x-mpegurl, text/plain, */*'
-			},
-			signal: AbortSignal.timeout(60000)
-		});
-
-		if (!response.ok) {
-			if (response.status === 401) {
-				// The gateway rejected our identity (likely stale release
-				// pair). Kick off a self-heal refresh so the next request
-				// authenticates with the latest release.
-				void getCinephageCore().refreshLatestIdentity(true);
-				throw new Error('Cinephage API rejected authentication. Verify version and commit.');
-			}
-			if (response.status === 429) {
-				throw new Error('Cinephage API rate limited the IPTV request.');
-			}
-			throw new Error(`Cinephage API returned HTTP ${response.status}`);
+		try {
+			const response = await getCinephageCore().get(
+				`${IPTV_API_PATH}/playlist.m3u?${params.toString()}`
+			);
+			return response.body;
+		} catch (error) {
+			throw new Error(await getCinephageCore().toGatewayErrorMessage(error, { playlist: true }), {
+				cause: error
+			});
 		}
-
-		return response.text();
 	}
 
 	private parsePlaylist(content: string): GroupedPlaylistEntry[] {

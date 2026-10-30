@@ -15,6 +15,12 @@ export interface CinephageSubsystemState {
 		autoUpdate: boolean;
 		latestVersion: string | null;
 		latestCommit: string | null;
+		installKey: {
+			installId: string | null;
+			registered: boolean;
+			keyPrefix: string | null;
+			registrationEmail: string | null;
+		};
 	};
 	identity: {
 		version: string;
@@ -38,12 +44,40 @@ export interface CinephageTestResult {
 	error?: string;
 }
 
+/** Registration result — `key` is present exactly once, right after registering. */
+export interface CinephageRegisterResult {
+	success: boolean;
+	key?: string;
+	keyPrefix?: string;
+	rotated?: boolean;
+	installId?: string;
+	error?: string;
+	code?: string;
+}
+
+export interface CinephageRevokeResult {
+	success: boolean;
+	revoked?: boolean;
+	wasRegistered?: boolean;
+	error?: string;
+}
+
 export async function getCinephageState() {
 	return apiGet<CinephageSubsystemState>('/api/cinephage');
 }
 
 export async function testCinephageConnection() {
 	return apiPost<CinephageTestResult>('/api/cinephage/test');
+}
+
+/** Register (or rotate) this install's gateway key. Response carries the plaintext key once. */
+export async function registerCinephageInstall(payload: { email: string; label?: string }) {
+	return apiPost<CinephageRegisterResult>('/api/cinephage/register', payload);
+}
+
+/** Revoke this install's gateway key and drop the stored copy. */
+export async function revokeCinephageInstall() {
+	return apiPost<CinephageRevokeResult>('/api/cinephage/revoke');
 }
 
 export async function updateCinephageConfig(payload: CinephageSubsystemUpdate) {

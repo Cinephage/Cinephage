@@ -164,6 +164,7 @@ import { migration_v164 } from './164-transfer-mode.js';
 import { migration_v165 } from './165-unmatched-origin.js';
 import { migration_v166 } from './166-scoring-profile-allowed-indexers.js';
 import { migration_v167 } from './167-add-cinephage-live-channel-data.js';
+import { migration_v168 } from './168-add-cinephage-install-key.js';
 
 export const MIGRATIONS: MigrationDefinition[] = [
 	migration_v002,
@@ -330,5 +331,6 @@ export const MIGRATIONS: MigrationDefinition[] = [
 	migration_v164,
 	migration_v165,
 	migration_v166,
-	migration_v167
+	migration_v167,
+	migration_v168
 ];

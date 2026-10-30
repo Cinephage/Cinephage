@@ -25,7 +25,8 @@ export const POST: RequestHandler = async (event) => {
 
 	try {
 		const baseUrl = await core.getBaseUrl();
-		const response = await core.getHttpClient().get(`${baseUrl}/api/v1/health`, {
+		const healthUrl = `${baseUrl}/api/v1/health`;
+		const response = await core.getHttpClient().get(healthUrl, {
 			headers: { Accept: 'application/json', ...(await core.getAuthHeaders()) }
 		});
 
@@ -37,7 +38,7 @@ export const POST: RequestHandler = async (event) => {
 			error: `Cinephage API returned HTTP ${response.status}`
 		});
 	} catch (error) {
-		const message = error instanceof Error ? error.message : String(error);
-		return Response.json({ success: false, error: message });
+		// Shared mapping keeps 401 guidance consistent (registration vs identity).
+		return Response.json({ success: false, error: await core.toGatewayErrorMessage(error) });
 	}
 };

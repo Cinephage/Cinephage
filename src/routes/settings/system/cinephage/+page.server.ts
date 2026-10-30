@@ -41,7 +41,8 @@ export const load: PageServerLoad = async () => {
 			commitOverride: config.commitOverride,
 			autoUpdate: config.autoUpdate,
 			latestVersion: config.latestVersion,
-			latestCommit: config.latestCommit
+			latestCommit: config.latestCommit,
+			installKey: config.installKey
 		},
 		identity: {
 			version: identity.version,

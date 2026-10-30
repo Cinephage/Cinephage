@@ -10,7 +10,9 @@
 		updateCinephageConfig,
 		updateCinephageModule,
 		testCinephageConnection,
-		getGithubRelease
+		getGithubRelease,
+		registerCinephageInstall,
+		revokeCinephageInstall
 	} from '#lib/api/index.js';
 
 	let { data } = $props();
@@ -31,6 +33,82 @@
 	let testResult = $state<{ success: boolean; error?: string } | null>(null);
 	let advancedOpen = $state(false);
 	let fetchingRelease = $state(false);
+
+	// ---- Install key (per-install gateway identity) ----
+	let keyEmail = $state(untrack(() => data.config.installKey?.registrationEmail ?? ''));
+	let registering = $state(false);
+	let revoking = $state(false);
+	let revealedKey = $state<{ key: string; rotated: boolean } | null>(null);
+	let manualKey = $state('');
+	let keyCopied = $state(false);
+
+	async function handleRegisterKey() {
+		registering = true;
+		revealedKey = null;
+		keyCopied = false;
+		try {
+			const res = await registerCinephageInstall({ email: keyEmail });
+			if (res.success && res.key) {
+				revealedKey = { key: res.key, rotated: res.rotated ?? false };
+				toasts.add({
+					message: res.rotated
+						? 'Install key rotated — previous key no longer works'
+						: 'Install registered',
+					type: 'success'
+				});
+				await refreshAll();
+			} else {
+				toasts.add({
+					message: res.error || m.settings_cinephage_installKey_rateLimited(),
+					type: 'error'
+				});
+			}
+		} catch {
+			toasts.add({ message: 'Registration failed', type: 'error' });
+		} finally {
+			registering = false;
+		}
+	}
+
+	async function handleRevokeKey() {
+		revoking = true;
+		try {
+			const res = await revokeCinephageInstall();
+			if (res.success) {
+				toasts.add({ message: 'Install key revoked', type: 'success' });
+				revealedKey = null;
+				await refreshAll();
+			} else {
+				toasts.add({ message: res.error || 'Revoke failed', type: 'error' });
+			}
+		} catch {
+			toasts.add({ message: 'Revoke failed', type: 'error' });
+		} finally {
+			revoking = false;
+		}
+	}
+
+	async function handleSaveManualKey() {
+		if (!manualKey.trim()) return;
+		try {
+			await updateCinephageConfig({ apiKey: manualKey.trim() });
+			manualKey = '';
+			toasts.add({ message: 'Install key saved', type: 'success' });
+			await refreshAll();
+		} catch {
+			toasts.add({ message: 'Failed to save install key', type: 'error' });
+		}
+	}
+
+	async function copyRevealedKey() {
+		if (!revealedKey) return;
+		try {
+			await navigator.clipboard.writeText(revealedKey.key);
+			keyCopied = true;
+		} catch {
+			/* clipboard unavailable; the key remains selectable on screen */
+		}
+	}
 
 	async function handleToggleSubsystem() {
 		try {
@@ -239,6 +317,114 @@
 								/>
 							</label>
 							<button class="btn btn-outline btn-sm" onclick={handleSaveOverrides}>
+								{m.settings_cinephage_saveSettings()}
+							</button>
+						</div>
+					</div>
+				</details>
+			</div>
+		</div>
+
+		<!-- Install key card -->
+		<div class="card bg-base-200">
+			<div class="card-body">
+				<div class="flex items-center justify-between">
+					<div>
+						<h2 class="card-title">{m.settings_cinephage_installKey_heading()}</h2>
+						<p class="text-sm text-base-content/60">
+							{m.settings_cinephage_installKey_description()}
+						</p>
+					</div>
+					{#if config.installKey?.registered}
+						<div class="badge gap-1 badge-success">
+							{m.settings_cinephage_installKey_registeredAs()}
+							{#if config.installKey.keyPrefix}
+								<span class="font-mono">{config.installKey.keyPrefix}…</span>
+							{/if}
+						</div>
+					{:else}
+						<div class="badge badge-ghost">
+							{m.settings_cinephage_installKey_notRegistered()}
+						</div>
+					{/if}
+				</div>
+
+				<div class="mt-3 flex flex-wrap items-end gap-3">
+					<label class="form-control w-full max-w-xs">
+						<span class="label-text text-sm">{m.settings_cinephage_installKey_email()}</span>
+						<input
+							type="email"
+							class="input-bordered input w-full input-sm"
+							placeholder="admin@example.com"
+							bind:value={keyEmail}
+						/>
+						<span class="label-text-alt text-base-content/50">
+							{m.settings_cinephage_installKey_emailHint()}
+						</span>
+					</label>
+					<button
+						class="btn btn-primary btn-sm"
+						onclick={handleRegisterKey}
+						disabled={registering || !keyEmail.includes('@')}
+					>
+						{#if registering}
+							<Loader2 class="h-3 w-3 animate-spin" />
+						{/if}
+						{config.installKey?.registered
+							? m.settings_cinephage_installKey_rotate()
+							: m.settings_cinephage_installKey_register()}
+					</button>
+					{#if config.installKey?.registered}
+						<button
+							class="btn btn-outline btn-error btn-sm"
+							onclick={handleRevokeKey}
+							disabled={revoking}
+						>
+							{m.settings_cinephage_installKey_revoke()}
+						</button>
+					{/if}
+				</div>
+
+				{#if config.installKey?.installId}
+					<p class="mt-2 text-xs text-base-content/50">
+						{m.settings_cinephage_installKey_installId()}:
+						<span class="font-mono">{config.installKey.installId}</span>
+					</p>
+				{/if}
+
+				{#if revealedKey}
+					<div class="mt-3 rounded-lg bg-warning/10 p-3">
+						<p class="text-xs text-warning">{m.settings_cinephage_installKey_shownOnce()}</p>
+						<div class="mt-2 flex items-center gap-2">
+							<code class="flex-1 overflow-x-auto rounded bg-base-300 px-2 py-1 font-mono text-sm">
+								{revealedKey.key}
+							</code>
+							<button class="btn btn-sm" onclick={copyRevealedKey}>
+								{keyCopied ? '✓' : m.settings_cinephage_installKey_copy()}
+							</button>
+						</div>
+					</div>
+				{/if}
+
+				<details class="mt-3">
+					<summary class="cursor-pointer text-sm font-medium">
+						{m.settings_cinephage_installKey_manual()}
+					</summary>
+					<div class="mt-3 space-y-2">
+						<p class="text-xs text-base-content/50">
+							{m.settings_cinephage_installKey_manualHint()}
+						</p>
+						<div class="flex flex-wrap items-end gap-3">
+							<label class="form-control w-full max-w-xs">
+								<input
+									type="password"
+									class="input-bordered input w-full font-mono input-sm"
+									placeholder="ck_…"
+									bind:value={manualKey}
+									autocomplete="off"
+								/>
+							</label>
+							<button class="btn btn-outline btn-sm" onclick={handleSaveManualKey}>
 								{m.settings_cinephage_saveSettings()}
 							</button>
 						</div>

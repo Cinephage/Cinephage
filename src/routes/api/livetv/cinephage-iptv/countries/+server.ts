@@ -1,17 +1,17 @@
 /**
  * Cinephage IPTV Countries API
  *
- * GET /api/livetv/cinephage-iptv/countries - List all IPTV countries from Cinephage API
+ * GET /api/livetv/cinephage-iptv/countries - List all IPTV countries from Cinephage API.
+ * Routes through CinephageCore so the configured base URL and auth headers
+ * (identity pair + install key) apply like every other gateway call.
  */
 
 import type { RequestHandler } from './$types';
 import { createChildLogger } from '#lib/logging/index.js';
-import { getStreamingIndexerSettings } from '#lib/server/streaming/settings.js';
 import { getCinephageCore } from '#lib/server/cinephage/core/CinephageCore.js';
 
 const logger = createChildLogger({ module: 'LiveTvCinephageIptvCountries', logDomain: 'livetv' });
 
-const CINEPHAGE_API_BASE = 'https://api.cinephage.net';
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 
 interface CinephageCountry {
@@ -29,50 +29,20 @@ interface CachedData {
 
 let cachedCountries: CachedData | null = null;
 
-async function getAuthHeaders(): Promise<Record<string, string>> {
-	const settings = await getStreamingIndexerSettings();
-	const version = settings?.cinephageVersion;
-	const commit = settings?.cinephageCommit;
-
-	if (!version || !commit) {
-		throw new Error('Cinephage API not configured: missing cinephageVersion or cinephageCommit');
-	}
-
-	return {
-		'X-Cinephage-Version': version,
-		'X-Cinephage-Commit': commit
-	};
-}
-
 async function fetchCinephageCountries(): Promise<CinephageCountry[]> {
-	const headers = await getAuthHeaders();
+	const core = getCinephageCore();
+	try {
+		const response = await core.get('/api/v1/iptv/countries');
+		const data = JSON.parse(response.body) as { countries?: CinephageCountry[] };
 
-	const response = await fetch(`${CINEPHAGE_API_BASE}/api/v1/iptv/countries`, {
-		headers: { ...headers, Accept: 'application/json' },
-		signal: AbortSignal.timeout(30000)
-	});
-
-	if (!response.ok) {
-		if (response.status === 401) {
-			// The gateway rejected our identity (likely stale release pair).
-			// Kick off a self-heal refresh so the next request authenticates
-			// with the latest release.
-			void getCinephageCore().refreshLatestIdentity(true);
-			throw new Error('Cinephage API rejected authentication');
+		if (!data.countries || !Array.isArray(data.countries)) {
+			throw new Error('Unexpected response format from Cinephage API');
 		}
-		if (response.status === 429) {
-			throw new Error('Cinephage API rate limited this request');
-		}
-		throw new Error(`Cinephage API returned HTTP ${response.status}`);
+
+		return data.countries;
+	} catch (error) {
+		throw new Error(await core.toGatewayErrorMessage(error), { cause: error });
 	}
-
-	const data = (await response.json()) as { countries?: CinephageCountry[] };
-
-	if (!data.countries || !Array.isArray(data.countries)) {
-		throw new Error('Unexpected response format from Cinephage API');
-	}
-
-	return data.countries;
 }
 
 async function getCachedCountries(): Promise<CinephageCountry[]> {
