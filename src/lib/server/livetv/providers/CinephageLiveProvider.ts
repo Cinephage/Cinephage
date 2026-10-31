@@ -162,7 +162,7 @@ export class CinephageLiveProvider implements LiveTvProvider {
 				}
 			};
 		} catch (error) {
-			return { success: false, error: this.toProviderError(error) };
+			return { success: false, error: await this.toProviderError(error) };
 		}
 	}
 
@@ -344,7 +344,7 @@ export class CinephageLiveProvider implements LiveTvProvider {
 				duration
 			};
 		} catch (error) {
-			const message = this.toProviderError(error);
+			const message = await this.toProviderError(error);
 			const duration = Date.now() - startTime;
 
 			logger.error({ accountId, err: error }, '[CinephageLive] Channel sync failed');
@@ -405,7 +405,7 @@ export class CinephageLiveProvider implements LiveTvProvider {
 			return {
 				success: false,
 				type: 'unknown',
-				error: this.toProviderError(error)
+				error: await this.toProviderError(error)
 			};
 		}
 	}
@@ -635,18 +635,14 @@ export class CinephageLiveProvider implements LiveTvProvider {
 	}
 
 	/** Map client/HTTP errors to provider messages, self-healing stale identities. */
-	private toProviderError(error: unknown): string {
+	private async toProviderError(error: unknown): Promise<string> {
 		if (error instanceof HttpError) {
 			if (error.status === 401) {
-				// The gateway rejected our identity (stale release pair, or —
-				// once install-key enforcement flips on — an unregistered
-				// install). Kick off a self-heal refresh; if that is not the
-				// cause, registering the install is the other fix.
-				void getCinephageCore().refreshLatestIdentity(true);
-				return (
-					'Cinephage API rejected authentication. Verify the configured version and ' +
-					'commit, or register this install under Settings → Cinephage Network.'
-				);
+				// Shared mapping branches on install-key state: unregistered
+				// installs get registration guidance (required once
+				// install_key_required enforcement flips on); registered ones
+				// keep the stale-identity self-heal path.
+				return getCinephageCore().toGatewayErrorMessage(error);
 			}
 			if (error.status === 404) {
 				return 'Channel not found or currently offline on Cinephage Live.';

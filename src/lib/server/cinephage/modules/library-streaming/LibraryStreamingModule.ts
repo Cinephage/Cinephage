@@ -486,14 +486,17 @@ export class LibraryStreamingModule extends BaseCinephageModule {
 			}
 
 			if (response.status === 401) {
-				// Gateway still rejects our identity (likely stale release
-				// pair). Kick off a self-heal refresh so the next request
-				// authenticates with the latest release.
-				void this.core.refreshLatestIdentity(true);
+				// Gateway still rejects us. The shared mapper branches on
+				// install-key state: unregistered installs get registration
+				// guidance (required once install_key_required enforcement
+				// flips on); registered ones keep the stale-identity path,
+				// whose self-heal refresh the mapper fires itself.
 				return {
 					success: false,
 					sources: [],
-					error: 'Cinephage API rejected authentication. Verify the configured version and commit.'
+					error: await this.core.toGatewayErrorMessage(
+						new Error('HTTP 401: authentication rejected')
+					)
 				};
 			}
 

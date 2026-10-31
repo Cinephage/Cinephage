@@ -20,7 +20,8 @@ vi.mock('#lib/server/db/index.js', () => ({
 
 const coreMocks = vi.hoisted(() => ({
 	get: vi.fn(),
-	refreshLatestIdentity: vi.fn()
+	refreshLatestIdentity: vi.fn(),
+	toGatewayErrorMessage: vi.fn()
 }));
 
 vi.mock('#lib/server/cinephage/core/CinephageCore.js', () => ({
@@ -140,12 +141,31 @@ describe('CinephageLiveProvider.testConnection', () => {
 
 	it('self-heals and reports a friendly error on 401', async () => {
 		coreMocks.get.mockRejectedValue(new HttpError(401, 'Unauthorized', new Headers()));
+		// Registered branch of the real mapper: fires the self-heal itself.
+		coreMocks.toGatewayErrorMessage.mockImplementation(async () => {
+			await coreMocks.refreshLatestIdentity(true);
+			return 'Cinephage API rejected authentication. Verify the configured version and commit.';
+		});
 
 		const result = await new CinephageLiveProvider().testConnection(makeAccount());
 
 		expect(result.success).toBe(false);
 		expect(result.error).toContain('rejected authentication');
-		expect(coreMocks.refreshLatestIdentity).toHaveBeenCalledWith(true);
+		expect(coreMocks.toGatewayErrorMessage).toHaveBeenCalledTimes(1);
+	});
+
+	it('routes unregistered 401s to registration guidance', async () => {
+		coreMocks.get.mockRejectedValue(new HttpError(401, 'Unauthorized', new Headers()));
+		// Unregistered branch of the real mapper: registration guidance, no self-heal.
+		coreMocks.toGatewayErrorMessage.mockImplementation(async () => {
+			return 'Cinephage API requires a registered install key. Register this install under Settings → Cinephage Network.';
+		});
+
+		const result = await new CinephageLiveProvider().testConnection(makeAccount());
+
+		expect(result.success).toBe(false);
+		expect(result.error).toContain('Register this install');
+		expect(coreMocks.refreshLatestIdentity).not.toHaveBeenCalled();
 	});
 });
 

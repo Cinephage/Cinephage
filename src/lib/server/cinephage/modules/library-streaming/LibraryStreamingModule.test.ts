@@ -213,7 +213,7 @@ describe('LibraryStreamingModule', () => {
 
 	describe('getStreams', () => {
 		function createFakeCore(httpGet: ReturnType<typeof vi.fn>) {
-			return {
+			const core = {
 				getBaseUrl: vi.fn().mockResolvedValue('https://api.cinephage.net'),
 				getIdentity: vi.fn().mockResolvedValue({
 					version: 'v0.15.0',
@@ -226,8 +226,17 @@ describe('LibraryStreamingModule', () => {
 				}),
 				getHttpClient: vi.fn().mockReturnValue({ get: httpGet }),
 				toggleVersionFormat: vi.fn().mockResolvedValue(null),
-				refreshLatestIdentity: vi.fn().mockResolvedValue(undefined)
+				refreshLatestIdentity: vi.fn().mockResolvedValue(undefined),
+				// Default stub mirrors the real mapper's registered 401 branch:
+				// the self-heal refresh is fired by toGatewayErrorMessage itself.
+				toGatewayErrorMessage: vi.fn(async () => {
+					await core.refreshLatestIdentity(true);
+					return (
+						'Cinephage API rejected authentication. ' + 'Verify the configured version and commit.'
+					);
+				})
 			};
+			return core;
 		}
 
 		it('normalizes a dash source with string subtitles, requiresProxy and expiresAt', async () => {
@@ -339,6 +348,35 @@ describe('LibraryStreamingModule', () => {
 			expect(core.refreshLatestIdentity).toHaveBeenCalledWith(true);
 			expect(result.success).toBe(false);
 			expect(result.error).toContain('rejected authentication');
+		});
+
+		it('tells unregistered installs to register when the 401 retry also fails', async () => {
+			const httpGet = vi.fn().mockResolvedValue({
+				status: 401,
+				body: JSON.stringify({ error: { message: 'Invalid or missing authentication' } })
+			});
+
+			const core = createFakeCore(httpGet);
+			core.toggleVersionFormat = vi.fn().mockResolvedValue({
+				version: '0.15.0',
+				commit: '8167446',
+				isConfigured: true
+			});
+			// Unregistered branch of the real mapper: registration guidance,
+			// no identity self-heal.
+			core.toGatewayErrorMessage = vi.fn(async () => {
+				return (
+					'Cinephage API requires a registered install key. ' +
+					'Register this install under Settings → Cinephage Network.'
+				);
+			});
+
+			const mod = new LibraryStreamingModule(settings, core as never);
+			const result = await mod.getStreams({ tmdbId: 603, type: 'movie' });
+
+			expect(result.success).toBe(false);
+			expect(result.error).toContain('Register this install');
+			expect(core.refreshLatestIdentity).not.toHaveBeenCalled();
 		});
 
 		it('sends refresh=1 to the gateway only when a refresh is requested', async () => {
