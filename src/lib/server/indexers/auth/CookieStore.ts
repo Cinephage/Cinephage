@@ -157,12 +157,10 @@ export class CookieStore {
 			});
 
 			if (existingRecord) {
-				// Update existing record. The column is JSON-mode; the envelope is
-				// stored as a JSON string value (cast for the Record-typed column).
-				const blob = encryptCookieBlob(indexerId, mergedCookies) as unknown as Record<
-					string,
-					string
-				>;
+				// Update existing record. The column is plain text and stores the
+				// raw credential envelope, matching the raw-SQL writers (credential
+				// migration, key rotation) that bypass drizzle.
+				const blob = encryptCookieBlob(indexerId, mergedCookies);
 				await db
 					.update(indexerStatus)
 					.set({
@@ -173,10 +171,7 @@ export class CookieStore {
 					.where(eq(indexerStatus.indexerId, indexerId));
 			} else {
 				// Create new record
-				const blob = encryptCookieBlob(indexerId, mergedCookies) as unknown as Record<
-					string,
-					string
-				>;
+				const blob = encryptCookieBlob(indexerId, mergedCookies);
 				await db.insert(indexerStatus).values({
 					indexerId,
 					cookies: blob,

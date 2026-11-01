@@ -279,8 +279,13 @@ export const indexerStatus = sqliteTable(
 			.$type<Array<{ timestamp: string; message: string; requestUrl?: string }>>()
 			.default([]),
 
-		// Session cookies for persistent authentication (e.g., ncore 2FA sessions)
-		cookies: text('cookies', { mode: 'json' }).$type<Record<string, string>>(),
+		// Session cookies for persistent authentication (e.g., ncore 2FA sessions).
+		// Since schema 161 this column holds a raw `cphg1.` credential envelope,
+		// so it must stay plain text: the old JSON-mode mapping failed on the raw
+		// envelopes written by raw-SQL paths (credential migration, key rotation),
+		// which broke the whole typed read of this table. Schema 169 unwraps the
+		// JSON-encoded envelopes the old app-side writes had stored.
+		cookies: text('cookies'),
 		cookiesExpirationDate: text('cookies_expiration_date'),
 
 		// Timestamps

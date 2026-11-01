@@ -183,8 +183,13 @@ import {
  *   (NULL = all indexers, preserving pre-existing behavior).
  * Version 167: livetv_channels.cinephage_data — Cinephage Live channel metadata
  *   (taxonomy category + country code from the Cinephage API).
+ * Version 168: cinephage_api_config per-install gateway key columns
+ *   (install_id / api_key / api_key_prefix / registration_email).
+ * Version 169: indexer_status.cookies — unwrap the JSON-encoded credential
+ *   envelopes the old JSON-mode app path stored; the column is plain text
+ *   (raw `cphg1.` envelope) from here on.
  */
-export const CURRENT_SCHEMA_VERSION = 168;
+export const CURRENT_SCHEMA_VERSION = 169;
 
 export const SYSTEM_LIBRARY_SEEDS = [
 	{
