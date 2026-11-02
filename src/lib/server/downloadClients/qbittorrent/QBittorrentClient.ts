@@ -4,7 +4,7 @@
  * API Documentation: https://github.com/qbittorrent/qBittorrent/wiki/WebUI-API-(qBittorrent-4.1)
  */
 
-import type { ConnectionTestResult } from '$lib/types/downloadClient';
+import type { ConnectionTestResult } from '#lib/types/downloadClient.js';
 import type {
 	IDownloadClient,
 	DownloadClientConfig,
@@ -12,7 +12,7 @@ import type {
 	DownloadInfo,
 	DownloadFileInfo
 } from '../core/interfaces';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'imports' as const });
 

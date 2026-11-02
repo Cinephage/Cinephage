@@ -11,13 +11,16 @@
  * - Title normalization for matching
  */
 
-import { db } from '$lib/server/db/index.js';
-import { alternateTitles, movies, series } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { alternateTitles, movies, series } from '#lib/server/db/schema.js';
 import { eq, and } from 'drizzle-orm';
-import { tmdb } from '$lib/server/tmdb.js';
-import type { MetadataTitleVariant } from '$lib/server/metadata/providers/types.js';
-import { normalizeLanguageTag } from '$lib/server/languages/normalize.js';
-import { createChildLogger } from '$lib/logging/index.js';
+import { tmdb } from '#lib/server/tmdb.js';
+import type { MetadataTitleVariant } from '#lib/server/metadata/providers/types.js';
+import { normalizeLanguageTag } from '#lib/server/languages/normalize.js';
+import { languageMatches } from '#lib/server/languages/audio-preference.js';
+import { getLanguageSettingsService } from '#lib/server/subtitles/services/LanguageSettingsService.js';
+import { getLanguageProfileService } from '#lib/server/subtitles/services/LanguageProfileService.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'AlternateTitleService', logDomain: 'system' });
 
@@ -197,98 +200,145 @@ export function selectSearchTitles(
 	return capped;
 }
 
+/** The title fields of a movie/series row that search-title ordering reads. */
+interface SearchTitleMedia {
+	title: string;
+	originalTitle: string | null;
+	originalLanguage: string | null;
+	metadataLanguageMode: string;
+	metadataLanguageValue: string | null;
+}
+
+type SearchTitleAlternate = { title: string; country: string | null; language: string | null };
+
 /**
- * Get all search titles for a movie (primary + original + alternates).
- *
- * Order of precedence:
- * 1. Display title (user's preferred language)
- * 2. Original title (if different - covers non-English originals)
- * 3. TMDB alternates from countries matching the preferred language
- * 4. Remaining TMDB alternates (last-resort fallback for regional trackers)
- *
- * The early-exit in SearchOrchestrator means later entries are only tried
- * when the primary titles return nothing, so the ordering matters more than the count.
+ * Language the display title is written in: the item's explicit metadata
+ * language, its original language ('original' mode), or the global metadata
+ * locale.
  */
-export async function getMovieSearchTitles(
-	movieId: string,
-	preferredLanguage?: string
-): Promise<string[]> {
-	const movie = await db.query.movies.findFirst({
-		where: eq(movies.id, movieId),
-		columns: { title: true, originalTitle: true }
-	});
-
-	if (!movie) return [];
-
-	const seen = new Set<string>();
-	// Display title always goes first (user's preferred language, most likely to match standard trackers).
-	const displayTitle = movie.title;
-	seen.add(cleanTitle(displayTitle));
-	const candidatesSeen = new Set<string>(seen);
-
-	const alternates = await db.query.alternateTitles.findMany({
-		where: and(eq(alternateTitles.mediaType, 'movie'), eq(alternateTitles.mediaId, movieId)),
-		columns: { title: true, country: true }
-	});
-
-	// Split alternates: preferred-language countries first, others as fallback.
-	const preferredCountries = preferredLanguage
-		? (LANGUAGE_COUNTRIES[preferredLanguage.toLowerCase()] ?? null)
-		: null;
-	const [langAlts, otherAlts] = preferredCountries
-		? [
-				alternates.filter((a) => a.country && preferredCountries.has(a.country)),
-				alternates.filter((a) => !a.country || !preferredCountries.has(a.country))
-			]
-		: [alternates, []];
-
-	// Collect remaining candidates (original title + alternates), then sort so
-	// romanized (Latin-script) titles appear before CJK-script titles.
-	const remaining: string[] = [];
-	const pushCandidate = (t: string | null | undefined) => {
-		if (!t) return;
-		const norm = cleanTitle(t.trim());
-		if (!norm || candidatesSeen.has(norm)) return;
-		candidatesSeen.add(norm);
-		remaining.push(t.trim());
-	};
-
-	if (movie.originalTitle && movie.originalTitle !== displayTitle) {
-		pushCandidate(movie.originalTitle);
+async function resolveDisplayTitleLanguage(media: SearchTitleMedia): Promise<string | null> {
+	if (media.metadataLanguageMode === 'explicit' && media.metadataLanguageValue) {
+		return media.metadataLanguageValue;
 	}
-	for (const alt of [...langAlts, ...otherAlts]) {
-		pushCandidate(alt.title);
+	if (media.metadataLanguageMode === 'original' && media.originalLanguage) {
+		return media.originalLanguage;
 	}
-
-	const sorted = sortTitlesByScript(remaining);
-	return selectSearchTitles(displayTitle, sorted);
+	try {
+		return (await getLanguageSettingsService().get()).metadataLocale;
+	} catch {
+		return null;
+	}
 }
 
 /**
- * Get all search titles for a series (primary + original + alternates).
- * Same ordering strategy as getMovieSearchTitles.
+ * The item's title in the given language, from what is known locally: the
+ * original title, the display title, a TMDB translation, or an alternate title
+ * from a country speaking it.
  */
-export async function getSeriesSearchTitles(
-	seriesId: string,
+function findTitleInLanguage(
+	language: string,
+	media: SearchTitleMedia,
+	displayLanguage: string | null,
+	alternates: SearchTitleAlternate[]
+): string | null {
+	if (media.originalTitle && languageMatches(media.originalLanguage ?? undefined, language)) {
+		return media.originalTitle;
+	}
+	if (languageMatches(displayLanguage ?? undefined, language)) {
+		return media.title;
+	}
+	const translation = alternates.find((alt) =>
+		languageMatches(alt.language ?? undefined, language)
+	);
+	if (translation) return translation.title;
+	const countries = LANGUAGE_COUNTRIES[language.split('-')[0].toLowerCase()];
+	const regional = countries
+		? alternates.find((alt) => alt.country && countries.has(alt.country))
+		: undefined;
+	return regional?.title ?? null;
+}
+
+/**
+ * Titles to search first, following the item's language profile: the
+ * original title when "prefer original audio track" is on, then a title in
+ * each preferred audio language, in profile order. Releases are named after
+ * the audio they carry (an Italian dub is usually released under its Italian
+ * title), so the language you want to hear decides which title finds it.
+ *
+ * Non-Latin titles (kanji, Cyrillic…) are left to the general ordering:
+ * general trackers name releases in Latin script, and the regional trackers
+ * that want native-script titles get them reordered per indexer by the
+ * SearchOrchestrator. Empty when the item has no language profile, which
+ * keeps the display title first.
+ */
+async function resolveProfileLeadingTitles(
+	mediaType: 'movie' | 'series',
+	mediaId: string,
+	media: SearchTitleMedia,
+	alternates: SearchTitleAlternate[]
+): Promise<string[]> {
+	let audio;
+	try {
+		const profileService = getLanguageProfileService();
+		const profile =
+			mediaType === 'movie'
+				? await profileService.getProfileForMovie(mediaId)
+				: await profileService.getProfileForSeries(mediaId);
+		audio = profile?.audio;
+	} catch (error) {
+		logger.warn(
+			{ mediaType, mediaId, error: error instanceof Error ? error.message : String(error) },
+			'Failed to resolve language profile for search titles, using display title first'
+		);
+	}
+	if (!audio) return [];
+
+	const languages = [
+		...(audio.preferOriginal && media.originalLanguage ? [media.originalLanguage] : []),
+		...audio.languages
+	];
+	if (languages.length === 0) return [];
+
+	const displayLanguage = await resolveDisplayTitleLanguage(media);
+	const titles: string[] = [];
+	for (const language of languages) {
+		const title = findTitleInLanguage(language, media, displayLanguage, alternates);
+		if (title && !containsNonLatinScript(title)) titles.push(title);
+	}
+	return titles;
+}
+
+/**
+ * Order a movie/series' search titles.
+ *
+ * Order of precedence:
+ * 1. Titles in the languages the item's language profile prefers
+ *    (see resolveProfileLeadingTitles)
+ * 2. Display title (metadata language)
+ * 3. Original title (if different - covers non-English originals)
+ * 4. TMDB alternates from countries matching the preferred language
+ * 5. Remaining TMDB alternates (last-resort fallback for regional trackers)
+ *
+ * The early exit in SearchOrchestrator means later entries are only tried
+ * when earlier titles find no matching release, so the ordering matters more
+ * than the count.
+ */
+async function buildSearchTitles(
+	mediaType: 'movie' | 'series',
+	mediaId: string,
+	media: SearchTitleMedia,
 	preferredLanguage?: string
 ): Promise<string[]> {
-	const show = await db.query.series.findFirst({
-		where: eq(series.id, seriesId),
-		columns: { title: true, originalTitle: true }
-	});
-
-	if (!show) return [];
-
-	const candidatesSeen = new Set<string>();
-	// Display title always goes first (user's preferred language).
-	const displayTitle = show.title;
-	candidatesSeen.add(cleanTitle(displayTitle));
-
 	const alternates = await db.query.alternateTitles.findMany({
-		where: and(eq(alternateTitles.mediaType, 'series'), eq(alternateTitles.mediaId, seriesId)),
-		columns: { title: true, country: true }
+		where: and(eq(alternateTitles.mediaType, mediaType), eq(alternateTitles.mediaId, mediaId)),
+		columns: { title: true, country: true, language: true }
 	});
 
+	const leading = await resolveProfileLeadingTitles(mediaType, mediaId, media, alternates);
+	const primary = leading[0] ?? media.title;
+	const candidatesSeen = new Set<string>([cleanTitle(primary)]);
+
+	// Split alternates: preferred-language countries first, others as fallback.
 	const preferredCountries = preferredLanguage
 		? (LANGUAGE_COUNTRIES[preferredLanguage.toLowerCase()] ?? null)
 		: null;
@@ -310,15 +360,59 @@ export async function getSeriesSearchTitles(
 		remaining.push(t.trim());
 	};
 
-	if (show.originalTitle && show.originalTitle !== displayTitle) {
-		pushCandidate(show.originalTitle);
+	for (const title of leading.slice(1)) {
+		pushCandidate(title);
 	}
+	pushCandidate(media.title);
+	pushCandidate(media.originalTitle);
 	for (const alt of [...langAlts, ...otherAlts]) {
 		pushCandidate(alt.title);
 	}
 
 	const sorted = sortTitlesByScript(remaining);
-	return selectSearchTitles(displayTitle, sorted);
+	return selectSearchTitles(primary, sorted);
+}
+
+const SEARCH_TITLE_MEDIA_COLUMNS = {
+	title: true,
+	originalTitle: true,
+	originalLanguage: true,
+	metadataLanguageMode: true,
+	metadataLanguageValue: true
+} as const;
+
+/**
+ * Get all search titles for a movie (profile-preferred + display + original +
+ * alternates). See buildSearchTitles for the ordering.
+ */
+export async function getMovieSearchTitles(
+	movieId: string,
+	preferredLanguage?: string
+): Promise<string[]> {
+	const movie = await db.query.movies.findFirst({
+		where: eq(movies.id, movieId),
+		columns: SEARCH_TITLE_MEDIA_COLUMNS
+	});
+
+	if (!movie) return [];
+	return buildSearchTitles('movie', movieId, movie, preferredLanguage);
+}
+
+/**
+ * Get all search titles for a series (profile-preferred + display + original +
+ * alternates). Same ordering as getMovieSearchTitles.
+ */
+export async function getSeriesSearchTitles(
+	seriesId: string,
+	preferredLanguage?: string
+): Promise<string[]> {
+	const show = await db.query.series.findFirst({
+		where: eq(series.id, seriesId),
+		columns: SEARCH_TITLE_MEDIA_COLUMNS
+	});
+
+	if (!show) return [];
+	return buildSearchTitles('series', seriesId, show, preferredLanguage);
 }
 
 /**

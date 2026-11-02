@@ -25,8 +25,8 @@ import type {
 } from '../types';
 import type { YamlDefinition } from '../schema/yamlDefinition';
 import { buildCapabilitiesFromYaml } from '../capabilities';
-import type { IndexerRecord } from '$lib/server/db/schema';
-import type { ProtocolSettings } from '$lib/server/indexers/types/index.js';
+import type { IndexerRecord } from '#lib/server/db/schema.js';
+import type { ProtocolSettings } from '#lib/server/indexers/types/index.js';
 import { TemplateEngine, createTemplateEngine } from '../engine/TemplateEngine';
 import { FilterEngine, createFilterEngine } from '../engine/FilterEngine';
 import { SelectorEngine, createSelectorEngine } from '../engine/SelectorEngine';
@@ -40,8 +40,8 @@ import { SearchCapabilityChecker } from './SearchCapabilityChecker';
 import { getPersistentStatusTracker } from '../status';
 import { getRateLimitRegistry } from '../ratelimit';
 import { getHostRateLimiter, type HostRateLimiter } from '../ratelimit/HostRateLimiter';
-import type { RateLimitConfig } from '../ratelimit/types';
-import { createChildLogger } from '$lib/logging';
+import { DEFAULT_RATE_LIMIT, type RateLimitConfig } from '../ratelimit/types';
+import { createChildLogger } from '#lib/logging/index.js';
 import { IndexerHttp, createIndexerHttp } from '../http/IndexerHttp';
 import { DatabaseQueryExecutor, createDatabaseQueryExecutor } from './DatabaseQueryExecutor';
 import type { NewznabCapabilities } from '../newznab/types';
@@ -96,7 +96,7 @@ export class UnifiedIndexer implements IIndexer {
 	private readonly log: ReturnType<typeof createChildLogger>;
 	private readonly http: IndexerHttp;
 	private readonly hostRateLimiter: HostRateLimiter;
-	private readonly additionalCategories: number[];
+	readonly additionalCategories: number[];
 	/** True when the user explicitly configured a category restriction (even an empty/open one). */
 	private readonly categoryRestrictionEnabled: boolean;
 	private readonly dbExecutor?: DatabaseQueryExecutor;
@@ -239,7 +239,7 @@ export class UnifiedIndexer implements IIndexer {
 				? record.alternateUrls
 				: definition.links.slice(1),
 			userAgent: 'Cinephage/1.0',
-			rateLimit: rateLimit ?? { requests: 30, periodMs: 60_000 },
+			rateLimit: rateLimit ?? DEFAULT_RATE_LIMIT,
 			encoding: definition.encoding,
 			defaultTimeout: definition.requesttimeout
 		});
@@ -385,7 +385,7 @@ export class UnifiedIndexer implements IIndexer {
 	 * Check if this indexer can handle the given search criteria
 	 */
 	canSearch(criteria: SearchCriteria): boolean {
-		return this.capabilityChecker.canSearch(criteria, this.capabilities);
+		return this.capabilityChecker.canSearch(criteria, this.capabilities, this.additionalCategories);
 	}
 
 	/**
@@ -474,6 +474,12 @@ export class UnifiedIndexer implements IIndexer {
 		const requestErrors: string[] = [];
 
 		for (const request of requests) {
+			if (criteria.signal?.aborted) {
+				// Search was cancelled (race settled elsewhere); skip the remaining
+				// variants instead of burning rate-limit budget on dead requests.
+				this.log.debug('Search cancelled before remaining request variants ran');
+				break;
+			}
 			this.log.debug({ url: request.url, method: request.method }, 'Executing search request');
 			try {
 				// Enforce both indexer and host limits per outbound request
@@ -486,6 +492,14 @@ export class UnifiedIndexer implements IIndexer {
 				successfulRequests += 1;
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
+				if (criteria.signal?.aborted) {
+					// The orchestrator aborts sibling variants after one wins the
+					// race (early-exit movie search) and settles the overall race
+					// on success or timeout. Their 'Aborted' rejections are
+					// deliberate cancellations, not indexer failures.
+					this.log.debug({ url: request.url, error: message }, 'Search request cancelled');
+					continue;
+				}
 				this.log.warn({ url: request.url, error: message }, 'Search request failed');
 				requestErrors.push(this.normalizeTestRequestError(message));
 			}
@@ -581,11 +595,13 @@ export class UnifiedIndexer implements IIndexer {
 				request.method === 'POST'
 					? await this.http.post(request.url, request.body!, {
 							headers: request.headers,
-							followRedirects: this.definition.followredirect ?? true
+							followRedirects: this.definition.followredirect ?? true,
+							signal
 						})
 					: await this.http.get(request.url, {
 							headers: request.headers,
-							followRedirects: this.definition.followredirect ?? true
+							followRedirects: this.definition.followredirect ?? true,
+							signal
 						});
 
 			const retryApiError = this.detectProviderError(retryResponse.body);
@@ -620,23 +636,8 @@ export class UnifiedIndexer implements IIndexer {
 	 * Example: Newznab returns <error code="100" description="..." /> with HTTP 200.
 	 */
 	private detectProviderError(content: string): string | null {
-		// Both Newznab and Torznab use the same <error code="N" description="..."/> XML format.
 		const defId = this.definition.id;
-		if (defId === 'newznab' || defId === 'torznab') {
-			const errorMatch = content.match(/<error\b([^>]*)\/?>/i);
-			if (!errorMatch) return null;
-
-			const attrs = errorMatch[1] ?? '';
-			const codeMatch = attrs.match(/\bcode=(['"]?)([^'" >]+)\1/i);
-			const descQuotedMatch = attrs.match(/\bdescription=(['"])(.*?)\1/i);
-			const descBareMatch = attrs.match(/\bdescription=([^'" >]+)/i);
-
-			const code = codeMatch?.[2] ?? 'unknown';
-			const description = descQuotedMatch?.[2] ?? descBareMatch?.[1] ?? 'Unknown API error';
-			return `Indexer API error ${code}: ${description}`;
-		}
-
-		return null;
+		return detectNewznabApiError(content, defId === 'newznab' || defId === 'torznab');
 	}
 
 	/**
@@ -1057,7 +1058,7 @@ export class UnifiedIndexer implements IIndexer {
 
 			if (url.startsWith('magnet:')) {
 				const { extractInfoHashFromMagnet } =
-					await import('$lib/server/downloadClients/utils/torrentParser');
+					await import('#lib/server/downloadClients/utils/torrentParser.js');
 				const infoHash = await extractInfoHashFromMagnet(url);
 				return {
 					success: true,
@@ -1134,7 +1135,7 @@ export class UnifiedIndexer implements IIndexer {
 							'Resolved download URL to magnet'
 						);
 						const { extractInfoHashFromMagnet } =
-							await import('$lib/server/downloadClients/utils/torrentParser');
+							await import('#lib/server/downloadClients/utils/torrentParser.js');
 						const infoHash = await extractInfoHashFromMagnet(resolution.magnetUrl);
 						return {
 							success: true,
@@ -1164,7 +1165,7 @@ export class UnifiedIndexer implements IIndexer {
 						}
 
 						const { parseTorrentFile } =
-							await import('$lib/server/downloadClients/utils/torrentParser');
+							await import('#lib/server/downloadClients/utils/torrentParser.js');
 						const parseResult = await parseTorrentFile(resolution.torrentData);
 
 						if (!parseResult.success) {
@@ -1206,7 +1207,7 @@ export class UnifiedIndexer implements IIndexer {
 						// Check if the resolved URL is a magnet link
 						if (url.startsWith('magnet:')) {
 							const { extractInfoHashFromMagnet } =
-								await import('$lib/server/downloadClients/utils/torrentParser');
+								await import('#lib/server/downloadClients/utils/torrentParser.js');
 							const infoHash = await extractInfoHashFromMagnet(url);
 							return {
 								success: true,
@@ -1266,7 +1267,7 @@ export class UnifiedIndexer implements IIndexer {
 
 					if (location.startsWith('magnet:')) {
 						const { extractInfoHashFromMagnet } =
-							await import('$lib/server/downloadClients/utils/torrentParser');
+							await import('#lib/server/downloadClients/utils/torrentParser.js');
 						const infoHash = await extractInfoHashFromMagnet(location);
 						return {
 							success: true,
@@ -1301,7 +1302,7 @@ export class UnifiedIndexer implements IIndexer {
 				const isCloudflare = isCloudflareProtected(response.status, response.headers, _errorText);
 				if (isCloudflare || response.status === 403 || response.status === 503) {
 					this.log.info({ url: currentUrl }, 'Download blocked, retrying through browser');
-					const { getCaptchaSolver } = await import('$lib/server/captcha/CaptchaSolver');
+					const { getCaptchaSolver } = await import('#lib/server/captcha/CaptchaSolver.js');
 					const solver = getCaptchaSolver();
 					const browserResult = await solver.fetch({
 						url: currentUrl,
@@ -1324,7 +1325,7 @@ export class UnifiedIndexer implements IIndexer {
 						}
 
 						const { parseTorrentFile } =
-							await import('$lib/server/downloadClients/utils/torrentParser');
+							await import('#lib/server/downloadClients/utils/torrentParser.js');
 						const parseResult = await parseTorrentFile(data);
 
 						if (!parseResult.success) {
@@ -1375,7 +1376,8 @@ export class UnifiedIndexer implements IIndexer {
 			}
 
 			// For torrent, parse the file
-			const { parseTorrentFile } = await import('$lib/server/downloadClients/utils/torrentParser');
+			const { parseTorrentFile } =
+				await import('#lib/server/downloadClients/utils/torrentParser.js');
 			const parseResult = await parseTorrentFile(data);
 
 			if (!parseResult.success) {
@@ -1431,6 +1433,48 @@ export class UnifiedIndexer implements IIndexer {
 	private delay(ms: number): Promise<void> {
 		return new Promise((resolve) => setTimeout(resolve, ms));
 	}
+}
+
+/**
+ * Detect a Newznab/Torznab `<error code="N" description="..."/>` response.
+ *
+ * Providers report these with HTTP 200, so without this check a rejected API key
+ * parses as an empty feed and looks like a successful search with no results.
+ * The generic newznab/torznab definitions are not the only ones that speak the
+ * protocol - site-specific usenet definitions use the same endpoints. A document
+ * whose ROOT element is `<error>` is unambiguous, so it is recognised for every
+ * definition; HTML scrapers never start with that element.
+ *
+ * @param content Raw response body.
+ * @param anyErrorPosition When true (generic newznab/torznab), accept an
+ *   `<error>` element anywhere in the document.
+ */
+export function detectNewznabApiError(
+	content: string,
+	anyErrorPosition: boolean = false
+): string | null {
+	if (!anyErrorPosition) {
+		// Skip the XML prolog and whitespace, then require the root element itself.
+		const rootElement = content
+			.replace(/^\uFEFF/, '')
+			.replace(/<\?xml[^>]*\?>/i, '')
+			.trimStart();
+		if (!/^<error\b/i.test(rootElement)) {
+			return null;
+		}
+	}
+
+	const errorMatch = content.match(/<error\b([^>]*)\/?>/i);
+	if (!errorMatch) return null;
+
+	const attrs = errorMatch[1] ?? '';
+	const codeMatch = attrs.match(/\bcode=(['"]?)([^'" >]+)\1/i);
+	const descQuotedMatch = attrs.match(/\bdescription=(['"])(.*?)\1/i);
+	const descBareMatch = attrs.match(/\bdescription=([^'" >]+)/i);
+
+	const code = codeMatch?.[2] ?? 'unknown';
+	const description = descQuotedMatch?.[2] ?? descBareMatch?.[1] ?? 'Unknown API error';
+	return `Indexer API error ${code}: ${description}`;
 }
 
 /**

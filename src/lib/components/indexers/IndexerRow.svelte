@@ -12,9 +12,9 @@
 		ToggleRight,
 		Settings,
 		ExternalLink
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 	import IndexerStatusBadge from './IndexerStatusBadge.svelte';
-	import type { IndexerWithStatus } from '$lib/types/indexer';
+	import type { IndexerWithStatus } from '#lib/types/indexer.js';
 
 	interface Props {
 		indexer: IndexerWithStatus;
@@ -128,6 +128,8 @@
 			consecutiveFailures={indexer.status?.consecutiveFailures ?? 0}
 			lastFailure={indexer.status?.lastFailure}
 			disabledUntil={indexer.status?.disabledUntil}
+			disabledReason={indexer.status?.disabledReason}
+			lastFailureMessage={indexer.status?.lastFailureMessage}
 			jackettManaged={isJackettIndexer()}
 		/>
 	</td>

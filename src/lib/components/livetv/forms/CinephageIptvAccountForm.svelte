@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { Globe, X, Loader2, Search } from 'lucide-svelte';
+	import { Globe, X, Loader2, Search } from '@lucide/svelte';
 	import { onMount } from 'svelte';
-	import { SectionHeader } from '$lib/components/ui/modal';
-	import { getCinephageIptvCountries } from '$lib/api/livetv.js';
+	import { SectionHeader } from '#lib/components/ui/modal/index.js';
+	import { getCinephageIptvCountries } from '#lib/api/livetv.js';
 
 	interface Country {
 		code: string;

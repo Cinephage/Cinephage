@@ -7,8 +7,8 @@
 
 import { XMLParser } from 'fast-xml-parser';
 import path from 'node:path';
-import { createChildLogger } from '$lib/logging';
-import { resolveAppVersion } from '$lib/server/version.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { resolveAppVersion } from '#lib/server/version.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 import type {

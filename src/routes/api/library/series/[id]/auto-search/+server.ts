@@ -1,20 +1,20 @@
 import type { RequestHandler } from './$types.js';
-import { searchOnAdd } from '$lib/server/library/searchOnAdd.js';
-import { createSSEOperationStream } from '$lib/server/sse';
+import { searchOnAdd } from '#lib/server/library/searchOnAdd.js';
+import { createSSEOperationStream } from '#lib/server/sse.js';
 import {
 	startSearch,
 	stopSearch,
 	isSeriesSearching,
 	updateSearchProgress
-} from '$lib/server/library/ActiveSearchTracker.js';
-import { libraryMediaEvents } from '$lib/server/library/LibraryMediaEvents.js';
-import { db } from '$lib/server/db/index.js';
-import { series } from '$lib/server/db/schema.js';
+} from '#lib/server/library/ActiveSearchTracker.js';
+import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
+import { db } from '#lib/server/db/index.js';
+import { series } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import type { SearchProgressUpdate } from '$lib/server/downloads/MultiSeasonSearchStrategy.js';
-import { collectAutoSearchIssues } from '$lib/server/library/autoSearchIssues.js';
-import { getAutoSearchPreflightIssue } from '$lib/server/library/autoSearchPreflight.js';
-import { createChildLogger } from '$lib/logging';
+import type { SearchProgressUpdate } from '#lib/server/downloads/MultiSeasonSearchStrategy.js';
+import { collectAutoSearchIssues } from '#lib/server/library/autoSearchIssues.js';
+import { getAutoSearchPreflightIssue } from '#lib/server/library/autoSearchPreflight.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LibrarySeriesAutoSearchApi', logDomain: 'scans' });
 

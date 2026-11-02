@@ -1,10 +1,9 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getDownloadClientManager } from '$lib/server/downloadClients/DownloadClientManager';
-import { downloadClientUpdateSchemaForImplementation } from '$lib/validation/schemas';
-import { assertFound, parseBody } from '$lib/server/api/validate';
-import { NotFoundError } from '$lib/errors';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
+import { getDownloadClientManager } from '#lib/server/downloadClients/DownloadClientManager.js';
+import { downloadClientUpdateSchemaForImplementation } from '#lib/validation/schemas.js';
+import { assertFound, parseBody } from '#lib/server/api/validate.js';
+import { NotFoundError } from '#lib/errors/index.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 
 /**
  * GET /api/download-clients/[id]
@@ -15,7 +14,7 @@ export const GET: RequestHandler = async ({ params }) => {
 	const client = await manager.getClient(params.id);
 
 	// Throws NotFoundError if client is null, handled by hooks.server.ts
-	return json(assertFound(client, 'Download client', params.id));
+	return Response.json(assertFound(client, 'Download client', params.id));
 };
 
 /**
@@ -37,7 +36,7 @@ export const PUT: RequestHandler = async (event) => {
 
 	try {
 		const updated = await manager.updateClient(params.id, data);
-		return json({ success: true, client: updated });
+		return Response.json({ success: true, client: updated });
 	} catch (error) {
 		// Re-throw as NotFoundError for proper status code
 		if (error instanceof Error && error.message.includes('not found')) {
@@ -60,7 +59,7 @@ export const DELETE: RequestHandler = async (event) => {
 
 	try {
 		await manager.deleteClient(params.id);
-		return json({ success: true });
+		return Response.json({ success: true });
 	} catch (error) {
 		// Re-throw as NotFoundError for proper status code
 		if (error instanceof Error && error.message.includes('not found')) {

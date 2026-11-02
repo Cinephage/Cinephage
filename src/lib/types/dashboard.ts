@@ -1,4 +1,4 @@
-export type { UpcomingItem } from '$lib/server/calendar/queries.js';
+export type { UpcomingItem } from '#lib/server/calendar/queries.js';
 
 export interface RecentlyAddedMovie {
 	id: string;

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach, afterAll } from 'vitest';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../test/db-helper';
-import type { LiveTvAccountInput } from '$lib/types/livetv';
+import type { LiveTvAccountInput } from '#lib/types/livetv.js';
 
 /**
  * In-memory database backing createAccount's insert. The mock defers access
@@ -8,7 +8,7 @@ import type { LiveTvAccountInput } from '$lib/types/livetv';
  */
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},

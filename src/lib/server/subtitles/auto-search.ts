@@ -22,10 +22,10 @@ import {
 	recordSearchFailure,
 	resetSearchFailure
 } from './subtitle-search-state.js';
-import { DEFAULT_MINIMUM_SCORE, requirementKey } from '$lib/shared/language-profile.js';
-import type { SubtitleRequirement } from '$lib/shared/language-profile.js';
+import { DEFAULT_MINIMUM_SCORE, requirementKey } from '#lib/shared/language-profile.js';
+import type { SubtitleRequirement } from '#lib/shared/language-profile.js';
 import type { SubtitleDownloadResult, SubtitleSearchResult } from './types.js';
-import { createChildLogger } from '$lib/logging/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'SubtitleAutoSearch', logDomain: 'subtitles' });
 

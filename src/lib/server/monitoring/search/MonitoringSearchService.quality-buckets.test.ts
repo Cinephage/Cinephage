@@ -6,14 +6,14 @@
  */
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../../test/db-helper.js';
-import { movies, movieFiles } from '$lib/server/db/schema.js';
+import { movies, movieFiles } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { createSearchRelease, createGrabResponse } from '../../../../test/fixtures/releases.js';
 
 const testDb: TestDatabase = createTestDb();
 
 // Real DB backing the service and the resolver.
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	}
@@ -22,20 +22,20 @@ vi.mock('$lib/server/db/index.js', () => ({
 const searchEnhancedMock = vi.hoisted(() => vi.fn());
 const grabMock = vi.hoisted(() => vi.fn());
 
-vi.mock('$lib/server/indexers/IndexerManager.js', () => ({
+vi.mock('#lib/server/indexers/IndexerManager.js', () => ({
 	getIndexerManager: vi.fn(async () => ({ searchEnhanced: searchEnhancedMock }))
 }));
 
-vi.mock('$lib/server/downloads/GrabService.js', () => ({
+vi.mock('#lib/server/downloads/GrabService.js', () => ({
 	grabService: { grab: grabMock }
 }));
 
-vi.mock('$lib/server/services/AlternateTitleService.js', () => ({
+vi.mock('#lib/server/services/AlternateTitleService.js', () => ({
 	getMovieSearchTitles: vi.fn().mockResolvedValue([]),
 	getSeriesSearchTitles: vi.fn().mockResolvedValue([])
 }));
 
-vi.mock('$lib/logging/index.js', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	createChildLogger: () => ({
 		info: () => {},
 		warn: () => {},

@@ -1,11 +1,11 @@
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
-import type { ServiceStatus, BackgroundService } from '$lib/server/services/background-service.js';
-import { getMediaBrowserManager } from '$lib/server/notifications/mediabrowser/MediaBrowserManager.js';
+import type { ServiceStatus, BackgroundService } from '#lib/server/services/background-service.js';
+import { getMediaBrowserManager } from '#lib/server/notifications/mediabrowser/MediaBrowserManager.js';
 import { createStatsProvider } from './providers/index.js';
-import { db } from '$lib/server/db';
-import { mediaServerSyncedItems, mediaServerSyncedRuns } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { mediaServerSyncedItems, mediaServerSyncedRuns } from '#lib/server/db/schema.js';
 import { eq, and, inArray } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';

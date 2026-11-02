@@ -1,7 +1,7 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
-	import type { UnifiedTask } from '$lib/server/tasks/UnifiedTaskRegistry';
-	import type { TaskHistoryEntry } from '$lib/types/task';
+	import * as m from '#lib/paraglide/messages.js';
+	import type { UnifiedTask } from '#lib/server/tasks/UnifiedTaskRegistry.js';
+	import type { TaskHistoryEntry } from '#lib/types/task.js';
 	import TaskTableRow from './TaskTableRow.svelte';
 	import TaskCard from './TaskCard.svelte';
 	import TaskHistoryModal from './TaskHistoryModal.svelte';

@@ -3,7 +3,7 @@ import { createTestDb, destroyTestDb, type TestDatabase } from '../../../test/db
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -38,7 +38,7 @@ vi.mock('./media-info.js', () => ({
 	isVideoFile: vi.fn(() => true)
 }));
 
-vi.mock('$lib/server/subtitles/services/subtitle-reconcile-hooks.js', () => ({
+vi.mock('#lib/server/subtitles/services/subtitle-reconcile-hooks.js', () => ({
 	scheduleReconcileRootFolder: vi.fn().mockResolvedValue(undefined)
 }));
 
@@ -48,7 +48,7 @@ const { LibraryWatcherService, IGNORED_PATTERNS } = await import('./library-watc
 const { diskScanService } = await import('./disk-scan.js');
 const { libraryOperationLock } = await import('./library-operation-lock.js');
 const { scheduleReconcileRootFolder } =
-	await import('$lib/server/subtitles/services/subtitle-reconcile-hooks.js');
+	await import('#lib/server/subtitles/services/subtitle-reconcile-hooks.js');
 
 describe('LibraryWatcherService IGNORED_PATTERNS', () => {
 	// @parcel/watcher's subscribe() throws synchronously if any ignore RegExp

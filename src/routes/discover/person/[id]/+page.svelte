@@ -1,12 +1,12 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import { SvelteSet } from 'svelte/reactivity';
 	import type { PageData } from './$types';
-	import type { PersonCastCredit, PersonCrewCredit } from '$lib/types/tmdb';
-	import PersonHero from '$lib/components/tmdb/PersonHero.svelte';
-	import FilmographyCard from '$lib/components/tmdb/FilmographyCard.svelte';
-	import { Film, Tv, Clapperboard } from 'lucide-svelte';
-	import { getPersonCredits } from '$lib/api';
+	import type { PersonCastCredit, PersonCrewCredit } from '#lib/types/tmdb.js';
+	import PersonHero from '#lib/components/tmdb/PersonHero.svelte';
+	import FilmographyCard from '#lib/components/tmdb/FilmographyCard.svelte';
+	import { Film, Tv, Clapperboard } from '@lucide/svelte';
+	import { getPersonCredits } from '#lib/api/index.js';
 
 	type CreditWithStatus = (PersonCastCredit | PersonCrewCredit) & {
 		inLibrary?: boolean;

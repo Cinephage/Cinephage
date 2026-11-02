@@ -1,13 +1,17 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { db } from '$lib/server/db/index.js';
-import { downloadHistory, movies, movieFiles, rootFolders } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { downloadHistory, movies, movieFiles, rootFolders } from '#lib/server/db/schema.js';
 import { eq, inArray } from 'drizzle-orm';
-import { deleteDirectoryWithinRoot } from '$lib/server/filesystem/delete-helpers.js';
-import { deleteAllAlternateTitles } from '$lib/server/services/index.js';
-import { monitoringSearchService } from '$lib/server/monitoring/search/MonitoringSearchService.js';
-import { libraryMediaEvents } from '$lib/server/library/LibraryMediaEvents.js';
-import { createChildLogger } from '$lib/logging';
+import { join } from 'node:path';
+import {
+	deleteDirectoryWithinRoot,
+	deleteFilesWithinRoot,
+	namesRootItself
+} from '#lib/server/filesystem/delete-helpers.js';
+import { deleteAllAlternateTitles } from '#lib/server/services/index.js';
+import { monitoringSearchService } from '#lib/server/monitoring/search/MonitoringSearchService.js';
+import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LibraryMoviesBatchApi', logDomain: 'scans' });
 
@@ -25,14 +29,17 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		const { movieIds, updates } = body;
 
 		if (!movieIds || !Array.isArray(movieIds) || movieIds.length === 0) {
-			return json(
+			return Response.json(
 				{ success: false, error: 'movieIds array is required and must not be empty' },
 				{ status: 400 }
 			);
 		}
 
 		if (!updates || typeof updates !== 'object') {
-			return json({ success: false, error: 'updates object is required' }, { status: 400 });
+			return Response.json(
+				{ success: false, error: 'updates object is required' },
+				{ status: 400 }
+			);
 		}
 
 		const updateData: Record<string, unknown> = {};
@@ -46,7 +53,7 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		}
 
 		if (Object.keys(updateData).length === 0) {
-			return json({ success: false, error: 'No valid fields to update' }, { status: 400 });
+			return Response.json({ success: false, error: 'No valid fields to update' }, { status: 400 });
 		}
 
 		const result = await db.update(movies).set(updateData).where(inArray(movies.id, movieIds));
@@ -82,13 +89,13 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			reason: 'batch-updated'
 		});
 
-		return json({
+		return Response.json({
 			success: true,
 			updatedCount: result.changes
 		});
 	} catch (error) {
 		logger.error('[API] Error batch updating movies', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to batch update movies'
@@ -116,7 +123,7 @@ export const DELETE: RequestHandler = async ({ request }) => {
 		const { movieIds, deleteFiles = false, removeFromLibrary = false } = body;
 
 		if (!movieIds || !Array.isArray(movieIds) || movieIds.length === 0) {
-			return json(
+			return Response.json(
 				{ success: false, error: 'movieIds array is required and must not be empty' },
 				{ status: 400 }
 			);
@@ -162,9 +169,18 @@ export const DELETE: RequestHandler = async ({ request }) => {
 					continue;
 				}
 
-				// Delete files from disk if requested
+				// Delete files from disk if requested. A movie tracked at the root
+				// itself (a loose file at the top of the library) only removes its
+				// own files; deleting the directory would wipe every other title.
 				if (deleteFiles && movie.rootFolderPath && movie.path) {
-					await deleteDirectoryWithinRoot(movie.rootFolderPath, movie.path);
+					if (namesRootItself(movie.rootFolderPath, movie.path)) {
+						await deleteFilesWithinRoot(
+							movie.rootFolderPath,
+							files.map((file) => join(movie.path!, file.relativePath))
+						);
+					} else {
+						await deleteDirectoryWithinRoot(movie.rootFolderPath, movie.path);
+					}
 				}
 
 				// Delete movie file records from database
@@ -208,7 +224,7 @@ export const DELETE: RequestHandler = async ({ request }) => {
 			});
 		}
 
-		return json({
+		return Response.json({
 			success: errors.length === 0,
 			deletedCount,
 			removedCount,
@@ -221,7 +237,7 @@ export const DELETE: RequestHandler = async ({ request }) => {
 			'[API] Error batch deleting movie files',
 			error instanceof Error ? error : undefined
 		);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to batch delete movie files'

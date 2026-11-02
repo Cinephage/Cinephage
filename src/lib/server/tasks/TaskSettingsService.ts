@@ -9,10 +9,10 @@
  * Replaces the key-value monitoring_settings approach with structured storage.
  */
 
-import { db } from '$lib/server/db/index.js';
-import { taskSettings, type TaskSettingsRecord } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { taskSettings, type TaskSettingsRecord } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 import { UNIFIED_TASK_DEFINITIONS } from './UnifiedTaskRegistry.js';
@@ -34,7 +34,9 @@ const DEFAULT_TASK_SETTINGS: Record<
 	smartListRefresh: { intervalHours: 1, minIntervalHours: 0.25, enabled: true },
 	'library-scan': { intervalHours: null, minIntervalHours: 0.25, enabled: true },
 	'update-strm-urls': { intervalHours: null, minIntervalHours: 0.25, enabled: true },
-	'metadata-refresh': { intervalHours: null, minIntervalHours: 0.25, enabled: true },
+	'library-reconcile': { intervalHours: 6, minIntervalHours: 1, enabled: true },
+	'request-sweep': { intervalHours: 1, minIntervalHours: 1, enabled: true },
+	'metadata-refresh': { intervalHours: 24, minIntervalHours: 24, enabled: true },
 	dbBackup: { intervalHours: 24, minIntervalHours: 1, enabled: true }
 };
 
@@ -122,7 +124,15 @@ class TaskSettingsService {
 	 */
 	async setTaskInterval(taskId: string, intervalHours: number): Promise<void> {
 		const settings = await this.getTaskSettings(taskId);
-		const minInterval = settings?.minIntervalHours ?? 0.25;
+		// The registry is the single source of truth for a task's minimum
+		// interval. The persisted min_interval_hours column is seeded once
+		// when a task's row is first created and never reconciled afterward,
+		// so it goes stale whenever a task's registry minimum changes later
+		// (e.g. metadata-refresh's row was created back when its minimum was
+		// 0.25h, well before it was raised to 24h); falling back to it here
+		// would silently let that floor be bypassed.
+		const registryTask = UNIFIED_TASK_DEFINITIONS.find((t) => t.id === taskId);
+		const minInterval = registryTask?.minIntervalHours ?? settings?.minIntervalHours ?? 0.25;
 
 		// Enforce minimum interval
 		if (intervalHours < minInterval) {
@@ -149,6 +159,7 @@ class TaskSettingsService {
 			.values({
 				id: taskId,
 				intervalHours,
+				minIntervalHours: minInterval,
 				nextRunAt,
 				updatedAt: now
 			})
@@ -156,6 +167,7 @@ class TaskSettingsService {
 				target: taskSettings.id,
 				set: {
 					intervalHours,
+					minIntervalHours: minInterval,
 					nextRunAt,
 					updatedAt: now
 				}

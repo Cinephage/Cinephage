@@ -1,4 +1,4 @@
-import { enrichWithLibraryStatus, filterInLibrary } from '$lib/server/library/status.js';
+import { enrichWithLibraryStatus, filterInLibrary } from '#lib/server/library/status.js';
 import type { FilterStage, FilterContext } from '../types.js';
 
 export class LibraryStage implements FilterStage<

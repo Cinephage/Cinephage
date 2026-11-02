@@ -11,7 +11,7 @@
  * in Radarr/Sonarr's actual openapi.json - both are the same four fields.
  */
 
-import { RenamePreviewService } from '$lib/server/library/naming/RenamePreviewService.js';
+import { RenamePreviewService } from '#lib/server/library/naming/RenamePreviewService.js';
 import { getEntityIdForArrId, getOrAssignArrId } from './ArrIdMappingService.js';
 
 export async function buildMovieRename(movieArrId: number): Promise<Record<string, unknown>[]> {

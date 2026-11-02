@@ -1,7 +1,6 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import * as svc from '$lib/server/library/duplicates/DuplicateDetectionService.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import * as svc from '#lib/server/library/duplicates/DuplicateDetectionService.js';
 import { z } from 'zod';
 
 const suppressSchema = z.object({
@@ -23,7 +22,7 @@ export const GET: RequestHandler = async (event) => {
 			? await svc.findHashDuplicates(libraryId)
 			: await svc.findFilenameDuplicates(libraryId);
 
-	return json(dups);
+	return Response.json(dups);
 };
 
 export const POST: RequestHandler = async (event) => {
@@ -32,7 +31,8 @@ export const POST: RequestHandler = async (event) => {
 
 	const body = await event.request.json();
 	const parsed = suppressSchema.safeParse(body);
-	if (!parsed.success) return json({ success: false, error: 'Invalid request' }, { status: 400 });
+	if (!parsed.success)
+		return Response.json({ success: false, error: 'Invalid request' }, { status: 400 });
 
 	const { libraryId, signature, signatureType, action } = parsed.data;
 	if (action === 'suppress') {
@@ -41,5 +41,5 @@ export const POST: RequestHandler = async (event) => {
 		await svc.unsuppressGroup(libraryId, signature, signatureType);
 	}
 
-	return json({ success: true });
+	return Response.json({ success: true });
 };

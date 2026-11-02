@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Eye, Tv, Calendar, Film, ChevronDown, ChevronUp } from 'lucide-svelte';
+	import { Eye, Tv, Calendar, Film, ChevronDown, ChevronUp } from '@lucide/svelte';
 	import { SvelteSet } from 'svelte/reactivity';
-	import * as m from '$lib/paraglide/messages.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	export type MonitorType =
 		| 'all'

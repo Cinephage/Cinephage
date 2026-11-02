@@ -1,5 +1,5 @@
-import { db } from '$lib/server/db/index.js';
-import { blocklist } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { blocklist } from '#lib/server/db/schema.js';
 import { eq, or, and, gt, isNull, lte, inArray, count } from 'drizzle-orm';
 
 export type BlocklistReason =

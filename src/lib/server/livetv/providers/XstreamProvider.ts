@@ -5,10 +5,10 @@
  * Uses robust error handling and timeouts to handle slow/unreliable servers.
  */
 
-import { db } from '$lib/server/db';
-import { livetvAccounts, livetvChannels, livetvCategories } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { livetvAccounts, livetvChannels, livetvCategories } from '#lib/server/db/schema.js';
 import { and, eq, inArray, notInArray } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 import { randomUUID } from 'node:crypto';
 import { XMLParser } from 'fast-xml-parser';
 
@@ -27,8 +27,9 @@ import type {
 	LiveTvAccountTestResult,
 	XstreamConfig,
 	XstreamChannelData
-} from '$lib/types/livetv';
+} from '#lib/types/livetv.js';
 import { recordToAccount } from '../LiveTvAccountManager.js';
+import { resolveHttpUrl } from '../urlGuards.js';
 import { buildXstreamPlayerApiUrl, normalizeXstreamBaseUrl } from './xstream-url.js';
 
 // XStream API Response Types
@@ -944,7 +945,17 @@ export class XstreamProvider implements LiveTvProvider {
 		startTime: Date,
 		endTime: Date
 	): Promise<EpgProgram[]> {
+		if (!resolveHttpUrl(epgUrl)) {
+			logger.warn(
+				{ accountId },
+				'[XstreamProvider] Configured EPG URL is not a valid http(s) URL; skipping EPG sync'
+			);
+			return [];
+		}
+
 		try {
+			// Log the URL through the redaction-aware logger: Xtream EPG URLs
+			// commonly embed portal credentials as query params.
 			logger.info({ accountId, epgUrl }, '[XstreamProvider] Fetching configured XMLTV EPG');
 
 			const response = await fetch(epgUrl, {

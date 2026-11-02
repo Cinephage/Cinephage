@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { EffectiveAudioPreference } from '$lib/server/languages/audio-preference';
+import type { EffectiveAudioPreference } from '#lib/server/languages/audio-preference.js';
 
 const { resolveMock } = vi.hoisted(() => ({ resolveMock: vi.fn() }));
 
-vi.mock('$lib/server/languages/audio-preference-resolver', () => ({
+vi.mock('#lib/server/languages/audio-preference-resolver.js', () => ({
 	resolveAudioPreferenceForItem: resolveMock
 }));
 

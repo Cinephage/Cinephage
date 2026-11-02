@@ -42,9 +42,10 @@ function shouldEnforceApiRateLimit(event: RequestEvent): boolean {
 		return false;
 	}
 
-	// Always protect auth endpoints from brute-force attempts.
+	// Better Auth enforces its own database-backed limiter on /api/auth —
+	// a second in-memory limit here would double-lock sign-in attempts.
 	if (pathname.startsWith('/api/auth/')) {
-		return true;
+		return false;
 	}
 
 	// Streaming/LiveTV playback routes already require a validated API key
@@ -53,19 +54,17 @@ function shouldEnforceApiRateLimit(event: RequestEvent): boolean {
 		return false;
 	}
 
-	// Internal authenticated UI traffic should not be throttled by shared IP limits.
-	return !hasAuthenticatedUserSession(event);
+	// Authenticated traffic is limited too. It used to be exempt so a shared
+	// LAN IP would not throttle the UI, but that let any viewer hammer
+	// viewer-allowed endpoints (and fan-out routes like /api/calendar) without
+	// bound. Authenticated requests get a much higher ceiling instead.
+	return true;
 }
 
 // Default rate limits
 const DEFAULT_API_LIMIT: RateLimitConfig = {
 	windowMs: 15 * 60 * 1000, // 15 minutes
 	maxRequests: 100
-};
-
-const AUTH_LIMIT: RateLimitConfig = {
-	windowMs: 15 * 60 * 1000, // 15 minutes
-	maxRequests: 5
 };
 
 const STREAMING_LIMIT: RateLimitConfig = {
@@ -76,6 +75,17 @@ const STREAMING_LIMIT: RateLimitConfig = {
 const ACTIVITY_API_LIMIT: RateLimitConfig = {
 	windowMs: 15 * 60 * 1000, // 15 minutes
 	maxRequests: 300
+};
+
+/**
+ * Ceiling for signed-in UI traffic. High enough that page loads and polling
+ * never hit it, low enough that a scripted loop is stopped: the audit found
+ * authenticated requests were exempt entirely, so a viewer account could
+ * hammer fan-out endpoints without bound.
+ */
+const AUTHENTICATED_API_LIMIT: RateLimitConfig = {
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	maxRequests: 3000
 };
 
 const ACTIVITY_STREAM_LIMIT: RateLimitConfig = {
@@ -221,28 +231,22 @@ export function checkApiRateLimit(event: RequestEvent): Response | null {
 	let config: RateLimitConfig;
 	let keyPrefix: string;
 
-	// Auth endpoints get stricter limits
-	if (pathname.startsWith('/api/auth/')) {
-		config = AUTH_LIMIT;
-		keyPrefix = 'auth';
-	}
 	// Activity SSE is long-lived and should not compete with general API quota.
-	else if (pathname.startsWith('/api/activity/stream')) {
+	if (pathname.startsWith('/api/activity/stream')) {
 		config = ACTIVITY_STREAM_LIMIT;
 		keyPrefix = 'activity-stream';
-	}
-	// Activity endpoints are high-frequency by design (filters/live updates).
-	else if (pathname.startsWith('/api/activity')) {
+	} else if (pathname.startsWith('/api/activity')) {
 		config = ACTIVITY_API_LIMIT;
 		keyPrefix = 'activity';
-	}
-	// Streaming endpoints get different limits
-	else if (pathname.startsWith('/api/streaming/') || pathname.startsWith('/api/livetv/stream/')) {
+	} else if (pathname.startsWith('/api/streaming/') || pathname.startsWith('/api/livetv/stream/')) {
 		config = STREAMING_LIMIT;
 		keyPrefix = 'stream';
-	}
-	// Standard API endpoints
-	else {
+	} else if (hasAuthenticatedUserSession(event)) {
+		// Signed-in UI traffic still gets a ceiling, but high enough that a
+		// normal browsing session never reaches it.
+		config = AUTHENTICATED_API_LIMIT;
+		keyPrefix = 'api-user';
+	} else {
 		config = DEFAULT_API_LIMIT;
 		keyPrefix = 'api';
 	}
@@ -289,10 +293,7 @@ export function applyRateLimitHeaders(event: RequestEvent, response: Response): 
 	let config: RateLimitConfig;
 	let keyPrefix: string;
 
-	if (pathname.startsWith('/api/auth/')) {
-		config = AUTH_LIMIT;
-		keyPrefix = 'auth';
-	} else if (pathname.startsWith('/api/activity/stream')) {
+	if (pathname.startsWith('/api/activity/stream')) {
 		config = ACTIVITY_STREAM_LIMIT;
 		keyPrefix = 'activity-stream';
 	} else if (pathname.startsWith('/api/activity')) {

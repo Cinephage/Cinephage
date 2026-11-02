@@ -19,10 +19,10 @@
  * fabricated single "Default" entry.
  */
 
-import { db } from '$lib/server/db/index.js';
-import { languageProfiles } from '$lib/server/db/schema.js';
-import { getLanguageName } from '$lib/shared/languages.js';
-import type { LanguageProfileV2 } from '$lib/shared/language-profile.js';
+import { db } from '#lib/server/db/index.js';
+import { languageProfiles } from '#lib/server/db/schema.js';
+import { getLanguageName } from '#lib/shared/languages.js';
+import type { LanguageProfileV2 } from '#lib/shared/language-profile.js';
 import { getOrAssignArrId, getOrAssignArrIds } from './ArrIdMappingService.js';
 
 interface LanguageResource {

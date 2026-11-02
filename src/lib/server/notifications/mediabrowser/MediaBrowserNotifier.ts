@@ -8,10 +8,10 @@
  */
 
 import { EventEmitter } from 'events';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
-import type { ServiceStatus, BackgroundService } from '$lib/server/services/background-service';
+import type { ServiceStatus, BackgroundService } from '#lib/server/services/background-service.js';
 import { getMediaBrowserManager } from './MediaBrowserManager';
 import { MediaBrowserClient } from './MediaBrowserClient';
 import type {

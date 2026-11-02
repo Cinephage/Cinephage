@@ -1,9 +1,8 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { requireArrCompatEnabled } from '$lib/server/arr/requireArrCompatEnabled.js';
-import { blockedMediaService } from '$lib/server/blocked-media/service.js';
-import { getOrAssignArrIds } from '$lib/server/arr/ArrIdMappingService.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { requireArrCompatEnabled } from '#lib/server/arr/requireArrCompatEnabled.js';
+import { blockedMediaService } from '#lib/server/blocked-media/service.js';
+import { getOrAssignArrIds } from '#lib/server/arr/ArrIdMappingService.js';
 
 /**
  * GET /api/sonarr/api/v3/importlistexclusion/paged - Sonarr's "don't re-add
@@ -33,7 +32,7 @@ export const GET: RequestHandler = async (event) => {
 		entries.map((entry) => entry.id)
 	);
 
-	return json({
+	return Response.json({
 		page,
 		pageSize,
 		sortKey,

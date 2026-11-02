@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { FolderOpen } from 'lucide-svelte';
-	import { SectionHeader } from '$lib/components/ui/modal';
-	import type { DownloadClientDefinition } from '$lib/types/downloadClient';
-	import * as m from '$lib/paraglide/messages.js';
+	import { FolderOpen } from '@lucide/svelte';
+	import { SectionHeader } from '#lib/components/ui/modal/index.js';
+	import type { DownloadClientDefinition } from '#lib/types/downloadClient.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
 		definition?: DownloadClientDefinition | null;
@@ -12,6 +12,9 @@
 		olderPriority?: 'normal' | 'high' | 'force';
 		initialState?: 'start' | 'pause' | 'force';
 		sequentialDownload?: boolean;
+		removeAfterImport?: boolean;
+		seedRatioLimit?: string;
+		seedTimeLimit?: string;
 		downloadPathLocal?: string;
 		downloadPathRemote?: string;
 		tempPathLocal?: string;
@@ -38,6 +41,9 @@
 		olderPriority = $bindable(),
 		initialState = $bindable(),
 		sequentialDownload = $bindable(),
+		removeAfterImport = $bindable(),
+		seedRatioLimit = $bindable(),
+		seedTimeLimit = $bindable(),
 		downloadPathLocal = $bindable(),
 		downloadPathRemote = $bindable(),
 		tempPathLocal = $bindable(),
@@ -212,6 +218,53 @@
 				/>
 				<span class="label-text text-sm"
 					>{m.settings_integrations_downloadClients_sequentialDownload()}</span
+				>
+			</label>
+		{/if}
+
+		{#if definition?.supportsSeedingLimits}
+			<div class="mt-3 grid grid-cols-2 gap-3">
+				<div class="form-control">
+					<label class="label py-1" for="seedRatioLimit">
+						<span class="label-text text-xs"
+							>{m.settings_integrations_downloadClients_seedRatio()}</span
+						>
+					</label>
+					<input
+						id="seedRatioLimit"
+						type="text"
+						inputmode="decimal"
+						class="input-bordered input input-sm"
+						bind:value={seedRatioLimit}
+						placeholder="1.0"
+					/>
+				</div>
+				<div class="form-control">
+					<label class="label py-1" for="seedTimeLimit">
+						<span class="label-text text-xs"
+							>{m.settings_integrations_downloadClients_seedTimeMinutes()}</span
+						>
+					</label>
+					<input
+						id="seedTimeLimit"
+						type="number"
+						min="0"
+						class="input-bordered input input-sm"
+						bind:value={seedTimeLimit}
+						placeholder="0"
+					/>
+				</div>
+			</div>
+
+			<label class="label mt-3 cursor-pointer justify-start gap-2" for="removeAfterImport">
+				<input
+					id="removeAfterImport"
+					type="checkbox"
+					class="checkbox checkbox-sm checkbox-primary"
+					bind:checked={removeAfterImport}
+				/>
+				<span class="label-text text-sm"
+					>{m.settings_integrations_downloadClients_removeWhenSeedGoalsMet()}</span
 				>
 			</label>
 		{/if}

@@ -1,11 +1,11 @@
-import { db } from '$lib/server/db';
-import { settings, movies, series, rootFolders } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { settings, movies, series, rootFolders } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 import {
 	globalBlockedVideoExtensionsSchema,
 	type GlobalBlockedVideoExtensions
-} from '$lib/validation/schemas.js';
+} from '#lib/validation/schemas.js';
 
 const logger = createChildLogger({ module: 'BlockedVideoExtensions' });
 const SETTINGS_KEY = 'global_blocked_video_extensions';

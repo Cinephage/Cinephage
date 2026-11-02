@@ -9,8 +9,15 @@ const { enrichMock, getBlockedIdentifiersMock, findMovieMock } = vi.hoisted(() =
 	findMovieMock: vi.fn()
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	db: {
+		// QualityFilter.getProfile reads scoring_profiles via select(); the indexer
+		// allowlist resolver tolerates a profile that is not found.
+		select: () => ({
+			from: () => ({
+				where: () => ({ get: async () => undefined })
+			})
+		}),
 		query: {
 			movies: { findFirst: findMovieMock },
 			series: { findFirst: vi.fn(async () => undefined) }
@@ -18,11 +25,11 @@ vi.mock('$lib/server/db/index.js', () => ({
 	}
 }));
 
-vi.mock('$lib/server/blocklist/BlocklistService.js', () => ({
+vi.mock('#lib/server/blocklist/BlocklistService.js', () => ({
 	blocklistService: { getBlockedIdentifiers: getBlockedIdentifiersMock }
 }));
 
-vi.mock('$lib/server/tmdb.js', () => ({
+vi.mock('#lib/server/tmdb.js', () => ({
 	tmdb: {
 		getMovieExternalIds: vi.fn(),
 		getTvExternalIds: vi.fn(),

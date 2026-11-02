@@ -7,17 +7,16 @@
  * channel's EPG data for channels that don't have their own EPG.
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { db } from '$lib/server/db';
+import { db } from '#lib/server/db/index.js';
 import {
 	livetvChannels,
 	livetvAccounts,
 	livetvCategories,
 	epgPrograms
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 import { eq, like, sql, and, gt } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LiveTvChannelsWithEpg', logDomain: 'livetv' });
 
@@ -124,7 +123,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			programCount: row.programCount || 0
 		}));
 
-		return json({
+		return Response.json({
 			success: true,
 			items: response,
 			total,
@@ -137,7 +136,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			'[API] Failed to get channels with EPG',
 			error instanceof Error ? error : undefined
 		);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to get channels with EPG'

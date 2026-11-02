@@ -20,10 +20,23 @@ export interface InsightItemsResponse {
 	};
 }
 
+export interface InsightItemsMeta {
+	insightId: string;
+	insightType: string;
+	filters: { page: number; limit: number };
+	/**
+	 * The insight's title/summary/itemCount as of this request - re-synced
+	 * server-side against the live resolver total when the cached values had
+	 * drifted (see the items endpoint). Prefer this over a stale `insight`
+	 * prop for display once a response has come back.
+	 */
+	insight: { itemCount: number; summary: string | null; title: string };
+}
+
 export async function getInsightItems(
 	insightId: string,
 	params?: { page?: number; limit?: number }
-): Promise<ApiResponse<{ data: InsightItemsResponse }>> {
+): Promise<ApiResponse<{ data: InsightItemsResponse; meta: InsightItemsMeta }>> {
 	return apiGet(`/api/storage/insights/${insightId}/items`, {
 		page: String(params?.page ?? 1),
 		limit: String(params?.limit ?? 50)

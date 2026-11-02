@@ -10,10 +10,10 @@
  */
 
 import { eq, and } from 'drizzle-orm';
-import { db } from '$lib/server/db/index.js';
-import { arrNotificationConfigs } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { arrNotificationConfigs } from '#lib/server/db/schema.js';
 import { getOrAssignArrId, getEntityIdForArrId } from './ArrIdMappingService.js';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 

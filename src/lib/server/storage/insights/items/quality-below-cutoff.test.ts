@@ -5,12 +5,12 @@ import {
 	clearTestDb,
 	type TestDatabase
 } from '../../../../../test/db-helper.js';
-import { movies, series } from '$lib/server/db/schema';
+import { movies, series } from '#lib/server/db/schema.js';
 import { createMovie, createSeries } from '../../../../../test/fixtures/index.js';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -20,7 +20,7 @@ vi.mock('$lib/server/db', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -58,8 +58,20 @@ describe('qualityBelowCutoffResolver', () => {
 				summary: '2 items below cutoff',
 				detailsJson: JSON.stringify({
 					items: [
-						{ tmdbId: 100, title: 'Movie A', currentResolution: '720p', minResolution: '1080p' },
-						{ tmdbId: 200, title: 'Series B', currentResolution: '480p', minResolution: '1080p' }
+						{
+							tmdbId: 100,
+							title: 'Movie A',
+							itemType: 'movie',
+							currentResolution: '720p',
+							minResolution: '1080p'
+						},
+						{
+							tmdbId: 200,
+							title: 'Series B',
+							itemType: 'episode',
+							currentResolution: '480p',
+							minResolution: '1080p'
+						}
 					]
 				}),
 				reclaimableBytes: null,
@@ -77,6 +89,63 @@ describe('qualityBelowCutoffResolver', () => {
 		expect(result.items[1].badges?.[1]?.label).toBe('target: 1080p');
 		expect(result.items[0].href).toBe('/library/movie/q-movie-a');
 		expect(result.items[1].href).toBe('/library/tv/q-series-b');
+	});
+
+	it('resolves the correct library page when a movie and a series share the same tmdbId (#601)', async () => {
+		await testDb.db
+			.insert(movies)
+			.values(createMovie({ id: 'q-movie-collision', tmdbId: 777, title: 'Shared Id' }));
+		await testDb.db
+			.insert(series)
+			.values(createSeries({ id: 'q-series-collision', tmdbId: 777, title: 'Shared Id Show' }));
+
+		const result = await qualityBelowCutoffResolver({
+			db: testDb.db as any,
+			page: 1,
+			limit: 50,
+			insight: {
+				id: 'test',
+				insightType: 'quality-below-cutoff',
+				severity: 'info',
+				scope: 'global',
+				scopeId: null,
+				title: 'Items below quality cutoff',
+				summary: null,
+				detailsJson: JSON.stringify({
+					items: [
+						{
+							tmdbId: 777,
+							title: 'Shared Id',
+							itemType: 'movie',
+							currentResolution: '720p',
+							minResolution: '1080p'
+						},
+						{
+							tmdbId: 777,
+							title: 'Shared Id Show',
+							itemType: 'episode',
+							currentResolution: '480p',
+							minResolution: '1080p'
+						}
+					]
+				}),
+				reclaimableBytes: null,
+				itemCount: 2,
+				firstDetectedAt: '',
+				lastDetectedAt: '',
+				dismissedAt: null,
+				dismissedBy: null
+			}
+		});
+
+		expect(result.items).toHaveLength(2);
+		const movieItem = result.items.find((i) => i.title === 'Shared Id')!;
+		const seriesItem = result.items.find((i) => i.title === 'Shared Id Show')!;
+		expect(movieItem.id).not.toBe(seriesItem.id);
+		expect(movieItem.kind).toBe('movie');
+		expect(movieItem.href).toBe('/library/movie/q-movie-collision');
+		expect(seriesItem.kind).toBe('episode');
+		expect(seriesItem.href).toBe('/library/tv/q-series-collision');
 	});
 
 	it('handles empty items', async () => {
@@ -109,6 +178,7 @@ describe('qualityBelowCutoffResolver', () => {
 		const items = Array.from({ length: 5 }, (_, i) => ({
 			tmdbId: 100 + i,
 			title: `Item ${i}`,
+			itemType: 'movie' as const,
 			currentResolution: '720p',
 			minResolution: '1080p'
 		}));

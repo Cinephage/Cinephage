@@ -4,11 +4,11 @@ import { eq } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../test/db-helper.js';
-import { indexers as indexersTable } from '$lib/server/db/schema';
+import { indexers as indexersTable } from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -18,7 +18,7 @@ vi.mock('$lib/server/db', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -36,13 +36,13 @@ const mockLogger = vi.hoisted(() => ({
 	child: vi.fn().mockReturnThis()
 }));
 
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	logger: mockLogger,
 	createChildLogger: vi.fn(() => mockLogger)
 }));
 
 const { IndexerManager } = await import('./IndexerManager.js');
-import { indexerUpdateSchema } from '$lib/validation/schemas';
+import { indexerUpdateSchema } from '#lib/validation/schemas.js';
 
 type IndexerRow = typeof indexersTable.$inferInsert;
 

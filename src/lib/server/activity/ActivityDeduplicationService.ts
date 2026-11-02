@@ -1,6 +1,6 @@
 import { normalizeReleaseKey, isSameMediaTarget } from './dedup-utils.js';
 import type { DownloadQueueRecord, DownloadHistoryRecord } from './types.js';
-import type { UnifiedActivity } from '$lib/types/activity';
+import type { UnifiedActivity } from '#lib/types/activity.js';
 
 export interface ActiveQueueIndex {
 	byDownloadId: Map<string, DownloadQueueRecord>;

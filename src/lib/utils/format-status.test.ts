@@ -8,8 +8,8 @@
  */
 
 import { describe, it, expect, afterAll } from 'vitest';
-import * as m from '$lib/paraglide/messages.js';
-import { overwriteGetLocale } from '$lib/paraglide/runtime.js';
+import * as m from '#lib/paraglide/messages.js';
+import { overwriteGetLocale } from '#lib/paraglide/runtime.js';
 import {
 	formatSeriesStatus,
 	matchesSeriesStatusFilter,

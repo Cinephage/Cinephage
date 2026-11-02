@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { X, Loader2, Search, Tv } from 'lucide-svelte';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
-	import { getChannelsWithEpg } from '$lib/api/livetv.js';
-	import * as m from '$lib/paraglide/messages.js';
+	import { X, Loader2, Search, Tv } from '@lucide/svelte';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
+	import { getChannelsWithEpg } from '#lib/api/livetv.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface ChannelWithEpg {
 		id: string;
@@ -67,9 +67,22 @@
 		error = null;
 
 		try {
-			const data = (await getChannelsWithEpg()) as { items?: ChannelWithEpg[] };
+			// The endpoint paginates server-side (max 100/page); fetch everything
+			// so the picker isn't silently truncated to the first page.
+			const collected: ChannelWithEpg[] = [];
+			let total = Number.POSITIVE_INFINITY;
+			for (let page = 1; page <= 30 && collected.length < total; page++) {
+				const data = (await getChannelsWithEpg({
+					page: String(page),
+					pageSize: '100'
+				})) as { items?: ChannelWithEpg[]; total?: number };
+				const items = data.items || [];
+				collected.push(...items);
+				if (typeof data.total === 'number') total = data.total;
+				if (items.length === 0) break;
+			}
 			// Filter by search query client-side and exclude the target channel
-			const filtered = (data.items || []).filter((c: ChannelWithEpg) => c.id !== excludeChannelId);
+			const filtered = collected.filter((c: ChannelWithEpg) => c.id !== excludeChannelId);
 			if (debouncedSearch) {
 				const q = debouncedSearch.toLowerCase();
 				channels = filtered.filter(

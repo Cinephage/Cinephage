@@ -5,13 +5,47 @@
  * Handles CRUD operations, instance caching, and health tracking.
  */
 
-import { db } from '$lib/server/db';
-import { subtitleProviders } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { subtitleProviders } from '#lib/server/db/schema.js';
 import { eq, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
+import {
+	decryptCredential,
+	encryptCredential,
+	isEncryptedCredential
+} from '#lib/server/crypto/credentialsCrypto.js';
 
 const logger = createChildLogger({ logDomain: 'subtitles' as const });
+
+/** AAD purpose for subtitle-provider credentials at rest. */
+const SUBTITLE_CRED_PURPOSE = 'subtitle-provider';
+
+function encryptProviderCredential(providerId: string, value: string | null | undefined) {
+	if (typeof value === 'string' && value && !isEncryptedCredential(value)) {
+		return encryptCredential(SUBTITLE_CRED_PURPOSE, providerId, value);
+	}
+	return value ?? null;
+}
+
+function decryptProviderCredential(
+	providerId: string,
+	value: string | null | undefined,
+	field: string
+): string | undefined {
+	if (typeof value === 'string' && isEncryptedCredential(value)) {
+		return (
+			decryptCredential(
+				SUBTITLE_CRED_PURPOSE,
+				providerId,
+				value,
+				`subtitle-provider:${providerId}:${field}`
+			) ?? undefined
+		);
+	}
+	return value ?? undefined;
+}
+
 import type {
 	ISubtitleProvider,
 	ProviderDefinition,
@@ -180,9 +214,9 @@ export class SubtitleProviderManager {
 			implementation: config.implementation,
 			enabled: config.enabled,
 			priority: config.priority,
-			apiKey: config.apiKey,
-			username: config.username,
-			password: config.password,
+			apiKey: encryptProviderCredential(id, config.apiKey),
+			username: encryptProviderCredential(id, config.username),
+			password: encryptProviderCredential(id, config.password),
 			settings: config.settings,
 			requestsPerMinute: config.requestsPerMinute
 		});
@@ -215,9 +249,12 @@ export class SubtitleProviderManager {
 		if (updates.name !== undefined) updateData.name = updates.name;
 		if (updates.enabled !== undefined) updateData.enabled = updates.enabled;
 		if (updates.priority !== undefined) updateData.priority = updates.priority;
-		if (updates.apiKey !== undefined) updateData.apiKey = updates.apiKey;
-		if (updates.username !== undefined) updateData.username = updates.username;
-		if (updates.password !== undefined) updateData.password = updates.password;
+		if (updates.apiKey !== undefined)
+			updateData.apiKey = encryptProviderCredential(id, updates.apiKey);
+		if (updates.username !== undefined)
+			updateData.username = encryptProviderCredential(id, updates.username);
+		if (updates.password !== undefined)
+			updateData.password = encryptProviderCredential(id, updates.password);
 		if (updates.settings !== undefined) updateData.settings = updates.settings;
 		if (updates.requestsPerMinute !== undefined)
 			updateData.requestsPerMinute = updates.requestsPerMinute;
@@ -747,9 +784,9 @@ export class SubtitleProviderManager {
 			implementation: row.implementation as ProviderImplementation,
 			enabled: !!row.enabled,
 			priority: row.priority ?? 25,
-			apiKey: row.apiKey ?? undefined,
-			username: row.username ?? undefined,
-			password: row.password ?? undefined,
+			apiKey: decryptProviderCredential(row.id, row.apiKey, 'apiKey'),
+			username: decryptProviderCredential(row.id, row.username, 'username'),
+			password: decryptProviderCredential(row.id, row.password, 'password'),
 			settings: (row.settings as Record<string, unknown>) ?? undefined,
 			requestsPerMinute: row.requestsPerMinute ?? 60,
 			lastError: row.lastError ?? undefined,

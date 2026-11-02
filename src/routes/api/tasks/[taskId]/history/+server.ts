@@ -3,11 +3,10 @@
  *
  * GET /api/tasks/[taskId]/history - Returns execution history for a specific task
  */
-
-import { json, error } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getUnifiedTaskById } from '$lib/server/tasks/UnifiedTaskRegistry';
-import { taskHistoryService } from '$lib/server/tasks/TaskHistoryService';
+import { getUnifiedTaskById } from '#lib/server/tasks/UnifiedTaskRegistry.js';
+import { taskHistoryService } from '#lib/server/tasks/TaskHistoryService.js';
 import { z } from 'zod';
 
 const querySchema = z.object({
@@ -30,7 +29,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
 	// Verify task exists
 	const task = getUnifiedTaskById(taskId);
 	if (!task) {
-		throw error(404, { message: `Task '${taskId}' not found` });
+		throw error(404, `Task '${taskId}' not found`);
 	}
 
 	// Parse query params
@@ -40,7 +39,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
 	});
 
 	if (!parseResult.success) {
-		throw error(400, { message: 'Invalid query parameters' });
+		throw error(400, 'Invalid query parameters');
 	}
 
 	const { limit, offset } = parseResult.data;
@@ -48,7 +47,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
 	// Get history for this task
 	const { entries, total } = await taskHistoryService.getHistoryForTask(taskId, limit, offset);
 
-	return json({
+	return Response.json({
 		success: true,
 		taskId,
 		history: entries,

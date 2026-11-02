@@ -1,8 +1,7 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getLanguageProfileService } from '$lib/server/subtitles/services/LanguageProfileService';
-import { db } from '$lib/server/db';
-import { libraries } from '$lib/server/db/schema';
+import { getLanguageProfileService } from '#lib/server/subtitles/services/LanguageProfileService.js';
+import { db } from '#lib/server/db/index.js';
+import { libraries } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 
 /**
@@ -30,7 +29,7 @@ import { eq } from 'drizzle-orm';
 export const GET: RequestHandler = async (event) => {
 	const mediaType = event.url.searchParams.get('mediaType');
 	if (mediaType !== null && mediaType !== 'movie' && mediaType !== 'series') {
-		return json({ error: 'mediaType must be "movie" or "series"' }, { status: 400 });
+		return Response.json({ error: 'mediaType must be "movie" or "series"' }, { status: 400 });
 	}
 
 	const profileService = getLanguageProfileService();
@@ -46,15 +45,15 @@ export const GET: RequestHandler = async (event) => {
 		if (library?.languageProfileId) {
 			const profile = await profileService.getProfile(library.languageProfileId);
 			if (profile) {
-				return json({ profile, source: 'library' });
+				return Response.json({ profile, source: 'library' });
 			}
 		}
 	}
 
 	const defaultProfile = await profileService.getDefaultProfile();
 	if (!defaultProfile) {
-		return json(null);
+		return Response.json(null);
 	}
 
-	return json({ profile: defaultProfile, source: 'default' });
+	return Response.json({ profile: defaultProfile, source: 'default' });
 };

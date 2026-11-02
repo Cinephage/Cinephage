@@ -1,6 +1,6 @@
 import type { PageServerLoad } from './$types';
-import { db } from '$lib/server/db';
-import { storageInsights } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { storageInsights } from '#lib/server/db/schema.js';
 import { sql } from 'drizzle-orm';
 
 export const load: PageServerLoad = async ({ parent }) => {

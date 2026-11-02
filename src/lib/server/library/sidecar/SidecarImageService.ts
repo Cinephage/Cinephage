@@ -6,7 +6,8 @@
 
 import { writeFile, stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { createChildLogger } from '$lib/logging';
+import { applyMediaFileMode } from '#lib/server/filesystem/mkdir-helpers.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'imports' as const });
 
@@ -58,6 +59,7 @@ export async function downloadSidecarImage(
 
 		const buffer = Buffer.from(await response.arrayBuffer());
 		await writeFile(destPath, buffer);
+		await applyMediaFileMode(destPath);
 		return true;
 	} catch (err) {
 		logger.warn(

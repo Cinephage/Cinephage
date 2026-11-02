@@ -1,9 +1,3 @@
-import { vi } from 'vitest';
-
-vi.mock('$env/dynamic/private', () => ({
-	env: process.env
-}));
-
 // Check if we're in a Node.js environment (server tests)
 const isNode = typeof process !== 'undefined' && process.versions?.node;
 

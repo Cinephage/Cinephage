@@ -20,20 +20,21 @@
 import { readdir, realpath, stat } from 'fs/promises';
 import { existsSync } from 'node:fs';
 import { join, basename, extname, posix, relative } from 'path';
-import { db } from '$lib/server/db';
+import { db } from '#lib/server/db/index.js';
 import {
 	subtitles,
 	subtitleHistory,
 	movies,
 	movieFiles,
+	episodes,
 	episodeFiles,
 	rootFolders,
 	series
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 import { eq, inArray } from 'drizzle-orm';
 import type { SubtitleFormat, LanguageCode } from '../types';
 import { randomUUID } from 'node:crypto';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 import {
 	resolveStoredSubtitlePaths,
 	toStoredRelativePath,
@@ -41,8 +42,8 @@ import {
 } from '../subtitle-paths';
 
 const logger = createChildLogger({ logDomain: 'subtitles' as const });
-import { normalizeLanguageCode } from '$lib/shared/languages';
-import { normalizeLanguageTag } from '$lib/server/languages/normalize.js';
+import { normalizeLanguageCode } from '#lib/shared/languages.js';
+import { normalizeLanguageTag } from '#lib/server/languages/normalize.js';
 import { LanguageSettingsService } from './LanguageSettingsService.js';
 
 /** Common subtitle file extensions */
@@ -455,6 +456,17 @@ class SubtitleScannerService {
 				}
 			}
 		} catch (error) {
+			const fsError = error as NodeJS.ErrnoException;
+			if (fsError?.code === 'ENOENT') {
+				// Expected under the file-row-driven model: items whose files
+				// vanished between scheduling and the readdir, or folders not
+				// present on disk (wanted-but-missing media).
+				logger.debug(
+					{ directoryPath },
+					'Subtitle scan target folder not present on disk; skipping'
+				);
+				return subtitleFiles;
+			}
 			logger.error({ directoryPath, error }, 'Error reading directory for subtitles');
 		}
 
@@ -551,20 +563,25 @@ class SubtitleScannerService {
 				return result;
 			}
 
-			const moviePath = join(rootFolder.path, movie.path);
-			const discovered = await this.discoverSubtitles(
-				moviePath,
-				moviePath,
-				await this.resolveAssumedLanguage()
-			);
-			result.discovered = discovered.length;
-
 			// Load this movie's files so each sidecar can be linked to the specific
 			// quality tier it belongs to (multi-quality support).
 			const movieFilesList = await db
 				.select({ id: movieFiles.id, relativePath: movieFiles.relativePath })
 				.from(movieFiles)
 				.where(eq(movieFiles.movieId, movieId));
+
+			const moviePath = join(rootFolder.path, movie.path);
+			// File-row-driven discovery (Sonarr parity): a movie with no files has
+			// nothing to discover and its folder is not guaranteed to exist
+			// (wanted-but-missing entries). Skip the directory read, but still
+			// reconcile stored rows below so stale subtitle rows die with their
+			// media file.
+			const discovered =
+				movieFilesList.length > 0
+					? await this.discoverSubtitles(moviePath, moviePath, await this.resolveAssumedLanguage())
+					: [];
+			result.discovered = discovered.length;
+
 			// Map lowercased video base name -> movie file id. Matching is
 			// case-insensitive because subtitle files commonly differ in case from
 			// their video (e.g. "MOVIE.2024.EN.SRT" next to "Movie.2024.mkv") and
@@ -652,22 +669,28 @@ class SubtitleScannerService {
 				return result;
 			}
 
-			const seriesPath = join(rootFolder.path, seriesData.path);
-			const discovered = await this.discoverSubtitles(
-				seriesPath,
-				seriesPath,
-				await this.resolveAssumedLanguage()
-			);
-			result.discovered = discovered.length;
-
 			// Get all episode files to match subtitles
 			const epFiles = await db
 				.select()
 				.from(episodeFiles)
 				.where(eq(episodeFiles.seriesId, seriesId));
 
+			const seriesPath = join(rootFolder.path, seriesData.path);
+			// File-row-driven discovery (Sonarr parity): a series with no files
+			// has nothing to discover and its folder is not guaranteed to exist.
+			// Stored rows are still reconciled below so subtitle rows outliving
+			// their media file are cleaned up.
+			const discovered =
+				epFiles.length > 0
+					? await this.discoverSubtitles(
+							seriesPath,
+							seriesPath,
+							await this.resolveAssumedLanguage()
+						)
+					: [];
+			result.discovered = discovered.length;
+
 			const filesByDir = this.indexEpisodeFilesByDir(epFiles);
-			const allEpisodeIds = [...new Set(epFiles.flatMap((ef) => ef.episodeIds ?? []))];
 
 			const desired: DesiredSubtitle[] = [];
 			for (const sub of discovered) {
@@ -706,10 +729,21 @@ class SubtitleScannerService {
 				}
 			}
 
+			// Owner-keyed stored rows: every episode of the series regardless of
+			// current files (mirrors the movie side), so a subtitle row whose
+			// episode lost its media file is visible to the deletion pass
+			// instead of being frozen as an orphan.
+			const seriesEpisodeIds = await db
+				.select({ id: episodes.id })
+				.from(episodes)
+				.where(eq(episodes.seriesId, seriesId));
 			const storedRows =
-				allEpisodeIds.length > 0
+				seriesEpisodeIds.length > 0
 					? await db.query.subtitles.findMany({
-							where: inArray(subtitles.episodeId, allEpisodeIds)
+							where: inArray(
+								subtitles.episodeId,
+								seriesEpisodeIds.map((episode) => episode.id)
+							)
 						})
 					: [];
 			const storedAbsPaths = await resolveStoredSubtitlePaths(storedRows);
@@ -910,14 +944,16 @@ class SubtitleScannerService {
 			// Deletion pass: a stored row not represented by a desired entry is
 			// removed if its file is gone, or if the same file now belongs to a
 			// different owner/episode (stale association from the old scanner).
-			// Rows whose file still exists without a desired entry (e.g. an
-			// ambiguous sidecar) and rows with an unresolvable owner are kept.
+			// An unresolvable path means the owning episode/movie has no media
+			// file row anymore — the subtitle cannot exist on disk, so it is
+			// gone too. Rows whose file still exists without a desired entry
+			// (e.g. an ambiguous sidecar) are kept.
 			for (const row of storedRows) {
 				if (desiredByKey.has(keyOf(ownerIdOf(row), row.relativePath))) continue;
 
 				const absPath = storedAbsPaths.get(row.id) ?? null;
 				const staleOwner = absPath !== null && desiredByAbs.has(absPath);
-				const fileGone = absPath !== null && !existsSync(absPath);
+				const fileGone = absPath === null || !existsSync(absPath);
 
 				if (staleOwner || fileGone) {
 					tx.delete(subtitles).where(eq(subtitles.id, row.id)).run();
@@ -930,7 +966,9 @@ class SubtitleScannerService {
 							language: row.language,
 							errorMessage: staleOwner
 								? 'reassociated during subtitle scan reconciliation'
-								: 'file missing during subtitle scan reconciliation',
+								: absPath === null
+									? 'owning media file removed during subtitle scan reconciliation'
+									: 'file missing during subtitle scan reconciliation',
 							createdAt: new Date().toISOString()
 						})
 						.run();

@@ -37,12 +37,14 @@ function classifyError(error: string): Omit<AutoSearchIssue, 'count'> | null {
 	if (
 		lower.includes('no indexers are available') ||
 		lower.includes('no eligible indexers') ||
-		lower.includes('indexer availability')
+		lower.includes('indexer availability') ||
+		lower.includes('selected in quality profile')
 	) {
 		return {
 			code: 'NO_INDEXER_AVAILABLE',
 			message: 'No eligible indexers are available for this search',
-			suggestion: 'Enable at least one indexer that supports this media type and profile.'
+			suggestion:
+				'Enable at least one indexer that supports this media type, or adjust the quality profile indexer selection.'
 		};
 	}
 

@@ -4,7 +4,7 @@
  * Shared types for the /api/activity/stream endpoint
  */
 
-import type { UnifiedActivity } from '$lib/types/activity';
+import type { UnifiedActivity } from '#lib/types/activity.js';
 
 /**
  * activity:new event - New activity item

@@ -1,5 +1,13 @@
 <script lang="ts">
-	import { RefreshCw, Trash2, Search, Captions, CaptionsOff, Loader2, Clock3 } from 'lucide-svelte';
+	import {
+		RefreshCw,
+		Trash2,
+		Search,
+		Captions,
+		CaptionsOff,
+		Loader2,
+		Clock3
+	} from '@lucide/svelte';
 	import SubtitleBadge from './SubtitleBadge.svelte';
 	import SubtitleSyncBadge from './SubtitleSyncBadge.svelte';
 

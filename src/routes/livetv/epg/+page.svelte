@@ -1,32 +1,35 @@
 <script lang="ts">
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-	import { Calendar, LayoutGrid, Settings } from 'lucide-svelte';
+	import { Calendar, LayoutGrid, Settings } from '@lucide/svelte';
 	import {
 		EpgStatusPanel,
 		EpgCoverageTable,
 		EpgGuideGrid,
 		EpgSourcePickerModal
-	} from '$lib/components/livetv';
+	} from '#lib/components/livetv/index.js';
 	import type {
 		ChannelLineupItemWithDetails,
 		EpgStatus,
 		UpdateChannelRequest
-	} from '$lib/types/livetv';
-	import { createSSE } from '$lib/sse';
-	import { layoutState, deriveMobileSseStatus } from '$lib/layout.svelte';
-	import { resolvePath } from '$lib/utils/routing';
-	import type { EpgStreamEvents } from '$lib/types/sse/events/livetv-epg-events.js';
-	import type { NowNextEntry } from '$lib/types/sse/events/livetv-channel-events.js';
-	import * as m from '$lib/paraglide/messages.js';
+	} from '#lib/types/livetv.js';
+	import { createSSE } from '#lib/sse/index.js';
+	import { layoutState, deriveMobileSseStatus } from '#lib/layout.svelte.js';
+	import { resolvePath } from '#lib/utils/routing.js';
+	import type { EpgStreamEvents } from '#lib/types/sse/events/livetv-epg-events.js';
+	import type { NowNextEntry } from '#lib/types/sse/events/livetv-channel-events.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import {
 		getLineup,
 		getEpgNow,
+		getEpgStatus,
 		syncEpg,
 		syncEpgForAccount,
 		cancelEpgSync,
 		cancelEpgSyncForAccount,
-		updateLineupItem
-	} from '$lib/api';
+		updateLineupItem,
+		updateEpgSettings
+	} from '#lib/api/index.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
 
 	type TabId = 'status' | 'coverage' | 'guide';
 
@@ -174,6 +177,19 @@
 		}
 	}
 
+	async function handleSaveEpgSettings(settings: {
+		syncIntervalHours: number;
+		retentionHours: number;
+	}) {
+		const result = await updateEpgSettings(settings);
+		if (!result.success) {
+			throw new Error(result.error || m.livetv_epgSettings_saveFailed());
+		}
+		const refreshed = await getEpgStatus();
+		epgStatus = refreshed;
+		toasts.success(m.livetv_epgSettings_saved());
+	}
+
 	async function triggerEpgSync() {
 		if (epgSyncingAny) return;
 		epgCancelRequestedAll = false;
@@ -300,6 +316,7 @@
 			onSyncAccount={triggerAccountSync}
 			onCancel={handleCancelEpgSync}
 			onCancelAccount={cancelAccountSync}
+			onSaveSettings={handleSaveEpgSettings}
 		/>
 	{:else if activeTab === 'coverage'}
 		<EpgCoverageTable

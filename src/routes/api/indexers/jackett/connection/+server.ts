@@ -1,6 +1,5 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 import {
 	getJackettConnection,
 	saveJackettConnection,
@@ -8,9 +7,9 @@ import {
 	fetchJackettIndexers,
 	normalizeJackettUrl,
 	propagateJackettApiKey
-} from '$lib/server/indexers/jackett/JackettConnectionService.js';
+} from '#lib/server/indexers/jackett/JackettConnectionService.js';
 import { z } from 'zod';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'indexers' as const });
 
@@ -29,9 +28,9 @@ export const GET: RequestHandler = async (event) => {
 	if (authError) return authError;
 
 	const conn = await getJackettConnection();
-	if (!conn) return json({ connection: null });
+	if (!conn) return Response.json({ connection: null });
 
-	return json({
+	return Response.json({
 		connection: {
 			url: conn.url,
 			autoSync: conn.autoSync,
@@ -57,12 +56,15 @@ export const PUT: RequestHandler = async (event) => {
 	try {
 		body = await event.request.json();
 	} catch {
-		return json({ error: 'Invalid JSON body' }, { status: 400 });
+		return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
 	}
 
 	const result = connectionSchema.safeParse(body);
 	if (!result.success) {
-		return json({ error: result.error.issues[0]?.message ?? 'Invalid request' }, { status: 400 });
+		return Response.json(
+			{ error: result.error.issues[0]?.message ?? 'Invalid request' },
+			{ status: 400 }
+		);
 	}
 
 	const {
@@ -96,7 +98,7 @@ export const PUT: RequestHandler = async (event) => {
 			const isTimeout =
 				message.toLowerCase().includes('timeout') || message.includes('TimeoutError');
 			const detail = cause ? ` (${cause})` : '';
-			return json(
+			return Response.json(
 				{
 					error: isTimeout
 						? `Connection timed out. Check the URL and ensure Jackett is accessible.${detail}`
@@ -108,7 +110,7 @@ export const PUT: RequestHandler = async (event) => {
 	} else if (existing?.apiKey) {
 		apiKey = existing.apiKey;
 	} else {
-		return json({ error: 'API key is required.' }, { status: 400 });
+		return Response.json({ error: 'API key is required.' }, { status: 400 });
 	}
 
 	await saveJackettConnection({
@@ -129,7 +131,7 @@ export const PUT: RequestHandler = async (event) => {
 		propagateJackettApiKey(newKey).catch(() => {});
 	}
 
-	return json({ success: true });
+	return Response.json({ success: true });
 };
 
 /** DELETE: remove connection. Already-imported indexers are not affected. */
@@ -138,5 +140,5 @@ export const DELETE: RequestHandler = async (event) => {
 	if (authError) return authError;
 
 	await deleteJackettConnection();
-	return json({ success: true });
+	return Response.json({ success: true });
 };

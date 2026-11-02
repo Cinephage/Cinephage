@@ -3,10 +3,12 @@
  */
 
 import type { PageServerLoad } from './$types';
-import { db } from '$lib/server/db/index.js';
-import { rootFolders, scoringProfiles } from '$lib/server/db/schema.js';
+import { requireAdminPage } from '#lib/server/auth/authorization.js';
+import { db } from '#lib/server/db/index.js';
+import { rootFolders, scoringProfiles } from '#lib/server/db/schema.js';
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ locals }) => {
+	requireAdminPage(locals);
 	const folders = await db.select().from(rootFolders);
 	const profiles = await db.select().from(scoringProfiles);
 

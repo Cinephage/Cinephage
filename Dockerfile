@@ -1,7 +1,7 @@
 # ==========================================
 # Build-deps base (shared by builder + prod-deps to avoid duplicate apt layers)
 # ==========================================
-FROM node:24-trixie-slim AS build-deps-base
+FROM node:26-trixie-slim AS build-deps-base
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
 	python3 \
@@ -16,6 +16,7 @@ FROM build-deps-base AS builder
 
 COPY package*.json ./
 COPY .npmrc ./
+COPY tools/npm-stub ./tools/npm-stub
 
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 
@@ -27,11 +28,15 @@ COPY data ./data
 COPY messages ./messages
 COPY project.inlang ./project.inlang
 COPY scripts/fix-tv-subtitle-paths.js ./scripts/fix-tv-subtitle-paths.js
-COPY server.js svelte.config.js tsconfig.json vite.config.ts ./
+COPY server.js tsconfig.json vite.config.ts ./
 
 ARG APP_VERSION=dev
 
-RUN npm run build
+# Build-only placeholder: SvelteKit's build evaluates server module top-level
+# code (route analysis) with NODE_ENV=production, and the runtime auth secret
+# fails closed without one. The real secret is injected at runtime only, so
+# this value never reaches a running server (multi-stage build).
+RUN BETTER_AUTH_SECRET=build-placeholder-not-used-at-runtime npm run build
 
 # ==========================================
 # Production Dependencies Stage
@@ -44,20 +49,26 @@ COPY .npmrc ./
 # Install only runtime dependencies.
 # Keep optional deps, some runtime packages (e.g. impit) ship
 # platform-native bindings through optionalDependencies.
+# The doc/docs pruning must not touch */dist/* trees: the yaml package ships
+# actual code in dist/doc/ (its document AST), required at runtime via
+# camoufox — deleting it crashes the server on require.
 RUN npm ci --omit=dev --no-audit --no-fund \
 	&& find node_modules -type f -name '*.map' -delete \
-	&& find node_modules -type d \( -name test -o -name tests -o -name __tests__ -o -name docs -o -name doc -o -name examples -o -name example \) -prune -exec rm -rf '{}' + \
+	&& find node_modules -type d \
+		\( -name test -o -name tests -o -name __tests__ -o -name examples -o -name example \
+		-o \( \( -name doc -o -name docs \) ! -path '*/dist/*' \) \) \
+		-prune -exec rm -rf '{}' + \
 	&& find node_modules -name 'lightningcss-linux-x64-musl' -prune -exec rm -rf '{}' + \
 	&& find node_modules -type d -empty -delete
 
 # ==========================================
 # Runtime Stage
 # ==========================================
-FROM node:24-trixie-slim AS runner
+FROM node:26-trixie-slim AS runner
 WORKDIR /app
 
 ARG APP_VERSION=dev
-ARG APP_SOURCE=https://github.com/MoldyTaint/Cinephage
+ARG APP_SOURCE=https://github.com/Cinephage/Cinephage
 ARG VCS_REF=unknown
 ARG BUILD_CREATED=unknown
 ENV APP_VERSION=${APP_VERSION}
@@ -99,7 +110,12 @@ COPY --from=builder /app/build ./build
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/server.js ./server.js
 COPY --from=builder /app/scripts ./scripts
-COPY --from=builder /app/data ./bundled-data
+# Only the bundled read-only assets the entrypoint syncs. Copying all of
+# /app/data would ship a developer checkout's database, logs and backups if
+# the .dockerignore re-includes ever drift. Channel logos are fetched into
+# the config volume at runtime, so they are deliberately not bundled.
+COPY --from=builder /app/data/indexers ./bundled-data/indexers
+COPY --from=builder /app/data/external-lists ./bundled-data/external-lists
 # Camoufox shadow-unlock addon (loaded at runtime for Cloudflare Turnstile solving)
 COPY --from=builder /app/src/lib/server/captcha/browser/addon ./camoufox-addon
 COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/cinephage-entrypoint

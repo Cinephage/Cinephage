@@ -17,11 +17,11 @@ vi.mock('$app/state', () => ({
 	}
 }));
 
-vi.mock('$lib/api/settings.js', () => ({
+vi.mock('#lib/api/settings.js', () => ({
 	updateTmdbFilters
 }));
 
-vi.mock('$lib/stores/toast.svelte', () => ({
+vi.mock('#lib/stores/toast.svelte.js', () => ({
 	toasts: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() }
 }));
 

@@ -52,6 +52,12 @@ jobs:
         run: npm ci
 
       - name: Generate paraglide files
+        # SvelteKit's build evaluates server module top-level code (route
+        # analysis), which reaches getAuthSecret(); a production build has
+        # NODE_ENV=production, so the runtime fail-closed check needs a
+        # build-only placeholder here. It never reaches a running server.
+        env:
+          BETTER_AUTH_SECRET: ci-build-placeholder-not-used-at-runtime
         run: rm -rf src/lib/paraglide && npm run build
 
       - name: Run type check
@@ -78,7 +84,7 @@ jobs:
 
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: coverage-report
           path: coverage/
@@ -100,6 +106,10 @@ jobs:
         run: npm ci
 
       - name: Build application
+        # Same build-only placeholder as the typecheck job above: the build
+        # environment has no .env, and the secret is only required at runtime.
+        env:
+          BETTER_AUTH_SECRET: ci-build-placeholder-not-used-at-runtime
         run: npm run build
 
   ci:

@@ -12,11 +12,17 @@ export interface RateLimitConfig {
 	burst?: number;
 }
 
-/** Default rate limit (60 requests per minute - generous for development) */
+/**
+ * Default rate limit applied when an indexer has no explicit `requestdelay`
+ * (YAML definitions) or user-configured rate limit. Kept conservative: many
+ * real indexer accounts (especially Usenet) enforce much stricter API quotas
+ * than this, and a large automatic/manual search can otherwise burn through
+ * a real quota in minutes before the user notices.
+ */
 export const DEFAULT_RATE_LIMIT: RateLimitConfig = {
-	requests: 60,
+	requests: 12,
 	periodMs: 60_000,
-	burst: 10
+	burst: 2
 };
 
 /** Convert from YAML format (seconds) to internal format (ms) */

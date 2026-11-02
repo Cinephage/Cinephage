@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { deriveSeriesSubtitleProgress, deriveSubtitleProgress } from './subtitle-status-display.js';
 import type { SubtitleStatusSummary } from './subtitle-status-display.js';
-import type { LanguageProfileV2 } from '$lib/shared/language-profile.js';
+import type { LanguageProfileV2 } from '#lib/shared/language-profile.js';
 
 const profile: Pick<LanguageProfileV2, 'subtitles' | 'cutoffRank'> = {
 	subtitles: [

@@ -67,7 +67,7 @@ class ProviderRegistry {
 }
 
 // Singleton instance
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'monitoring' as const });
 export const providerRegistry = new ProviderRegistry();

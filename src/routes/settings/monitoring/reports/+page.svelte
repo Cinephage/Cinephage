@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import {
 		AlertTriangle,
@@ -18,12 +18,12 @@
 		ShieldX,
 		Unlink,
 		X
-	} from 'lucide-svelte';
-	import * as m from '$lib/paraglide/messages.js';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import MatchFileModal from '$lib/components/library/MatchFileModal.svelte';
-	import { ConfirmationModal } from '$lib/components/ui/modal';
-	import { copyToClipboard } from '$lib/utils/clipboard';
+	} from '@lucide/svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import MatchFileModal from '#lib/components/library/MatchFileModal.svelte';
+	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
+	import { copyToClipboard } from '#lib/utils/clipboard.js';
 
 	let { data } = $props();
 
@@ -57,7 +57,7 @@
 	type TabId = (typeof TABS)[number]['id'];
 	type AnyRecord = { id: string; [key: string]: unknown };
 
-	const activeTab = $derived(($page.url.searchParams.get('tab') as TabId) || TABS[0].id);
+	const activeTab = $derived((page.url.searchParams.get('tab') as TabId) || TABS[0].id);
 
 	let records = $state<AnyRecord[]>([]);
 	let loading = $state(false);
@@ -140,7 +140,7 @@
 		dateFilter = '';
 		mediaTypeFilter = '';
 		renamingFileTypeFilter = '';
-		goto(`?tab=${tabId}`, { replaceState: true });
+		goto(`?tab=${tabId}`, { replace: true });
 	}
 
 	function applyStatCard(card: 'all' | '24h' | 'no_match' | 'parse_failed' | 'unresolved') {
@@ -869,7 +869,9 @@
 			root_folder: m.reports_stage_root_folder(),
 			library_entity: m.reports_stage_library_entity(),
 			transfer: m.reports_stage_transfer(),
-			max_retries: m.reports_stage_max_retries()
+			max_retries: m.reports_stage_max_retries(),
+			unmatched_accept: m.reports_stage_unmatched_accept(),
+			unmatched_attach: m.reports_stage_unmatched_attach()
 		};
 		return stage ? (map[stage] ?? stage) : '-';
 	}
@@ -1083,20 +1085,22 @@
 		<!-- Toolbar -->
 		<div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
 			<!-- Row 1: search (full width on mobile) -->
-			<div class="relative w-full sm:w-64">
-				<Search
-					class="pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-base-content/40"
-				/>
+			<div class="group relative w-full sm:w-64">
+				<div class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2">
+					<Search
+						class="h-4 w-4 text-base-content/40 transition-colors group-focus-within:text-primary"
+					/>
+				</div>
 				<input
 					type="text"
-					class="input w-full rounded-full border-base-content/20 bg-base-200 pr-8 pl-9 transition-all input-sm placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
+					class="input w-full rounded-full border-base-content/20 bg-base-200/60 pr-9 pl-10 transition-all duration-200 input-sm placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
 					placeholder={m.reports_search_fileOrTitle()}
 					bind:value={searchQuery}
 					oninput={onSearchInput}
 				/>
 				{#if searchQuery}
 					<button
-						class="absolute top-1/2 right-2.5 -translate-y-1/2 text-base-content/40 hover:text-base-content"
+						class="absolute top-1/2 right-3 -translate-y-1/2 text-base-content/40 hover:text-base-content"
 						onclick={() => {
 							searchQuery = '';
 							loadRecords(activeTab, 1);
@@ -1113,7 +1117,7 @@
 				<div class="flex items-center gap-1">
 					{#each [{ value: '', label: m.reports_filter_all() }, { value: 'movie', label: m.reports_type_movie() }, { value: 'tv', label: m.reports_type_tv() }] as opt (opt)}
 						<button
-							class="btn font-mono btn-xs {mediaTypeFilter === opt.value
+							class="btn font-medium btn-sm {mediaTypeFilter === opt.value
 								? 'btn-primary'
 								: 'btn-ghost'}"
 							onclick={() => {
@@ -1667,20 +1671,22 @@
 		<!-- Toolbar -->
 		<div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
 			<!-- Search -->
-			<div class="relative w-full sm:w-64">
-				<Search
-					class="pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-base-content/40"
-				/>
+			<div class="group relative w-full sm:w-64">
+				<div class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2">
+					<Search
+						class="h-4 w-4 text-base-content/40 transition-colors group-focus-within:text-primary"
+					/>
+				</div>
 				<input
 					type="text"
-					class="input w-full rounded-full border-base-content/20 bg-base-200 pr-8 pl-9 transition-all input-sm placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
+					class="input w-full rounded-full border-base-content/20 bg-base-200/60 pr-9 pl-10 transition-all duration-200 input-sm placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
 					placeholder={m.reports_search_releaseOrTitle()}
 					bind:value={searchQuery}
 					oninput={onSearchInput}
 				/>
 				{#if searchQuery}
 					<button
-						class="absolute top-1/2 right-2.5 -translate-y-1/2 text-base-content/40 hover:text-base-content"
+						class="absolute top-1/2 right-3 -translate-y-1/2 text-base-content/40 hover:text-base-content"
 						onclick={() => {
 							searchQuery = '';
 							loadRecords(activeTab, 1);
@@ -1697,7 +1703,7 @@
 				<div class="flex items-center gap-1">
 					{#each [{ value: '', label: m.reports_filter_all() }, { value: 'movie', label: m.reports_type_movie() }, { value: 'tv', label: m.reports_type_tv() }] as opt (opt)}
 						<button
-							class="btn font-mono btn-xs {mediaTypeFilter === opt.value
+							class="btn font-medium btn-sm {mediaTypeFilter === opt.value
 								? 'btn-primary'
 								: 'btn-ghost'}"
 							onclick={() => {
@@ -2289,20 +2295,22 @@
 		<!-- Toolbar -->
 		<div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
 			<!-- Left side: search + filters -->
-			<div class="relative w-full sm:w-64">
-				<Search
-					class="pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-base-content/40"
-				/>
+			<div class="group relative w-full sm:w-64">
+				<div class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2">
+					<Search
+						class="h-4 w-4 text-base-content/40 transition-colors group-focus-within:text-primary"
+					/>
+				</div>
 				<input
 					type="text"
-					class="input w-full rounded-full border-base-content/20 bg-base-200 pr-8 pl-9 transition-all input-sm placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
+					class="input w-full rounded-full border-base-content/20 bg-base-200/60 pr-9 pl-10 transition-all duration-200 input-sm placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
 					placeholder={m.reports_search_releaseOrPath()}
 					bind:value={searchQuery}
 					oninput={onSearchInput}
 				/>
 				{#if searchQuery}
 					<button
-						class="absolute top-1/2 right-2.5 -translate-y-1/2 text-base-content/40 hover:text-base-content"
+						class="absolute top-1/2 right-3 -translate-y-1/2 text-base-content/40 hover:text-base-content"
 						onclick={() => {
 							searchQuery = '';
 							loadRecords('import-failures', 1);
@@ -2324,6 +2332,8 @@
 				<option value="library_entity">{m.reports_stage_library_entity()}</option>
 				<option value="transfer">{m.reports_stage_transfer()}</option>
 				<option value="max_retries">{m.reports_stage_max_retries()}</option>
+				<option value="unmatched_accept">{m.reports_stage_unmatched_accept()}</option>
+				<option value="unmatched_attach">{m.reports_stage_unmatched_attach()}</option>
 			</select>
 			<select
 				class="select w-full border-base-content/20 bg-base-200 select-sm sm:w-auto"
@@ -2868,20 +2878,22 @@
 		{/if}
 
 		<div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-			<div class="relative w-full sm:w-64">
-				<Search
-					class="pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-base-content/40"
-				/>
+			<div class="group relative w-full sm:w-64">
+				<div class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2">
+					<Search
+						class="h-4 w-4 text-base-content/40 transition-colors group-focus-within:text-primary"
+					/>
+				</div>
 				<input
 					type="text"
-					class="input w-full rounded-full border-base-content/20 bg-base-200 pr-8 pl-9 transition-all input-sm placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
+					class="input w-full rounded-full border-base-content/20 bg-base-200/60 pr-9 pl-10 transition-all duration-200 input-sm placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
 					placeholder={m.reports_search_sourceOrPath()}
 					bind:value={searchQuery}
 					oninput={onSearchInput}
 				/>
 				{#if searchQuery}
 					<button
-						class="absolute top-1/2 right-2.5 -translate-y-1/2 text-base-content/40 hover:text-base-content"
+						class="absolute top-1/2 right-3 -translate-y-1/2 text-base-content/40 hover:text-base-content"
 						onclick={() => {
 							searchQuery = '';
 							loadRecords('renaming-failures', 1);
@@ -2895,7 +2907,7 @@
 				<div class="flex items-center gap-1">
 					{#each [{ value: '', label: m.reports_filter_all() }, { value: 'movie', label: m.reports_type_movie() }, { value: 'episode', label: m.reports_type_tv() }] as opt (opt.value)}
 						<button
-							class="btn font-mono btn-xs {renamingFileTypeFilter === opt.value
+							class="btn font-medium btn-sm {renamingFileTypeFilter === opt.value
 								? 'btn-primary'
 								: 'btn-ghost'}"
 							onclick={() => {

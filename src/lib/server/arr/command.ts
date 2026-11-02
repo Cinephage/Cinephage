@@ -16,30 +16,74 @@
  * openapi.json.
  */
 
-import { createChildLogger } from '$lib/logging/index.js';
-import { monitoringSearchService } from '$lib/server/monitoring/search/MonitoringSearchService.js';
-import { diskScanService } from '$lib/server/library/disk-scan.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { monitoringSearchService } from '#lib/server/monitoring/search/MonitoringSearchService.js';
+import { diskScanService } from '#lib/server/library/disk-scan.js';
 import {
 	refreshMovieMetadata,
 	refreshSeriesMetadata
-} from '$lib/server/metadata/metadata-refresh.js';
-import { RenamePreviewService } from '$lib/server/library/naming/RenamePreviewService.js';
-import { db } from '$lib/server/db/index.js';
-import { movies, series, blocklist } from '$lib/server/db/schema.js';
+} from '#lib/server/metadata/metadata-refresh.js';
+import { RenamePreviewService } from '#lib/server/library/naming/RenamePreviewService.js';
+import { db } from '#lib/server/db/index.js';
+import { movies, series, blocklist } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { getEntityIdForArrId } from './ArrIdMappingService.js';
-import { searchOnAdd } from '$lib/server/library/searchOnAdd/index.js';
+import { searchOnAdd } from '#lib/server/library/searchOnAdd/index.js';
 import type { ArrAppName } from './systemStatus.js';
 
 const logger = createChildLogger({ module: 'ArrCompatCommand', logDomain: 'system' });
 
 let nextCommandId = 1;
 
+interface CommandRecord {
+	id: number;
+	name: string;
+	commandName: string;
+	message: string;
+	priority: string;
+	status: 'started' | 'completed' | 'failed';
+	queued: string;
+	started: string;
+	ended?: string;
+	trigger: string;
+	sendUpdatesToClient: boolean;
+	updateScheduledTask: boolean;
+	exception?: string;
+}
+
+/**
+ * Real command history, keyed by id. Without this, GET /command (list) and
+ * GET /command/{id} (poll-for-completion) had nothing to return but an empty
+ * list; a client polling to confirm the command it just submitted actually
+ * ran would see it "doesn't exist" and, per typical arr-client retry policy,
+ * resubmit it. That's a real hammering vector: repeated resubmission of a
+ * search command with no cooldown between attempts.
+ */
+const commandHistory = new Map<number, CommandRecord>();
+const MAX_COMMAND_HISTORY = 200;
+
+function recordCommand(record: CommandRecord): void {
+	commandHistory.set(record.id, record);
+	if (commandHistory.size > MAX_COMMAND_HISTORY) {
+		const oldestId = commandHistory.keys().next().value;
+		if (oldestId !== undefined) commandHistory.delete(oldestId);
+	}
+}
+
 /** Fire a real trigger without blocking the HTTP response - matches how real command execution is async too. */
-function fireAndForget(name: string, fn: () => Promise<unknown>): void {
-	fn().catch((err) => {
-		logger.warn({ err, command: name }, '[ArrCompatCommand] Background command failed');
-	});
+function fireAndForget(name: string, fn: () => Promise<unknown>, record: CommandRecord): void {
+	record.status = 'started';
+	fn()
+		.then(() => {
+			record.status = 'completed';
+			record.ended = new Date().toISOString();
+		})
+		.catch((err) => {
+			logger.warn({ err, command: name }, '[ArrCompatCommand] Background command failed');
+			record.status = 'failed';
+			record.ended = new Date().toISOString();
+			record.exception = err instanceof Error ? err.message : String(err);
+		});
 }
 
 async function resolveRootFolderScan(appName: ArrAppName, arrId: number): Promise<void> {
@@ -79,12 +123,28 @@ async function renameEntity(appName: ArrAppName, arrId: number): Promise<void> {
 	await service.executeRenames(fileIds, appName === 'Radarr' ? 'movie' : 'episode');
 }
 
+/** Coerce a value to a finite integer arr id, accepting both a real number
+ * and a numeric string; some arr clients serialize ids as strings, and a
+ * strict `typeof === 'number'` check would silently drop them, falling
+ * through to an unscoped library-wide search instead of the one entity the
+ * client actually asked for. */
+function toArrId(value: unknown): number | null {
+	if (typeof value === 'number' && Number.isFinite(value)) return value;
+	if (typeof value === 'string' && value.trim() !== '') {
+		const parsed = Number(value);
+		if (Number.isFinite(parsed)) return parsed;
+	}
+	return null;
+}
+
 function collectIds(body: Record<string, unknown>, single: string, plural: string): number[] {
 	const ids: number[] = [];
-	if (typeof body[single] === 'number') ids.push(body[single] as number);
+	const singleId = toArrId(body[single]);
+	if (singleId !== null) ids.push(singleId);
 	if (Array.isArray(body[plural])) {
 		for (const id of body[plural]) {
-			if (typeof id === 'number') ids.push(id);
+			const parsed = toArrId(id);
+			if (parsed !== null) ids.push(parsed);
 		}
 	}
 	return ids;
@@ -148,103 +208,12 @@ export function handleCommand(
 	const id = nextCommandId++;
 	const now = new Date().toISOString();
 
-	switch (name) {
-		case 'MissingMoviesSearch':
-		case 'MoviesSearch': {
-			const movieIds = collectIds(body, 'movieId', 'movieIds');
-			if (movieIds.length > 0) {
-				fireAndForget(name, () => searchTargetedMovies(movieIds));
-			} else {
-				fireAndForget(name, () => monitoringSearchService.searchMissingMovies());
-			}
-			break;
-		}
-		case 'MissingEpisodeSearch':
-		case 'SeriesSearch':
-		case 'EpisodeSearch': {
-			const episodeIds = collectIds(body, 'episodeId', 'episodeIds');
-			const seriesIds = collectIds(body, 'seriesId', 'seriesIds');
-			if (episodeIds.length > 0) {
-				fireAndForget(name, () => searchTargetedEpisodes(episodeIds));
-			} else if (seriesIds.length > 0) {
-				fireAndForget(name, () => searchTargetedSeries(seriesIds));
-			} else {
-				fireAndForget(name, () => monitoringSearchService.searchMissingEpisodes());
-			}
-			break;
-		}
-		case 'RescanMovie':
-			if (typeof body.movieId === 'number') {
-				fireAndForget(name, () => resolveRootFolderScan('Radarr', body.movieId as number));
-			}
-			break;
-		case 'RescanSeries':
-			if (typeof body.seriesId === 'number') {
-				fireAndForget(name, () => resolveRootFolderScan('Sonarr', body.seriesId as number));
-			}
-			break;
-		case 'RefreshMovie':
-			if (typeof body.movieId === 'number') {
-				fireAndForget(name, async () => {
-					const entityId = await getEntityIdForArrId('movie', body.movieId as number);
-					if (entityId) await refreshMovieMetadata(entityId);
-				});
-			}
-			break;
-		case 'RefreshSeries':
-			if (typeof body.seriesId === 'number') {
-				fireAndForget(name, async () => {
-					const entityId = await getEntityIdForArrId('series', body.seriesId as number);
-					if (entityId) await refreshSeriesMetadata(entityId);
-				});
-			}
-			break;
-		case 'CutOffUnmetMoviesSearch':
-			fireAndForget(name, () =>
-				monitoringSearchService.searchForUpgrades({ cutoffUnmetOnly: true })
-			);
-			break;
-		case 'CutOffUnmetEpisodeSearch':
-			fireAndForget(name, () =>
-				monitoringSearchService.searchForUpgrades({ cutoffUnmetOnly: true })
-			);
-			break;
-		case 'ClearBlocklist':
-			fireAndForget(name, async () => {
-				await db.delete(blocklist);
-			});
-			break;
-		case 'RenameMovie':
-			if (typeof body.movieId === 'number') {
-				fireAndForget(name, () => renameEntity('Radarr', body.movieId as number));
-			} else if (Array.isArray(body.movieIds)) {
-				for (const movieId of body.movieIds) {
-					if (typeof movieId === 'number')
-						fireAndForget(name, () => renameEntity('Radarr', movieId));
-				}
-			}
-			break;
-		case 'RenameSeries':
-			if (typeof body.seriesId === 'number') {
-				fireAndForget(name, () => renameEntity('Sonarr', body.seriesId as number));
-			} else if (Array.isArray(body.seriesIds)) {
-				for (const seriesId of body.seriesIds) {
-					if (typeof seriesId === 'number')
-						fireAndForget(name, () => renameEntity('Sonarr', seriesId));
-				}
-			}
-			break;
-		// Backup is intentionally not mapped: Cinephage's backup mechanism
-		// requires a user-supplied encryption passphrase (ConfigurationBackupService),
-		// which isn't available to an automated command trigger - there's no
-		// safe value to supply on the caller's behalf.
-		default:
-			// Unmapped command name - accept it, but there's nothing real to
-			// trigger. Reported as completed rather than erroring the caller.
-			break;
-	}
-
-	return {
+	// Default: nothing dispatched below flips this; matches real commands
+	// that have nothing to do (unmapped names, a rename with no changes to
+	// make) reporting completed immediately. Any branch that does dispatch
+	// work hands this same object to fireAndForget, which flips it to
+	// 'started' synchronously and to 'completed'/'failed' once settled.
+	const record: CommandRecord = {
 		id,
 		name,
 		commandName: name,
@@ -258,9 +227,133 @@ export function handleCommand(
 		sendUpdatesToClient: false,
 		updateScheduledTask: false
 	};
+
+	switch (name) {
+		case 'MissingMoviesSearch':
+		case 'MoviesSearch': {
+			const movieIds = collectIds(body, 'movieId', 'movieIds');
+			if (movieIds.length > 0) {
+				fireAndForget(name, () => searchTargetedMovies(movieIds), record);
+			} else {
+				fireAndForget(name, () => monitoringSearchService.searchMissingMovies(), record);
+			}
+			break;
+		}
+		case 'MissingEpisodeSearch':
+		case 'SeriesSearch':
+		case 'EpisodeSearch': {
+			const episodeIds = collectIds(body, 'episodeId', 'episodeIds');
+			const seriesIds = collectIds(body, 'seriesId', 'seriesIds');
+			if (episodeIds.length > 0) {
+				fireAndForget(name, () => searchTargetedEpisodes(episodeIds), record);
+			} else if (seriesIds.length > 0) {
+				fireAndForget(name, () => searchTargetedSeries(seriesIds), record);
+			} else {
+				fireAndForget(name, () => monitoringSearchService.searchMissingEpisodes(), record);
+			}
+			break;
+		}
+		case 'RescanMovie': {
+			const movieId = toArrId(body.movieId);
+			if (movieId !== null) {
+				fireAndForget(name, () => resolveRootFolderScan('Radarr', movieId), record);
+			}
+			break;
+		}
+		case 'RescanSeries': {
+			const seriesId = toArrId(body.seriesId);
+			if (seriesId !== null) {
+				fireAndForget(name, () => resolveRootFolderScan('Sonarr', seriesId), record);
+			}
+			break;
+		}
+		case 'RefreshMovie': {
+			const movieId = toArrId(body.movieId);
+			if (movieId !== null) {
+				fireAndForget(
+					name,
+					async () => {
+						const entityId = await getEntityIdForArrId('movie', movieId);
+						if (entityId) await refreshMovieMetadata(entityId);
+					},
+					record
+				);
+			}
+			break;
+		}
+		case 'RefreshSeries': {
+			const seriesId = toArrId(body.seriesId);
+			if (seriesId !== null) {
+				fireAndForget(
+					name,
+					async () => {
+						const entityId = await getEntityIdForArrId('series', seriesId);
+						if (entityId) await refreshSeriesMetadata(entityId);
+					},
+					record
+				);
+			}
+			break;
+		}
+		case 'CutOffUnmetMoviesSearch':
+			fireAndForget(
+				name,
+				() => monitoringSearchService.searchForUpgrades({ cutoffUnmetOnly: true }),
+				record
+			);
+			break;
+		case 'CutOffUnmetEpisodeSearch':
+			fireAndForget(
+				name,
+				() => monitoringSearchService.searchForUpgrades({ cutoffUnmetOnly: true }),
+				record
+			);
+			break;
+		case 'ClearBlocklist':
+			fireAndForget(
+				name,
+				async () => {
+					await db.delete(blocklist);
+				},
+				record
+			);
+			break;
+		case 'RenameMovie': {
+			const movieIds = collectIds(body, 'movieId', 'movieIds');
+			for (const movieId of movieIds) {
+				fireAndForget(name, () => renameEntity('Radarr', movieId), record);
+			}
+			break;
+		}
+		case 'RenameSeries': {
+			const seriesIds = collectIds(body, 'seriesId', 'seriesIds');
+			for (const seriesId of seriesIds) {
+				fireAndForget(name, () => renameEntity('Sonarr', seriesId), record);
+			}
+			break;
+		}
+		// Backup is intentionally not mapped: Cinephage's backup mechanism
+		// requires a user-supplied encryption passphrase (ConfigurationBackupService),
+		// which isn't available to an automated command trigger - there's no
+		// safe value to supply on the caller's behalf.
+		default:
+			// Unmapped command name - accept it, but there's nothing real to
+			// trigger. Reported as completed rather than erroring the caller.
+			break;
+	}
+
+	recordCommand(record);
+	return record as unknown as Record<string, unknown>;
 }
 
-/** GET /command - no real command-history tracking exists yet, so this is an empty list. */
+/** GET /command - real command history, so a polling client sees actual
+ * status instead of an empty list (which some arr clients treat as "the
+ * command was lost" and resubmit, hammering whatever it triggers). */
 export function listCommands(): Record<string, unknown>[] {
-	return [];
+	return Array.from(commandHistory.values()) as unknown as Record<string, unknown>[];
+}
+
+/** GET /command/{id} */
+export function getCommand(id: number): Record<string, unknown> | undefined {
+	return commandHistory.get(id) as unknown as Record<string, unknown> | undefined;
 }

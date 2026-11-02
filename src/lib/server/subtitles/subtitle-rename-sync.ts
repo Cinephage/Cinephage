@@ -18,8 +18,8 @@
  * link, where present, is a movieFileId and does not change with a rename).
  */
 
-import { db } from '$lib/server/db';
-import { episodes, subtitles } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { episodes, subtitles } from '#lib/server/db/schema.js';
 import { eq, inArray } from 'drizzle-orm';
 import { basename, dirname, resolve } from 'node:path';
 import { resolveStoredSubtitlePaths } from './subtitle-paths';

@@ -1,6 +1,6 @@
 import type { MigrationDefinition } from '../migration-helpers.js';
 import { columnExists } from '../migration-helpers.js';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 // Version 11: Add temp path columns to download_clients for SABnzbd dual folder support

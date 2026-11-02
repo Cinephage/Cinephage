@@ -13,6 +13,25 @@ import { createAccessControl } from 'better-auth/plugins/access';
  * Resource permissions available in Cinephage
  */
 const statements = {
+	// User management — the verbs the Better Auth admin plugin actually
+	// checks (createUser/listUsers/setRole/ban/impersonate/...).
+	user: [
+		'create',
+		'delete',
+		'get',
+		'list',
+		'update',
+		'ban',
+		'impersonate',
+		'impersonate-admins',
+		'set-email',
+		'set-password',
+		'set-role'
+	],
+
+	// Session management (admin plugin list/revoke session endpoints)
+	session: ['list', 'revoke'],
+
 	// Indexer management
 	indexer: ['create', 'read', 'update', 'delete'],
 
@@ -65,10 +84,23 @@ const statements = {
 export const ac = createAccessControl(statements);
 
 /**
- * Admin role - full access to everything
- * Single admin system - only one admin account allowed
+ * Admin role - full access to everything, including user management
  */
 export const admin = ac.newRole({
+	user: [
+		'create',
+		'delete',
+		'get',
+		'list',
+		'update',
+		'ban',
+		'impersonate',
+		'impersonate-admins',
+		'set-email',
+		'set-password',
+		'set-role'
+	],
+	session: ['list', 'revoke'],
 	indexer: ['create', 'read', 'update', 'delete'],
 	downloadClient: ['create', 'read', 'update', 'delete'],
 	rootFolder: ['create', 'read', 'update', 'delete'],

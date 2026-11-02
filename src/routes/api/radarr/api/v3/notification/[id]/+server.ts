@@ -1,12 +1,12 @@
-import { error, json } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { requireArrCompatEnabled } from '$lib/server/arr/requireArrCompatEnabled.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { requireArrCompatEnabled } from '#lib/server/arr/requireArrCompatEnabled.js';
 import {
 	getNotificationByArrId,
 	updateNotificationByArrId,
 	deleteNotificationByArrId
-} from '$lib/server/arr/notifications.js';
+} from '#lib/server/arr/notifications.js';
 
 /** GET /api/radarr/api/v3/notification/{id} */
 export const GET: RequestHandler = async (event) => {
@@ -22,7 +22,7 @@ export const GET: RequestHandler = async (event) => {
 	const notification = await getNotificationByArrId('radarr', id);
 	if (!notification) error(404, 'Notification not found');
 
-	return json(notification);
+	return Response.json(notification);
 };
 
 /** PUT /api/radarr/api/v3/notification/{id} - update an existing webhook. */
@@ -40,7 +40,7 @@ export const PUT: RequestHandler = async (event) => {
 	const notification = await updateNotificationByArrId('radarr', id, body);
 	if (!notification) error(404, 'Notification not found');
 
-	return json(notification);
+	return Response.json(notification);
 };
 
 /** DELETE /api/radarr/api/v3/notification/{id} */
@@ -55,5 +55,5 @@ export const DELETE: RequestHandler = async (event) => {
 	if (Number.isNaN(id)) error(400, 'Invalid notification id');
 
 	await deleteNotificationByArrId('radarr', id);
-	return json({});
+	return Response.json({});
 };

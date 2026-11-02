@@ -1,8 +1,7 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { requireArrCompatEnabled } from '$lib/server/arr/requireArrCompatEnabled.js';
-import { buildLanguageProfiles } from '$lib/server/arr/languageProfiles.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { requireArrCompatEnabled } from '#lib/server/arr/requireArrCompatEnabled.js';
+import { buildLanguageProfiles } from '#lib/server/arr/languageProfiles.js';
 
 /**
  * GET /api/sonarr/api/v3/languageprofile
@@ -16,5 +15,5 @@ export const GET: RequestHandler = async (event) => {
 	const authError = requireAdmin(event);
 	if (authError) return authError;
 
-	return json(await buildLanguageProfiles());
+	return Response.json(await buildLanguageProfiles());
 };

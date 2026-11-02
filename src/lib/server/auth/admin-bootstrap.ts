@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3';
 import { count, eq } from 'drizzle-orm';
-import { db } from '$lib/server/db/index.js';
-import { user } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { user } from '#lib/server/db/schema.js';
 
 function tableExists(sqlite: Database.Database, tableName: string): boolean {
 	return !!sqlite
@@ -94,4 +94,28 @@ export async function ensureSoleUserIsAdminRecord(expectedUserId?: string): Prom
 		.where(eq(user.id, existingUser.id));
 
 	return true;
+}
+
+/**
+ * Admin account count. The last-admin guards (demotion, deletion) key off
+ * this: an instance must always keep at least one admin regardless of how
+ * many viewer accounts exist.
+ */
+export async function getAdminCount(): Promise<number> {
+	const [{ value: adminCount }] = await db
+		.select({ value: count() })
+		.from(user)
+		.where(eq(user.role, 'admin'));
+	return adminCount;
+}
+
+/**
+ * A user's current role, or null when the id does not exist.
+ */
+export async function getUserRoleById(userId: string): Promise<string | null> {
+	const existing = await db.query.user.findFirst({
+		where: eq(user.id, userId),
+		columns: { role: true }
+	});
+	return existing?.role ?? null;
 }

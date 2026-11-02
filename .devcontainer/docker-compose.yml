@@ -15,7 +15,7 @@ services:
       - '5173:5173'
 
   transmission:
-    image: linuxserver/transmission:4.1.1
+    image: linuxserver/transmission:4.1.3
     container_name: transmission
     restart: unless-stopped
     profiles:

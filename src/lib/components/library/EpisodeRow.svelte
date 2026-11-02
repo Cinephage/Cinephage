@@ -14,17 +14,17 @@
 		Captions,
 		CaptionsOff,
 		Trash2
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 	import QualityBadge from './QualityBadge.svelte';
 	import AutoSearchStatus from './AutoSearchStatus.svelte';
 	import SubtitleRequirementBadge from './SubtitleRequirementBadge.svelte';
-	import { SubtitleDisplay } from '$lib/components/subtitles';
-	import SubtitlePopover from '$lib/components/subtitles/SubtitlePopover.svelte';
-	import { normalizeLanguageCode } from '$lib/shared/languages';
-	import type { EpisodeSubtitleCounts } from '$lib/shared/language-profile.js';
-	import type { SubtitleRequirementProgress } from '$lib/utils/subtitle-status-display.js';
-	import * as m from '$lib/paraglide/messages.js';
-	import { formatBytes, getFileName, formatDisplayDate } from '$lib/utils/format.js';
+	import { SubtitleDisplay } from '#lib/components/subtitles/index.js';
+	import SubtitlePopover from '#lib/components/subtitles/SubtitlePopover.svelte';
+	import { normalizeLanguageCode } from '#lib/shared/languages.js';
+	import type { EpisodeSubtitleCounts } from '#lib/shared/language-profile.js';
+	import type { SubtitleRequirementProgress } from '#lib/utils/subtitle-status-display.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import { formatBytes, getFileName, formatDisplayDate } from '#lib/utils/format.js';
 
 	interface EpisodeFile {
 		id: string;
@@ -87,6 +87,8 @@
 		seriesMonitored: boolean;
 		isStreamerProfile?: boolean;
 		wantsSubtitles?: boolean;
+		/** Viewer mode: hide monitor/search/delete controls, keep browsing. */
+		readOnly?: boolean;
 		selected?: boolean;
 		showCheckbox?: boolean;
 		isDownloading?: boolean;
@@ -112,6 +114,7 @@
 		seriesMonitored,
 		isStreamerProfile = false,
 		wantsSubtitles = false,
+		readOnly = false,
 		selected = false,
 		showCheckbox = false,
 		isDownloading = false,
@@ -304,22 +307,24 @@
 					{episode.title || m.library_episodeRow_tba()}
 				</span>
 				<div class="ml-auto flex shrink-0 items-center gap-1 sm:hidden">
-					<button
-						class="btn btn-ghost btn-xs {episode.monitored
-							? 'text-success'
-							: 'text-base-content/40'} {monitorDisabled ? 'opacity-40' : ''}"
-						onclick={handleMonitorClick}
-						disabled={monitorDisabled}
-						title={monitorTooltip}
-					>
-						{#if monitorDisabled}
-							<Lock size={14} />
-						{:else if episode.monitored}
-							<Eye size={14} />
-						{:else}
-							<EyeOff size={14} />
-						{/if}
-					</button>
+					{#if !readOnly}
+						<button
+							class="btn btn-ghost btn-xs {episode.monitored
+								? 'text-success'
+								: 'text-base-content/40'} {monitorDisabled ? 'opacity-40' : ''}"
+							onclick={handleMonitorClick}
+							disabled={monitorDisabled}
+							title={monitorTooltip}
+						>
+							{#if monitorDisabled}
+								<Lock size={14} />
+							{:else if episode.monitored}
+								<Eye size={14} />
+							{:else}
+								<EyeOff size={14} />
+							{/if}
+						</button>
+					{/if}
 
 					<AutoSearchStatus
 						status={autoSearchStatus}
@@ -327,43 +332,45 @@
 						error={autoSearchResult?.error}
 						size="xs"
 					/>
-					<div class="dropdown dropdown-end">
-						<div
-							tabindex={autoSearching ? -1 : 0}
-							role="button"
-							class="btn btn-ghost btn-xs"
-							class:btn-disabled={autoSearching}
-							title={m.library_episodeRow_searchOptions()}
-						>
-							{#if autoSearching}
-								<Loader2 size={14} class="animate-spin" />
-							{:else}
-								<Search size={14} />
-							{/if}
-							<ChevronDown size={10} />
-						</div>
-						<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-						<ul
-							tabindex="0"
-							class="menu dropdown-content z-50 w-52 rounded-box bg-base-200 p-2 shadow-lg"
-						>
-							<li class="menu-title">
-								<span>{m.library_episodeRow_mediaMenuTitle()}</span>
-							</li>
-							<li>
-								<button onclick={handleAutoSearchClick} disabled={autoSearching}>
-									<Zap size={14} />
-									{m.library_episodeRow_autoGrabBest()}
-								</button>
-							</li>
-							<li>
-								<button onclick={handleSearchClick}>
+					{#if !readOnly}
+						<div class="dropdown dropdown-end">
+							<div
+								tabindex={autoSearching ? -1 : 0}
+								role="button"
+								class="btn btn-ghost btn-xs"
+								class:btn-disabled={autoSearching}
+								title={m.library_episodeRow_searchOptions()}
+							>
+								{#if autoSearching}
+									<Loader2 size={14} class="animate-spin" />
+								{:else}
 									<Search size={14} />
-									{m.library_episodeRow_interactiveSearch()}
-								</button>
-							</li>
-						</ul>
-					</div>
+								{/if}
+								<ChevronDown size={10} />
+							</div>
+							<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+							<ul
+								tabindex="0"
+								class="menu dropdown-content z-50 w-52 rounded-box bg-base-200 p-2 shadow-lg"
+							>
+								<li class="menu-title">
+									<span>{m.library_episodeRow_mediaMenuTitle()}</span>
+								</li>
+								<li>
+									<button onclick={handleAutoSearchClick} disabled={autoSearching}>
+										<Zap size={14} />
+										{m.library_episodeRow_autoGrabBest()}
+									</button>
+								</li>
+								<li>
+									<button onclick={handleSearchClick}>
+										<Search size={14} />
+										{m.library_episodeRow_interactiveSearch()}
+									</button>
+								</li>
+							</ul>
+						</div>
+					{/if}
 					{#if episode.file?.mediaInfo}
 						<div class="dropdown dropdown-end">
 							<div tabindex="0" role="button" class="btn btn-ghost btn-xs">
@@ -415,7 +422,7 @@
 							</div>
 						</div>
 					{/if}
-					{#if onDelete}
+					{#if !readOnly && onDelete}
 						<button
 							class="btn btn-ghost btn-xs {!hasEpisodeFile && !isDownloading
 								? 'text-base-content/30'
@@ -501,18 +508,20 @@
 								<SubtitleRequirementBadge progress={subtitleProgress} size="xs" />
 							{/if}
 						</div>
-						<SubtitlePopover
-							subtitles={allSubtitles}
-							hasFile={hasEpisodeFile}
-							syncingId={subtitleSyncingId}
-							deletingId={subtitleDeletingId}
-							onSync={onSubtitleSync}
-							onDelete={onSubtitleDelete}
-							onSearch={() => onSubtitleSearch?.(episode)}
-							onAutoSearch={handleSubtitleAutoSearchClick}
-							wantsSubtitles={episode.wantsSubtitlesOverride ?? null}
-							onWantsSubtitlesChange={(value) => onSubtitleGateChange?.(episode.id, value)}
-						/>
+						{#if !readOnly}
+							<SubtitlePopover
+								subtitles={allSubtitles}
+								hasFile={hasEpisodeFile}
+								syncingId={subtitleSyncingId}
+								deletingId={subtitleDeletingId}
+								onSync={onSubtitleSync}
+								onDelete={onSubtitleDelete}
+								onSearch={() => onSubtitleSearch?.(episode)}
+								onAutoSearch={handleSubtitleAutoSearchClick}
+								wantsSubtitles={episode.wantsSubtitlesOverride ?? null}
+								onWantsSubtitlesChange={(value) => onSubtitleGateChange?.(episode.id, value)}
+							/>
+						{/if}
 					</div>
 				</div>
 			{/if}
@@ -579,18 +588,20 @@
 							<SubtitleRequirementBadge progress={subtitleProgress} size="xs" />
 						{/if}
 					</div>
-					<SubtitlePopover
-						subtitles={allSubtitles}
-						hasFile={hasEpisodeFile}
-						syncingId={subtitleSyncingId}
-						deletingId={subtitleDeletingId}
-						onSync={onSubtitleSync}
-						onDelete={onSubtitleDelete}
-						onSearch={() => onSubtitleSearch?.(episode)}
-						onAutoSearch={handleSubtitleAutoSearchClick}
-						wantsSubtitles={episode.wantsSubtitlesOverride ?? null}
-						onWantsSubtitlesChange={(value) => onSubtitleGateChange?.(episode.id, value)}
-					/>
+					{#if !readOnly}
+						<SubtitlePopover
+							subtitles={allSubtitles}
+							hasFile={hasEpisodeFile}
+							syncingId={subtitleSyncingId}
+							deletingId={subtitleDeletingId}
+							onSync={onSubtitleSync}
+							onDelete={onSubtitleDelete}
+							onSearch={() => onSubtitleSearch?.(episode)}
+							onAutoSearch={handleSubtitleAutoSearchClick}
+							wantsSubtitles={episode.wantsSubtitlesOverride ?? null}
+							onWantsSubtitlesChange={(value) => onSubtitleGateChange?.(episode.id, value)}
+						/>
+					{/if}
 				</div>
 			</div>
 		{:else if isDownloading}
@@ -620,23 +631,25 @@
 	<!-- Actions -->
 	<td class="hidden sm:table-cell">
 		<div class="flex flex-wrap items-center gap-1">
-			<!-- Monitor toggle -->
-			<button
-				class="btn btn-ghost btn-xs {episode.monitored
-					? 'text-success'
-					: 'text-base-content/40'} {monitorDisabled ? 'opacity-40' : ''}"
-				onclick={handleMonitorClick}
-				disabled={monitorDisabled}
-				title={monitorTooltip}
-			>
-				{#if monitorDisabled}
-					<Lock size={14} />
-				{:else if episode.monitored}
-					<Eye size={14} />
-				{:else}
-					<EyeOff size={14} />
-				{/if}
-			</button>
+			{#if !readOnly}
+				<!-- Monitor toggle -->
+				<button
+					class="btn btn-ghost btn-xs {episode.monitored
+						? 'text-success'
+						: 'text-base-content/40'} {monitorDisabled ? 'opacity-40' : ''}"
+					onclick={handleMonitorClick}
+					disabled={monitorDisabled}
+					title={monitorTooltip}
+				>
+					{#if monitorDisabled}
+						<Lock size={14} />
+					{:else if episode.monitored}
+						<Eye size={14} />
+					{:else}
+						<EyeOff size={14} />
+					{/if}
+				</button>
+			{/if}
 
 			<!-- Auto-search status indicator -->
 			<AutoSearchStatus
@@ -646,44 +659,46 @@
 				size="xs"
 			/>
 
-			<!-- Search dropdown with auto-grab and interactive options -->
-			<div class="dropdown dropdown-end">
-				<div
-					tabindex={autoSearching ? -1 : 0}
-					role="button"
-					class="btn btn-ghost btn-xs"
-					class:btn-disabled={autoSearching}
-					title={m.library_episodeRow_searchOptions()}
-				>
-					{#if autoSearching}
-						<Loader2 size={14} class="animate-spin" />
-					{:else}
-						<Search size={14} />
-					{/if}
-					<ChevronDown size={10} />
-				</div>
-				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-				<ul
-					tabindex="0"
-					class="menu dropdown-content z-50 w-52 rounded-box bg-base-200 p-2 shadow-lg"
-				>
-					<li class="menu-title">
-						<span>{m.library_episodeRow_mediaMenuTitle()}</span>
-					</li>
-					<li>
-						<button onclick={handleAutoSearchClick} disabled={autoSearching}>
-							<Zap size={14} />
-							{m.library_episodeRow_autoGrabBest()}
-						</button>
-					</li>
-					<li>
-						<button onclick={handleSearchClick}>
+			{#if !readOnly}
+				<!-- Search dropdown with auto-grab and interactive options -->
+				<div class="dropdown dropdown-end">
+					<div
+						tabindex={autoSearching ? -1 : 0}
+						role="button"
+						class="btn btn-ghost btn-xs"
+						class:btn-disabled={autoSearching}
+						title={m.library_episodeRow_searchOptions()}
+					>
+						{#if autoSearching}
+							<Loader2 size={14} class="animate-spin" />
+						{:else}
 							<Search size={14} />
-							{m.library_episodeRow_interactiveSearch()}
-						</button>
-					</li>
-				</ul>
-			</div>
+						{/if}
+						<ChevronDown size={10} />
+					</div>
+					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+					<ul
+						tabindex="0"
+						class="menu dropdown-content z-50 w-52 rounded-box bg-base-200 p-2 shadow-lg"
+					>
+						<li class="menu-title">
+							<span>{m.library_episodeRow_mediaMenuTitle()}</span>
+						</li>
+						<li>
+							<button onclick={handleAutoSearchClick} disabled={autoSearching}>
+								<Zap size={14} />
+								{m.library_episodeRow_autoGrabBest()}
+							</button>
+						</li>
+						<li>
+							<button onclick={handleSearchClick}>
+								<Search size={14} />
+								{m.library_episodeRow_interactiveSearch()}
+							</button>
+						</li>
+					</ul>
+				</div>
+			{/if}
 
 			<!-- File info -->
 			{#if episode.file?.mediaInfo}
@@ -736,8 +751,7 @@
 				</div>
 			{/if}
 
-			<!-- Delete episode -->
-			{#if onDelete}
+			{#if !readOnly && onDelete}
 				<button
 					class="btn btn-ghost btn-xs {!hasEpisodeFile && !isDownloading
 						? 'text-base-content/30'

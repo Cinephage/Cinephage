@@ -1,6 +1,6 @@
 import type { MigrationDefinition } from '../migration-helpers.js';
-import { ensureSoleUserIsAdmin } from '$lib/server/auth/admin-bootstrap.js';
-import { createChildLogger } from '$lib/logging';
+import { ensureSoleUserIsAdmin } from '#lib/server/auth/admin-bootstrap.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 // Version 64: Promote the sole bootstrap user to admin if older auth code created it as user

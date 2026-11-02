@@ -6,4 +6,4 @@ export {
 	buildExistingAttrs,
 	type StoredQuality,
 	type ExistingFileRecord
-} from '$lib/server/scoring/utils.js';
+} from '#lib/server/scoring/utils.js';

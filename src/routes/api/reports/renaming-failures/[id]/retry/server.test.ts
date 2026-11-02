@@ -7,11 +7,17 @@ import {
 } from '../../../../../../test/db-helper';
 import { callHandler } from '../../../../../../test/api-helper';
 import { randomUUID } from 'node:crypto';
-import { renamingFailures, movieFiles, episodeFiles, movies, series } from '$lib/server/db/schema';
+import {
+	renamingFailures,
+	movieFiles,
+	episodeFiles,
+	movies,
+	series
+} from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -29,7 +35,7 @@ const mockLogger = vi.hoisted(() => ({
 	child: vi.fn().mockReturnThis()
 }));
 
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	logger: mockLogger,
 	createChildLogger: vi.fn(() => mockLogger)
 }));
@@ -51,7 +57,8 @@ async function call(id: string) {
 	try {
 		return await callHandler(POST, 'POST', undefined, {
 			url: `http://localhost/api/reports/renaming-failures/${id}/retry`,
-			params: { id }
+			params: { id },
+			auth: 'admin' as const
 		});
 	} catch (err: any) {
 		if (err && typeof err.status === 'number') {

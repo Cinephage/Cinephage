@@ -1,10 +1,9 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { parseRelease, evaluateCondition } from '$lib/server/scoring';
-import type { FormatCondition } from '$lib/server/scoring';
-import { customFormatTestSchema } from '$lib/validation/schemas.js';
-import { logger } from '$lib/logging';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
+import { parseRelease, evaluateCondition } from '#lib/server/scoring/index.js';
+import type { FormatCondition } from '#lib/server/scoring/index.js';
+import { customFormatTestSchema } from '#lib/validation/schemas.js';
+import { logger } from '#lib/logging/index.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 
 /**
  * POST /api/custom-formats/test
@@ -20,7 +19,7 @@ export const POST: RequestHandler = async (event) => {
 		const validation = customFormatTestSchema.safeParse(body);
 
 		if (!validation.success) {
-			return json(
+			return Response.json(
 				{ error: 'Invalid request body', details: validation.error.issues },
 				{ status: 400 }
 			);
@@ -58,7 +57,7 @@ export const POST: RequestHandler = async (event) => {
 		).length;
 		const failedConditions = requiredConditions.filter((r) => !r.matched).length;
 
-		return json({
+		return Response.json({
 			matched,
 			totalConditions: conditions.length,
 			matchedConditions,
@@ -90,6 +89,6 @@ export const POST: RequestHandler = async (event) => {
 		});
 	} catch (error) {
 		logger.error('Error testing format:', error);
-		return json({ error: 'Test failed' }, { status: 500 });
+		return Response.json({ error: 'Test failed' }, { status: 500 });
 	}
 };

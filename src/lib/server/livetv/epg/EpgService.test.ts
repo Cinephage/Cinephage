@@ -1,7 +1,7 @@
 import { beforeEach, afterAll, describe, expect, it, vi } from 'vitest';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../../test/db-helper';
-import { epgPrograms, livetvAccounts, livetvChannels } from '$lib/server/db/schema';
-import type { EpgProgram } from '$lib/types/livetv';
+import { epgPrograms, livetvAccounts, livetvChannels } from '#lib/server/db/schema.js';
+import type { EpgProgram } from '#lib/types/livetv.js';
 
 /**
  * Real integration over an in-memory database: storeEpgData writes through the
@@ -10,7 +10,7 @@ import type { EpgProgram } from '$lib/types/livetv';
  */
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},

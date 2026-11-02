@@ -16,10 +16,10 @@
 
 import type { CustomFormat, ConditionType, FormatCondition } from '../types.js';
 import { ALL_FORMATS } from './index.js';
-import { db } from '$lib/server/db';
-import { customFormats } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { customFormats } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 let _activeFormats: CustomFormat[] | null = null;
 const logger = createChildLogger({ module: 'FormatRegistry', component: 'FormatRegistry' });

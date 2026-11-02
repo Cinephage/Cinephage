@@ -1,8 +1,10 @@
 <script lang="ts">
-	import { theme } from '$lib/theme.svelte';
-	import { themes } from '$lib/themes';
-	import { Palette, Check } from 'lucide-svelte';
-	import * as m from '$lib/paraglide/messages.js';
+	import { browser } from '$app/env';
+	import { theme } from '#lib/theme.svelte.js';
+	import { themes } from '#lib/themes.js';
+	import { Palette, Check } from '@lucide/svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { apiPut } from '#lib/api/client.js';
 
 	let { class: className = 'dropdown-end', showLabel = true, triggerId = '' } = $props();
 	let isOpen = $state(false);
@@ -12,12 +14,24 @@
 		return current.charAt(0).toUpperCase() + current.slice(1);
 	});
 
+	// The account preference rides the same per-user preferences table as
+	// language; the cookie mirrors it so the anti-flash script in app.html
+	// can render the right theme on the next document before hydration.
+	function persistTheme(nextTheme: (typeof themes)[number]) {
+		if (!browser) return;
+		document.cookie = `cinephage-theme=${nextTheme}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
+		void apiPut(`/api/user/preferences/theme`, { value: nextTheme }).catch(() => {
+			// Non-critical: the theme still applies locally.
+		});
+	}
+
 	function toggleDropdown() {
 		isOpen = !isOpen;
 	}
 
 	function handleThemeChange(nextTheme: (typeof themes)[number]) {
 		theme.set(nextTheme);
+		persistTheme(nextTheme);
 		isOpen = false;
 	}
 

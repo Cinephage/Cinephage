@@ -1,11 +1,11 @@
-import { getDownloadClientManager } from '$lib/server/downloadClients/DownloadClientManager.js';
-import { downloadMonitor } from '$lib/server/downloadClients/monitoring/index.js';
-import { ReleaseParser } from '$lib/server/indexers/parser/ReleaseParser.js';
-import { getIndexerManager } from '$lib/server/indexers/IndexerManager.js';
+import { getDownloadClientManager } from '#lib/server/downloadClients/DownloadClientManager.js';
+import { downloadMonitor } from '#lib/server/downloadClients/monitoring/index.js';
+import { ReleaseParser } from '#lib/server/indexers/parser/ReleaseParser.js';
+import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
 import { getNzbValidationService } from '../nzb/index.js';
 import { checkNzbAvailability } from '../nzb/NzbAvailabilityChecker.js';
-import { blocklistService } from '$lib/server/monitoring/specifications/BlocklistSpecification.js';
-import { createChildLogger } from '$lib/logging/index.js';
+import { blocklistService } from '#lib/server/monitoring/specifications/BlocklistSpecification.js';
+import { createChildLogger } from '#lib/logging/index.js';
 import type { GrabRequest, ResolvedContext, HandlerResult } from '../grab-types.js';
 
 const logger = createChildLogger({ module: 'UsenetHandler' });

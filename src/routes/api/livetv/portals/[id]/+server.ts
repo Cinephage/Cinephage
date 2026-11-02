@@ -6,12 +6,11 @@
  * DELETE /api/livetv/portals/[id] - Delete a portal
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getStalkerPortalManager } from '$lib/server/livetv/stalker';
-import { stalkerPortalUpdateSchema } from '$lib/validation/schemas';
-import { createChildLogger } from '$lib/logging';
-import { ValidationError } from '$lib/errors';
+import { getStalkerPortalManager } from '#lib/server/livetv/stalker/index.js';
+import { stalkerPortalUpdateSchema } from '#lib/validation/schemas.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { ValidationError } from '#lib/errors/index.js';
 
 const logger = createChildLogger({ module: 'LiveTvPortalById', logDomain: 'livetv' });
 
@@ -24,7 +23,7 @@ export const GET: RequestHandler = async ({ params }) => {
 		const portal = await manager.getPortal(params.id);
 
 		if (!portal) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: 'Portal not found'
@@ -33,14 +32,14 @@ export const GET: RequestHandler = async ({ params }) => {
 			);
 		}
 
-		return json({
+		return Response.json({
 			success: true,
 			portal
 		});
 	} catch (error) {
 		logger.error('[API] Failed to get portal', error instanceof Error ? error : undefined);
 
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to get portal'
@@ -68,7 +67,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 		const manager = getStalkerPortalManager();
 		const portal = await manager.updatePortal(params.id, parsed.data);
 
-		return json({
+		return Response.json({
 			success: true,
 			portal
 		});
@@ -77,7 +76,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 
 		// Validation errors
 		if (error instanceof ValidationError) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: error.message,
@@ -91,7 +90,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 		const message = error instanceof Error ? error.message : String(error);
 
 		if (message.includes('not found')) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: 'Portal not found'
@@ -101,7 +100,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 		}
 
 		if (message.includes('already exists')) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: message
@@ -110,7 +109,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 			);
 		}
 
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: message || 'Failed to update portal'
@@ -128,7 +127,7 @@ export const DELETE: RequestHandler = async ({ params }) => {
 		const manager = getStalkerPortalManager();
 		await manager.deletePortal(params.id);
 
-		return json({
+		return Response.json({
 			success: true
 		});
 	} catch (error) {
@@ -137,7 +136,7 @@ export const DELETE: RequestHandler = async ({ params }) => {
 		const message = error instanceof Error ? error.message : String(error);
 
 		if (message.includes('not found')) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: 'Portal not found'
@@ -146,7 +145,7 @@ export const DELETE: RequestHandler = async ({ params }) => {
 			);
 		}
 
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: message || 'Failed to delete portal'

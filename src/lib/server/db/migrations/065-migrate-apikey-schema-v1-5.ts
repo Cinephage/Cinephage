@@ -1,5 +1,5 @@
 import type { MigrationDefinition } from '../migration-helpers.js';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 // Version 65: Migrate Better Auth apiKey table from v1.4 to v1.5 schema
@@ -38,11 +38,23 @@ export const migration_v065: MigrationDefinition = {
 			return;
 		}
 
-		if (hasUserId) {
+		if (hasUserId && hasReferenceId) {
+			// A table with BOTH columns is a corrupted intermediate state that
+			// current code paths never create; the rename below would fail on
+			// it. Drop the stray legacy column instead.
+			try {
+				sqlite.prepare(`ALTER TABLE apikey DROP COLUMN userId`).run();
+				logger.info('[SchemaSync] Dropped stray apikey.userId column');
+			} catch {
+				logger.warn('[SchemaSync] Could not drop stray apikey.userId column');
+			}
+		}
+
+		if (hasUserId && !hasReferenceId) {
 			// Rename userId to referenceId
 			logger.info('[SchemaSync] Renaming apikey.userId to referenceId...');
 			sqlite.prepare(`ALTER TABLE apikey RENAME COLUMN userId TO referenceId`).run();
-			logger.info('[SchemaSync] Renamed userId column to referenceId');
+			logger.info('[SchemaSync] Renamed apikey column to referenceId');
 		}
 
 		// Add configId column if it doesn't exist

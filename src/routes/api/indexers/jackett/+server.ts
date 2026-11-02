@@ -1,15 +1,14 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 import { z } from 'zod';
-import { getIndexerManager } from '$lib/server/indexers/IndexerManager.js';
+import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
 import {
 	normalizeJackettUrl,
 	fetchJackettIndexers,
 	jackettIndexerUrl,
 	isIndexerFromJackett,
 	extractJackettIndexerId
-} from '$lib/server/indexers/jackett/JackettConnectionService.js';
+} from '#lib/server/indexers/jackett/JackettConnectionService.js';
 
 const requestSchema = z.object({
 	url: z.string().url('Jackett URL must be a valid URL'),
@@ -33,12 +32,15 @@ export const POST: RequestHandler = async (event) => {
 	try {
 		body = await event.request.json();
 	} catch {
-		return json({ error: 'Invalid JSON body' }, { status: 400 });
+		return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
 	}
 
 	const result = requestSchema.safeParse(body);
 	if (!result.success) {
-		return json({ error: result.error.issues[0]?.message ?? 'Invalid request' }, { status: 400 });
+		return Response.json(
+			{ error: result.error.issues[0]?.message ?? 'Invalid request' },
+			{ status: 400 }
+		);
 	}
 
 	const { url: rawUrl, apiKey } = result.data;
@@ -50,7 +52,7 @@ export const POST: RequestHandler = async (event) => {
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
 		const isTimeout = message.toLowerCase().includes('timeout') || message.includes('TimeoutError');
-		return json(
+		return Response.json(
 			{
 				error: isTimeout
 					? 'Connection timed out. Check that Jackett is running and the URL is correct.'
@@ -87,5 +89,5 @@ export const POST: RequestHandler = async (event) => {
 
 	indexers.sort((a, b) => a.name.localeCompare(b.name));
 
-	return json({ indexers });
+	return Response.json({ indexers });
 };

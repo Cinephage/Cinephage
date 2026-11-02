@@ -21,7 +21,16 @@ export type {
 	AudioChannels
 } from './types.js';
 
-export { RESOLUTION_ORDER, SOURCE_ORDER, CODEC_ORDER, AUDIO_CODEC_ORDER } from './types.js';
+export {
+	RESOLUTION_ORDER,
+	SOURCE_ORDER,
+	CODEC_ORDER,
+	AUDIO_CODEC_ORDER,
+	HDR_FORMAT_ORDER,
+	sortHdrFormats,
+	bestHdrFormat,
+	isHdrFormat
+} from './types.js';
 
 // Individual pattern extractors (for advanced use)
 export { extractResolution, hasResolutionInfo } from './patterns/resolution.js';
@@ -30,6 +39,7 @@ export { extractCodec, extractBitDepth, hasCodecInfo, hasBitDepthInfo } from './
 export {
 	extractEnhancedAudio,
 	extractHdr,
+	extractHdrFormats,
 	hasAudioInfo,
 	hasHdrInfo,
 	hasAtmos,

@@ -1,13 +1,13 @@
 import { describe, expect, it, vi, afterAll, afterEach } from 'vitest';
 import { createTestDb, destroyTestDb } from '../../../test/db-helper.js';
-import { movies, blockedMedia } from '$lib/server/db/schema.js';
-import { invalidateBlockedCache } from '$lib/server/library/status.js';
+import { movies, blockedMedia } from '#lib/server/db/schema.js';
+import { invalidateBlockedCache } from '#lib/server/library/status.js';
 import { randomUUID } from 'node:crypto';
 import type { TestDatabase } from '../../../test/db-helper.js';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -17,7 +17,7 @@ vi.mock('$lib/server/db/index.js', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	logger: {
 		info: vi.fn(),
 		debug: vi.fn(),

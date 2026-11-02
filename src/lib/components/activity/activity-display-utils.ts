@@ -1,7 +1,7 @@
-import type { UnifiedActivity } from '$lib/types/activity';
-import { isImportFailedActivity, TASK_TYPE_LABELS } from '$lib/types/activity';
-import * as m from '$lib/paraglide/messages.js';
-import { getLocale } from '$lib/paraglide/runtime.js';
+import type { UnifiedActivity } from '#lib/types/activity.js';
+import { isImportFailedActivity, TASK_TYPE_LABELS } from '#lib/types/activity.js';
+import * as m from '#lib/paraglide/messages.js';
+import { getLocale } from '#lib/paraglide/runtime.js';
 import {
 	CheckCircle2,
 	XCircle,
@@ -11,13 +11,13 @@ import {
 	Pause,
 	Minus,
 	SearchX
-} from 'lucide-svelte';
+} from '@lucide/svelte';
 
 /**
  * Status → display metadata mapping shared across all activity UI components.
  *
  * Note: `icon` is typed loosely (`typeof CheckCircle2`) because every
- * lucide-svelte icon shares the same component signature.
+ * @lucide/svelte icon shares the same component signature.
  *
  * Labels are resolved at call time via paraglide so the config object
  * stores getter functions instead of static strings.
@@ -100,29 +100,6 @@ export function supportsQueuePauseResume(activity: Pick<UnifiedActivity, 'protoc
 }
 
 /**
- * Compact progress-cell text for table layouts.
- *
- * Failed queue items may carry very long client error messages which do not fit
- * well in summary tables. In those cases we surface a short status label and
- * leave the full reason for the expanded detail view / tooltip.
- */
-export function getCompactProgressLabel(activity: UnifiedActivity): string | null {
-	if (!activity.statusReason) {
-		return null;
-	}
-
-	if (activity.status === 'failed') {
-		return m.status_error();
-	}
-
-	if (activity.status === 'search_error') {
-		return m.status_searchError();
-	}
-
-	return activity.statusReason;
-}
-
-/**
  * Human-readable relative timestamp ("3m ago", "2d ago", etc.).
  *
  * Returns `'-'` when `dateStr` is null/undefined so callers don't need to
@@ -140,8 +117,7 @@ export function formatRelativeTime(dateStr: string | null | undefined): string {
 	if (minutes < 1) return m.activity_relativeTime_justNow();
 	if (minutes < 60) return m.activity_relativeTime_minutesAgo({ count: minutes });
 	if (hours < 24) return m.activity_relativeTime_hoursAgo({ count: hours });
-	if (days < 7) return m.activity_relativeTime_daysAgo({ count: days });
-	return date.toLocaleDateString(getLocale());
+	return m.activity_relativeTime_daysAgo({ count: days });
 }
 
 /**
@@ -205,7 +181,7 @@ const MEDIA_TASK_TYPES = new Set([
 	'new_episode'
 ]);
 
-export interface ActivityCategoryTag {
+interface ActivityCategoryTag {
 	label: string;
 	variant: string;
 }
@@ -224,6 +200,7 @@ export function getMobileCompactStatusLabel(
 	fallbackLabel: string
 ): string | undefined {
 	if (activity.status === 'search_error') return m.action_search();
+	if (activity.status === 'no_results') return m.status_noResults();
 
 	const tag = getActivityCategoryTag(activity);
 	if (tag?.label === m.activity_tag_download()) return getStatusLabel(activity, fallbackLabel);
@@ -231,8 +208,8 @@ export function getMobileCompactStatusLabel(
 	return getStatusLabel(activity, fallbackLabel);
 }
 
-export function getActivityCategoryTag(
-	activity: Pick<UnifiedActivity, 'taskType' | 'activitySource'>
+function getActivityCategoryTag(
+	activity: Pick<UnifiedActivity, 'taskType' | 'activitySource' | 'downloadClientId'>
 ): ActivityCategoryTag | null {
 	if (activity.taskType && SUBTITLE_TASK_TYPES.has(activity.taskType)) {
 		return { label: m.activity_tag_sub(), variant: 'badge-ghost badge-xs' };
@@ -246,9 +223,13 @@ export function getActivityCategoryTag(
 	if (activity.taskType === 'media_move') {
 		return { label: m.activity_tag_move(), variant: 'badge-ghost badge-xs' };
 	}
+	// A manual-import history row (no download client involved) isn't a
+	// "Download" by any meaningful sense - tagging it that way reads as if a
+	// download client triggered the import, which it didn't.
 	if (
 		!activity.taskType &&
-		(activity.activitySource === 'queue' || activity.activitySource === 'download_history')
+		(activity.activitySource === 'queue' ||
+			(activity.activitySource === 'download_history' && activity.downloadClientId))
 	) {
 		return { label: m.activity_tag_download(), variant: 'badge-accent badge-xs' };
 	}

@@ -1,16 +1,16 @@
 import { describe, it, expect, afterAll, beforeEach, vi } from 'vitest';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../test/db-helper.js';
-import { indexers, downloadClients, rootFolders, settings } from '$lib/server/db/schema.js';
+import { indexers, downloadClients, rootFolders, settings } from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/tmdb', () => ({
+vi.mock('#lib/server/tmdb.js', () => ({
 	tmdb: {
 		getMovieReleaseInfo: vi.fn()
 	}
 }));
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -20,7 +20,7 @@ vi.mock('$lib/server/db', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},

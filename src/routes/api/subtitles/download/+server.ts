@@ -1,17 +1,16 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getSubtitleDownloadService } from '$lib/server/subtitles/services/SubtitleDownloadService';
-import { LanguageProfileService } from '$lib/server/subtitles/services/LanguageProfileService';
-import { matchesRequirement } from '$lib/server/subtitles/requirement-matcher';
-import { resetSearchFailure } from '$lib/server/subtitles/subtitle-search-state';
-import { requirementKey } from '$lib/shared/language-profile';
-import { subtitleDownloadSchema } from '$lib/validation/schemas';
-import { db } from '$lib/server/db';
-import { movies, episodes } from '$lib/server/db/schema';
+import { getSubtitleDownloadService } from '#lib/server/subtitles/services/SubtitleDownloadService.js';
+import { LanguageProfileService } from '#lib/server/subtitles/services/LanguageProfileService.js';
+import { matchesRequirement } from '#lib/server/subtitles/requirement-matcher.js';
+import { resetSearchFailure } from '#lib/server/subtitles/subtitle-search-state.js';
+import { requirementKey } from '#lib/shared/language-profile.js';
+import { subtitleDownloadSchema } from '#lib/validation/schemas.js';
+import { db } from '#lib/server/db/index.js';
+import { movies, episodes } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import type { SubtitleSearchResult } from '$lib/server/subtitles/types';
-import { libraryMediaEvents } from '$lib/server/library/LibraryMediaEvents';
-import { parseBody, assertFound } from '$lib/server/api/validate.js';
+import type { SubtitleSearchResult } from '#lib/server/subtitles/types.js';
+import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
+import { parseBody, assertFound } from '#lib/server/api/validate.js';
 
 /**
  * A manual download is a user override: reset the per-requirement search
@@ -97,7 +96,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		});
 		libraryMediaEvents.emitMovieUpdated(validated.movieId);
 
-		return json({
+		return Response.json({
 			success: true,
 			subtitle: downloadResult
 		});
@@ -124,11 +123,11 @@ export const POST: RequestHandler = async ({ request }) => {
 		});
 		libraryMediaEvents.emitSeriesUpdated(episode.seriesId);
 
-		return json({
+		return Response.json({
 			success: true,
 			subtitle: downloadResult
 		});
 	}
 
-	return json({ error: 'Either movieId or episodeId is required' }, { status: 400 });
+	return Response.json({ error: 'Either movieId or episodeId is required' }, { status: 400 });
 };

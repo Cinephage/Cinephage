@@ -1,6 +1,6 @@
 import type { MigrationDefinition } from '../migration-helpers.js';
 import { columnExists, tableExists } from '../migration-helpers.js';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 import { SYSTEM_LIBRARY_SEEDS } from '../schema-sync.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });

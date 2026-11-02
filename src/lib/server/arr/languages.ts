@@ -10,9 +10,9 @@
  * dropdowns) - an empty array would leave nothing selectable.
  */
 
-import { db } from '$lib/server/db/index.js';
-import { languageProfiles } from '$lib/server/db/schema.js';
-import { getLanguageName } from '$lib/shared/languages.js';
+import { db } from '#lib/server/db/index.js';
+import { languageProfiles } from '#lib/server/db/schema.js';
+import { getLanguageName } from '#lib/shared/languages.js';
 import { getOrAssignArrIds } from './ArrIdMappingService.js';
 
 export interface LanguageResource {

@@ -252,7 +252,7 @@ export function toDefinitionSummary(definition: IndexerDefinition): IndexerDefin
 // UI Type Conversion
 // ============================================================================
 
-/** Setting type matching UI expectations from $lib/types/indexer.ts */
+/** Setting type matching UI expectations from #lib/types/indexer.ts */
 export type UISettingType =
 	| 'text'
 	| 'password'
@@ -268,7 +268,7 @@ export type UISettingType =
 
 /**
  * UI-compatible definition setting type.
- * Matches the DefinitionSetting type in $lib/types/indexer.ts
+ * Matches the DefinitionSetting type in #lib/types/indexer.ts
  */
 export interface UIDefinitionSetting {
 	name: string;
@@ -283,7 +283,7 @@ export interface UIDefinitionSetting {
 
 /**
  * UI-compatible indexer definition type.
- * Matches the IndexerDefinition type in $lib/types/indexer.ts
+ * Matches the IndexerDefinition type in #lib/types/indexer.ts
  */
 export interface UIIndexerDefinition {
 	id: string;

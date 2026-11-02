@@ -1,7 +1,8 @@
 import { db } from './db';
 import { languageSettings, settings } from './db/schema';
 import { eq } from 'drizzle-orm';
-import { normalizeMetadataLocale, normalizeRegionCode } from '$lib/server/languages/normalize.js';
+import { normalizeMetadataLocale, normalizeRegionCode } from '#lib/server/languages/normalize.js';
+import { decryptSettingValue } from '#lib/server/settings/secretSettings.js';
 import type {
 	GlobalTmdbFilters,
 	MovieDetails,
@@ -12,10 +13,11 @@ import type {
 	Collection,
 	PersonDetails,
 	PersonCombinedCredits,
-	ReleaseDatesResponse
-} from '$lib/types/tmdb';
-import { TMDB } from '$lib/config/constants';
-import { createChildLogger } from '$lib/logging';
+	ReleaseDatesResponse,
+	TmdbNetwork
+} from '#lib/types/tmdb.js';
+import { DISCOVER_NETWORKS, TMDB } from '#lib/config/constants.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 import { tmdbCache, getCacheKey } from './tmdb-cache';
@@ -68,7 +70,7 @@ async function loadTmdbSettings(): Promise<{
 					db.query.settings.findFirst({ where: eq(settings.key, 'global_filters') })
 				]);
 
-				_cachedApiKey = apiKeySetting?.value ?? null;
+				_cachedApiKey = decryptSettingValue('tmdb_api_key', apiKeySetting?.value) ?? null;
 
 				// language_settings is the TMDB locale/region authority. It is read
 				// independently of global_filters: a fresh install without the
@@ -247,7 +249,7 @@ export const tmdb = {
 					// Apply globally blocked keywords as without_keywords for discover paths
 					if (path.includes('/discover/') && !skipKeywordBlocklist) {
 						const { keywordBlocklistService } =
-							await import('$lib/server/settings/KeywordBlocklistService.js');
+							await import('#lib/server/settings/KeywordBlocklistService.js');
 						const blockedIds = await keywordBlocklistService.getBlockedKeywordIds();
 						if (blockedIds.length > 0) {
 							const existing = url.searchParams.get('without_keywords');
@@ -623,6 +625,28 @@ export const tmdb = {
 	 */
 	async getCertifications(mediaType: 'movie' | 'tv'): Promise<TmdbCertificationsResponse> {
 		return this.fetch(`/certification/${mediaType}/list`) as Promise<TmdbCertificationsResponse>;
+	},
+
+	/**
+	 * Curated popular networks for the discover network filter. TMDB has no
+	 * network list or search endpoint, so ids come from DISCOVER_NETWORKS while
+	 * names and logos are fetched live (cached like any other GET); the curated
+	 * name is only a fallback when /network/{id} fails.
+	 */
+	async getNetworks(): Promise<TmdbNetwork[]> {
+		return Promise.all(
+			DISCOVER_NETWORKS.map(async ({ id, name }) => {
+				try {
+					const data = (await this.fetch(`/network/${id}`)) as {
+						name?: string;
+						logo_path?: string | null;
+					} | null;
+					return { id, name: data?.name || name, logo_path: data?.logo_path ?? null };
+				} catch {
+					return { id, name, logo_path: null };
+				}
+			})
+		);
 	},
 
 	/**

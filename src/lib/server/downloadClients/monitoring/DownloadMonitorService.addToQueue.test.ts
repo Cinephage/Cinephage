@@ -1,10 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../../test/db-helper';
-import { downloadClients, downloadQueue, movies } from '$lib/server/db/schema';
+import { downloadClients, downloadQueue, movies } from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -14,7 +14,7 @@ vi.mock('$lib/server/db', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},

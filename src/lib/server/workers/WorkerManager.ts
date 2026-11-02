@@ -5,7 +5,7 @@
  */
 
 import { EventEmitter } from 'events';
-import { logger } from '$lib/logging';
+import { logger } from '#lib/logging/index.js';
 import { TaskWorker } from './TaskWorker.js';
 import type {
 	WorkerType,

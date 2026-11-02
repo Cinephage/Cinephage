@@ -1,5 +1,5 @@
-import { db } from '$lib/server/db';
-import { rootFolders, settings } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { rootFolders, settings } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 
 export const ANIME_ROOT_FOLDER_ENFORCEMENT_KEY = 'enforce_anime_root_folder';

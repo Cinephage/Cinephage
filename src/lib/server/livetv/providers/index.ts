@@ -5,18 +5,24 @@
  */
 
 export type { LiveTvProvider } from './LiveTvProvider';
-export type { AuthResult, StreamResolutionResult, ProviderCapabilities } from '$lib/types/livetv';
+export type {
+	AuthResult,
+	StreamResolutionResult,
+	ProviderCapabilities
+} from '#lib/types/livetv.js';
 export { StalkerProvider, getStalkerProvider } from './StalkerProvider';
 export { XstreamProvider, getXstreamProvider } from './XstreamProvider';
 export { M3uProvider, getM3uProvider } from './M3uProvider';
 export { CinephageIptvProvider, getCinephageIptvProvider } from './CinephageIptvProvider';
+export { CinephageLiveProvider, getCinephageLiveProvider } from './CinephageLiveProvider';
 
 import type { LiveTvProvider } from './LiveTvProvider';
 import { getStalkerProvider } from './StalkerProvider';
 import { getXstreamProvider } from './XstreamProvider';
 import { getM3uProvider } from './M3uProvider';
 import { getCinephageIptvProvider } from './CinephageIptvProvider';
-import type { LiveTvProviderType, LiveTvAccount } from '$lib/types/livetv';
+import { getCinephageLiveProvider } from './CinephageLiveProvider';
+import type { LiveTvProviderType, LiveTvAccount } from '#lib/types/livetv.js';
 
 /**
  * Get the appropriate provider for a given type
@@ -31,6 +37,8 @@ export function getProvider(type: LiveTvProviderType): LiveTvProvider {
 			return getM3uProvider();
 		case 'cinephage-iptv':
 			return getCinephageIptvProvider();
+		case 'cinephage-live':
+			return getCinephageLiveProvider();
 		default:
 			throw new Error(`Unknown provider type: ${type}`);
 	}
@@ -47,5 +55,11 @@ export function getProviderForAccount(account: LiveTvAccount): LiveTvProvider {
  * Get all available providers
  */
 export function getAllProviders(): LiveTvProvider[] {
-	return [getStalkerProvider(), getXstreamProvider(), getM3uProvider(), getCinephageIptvProvider()];
+	return [
+		getStalkerProvider(),
+		getXstreamProvider(),
+		getM3uProvider(),
+		getCinephageIptvProvider(),
+		getCinephageLiveProvider()
+	];
 }

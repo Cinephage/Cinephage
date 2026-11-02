@@ -10,8 +10,8 @@
  * 3. New score doesn't exceed upgradeUntilScore cutoff
  */
 
-import { isUpgrade } from '$lib/server/scoring/scorer.js';
-import { qualityFilter } from '$lib/server/quality';
+import { isUpgrade } from '#lib/server/scoring/scorer.js';
+import { qualityFilter } from '#lib/server/quality/index.js';
 import type {
 	IMonitoringSpecification,
 	MovieContext,
@@ -20,7 +20,7 @@ import type {
 	ReleaseCandidate
 } from './types.js';
 import { reject, accept, RejectionReason } from './types.js';
-import type { ScoringProfile } from '$lib/server/scoring/types.js';
+import type { ScoringProfile } from '#lib/server/scoring/types.js';
 import { buildExistingAttrs } from './utils.js';
 
 /**

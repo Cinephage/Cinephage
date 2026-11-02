@@ -3,7 +3,7 @@
  * Handles adding NZBs, monitoring downloads, and managing the download queue.
  */
 
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'imports' as const });
 import type {
@@ -13,7 +13,7 @@ import type {
 	DownloadInfo,
 	NntpServerConfig
 } from '../core/interfaces';
-import type { ConnectionTestResult } from '$lib/types/downloadClient';
+import type { ConnectionTestResult } from '#lib/types/downloadClient.js';
 import { SABnzbdProxy, SabnzbdApiError } from './SABnzbdProxy';
 import type {
 	SabnzbdSettings,

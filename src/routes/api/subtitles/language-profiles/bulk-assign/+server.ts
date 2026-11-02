@@ -1,14 +1,13 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
-import { db } from '$lib/server/db';
-import { movies, series, episodes, libraries } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { movies, series, episodes, libraries } from '#lib/server/db/schema.js';
 import { inArray, and, eq } from 'drizzle-orm';
-import { LanguageProfileService } from '$lib/server/subtitles/services/LanguageProfileService';
-import { searchSubtitlesForMediaBatch } from '$lib/server/subtitles/services/SubtitleImportService';
-import { monitoringScheduler } from '$lib/server/monitoring/MonitoringScheduler';
-import { createChildLogger } from '$lib/logging';
-import { parseBody, assertFound } from '$lib/server/api/validate.js';
+import { LanguageProfileService } from '#lib/server/subtitles/services/LanguageProfileService.js';
+import { searchSubtitlesForMediaBatch } from '#lib/server/subtitles/services/SubtitleImportService.js';
+import { monitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { parseBody, assertFound } from '#lib/server/api/validate.js';
 
 const logger = createChildLogger({
 	module: 'SubtitleLanguageProfileBulkAssignApi',
@@ -65,11 +64,11 @@ export const POST: RequestHandler = async ({ request }) => {
 			.where(eq(libraries.id, libraryId))
 			.limit(1);
 		if (!library) {
-			return json({ success: false, error: 'Library not found' }, { status: 404 });
+			return Response.json({ success: false, error: 'Library not found' }, { status: 404 });
 		}
 		const resolvedType = library.mediaType === 'tv' ? 'series' : 'movie';
 		if (resolvedType !== mediaType) {
-			return json(
+			return Response.json(
 				{ success: false, error: `Library media type is ${resolvedType}, not ${mediaType}` },
 				{ status: 400 }
 			);
@@ -80,7 +79,7 @@ export const POST: RequestHandler = async ({ request }) => {
 				: await db.select({ id: movies.id }).from(movies).where(eq(movies.libraryId, libraryId));
 		mediaIds = rows.map((row) => row.id);
 		if (mediaIds.length === 0) {
-			return json({ success: true, updated: 0 });
+			return Response.json({ success: true, updated: 0 });
 		}
 	} else {
 		mediaIds = explicitIds;
@@ -207,7 +206,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 	}
 
-	return json({
+	return Response.json({
 		success: true,
 		updated: mediaIds.length
 	});

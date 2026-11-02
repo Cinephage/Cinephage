@@ -6,9 +6,9 @@
  * movie clearly cannot be in multi-quality mode (null/<2 desired qualities).
  */
 import { eq } from 'drizzle-orm';
-import { db } from '$lib/server/db';
-import { scoringProfiles } from '$lib/server/db/schema';
-import type { Resolution } from '$lib/server/indexers/parser/types.js';
+import { db } from '#lib/server/db/index.js';
+import { scoringProfiles } from '#lib/server/db/schema.js';
+import type { Resolution } from '#lib/server/indexers/parser/types.js';
 import { effectiveBuckets, isMultiQualityMode } from './buckets.js';
 
 export interface MovieMultiQualityContext {

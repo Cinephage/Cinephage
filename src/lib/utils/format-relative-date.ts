@@ -1,5 +1,5 @@
-import * as m from '$lib/paraglide/messages.js';
-import { getLocale } from '$lib/paraglide/runtime.js';
+import * as m from '#lib/paraglide/messages.js';
+import { getLocale } from '#lib/paraglide/runtime.js';
 
 export function formatRelativeDate(dateStr: string): { display: string; full: string } {
 	const date = new Date(dateStr);

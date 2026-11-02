@@ -1,9 +1,8 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { activityService, activityStreamEvents } from '$lib/server/activity';
-import { createChildLogger } from '$lib/logging';
-import type { ActivityFilters, ActivitySortOptions, ActivityScope } from '$lib/types/activity';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
+import { activityService, activityStreamEvents } from '#lib/server/activity/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import type { ActivityFilters, ActivitySortOptions, ActivityScope } from '#lib/types/activity.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 import { z } from 'zod';
 
 const logger = createChildLogger({ module: 'ActivityApi', logDomain: 'monitoring' });
@@ -88,7 +87,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		// Get activities from service
 		const result = await activityService.getActivities(filters, sort, { limit, offset }, scope);
 
-		return json({
+		return Response.json({
 			success: true,
 			activities: result.activities,
 			total: result.total,
@@ -98,7 +97,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		});
 	} catch (err) {
 		logger.error('Error fetching activity', err instanceof Error ? err : undefined);
-		return json({ error: 'Failed to fetch activity', success: false }, { status: 500 });
+		return Response.json({ error: 'Failed to fetch activity', success: false }, { status: 500 });
 	}
 };
 
@@ -119,12 +118,12 @@ export const DELETE: RequestHandler = async (event) => {
 	try {
 		body = await event.request.json();
 	} catch {
-		return json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
+		return Response.json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
 	}
 
 	const parsed = deleteHistorySchema.safeParse(body);
 	if (!parsed.success) {
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: 'Validation failed',
@@ -144,13 +143,16 @@ export const DELETE: RequestHandler = async (event) => {
 				timestamp: new Date().toISOString()
 			});
 		}
-		return json({
+		return Response.json({
 			success: true,
 			...result,
 			totalDeleted
 		});
 	} catch (err) {
 		logger.error('Error deleting activity history rows', err instanceof Error ? err : undefined);
-		return json({ success: false, error: 'Failed to delete activity entries' }, { status: 500 });
+		return Response.json(
+			{ success: false, error: 'Failed to delete activity entries' },
+			{ status: 500 }
+		);
 	}
 };

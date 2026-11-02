@@ -5,7 +5,7 @@
  */
 
 import * as cheerio from 'cheerio';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 import { createHash } from 'node:crypto';
 
 const logger = createChildLogger({ logDomain: 'streams' as const });

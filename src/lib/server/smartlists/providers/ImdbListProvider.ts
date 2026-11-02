@@ -4,7 +4,7 @@
  * Scrapes IMDb lists (e.g., https://www.imdb.com/list/ls060044601/)
  * Uses JSON-LD structured data embedded in the page.
  */
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'monitoring' as const });
 import type { ExternalListProvider, ExternalListItem, ExternalListResult } from './types.js';

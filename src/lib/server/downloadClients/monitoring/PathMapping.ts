@@ -11,7 +11,7 @@
  * - Result: /mnt/storage/downloads/torrents/Movie.Name.2024/movie.mkv
  */
 
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'imports' as const });
 

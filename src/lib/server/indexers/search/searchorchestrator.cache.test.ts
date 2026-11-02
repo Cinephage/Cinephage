@@ -10,8 +10,15 @@ const { enrichMock, getBlockedIdentifiersMock, findMovieMock } = vi.hoisted(() =
 	findMovieMock: vi.fn()
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	db: {
+		// QualityFilter.getProfile reads scoring_profiles via select(); the indexer
+		// allowlist resolver tolerates a profile that is not found.
+		select: () => ({
+			from: () => ({
+				where: () => ({ get: async () => undefined })
+			})
+		}),
 		query: {
 			movies: { findFirst: findMovieMock },
 			series: { findFirst: vi.fn(async () => undefined) }
@@ -19,11 +26,11 @@ vi.mock('$lib/server/db/index.js', () => ({
 	}
 }));
 
-vi.mock('$lib/server/blocklist/BlocklistService.js', () => ({
+vi.mock('#lib/server/blocklist/BlocklistService.js', () => ({
 	blocklistService: { getBlockedIdentifiers: getBlockedIdentifiersMock }
 }));
 
-vi.mock('$lib/server/tmdb.js', () => ({
+vi.mock('#lib/server/tmdb.js', () => ({
 	tmdb: {
 		getMovieExternalIds: vi.fn(),
 		getTvExternalIds: vi.fn(),
@@ -257,5 +264,44 @@ describe('ReleaseCache key includes language', () => {
 
 		expect(cache.get(de)).toBeNull();
 		expect(cache.get(en)).not.toBeNull();
+	});
+});
+
+describe('ReleaseCache key includes the profile indexer allowlist', () => {
+	const criteria: SearchCriteria = { searchType: 'movie', query: 'Foo', tmdbId: 1234 };
+
+	it('keeps an unrestricted result set out of a restricted scope', () => {
+		const cache = new ReleaseCache();
+		cache.set(criteria, [createRelease()], { ix: '' });
+
+		// A profile restricted to one indexer must not reuse the broader result set.
+		expect(cache.get(criteria, { ix: 'indexer-a' })).toBeNull();
+		expect(cache.get(criteria, { ix: '' })).not.toBeNull();
+	});
+
+	it('does not serve one profile allowlist to a different allowlist', () => {
+		const cache = new ReleaseCache();
+		cache.set(criteria, [createRelease()], { ix: 'indexer-a' });
+
+		expect(cache.get(criteria, { ix: 'indexer-b' })).toBeNull();
+		expect(cache.get(criteria, { ix: 'indexer-a' })).not.toBeNull();
+	});
+
+	it('normalizes allowlist ordering in the key', () => {
+		const cache = new ReleaseCache();
+		cache.set(criteria, [createRelease()], { ix: ['b', 'a'].sort().join(',') });
+
+		// The orchestrator sorts before building the key; the cache must then hit.
+		expect(cache.get(criteria, { ix: ['a', 'b'].sort().join(',') })).not.toBeNull();
+	});
+
+	it('invalidates only the matching scope', () => {
+		const cache = new ReleaseCache();
+		cache.set(criteria, [createRelease()], { ix: 'indexer-a' });
+		cache.set(criteria, [createRelease()], { ix: 'indexer-b' });
+
+		expect(cache.invalidate(criteria, { ix: 'indexer-a' })).toBe(true);
+		expect(cache.get(criteria, { ix: 'indexer-a' })).toBeNull();
+		expect(cache.get(criteria, { ix: 'indexer-b' })).not.toBeNull();
 	});
 });

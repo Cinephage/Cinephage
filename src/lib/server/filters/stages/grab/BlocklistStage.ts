@@ -1,6 +1,6 @@
 import type { DecisionStage, StageResult } from '../../types.js';
 import type { GrabDecisionContext } from './types.js';
-import { blocklistService } from '$lib/server/blocklist/BlocklistService.js';
+import { blocklistService } from '#lib/server/blocklist/BlocklistService.js';
 
 export class BlocklistStage implements DecisionStage<GrabDecisionContext> {
 	name = 'blocklist';

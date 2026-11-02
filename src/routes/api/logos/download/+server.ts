@@ -1,7 +1,6 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getLogoDownloadService } from '$lib/server/logos/LogoDownloadService.js';
-import { createChildLogger } from '$lib/logging';
+import { getLogoDownloadService } from '#lib/server/logos/LogoDownloadService.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LogosDownloadApi', logDomain: 'system' });
 
@@ -16,7 +15,7 @@ export const POST: RequestHandler = async () => {
 		// Check if already downloaded
 		const status = await service.getStatus();
 		if (status.downloaded && status.count > 0) {
-			return json({
+			return Response.json({
 				success: true,
 				message: 'Logos already downloaded',
 				data: status
@@ -28,13 +27,13 @@ export const POST: RequestHandler = async () => {
 			logger.error('[LogosDownloadAPI] Download failed', err);
 		});
 
-		return json({
+		return Response.json({
 			success: true,
 			message: 'Download started'
 		});
 	} catch (error) {
 		logger.error('[LogosDownloadAPI] Failed to start download', error);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: 'Failed to start download'
@@ -53,13 +52,13 @@ export const DELETE: RequestHandler = async () => {
 		const service = getLogoDownloadService();
 		await service.remove();
 
-		return json({
+		return Response.json({
 			success: true,
 			message: 'Logos removed'
 		});
 	} catch (error) {
 		logger.error('[LogosDownloadAPI] Failed to remove logos', error);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: 'Failed to remove logos'

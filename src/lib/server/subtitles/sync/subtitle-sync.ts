@@ -15,6 +15,7 @@
  */
 
 import { readFile, writeFile } from 'node:fs/promises';
+import { applyMediaFileMode } from '#lib/server/filesystem/mkdir-helpers.js';
 
 import type { SyncOptions, SyncResult, TimeDelta, TimeSpan } from './types.js';
 import { NO_PROGRESS } from './types.js';
@@ -24,7 +25,7 @@ import { standardScoring, denormalizeSplitPenalty } from './scoring.js';
 import { alignNosplit } from './align-nosplit.js';
 import { alignWithSplits } from './align-split.js';
 import { extractSpeechSegments, mergeCloseSegments } from './vad.js';
-import { createChildLogger } from '$lib/logging/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'SubtitleSyncEngine', logDomain: 'subtitles' });
 
@@ -196,6 +197,7 @@ export async function syncSubtitles(options: SyncOptions): Promise<SyncResult> {
 			syncedContent,
 			options.outputPath ? { encoding: 'utf-8', flag: 'wx' } : 'utf-8'
 		);
+		await applyMediaFileMode(outputPath);
 
 		logger.info(`Synced subtitle written to ${outputPath}`);
 

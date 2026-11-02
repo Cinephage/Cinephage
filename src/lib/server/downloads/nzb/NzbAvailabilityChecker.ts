@@ -5,10 +5,10 @@
  * This prevents sending doomed downloads to download clients that will fail with "cannot be completed".
  */
 
-import { getNntpManager } from '$lib/server/streaming/usenet/NntpManager';
-import { parseNzb } from '$lib/server/streaming/usenet/NzbParser';
-import type { NzbSegment } from '$lib/server/streaming/usenet/types';
-import { createChildLogger } from '$lib/logging';
+import { getNntpManager } from '#lib/server/streaming/usenet/NntpManager.js';
+import { parseNzb } from '#lib/server/streaming/usenet/NzbParser.js';
+import type { NzbSegment } from '#lib/server/streaming/usenet/types.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'imports' as const });
 

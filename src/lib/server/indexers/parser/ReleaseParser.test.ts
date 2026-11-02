@@ -5,11 +5,42 @@ import { isTvRelease } from './patterns/episode';
 import { extractResolution } from './patterns/resolution';
 import { extractSource } from './patterns/source';
 import { extractBitDepth, extractCodec } from './patterns/codec';
-import { extractEnhancedAudio, extractHdr } from './patterns/audio';
+import { extractEnhancedAudio, extractHdr, extractHdrFormats } from './patterns/audio';
+import { hdrFormatsFromLabel } from './types';
 import { extractReleaseGroup } from './patterns/releaseGroup';
 
 describe('ReleaseParser', () => {
 	describe('Movie Releases', () => {
+		it.each([
+			[
+				"Straight Outta Compton (2015-Director's Cut)",
+				'Straight Outta Compton',
+				2015,
+				"Director's Cut"
+			],
+			['Se7en (1995-Remastered)', 'Se7en', 1995, 'Remastered'],
+			[
+				"Gods and Generals (2003-Extended Director's Cut)",
+				'Gods and Generals',
+				2003,
+				"Director's Cut"
+			],
+			['Aquaman (2018-Imax)', 'Aquaman', 2018, 'IMAX'],
+			['Alien (1979-Theatrical Cut)', 'Alien', 1979, 'Theatrical'],
+			['Se7en (1995 Remastered)', 'Se7en', 1995, 'Remastered'],
+			[
+				"Straight Outta Compton (2015 Director's Cut)",
+				'Straight Outta Compton',
+				2015,
+				"Director's Cut"
+			]
+		])('parses year and edition from %s', (filename, cleanTitle, year, edition) => {
+			const result = parseRelease(filename);
+			expect(result.cleanTitle).toBe(cleanTitle);
+			expect(result.year).toBe(year);
+			expect(result.edition).toBe(edition);
+		});
+
 		it('should parse a standard movie release', () => {
 			const result = parseRelease('The.Matrix.1999.1080p.BluRay.x264-GROUP');
 
@@ -658,6 +689,22 @@ describe('ReleaseParser', () => {
 			expect(extractResolution('SD')?.resolution).toBe('480p');
 		});
 
+		it('should prefer an explicit resolution over a UHD/4K marketing alias in the same title', () => {
+			// A 1080p encode sourced from UHD/4K media - the title states
+			// both, but the explicit "1080p" is what the release actually is.
+			expect(
+				extractResolution('A Bronx Tale 1993 1080p UHD BluRay FLAC 2.0 DV HDR x265-PTer')
+					?.resolution
+			).toBe('1080p');
+			expect(extractResolution('Movie.2021.720p.UHD.BluRay.x264-GROUP')?.resolution).toBe('720p');
+			expect(extractResolution('Movie.2021.4K.1080p.BluRay.x264-GROUP')?.resolution).toBe('1080p');
+
+			// Alias-only titles (no explicit numeric resolution) must still
+			// resolve to 2160p.
+			expect(extractResolution('Movie 2021 UHD BluRay REMUX')?.resolution).toBe('2160p');
+			expect(extractResolution('Movie 2021 4K BluRay REMUX')?.resolution).toBe('2160p');
+		});
+
 		it('should detect all source variants', () => {
 			expect(extractSource('REMUX')?.source).toBe('remux');
 			expect(extractSource('BluRay')?.source).toBe('bluray');
@@ -702,6 +749,50 @@ describe('ReleaseParser', () => {
 			expect(extractEnhancedAudio('FLAC').codec).toBe('flac');
 		});
 
+		it('should detect codecs with channel digits glued on (#585)', () => {
+			// Releases routinely glue the channel spec straight onto the codec
+			// token (FLAC1.0, DTSHDMA7.1) and a trailing \b never matches there.
+			expect(extractEnhancedAudio('FLAC1.0').codec).toBe('flac');
+			expect(extractEnhancedAudio('FLAC.1.0').codec).toBe('flac');
+			expect(extractEnhancedAudio('LPCM7.1').codec).toBe('pcm');
+			expect(extractEnhancedAudio('PCM2.0').codec).toBe('pcm');
+			expect(extractEnhancedAudio('DTSHDMA7.1').codec).toBe('dts-hdma');
+			expect(extractEnhancedAudio('DTS-HDMA7.1').codec).toBe('dts-hdma');
+			expect(extractEnhancedAudio('DTS-HD.MA.5.1').codec).toBe('dts-hdma');
+			expect(extractEnhancedAudio('DTS-HD7.1').codec).toBe('dts-hd');
+			expect(extractEnhancedAudio('DTS-HD-HRA7.1').codec).toBe('dts-hd-hra');
+			expect(extractEnhancedAudio('DTS-ES6.1').codec).toBe('dts-es');
+			expect(extractEnhancedAudio('DTSX5.1').codec).toBe('dts-x');
+			expect(extractEnhancedAudio('EAC35.1').codec).toBe('dd+');
+			expect(extractEnhancedAudio('AC35.1').codec).toBe('dd');
+			expect(extractEnhancedAudio('DolbyDigitalPlus5.1').codec).toBe('dd+');
+			expect(extractEnhancedAudio('DolbyDigital5.1').codec).toBe('dd');
+			expect(extractEnhancedAudio('DTS5.1').codec).toBe('dts');
+			expect(extractEnhancedAudio('MP3 320kbps').codec).toBe('mp3');
+		});
+
+		it('should still parse channels glued after letter-ending codecs (#585)', () => {
+			expect(extractEnhancedAudio('FLAC1.0').channels).toBe('1.0');
+			expect(extractEnhancedAudio('LPCM7.1').channels).toBe('7.1');
+			// AC3-style codecs end in a digit themselves, so the channel guard
+			// still cannot see the glued spec; codec detection is what scoring
+			// depends on.
+			expect(extractEnhancedAudio('EAC35.1').channels).toBe('unknown');
+		});
+
+		it('should detect Atmos glued to codec tokens and channel digits (#585)', () => {
+			expect(extractEnhancedAudio('TrueHDAtmos7.1').hasAtmos).toBe(true);
+			expect(extractEnhancedAudio('Atmos7.1').hasAtmos).toBe(true);
+			expect(extractEnhancedAudio('TrueHD.Atmos.7.1').hasAtmos).toBe(true);
+			expect(extractEnhancedAudio('Atmospheric.Disaster.2020.1080p').hasAtmos).toBe(false);
+		});
+
+		it('should parse FLAC1.0 inside a full release title (#585)', () => {
+			const parsed = parseRelease('And.Justice.for.All.1979.1080p.BluRay.FLAC1.0.x264-ZoroSenpai');
+			expect(parsed.audioCodec).toBe('flac');
+			expect(parsed.audioChannels).toBe('1.0');
+		});
+
 		it('should detect HDR formats', () => {
 			expect(extractHdr('Dolby Vision')?.hdr).toBe('dolby-vision');
 			expect(extractHdr('DoVi')?.hdr).toBe('dolby-vision');
@@ -710,6 +801,80 @@ describe('ReleaseParser', () => {
 			expect(extractHdr('HDR10')?.hdr).toBe('hdr10');
 			expect(extractHdr('HDR')?.hdr).toBe('hdr'); // Generic HDR without version
 			expect(extractHdr('HLG')?.hdr).toBe('hlg');
+		});
+
+		it('should report every HDR format in a combo release (#640)', () => {
+			expect(extractHdrFormats('DV HDR10+').map((m) => m.hdr)).toEqual(['dolby-vision', 'hdr10+']);
+			expect(extractHdrFormats('HDR10+ DV').map((m) => m.hdr)).toEqual(['dolby-vision', 'hdr10+']);
+			expect(extractHdrFormats('DoVi HDR10Plus').map((m) => m.hdr)).toEqual([
+				'dolby-vision',
+				'hdr10+'
+			]);
+			expect(extractHdrFormats('Dolby Vision HDR10').map((m) => m.hdr)).toEqual([
+				'dolby-vision',
+				'hdr10'
+			]);
+			expect(extractHdrFormats('DV HLG').map((m) => m.hdr)).toEqual(['dolby-vision', 'hlg']);
+			// Static and dynamic HDR10 layers are both genuinely present.
+			expect(extractHdrFormats('HDR10 HDR10+').map((m) => m.hdr)).toEqual(['hdr10+', 'hdr10']);
+		});
+
+		it('should keep fallback HDR labels from contradicting a specific format (#640)', () => {
+			// A specific format wins; the generic "HDR" label is not an extra format.
+			expect(extractHdrFormats('DV HDR').map((m) => m.hdr)).toEqual(['dolby-vision']);
+			expect(extractHdrFormats('HDR10 HDR').map((m) => m.hdr)).toEqual(['hdr10']);
+			// Explicit SDR alongside a real HDR format is noise, not a second format.
+			expect(extractHdrFormats('DV SDR').map((m) => m.hdr)).toEqual(['dolby-vision']);
+			// Bare labels still work on their own.
+			expect(extractHdrFormats('HDR').map((m) => m.hdr)).toEqual(['hdr']);
+			expect(extractHdrFormats('SDR').map((m) => m.hdr)).toEqual(['sdr']);
+		});
+
+		it('should not let the DV guard swallow DV before audio tokens (#640)', () => {
+			// The old `(?!D)` lookahead rejected DV followed by DTS/DDP/DoVi.
+			for (const title of [
+				'Movie.2024.2160p.DV.DTS-HD.MA.5.1.H.265-GRP',
+				'Movie.2024.2160p.DV.DDP5.1.H.265-GRP',
+				'Movie.2024.2160p.DV.DoVi-GRP'
+			]) {
+				expect(parseRelease(title).hdrFormats).toEqual(['dolby-vision']);
+			}
+			// ...while still rejecting DVD/DVDRip.
+			expect(parseRelease('Movie.2005.DVDRip.XviD-GRP').hdrFormats).toEqual([]);
+		});
+
+		it('should detect HDR10Plus/HDR10P and PQ10 label variants (#640)', () => {
+			expect(extractHdrFormats('HDR10Plus').map((m) => m.hdr)).toEqual(['hdr10+']);
+			expect(extractHdrFormats('HDR10P').map((m) => m.hdr)).toEqual(['hdr10+']);
+			expect(extractHdrFormats('PQ10').map((m) => m.hdr)).toEqual(['pq']);
+		});
+
+		it('should keep the headline hdr field aligned with hdrFormats (#640)', () => {
+			const parsed = parseRelease('Movie.2024.2160p.DV.HDR10Plus.H.265-GRP');
+			expect(parsed.hdrFormats).toEqual(['dolby-vision', 'hdr10+']);
+			expect(parsed.hdr).toBe(parsed.hdrFormats[0]);
+		});
+
+		it('should detect HDR10+ across separator and suffix spellings (#640)', () => {
+			// "HDR10+" at end of string has no word boundary after "+", so the
+			// pattern must not require one. Dots normalize to spaces, so the
+			// spaced forms reach the detector too.
+			for (const title of [
+				'HDR10+',
+				'HDR10 +',
+				'HDR 10+',
+				'HDR 10 +',
+				'HDR.10+',
+				'HDR-10+',
+				'HDR10Plus',
+				'HDR 10 Plus',
+				'HDR10P'
+			]) {
+				expect(extractHdrFormats(title).map((m) => m.hdr)).toEqual(['hdr10+']);
+			}
+			// ...and static HDR10 is still not promoted to HDR10+.
+			expect(extractHdrFormats('HDR 10').map((m) => m.hdr)).toEqual(['hdr10']);
+			expect(extractHdrFormats('HDR.10').map((m) => m.hdr)).toEqual(['hdr10']);
 		});
 	});
 
@@ -974,6 +1139,36 @@ describe('ReleaseParser', () => {
 
 			expect(result.cleanTitle).toContain('Demon Slayer');
 			expect(result.resolution).toBe('1080p');
+		});
+
+		it('keeps a dual-language alternate title joined with " / " intact (movie)', () => {
+			// Reported identity-mismatch false positive: the release joins a
+			// Russian primary title with its English alternate via " / ".
+			// cleanTitle deliberately keeps both segments, SearchOrchestrator's
+			// alias matching relies on the alternate segment surviving here;
+			// release-identity.ts's matchReleaseToTarget is what scores each
+			// segment separately against the library's title (see its tests).
+			const result = parseRelease(
+				'Зловещие Мертвецы 3: Армия Тьмы / Army of Darkness (1992) BDRip [H.264/1080p] [Theatrical Cut]',
+				{ mode: 'movie' }
+			);
+
+			expect(result.cleanTitle).toBe('Зловещие Мертвецы 3: Армия Тьмы / Army of Darkness');
+			expect(result.year).toBe(1992);
+		});
+
+		it('recovers a title that comes after a leading "Season N Episode M" marker (TV)', () => {
+			// Reported identity-mismatch false positive: extractTitleBeforeEpisode
+			// cut at the leading episode marker (index 0), leaving cleanTitle
+			// empty. The title is recovered from between that marker and the
+			// next one instead.
+			const result = parseRelease(
+				'Season 2 Episode 4 - Гангстерленд / MobLand / - S2E1-4 - 2026 / DUB, 4 x MVO, 2 x DVO, Sub / 4K, HEVC, SDR / WEBDL 2160p'
+			);
+
+			expect(result.cleanTitle).toBe('Гангстерленд / Mobland');
+			expect(result.episode?.season).toBe(2);
+			expect(result.episode?.episodes).toEqual([4]);
 		});
 	});
 
@@ -1304,5 +1499,31 @@ describe('parseRelease Cyrillic season patterns', () => {
 		const p = parseRelease('Кухня Сезон 1 Серия 5 1080p WEB-DL');
 		expect(p.episode?.season).toBe(1);
 		expect(p.episode?.episodes).toContain(5);
+	});
+});
+
+describe('hdrFormatsFromLabel (#640)', () => {
+	it('reads probe combo labels as a set', () => {
+		expect(hdrFormatsFromLabel('Dolby Vision HDR10+')).toEqual(['dolby-vision', 'hdr10+']);
+		expect(hdrFormatsFromLabel('Dolby Vision HDR10')).toEqual(['dolby-vision', 'hdr10']);
+		expect(hdrFormatsFromLabel('Dolby Vision HLG')).toEqual(['dolby-vision', 'hlg']);
+	});
+
+	it('reads single-format labels', () => {
+		expect(hdrFormatsFromLabel('HDR10+')).toEqual(['hdr10+']);
+		expect(hdrFormatsFromLabel('HDR10')).toEqual(['hdr10']);
+		expect(hdrFormatsFromLabel('HLG')).toEqual(['hlg']);
+		expect(hdrFormatsFromLabel('PQ10')).toEqual(['pq']);
+	});
+
+	it('only reports generic HDR when nothing specific was named', () => {
+		expect(hdrFormatsFromLabel('HDR')).toEqual(['hdr']);
+		expect(hdrFormatsFromLabel('HDR10 HDR')).toEqual(['hdr10']);
+	});
+
+	it('returns an empty set for missing or unrecognised labels', () => {
+		expect(hdrFormatsFromLabel(undefined)).toEqual([]);
+		expect(hdrFormatsFromLabel('')).toEqual([]);
+		expect(hdrFormatsFromLabel('SDR')).toEqual(['sdr']);
 	});
 });

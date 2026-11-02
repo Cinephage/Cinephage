@@ -158,6 +158,45 @@ export const EXECUTABLE_EXTENSIONS = ['.bat', '.cmd', '.exe', '.sh'] as const;
  * @see https://developers.themoviedb.org/3/genres/get-movie-list
  * @see https://developers.themoviedb.org/3/genres/get-tv-list
  */
+/**
+ * Curated TMDB TV networks for the discover network filter (`with_networks`).
+ *
+ * TMDB exposes no network list or network search endpoint, so the picker is a
+ * curated ID set (each verified against /network/{id} on live data); names and
+ * logos are still fetched live at page load. Discover queries pipe-join
+ * selections, so multiple picks mean "aired on any of these networks".
+ */
+export const DISCOVER_NETWORKS = [
+	{ id: 213, name: 'Netflix' },
+	{ id: 1024, name: 'Prime Video' },
+	{ id: 2552, name: 'Apple TV+' },
+	{ id: 2739, name: 'Disney+' },
+	{ id: 453, name: 'Hulu' },
+	{ id: 6783, name: 'Max' },
+	{ id: 3353, name: 'Peacock' },
+	{ id: 4330, name: 'Paramount+' },
+	{ id: 4353, name: 'discovery+' },
+	{ id: 56, name: 'Cartoon Network' },
+	{ id: 13, name: 'Nickelodeon' },
+	{ id: 54, name: 'Disney Channel' },
+	{ id: 44, name: 'Disney XD' },
+	{ id: 80, name: 'Adult Swim' },
+	{ id: 49, name: 'HBO' },
+	{ id: 67, name: 'Showtime' },
+	{ id: 318, name: 'Starz' },
+	{ id: 174, name: 'AMC' },
+	{ id: 88, name: 'FX' },
+	{ id: 47, name: 'Comedy Central' },
+	{ id: 33, name: 'MTV' },
+	{ id: 6, name: 'NBC' },
+	{ id: 2, name: 'ABC' },
+	{ id: 19, name: 'FOX' },
+	{ id: 16, name: 'CBS' },
+	{ id: 71, name: 'The CW' },
+	{ id: 68, name: 'TBS' },
+	{ id: 4, name: 'BBC One' }
+] as const;
+
 export const GENRE_MAPPINGS = {
 	/**
 	 * Maps movie genre IDs to their TV equivalents.

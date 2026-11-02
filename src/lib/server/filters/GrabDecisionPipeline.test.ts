@@ -7,21 +7,21 @@ const mockParse = vi.hoisted(() => vi.fn());
 const mockIsUpgrade = vi.hoisted(() => vi.fn());
 const mockBuildExistingAttrs = vi.hoisted(() => vi.fn());
 
-vi.mock('$lib/server/blocklist/BlocklistService.js', () => ({
+vi.mock('#lib/server/blocklist/BlocklistService.js', () => ({
 	blocklistService: { isBlocklisted: mockIsBlocklisted }
 }));
 
-vi.mock('$lib/server/quality/QualityFilter.js', () => ({
+vi.mock('#lib/server/quality/QualityFilter.js', () => ({
 	qualityFilter: { calculateEnhancedScore: mockCalculateEnhancedScore }
 }));
 
-vi.mock('$lib/server/indexers/parser/ReleaseParser.js', () => ({
+vi.mock('#lib/server/indexers/parser/ReleaseParser.js', () => ({
 	ReleaseParser: class {
 		parse = mockParse;
 	}
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	db: {
 		select: () => ({
 			from: () => ({
@@ -39,15 +39,15 @@ vi.mock('$lib/server/db/index.js', () => ({
 	}
 }));
 
-vi.mock('$lib/server/settings/blocked-extensions.js', () => ({
+vi.mock('#lib/server/settings/blocked-extensions.js', () => ({
 	resolveBlockedExtensionsForQueueItem: vi.fn().mockReturnValue([])
 }));
 
-vi.mock('$lib/server/scoring/scorer.js', () => ({
+vi.mock('#lib/server/scoring/scorer.js', () => ({
 	isUpgrade: mockIsUpgrade
 }));
 
-vi.mock('$lib/server/monitoring/specifications/utils.js', () => ({
+vi.mock('#lib/server/monitoring/specifications/utils.js', () => ({
 	buildExistingAttrs: mockBuildExistingAttrs
 }));
 
@@ -62,7 +62,7 @@ vi.mock('drizzle-orm', () => ({
 	sql: vi.fn()
 }));
 
-vi.mock('$lib/server/db/schema.js', () => ({
+vi.mock('#lib/server/db/schema.js', () => ({
 	downloadQueue: {
 		id: 'id',
 		infoHash: 'infoHash',
@@ -194,6 +194,94 @@ describe('GrabDecisionPipeline', () => {
 		expect(sizeStage?.skipped).toBe(true);
 	});
 
+	it('rejects a release from an indexer outside the profile allowlist', async () => {
+		const ctx = makeGrabDecisionContext({
+			release: {
+				title: 'Movie.2024.1080p.WEB-DL.x264',
+				size: 5_000_000_000,
+				indexerId: 'not-selected',
+				indexerName: 'OtherIndexer',
+				protocol: 'torrent'
+			},
+			profile: {
+				...makeGrabDecisionContext().profile,
+				allowedIndexerIds: ['selected-indexer']
+			},
+			options: { force: false, skipBlocklist: false, allowSidegrade: false, isAutomatic: false }
+		});
+
+		const decision = await pipeline.evaluate(ctx);
+
+		expect(decision.accepted).toBe(false);
+		expect(decision.rejectionType).toBe('indexer_not_allowed');
+		expect(decision.reason).toContain('OtherIndexer');
+	});
+
+	it('accepts a release from an allowlisted indexer', async () => {
+		const ctx = makeGrabDecisionContext({
+			release: {
+				title: 'Movie.2024.1080p.WEB-DL.x264',
+				size: 5_000_000_000,
+				indexerId: 'selected-indexer',
+				indexerName: 'SelectedIndexer',
+				protocol: 'torrent'
+			},
+			profile: {
+				...makeGrabDecisionContext().profile,
+				allowedIndexerIds: ['selected-indexer']
+			},
+			options: { force: false, skipBlocklist: false, allowSidegrade: false, isAutomatic: false }
+		});
+
+		const decision = await pipeline.evaluate(ctx);
+
+		expect(decision.accepted).toBe(true);
+		expect(decision.audit.stages.find((s) => s.name === 'indexer')?.result?.accepted).toBe(true);
+	});
+
+	it('lets force bypass the indexer allowlist', async () => {
+		const ctx = makeGrabDecisionContext({
+			release: {
+				title: 'Movie.2024.1080p.WEB-DL.x264',
+				size: 5_000_000_000,
+				indexerId: 'not-selected',
+				indexerName: 'OtherIndexer',
+				protocol: 'torrent'
+			},
+			profile: {
+				...makeGrabDecisionContext().profile,
+				allowedIndexerIds: ['selected-indexer']
+			},
+			options: { force: true, skipBlocklist: false, allowSidegrade: false, isAutomatic: false }
+		});
+
+		const decision = await pipeline.evaluate(ctx);
+
+		expect(decision.accepted).toBe(true);
+		expect(decision.audit.stages.find((s) => s.name === 'indexer')?.skipped).toBe(true);
+	});
+
+	it('does not restrict when the profile allowlist is null', async () => {
+		const ctx = makeGrabDecisionContext({
+			release: {
+				title: 'Movie.2024.1080p.WEB-DL.x264',
+				size: 5_000_000_000,
+				indexerId: 'any-indexer',
+				indexerName: 'AnyIndexer',
+				protocol: 'torrent'
+			},
+			profile: {
+				...makeGrabDecisionContext().profile,
+				allowedIndexerIds: null
+			},
+			options: { force: false, skipBlocklist: false, allowSidegrade: false, isAutomatic: false }
+		});
+
+		const decision = await pipeline.evaluate(ctx);
+
+		expect(decision.accepted).toBe(true);
+	});
+
 	it('produces correct stage names and timing in audit trail', async () => {
 		const ctx = makeGrabDecisionContext();
 		const decision = await pipeline.evaluate(ctx);
@@ -208,6 +296,7 @@ describe('GrabDecisionPipeline', () => {
 			'language',
 			'sizeValidation',
 			'protocol',
+			'indexer',
 			'minimumScore',
 			'duplicateHash',
 			'mediaOccupancy',

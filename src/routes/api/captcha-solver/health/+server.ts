@@ -1,8 +1,7 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getCaptchaSolver } from '$lib/server/captcha';
-import { createChildLogger } from '$lib/logging';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
+import { getCaptchaSolver } from '#lib/server/captcha/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 
 const logger = createChildLogger({ module: 'CaptchaSolverHealthApi', logDomain: 'indexers' });
 
@@ -17,7 +16,7 @@ export const GET: RequestHandler = async (event) => {
 		const solver = getCaptchaSolver();
 		const health = solver.getHealth();
 
-		return json({
+		return Response.json({
 			success: true,
 			health
 		});
@@ -26,7 +25,7 @@ export const GET: RequestHandler = async (event) => {
 			'[API] Failed to get captcha solver health',
 			error instanceof Error ? error : undefined
 		);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: 'Failed to get captcha solver health'
@@ -48,7 +47,7 @@ export const DELETE: RequestHandler = async (event) => {
 		solver.resetStats();
 		solver.clearCache();
 
-		return json({
+		return Response.json({
 			success: true,
 			message: 'Cache cleared and statistics reset'
 		});
@@ -57,7 +56,7 @@ export const DELETE: RequestHandler = async (event) => {
 			'[API] Failed to reset captcha solver stats',
 			error instanceof Error ? error : undefined
 		);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: 'Failed to reset captcha solver stats'

@@ -4,13 +4,17 @@
  * Database-backed configuration for the Camoufox-based captcha solving system.
  */
 
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'indexers' as const });
-import { db } from '$lib/server/db';
-import { captchaSolverSettings } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { captchaSolverSettings } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { DEFAULT_CONFIG, type CaptchaSolverConfig, type ProxyConfig } from './types';
+import {
+	decryptCaptchaSettingValue,
+	encryptCaptchaSettingValue
+} from '#lib/server/settings/secretSettings.js';
 
 /**
  * Database key to config property mapping
@@ -82,7 +86,9 @@ export class CaptchaSolverSettingsService {
 			);
 		}
 
-		const settingsMap = new Map(settings.map((s) => [s.key, s.value]));
+		const settingsMap = new Map(
+			settings.map((s) => [s.key, decryptCaptchaSettingValue(s.key, s.value) ?? ''])
+		);
 
 		// Build config from database settings, falling back to defaults
 		const config: CaptchaSolverConfig = { ...DEFAULT_CONFIG };
@@ -191,6 +197,8 @@ export class CaptchaSolverSettingsService {
 	 * Set a single setting value
 	 */
 	private setSetting(key: string, value: string): void {
+		// Proxy credentials are encrypted at rest; other settings are plain.
+		const storedValue = encryptCaptchaSettingValue(key, value);
 		const existing = db
 			.select()
 			.from(captchaSolverSettings)
@@ -199,11 +207,11 @@ export class CaptchaSolverSettingsService {
 
 		if (existing) {
 			db.update(captchaSolverSettings)
-				.set({ value })
+				.set({ value: storedValue })
 				.where(eq(captchaSolverSettings.key, key))
 				.run();
 		} else {
-			db.insert(captchaSolverSettings).values({ key, value }).run();
+			db.insert(captchaSolverSettings).values({ key, value: storedValue }).run();
 		}
 	}
 

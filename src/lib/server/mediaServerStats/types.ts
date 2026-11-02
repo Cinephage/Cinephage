@@ -1,4 +1,4 @@
-import type { MediaBrowserServerType } from '$lib/server/notifications/mediabrowser/types.js';
+import type { MediaBrowserServerType } from '#lib/server/notifications/mediabrowser/types.js';
 
 export interface MediaServerStatsProviderConfig {
 	host: string;

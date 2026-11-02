@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { CheckCircle2, XCircle } from 'lucide-svelte';
-	import { SectionHeader } from '$lib/components/ui/modal';
-	import * as m from '$lib/paraglide/messages.js';
+	import { CheckCircle2, XCircle } from '@lucide/svelte';
+	import { SectionHeader } from '#lib/components/ui/modal/index.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
 		name: string;

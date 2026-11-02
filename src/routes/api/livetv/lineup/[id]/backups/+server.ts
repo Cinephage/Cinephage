@@ -4,12 +4,11 @@
  * POST /api/livetv/lineup/[id]/backups - Add a backup link
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { channelLineupService } from '$lib/server/livetv/lineup/ChannelLineupService';
-import { createChildLogger } from '$lib/logging';
-import { ValidationError } from '$lib/errors';
-import { addBackupLinkSchema } from '$lib/validation/schemas.js';
+import { channelLineupService } from '#lib/server/livetv/lineup/ChannelLineupService.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { ValidationError } from '#lib/errors/index.js';
+import { addBackupLinkSchema } from '#lib/validation/schemas.js';
 
 const logger = createChildLogger({ module: 'LiveTvLineupBackups', logDomain: 'livetv' });
 
@@ -23,7 +22,7 @@ export const GET: RequestHandler = async ({ params }) => {
 		// Verify lineup item exists
 		const item = await channelLineupService.getChannelById(id);
 		if (!item) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: 'Lineup item not found'
@@ -33,13 +32,13 @@ export const GET: RequestHandler = async ({ params }) => {
 		}
 
 		const backups = await channelLineupService.getBackups(id);
-		return json({
+		return Response.json({
 			success: true,
 			backups
 		});
 	} catch (error) {
 		logger.error('[API] Failed to get backups', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to get backups'
@@ -59,7 +58,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		// Verify lineup item exists
 		const item = await channelLineupService.getChannelById(id);
 		if (!item) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: 'Lineup item not found'
@@ -70,7 +69,10 @@ export const POST: RequestHandler = async ({ params, request }) => {
 
 		const parsed = addBackupLinkSchema.safeParse(await request.json());
 		if (!parsed.success) {
-			return json({ success: false, error: parsed.error.issues[0].message }, { status: 400 });
+			return Response.json(
+				{ success: false, error: parsed.error.issues[0].message },
+				{ status: 400 }
+			);
 		}
 		const body = parsed.data;
 
@@ -78,7 +80,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		const result = await channelLineupService.addBackup(id, body.accountId, body.channelId);
 
 		if (!result.backup) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: result.error || 'Failed to add backup'
@@ -87,7 +89,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 			);
 		}
 
-		return json(
+		return Response.json(
 			{
 				success: true,
 				backup: result.backup
@@ -97,7 +99,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	} catch (error) {
 		// Validation errors
 		if (error instanceof ValidationError) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: error.message,
@@ -107,7 +109,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 			);
 		}
 		logger.error('[API] Failed to add backup', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to add backup'

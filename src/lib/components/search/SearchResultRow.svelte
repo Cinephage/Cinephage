@@ -13,17 +13,20 @@
 		ArrowUpCircle,
 		ArrowDownCircle,
 		Ban
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 	import { getContext } from 'svelte';
-	import { formatBytes } from '$lib/utils/format';
-	import type { ScoreComponents } from '$lib/server/quality/types.js';
-	import * as m from '$lib/paraglide/messages.js';
+	import { formatBytes } from '#lib/utils/format.js';
+	import type { ScoreComponents } from '#lib/server/quality/types.js';
+	import { formatHdrFormats } from '#lib/types/format.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	export interface Release {
-		guid: string;
+		guid: string | null;
 		title: string;
-		downloadUrl: string;
-		magnetUrl?: string;
+		/** Null when the indexer only offers a magnet (or vice versa); the
+		 * search API redacts absent URLs to null instead of omitting them. */
+		downloadUrl: string | null;
+		magnetUrl?: string | null;
 		infoHash?: string;
 		size: number;
 		seeders?: number;
@@ -44,7 +47,16 @@
 			source?: string;
 			codec?: string;
 			hdr?: string;
+			/** Every detected HDR format, best-first (#640). */
+			hdrFormats?: string[];
 			releaseGroup?: string;
+			audioCodec?: string;
+			audioChannels?: string;
+			hasAtmos?: boolean;
+			edition?: string;
+			isProper?: boolean;
+			isRepack?: boolean;
+			languages?: string[];
 			episode?: {
 				season?: number;
 				seasons?: number[];
@@ -157,8 +169,55 @@
 		addTag(release.parsed?.resolution);
 		addTag(release.parsed?.source);
 		addTag(release.parsed?.codec);
+		addTag(release.parsed?.audioCodec ? release.parsed.audioCodec.toUpperCase() : undefined);
 		addTag(release.parsed?.hdr);
+		for (const format of release.parsed?.hdrFormats ?? []) {
+			if (format !== release.parsed?.hdr) addTag(format);
+		}
 		return tags;
+	}
+
+	/**
+	 * Every detected HDR format for the Technical Details row, e.g.
+	 * "Dolby Vision + HDR10+". Falls back to the headline `hdr` value for
+	 * responses produced before `hdrFormats` existed.
+	 */
+	function formatHdr(): string | null {
+		const formats = release.parsed?.hdrFormats?.length
+			? release.parsed.hdrFormats
+			: release.parsed?.hdr
+				? [release.parsed.hdr]
+				: [];
+		return formatHdrFormats(formats);
+	}
+
+	/**
+	 * Audio codec + channels for the Technical Details row, e.g. "FLAC 1.0"
+	 * or "DD+ 5.1 ATMOS". Null when nothing audio-related was detected so the
+	 * row can fall back to "Unknown" (#586).
+	 */
+	function formatAudioSummary(): string | null {
+		const codec = release.parsed?.audioCodec;
+		const channels = release.parsed?.audioChannels;
+		if (!isKnownBadge(codec) && !isKnownBadge(channels)) return null;
+		const parts = [
+			isKnownBadge(codec) ? codec!.trim().toUpperCase() : null,
+			isKnownBadge(channels) ? channels!.trim() : null,
+			release.parsed?.hasAtmos ? 'ATMOS' : null
+		];
+		return parts.filter(Boolean).join(' ');
+	}
+
+	/**
+	 * "Repack", "Proper" or "Repack / Proper" for the Version row (#586).
+	 */
+	function getVersionSummary(): string | null {
+		const parts = [
+			release.parsed?.isRepack ? 'Repack' : null,
+			release.parsed?.isProper ? 'Proper' : null
+		];
+		const summary = parts.filter(Boolean).join(' / ');
+		return summary || null;
 	}
 
 	function getProtocolColor(): string {
@@ -517,7 +576,10 @@
 								{@const scoreClass =
 									cat.score > 0 ? 'bg-success/10 text-success' : 'bg-error/10 text-error'}
 								{@const prefix = cat.score > 0 ? '+' : ''}
-								<span class="rounded-full px-2 py-1 text-xs {scoreClass}">
+								<span
+									class="rounded-full px-2 py-1 text-xs {scoreClass}"
+									title={cat.formats?.length ? cat.formats.join(', ') : undefined}
+								>
 									{prefix}{cat.score}
 									{label}
 								</span>
@@ -597,10 +659,32 @@
 								<dd class="font-medium">{release.parsed.codec}</dd>
 							</div>
 						{/if}
-						{#if release.parsed?.hdr}
+						<div class="flex justify-between">
+							<dt class="text-base-content/60">{m.search_labelAudioCodec()}</dt>
+							<dd class="font-medium">{formatAudioSummary() ?? m.common_unknown()}</dd>
+						</div>
+						{#if release.parsed?.hdr || release.parsed?.hdrFormats?.length}
 							<div class="flex justify-between">
 								<dt class="text-base-content/60">{m.search_labelHdr()}</dt>
-								<dd class="font-medium">{release.parsed.hdr}</dd>
+								<dd class="font-medium">{formatHdr() ?? m.common_unknown()}</dd>
+							</div>
+						{/if}
+						{#if release.parsed?.edition}
+							<div class="flex justify-between">
+								<dt class="text-base-content/60">{m.search_labelEdition()}</dt>
+								<dd class="font-medium">{release.parsed.edition}</dd>
+							</div>
+						{/if}
+						{#if getVersionSummary()}
+							<div class="flex justify-between">
+								<dt class="text-base-content/60">{m.search_labelVersion()}</dt>
+								<dd class="font-medium">{getVersionSummary()}</dd>
+							</div>
+						{/if}
+						{#if release.parsed?.languages?.length}
+							<div class="flex justify-between">
+								<dt class="text-base-content/60">{m.search_labelLanguages()}</dt>
+								<dd class="font-medium">{release.parsed.languages.join(', ')}</dd>
 							</div>
 						{/if}
 						<div class="flex justify-between">

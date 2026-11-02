@@ -1,6 +1,6 @@
 import { describe, it, expect, afterAll, vi, beforeEach } from 'vitest';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../test/db-helper.js';
-import { blockedKeywords, settings } from '$lib/server/db/schema.js';
+import { blockedKeywords, settings } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 
 const testDb: TestDatabase = createTestDb();
@@ -9,13 +9,13 @@ const { mockKeywordDetails } = vi.hoisted(() => ({
 	mockKeywordDetails: vi.fn()
 }));
 
-vi.mock('$lib/server/tmdb', () => ({
+vi.mock('#lib/server/tmdb.js', () => ({
 	tmdb: {
 		keywordDetails: mockKeywordDetails
 	}
 }));
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -25,7 +25,7 @@ vi.mock('$lib/server/db', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},

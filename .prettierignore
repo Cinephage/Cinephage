@@ -7,12 +7,7 @@ bun.lockb
 
 # Miscellaneous
 /static/
-/drizzle/
 .claude/
-
-# External/separate projects
-Flyx-main/
-Cinephage-Streamer/
 
 # Build artifacts
 .svelte-kit/
@@ -20,3 +15,4 @@ Cinephage-Streamer/
 # Auto-generated files
 /src/lib/paraglide/
 /src/lib/server/languages/iso-data.generated.ts
+/project.inlang/

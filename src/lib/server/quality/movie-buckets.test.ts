@@ -2,11 +2,11 @@ import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { vi } from 'vitest';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../test/db-helper.js';
 import { resolveMovieMultiQuality } from './movie-buckets.js';
-import type { Resolution } from '$lib/server/indexers/parser/types.js';
+import type { Resolution } from '#lib/server/indexers/parser/types.js';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	}
@@ -25,7 +25,7 @@ async function seedProfile(
 	}
 ) {
 	const { db } = testDb;
-	const { scoringProfiles } = await import('$lib/server/db/schema');
+	const { scoringProfiles } = await import('#lib/server/db/schema.js');
 	await db
 		.insert(scoringProfiles)
 		.values({
@@ -41,7 +41,7 @@ async function seedProfile(
 describe('resolveMovieMultiQuality', () => {
 	beforeEach(async () => {
 		const { db } = testDb;
-		const { scoringProfiles } = await import('$lib/server/db/schema');
+		const { scoringProfiles } = await import('#lib/server/db/schema.js');
 		await db.delete(scoringProfiles).run();
 	});
 

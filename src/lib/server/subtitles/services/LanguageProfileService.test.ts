@@ -10,13 +10,13 @@ import {
 	rootFolders,
 	series,
 	subtitles
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 import type { LanguageProfile } from './LanguageProfileService';
 import type { SubtitleStatus } from '../types';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -120,7 +120,8 @@ async function seedEpisode(
 			tmdbId: 6000 + episodeNumber,
 			seasonNumber: 1,
 			episodeNumber,
-			title: `E${episodeNumber}`
+			title: `E${episodeNumber}`,
+			hasFile: true
 		})
 		.run();
 	await testDb.db.insert(episodeFiles).values({
@@ -451,6 +452,30 @@ describe('LanguageProfileService', () => {
 				.set({ subtitleRequirementsOverride: null })
 				.where(eq(episodes.id, 'ep-ovr'))
 				.run();
+			expect(await profileService.getSeriesEpisodesMissingSubtitles(seriesId)).toEqual([]);
+		});
+
+		it('excludes file-less episodes from the missing-subtitles list (arr parity)', async () => {
+			const seriesId = await seedSeries('series-nofile');
+			await seedEpisode('ep-with-file', seriesId, 1);
+			await seedEpisode('ep-no-file', seriesId, 2);
+			await testDb.db
+				.update(episodes)
+				.set({ hasFile: false })
+				.where(eq(episodes.id, 'ep-no-file'))
+				.run();
+			await testDb.db
+				.update(episodes)
+				.set({
+					subtitleRequirementsOverride: [{ tag: 'fr', variant: 'regular', accessibility: 'any' }]
+				})
+				.where(eq(episodes.id, 'ep-no-file'))
+				.run();
+
+			// ep-no-file carries an unsatisfied override but has no media
+			// file: it is missing CONTENT, not subtitles. ep-with-file has a
+			// file but no requirements (no series profile, no override), so
+			// the missing list is empty either way.
 			expect(await profileService.getSeriesEpisodesMissingSubtitles(seriesId)).toEqual([]);
 		});
 
@@ -1301,7 +1326,7 @@ describe('countProfileUsage (delete impact preview)', () => {
 			series: seriesTable,
 			libraries: librariesTable,
 			smartLists: smartListsTable
-		} = await import('$lib/server/db/schema.js');
+		} = await import('#lib/server/db/schema.js');
 
 		await testDb.db.insert(librariesTable).values({
 			id: 'lib-usage',

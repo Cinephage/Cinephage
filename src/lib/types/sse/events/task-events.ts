@@ -4,7 +4,7 @@
  * Shared types for the /api/tasks/stream endpoint
  */
 
-import type { TaskHistoryEntry } from '$lib/types/task';
+import type { TaskHistoryEntry } from '#lib/types/task.js';
 
 /**
  * task:started event - A task began execution

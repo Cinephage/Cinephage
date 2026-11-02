@@ -12,10 +12,10 @@
 		Loader2,
 		Calendar,
 		RefreshCw
-	} from 'lucide-svelte';
-	import type { LiveTvAccount, LiveTvProviderType } from '$lib/types/livetv';
-	import * as m from '$lib/paraglide/messages.js';
-	import { formatDisplayDate } from '$lib/utils/format.js';
+	} from '@lucide/svelte';
+	import type { LiveTvAccount, LiveTvProviderType } from '#lib/types/livetv.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import { formatDisplayDate } from '#lib/utils/format.js';
 
 	interface Props {
 		accounts: LiveTvAccount[];
@@ -63,6 +63,8 @@
 				return { class: 'badge-accent', text: m.livetv_accountTable_providerM3u(), icon: List };
 			case 'cinephage-iptv':
 				return { class: 'badge-info', text: 'Cinephage IPTV', icon: Globe };
+			case 'cinephage-live':
+				return { class: 'badge-info', text: 'Cinephage Live', icon: Tv };
 			default:
 				return { class: 'badge-ghost', text: type, icon: Tv };
 		}

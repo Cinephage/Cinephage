@@ -1,0 +1,157 @@
+---
+# SuperBits (SBS) — Private SWEDISH Movies / TV / General tracker
+# Source port of Prowlarr's superbits.yml to the Cinephage Cardigann schema.
+# Auth uses a session cookie (form login was removed upstream due to bot
+# detection); search hits the site's internal rartracker JSON API.
+id: superbits
+name: SuperBits
+description: A private Swedish torrent tracker for movies / TV / general content (JSON API)
+type: private
+language: sv-SE
+encoding: UTF-8
+protocol: torrent
+requestdelay: 2
+
+links:
+  - https://superbits.org/
+  - https://superbits.cc/
+
+caps:
+  modes:
+    search: [q]
+    movie-search: [q, imdbid]
+    tv-search: [q, season, ep, imdbid]
+  categorymappings:
+    - { id: 1, cat: Movies/DVD, desc: DVD-R Swesub }
+    - { id: 2, cat: TV, desc: DVD-R TV }
+    - { id: 3, cat: Books/EBook, desc: eBok }
+    - { id: 4, cat: Movies/HD, desc: Film 1080 }
+    - { id: 5, cat: Movies/3D, desc: Film 3D }
+    - { id: 6, cat: Movies/HD, desc: Film 720 }
+    - { id: 7, cat: Movies/BluRay, desc: Film Bluray }
+    - { id: 24, cat: Movies/UHD, desc: Film 4K }
+    - { id: 8, cat: TV, desc: Svensk TV }
+    - { id: 9, cat: Audio/Audiobook, desc: Ljudbocker }
+    - { id: 10, cat: Audio/Video, desc: Musikvideos }
+    - { id: 11, cat: Books/Mags, desc: E-tidningar }
+    - { id: 12, cat: Audio, desc: MP3 }
+    - { id: 13, cat: Audio, desc: Pod }
+    - { id: 14, cat: Other, desc: Ovrigt }
+    - { id: 15, cat: PC/Games, desc: PC-Spel }
+    - { id: 16, cat: PC/0day, desc: Program }
+    - { id: 17, cat: Console/PS4, desc: Playstation }
+    - { id: 18, cat: TV, desc: TV }
+    - { id: 19, cat: Console/Other, desc: Nintendo }
+    - { id: 20, cat: Console/XBox, desc: Xbox }
+    - { id: 21, cat: Movies/SD, desc: Xvid }
+    - { id: 25, cat: Movies/Foreign, desc: Subpacks }
+    - { id: 26, cat: TV, desc: TV DK }
+    - { id: 27, cat: TV, desc: TV NO }
+    - { id: 28, cat: TV, desc: TV FI }
+    # Parent expansion so TV searches route to every TV category
+    - { id: 2, cat: TV }
+    - { id: 8, cat: TV }
+    - { id: 18, cat: TV }
+    - { id: 26, cat: TV }
+    - { id: 27, cat: TV }
+    - { id: 28, cat: TV }
+
+settings:
+  - name: cookie
+    type: text
+    label: Cookie
+  - name: info_cookie
+    type: info_cookie
+  - name: freeleech
+    type: checkbox
+    label: Search freeleech only
+    default: false
+  - name: p2p_releases_only
+    type: checkbox
+    label: Search P2P releases only
+    default: false
+  - name: sort
+    type: select
+    label: Sort requested from site
+    default: d
+    options:
+      d: created
+      up: seeders
+      s: size
+      n: title
+  - name: type
+    type: select
+    label: Order requested from site
+    default: desc
+    options:
+      desc: desc
+      asc: asc
+  - name: info_activity
+    type: info
+    label: Account Inactivity
+    default: 'If you have not logged in via web browser for 3 months the account will be suspended. Park your account in Settings to avoid deletion for inactivity.'
+
+login:
+  method: cookie
+  inputs:
+    cookie: '{{ .Config.cookie }}'
+  test:
+    path: /
+    selector: a[href*="logout"]
+
+search:
+  paths:
+    - path: api/v1/torrents?{{ range .Categories }}categories[]={{.}}&{{ end }}dkaudio=false&dksub=false&enaudio=false&ensub=false&extendedSearch=false&fiaudio=false&fisub=false&freeleech={{ if .Config.freeleech }}true{{ else }}false{{ end }}&index=0&limit=100&noaudio=false&nosub=false&order={{ .Config.type }}&p2p={{ if .Config.p2p_releases_only }}true{{ else }}false{{ end }}&page=search&searchText={{ if .Query.IMDBID }}{{ .Query.IMDBID }} {{ end }}{{ .Keywords }}&section=all&sort={{ .Config.sort }}&stereoscopic=false&sweaudio=false&swesub=false&watchview=false
+      response:
+        type: json
+        noResultsMessage: ''
+
+  rows:
+    selector: $
+
+  fields:
+    category:
+      selector: category
+    title:
+      selector: name
+    _id:
+      selector: id
+    details:
+      text: '/torrent/{{ .Result._id }}/'
+    download:
+      text: '/api/v1/torrents/download/{{ .Result._id }}'
+    imdbid:
+      selector: imdbid2
+    date:
+      # 2021-10-26 13:50:07 (site local time, CET)
+      selector: added
+      filters:
+        - name: append
+          args: ' +01:00'
+        - name: dateparse
+          args: YYYY-MM-DD HH:mm:ss ZZ
+    size:
+      selector: size
+    files:
+      selector: numfiles
+    grabs:
+      selector: timesCompleted
+      optional: true
+      default: 0
+    seeders:
+      selector: seeders
+    leechers:
+      selector: leechers
+    downloadvolumefactor:
+      # api returns 0=false, 1=true
+      selector: frileech
+      case:
+        '0': '1'
+        '1': '0'
+    uploadvolumefactor:
+      text: '1'
+    minimumratio:
+      text: '1.1'
+    minimumseedtime:
+      # 2 days
+      text: '172800'

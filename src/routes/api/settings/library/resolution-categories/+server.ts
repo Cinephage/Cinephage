@@ -6,12 +6,11 @@
  * PUT  /api/settings/library/resolution-categories/[id]
  * DELETE /api/settings/library/resolution-categories/[id]
  */
-
-import { json, error } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 import { z } from 'zod';
-import * as svc from '$lib/server/library/resolution/ResolutionCategoryService.js';
+import * as svc from '#lib/server/library/resolution/ResolutionCategoryService.js';
 
 const createSchema = z.object({
 	label: z.string().min(1),
@@ -26,7 +25,7 @@ export const GET: RequestHandler = async (event) => {
 	if (authError) return authError;
 
 	const categories = await svc.getAll();
-	return json(categories);
+	return Response.json(categories);
 };
 
 export const POST: RequestHandler = async (event) => {
@@ -38,5 +37,5 @@ export const POST: RequestHandler = async (event) => {
 	if (!parsed.success) throw error(400, 'Invalid request');
 
 	const cat = await svc.create(parsed.data);
-	return json(cat, { status: 201 });
+	return Response.json(cat, { status: 201 });
 };

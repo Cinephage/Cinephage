@@ -1,26 +1,26 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getIndexerManager } from '$lib/server/indexers/IndexerManager';
-import type { SearchCriteria } from '$lib/server/indexers/types';
+import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
+import type { SearchCriteria } from '#lib/server/indexers/types/index.js';
 import {
 	getCategoriesForSearchType,
 	expandCategoriesForClassification
-} from '$lib/server/indexers/types';
-import { searchQuerySchema } from '$lib/validation/schemas';
-import { qualityFilter, type EnrichmentOptions } from '$lib/server/quality';
-import { createChildLogger } from '$lib/logging';
-
-import { redactUrl } from '$lib/server/utils/urlSecurity';
-import { db } from '$lib/server/db';
-import { movies, series, settings } from '$lib/server/db/schema';
+} from '#lib/server/indexers/types/index.js';
+import { searchQuerySchema } from '#lib/validation/schemas.js';
+import { extractSearchYear } from '#lib/utils/search-query.js';
+import { qualityFilter, type EnrichmentOptions } from '#lib/server/quality/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { redactUrl } from '#lib/server/utils/urlSecurity.js';
+import { db } from '#lib/server/db/index.js';
+import { movies, series, settings } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { evaluateIndexerSearchAvailability } from '$lib/server/indexers/search/availability';
+import { evaluateIndexerSearchAvailability } from '#lib/server/indexers/search/availability.js';
+import { resolveProfileSearchScope } from '#lib/server/indexers/search/profile-indexer-filter.js';
 import {
 	getMovieSearchTitles,
 	getSeriesSearchTitles,
 	fetchAndStoreMovieAlternateTitles,
 	fetchAndStoreSeriesAlternateTitles
-} from '$lib/server/services/AlternateTitleService';
+} from '#lib/server/services/AlternateTitleService.js';
 
 const logger = createChildLogger({ module: 'SearchApi', logDomain: 'system' });
 
@@ -40,11 +40,20 @@ const INTERACTIVE_SEARCH_TIMEOUT_MS = (() => {
 /**
  * Redact sensitive URLs from release objects before returning in API responses.
  * This prevents API keys from being exposed to clients.
+ *
+ * `guid` is included because ResponseParser falls back to the download URL
+ * when a definition has no guid mapping — for a key-bearing download URL that
+ * made the credential part of an unredacted field. `magnetUrl` can carry
+ * tracker passkeys inside its `tr=` parameters.
  */
-function redactReleaseUrls<T extends { downloadUrl?: string | null }>(releases: T[]): T[] {
+function redactReleaseUrls<
+	T extends { downloadUrl?: string | null; guid?: string | null; magnetUrl?: string | null }
+>(releases: T[]): T[] {
 	return releases.map((release) => ({
 		...release,
-		downloadUrl: release.downloadUrl ? redactUrl(release.downloadUrl) : null
+		downloadUrl: release.downloadUrl ? redactUrl(release.downloadUrl) : null,
+		guid: release.guid ? redactUrl(release.guid) : null,
+		magnetUrl: release.magnetUrl ? redactUrl(release.magnetUrl) : null
 	}));
 }
 
@@ -64,7 +73,7 @@ export const GET: RequestHandler = async ({ url }) => {
 	const result = searchQuerySchema.safeParse(params);
 
 	if (!result.success) {
-		return json(
+		return Response.json(
 			{
 				error: 'Invalid query parameters',
 				details: result.error.flatten()
@@ -103,6 +112,16 @@ export const GET: RequestHandler = async ({ url }) => {
 		: (categories ?? getCategoriesForSearchType(searchType));
 	const effectiveLimit = isMultiSeasonPackTvSearch ? (limit ?? 200) : limit;
 
+	// Movie/TV queries often carry a trailing year ("Se7en (1995)"). Indexers
+	// match better with the bare title plus a separate year criterion; for
+	// basic search there is no year field, so the query is left untouched.
+	const isTypedSearch = searchType === 'movie' || searchType === 'tv';
+	const { title: strippedTitle, year: embeddedYear } = isTypedSearch
+		? extractSearchYear(q ?? '')
+		: { title: q ?? '', year: undefined };
+	const effectiveQuery = isTypedSearch ? strippedTitle : q;
+	const effectiveYear = isTypedSearch ? (year ?? embeddedYear) : year;
+
 	// Resolve language preference and global adult toggle from settings.
 	// Explicit ?language= param takes precedence over the stored language preference.
 	// An empty or "any" language means no preference (all alternate titles used,
@@ -133,26 +152,26 @@ export const GET: RequestHandler = async ({ url }) => {
 	if (searchType === 'movie') {
 		criteria = {
 			searchType: 'movie',
-			query: q,
+			query: effectiveQuery ?? '',
 			categories: effectiveCategories.length > 0 ? effectiveCategories : undefined,
 			indexerIds: indexers,
 			limit: effectiveLimit,
 			imdbId,
 			tmdbId,
-			year,
+			year: effectiveYear,
 			language: effectiveLanguage
 		};
 	} else if (searchType === 'tv') {
 		criteria = {
 			searchType: 'tv',
-			query: q,
+			query: effectiveQuery ?? '',
 			categories: effectiveCategories.length > 0 ? effectiveCategories : undefined,
 			indexerIds: indexers,
 			limit: effectiveLimit,
 			imdbId,
 			tmdbId,
 			tvdbId,
-			year,
+			year: effectiveYear,
 			season,
 			episode,
 			language: effectiveLanguage
@@ -160,7 +179,7 @@ export const GET: RequestHandler = async ({ url }) => {
 	} else {
 		// Basic search requires a query
 		if (!q) {
-			return json({ error: 'Query (q) is required for basic search' }, { status: 400 });
+			return Response.json({ error: 'Query (q) is required for basic search' }, { status: 400 });
 		}
 		criteria = {
 			searchType: 'basic',
@@ -255,13 +274,15 @@ export const GET: RequestHandler = async ({ url }) => {
 			effectiveScoringProfileId = defaultScoringProfile.id;
 		}
 
-		// Load the scoring profile to get allowedProtocols for indexer filtering
+		// Load the scoring profile to get its protocol and indexer restrictions
 		let protocolFilter: string[] | undefined;
+		let allowedIndexerIds: string[] | null = null;
+		let profileName: string | undefined;
 		if (effectiveScoringProfileId) {
-			const profile = await qualityFilter.getProfile(effectiveScoringProfileId);
-			if (profile?.allowedProtocols && profile.allowedProtocols.length > 0) {
-				protocolFilter = profile.allowedProtocols;
-			}
+			const scope = await resolveProfileSearchScope(effectiveScoringProfileId);
+			protocolFilter = scope.protocolFilter;
+			allowedIndexerIds = scope.allowedIndexerIds;
+			profileName = scope.profileName;
 		}
 
 		// Debug logging for profile issues
@@ -294,12 +315,14 @@ export const GET: RequestHandler = async ({ url }) => {
 			searchType,
 			searchSource: 'interactive',
 			protocolFilter,
+			allowedIndexerIds,
 			scoringProfileId: effectiveScoringProfileId,
+			profileName,
 			getDefinitionCapabilities: (definitionId) => manager.getDefinitionCapabilities(definitionId)
 		});
 
 		if (!availability.ok) {
-			return json(
+			return Response.json(
 				{
 					error: availability.message,
 					errorCode: availability.code
@@ -312,10 +335,11 @@ export const GET: RequestHandler = async ({ url }) => {
 			searchSource: 'interactive',
 			enrichment: enrichmentOpts,
 			protocolFilter,
+			allowedIndexerIds,
 			timeout: INTERACTIVE_SEARCH_TIMEOUT_MS
 		});
 
-		return json({
+		return Response.json({
 			releases: redactReleaseUrls(searchResult.releases),
 			meta: {
 				totalResults: searchResult.totalResults,
@@ -345,15 +369,23 @@ export const GET: RequestHandler = async ({ url }) => {
 		});
 	}
 
+	// Standard search without enrichment. The profile is still resolved here so a
+	// profile's indexer allowlist narrows the query set even without scoring.
+	// Protocol filtering is left out of this path deliberately: it was never
+	// applied here, and adding it would change behavior for profile-less searches.
+	const plainScope = await resolveProfileSearchScope(effectiveScoringProfileId);
+
 	const availability = evaluateIndexerSearchAvailability(configuredIndexers, {
 		searchType,
 		searchSource: 'interactive',
-		scoringProfileId: effectiveScoringProfileId,
+		allowedIndexerIds: plainScope.allowedIndexerIds,
+		scoringProfileId: plainScope.scoringProfileId,
+		profileName: plainScope.profileName,
 		getDefinitionCapabilities: (definitionId) => manager.getDefinitionCapabilities(definitionId)
 	});
 
 	if (!availability.ok) {
-		return json(
+		return Response.json(
 			{
 				error: availability.message,
 				errorCode: availability.code
@@ -365,10 +397,11 @@ export const GET: RequestHandler = async ({ url }) => {
 	// Standard search without enrichment (interactive)
 	const searchResult = await manager.search(criteria, {
 		searchSource: 'interactive',
+		allowedIndexerIds: plainScope.allowedIndexerIds,
 		timeout: INTERACTIVE_SEARCH_TIMEOUT_MS
 	});
 
-	return json({
+	return Response.json({
 		releases: redactReleaseUrls(searchResult.releases),
 		meta: {
 			totalResults: searchResult.totalResults,

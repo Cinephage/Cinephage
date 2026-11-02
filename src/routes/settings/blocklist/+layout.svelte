@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Ban, EyeOff, Hash, FileWarning } from 'lucide-svelte';
-	import { SettingsTabNav } from '$lib/components/settings';
-	import * as m from '$lib/paraglide/messages.js';
+	import { Ban, EyeOff, Hash, FileWarning } from '@lucide/svelte';
+	import { SettingsTabNav } from '#lib/components/settings/index.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	let { children } = $props();
 

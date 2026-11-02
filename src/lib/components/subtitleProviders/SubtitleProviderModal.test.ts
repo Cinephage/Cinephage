@@ -3,8 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/svelte';
 import { afterEach } from 'vitest';
 import SubtitleProviderModal from './SubtitleProviderModal.svelte';
-import type { ProviderDefinition } from '$lib/server/subtitles/providers/interfaces';
-import type { SubtitleProviderConfig } from '$lib/server/subtitles/types';
+import type { ProviderDefinition } from '#lib/server/subtitles/providers/interfaces.js';
+import type { SubtitleProviderConfig } from '#lib/server/subtitles/types.js';
 
 const assrtDefinition: ProviderDefinition = {
 	implementation: 'assrt',

@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createTestDb } from '../../../test/db-helper';
-import { downloadClients } from '$lib/server/db/schema';
+import { downloadClients } from '#lib/server/db/schema.js';
 
 const testDb = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -27,7 +27,7 @@ const connection = {
 describe('qBittorrent sequential download configuration', () => {
 	it('accepts the setting only for qBittorrent', async () => {
 		const { downloadClientCreateSchema, downloadClientUpdateSchemaForImplementation } =
-			await import('$lib/validation/schemas');
+			await import('#lib/validation/schemas.js');
 
 		expect(
 			downloadClientCreateSchema.parse({

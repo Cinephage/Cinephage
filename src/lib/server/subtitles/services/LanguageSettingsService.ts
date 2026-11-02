@@ -11,18 +11,18 @@
  *
  * Reads go straight to the database on every call (no cache) so all consumers
  * observe updates immediately. Updates are validated through
- * languageSettingsUpdateSchema ($lib/validation/schemas) and canonicalized
+ * languageSettingsUpdateSchema (#lib/server/validation/schemas) and canonicalized
  * before storage.
  */
 
-import { db } from '$lib/server/db';
-import { languageProfiles, languageSettings } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { languageProfiles, languageSettings } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 import {
 	languageSettingsUpdateSchema,
 	type LanguageSettingsUpdateInput
-} from '$lib/validation/schemas';
+} from '#lib/server/validation/schemas.js';
 
 const logger = createChildLogger({ logDomain: 'subtitles' as const });
 

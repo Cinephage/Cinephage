@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { sql } from 'drizzle-orm';
-import { libraries, libraryScanHistory, rootFolders } from '$lib/server/db/schema';
+import { libraries, libraryScanHistory, rootFolders } from '#lib/server/db/schema.js';
 import type { StorageInsightRule, RuleContext, InsightFinding } from '../types.js';
 
 /**

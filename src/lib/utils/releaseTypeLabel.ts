@@ -1,4 +1,4 @@
-import * as m from '$lib/paraglide/messages.js';
+import * as m from '#lib/paraglide/messages.js';
 import { RELEASE_TYPE } from './releaseTypes.js';
 
 const LABELS: Record<number, () => string> = {

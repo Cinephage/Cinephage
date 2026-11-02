@@ -3,7 +3,7 @@ import {
 	isSensitiveDefinitionSetting,
 	isSensitiveKeyName,
 	isSensitiveSettingName
-} from '$lib/shared/sensitiveSettings';
+} from '#lib/shared/sensitiveSettings.js';
 
 interface SensitiveSettingDefinition {
 	name: string;

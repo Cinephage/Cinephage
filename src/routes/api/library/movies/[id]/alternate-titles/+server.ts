@@ -1,16 +1,15 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { db } from '$lib/server/db/index.js';
-import { movies } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { movies } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import {
 	getAlternateTitles,
 	addUserAlternateTitle,
 	removeAlternateTitle
-} from '$lib/server/services/AlternateTitleService.js';
-import { ValidationError } from '$lib/errors';
-import { createChildLogger } from '$lib/logging';
+} from '#lib/server/services/AlternateTitleService.js';
+import { ValidationError } from '#lib/errors/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LibraryMovieAlternateTitlesApi', logDomain: 'scans' });
 
@@ -40,12 +39,12 @@ export const GET: RequestHandler = async ({ params }) => {
 			.where(eq(movies.id, params.id));
 
 		if (!movie) {
-			return json({ success: false, error: 'Movie not found' }, { status: 404 });
+			return Response.json({ success: false, error: 'Movie not found' }, { status: 404 });
 		}
 
 		const titles = await getAlternateTitles('movie', params.id);
 
-		return json({
+		return Response.json({
 			success: true,
 			primaryTitle: movie.title,
 			originalTitle: movie.originalTitle,
@@ -62,7 +61,7 @@ export const GET: RequestHandler = async ({ params }) => {
 			'[API] Error fetching movie alternate titles',
 			error instanceof Error ? error : undefined
 		);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to fetch alternate titles'
@@ -82,7 +81,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		const [movie] = await db.select({ id: movies.id }).from(movies).where(eq(movies.id, params.id));
 
 		if (!movie) {
-			return json({ success: false, error: 'Movie not found' }, { status: 404 });
+			return Response.json({ success: false, error: 'Movie not found' }, { status: 404 });
 		}
 
 		const body = await request.json();
@@ -97,10 +96,13 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		const newTitle = await addUserAlternateTitle('movie', params.id, result.data.title);
 
 		if (!newTitle) {
-			return json({ success: false, error: 'Alternate title already exists' }, { status: 409 });
+			return Response.json(
+				{ success: false, error: 'Alternate title already exists' },
+				{ status: 409 }
+			);
 		}
 
-		return json({
+		return Response.json({
 			success: true,
 			alternateTitle: {
 				id: newTitle.id,
@@ -113,7 +115,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 			'[API] Error adding movie alternate title',
 			error instanceof Error ? error : undefined
 		);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to add alternate title'
@@ -133,7 +135,7 @@ export const DELETE: RequestHandler = async ({ params, request }) => {
 		const [movie] = await db.select({ id: movies.id }).from(movies).where(eq(movies.id, params.id));
 
 		if (!movie) {
-			return json({ success: false, error: 'Movie not found' }, { status: 404 });
+			return Response.json({ success: false, error: 'Movie not found' }, { status: 404 });
 		}
 
 		const body = await request.json();
@@ -153,19 +155,19 @@ export const DELETE: RequestHandler = async ({ params, request }) => {
 		);
 
 		if (!deleted) {
-			return json(
+			return Response.json(
 				{ success: false, error: 'Alternate title not found or is not user-added' },
 				{ status: 404 }
 			);
 		}
 
-		return json({ success: true });
+		return Response.json({ success: true });
 	} catch (error) {
 		logger.error(
 			'[API] Error removing movie alternate title',
 			error instanceof Error ? error : undefined
 		);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to remove alternate title'

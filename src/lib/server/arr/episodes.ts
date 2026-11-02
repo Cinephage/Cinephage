@@ -9,8 +9,8 @@
  */
 
 import { and, eq, inArray } from 'drizzle-orm';
-import { db } from '$lib/server/db/index.js';
-import { episodes, episodeFiles } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { episodes, episodeFiles } from '#lib/server/db/schema.js';
 import { getOrAssignArrId, getOrAssignArrIds } from './ArrIdMappingService.js';
 
 type EpisodeRow = typeof episodes.$inferSelect;

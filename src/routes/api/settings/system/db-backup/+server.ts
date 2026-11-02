@@ -1,7 +1,6 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { dbBackupService } from '$lib/server/db/DbBackupService.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { dbBackupService } from '#lib/server/db/DbBackupService.js';
 
 export const GET: RequestHandler = async (event) => {
 	const authError = requireAdmin(event);
@@ -13,7 +12,7 @@ export const GET: RequestHandler = async (event) => {
 		dbBackupService.listPreUpdateBackups()
 	]);
 
-	return json({ success: true, settings: dbSettings, scheduledBackups, preUpdateBackups });
+	return Response.json({ success: true, settings: dbSettings, scheduledBackups, preUpdateBackups });
 };
 
 export const PUT: RequestHandler = async (event) => {
@@ -30,5 +29,5 @@ export const PUT: RequestHandler = async (event) => {
 
 	await dbBackupService.updateSettings(patch);
 	const updated = await dbBackupService.getSettings();
-	return json({ success: true, settings: updated });
+	return Response.json({ success: true, settings: updated });
 };

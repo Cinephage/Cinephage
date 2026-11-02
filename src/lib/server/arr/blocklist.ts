@@ -7,8 +7,8 @@
  */
 
 import { desc, inArray } from 'drizzle-orm';
-import { db } from '$lib/server/db/index.js';
-import { blocklist, indexers } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { blocklist, indexers } from '#lib/server/db/schema.js';
 import { getOrAssignArrId, getOrAssignArrIds } from './ArrIdMappingService.js';
 import type { ArrAppName } from './systemStatus.js';
 

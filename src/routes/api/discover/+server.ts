@@ -1,14 +1,13 @@
-import { getDiscoverResults, resolveWithOriginalLanguage } from '$lib/server/discover';
-import { contentFilterPipeline } from '$lib/server/filters/ContentFilterPipeline.js';
-import { enrichWithReleaseDates } from '$lib/server/release-enrichment.js';
-import { tmdb } from '$lib/server/tmdb';
-import { db } from '$lib/server/db/index.js';
-import { languageSettings } from '$lib/server/db/schema.js';
+import { getDiscoverResults, resolveWithOriginalLanguage } from '#lib/server/discover.js';
+import { contentFilterPipeline } from '#lib/server/filters/ContentFilterPipeline.js';
+import { enrichWithReleaseDates } from '#lib/server/release-enrichment.js';
+import { tmdb } from '#lib/server/tmdb.js';
+import { db } from '#lib/server/db/index.js';
+import { languageSettings } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'DiscoverApi', logDomain: 'system' });
 
@@ -23,6 +22,7 @@ const discoverQuerySchema = z.object({
 	top_rated: z.enum(['true', 'false']).optional(),
 	with_watch_providers: z.string().default(''),
 	watch_region: z.string().optional(),
+	with_networks: z.string().default(''),
 	with_genres: z.string().default(''),
 	with_keywords: z.string().default(''),
 	without_keywords: z.string().default(''),
@@ -48,7 +48,7 @@ export const GET: RequestHandler = async ({ url }) => {
 	const result = discoverQuerySchema.safeParse(queryParams);
 
 	if (!result.success) {
-		return json(
+		return Response.json(
 			{
 				error: 'Invalid query parameters',
 				details: result.error.flatten()
@@ -127,6 +127,7 @@ export const GET: RequestHandler = async ({ url }) => {
 				trending: params.trending ?? null,
 				withWatchProviders: params.with_watch_providers,
 				watchRegion: params.watch_region ?? '',
+				withNetworks: params.with_networks,
 				withGenres: params.with_genres,
 				withKeywords: params.with_keywords,
 				withoutKeywords: params.without_keywords,
@@ -149,13 +150,13 @@ export const GET: RequestHandler = async ({ url }) => {
 		});
 		const enrichedResults = await enrichWithReleaseDates(filteredResults);
 
-		return json({
+		return Response.json({
 			results: enrichedResults,
 			pagination
 		});
 	} catch (e) {
 		const message = e instanceof Error ? e.message : 'Unknown error';
 		logger.error({ err: e, ...{ errorMessage: message } }, 'Discover API error');
-		return json({ error: 'Failed to load content' }, { status: 500 });
+		return Response.json({ error: 'Failed to load content' }, { status: 500 });
 	}
 };

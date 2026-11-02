@@ -1,6 +1,6 @@
-import { createSSEStream } from '$lib/server/sse.js';
-import { storageEvents } from '$lib/server/storage/StorageEvents.js';
-import { requireAuth } from '$lib/server/auth/authorization.js';
+import { createSSEStream } from '#lib/server/sse.js';
+import { storageEvents } from '#lib/server/storage/StorageEvents.js';
+import { requireAuth } from '#lib/server/auth/authorization.js';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = (event) => {

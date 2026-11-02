@@ -111,7 +111,7 @@ const TEST_PROFILES: Record<string, Record<string, unknown>> = {
 	}
 };
 
-vi.mock('$lib/server/quality', () => ({
+vi.mock('#lib/server/quality/index.js', () => ({
 	qualityFilter: {
 		getProfile: vi.fn(async (id: string) => TEST_PROFILES[id] ?? null)
 	}

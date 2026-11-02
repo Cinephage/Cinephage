@@ -1,10 +1,12 @@
-import type { RenamePreviewItem, RenamePreviewResult } from '$lib/library/naming/types.js';
-import { libraryMediaEvents } from '$lib/server/library/LibraryMediaEvents.js';
+import type { RenamePreviewItem, RenamePreviewResult } from '#lib/library/naming/types.js';
+import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
 
 interface MediaTypeCache {
 	result: RenamePreviewResult;
 	staleIds: Set<string>;
 	fullyStale: boolean;
+	/** Fingerprint of config + library shape at the time the result was computed. */
+	fingerprint: string | null;
 }
 
 class RenamePreviewCacheStore {
@@ -14,6 +16,17 @@ class RenamePreviewCacheStore {
 	constructor() {
 		libraryMediaEvents.onMovieUpdated(({ movieId }) => this.invalidateMovie(movieId));
 		libraryMediaEvents.onSeriesUpdated(({ seriesId }) => this.invalidateSeries(seriesId));
+		libraryMediaEvents.onLibraryDataChanged((event) => {
+			// Per-entity events keep the rest of the cached result warm; anything
+			// without an entity scope (bulk adds, root folder edits, reorganize,
+			// config restores, manual imports) invalidates everything.
+			if ((event.source === 'movie' || event.source === 'series') && event.entityId) {
+				if (event.source === 'movie') this.invalidateMovie(event.entityId);
+				else this.invalidateSeries(event.entityId);
+				return;
+			}
+			this.invalidateAll();
+		});
 	}
 
 	isFresh(mediaType: 'movie' | 'tv'): boolean {
@@ -36,10 +49,19 @@ class RenamePreviewCacheStore {
 		return c ? new Set(c.staleIds) : new Set();
 	}
 
-	set(mediaType: 'movie' | 'tv', result: RenamePreviewResult): void {
-		const entry: MediaTypeCache = { result, staleIds: new Set(), fullyStale: false };
+	set(
+		mediaType: 'movie' | 'tv',
+		result: RenamePreviewResult,
+		fingerprint: string | null = null
+	): void {
+		const entry: MediaTypeCache = { result, staleIds: new Set(), fullyStale: false, fingerprint };
 		if (mediaType === 'movie') this.movie = entry;
 		else this.tv = entry;
+	}
+
+	getStoredFingerprint(mediaType: 'movie' | 'tv'): string | null {
+		const c = mediaType === 'movie' ? this.movie : this.tv;
+		return c ? c.fingerprint : null;
 	}
 
 	invalidateAll(): void {

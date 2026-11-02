@@ -13,12 +13,19 @@ import type {
 } from './types.js';
 import { reject, accept, RejectionReason } from './types.js';
 
+/**
+ * How far back to look for newly aired episodes, in hours. Deliberately fixed
+ * and independent of the task's scheduling interval - the interval controls
+ * how often the check runs, not how wide its air-date window is.
+ */
+export const NEW_EPISODE_LOOKBACK_HOURS = 48;
+
 export interface NewEpisodeOptions {
 	/**
-	 * How far back to look for new episodes (in hours)
-	 * Should match the task interval
+	 * How far back to look for new episodes (in hours).
+	 * Defaults to NEW_EPISODE_LOOKBACK_HOURS; override only for tests.
 	 */
-	intervalHours: number;
+	lookbackHours?: number;
 }
 
 /**
@@ -49,8 +56,9 @@ export class NewEpisodeSpecification implements IMonitoringSpecification<Episode
 			return reject(RejectionReason.NOT_YET_AIRED);
 		}
 
-		// Check if aired within the monitoring interval
-		const hoursAgo = this.options.intervalHours * 60 * 60 * 1000; // Convert to milliseconds
+		// Check if aired within the lookback window
+		const lookbackHours = this.options.lookbackHours ?? NEW_EPISODE_LOOKBACK_HOURS;
+		const hoursAgo = lookbackHours * 60 * 60 * 1000; // Convert to milliseconds
 		const cutoffDate = new Date(now.getTime() - hoursAgo);
 
 		if (airDate < cutoffDate) {
@@ -60,16 +68,4 @@ export class NewEpisodeSpecification implements IMonitoringSpecification<Episode
 		// Episode aired recently and doesn't have a file
 		return accept();
 	}
-}
-
-/**
- * Convenience function to check if an episode is newly aired
- */
-export async function isNewEpisode(
-	context: EpisodeContext,
-	intervalHours: number
-): Promise<boolean> {
-	const spec = new NewEpisodeSpecification({ intervalHours });
-	const result = await spec.isSatisfied(context);
-	return result.accepted;
 }

@@ -1,21 +1,21 @@
 import type { RequestHandler } from './$types.js';
-import { db } from '$lib/server/db/index.js';
-import { episodes, series, movies } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { episodes, series, movies } from '#lib/server/db/schema.js';
 import { eq, and, inArray } from 'drizzle-orm';
-import { subtitleBatchAutoSearchSchema } from '$lib/validation/schemas.js';
-import type { SubtitleBatchAutoSearchRequest } from '$lib/validation/schemas.js';
-import { parseBody } from '$lib/server/api/validate.js';
-import { createSSEOperationStream } from '$lib/server/sse.js';
-import { createChildLogger } from '$lib/logging/index.js';
-import { LanguageProfileService } from '$lib/server/subtitles/services/LanguageProfileService.js';
+import { subtitleBatchAutoSearchSchema } from '#lib/validation/schemas.js';
+import type { SubtitleBatchAutoSearchRequest } from '#lib/validation/schemas.js';
+import { parseBody } from '#lib/server/api/validate.js';
+import { createSSEOperationStream } from '#lib/server/sse.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { LanguageProfileService } from '#lib/server/subtitles/services/LanguageProfileService.js';
 import {
 	autoSearchEpisode,
 	autoSearchMovie,
 	summarizeAutoSearchReason,
 	type AutoSearchItemResult,
 	type AutoSearchReason
-} from '$lib/server/subtitles/auto-search.js';
-import type { SubtitleRequirement } from '$lib/shared/language-profile.js';
+} from '#lib/server/subtitles/auto-search.js';
+import type { SubtitleRequirement } from '#lib/shared/language-profile.js';
 
 const logger = createChildLogger({ module: 'SubtitleAutoSearchBatchApi', logDomain: 'subtitles' });
 

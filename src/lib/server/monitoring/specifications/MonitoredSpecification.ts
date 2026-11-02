@@ -6,9 +6,10 @@
  * - Episode is monitored if series.monitored AND season.monitored AND episode.monitored
  */
 
-import { db } from '$lib/server/db/index.js';
-import { seasons } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { seasons } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
+import { createChildLogger } from '#lib/logging/index.js';
 import type {
 	IMonitoringSpecification,
 	MovieContext,
@@ -17,6 +18,8 @@ import type {
 	ReleaseCandidate
 } from './types.js';
 import { reject, accept, RejectionReason } from './types.js';
+
+const logger = createChildLogger({ module: 'MonitoredSpecification', logDomain: 'monitoring' });
 
 /**
  * Check if a movie is monitored
@@ -52,10 +55,18 @@ export class EpisodeMonitoredSpecification implements IMonitoringSpecification<E
 			return reject(RejectionReason.NOT_MONITORED);
 		}
 
-		// Check season-level monitoring (need to fetch from DB)
-		// If seasonId is missing, default to monitored
+		// Check season-level monitoring (need to fetch from DB). A missing or
+		// dangling seasonId is a data-integrity problem, not "no opinion", failing
+		// open here let episodes bypass an unmonitored season entirely and get
+		// endlessly re-searched/re-grabbed even though the user turned them off.
+		// Fail closed instead: reject and log so it surfaces as a fixable bug
+		// rather than silently resurrecting downloads.
 		if (!context.episode.seasonId) {
-			return accept();
+			logger.warn(
+				{ episodeId: context.episode.id, seriesId: context.series.id },
+				'[MonitoredSpecification] Episode has no seasonId; treating as unmonitored'
+			);
+			return reject(RejectionReason.SEASON_LINK_MISSING);
 		}
 
 		const season = await db.query.seasons.findFirst({
@@ -63,8 +74,11 @@ export class EpisodeMonitoredSpecification implements IMonitoringSpecification<E
 		});
 
 		if (!season) {
-			// If no season record, default to monitored
-			return accept();
+			logger.warn(
+				{ episodeId: context.episode.id, seasonId: context.episode.seasonId },
+				'[MonitoredSpecification] Episode references a season that no longer exists; treating as unmonitored'
+			);
+			return reject(RejectionReason.SEASON_LINK_MISSING);
 		}
 
 		if (!season.monitored) {

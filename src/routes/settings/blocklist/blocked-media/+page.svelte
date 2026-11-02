@@ -1,13 +1,13 @@
 <script lang="ts">
-	import { Search, EyeOff, Film as FilmIcon, Trash2 } from 'lucide-svelte';
+	import { Search, EyeOff, Film as FilmIcon, Trash2 } from '@lucide/svelte';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import { SettingsPage } from '$lib/components/ui/settings';
-	import { ConfirmationModal } from '$lib/components/ui/modal';
-	import TmdbImage from '$lib/components/tmdb/TmdbImage.svelte';
-	import * as m from '$lib/paraglide/messages.js';
-	import { getBlockedMedia, unblockMedia } from '$lib/api/settings.js';
-	import { formatDisplayDateShort } from '$lib/utils/format.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { SettingsPage } from '#lib/components/ui/settings/index.js';
+	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
+	import TmdbImage from '#lib/components/tmdb/TmdbImage.svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { getBlockedMedia, unblockMedia } from '#lib/api/settings.js';
+	import { formatDisplayDateShort } from '#lib/utils/format.js';
 
 	interface BlockedEntry {
 		id: string;

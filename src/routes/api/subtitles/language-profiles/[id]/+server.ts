@@ -1,8 +1,7 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { LanguageProfileService } from '$lib/server/subtitles/services/LanguageProfileService';
-import { languageProfileV2UpdateSchema } from '$lib/validation/schemas';
-import { parseBody, assertFound } from '$lib/server/api/validate.js';
+import { LanguageProfileService } from '#lib/server/subtitles/services/LanguageProfileService.js';
+import { languageProfileV2UpdateSchema } from '#lib/validation/schemas.js';
+import { parseBody, assertFound } from '#lib/server/api/validate.js';
 
 /**
  * GET /api/subtitles/language-profiles/:id
@@ -14,14 +13,14 @@ export const GET: RequestHandler = async ({ params, url }) => {
 	// ?usage=1 → delete-impact preview instead of the profile body.
 	if (url.searchParams.get('usage')) {
 		const usage = await service.countProfileUsage(params.id);
-		return json(usage);
+		return Response.json(usage);
 	}
 
 	const profile = await service.getProfile(params.id);
 
 	assertFound(profile, 'Language profile', params.id);
 
-	return json(profile);
+	return Response.json(profile);
 };
 
 /**
@@ -35,7 +34,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 
 	const updated = await service.updateProfile(params.id, validated);
 
-	return json({ success: true, profile: updated });
+	return Response.json({ success: true, profile: updated });
 };
 
 /**
@@ -45,5 +44,5 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 export const DELETE: RequestHandler = async ({ params }) => {
 	const service = LanguageProfileService.getInstance();
 	await service.deleteProfile(params.id);
-	return json({ success: true });
+	return Response.json({ success: true });
 };

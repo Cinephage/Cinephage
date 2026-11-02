@@ -1,10 +1,9 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { requireArrCompatEnabled } from '$lib/server/arr/requireArrCompatEnabled.js';
-import { buildMovies } from '$lib/server/arr/movies.js';
-import { addMovieFromArr, updateMovieFromArr } from '$lib/server/arr/libraryWrite.js';
-import { withForwardedApiKey } from '$lib/server/arr/internalFetch.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { requireArrCompatEnabled } from '#lib/server/arr/requireArrCompatEnabled.js';
+import { buildMovies } from '#lib/server/arr/movies.js';
+import { addMovieFromArr, updateMovieFromArr } from '#lib/server/arr/libraryWrite.js';
+import { withForwardedApiKey } from '#lib/server/arr/internalFetch.js';
 
 /** GET /api/radarr/api/v3/movie */
 export const GET: RequestHandler = async (event) => {
@@ -14,7 +13,7 @@ export const GET: RequestHandler = async (event) => {
 	const authError = requireAdmin(event);
 	if (authError) return authError;
 
-	return json(await buildMovies());
+	return Response.json(await buildMovies());
 };
 
 /**
@@ -30,7 +29,7 @@ export const POST: RequestHandler = async (event) => {
 
 	const body = await event.request.json().catch(() => ({}));
 	const result = await addMovieFromArr(withForwardedApiKey(event), body);
-	return json(result.body, { status: result.status });
+	return Response.json(result.body, { status: result.status });
 };
 
 /**
@@ -48,8 +47,8 @@ export const PUT: RequestHandler = async (event) => {
 
 	const body = await event.request.json().catch(() => ({}));
 	const id = Number(body.id);
-	if (!Number.isInteger(id)) return json({ message: 'id is required' }, { status: 400 });
+	if (!Number.isInteger(id)) return Response.json({ message: 'id is required' }, { status: 400 });
 
 	const result = await updateMovieFromArr(withForwardedApiKey(event), id, body);
-	return json(result.body, { status: result.status });
+	return Response.json(result.body, { status: result.status });
 };

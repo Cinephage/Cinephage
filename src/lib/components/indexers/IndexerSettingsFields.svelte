@@ -1,8 +1,8 @@
 <script lang="ts">
-	import type { DefinitionSetting } from '$lib/types/indexer';
-	import { HelpCircle, Info, Cookie, Shield, User } from 'lucide-svelte';
-	import * as m from '$lib/paraglide/messages.js';
-	import { isSensitiveDefinitionSetting } from '$lib/shared/sensitiveSettings';
+	import type { DefinitionSetting } from '#lib/types/indexer.js';
+	import { HelpCircle, Info, Cookie, Shield, User } from '@lucide/svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { isSensitiveDefinitionSetting } from '#lib/shared/sensitiveSettings.js';
 
 	interface Props {
 		settingsDefinitions: DefinitionSetting[];

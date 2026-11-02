@@ -1,12 +1,12 @@
 import type { RequestHandler } from '@sveltejs/kit';
 
-import type { CapturedLogFilters } from '$lib/logging/log-capture';
-import { logger } from '$lib/logging';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { logCaptureStore } from '$lib/server/logging/log-capture-store.js';
-import { logHistoryService } from '$lib/server/logging/log-history.js';
-import { createSSEStream } from '$lib/server/sse';
-import { logFilterQuerySchema } from '$lib/validation/schemas.js';
+import type { CapturedLogFilters } from '#lib/logging/log-capture.js';
+import { logger } from '#lib/logging/index.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { logCaptureStore } from '#lib/server/logging/log-capture-store.js';
+import { logHistoryService } from '#lib/server/logging/log-history.js';
+import { createSSEStream } from '#lib/server/sse.js';
+import { logFilterQuerySchema } from '#lib/validation/schemas.js';
 
 function parseFilters(url: URL): CapturedLogFilters {
 	const raw = Object.fromEntries(url.searchParams.entries());

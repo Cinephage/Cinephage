@@ -9,7 +9,7 @@ import {
 	createBetterAuthIndexes,
 	recreateBetterAuthSchema
 } from '../migration-helpers.js';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 // Version 63: Repair Better Auth schema drift and add missing plugin tables
@@ -130,7 +130,19 @@ export const migration_v063: MigrationDefinition = {
 		ensureColumn(sqlite, 'apikey', 'start', '"start" text');
 		ensureColumn(sqlite, 'apikey', 'prefix', '"prefix" text');
 		ensureColumn(sqlite, 'apikey', 'key', '"key" text');
-		ensureColumn(sqlite, 'apikey', 'userId', '"userId" text');
+		// apikey v1.5+ shape: never re-introduce the legacy userId column on a
+		// table already in the new shape — a table with BOTH columns breaks
+		// migration 065's rename. Legacy v1.4 tables keep userId here and 065
+		// performs the data-preserving rename.
+		if (
+			columnExists(sqlite, 'apikey', 'userId') &&
+			!columnExists(sqlite, 'apikey', 'referenceId')
+		) {
+			ensureColumn(sqlite, 'apikey', 'userId', '"userId" text');
+		} else {
+			ensureColumn(sqlite, 'apikey', 'referenceId', '"referenceId" text');
+			ensureColumn(sqlite, 'apikey', 'configId', `"configId" text DEFAULT 'default'`);
+		}
 		ensureColumn(sqlite, 'apikey', 'refillInterval', '"refillInterval" integer');
 		ensureColumn(sqlite, 'apikey', 'refillAmount', '"refillAmount" integer');
 		ensureColumn(sqlite, 'apikey', 'lastRefillAt', '"lastRefillAt" date');

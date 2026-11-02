@@ -1,4 +1,4 @@
-import type { LiveTvProviderType } from '$lib/types/livetv';
+import type { LiveTvProviderType } from '#lib/types/livetv.js';
 
 /**
  * Live TV Provider Definition
@@ -14,7 +14,7 @@ export interface LiveTvProviderDefinition {
 	/** Description of the provider type */
 	description: string;
 
-	/** Icon name (from lucide-svelte) */
+	/** Icon name (from @lucide/svelte) */
 	icon: 'Tv' | 'Radio' | 'List' | 'Globe';
 
 	/** Whether authentication is required */
@@ -83,6 +83,20 @@ export const providerDefinitions: LiveTvProviderDefinition[] = [
 		name: 'Cinephage IPTV',
 		description: 'Free IPTV channels from the Cinephage network',
 		icon: 'Globe',
+		requiresAuth: false,
+		authDescription: 'Automatic (Cinephage account)',
+		features: {
+			supportsEpg: true,
+			supportsArchive: false,
+			supportsCategories: true,
+			supportsAutoRefresh: false
+		}
+	},
+	{
+		id: 'cinephage-live',
+		name: 'Cinephage Live',
+		description: 'Live sports and events from the Cinephage network',
+		icon: 'Tv',
 		requiresAuth: false,
 		authDescription: 'Automatic (Cinephage account)',
 		features: {

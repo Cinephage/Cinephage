@@ -4,7 +4,7 @@
  * Svelte 5 runes-based store for handling search progress via SSE streaming.
  */
 
-import type { SearchProgressUpdate } from '$lib/types/search';
+import type { SearchProgressUpdate } from '#lib/types/search.js';
 
 export interface SearchState {
 	isActive: boolean;

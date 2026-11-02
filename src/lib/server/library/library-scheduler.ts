@@ -5,19 +5,19 @@
  * Provides centralized control over library scanning operations.
  */
 
-import { db } from '$lib/server/db/index.js';
-import { librarySettings, libraryScanHistory, rootFolders, series } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { librarySettings, libraryScanHistory, rootFolders, series } from '#lib/server/db/schema.js';
 import { eq, desc, and } from 'drizzle-orm';
 import { diskScanService, type ScanResult } from './disk-scan.js';
 import { mediaMatcherService } from './media-matcher.js';
 import { libraryWatcherService } from './library-watcher.js';
-import { getImportService } from '$lib/server/downloadClients/import/ImportService.js';
-import { scheduleReconcileRootFolder } from '$lib/server/subtitles/services/subtitle-reconcile-hooks.js';
+import { getImportService } from '#lib/server/downloadClients/import/ImportService.js';
+import { scheduleReconcileRootFolder } from '#lib/server/subtitles/services/subtitle-reconcile-hooks.js';
 import { EventEmitter } from 'events';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'scans' as const });
-import type { BackgroundService, ServiceStatus } from '$lib/server/services/background-service.js';
+import type { BackgroundService, ServiceStatus } from '#lib/server/services/background-service.js';
 
 /**
  * Default scan interval in hours

@@ -7,6 +7,7 @@ export {
 	buildTorrentRecoveryPath,
 	downloadMonitor,
 	getDownloadMonitor,
+	isSafeRecoveryCandidate,
 	resetDownloadMonitor
 } from './DownloadMonitorService';
 export {

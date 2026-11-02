@@ -6,23 +6,23 @@
  * Supports Stalker Portal, XStream Codes, and M3U playlist sources.
  */
 
-import { createChildLogger } from '$lib/logging';
-import { channelLineupService } from '$lib/server/livetv/lineup/ChannelLineupService';
-import { getProvider } from '$lib/server/livetv/providers';
-import { recordToAccount } from '$lib/server/livetv/LiveTvAccountManager.js';
-import { db } from '$lib/server/db';
-import { livetvAccounts, livetvChannels } from '$lib/server/db/schema';
+import { createChildLogger } from '#lib/logging/index.js';
+import { channelLineupService } from '#lib/server/livetv/lineup/ChannelLineupService.js';
+import { getProvider } from '#lib/server/livetv/providers/index.js';
+import { recordToAccount } from '#lib/server/livetv/LiveTvAccountManager.js';
+import { db } from '#lib/server/db/index.js';
+import { livetvAccounts, livetvChannels } from '#lib/server/db/schema.js';
 import { and, eq, ne } from 'drizzle-orm';
-import { resolveAndValidateUrl } from '$lib/server/http/ssrf-protection';
-import type { BackgroundService, ServiceStatus } from '$lib/server/services/background-service.js';
-import { ValidationError, ExternalServiceError } from '$lib/errors';
-import { STB_USER_AGENT } from '$lib/server/livetv/stalker/StalkerPortalClient.js';
+import { resolveAndValidateUrl } from '#lib/server/http/ssrf-protection.js';
+import type { BackgroundService, ServiceStatus } from '#lib/server/services/background-service.js';
+import { ValidationError, ExternalServiceError } from '#lib/errors/index.js';
+import { STB_USER_AGENT } from '#lib/server/livetv/stalker/StalkerPortalClient.js';
 import type {
 	FetchStreamResult,
 	StreamError,
 	CachedChannel,
 	LiveTvProviderType
-} from '$lib/types/livetv';
+} from '#lib/types/livetv.js';
 
 const logger = createChildLogger({ module: 'LiveTvStreamService' });
 
@@ -160,14 +160,14 @@ export class LiveTvStreamService implements BackgroundService {
 		for (let i = 0; i < fallbackRows.length; i++) {
 			const row = fallbackRows[i];
 			const stalkerData = (row.stalkerData ?? undefined) as
-				import('$lib/types/livetv').StalkerChannelData | undefined;
+				import('#lib/types/livetv.js').StalkerChannelData | undefined;
 			sources.push({
 				accountId: row.accountId,
 				channelId: row.id,
 				channel: {
 					id: row.id,
 					accountId: row.accountId,
-					providerType: row.providerType as import('$lib/types/livetv').LiveTvProviderType,
+					providerType: row.providerType as import('#lib/types/livetv.js').LiveTvProviderType,
 					externalId: row.externalId,
 					name: row.name,
 					number: row.number,
@@ -179,7 +179,7 @@ export class LiveTvStreamService implements BackgroundService {
 					createdAt: row.createdAt ?? new Date().toISOString(),
 					updatedAt: row.updatedAt ?? new Date().toISOString()
 				},
-				providerType: row.providerType as import('$lib/types/livetv').LiveTvProviderType,
+				providerType: row.providerType as import('#lib/types/livetv.js').LiveTvProviderType,
 				priority: 0.1 + i * 0.1
 			});
 		}

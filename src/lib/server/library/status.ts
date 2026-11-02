@@ -1,6 +1,6 @@
-import { db } from '$lib/server/db/index.js';
-import { movies, series, blockedMedia } from '$lib/server/db/schema.js';
-import { inArray, eq, and } from 'drizzle-orm';
+import { db } from '#lib/server/db/index.js';
+import { movies, series, blockedMedia, requests } from '#lib/server/db/schema.js';
+import { inArray, eq, and, desc } from 'drizzle-orm';
 
 /**
  * Library status for a single TMDB item
@@ -198,6 +198,113 @@ export async function getBlockedTmdbIdSet(
 
 export function invalidateBlockedCache(): void {
 	blockedCache = {};
+}
+
+/**
+ * Request-state annotation for TMDB items (the discover/detail sibling of
+ * getLibraryStatus). One indexed query per list; statuses collapse to the
+ * badge vocabulary pending / approved / fulfilled.
+ */
+export type RequestedState = 'none' | 'pending' | 'approved' | 'fulfilled';
+
+export interface RequestStateAnnotation {
+	requested: RequestedState;
+	/** Representative active request id (admin actions on detail pages). */
+	requestId: string | null;
+	/** The viewing user's own active request, when one exists. */
+	ownRequestId: string | null;
+}
+
+export type RequestStateMap = Record<number, RequestStateAnnotation>;
+
+const REQUEST_STATUS_TO_STATE: Record<string, RequestedState> = {
+	pending: 'pending',
+	failed: 'pending',
+	approved: 'approved',
+	awaiting_target: 'approved',
+	fulfilled: 'fulfilled'
+};
+
+const STATE_PRECEDENCE: Record<RequestedState, number> = {
+	fulfilled: 3,
+	pending: 2,
+	approved: 1,
+	none: 0
+};
+
+export async function getRequestStateMap(
+	tmdbIds: number[],
+	mediaType: 'movie' | 'tv' | 'all',
+	viewerId: string | null
+): Promise<RequestStateMap> {
+	const uniqueIds = [...new Set(tmdbIds)].slice(0, 500);
+	const map: RequestStateMap = {};
+	if (uniqueIds.length === 0) return map;
+	for (const id of uniqueIds) {
+		map[id] = { requested: 'none', requestId: null, ownRequestId: null };
+	}
+
+	const rows = await db
+		.select({
+			id: requests.id,
+			tmdbId: requests.tmdbId,
+			status: requests.status,
+			requestedBy: requests.requestedBy,
+			createdAt: requests.createdAt
+		})
+		.from(requests)
+		.where(
+			and(
+				inArray(requests.tmdbId, uniqueIds),
+				mediaType === 'all'
+					? undefined
+					: eq(requests.mediaType, mediaType === 'tv' ? 'series' : 'movie')
+			)
+		)
+		.orderBy(desc(requests.createdAt));
+
+	for (const row of rows) {
+		const state = REQUEST_STATUS_TO_STATE[row.status];
+		if (!state) continue; // declined/expired/cancelled never annotate
+		const current = map[row.tmdbId];
+		if (!current) continue;
+		if (STATE_PRECEDENCE[state] > STATE_PRECEDENCE[current.requested]) {
+			current.requested = state;
+			current.requestId = row.id;
+		}
+		if (viewerId && row.requestedBy === viewerId && STATE_PRECEDENCE[state] >= 1) {
+			current.ownRequestId ??= row.id;
+		}
+	}
+	return map;
+}
+
+/**
+ * Annotate TMDB items with request state (requested / requestId /
+ * ownRequestId), mirroring enrichWithLibraryStatus.
+ */
+export async function annotateRequestState<T extends { id: number }>(
+	items: T[],
+	mediaType: 'movie' | 'tv' | 'all',
+	viewerId: string | null
+): Promise<(T & RequestStateAnnotation)[]> {
+	if (!items || items.length === 0) {
+		return [];
+	}
+	const stateMap = await getRequestStateMap(
+		items.map((item) => item.id),
+		mediaType,
+		viewerId
+	);
+	return items.map((item) => {
+		const state = stateMap[item.id];
+		return {
+			...item,
+			requested: state?.requested ?? 'none',
+			requestId: state?.requestId ?? null,
+			ownRequestId: state?.ownRequestId ?? null
+		};
+	});
 }
 
 /**

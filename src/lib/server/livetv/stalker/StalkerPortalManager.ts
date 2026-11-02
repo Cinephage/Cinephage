@@ -6,11 +6,11 @@
  */
 
 import { eq } from 'drizzle-orm';
-import { db } from '$lib/server/db';
-import { stalkerPortals, type StalkerPortalRecord } from '$lib/server/db/schema';
-import { createChildLogger } from '$lib/logging';
-import type { BackgroundService, ServiceStatus } from '$lib/server/services/background-service.js';
-import { ValidationError, NotFoundError } from '$lib/errors';
+import { db } from '#lib/server/db/index.js';
+import { stalkerPortals, type StalkerPortalRecord } from '#lib/server/db/schema.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import type { BackgroundService, ServiceStatus } from '#lib/server/services/background-service.js';
+import { ValidationError, NotFoundError } from '#lib/errors/index.js';
 import { STB_USER_AGENT_PROBE } from './StalkerPortalClient.js';
 
 const logger = createChildLogger({ module: 'StalkerPortalManager' });

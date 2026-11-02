@@ -5,7 +5,7 @@ import {
 	mapGuideDataToRequestedChannels,
 	selectAutoAttachEpgSource
 } from './epg-utils';
-import type { EpgProgram } from '$lib/types/livetv';
+import type { EpgProgram } from '#lib/types/livetv.js';
 
 function createProgram(channelId: string, title: string): EpgProgram {
 	return {

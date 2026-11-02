@@ -1,0 +1,210 @@
+---
+# C411 (Community 411) — French private tracker (native Torznab API)
+# Source port of Jackett's c411.yml to Cinephage Cardigann schema.
+# Torznab endpoint: GET /api/torznab?apikey=...&t=search|movie|tvsearch|music|book
+# Cinephage's .Query.Type is basic/movie/tv/music/book, so `t` is remapped below.
+# Response parsing guarded by definitions/c411.test.ts.
+id: c411
+name: C411
+description: C411 (Community 411) is a FRENCH Private Torrent Tracker for MOVIES / TV / GENERAL
+language: fr-FR
+type: private
+encoding: UTF-8
+protocol: torrent
+# Site rate limit: 15 requests/minute
+requestdelay: 4.1
+
+links:
+  - https://c411.org/
+
+caps:
+  categorymappings:
+    # from https://c411.org/api/torznab?apikey=YOUR-API-KEY&t=caps
+    - { id: 1000, cat: Console, desc: 'Jeux Vidéo & Emulation & VR' }
+    - { id: 1030, cat: Console/Wii, desc: 'Nintendo' }
+    - { id: 1040, cat: Console/Xbox, desc: 'Microsoft' }
+    - { id: 1080, cat: Console/PS4, desc: 'Sony' }
+    - { id: 1090, cat: Console/Other, desc: 'Jeux Autre & ROM/ISO' }
+    - { id: 2000, cat: Movies, desc: 'Films & Vidéos' }
+    - { id: 2010, cat: Movies/Other, desc: 'Films Collection' }
+    - { id: 2030, cat: Movies/Foreign, desc: 'Films Foreign' }
+    - { id: 2050, cat: Movies/Other, desc: 'Vidéo-clips' }
+    - { id: 2060, cat: Movies/Other, desc: 'Films Animation' }
+    - { id: 2070, cat: Movies, desc: 'Films Documentaire' }
+    - { id: 2080, cat: Movies/Other, desc: 'Films Spectacle' }
+    - { id: 2090, cat: Movies/Other, desc: 'Films Concert' }
+    - { id: 3000, cat: Audio, desc: 'Audio' }
+    - { id: 3010, cat: Audio/MP3, desc: 'Musique' }
+    - { id: 3030, cat: Audio/Audiobook, desc: 'Audiobooks' }
+    - { id: 3050, cat: Audio/Other, desc: 'Karaoké & Podcast Radio & Samples' }
+    - { id: 4000, cat: PC/0day, desc: 'Applications & Windows & Nulled' }
+    - { id: 4030, cat: PC/0day, desc: 'Linux & MacOS' }
+    - { id: 4040, cat: PC, desc: 'Formation' }
+    - {
+        id: 4050,
+        cat: PC,
+        desc: 'Games-Linux & Games-MacOS & Games-Divers & Autre & Émulateur & GPS & Scripts PHP & CMS & Wordpress'
+      }
+    - {
+        id: 4060,
+        cat: PC/Mobile-Android,
+        desc: 'Android Mobile & Smartphone & Tablette & Applications & Cartes'
+      }
+    - { id: 4070, cat: PC/Mobile-iOS, desc: 'iOS Smartphone & Tablette' }
+    - { id: 5000, cat: TV, desc: 'Série TV' }
+    - { id: 5060, cat: TV/Sport, desc: 'Sport' }
+    - { id: 5070, cat: TV/Anime, desc: 'Animation Série' }
+    - { id: 5080, cat: TV/Documentary, desc: 'Emission TV' }
+    - { id: 6000, cat: XXX, desc: '3X & 3X VR' }
+    - { id: 6010, cat: XXX/DVD, desc: '3X Films' }
+    - { id: 6050, cat: XXX/Other, desc: '3X Ebooks' }
+    - { id: 6060, cat: XXX/ImageSet, desc: '3X Images' }
+    - { id: 6070, cat: XXX/Other, desc: 'Hentai' }
+    - { id: 6080, cat: XXX/Other, desc: '3X Jeux' }
+    - { id: 7000, cat: Books, desc: 'Ebook' }
+    - { id: 7010, cat: Books/Mags, desc: 'Presse' }
+    - { id: 7020, cat: Books/EBook, desc: 'Livres' }
+    - { id: 7030, cat: Books/Comics, desc: 'BDs & Comics & Manga' }
+    - { id: 8010, cat: Other/Misc, desc: 'Imprimante 3D & Objets & Pack & Personnages' }
+
+  modes:
+    search: [q]
+    tv-search: [q, season, ep, imdbid, tmdbid]
+    movie-search: [q, imdbid, tmdbid]
+    music-search: [q]
+    book-search: [q]
+  allowrawsearch: true
+
+settings:
+  - name: apikey
+    type: password
+    label: API Key
+    required: true
+  - name: info_key
+    type: info
+    label: About your API key
+    default: 'You can find or generate a new API Key on the C411 Intégrations API page (https://c411.org/user/integrations).'
+  - name: multilang
+    type: checkbox
+    label: Replace MULTi by another language in release name
+    default: false
+  - name: multilanguage
+    type: select
+    label: Replace MULTi by this language
+    default: FRENCH
+    options:
+      FRENCH: FRENCH
+      MULTi.FRENCH: MULTi.FRENCH
+      ENGLISH: ENGLISH
+      MULTi.ENGLISH: MULTi.ENGLISH
+      VOSTFR: VOSTFR
+      MULTi.VOSTFR: MULTi.VOSTFR
+  - name: vostfr
+    type: checkbox
+    label: Replace VOSTFR and SUBFRENCH with ENGLISH
+    default: false
+  - name: info_3x
+    type: info
+    label: Including 3X
+    default: 'To see 3X torrents, open your C411 Paramètres page (https://c411.org/user/settings) and tick the "Afficher le contenu XXX" checkbox.'
+
+# No login block: the API key is sent on every Torznab request. A login:
+# block would add an un-rate-limited probe before each search, since the
+# stateless API returns no cookies to reuse.
+
+search:
+  paths:
+    - path: api/torznab
+      method: get
+      response:
+        type: xml
+
+  inputs:
+    apikey: '{{ .Config.apikey }}'
+    t: '{{ if eq .Query.Type "tv" }}tvsearch{{ end }}{{ if eq .Query.Type "movie" }}movie{{ end }}{{ if eq .Query.Type "music" }}music{{ end }}{{ if eq .Query.Type "book" }}book{{ end }}{{ if eq .Query.Type "basic" }}search{{ end }}'
+    q: '{{ .Keywords }}'
+    cat: '{{ .Categories }}'
+    season: '{{ .Query.Season }}'
+    ep: '{{ .Query.Ep }}'
+    imdbid: '{{ .Query.IMDBID }}'
+    tmdbid: '{{ .Query.TMDBID }}'
+    limit: '100'
+
+  rows:
+    selector: rss channel item
+
+  fields:
+    category:
+      selector: "torznab|attr[name='category']"
+      attribute: value
+      optional: true
+    # Jackett chains title_phase1/2 via .Result.*, which XML rows don't expose
+    # here; the same rewrites are done with config-gated re_replace instead.
+    title:
+      selector: title
+      filters:
+        # vostfr: VOSTFR / SUBFRENCH -> ENGLISH
+        - name: re_replace
+          args:
+            ['(?i)\b(vostfr|subfrench)\b', '{{ if .Config.vostfr }}ENGLISH{{ else }}$1{{ end }}']
+        # multilang: MULTi -> chosen language, unless a language tag already follows
+        - name: re_replace
+          args:
+            - '(?i)\b(MULTI(?!.*(?:FRENCH|ENGLISH|VOSTFR|VF2|VFF|VFQ|VOQ|VFI|VOF)))\b'
+            - '{{ if .Config.multilang }}{{ .Config.multilanguage }}{{ else }}$1{{ end }}'
+    # Without a guid, the parser falls back to the download URL, which
+    # carries ?apikey= and is not redacted in /api/search.
+    guid:
+      selector: guid
+      optional: true
+    details:
+      selector: link
+    download:
+      selector: enclosure
+      attribute: url
+    infohash:
+      selector: "torznab|attr[name='infohash']"
+      attribute: value
+      optional: true
+    imdbid:
+      selector: "torznab|attr[name='imdbid']"
+      attribute: value
+      optional: true
+    tmdbid:
+      selector: "torznab|attr[name='tmdbid']"
+      attribute: value
+      optional: true
+    date:
+      # Sun, 18 Jan 2026 04:05:41 +0000
+      selector: pubDate
+      filters:
+        - name: dateparse
+          args: 'ddd, DD MMM YYYY HH:mm:ss ZZ'
+    size:
+      selector: size
+    seeders:
+      selector: "torznab|attr[name='seeders']"
+      attribute: value
+      optional: true
+    leechers:
+      selector: "torznab|attr[name='peers']"
+      attribute: value
+      optional: true
+    grabs:
+      selector: "torznab|attr[name='grabs']"
+      attribute: value
+      optional: true
+    downloadvolumefactor:
+      selector: "torznab|attr[name='downloadvolumefactor']"
+      attribute: value
+      optional: true
+    uploadvolumefactor:
+      selector: "torznab|attr[name='uploadvolumefactor']"
+      attribute: value
+      optional: true
+    minimumratio:
+      text: '1.0'
+    minimumseedtime:
+      # 2 days (as seconds = 2 x 24 x 60 x 60)
+      text: '172800'
+# torznab xml

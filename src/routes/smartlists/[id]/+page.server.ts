@@ -3,11 +3,13 @@
  */
 
 import type { PageServerLoad } from './$types';
-import { getSmartListService } from '$lib/server/smartlists/index.js';
+import { getSmartListService } from '#lib/server/smartlists/index.js';
+import { requireAdminPage } from '#lib/server/auth/authorization.js';
 import { error } from '@sveltejs/kit';
-import { getBlockedTmdbIdSet } from '$lib/server/library/status.js';
+import { getBlockedTmdbIdSet } from '#lib/server/library/status.js';
 
-export const load: PageServerLoad = async ({ params, url }) => {
+export const load: PageServerLoad = async ({ locals, params, url }) => {
+	requireAdminPage(locals);
 	const service = getSmartListService();
 	const list = await service.getSmartList(params.id);
 

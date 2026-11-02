@@ -1,12 +1,12 @@
 import { describe, it, expect, afterAll, beforeEach, vi } from 'vitest';
 import { inArray } from 'drizzle-orm';
-import * as schema from '$lib/server/db/schema';
+import * as schema from '#lib/server/db/schema.js';
 
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../test/db-helper.js';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -18,7 +18,7 @@ vi.mock('$lib/server/db', () => ({
 
 const mockedMoveDirectoryWithinRoots = vi.fn();
 
-vi.mock('$lib/server/filesystem/move-helpers.js', () => ({
+vi.mock('#lib/server/filesystem/move-helpers.js', () => ({
 	get moveDirectoryWithinRoots() {
 		return mockedMoveDirectoryWithinRoots;
 	}
@@ -28,7 +28,7 @@ const notifierMocks = vi.hoisted(() => ({
 	queueUpdate: vi.fn()
 }));
 
-vi.mock('$lib/server/notifications/mediabrowser', () => ({
+vi.mock('#lib/server/notifications/mediabrowser/index.js', () => ({
 	getMediaBrowserNotifier: () => ({ queueUpdate: notifierMocks.queueUpdate })
 }));
 
@@ -42,7 +42,7 @@ const mockStartTask = vi.fn();
 const mockCompleteTask = vi.fn();
 const mockFailTask = vi.fn();
 
-vi.mock('$lib/server/tasks/TaskHistoryService.js', () => ({
+vi.mock('#lib/server/tasks/TaskHistoryService.js', () => ({
 	getTaskHistoryService: () => ({
 		startTask: mockStartTask,
 		completeTask: mockCompleteTask,

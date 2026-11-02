@@ -1,8 +1,8 @@
-import { createSSEStream } from '$lib/server/sse';
-import { downloadMonitor } from '$lib/server/downloadClients/monitoring';
-import { importService } from '$lib/server/downloadClients/import';
-import { eventBuffer } from '$lib/server/sse/EventBuffer.js';
-import { db } from '$lib/server/db';
+import { createSSEStream } from '#lib/server/sse.js';
+import { downloadMonitor } from '#lib/server/downloadClients/monitoring/index.js';
+import { importService } from '#lib/server/downloadClients/import/index.js';
+import { eventBuffer } from '#lib/server/sse/EventBuffer.js';
+import { db } from '#lib/server/db/index.js';
 import {
 	series,
 	seasons,
@@ -11,12 +11,12 @@ import {
 	rootFolders,
 	downloadQueue,
 	subtitles
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 import { eq, asc, inArray, and } from 'drizzle-orm';
 import type { RequestHandler } from '@sveltejs/kit';
-import { libraryMediaEvents } from '$lib/server/library/LibraryMediaEvents';
-import { ACTIVE_DOWNLOAD_STATUSES } from '$lib/types/queue';
-import { createChildLogger } from '$lib/logging';
+import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
+import { ACTIVE_DOWNLOAD_STATUSES } from '#lib/types/queue.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LibrarySeriesStreamApi', logDomain: 'scans' });
 

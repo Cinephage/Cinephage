@@ -6,14 +6,15 @@
 
 import { randomUUID } from 'node:crypto';
 import { eq, lt, and, sql } from 'drizzle-orm';
-import { db } from '$lib/server/db';
-import { nzbStreamMounts } from '$lib/server/db/schema';
-import { createChildLogger } from '$lib/logging';
-import { parseNzb } from '$lib/server/streaming/usenet/NzbParser';
+import { db } from '#lib/server/db/index.js';
+import { nzbStreamMounts } from '#lib/server/db/schema.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { parseNzb } from '#lib/server/streaming/usenet/NzbParser.js';
+import { encryptCredential } from '#lib/server/crypto/credentialsCrypto.js';
 
 const logger = createChildLogger({ logDomain: 'streams' as const });
-import type { NzbFile } from '$lib/server/streaming/usenet/types';
-import { getSegmentCacheService } from '$lib/server/streaming/usenet/SegmentCacheService';
+import type { NzbFile } from '#lib/server/streaming/usenet/types.js';
+import { getSegmentCacheService } from '#lib/server/streaming/usenet/SegmentCacheService.js';
 
 /**
  * Mount status values.
@@ -128,10 +129,13 @@ class NzbMountManager {
 				groups: f.groups
 			}));
 
-			// Insert mount record and get generated ID
+			// Insert mount record and get generated ID. The id is generated
+			// client-side so the RAR password envelope can bind to it (AAD).
+			const mountId = randomUUID();
 			const [inserted] = await db
 				.insert(nzbStreamMounts)
 				.values({
+					id: mountId,
 					nzbHash: parsed.hash,
 					title: input.title,
 					indexerId: input.indexerId,
@@ -152,7 +156,9 @@ class NzbMountManager {
 								innerFiles: []
 							}
 						: undefined,
-					password: input.password,
+					password: input.password
+						? encryptCredential('nzb-mount-password', mountId, input.password)
+						: undefined,
 					status: 'ready',
 					expiresAt
 				})

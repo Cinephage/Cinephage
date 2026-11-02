@@ -1,17 +1,17 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../test/db-helper.js';
-import { downloadHistory, movies } from '$lib/server/db/schema.js';
+import { downloadHistory, movies } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	}
 }));
 
-vi.mock('$lib/server/filters/GrabDecisionPipeline.js', () => ({
+vi.mock('#lib/server/filters/GrabDecisionPipeline.js', () => ({
 	grabDecisionPipeline: {
 		evaluate: vi.fn(async () => ({
 			accepted: true,
@@ -23,19 +23,19 @@ vi.mock('$lib/server/filters/GrabDecisionPipeline.js', () => ({
 	}
 }));
 
-vi.mock('$lib/server/quality/QualityFilter.js', () => ({
+vi.mock('#lib/server/quality/QualityFilter.js', () => ({
 	qualityFilter: {
 		getDefaultScoringProfile: vi.fn(async () => ({ id: 'profile-1', name: 'Default' }))
 	}
 }));
 
-vi.mock('$lib/server/acquisition/MediaOccupancyService.js', () => ({
+vi.mock('#lib/server/acquisition/MediaOccupancyService.js', () => ({
 	mediaOccupancyService: {
 		runExclusive: vi.fn(async (_target, operation: () => Promise<unknown>) => operation())
 	}
 }));
 
-vi.mock('$lib/server/settings/acquisition.js', () => ({
+vi.mock('#lib/server/settings/acquisition.js', () => ({
 	getDefaultAcquisitionProtocol: vi.fn(() => 'torrent')
 }));
 

@@ -1,9 +1,10 @@
 <script lang="ts">
-	import type { PersonDetails } from '$lib/types/tmdb';
+	import type { PersonDetails } from '#lib/types/tmdb.js';
 	import TmdbImage from './TmdbImage.svelte';
-	import { ExternalLink, Briefcase } from 'lucide-svelte';
-	import { formatDisplayDate } from '$lib/utils/format.js';
-	import * as m from '$lib/paraglide/messages.js';
+	import { safeExternalUrl } from '#lib/shared/url-safety.js';
+	import { ExternalLink, Briefcase } from '@lucide/svelte';
+	import { formatDisplayDate } from '#lib/utils/format.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	// Accept PersonDetails with or without combined_credits (for optimized loading)
 	// The combined_credits field is intentionally optional as this component works with both variants
@@ -160,10 +161,10 @@
 						<ExternalLink size={12} />
 					</a>
 				{/if}
-				{#if person.homepage}
+				{#if safeExternalUrl(person.homepage)}
 					<!-- eslint-disable svelte/no-navigation-without-resolve -- External URL -->
 					<a
-						href={person.homepage}
+						href={safeExternalUrl(person.homepage)}
 						target="_blank"
 						rel="noopener noreferrer"
 						class="btn gap-1 btn-ghost btn-xs"

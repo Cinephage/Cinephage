@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Loader2 } from 'lucide-svelte';
+	import { Loader2 } from '@lucide/svelte';
 	import type { Snippet } from 'svelte';
 
 	interface Props {

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import {
 		Calendar,
 		ChevronLeft,
@@ -13,18 +13,20 @@
 		List,
 		Plus,
 		Info
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 	import { SvelteMap } from 'svelte/reactivity';
-	import { getLocale } from '$lib/paraglide/runtime.js';
-	import TmdbImage from '$lib/components/tmdb/TmdbImage.svelte';
-	import AddToLibraryModal from '$lib/components/library/AddToLibraryModal.svelte';
-	import type { CalendarDay, CalendarMovieItem } from '$lib/server/calendar/queries.js';
-	import type { CalendarPreferences } from '$lib/validation/schemas.js';
-	import { getCalendar } from '$lib/api';
-	import { apiPut } from '$lib/api/client.js';
-	import { toasts } from '$lib/stores/toast.svelte';
+	import { getLocale } from '#lib/paraglide/runtime.js';
+	import TmdbImage from '#lib/components/tmdb/TmdbImage.svelte';
+	import AddToLibraryModal from '#lib/components/library/AddToLibraryModal.svelte';
+	import type { CalendarDay, CalendarMovieItem } from '#lib/server/calendar/queries.js';
+	import type { CalendarPreferences } from '#lib/validation/schemas.js';
+	import { getCalendar } from '#lib/api/index.js';
+	import { apiPut } from '#lib/api/client.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
 
 	let { data } = $props();
+
+	// Preferences are per-account; every signed-in user owns their own.
 
 	let currentMonth = $state('');
 	let days = $state<CalendarDay[]>([]);
@@ -210,7 +212,7 @@
 	async function toggleViewMode() {
 		prefs.viewMode = prefs.viewMode === 'grid' ? 'list' : 'grid';
 		try {
-			await apiPut('/api/settings/calendar-preferences', { ...prefs });
+			await apiPut('/api/user/preferences/calendar', { value: { ...prefs } });
 		} catch {
 			// non-critical — view still works locally
 		}
@@ -219,7 +221,7 @@
 	async function savePreferences() {
 		savingPrefs = true;
 		try {
-			await apiPut('/api/settings/calendar-preferences', { ...prefs });
+			await apiPut('/api/user/preferences/calendar', { value: { ...prefs } });
 			fetchCalendar(currentMonth);
 			toasts.success('Calendar preferences saved');
 		} catch {

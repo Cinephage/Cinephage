@@ -11,7 +11,7 @@ import type {
 	UsenetProtocolSettings,
 	StreamingProtocolSettings
 } from './protocol';
-import type { NewznabCategory } from '$lib/server/indexers/newznab/types';
+import type { NewznabCategory } from '#lib/server/indexers/newznab/types.js';
 
 // =============================================================================
 // INDEXER CONFIG
@@ -56,6 +56,12 @@ export interface IndexerConfig {
 	alternateUrls: string[];
 	/** Priority (1-100, lower = higher priority) */
 	priority: number;
+	/**
+	 * User override for max requests/minute sent to this indexer. Overrides the
+	 * definition's `requestdelay` (if any) and the generic default. undefined/null
+	 * = use definition/default behavior.
+	 */
+	rateLimitPerMinute?: number | null;
 	/** Protocol type */
 	protocol: IndexerProtocol;
 
@@ -121,6 +127,8 @@ export interface CreateIndexerData {
 	alternateUrls?: string[];
 	/** Priority */
 	priority?: number;
+	/** User override for max requests/minute sent to this indexer */
+	rateLimitPerMinute?: number | null;
 
 	// Search toggles
 	enableAutomaticSearch?: boolean;
@@ -149,6 +157,8 @@ export interface UpdateIndexerData {
 	alternateUrls?: string[];
 	/** Priority */
 	priority?: number;
+	/** User override for max requests/minute sent to this indexer */
+	rateLimitPerMinute?: number | null;
 
 	// Search toggles
 	enableAutomaticSearch?: boolean;

@@ -1,7 +1,7 @@
 <script lang="ts">
-	import type { LibraryMovie, LibrarySeries } from '$lib/types/library';
-	import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-svelte';
-	import * as m from '$lib/paraglide/messages.js';
+	import type { LibraryMovie, LibrarySeries } from '#lib/types/library.js';
+	import { ArrowUpDown, ArrowUp, ArrowDown } from '@lucide/svelte';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
 		items: (LibraryMovie | LibrarySeries)[];

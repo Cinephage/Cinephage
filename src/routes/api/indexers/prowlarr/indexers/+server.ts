@@ -1,14 +1,13 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 import {
 	getProwlarrConnection,
 	fetchProwlarrIndexers,
 	normalizeProwlarrUrl,
 	isIndexerFromConnection,
 	getProwlarrId
-} from '$lib/server/indexers/prowlarr/ProwlarrConnectionService.js';
-import { getIndexerManager } from '$lib/server/indexers/IndexerManager.js';
+} from '#lib/server/indexers/prowlarr/ProwlarrConnectionService.js';
+import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
 
 /**
  * GET - fetch indexers from Prowlarr using the stored connection's API key.
@@ -21,7 +20,7 @@ export const GET: RequestHandler = async (event) => {
 
 	const conn = await getProwlarrConnection();
 	if (!conn) {
-		return json({ error: 'No Prowlarr connection configured.' }, { status: 400 });
+		return Response.json({ error: 'No Prowlarr connection configured.' }, { status: 400 });
 	}
 
 	const base = normalizeProwlarrUrl(conn.url);
@@ -32,7 +31,7 @@ export const GET: RequestHandler = async (event) => {
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
 		const isTimeout = message.toLowerCase().includes('timeout') || message.includes('TimeoutError');
-		return json(
+		return Response.json(
 			{
 				error: isTimeout
 					? 'Connection timed out. Check that Prowlarr is still running.'
@@ -77,5 +76,5 @@ export const GET: RequestHandler = async (event) => {
 		return a.name.localeCompare(b.name);
 	});
 
-	return json({ indexers });
+	return Response.json({ indexers });
 };

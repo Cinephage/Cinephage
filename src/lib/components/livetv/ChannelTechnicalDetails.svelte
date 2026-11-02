@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { ChevronDown, Check, Copy } from 'lucide-svelte';
-	import * as m from '$lib/paraglide/messages.js';
+	import { ChevronDown, Check, Copy } from '@lucide/svelte';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
 		open: boolean;

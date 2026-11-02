@@ -11,9 +11,8 @@
  * replacing that one file's import, not hunting through duplicated guard
  * logic.
  */
-
-import { json, type RequestHandler } from '@sveltejs/kit';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
+import { type RequestHandler } from '@sveltejs/kit';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 import { requireArrCompatEnabled } from './requireArrCompatEnabled.js';
 
 export const emptyListSkeleton: RequestHandler = async (event) => {
@@ -23,5 +22,5 @@ export const emptyListSkeleton: RequestHandler = async (event) => {
 	const authError = requireAdmin(event);
 	if (authError) return authError;
 
-	return json([]);
+	return Response.json([]);
 };

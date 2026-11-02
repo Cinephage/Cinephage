@@ -12,12 +12,12 @@
  */
 
 import type { RequestHandler } from './$types';
-import { createSSEStream } from '$lib/server/sse';
-import { monitoringScheduler } from '$lib/server/monitoring/MonitoringScheduler';
-import { taskSettingsService } from '$lib/server/tasks/TaskSettingsService';
-import { taskHistoryService } from '$lib/server/tasks/TaskHistoryService';
-import type { TaskResult } from '$lib/server/monitoring/MonitoringScheduler';
-import type { TaskHistoryEntry } from '$lib/types/task';
+import { createSSEStream } from '#lib/server/sse.js';
+import { monitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.js';
+import { taskSettingsService } from '#lib/server/tasks/TaskSettingsService.js';
+import { taskHistoryService } from '#lib/server/tasks/TaskHistoryService.js';
+import type { TaskResult } from '#lib/server/monitoring/MonitoringScheduler.js';
+import type { TaskHistoryEntry } from '#lib/types/task.js';
 
 /**
  * SSE event payload types

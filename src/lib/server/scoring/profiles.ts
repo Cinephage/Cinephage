@@ -632,6 +632,174 @@ export const COMPACT_PROFILE: ScoringProfile = {
 };
 
 // =============================================================================
+// Anime Profile - Fansub/Group Aware
+// =============================================================================
+
+/**
+ * Anime Profile: Tuned for anime release conventions
+ *
+ * Target: Dual-audio, group-aware anime releases
+ * - Dual Audio (EN+JP) is a defining preference, scored heavily
+ * - Simulcast WEB-DL groups (SubsPlease, Erai-raws) and top-tier BD batch
+ *   groups (LYS1TH3A, MTBB, OZR, Vodes, etc.) are the gold standard
+ * - Any recognized anime fansub group outscores an unidentified non-anime
+ *   group, since anime releases are near-universally group-muxed
+ * - x265 valued for efficiency, but x264 is still extremely common for
+ *   anime (official WEB-DL, older BD encodes) and isn't penalized much
+ * - HDR and lossless surround audio are rare for anime and barely move
+ *   the score either way - resolution, source, dual-audio, and group
+ *   identity carry nearly all the weight
+ *
+ * Ideal for: Anime libraries, fansub-aware grabbing, dual-audio preference
+ */
+export const ANIME_PROFILE: ScoringProfile = {
+	id: 'anime',
+	name: 'Anime',
+	description: 'Tuned for anime - dual-audio bonus, fansub group awareness, x265 efficient encodes',
+	tags: ['anime', 'dual-audio', 'fansub', 'x265'],
+	icon: 'Sparkles',
+	color: 'text-pink-500',
+	category: 'anime',
+	upgradesAllowed: true,
+	preventDowngrades: true,
+	minScore: 0,
+	upgradeUntilScore: 50000,
+	minScoreIncrement: 20,
+	resolutionOrder: DEFAULT_RESOLUTION_ORDER,
+	// Filtering - no restrictions; plenty of anime only ever gets a 720p release
+	minResolution: null,
+	maxResolution: null,
+	allowedSources: null,
+	excludedSources: ['cam', 'telesync', 'telecine', 'screener'],
+	allowedProtocols: ['torrent', 'usenet'],
+	formatScores: {
+		// ===========================================
+		// Resolution - 1080p is the anime ceiling for most releases, but a
+		// genuine 4K release should never score below 1080p
+		// ===========================================
+		'resolution-2160p': 210,
+		'resolution-1080p': 200,
+		'resolution-720p': 120,
+		'resolution-480p': 40,
+
+		// ===========================================
+		// Source
+		// ===========================================
+		'source-webdl': 160,
+		'source-bluray': 150,
+		'source-webrip': 110,
+		'source-hdtv': 60,
+		'source-dvd': 30,
+
+		// ===========================================
+		// Language - Dual Audio is the headline anime preference
+		// ===========================================
+		'lang-dual-audio': 180,
+		'lang-multi': 60,
+
+		// ===========================================
+		// Codec - x265 preferred, x264 still common and not punished
+		// ===========================================
+		'codec-x265': 100,
+		'codec-av1': 80,
+		'codec-x264': 40,
+
+		// ===========================================
+		// Audio - lossy formats are the anime norm, lossless is a small bonus
+		// ===========================================
+		'audio-opus': 70,
+		'audio-flac': 60,
+		'audio-ddplus': 50,
+		'audio-aac': 50,
+		'audio-atmos': 40,
+		'audio-truehd': 40,
+		'audio-dts': 30,
+		'audio-dd': 30,
+		'audio-mp3': 10,
+
+		// ===========================================
+		// HDR - rare for anime, barely moves the needle
+		// ===========================================
+		'hdr-dolby-vision': 20,
+		'hdr-hdr10plus': 20,
+		'hdr-hdr10': 15,
+		'hdr-generic': 10,
+		'hdr-hlg': 10,
+		'hdr-pq': 10,
+		'hdr-sdr': 0,
+
+		// ===========================================
+		// Release Groups - Simulcast WEB sources
+		// ===========================================
+		'group-subsplease': 150,
+		'group-erai-raws': 140,
+		'group-horriblesubs': 40,
+
+		// Top tier anime groups (BD batch re-encoders)
+		'group-lys1th3a': 160,
+		'group-mtbb': 160,
+		'group-vodes': 160,
+		'group-ozr': 150,
+		'group-sam': 150,
+		'group-scy': 150,
+		'group-smol': 150,
+
+		// Other recognized anime groups - any identified anime group beats
+		// an unidentified one, since anime is near-universally group-muxed
+		'group-arid': 70,
+		'group-cbt': 70,
+		'group-ctr': 70,
+		'group-dekinai': 70,
+		'group-drag': 70,
+		'group-exp': 70,
+		'group-flugel': 70,
+		'group-headpatter': 70,
+		'group-holomux': 70,
+		'group-hydes': 70,
+		'group-ik': 70,
+		'group-kametsu': 70,
+		'group-kh': 70,
+		'group-kuchikirukia': 70,
+		'group-lulu': 70,
+		'group-mysteria': 70,
+		'group-netaro': 70,
+		'group-okay-subs': 70,
+		'group-pog42': 70,
+		'group-pookie': 70,
+		'group-quetzal': 70,
+		'group-rasetsu': 70,
+		'group-senjou': 70,
+		'group-udf': 70,
+		'group-wbdp': 70,
+		'group-yuri': 70,
+		'group-zr': 70,
+
+		// Non-anime-aware micro/scene groups that occasionally rehost anime
+		// without care for subs/audio tracks
+		'group-yts': -50,
+		'group-yify': -50,
+		'group-rarbg': -20,
+		'group-nahom': -50,
+		'group-nogroup': -50,
+		'group-stuttershit': -50,
+
+		// ===========================================
+		// Repacks / Propers
+		// ===========================================
+		'repack-3': 30,
+		'repack-2': 20,
+		'repack-1': 10,
+		proper: 15,
+
+		'banned-3d': -100,
+		'banned-x264-2160p': -100,
+
+		// Banned formats
+		...UNIVERSAL_BANNED_FORMATS
+	}
+};
+
+// =============================================================================
 // Streamer Profile - Streaming Only
 // =============================================================================
 
@@ -701,6 +869,7 @@ export const DEFAULT_PROFILES: ScoringProfile[] = [
 	QUALITY_PROFILE,
 	BALANCED_PROFILE,
 	COMPACT_PROFILE,
+	ANIME_PROFILE,
 	STREAMER_PROFILE
 ];
 

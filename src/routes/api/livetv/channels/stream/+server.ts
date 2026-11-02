@@ -15,13 +15,13 @@
  * - epg:nowNext: Periodic EPG now/next updates (every 60s)
  */
 
-import { createSSEStream } from '$lib/server/sse';
-import { liveTvEvents } from '$lib/server/livetv/LiveTvEvents';
-import { channelLineupService } from '$lib/server/livetv/lineup';
-import { channelCategoryService } from '$lib/server/livetv/categories';
-import { getEpgService } from '$lib/server/livetv/epg';
+import { createSSEStream } from '#lib/server/sse.js';
+import { liveTvEvents } from '#lib/server/livetv/LiveTvEvents.js';
+import { channelLineupService } from '#lib/server/livetv/lineup/index.js';
+import { channelCategoryService } from '#lib/server/livetv/categories/index.js';
+import { getEpgService } from '#lib/server/livetv/epg/index.js';
 import type { RequestHandler } from './$types';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ component: 'LiveTVChannelsStream', logDomain: 'livetv' });
 

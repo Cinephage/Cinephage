@@ -14,8 +14,8 @@ import type {
 	ReleaseCandidate
 } from './types.js';
 import { reject, accept, RejectionReason } from './types.js';
-import { db } from '$lib/server/db';
-import { rootFolders } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { rootFolders } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 
 /**

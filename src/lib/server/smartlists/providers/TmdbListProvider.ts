@@ -4,10 +4,10 @@
  * Fetches movies from a specific TMDb list by ID
  * Uses the TMDb /list/{list_id} endpoint
  */
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'monitoring' as const });
-import { tmdb } from '$lib/server/tmdb.js';
+import { tmdb } from '#lib/server/tmdb.js';
 import type { ExternalListProvider, ExternalListItem, ExternalListResult } from './types.js';
 
 export interface TmdbListConfig {

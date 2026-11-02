@@ -191,6 +191,36 @@ describe('matchReleaseToTarget', () => {
 		expect(result.matched).toBe(true);
 		expect(result.method).toBe('exact');
 	});
+
+	it('matches a dual-language release title against its primary segment (GitHub report)', () => {
+		// The release joins a Russian primary title with its English
+		// alternate via " / "; comparing the whole string against the
+		// library's Russian-only title dragged similarity down to 0.65
+		// (below the 0.7 threshold) because of the extra English tokens.
+		const result = matchReleaseToTarget({
+			releaseTitle: 'Зловещие Мертвецы 3: Армия Тьмы / Army of Darkness',
+			targetTitles: ['Зловещие мертвецы 3: Армия тьмы'],
+			releaseYear: 1992,
+			targetYear: 1992
+		});
+		expect(result.matched).toBe(true);
+		expect(result.method).toBe('exact');
+		expect(result.bestSimilarity).toBe(1);
+	});
+
+	it('matches a dual-language release title against its alternate segment', () => {
+		// Same join format, but this time the LIBRARY title is the English
+		// one; the primary (Russian) segment alone would score low, so the
+		// alternate segment must be tried too.
+		const result = matchReleaseToTarget({
+			releaseTitle: 'Сталкер / Stalker',
+			targetTitles: ['Stalker'],
+			releaseYear: 1979,
+			targetYear: 1979
+		});
+		expect(result.matched).toBe(true);
+		expect(result.method).toBe('exact');
+	});
 });
 
 describe('matchTitleContainment (display-only)', () => {

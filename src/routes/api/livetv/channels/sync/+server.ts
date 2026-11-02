@@ -4,11 +4,11 @@
  * POST /api/livetv/channels/sync - Trigger channel sync for accounts
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getLiveTvChannelService, getLiveTvAccountManager } from '$lib/server/livetv';
-import { liveTvEvents } from '$lib/server/livetv/LiveTvEvents';
-import { createChildLogger } from '$lib/logging';
+import { getLiveTvChannelService, getLiveTvAccountManager } from '#lib/server/livetv/index.js';
+import { queueAccountEpgSync } from '#lib/server/livetv/epg/trigger.js';
+import { liveTvEvents } from '#lib/server/livetv/LiveTvEvents.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LiveTvChannelsSync', logDomain: 'livetv' });
 
@@ -31,6 +31,11 @@ export const POST: RequestHandler = async ({ request }) => {
 					const result = await channelService.syncChannels(account.id);
 					results[account.id] = result;
 					liveTvEvents.emitChannelsSyncCompleted(account.id, result);
+					if (result.success) {
+						// Channel ids changed — refresh the guide for this account
+						// instead of waiting out the global EPG interval.
+						queueAccountEpgSync(account.id, 'channel-sync');
+					}
 				} catch (err) {
 					liveTvEvents.emitChannelsSyncFailed(
 						account.id,
@@ -43,7 +48,7 @@ export const POST: RequestHandler = async ({ request }) => {
 				}
 			}
 
-			return json({
+			return Response.json({
 				success: true,
 				results
 			});
@@ -68,6 +73,9 @@ export const POST: RequestHandler = async ({ request }) => {
 				const result = await channelService.syncChannels(accountId);
 				results[accountId] = result;
 				liveTvEvents.emitChannelsSyncCompleted(accountId, result);
+				if (result.success) {
+					queueAccountEpgSync(accountId, 'channel-sync');
+				}
 			} catch (err) {
 				liveTvEvents.emitChannelsSyncFailed(
 					accountId,
@@ -80,13 +88,13 @@ export const POST: RequestHandler = async ({ request }) => {
 			}
 		}
 
-		return json({
+		return Response.json({
 			success: true,
 			results
 		});
 	} catch (error) {
 		logger.error('[API] Failed to sync channels', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to sync channels'

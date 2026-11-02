@@ -4,15 +4,14 @@
  * POST /api/smartlists/external/test - Test external list connection
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { providerRegistry } from '$lib/server/smartlists/providers/ProviderRegistry.js';
-import { externalIdResolver } from '$lib/server/smartlists/ExternalIdResolver.js';
-import { presetService } from '$lib/server/smartlists/presets/PresetService.js';
-import { createChildLogger } from '$lib/logging';
+import { providerRegistry } from '#lib/server/smartlists/providers/ProviderRegistry.js';
+import { externalIdResolver } from '#lib/server/smartlists/ExternalIdResolver.js';
+import { presetService } from '#lib/server/smartlists/presets/PresetService.js';
+import { createChildLogger } from '#lib/logging/index.js';
 import { z } from 'zod';
-import { smartListExternalPreviewSchema } from '$lib/validation/schemas.js';
-import { contentFilterPipeline } from '$lib/server/filters/ContentFilterPipeline.js';
+import { smartListExternalPreviewSchema } from '#lib/validation/schemas.js';
+import { contentFilterPipeline } from '#lib/server/filters/ContentFilterPipeline.js';
 
 const logger = createChildLogger({
 	module: 'SmartListsExternalPreviewApi',
@@ -34,7 +33,7 @@ export const POST: RequestHandler = async ({ request, url }) => {
 			// Using a preset - extract provider from preset ID
 			const preset = presetService.getPreset(data.presetId);
 			if (!preset) {
-				return json({ error: 'Preset not found' }, { status: 404 });
+				return Response.json({ error: 'Preset not found' }, { status: 404 });
 			}
 
 			providerType = preset.provider;
@@ -92,18 +91,21 @@ export const POST: RequestHandler = async ({ request, url }) => {
 				'[ExternalPreview API] Using URL (backward compatibility)'
 			);
 		} else {
-			return json({ error: 'Must provide presetId, providerType, or url' }, { status: 400 });
+			return Response.json(
+				{ error: 'Must provide presetId, providerType, or url' },
+				{ status: 400 }
+			);
 		}
 
 		// Get the appropriate provider
 		const provider = providerRegistry.get(providerType);
 		if (!provider) {
-			return json({ error: `Provider '${providerType}' not available` }, { status: 500 });
+			return Response.json({ error: `Provider '${providerType}' not available` }, { status: 500 });
 		}
 
 		// Validate config
 		if (!provider.validateConfig(providerConfig)) {
-			return json(
+			return Response.json(
 				{ error: `Invalid configuration for provider '${providerType}'` },
 				{ status: 400 }
 			);
@@ -124,7 +126,7 @@ export const POST: RequestHandler = async ({ request, url }) => {
 		const result = await provider.fetchItems(providerConfig, data.mediaType ?? '');
 
 		if (result.error) {
-			return json({ error: result.error }, { status: 400 });
+			return Response.json({ error: result.error }, { status: 400 });
 		}
 
 		logger.info(
@@ -137,7 +139,7 @@ export const POST: RequestHandler = async ({ request, url }) => {
 
 		// For test endpoint, just return counts without resolving IDs
 		if (isTest) {
-			return json({
+			return Response.json({
 				success: true,
 				totalCount: result.totalCount,
 				failedCount: result.failedCount
@@ -266,7 +268,7 @@ export const POST: RequestHandler = async ({ request, url }) => {
 			'[ExternalPreview API] Returning paginated results'
 		);
 
-		return json({
+		return Response.json({
 			items: paginatedItems,
 			totalResults: totalItems,
 			totalPages,
@@ -278,10 +280,10 @@ export const POST: RequestHandler = async ({ request, url }) => {
 	} catch (error) {
 		if (error instanceof z.ZodError) {
 			logger.error({ issues: error.issues }, '[ExternalPreview API] Validation error');
-			return json({ error: 'Validation failed', details: error.issues }, { status: 400 });
+			return Response.json({ error: 'Validation failed', details: error.issues }, { status: 400 });
 		}
 		logger.error('[ExternalPreview API] Error', error);
 		const message = error instanceof Error ? error.message : 'Unknown error';
-		return json({ error: message }, { status: 500 });
+		return Response.json({ error: message }, { status: 500 });
 	}
 };

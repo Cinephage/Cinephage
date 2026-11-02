@@ -1,11 +1,10 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 import {
 	getLibraryStatus,
 	type LibraryStatusMap,
 	type LibraryStatus
-} from '$lib/server/library/status.js';
+} from '#lib/server/library/status.js';
 
 const logger = createChildLogger({ module: 'LibraryStatusApi', logDomain: 'scans' });
 
@@ -31,13 +30,13 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		const statusMap = await getLibraryStatus(tmdbIds, mediaType);
 
-		return json({
+		return Response.json({
 			success: true,
 			status: statusMap
 		});
 	} catch (error) {
 		logger.error('[API] Error fetching library status', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to fetch library status',
@@ -59,12 +58,12 @@ export const GET: RequestHandler = async ({ url }) => {
 		const mediaType = url.searchParams.get('mediaType') as 'movie' | 'tv' | 'all' | null;
 
 		if (!tmdbIdParam) {
-			return json({ success: false, error: 'tmdbId is required' }, { status: 400 });
+			return Response.json({ success: false, error: 'tmdbId is required' }, { status: 400 });
 		}
 
 		const tmdbId = parseInt(tmdbIdParam, 10);
 		if (isNaN(tmdbId)) {
-			return json({ success: false, error: 'tmdbId must be a number' }, { status: 400 });
+			return Response.json({ success: false, error: 'tmdbId must be a number' }, { status: 400 });
 		}
 
 		const statusMap = await getLibraryStatus([tmdbId], mediaType ?? 'all');
@@ -74,10 +73,10 @@ export const GET: RequestHandler = async ({ url }) => {
 			mediaType: null
 		};
 
-		return json({ success: true, status });
+		return Response.json({ success: true, status });
 	} catch (error) {
 		logger.error('[API] Error fetching library status', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to fetch library status'

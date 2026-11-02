@@ -5,7 +5,7 @@
  * Follows the same pattern as searchProgress.svelte.ts.
  */
 
-import type { SubtitleBatchAutoSearchRequest } from '$lib/validation/schemas.js';
+import type { SubtitleBatchAutoSearchRequest } from '#lib/validation/schemas.js';
 
 export type SubtitleProgressStatus =
 	| 'searching'

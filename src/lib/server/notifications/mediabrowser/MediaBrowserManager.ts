@@ -3,14 +3,20 @@
  * Provides CRUD operations and connection testing.
  */
 
-import { db } from '$lib/server/db';
+import { db } from '#lib/server/db/index.js';
+import { decryptApiKey } from '#lib/server/crypto/apiKeyCrypto.js';
+import {
+	decryptCredential,
+	encryptCredential,
+	isEncryptedCredential
+} from '#lib/server/crypto/credentialsCrypto.js';
 import {
 	mediaBrowserServers,
 	mediaServerSyncedItems,
 	type MediaBrowserServerRecord
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 import { eq, and, asc } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 import { randomUUID } from 'node:crypto';
@@ -72,6 +78,51 @@ class MediaBrowserManager {
 	}
 
 	/**
+	 * Legacy `iv:tag:hex` ciphertext from apiKeyCrypto (pre-migration 161).
+	 * New values use the versioned `cphg1.` envelope, detected exactly by
+	 * isEncryptedCredential; plaintext rows that raced the encrypting
+	 * migration remain tolerated.
+	 */
+	private static looksLegacyEncrypted(value: string): boolean {
+		const parts = value.split(':');
+		return parts.length === 3 && parts.every((p) => /^[0-9a-f]+$/i.test(p));
+	}
+
+	/**
+	 * Decrypt the stored key, or null when the row looks like ciphertext but
+	 * will not decrypt (rotated master key, corruption). Never returns
+	 * the ciphertext itself: sending it to the media server would leak
+	 * key material to a third party while masking the misconfiguration.
+	 */
+	private static decryptStoredKey(serverId: string, value: string): string | null {
+		if (isEncryptedCredential(value)) {
+			return decryptCredential(
+				'media-browser-api-key',
+				serverId,
+				value,
+				`media-browser:${serverId}`
+			);
+		}
+		if (MediaBrowserManager.looksLegacyEncrypted(value)) {
+			const plaintext = decryptApiKey(value);
+			if (plaintext === null) {
+				logger.error(
+					{ logDomain: 'notifications', serverId },
+					'[MediaBrowser] Stored API key failed to decrypt — the credential is being dropped. ' +
+						'If the encryption master key was rotated, re-enter the server API key in settings.'
+				);
+			}
+			return plaintext;
+		}
+		return value;
+	}
+
+	private static encryptStoredKey(serverId: string, value: string): string {
+		if (isEncryptedCredential(value)) return value;
+		return encryptCredential('media-browser-api-key', serverId, value);
+	}
+
+	/**
 	 * Create and cache a client for a server record
 	 */
 	private createClient(record: MediaBrowserServerRecord): MediaBrowserClient {
@@ -103,11 +154,15 @@ class MediaBrowserManager {
 	 * Get all enabled servers (with full record for internal use)
 	 */
 	async getEnabledServers(): Promise<MediaBrowserServerRecord[]> {
-		return db
+		const records = await db
 			.select()
 			.from(mediaBrowserServers)
 			.where(eq(mediaBrowserServers.enabled, true))
 			.orderBy(asc(mediaBrowserServers.name));
+		return records.map((record) => ({
+			...record,
+			apiKey: MediaBrowserManager.decryptStoredKey(record.id, record.apiKey) ?? ''
+		}));
 	}
 
 	/**
@@ -133,7 +188,11 @@ class MediaBrowserManager {
 			.where(eq(mediaBrowserServers.id, id))
 			.limit(1);
 
-		return record ?? null;
+		if (!record) return null;
+		return {
+			...record,
+			apiKey: MediaBrowserManager.decryptStoredKey(record.id, record.apiKey) ?? ''
+		};
 	}
 
 	/**
@@ -141,13 +200,14 @@ class MediaBrowserManager {
 	 */
 	async createServer(input: MediaBrowserServerInput): Promise<MediaBrowserServerPublic> {
 		const now = new Date().toISOString();
+		const serverId = randomUUID();
 
 		const newServer = {
-			id: randomUUID(),
+			id: serverId,
 			name: input.name,
 			serverType: input.serverType,
 			host: input.host.replace(/\/+$/, ''), // Normalize URL
-			apiKey: input.apiKey,
+			apiKey: MediaBrowserManager.encryptStoredKey(serverId, input.apiKey),
 			enabled: input.enabled ?? true,
 			onImport: input.onImport ?? true,
 			onUpgrade: input.onUpgrade ?? true,
@@ -182,7 +242,8 @@ class MediaBrowserManager {
 		if (input.name !== undefined) updates.name = input.name;
 		if (input.serverType !== undefined) updates.serverType = input.serverType;
 		if (input.host !== undefined) updates.host = input.host.replace(/\/+$/, '');
-		if (input.apiKey !== undefined) updates.apiKey = input.apiKey;
+		if (input.apiKey !== undefined)
+			updates.apiKey = MediaBrowserManager.encryptStoredKey(id, input.apiKey);
 		if (input.enabled !== undefined) updates.enabled = input.enabled;
 		if (input.onImport !== undefined) updates.onImport = input.onImport;
 		if (input.onUpgrade !== undefined) updates.onUpgrade = input.onUpgrade;
@@ -202,6 +263,24 @@ class MediaBrowserManager {
 			.returning();
 
 		logger.info({ id, name: updated.name }, '[MediaBrowserManager] Updated server');
+
+		// A disabled server's synced data stays in the DB (so re-enabling and
+		// re-syncing is cheap) but must stop counting toward Storage
+		// Maintenance immediately, not whenever some unrelated scan/import
+		// happens to trigger the next reconcile. Lazy-import to avoid a
+		// circular dependency (mirrors ReconciliationService's own pattern
+		// for subscribing to its event sources).
+		if (input.enabled !== undefined && input.enabled !== existing.enabled) {
+			import('#lib/server/storage/reconciliation/ReconciliationService.js')
+				.then(({ getReconciliationService }) => getReconciliationService().reconcile())
+				.catch((e) => {
+					logger.warn(
+						{ id, error: e instanceof Error ? e.message : String(e) },
+						'[MediaBrowserManager] Failed to trigger reconcile after enabled toggle'
+					);
+				});
+		}
+
 		return toPublicInfo(updated);
 	}
 

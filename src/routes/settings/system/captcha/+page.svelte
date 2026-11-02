@@ -1,5 +1,5 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import {
 		Shield,
 		Globe,
@@ -11,18 +11,18 @@
 		Play,
 		RefreshCw,
 		AlertCircle
-	} from 'lucide-svelte';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import { formatDisplayDate } from '$lib/utils/format.js';
-	import { SettingsPage, SettingsSection } from '$lib/components/ui/settings';
+	} from '@lucide/svelte';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { formatDisplayDate } from '#lib/utils/format.js';
+	import { SettingsPage, SettingsSection } from '#lib/components/ui/settings/index.js';
 	import {
 		getCaptchaSolverHealth,
 		getCaptchaSolverSettings,
 		updateCaptchaSolverSettings,
 		testCaptchaSolver,
 		clearCaptchaSolverCache
-	} from '$lib/api/monitoring.js';
-	import type { CaptchaSolverSettingsUpdate } from '$lib/validation/schemas.js';
+	} from '#lib/api/monitoring.js';
+	import type { CaptchaSolverSettingsUpdate } from '#lib/validation/schemas.js';
 
 	// =====================
 	// Captcha Solver State

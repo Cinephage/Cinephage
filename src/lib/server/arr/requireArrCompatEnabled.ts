@@ -7,12 +7,11 @@
  * look like it exists to a probing client
  */
 
-import { json } from '@sveltejs/kit';
 import { isArrCompatEnabled } from './arrCompatSettings.js';
 
 export function requireArrCompatEnabled(): Response | null {
 	if (!isArrCompatEnabled()) {
-		return json({ message: 'Not Found' }, { status: 404 });
+		return Response.json({ message: 'Not Found' }, { status: 404 });
 	}
 	return null;
 }

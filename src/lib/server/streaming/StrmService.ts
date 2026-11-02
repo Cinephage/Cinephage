@@ -6,12 +6,14 @@
  * to locate and play streaming content.
  */
 
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { existsSync, writeFileSync, readFileSync } from 'fs';
 import { join, dirname, resolve, relative } from 'path';
-import { createChildLogger } from '$lib/logging';
-import { todayDateString } from '$lib/utils/format.js';
-import { getRecoverableApiKeyByType } from '$lib/server/auth/index.js';
-import { db } from '$lib/server/db';
+import { createChildLogger } from '#lib/logging/index.js';
+import { isRootFolderWritable } from '#lib/server/filesystem/writable-guard.js';
+import { applyMediaFileMode, ensureMediaDirectory } from '#lib/server/filesystem/mkdir-helpers.js';
+import { todayDateString } from '#lib/utils/format.js';
+import { getOwnerStreamingApiKey } from '#lib/server/auth/index.js';
+import { db } from '#lib/server/db/index.js';
 import {
 	movies,
 	series,
@@ -19,11 +21,11 @@ import {
 	rootFolders,
 	movieFiles,
 	episodeFiles
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 import { eq, and, sql, inArray } from 'drizzle-orm';
-import { NamingService, type MediaNamingInfo } from '$lib/server/library/naming/NamingService.js';
-import { namingSettingsService } from '$lib/server/library/naming/NamingSettingsService.js';
-import { resolveLocalizedTitlesForFormats } from '$lib/server/library/naming/localization.js';
+import { NamingService, type MediaNamingInfo } from '#lib/server/library/naming/NamingService.js';
+import { namingSettingsService } from '#lib/server/library/naming/NamingSettingsService.js';
+import { resolveLocalizedTitlesForFormats } from '#lib/server/library/naming/localization.js';
 
 const logger = createChildLogger({ module: 'StrmService' });
 
@@ -196,11 +198,12 @@ export class StrmService {
 	/**
 	 * Fetch the Media Streaming API Key from the database
 	 * This key is used for authenticating streaming requests from media servers
-	 * Queries directly from database to work in background contexts without user session
+	 * Queries directly from database to work in background contexts without user session;
+	 * always resolves to the owner admin's key so multi-user instances stay deterministic.
 	 */
 	private async getMediaStreamingApiKey(): Promise<string | null> {
 		try {
-			const key = await getRecoverableApiKeyByType('streaming');
+			const key = await getOwnerStreamingApiKey();
 
 			if (!key) {
 				logger.debug('[StrmService] No Media Streaming API Key found in database');
@@ -267,6 +270,9 @@ export class StrmService {
 
 		try {
 			let destinationPath: string;
+			// Captured in whichever branch builds the path, so the read-only guard
+			// below knows which root the destination belongs to.
+			let resolvedRootFolderId: string | undefined;
 
 			if (mediaType === 'movie' && movieId) {
 				// Get movie details for folder path
@@ -330,20 +336,28 @@ export class StrmService {
 					episode,
 					episodeRow?.title
 				);
+				resolvedRootFolderId = show.rootFolderId;
 			} else {
 				return { success: false, error: 'Invalid options for creating .strm file' };
 			}
 
-			// Ensure directory exists
-			const dir = dirname(destinationPath);
-			if (!existsSync(dir)) {
-				mkdirSync(dir, { recursive: true });
-				logger.debug({ dir }, '[StrmService] Created directory');
+			// Read-only roots are catalogue-only (NZBDav/rclone mounts); a
+			// streaming grab must not drop a .strm placeholder into one.
+			if (!resolvedRootFolderId || !(await isRootFolderWritable(resolvedRootFolderId))) {
+				return {
+					success: false,
+					error: 'Cannot write .strm placeholder into a read-only root folder'
+				};
 			}
+
+			// Ensure directory exists - ensureMediaDirectory overrides the
+			// container's umask 077 so other-UID media servers can traverse it.
+			await ensureMediaDirectory(dirname(destinationPath));
 
 			// Generate and write .strm content
 			const content = await this.generateStrmContent(options);
 			writeFileSync(destinationPath, content, 'utf8');
+			await applyMediaFileMode(destinationPath);
 
 			logger.info(
 				{
@@ -403,15 +417,13 @@ export class StrmService {
 				episode.title
 			);
 
-			// Ensure directory exists
-			const dir = dirname(destinationPath);
-			if (!existsSync(dir)) {
-				mkdirSync(dir, { recursive: true });
-			}
+			// Ensure directory exists with traversable permissions (umask 077).
+			await ensureMediaDirectory(dirname(destinationPath));
 
 			// Generate and write .strm content with API key
 			const content = `${baseUrl}/api/streaming/session/tv/${tmdbId}/${seasonNumber}/${episode.episodeNumber}?api_key=${encodeURIComponent(apiKey)}`;
 			writeFileSync(destinationPath, content, 'utf8');
+			await applyMediaFileMode(destinationPath);
 
 			return { success: true, filePath: destinationPath };
 		} catch (error) {
@@ -509,7 +521,7 @@ export class StrmService {
 		const relativePath =
 			(show.seasonFolder ?? true)
 				? join(
-						namingService.generateSeasonFolderName(seasonNumber),
+						namingService.generateSeasonFolderName(seasonNumber, seriesInfo),
 						namingService.generateEpisodeFileName(episodeInfo)
 					)
 				: namingService.generateEpisodeFileName(episodeInfo);
@@ -1161,6 +1173,9 @@ export class StrmService {
 
 		try {
 			let destinationPath: string;
+			// Captured in whichever branch builds the path, so the read-only guard
+			// below knows which root the destination belongs to.
+			let resolvedRootFolderId: string | undefined;
 
 			if (movieId) {
 				// Get movie details for folder path
@@ -1177,6 +1192,7 @@ export class StrmService {
 				}
 
 				destinationPath = await this.buildMovieStrmPath(movie.rootFolder.path, movie);
+				resolvedRootFolderId = movie.rootFolder.id;
 			} else if (seriesId && seasonNumber !== undefined && episodeId) {
 				// Get series and episode details
 				const show = await db.query.series.findFirst({
@@ -1206,20 +1222,26 @@ export class StrmService {
 					episodeRow.episodeNumber,
 					episodeRow.title
 				);
+				resolvedRootFolderId = show.rootFolder.id;
 			} else {
 				return { success: false, error: 'Invalid options for creating NZB .strm file' };
 			}
 
-			// Ensure directory exists
-			const dir = dirname(destinationPath);
-			if (!existsSync(dir)) {
-				mkdirSync(dir, { recursive: true });
-				logger.debug({ dir }, '[StrmService] Created directory');
+			// Same read-only rule as the other .strm writers.
+			if (!resolvedRootFolderId || !(await isRootFolderWritable(resolvedRootFolderId))) {
+				return {
+					success: false,
+					error: 'Cannot write .strm placeholder into a read-only root folder'
+				};
 			}
+
+			// Ensure directory exists with traversable permissions (umask 077).
+			await ensureMediaDirectory(dirname(destinationPath));
 
 			// Generate NZB streaming URL with API key
 			const content = `${baseUrl}/api/streaming/usenet/${mountId}/${fileIndex}?api_key=${encodeURIComponent(apiKey)}`;
 			writeFileSync(destinationPath, content, 'utf8');
+			await applyMediaFileMode(destinationPath);
 
 			logger.info(
 				{

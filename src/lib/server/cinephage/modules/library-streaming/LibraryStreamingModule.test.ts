@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, vi, afterAll } from 'vitest';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../../../test/db-helper.js';
-import { indexers } from '$lib/server/db/schema.js';
+import { indexers } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -15,7 +15,7 @@ vi.mock('$lib/server/db', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -213,7 +213,7 @@ describe('LibraryStreamingModule', () => {
 
 	describe('getStreams', () => {
 		function createFakeCore(httpGet: ReturnType<typeof vi.fn>) {
-			return {
+			const core = {
 				getBaseUrl: vi.fn().mockResolvedValue('https://api.cinephage.net'),
 				getIdentity: vi.fn().mockResolvedValue({
 					version: 'v0.15.0',
@@ -226,8 +226,17 @@ describe('LibraryStreamingModule', () => {
 				}),
 				getHttpClient: vi.fn().mockReturnValue({ get: httpGet }),
 				toggleVersionFormat: vi.fn().mockResolvedValue(null),
-				refreshLatestIdentity: vi.fn().mockResolvedValue(undefined)
+				refreshLatestIdentity: vi.fn().mockResolvedValue(undefined),
+				// Default stub mirrors the real mapper's registered 401 branch:
+				// the self-heal refresh is fired by toGatewayErrorMessage itself.
+				toGatewayErrorMessage: vi.fn(async () => {
+					await core.refreshLatestIdentity(true);
+					return (
+						'Cinephage API rejected authentication. ' + 'Verify the configured version and commit.'
+					);
+				})
 			};
+			return core;
 		}
 
 		it('normalizes a dash source with string subtitles, requiresProxy and expiresAt', async () => {
@@ -341,6 +350,35 @@ describe('LibraryStreamingModule', () => {
 			expect(result.error).toContain('rejected authentication');
 		});
 
+		it('tells unregistered installs to register when the 401 retry also fails', async () => {
+			const httpGet = vi.fn().mockResolvedValue({
+				status: 401,
+				body: JSON.stringify({ error: { message: 'Invalid or missing authentication' } })
+			});
+
+			const core = createFakeCore(httpGet);
+			core.toggleVersionFormat = vi.fn().mockResolvedValue({
+				version: '0.15.0',
+				commit: '8167446',
+				isConfigured: true
+			});
+			// Unregistered branch of the real mapper: registration guidance,
+			// no identity self-heal.
+			core.toGatewayErrorMessage = vi.fn(async () => {
+				return (
+					'Cinephage API requires a registered install key. ' +
+					'Register this install under Settings → Cinephage Network.'
+				);
+			});
+
+			const mod = new LibraryStreamingModule(settings, core as never);
+			const result = await mod.getStreams({ tmdbId: 603, type: 'movie' });
+
+			expect(result.success).toBe(false);
+			expect(result.error).toContain('Register this install');
+			expect(core.refreshLatestIdentity).not.toHaveBeenCalled();
+		});
+
 		it('sends refresh=1 to the gateway only when a refresh is requested', async () => {
 			const httpGet = vi.fn().mockResolvedValue({
 				status: 200,
@@ -439,6 +477,127 @@ describe('LibraryStreamingModule', () => {
 			const silentMod = new LibraryStreamingModule(settings, createFakeCore(silent) as never);
 			const silentResult = await silentMod.getStreams({ tmdbId: 603, type: 'movie' });
 			expect(silentResult.sources[0].referer).toBe('https://api.cinephage.net');
+		});
+
+		it('keeps proxy-only sources header-free when the gateway sends no headers', async () => {
+			// Vidlove: requiresProxy with no headers and no referer. Inventing a
+			// Referer breaks the gateway's header contract at the CDN.
+			const httpGet = vi.fn().mockResolvedValue({
+				status: 200,
+				body: JSON.stringify({
+					url: 'https://media.example.com/vidlove/movie.mp4',
+					provider: 'Vidlove (MovieBox)',
+					quality: '1080p',
+					protocol: 'mp4',
+					requiresProxy: true
+				})
+			});
+
+			const mod = new LibraryStreamingModule(settings, createFakeCore(httpGet) as never);
+			const result = await mod.getStreams({ tmdbId: 603, type: 'movie' });
+
+			expect(result.success).toBe(true);
+			expect(result.sources[0].referer).toBe('');
+			expect(result.sources[0].headers).toBeUndefined();
+			expect(result.sources[0].provider).toBe('Vidlove (MovieBox)');
+		});
+
+		it('passes Cno and Vidy headers through verbatim', async () => {
+			const httpGet = vi.fn().mockResolvedValue({
+				status: 200,
+				body: JSON.stringify({
+					url: 'https://vault.example.com/master.m3u8',
+					provider: 'Cno (2160p)',
+					quality: '2160p',
+					protocol: 'hls',
+					headers: { 'User-Agent': 'GatewayUA/2.0', Referer: 'https://cno.to/' },
+					requiresProxy: true
+				})
+			});
+
+			const mod = new LibraryStreamingModule(settings, createFakeCore(httpGet) as never);
+			const result = await mod.getStreams({ tmdbId: 603, type: 'movie' });
+
+			const source = result.sources[0];
+			expect(source.quality).toBe('2160p');
+			expect(source.provider).toBe('Cno (2160p)');
+			expect(source.requiresProxy).toBe(true);
+			expect(source.headers).toEqual({
+				'User-Agent': 'GatewayUA/2.0',
+				Referer: 'https://cno.to/'
+			});
+			expect(source.referer).toBe('https://cno.to/');
+			// No Origin is synthesized anywhere.
+			expect(source.headers?.Origin).toBeUndefined();
+		});
+
+		it('drops a provider error sentinel instead of creating a session from it', async () => {
+			// Upstream pools have returned this as a "successful" stream.
+			const httpGet = vi.fn().mockResolvedValue({
+				status: 200,
+				body: JSON.stringify({
+					url: '/video/error',
+					provider: 'Xpass',
+					quality: 'auto',
+					protocol: 'hls',
+					headers: { Referer: 'https://play.xpass.top/' },
+					requiresProxy: true
+				})
+			});
+
+			const mod = new LibraryStreamingModule(settings, createFakeCore(httpGet) as never);
+			const result = await mod.getStreams({ tmdbId: 1769, type: 'tv', season: 6, episode: 20 });
+
+			expect(result.success).toBe(false);
+			expect(result.sources).toHaveLength(0);
+			expect(result.error).toContain('no playable streams');
+		});
+
+		it('keeps the next source when one candidate has an unplayable URL', async () => {
+			const httpGet = vi.fn().mockResolvedValue({
+				status: 200,
+				body: JSON.stringify({
+					streams: [
+						{
+							url: '/video/error',
+							provider: 'Xpass',
+							quality: 'auto',
+							protocol: 'hls'
+						},
+						{
+							url: 'https://media.example.com/good/master.m3u8',
+							provider: 'Cinemabz',
+							quality: '1080p',
+							protocol: 'hls'
+						}
+					]
+				})
+			});
+
+			const mod = new LibraryStreamingModule(settings, createFakeCore(httpGet) as never);
+			const result = await mod.getStreams({ tmdbId: 1769, type: 'tv', season: 6, episode: 19 });
+
+			expect(result.success).toBe(true);
+			expect(result.sources).toHaveLength(1);
+			expect(result.sources[0].provider).toBe('Cinemabz');
+		});
+
+		it('rejects non-http(s) schemes', async () => {
+			const httpGet = vi.fn().mockResolvedValue({
+				status: 200,
+				body: JSON.stringify({
+					url: 'file:///etc/passwd',
+					provider: 'Xpass',
+					quality: 'auto',
+					protocol: 'hls'
+				})
+			});
+
+			const mod = new LibraryStreamingModule(settings, createFakeCore(httpGet) as never);
+			const result = await mod.getStreams({ tmdbId: 603, type: 'movie' });
+
+			expect(result.success).toBe(false);
+			expect(result.sources).toHaveLength(0);
 		});
 	});
 });

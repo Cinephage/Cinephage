@@ -1,7 +1,7 @@
 # =============================================================================
 # Cinephage Docker Compose
 # =============================================================================
-# Official image: ghcr.io/moldytaint/cinephage:latest
+# Official image: ghcr.io/cinephage/cinephage:latest
 # Optional: set IMAGE_TAG to pin a specific image tag
 # To build from source instead of pulling the image:
 #   Uncomment "build: ." and comment out "image:" below
@@ -12,7 +12,7 @@
 
 services:
   cinephage:
-    image: ghcr.io/moldytaint/cinephage:${IMAGE_TAG:-latest}
+    image: ghcr.io/cinephage/cinephage:${IMAGE_TAG:-latest}
     # build: .  # Uncomment to build locally (requires cloning the repo)
     container_name: cinephage
     restart: unless-stopped

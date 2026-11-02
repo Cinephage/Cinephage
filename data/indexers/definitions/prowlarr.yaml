@@ -22,11 +22,16 @@ settings:
     label: Indexer ID
     required: false
 
+# Text-only baseline. Each imported indexer's real ID support is read from
+# Prowlarr's per-indexer caps ({baseUrl}/api?t=caps) when the indexer is loaded.
+# The aggregate indexer keeps this baseline: Prowlarr drops any tracker that
+# can't handle a requested ID, so an aggregate ID search would silently skip
+# every text-only tracker.
 caps:
   modes:
     search: [q]
-    movie-search: [q, imdbid, tmdbid]
-    tv-search: [q, imdbid, tvdbid, season, ep]
+    movie-search: [q]
+    tv-search: [q]
   categories:
     '2000': Movies
     '2010': Movies/Foreign
@@ -65,31 +70,33 @@ caps:
     '8010': Other/Misc
     '8020': Other/Hashed
 
+# Prowlarr's search API only accepts query/type/indexerIds/categories/limit/offset.
+# IDs, season and episode must be embedded in the query as tokens
+# ({ImdbId:tt0111161} {Season:1} {Episode:5}), which Prowlarr parses for the
+# movie and tvsearch types only. .Query.IdTokens holds those tokens for an ID
+# search (and is empty for a text search), so an ID search sends only the tokens
+# and a text search sends only the keywords.
 search:
   paths:
-    # Movie search — passes TMDB/IMDB IDs when available
+    # Movie search
     - path: api/v1/search
       method: get
       categories: [Movies]
       inputs:
-        query: '{{ .Keywords }}'
+        query: '{{ if .Query.IdTokens }}{{ .Query.IdTokens }}{{ else }}{{ .Keywords }}{{ end }}'
         type: movie
-        imdbId: '{{ .Query.IMDBID }}'
-        tmdbId: '{{ .Query.TMDBID }}'
         apikey: '{{ .Config.apikey }}'
         $raw: '{{ if .Config.indexerId }}indexerIds={{ .Config.indexerId }}&{{ end }}{{ if .Categories }}categories={{ join .Categories "&categories=" }}{{ end }}'
 
-    # TV search — passes TVDB/IMDB IDs, season, and episode when available
+    # TV search. Text searches stay the basic search they have always been
+    # ('tv' is not a Prowlarr search type); the keywords already carry the
+    # episode token (S01E05).
     - path: api/v1/search
       method: get
       categories: [TV]
       inputs:
-        query: '{{ .Keywords }}'
-        type: tv
-        imdbId: '{{ .Query.IMDBID }}'
-        tvdbId: '{{ .Query.TVDBID }}'
-        seasonNumber: '{{ .Query.Season }}'
-        episodeNumber: '{{ .Query.Ep }}'
+        query: '{{ if .Query.IdTokens }}{{ .Query.IdTokens }}{{ else }}{{ .Keywords }}{{ end }}'
+        type: '{{ if .Query.IdTokens }}tvsearch{{ else }}search{{ end }}'
         apikey: '{{ .Config.apikey }}'
         $raw: '{{ if .Config.indexerId }}indexerIds={{ .Config.indexerId }}&{{ end }}{{ if .Categories }}categories={{ join .Categories "&categories=" }}{{ end }}'
 

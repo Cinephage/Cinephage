@@ -1,5 +1,5 @@
-import { db } from '$lib/server/db/index.js';
-import { delayProfileService } from '$lib/server/monitoring/specifications/DelaySpecification.js';
+import { db } from '#lib/server/db/index.js';
+import { delayProfileService } from '#lib/server/monitoring/specifications/DelaySpecification.js';
 import {
 	series,
 	seasons,
@@ -10,25 +10,24 @@ import {
 	downloadQueue,
 	subtitles,
 	libraries
-} from '$lib/server/db/schema.js';
+} from '#lib/server/db/schema.js';
 import { eq, asc, inArray, and } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { isSeriesSearching } from '$lib/server/library/ActiveSearchTracker.js';
-import { ACTIVE_DOWNLOAD_STATUSES } from '$lib/types/queue';
-import type { QualityProfileSummary } from '$lib/types/library';
-import type { TVShowDetails } from '$lib/types/tmdb';
-import { tmdb } from '$lib/server/tmdb.js';
-import { resolveMissingAnimeProviderRefs } from '$lib/server/metadata/provider-ref-resolver.js';
-import { getMetadataProviderConfig } from '$lib/server/metadata/provider-settings.js';
-import { getLanguageProfileService } from '$lib/server/subtitles/services/LanguageProfileService.js';
-import { getLanguageSettingsService } from '$lib/server/subtitles/services/LanguageSettingsService.js';
+import { isSeriesSearching } from '#lib/server/library/ActiveSearchTracker.js';
+import { ACTIVE_DOWNLOAD_STATUSES } from '#lib/types/queue.js';
+import type { QualityProfileSummary } from '#lib/types/library.js';
+import type { TVShowDetails } from '#lib/types/tmdb.js';
+import { tmdb } from '#lib/server/tmdb.js';
+import { getMetadataProviderConfig } from '#lib/server/metadata/provider-settings.js';
+import { getLanguageProfileService } from '#lib/server/subtitles/services/LanguageProfileService.js';
+import { getLanguageSettingsService } from '#lib/server/subtitles/services/LanguageSettingsService.js';
 import type {
 	EffectiveSubtitleRequirements,
 	EffectiveLanguageProfile,
 	EpisodeSubtitleCounts
-} from '$lib/shared/language-profile.js';
-import { createChildLogger } from '$lib/logging';
+} from '#lib/shared/language-profile.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LibraryTvPage', logDomain: 'scans' });
 
@@ -450,16 +449,18 @@ export const load: PageServerLoad = async ({ params }): Promise<LibrarySeriesPag
 		mal: providerConfig.animeEnrichmentEnabled
 	};
 
-	const enrichedProviderRefs = await resolveMissingAnimeProviderRefs({
-		title: seriesData.title,
-		aliases: [seriesData.originalTitle ?? ''],
-		year: seriesData.year,
-		isAnime: (seriesData.seriesType ?? '').toLowerCase() === 'anime',
-		configured: configuredMetadataProviders,
-		existingRefs:
-			(seriesData.providerRefs as Partial<Record<'tmdb' | 'anilist' | 'mal', string>> | null) ??
-			undefined
-	});
+	// AniList/Jikan(MAL) enrichment is NOT looked up here. It used to be
+	// (first awaited directly, then streamed as an unawaited promise), but
+	// even streamed it still visibly delayed first paint in practice -
+	// something between this app and the browser (proxy, adapter, or
+	// SvelteKit's own streaming semantics) wasn't actually deferring it the
+	// way the "don't await" pattern assumes. Moved to a dedicated endpoint
+	// (/api/library/series/[id]/anime-refs) that the client calls after the
+	// page has already rendered - see +page.svelte. This page only ever
+	// shows whatever provider refs are already stored.
+	const existingProviderRefs =
+		(seriesData.providerRefs as Partial<Record<'tmdb' | 'anilist' | 'mal', string>> | null) ??
+		undefined;
 
 	const tmdbDetails = await tmdb.getTVShow(seriesData.tmdbId).catch((err) => {
 		logger.warn(
@@ -481,7 +482,7 @@ export const load: PageServerLoad = async ({ params }): Promise<LibrarySeriesPag
 	return {
 		series: {
 			...seriesData,
-			providerRefs: enrichedProviderRefs,
+			providerRefs: existingProviderRefs ?? {},
 			added: seriesData.added ?? new Date().toISOString(),
 			percentComplete
 		},

@@ -1,8 +1,8 @@
 import type {
 	GrabDecisionContext,
 	GrabDecisionOptions
-} from '$lib/server/filters/stages/grab/types.js';
-import type { SearchEligibilityContext } from '$lib/server/filters/stages/search/types.js';
+} from '#lib/server/filters/stages/grab/types.js';
+import type { SearchEligibilityContext } from '#lib/server/filters/stages/search/types.js';
 
 export function makeGrabDecisionContext(
 	overrides: Partial<GrabDecisionContext> = {}

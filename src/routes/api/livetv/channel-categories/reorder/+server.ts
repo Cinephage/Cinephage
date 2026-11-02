@@ -4,11 +4,10 @@
  * POST /api/livetv/channel-categories/reorder - Reorder categories
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { channelCategoryService } from '$lib/server/livetv/categories';
-import { ValidationError } from '$lib/errors';
-import { createChildLogger } from '$lib/logging';
+import { channelCategoryService } from '#lib/server/livetv/categories/index.js';
+import { ValidationError } from '#lib/errors/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LiveTvChannelCategoriesReorder', logDomain: 'livetv' });
 
@@ -21,20 +20,20 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		if (body.categoryIds.length === 0) {
-			return json({
+			return Response.json({
 				success: true
 			});
 		}
 
 		await channelCategoryService.reorderCategories(body.categoryIds);
 
-		return json({
+		return Response.json({
 			success: true
 		});
 	} catch (error) {
 		// Validation errors
 		if (error instanceof ValidationError) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: error.message,
@@ -47,7 +46,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			'[API] Failed to reorder channel categories',
 			error instanceof Error ? error : undefined
 		);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to reorder channel categories'

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import {
 		Download,
 		Upload,
@@ -11,15 +11,15 @@
 		ChevronDown,
 		ChevronUp,
 		FolderOpen
-	} from 'lucide-svelte';
-	import { FolderBrowser } from '$lib/components/library';
+	} from '@lucide/svelte';
+	import { FolderBrowser } from '#lib/components/library/index.js';
 	import type { LayoutData } from '../$types';
-	import { invalidateAll } from '$app/navigation';
-	import { ConfirmationModal } from '$lib/components/ui/modal';
-	import { formatDisplayDate } from '$lib/utils/format.js';
-	import { SettingsPage, SettingsSection } from '$lib/components/ui/settings';
-	import { exportConfig, importConfig } from '$lib/api/settings.js';
-	import type { BackupImport } from '$lib/validation/schemas.js';
+	import { refreshAll } from '$app/navigation';
+	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
+	import { formatDisplayDate } from '#lib/utils/format.js';
+	import { SettingsPage, SettingsSection } from '#lib/components/ui/settings/index.js';
+	import { exportConfig, importConfig } from '#lib/api/settings.js';
+	import type { BackupImport } from '#lib/validation/schemas.js';
 
 	let { data: _data }: { data: LayoutData } = $props();
 
@@ -475,7 +475,7 @@
 			selectedBackupFile = null;
 			backupPreview = null;
 			selectedRestoreSections = [];
-			await invalidateAll();
+			await refreshAll();
 		} catch (error) {
 			backupError =
 				error instanceof Error ? error.message : m.settings_system_backup_errorRestoreFailed();

@@ -1,21 +1,21 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
-	import { Key, Copy, Eye, EyeOff, RefreshCw, Server, Check, AlertCircle } from 'lucide-svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { Key, Copy, Eye, EyeOff, RefreshCw, Server, Check, AlertCircle } from '@lucide/svelte';
 	import type { LayoutData } from '../$types';
 	import { untrack } from 'svelte';
-	import { copyToClipboard as copyTextToClipboard } from '$lib/utils/clipboard.js';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import { invalidateAll } from '$app/navigation';
+	import { copyToClipboard as copyTextToClipboard } from '#lib/utils/clipboard.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { refreshAll } from '$app/navigation';
 	import { page } from '$app/state';
-	import { ConfirmationModal } from '$lib/components/ui/modal';
-	import { formatDisplayDate } from '$lib/utils/format.js';
-	import { SettingsPage, SettingsSection } from '$lib/components/ui/settings';
+	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
+	import { formatDisplayDate } from '#lib/utils/format.js';
+	import { SettingsPage, SettingsSection } from '#lib/components/ui/settings/index.js';
 	import {
 		createApiKeys,
 		regenerateApiKey,
 		updateExternalUrl,
 		updateArrCompatEnabled
-	} from '$lib/api/settings.js';
+	} from '#lib/api/settings.js';
 
 	let { data }: { data: LayoutData } = $props();
 
@@ -62,7 +62,7 @@
 			const result = await createApiKeys();
 
 			if (result.success) {
-				await invalidateAll();
+				await refreshAll();
 				toasts.success(m.settings_system_apiKeysGenerated());
 			}
 		} catch (err) {
@@ -97,7 +97,7 @@
 			const result = await regenerateApiKey(keyId);
 
 			if (result.success && result.data?.key) {
-				await invalidateAll();
+				await refreshAll();
 				if (type === 'main') showMainKey = true;
 				else showStreamingKey = true;
 				toasts.success(m.settings_system_keyRegenerated({ label }));

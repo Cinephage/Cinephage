@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { BreakdownBar } from '$lib/components/ui';
-	import { SettingsSection } from '$lib/components/ui/settings';
+	import { BreakdownBar } from '#lib/components/ui/index.js';
+	import { SettingsSection } from '#lib/components/ui/settings/index.js';
 
 	type BreakdownItem = { label: string; count: number };
 

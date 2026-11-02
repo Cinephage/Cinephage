@@ -1,9 +1,9 @@
-import { blocklistService } from '$lib/server/blocklist/BlocklistService.js';
+import { blocklistService } from '#lib/server/blocklist/BlocklistService.js';
 import { reject, accept } from './types.js';
 import type { SpecificationResult, ReleaseCandidate } from './types.js';
 
-export { blocklistService } from '$lib/server/blocklist/BlocklistService.js';
-export type { BlocklistReason } from '$lib/server/blocklist/BlocklistService.js';
+export { blocklistService } from '#lib/server/blocklist/BlocklistService.js';
+export type { BlocklistReason } from '#lib/server/blocklist/BlocklistService.js';
 
 export class ReleaseBlocklistSpecification {
 	private movieId?: string;

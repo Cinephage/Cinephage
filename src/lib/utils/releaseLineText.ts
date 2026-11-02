@@ -1,4 +1,4 @@
-import * as m from '$lib/paraglide/messages.js';
+import * as m from '#lib/paraglide/messages.js';
 import type { SmartReleaseLineResult } from './smartReleaseLine.js';
 
 /**

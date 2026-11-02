@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { ChevronDown, ChevronUp, Trash2 } from 'lucide-svelte';
-	import * as m from '$lib/paraglide/messages.js';
+	import { ChevronDown, ChevronUp, Trash2 } from '@lucide/svelte';
+	import * as m from '#lib/paraglide/messages.js';
 
 	import type { BlocklistEntry } from './index.js';
 
@@ -56,7 +56,7 @@
 		return map[reason] ?? reason;
 	}
 
-	import { getLocale } from '$lib/paraglide/runtime.js';
+	import { getLocale } from '#lib/paraglide/runtime.js';
 
 	function formatDate(dateStr: string | null): string {
 		if (!dateStr) return '-';

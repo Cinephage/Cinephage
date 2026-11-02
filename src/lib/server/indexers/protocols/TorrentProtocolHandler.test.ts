@@ -11,6 +11,7 @@ const STUB_PARSED: ParsedRelease = {
 	source: 'webdl',
 	codec: 'h264',
 	hdr: null,
+	hdrFormats: [],
 	bitDepth: '8',
 	audioCodec: 'aac',
 	audioChannels: '5.1',

@@ -13,8 +13,10 @@ export interface StorageForecast {
 	projectedBytes90d: number;
 }
 
+/** The GET endpoint returns the bare retention settings, not the success envelope. */
 export async function getHistoryRetention(): Promise<HistoryRetentionSettings> {
-	return apiGet<HistoryRetentionSettings>('/api/settings/library/history-retention');
+	const response = await apiGet('/api/settings/library/history-retention');
+	return response as unknown as HistoryRetentionSettings;
 }
 
 export async function saveHistoryRetention(
@@ -23,6 +25,8 @@ export async function saveHistoryRetention(
 	return apiPut<{ success: boolean }>('/api/settings/library/history-retention', input);
 }
 
+/** The forecast endpoint returns the bare projection object, not the success envelope. */
 export async function getStorageForecast(): Promise<StorageForecast> {
-	return apiGet<StorageForecast>('/api/settings/library/history-retention/forecast');
+	const response = await apiGet('/api/settings/library/history-retention/forecast');
+	return response as unknown as StorageForecast;
 }

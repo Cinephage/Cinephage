@@ -1,4 +1,4 @@
-import { PLACEHOLDER_PACKAGE_VERSION } from '$lib/version.js';
+import { PLACEHOLDER_PACKAGE_VERSION } from '#lib/version.js';
 
 function readVersion(value: string | undefined | null): string | null {
 	const normalized = value?.trim();

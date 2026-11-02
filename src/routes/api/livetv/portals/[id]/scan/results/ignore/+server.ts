@@ -4,11 +4,10 @@
  * POST /api/livetv/portals/[id]/scan/results/ignore - Ignore scan results
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getPortalScannerService } from '$lib/server/livetv/stalker';
-import { createChildLogger } from '$lib/logging';
-import { ValidationError } from '$lib/errors';
+import { getPortalScannerService } from '#lib/server/livetv/stalker/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { ValidationError } from '#lib/errors/index.js';
 import { z } from 'zod';
 
 const logger = createChildLogger({ module: 'LiveTvPortalScanResultsIgnore', logDomain: 'livetv' });
@@ -35,7 +34,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		const scannerService = getPortalScannerService();
 		await scannerService.ignoreMultiple(parsed.data.resultIds);
 
-		return json({
+		return Response.json({
 			success: true,
 			ignored: parsed.data.resultIds.length
 		});
@@ -44,7 +43,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		// Validation errors
 		if (error instanceof ValidationError) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: error.message,
@@ -55,7 +54,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			);
 		}
 
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to ignore scan results'

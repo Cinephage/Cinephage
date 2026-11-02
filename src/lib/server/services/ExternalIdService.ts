@@ -13,11 +13,11 @@
  */
 
 import type { BackgroundService, ServiceStatus } from './background-service.js';
-import { db } from '$lib/server/db/index.js';
-import { movies, series } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { movies, series } from '#lib/server/db/schema.js';
 import { isNull, or } from 'drizzle-orm';
-import { tmdb } from '$lib/server/tmdb.js';
-import { createChildLogger } from '$lib/logging/index.js';
+import { tmdb } from '#lib/server/tmdb.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'ExternalIdService', logDomain: 'system' });
 

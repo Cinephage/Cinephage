@@ -5,13 +5,13 @@
  * Runs periodically (default: hourly) to grab new episodes as they become available.
  */
 
-import { db } from '$lib/server/db/index.js';
-import { monitoringHistory, episodes } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { monitoringHistory, episodes } from '#lib/server/db/schema.js';
 import { inArray } from 'drizzle-orm';
 import { monitoringSearchService } from '../search/MonitoringSearchService.js';
-import { createChildLogger } from '$lib/logging/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
 import type { TaskResult } from '../MonitoringScheduler.js';
-import type { TaskExecutionContext } from '$lib/server/tasks/TaskExecutionContext.js';
+import type { TaskExecutionContext } from '#lib/server/tasks/TaskExecutionContext.js';
 
 const logger = createChildLogger({ module: 'NewEpisodeMonitorTask', logDomain: 'monitoring' });
 

@@ -11,20 +11,20 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { ALL_FORMATS } from '$lib/server/scoring/formats/index.js';
+import { ALL_FORMATS } from '#lib/server/scoring/formats/index.js';
 
-vi.mock('$lib/server/scoring/formats/registry.js', () => ({
+vi.mock('#lib/server/scoring/formats/registry.js', () => ({
 	getActiveFormats: () => ALL_FORMATS,
 	invalidateFormatCache: () => {}
 }));
 
-import { scoreRelease, isUpgrade, rankReleases } from '$lib/server/scoring/scorer.js';
+import { scoreRelease, isUpgrade, rankReleases } from '#lib/server/scoring/scorer.js';
 import {
 	QUALITY_PROFILE,
 	BALANCED_PROFILE,
 	COMPACT_PROFILE
-} from '$lib/server/scoring/profiles.js';
-import type { ScoringProfile, ScoringResult } from '$lib/server/scoring/types.js';
+} from '#lib/server/scoring/profiles.js';
+import type { ScoringProfile, ScoringResult } from '#lib/server/scoring/types.js';
 
 /**
  * Simulates the full decision pipeline for grabbing a release

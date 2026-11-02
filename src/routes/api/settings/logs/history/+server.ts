@@ -1,10 +1,8 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-
-import { createChildLogger } from '$lib/logging';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { logHistoryService } from '$lib/server/logging/log-history.js';
-import { logHistoryQuerySchema } from '$lib/validation/schemas.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { logHistoryService } from '#lib/server/logging/log-history.js';
+import { logHistoryQuerySchema } from '#lib/validation/schemas.js';
 
 const logger = createChildLogger({ module: 'LogHistoryApi', logDomain: 'system' });
 
@@ -15,7 +13,7 @@ export const GET: RequestHandler = async (event) => {
 	const raw = Object.fromEntries(event.url.searchParams.entries());
 	const parsed = logHistoryQuerySchema.safeParse(raw);
 	if (!parsed.success) {
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: 'Validation failed',
@@ -27,10 +25,10 @@ export const GET: RequestHandler = async (event) => {
 
 	try {
 		const result = await logHistoryService.search(parsed.data);
-		return json({ success: true, ...result });
+		return Response.json({ success: true, ...result });
 	} catch (error) {
 		logger.error({ err: error }, 'Failed to load log history');
-		return json({ success: false, error: 'Failed to load log history' }, { status: 500 });
+		return Response.json({ success: false, error: 'Failed to load log history' }, { status: 500 });
 	}
 };
 
@@ -40,9 +38,9 @@ export const DELETE: RequestHandler = async (event) => {
 
 	try {
 		await logHistoryService.clearAllFiles();
-		return json({ success: true });
+		return Response.json({ success: true });
 	} catch (error) {
 		logger.error({ err: error }, 'Failed to clear log history');
-		return json({ success: false, error: 'Failed to clear log history' }, { status: 500 });
+		return Response.json({ success: false, error: 'Failed to clear log history' }, { status: 500 });
 	}
 };

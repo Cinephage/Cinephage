@@ -1,12 +1,12 @@
-import { db } from '$lib/server/db/index.js';
-import { movies, series } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { movies, series } from '#lib/server/db/schema.js';
 import { and, eq, isNotNull, isNull } from 'drizzle-orm';
-import { tmdb } from '$lib/server/tmdb.js';
-import { resolveLanguageForFetch } from '$lib/server/metadata/metadata-refresh.js';
-import { createChildLogger } from '$lib/logging/index.js';
+import { tmdb } from '#lib/server/tmdb.js';
+import { resolveLanguageForFetch } from '#lib/server/metadata/metadata-refresh.js';
+import { createChildLogger } from '#lib/logging/index.js';
 import type { TaskResult } from '../MonitoringScheduler.js';
-import type { TaskExecutionContext } from '$lib/server/tasks/TaskExecutionContext.js';
-import { TaskCancelledException } from '$lib/server/tasks/TaskCancelledException.js';
+import type { TaskExecutionContext } from '#lib/server/tasks/TaskExecutionContext.js';
+import { TaskCancelledException } from '#lib/server/tasks/TaskCancelledException.js';
 
 const logger = createChildLogger({
 	module: 'OriginalLanguageBackfillTask',

@@ -7,7 +7,7 @@ import type {
 	SmartListRecord,
 	SmartListItemRecord,
 	SmartListRefreshHistoryRecord
-} from '$lib/server/db/schema.js';
+} from '#lib/server/db/schema.js';
 
 // Re-export schema types
 export type {

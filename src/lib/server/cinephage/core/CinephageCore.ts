@@ -1,6 +1,6 @@
-import { createIndexerHttp } from '$lib/server/indexers/http';
-import type { IndexerHttp } from '$lib/server/indexers/http';
-import { createChildLogger } from '$lib/logging';
+import { createIndexerHttp } from '#lib/server/indexers/http/index.js';
+import type { IndexerHttp } from '#lib/server/indexers/http/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
 import type { CinephageSettingsService } from '../settings/CinephageSettingsService.js';
 import { getCinephageSettingsService } from '../settings/CinephageSettingsService.js';
 import { getServerIdentity, type CinephageServerIdentity } from './version.js';
@@ -22,6 +22,19 @@ import { getServerIdentity, type CinephageServerIdentity } from './version.js';
  * through this object.
  */
 const logger = createChildLogger({ module: 'CinephageCore', logDomain: 'system' });
+
+/** Registration/revoke failures the UI can branch on via `code`. */
+export type CinephageRegistrationErrorCode = 'rate_limited' | 'invalid_input' | 'gateway_error';
+
+export class CinephageRegistrationError extends Error {
+	constructor(
+		public readonly code: CinephageRegistrationErrorCode,
+		message: string
+	) {
+		super(message);
+		this.name = 'CinephageRegistrationError';
+	}
+}
 
 export class CinephageCore {
 	private readonly http: IndexerHttp;
@@ -86,22 +99,187 @@ export class CinephageCore {
 	}
 
 	/**
-	 * Build the X-Cinephage-* auth headers. Empty object when identity is
-	 * not fully resolvable (e.g. APP_COMMIT missing in a dev checkout).
+	 * Build the gateway auth headers: the identity pair (X-Cinephage-*)
+	 * plus the per-install API key (X-API-Key) when one is registered. The
+	 * identity pair alone is empty when not fully resolvable (e.g. APP_COMMIT
+	 * missing in a dev checkout); an install key is attached independently.
 	 */
 	async getAuthHeaders(): Promise<Record<string, string>> {
-		const identity = await this.getIdentity();
-		if (!identity.isConfigured || !identity.commit) {
+		const [identity, apiKey] = await Promise.all([
+			this.getIdentity(),
+			this.settings.getInstallApiKey()
+		]);
+
+		const headers: Record<string, string> = {};
+		if (identity.isConfigured && identity.commit) {
+			headers['X-Cinephage-Version'] = identity.version;
+			headers['X-Cinephage-Commit'] = identity.commit;
+		} else {
 			logger.debug(
 				{ version: identity.version, commit: identity.commit },
-				'CinephageCore identity not fully configured — omitting auth headers'
+				'CinephageCore identity not fully configured — omitting identity headers'
 			);
-			return {};
 		}
-		return {
-			'X-Cinephage-Version': identity.version,
-			'X-Cinephage-Commit': identity.commit
+		if (apiKey) {
+			headers['X-API-Key'] = apiKey;
+		}
+		return headers;
+	}
+
+	/**
+	 * Register (or rotate) this install's gateway API key. Re-registering the
+	 * same installId rotates: the previous key is revoked server-side and the
+	 * new one is returned exactly once, then stored encrypted at rest.
+	 *
+	 * Registration is IP-rate-limited (5/day) by the gateway; on 429 the
+	 * caller should surface a try-again-later message, never retry in a loop.
+	 */
+	async registerInstallKey(
+		email: string,
+		label?: string
+	): Promise<{ key: string; keyPrefix: string; rotated: boolean; installId: string }> {
+		const installId = await this.settings.getOrCreateInstallId();
+		const identity = await this.getIdentity();
+		const baseUrl = await this.getBaseUrl();
+
+		const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/v1/auth/register`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+			body: JSON.stringify({
+				installId,
+				email,
+				...(label ? { label } : {}),
+				version: identity.version
+			}),
+			signal: AbortSignal.timeout(15_000)
+		});
+
+		if (response.status === 429) {
+			throw new CinephageRegistrationError(
+				'rate_limited',
+				'Registration rate limit reached — try again later'
+			);
+		}
+		if (response.status === 400) {
+			throw new CinephageRegistrationError(
+				'invalid_input',
+				'The gateway rejected the registration payload'
+			);
+		}
+		if (!response.ok) {
+			throw new CinephageRegistrationError(
+				'gateway_error',
+				`Registration failed with HTTP ${response.status}`
+			);
+		}
+
+		const body = (await response.json()) as {
+			key?: string;
+			key_prefix?: string;
+			rotated?: boolean;
 		};
+		if (typeof body.key !== 'string' || !body.key.startsWith('ck_')) {
+			throw new CinephageRegistrationError(
+				'gateway_error',
+				'Registration response contained no key'
+			);
+		}
+
+		await this.settings.storeInstallApiKey(
+			body.key,
+			body.key_prefix ?? body.key.slice(0, 10),
+			email
+		);
+
+		logger.info(
+			{ installId, keyPrefix: body.key_prefix, rotated: body.rotated ?? false },
+			'Cinephage install key registered'
+		);
+
+		return {
+			key: body.key,
+			keyPrefix: body.key_prefix ?? body.key.slice(0, 10),
+			rotated: body.rotated ?? false,
+			installId
+		};
+	}
+
+	/**
+	 * Revoke this install's key at the gateway and drop the stored copy.
+	 * Unknown/already-revoked keys (404) still clear local state. No-op when
+	 * nothing is registered.
+	 */
+	async revokeInstallKey(): Promise<{ revoked: boolean; wasRegistered: boolean }> {
+		const key = await this.settings.getInstallApiKey();
+		if (!key) {
+			return { revoked: false, wasRegistered: false };
+		}
+
+		const baseUrl = await this.getBaseUrl();
+		const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/v1/auth/revoke`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+			body: JSON.stringify({ key }),
+			signal: AbortSignal.timeout(15_000)
+		});
+
+		await this.settings.clearInstallApiKey();
+
+		if (response.status === 429) {
+			throw new CinephageRegistrationError(
+				'rate_limited',
+				'Revoke rate limit reached — try again later'
+			);
+		}
+		if (!response.ok && response.status !== 404) {
+			throw new CinephageRegistrationError(
+				'gateway_error',
+				`Revoke failed with HTTP ${response.status}`
+			);
+		}
+
+		logger.info({ status: response.status }, 'Cinephage install key revoked');
+		return { revoked: response.ok, wasRegistered: true };
+	}
+
+	/**
+	 * Whether the last gateway rejection looks like an authentication failure
+	 * (HTTP 401). IndexerHttp wraps non-2xx errors, so this inspects the
+	 * stable `HTTP <status>:` fragment inside the wrapped message.
+	 */
+	isAuthRejection(error: unknown): boolean {
+		return error instanceof Error && /HTTP 401/.test(error.message);
+	}
+
+	/**
+	 * Map a gateway error to a user-facing message. Auth rejections branch on
+	 * install-key state: an unregistered install is told to register (the
+	 * gateway's future install_key_required enforcement), while a registered
+	 * install keeps the stale-identity self-heal path.
+	 */
+	async toGatewayErrorMessage(
+		error: unknown,
+		options: { playlist?: boolean } = {}
+	): Promise<string> {
+		if (this.isAuthRejection(error)) {
+			const apiKey = await this.settings.getInstallApiKey();
+			if (!apiKey) {
+				return (
+					'Cinephage API requires a registered install key. ' +
+					'Register this install under Settings → Cinephage Network.'
+				);
+			}
+			// Registered but still rejected: likely a stale release pair. Kick
+			// off a self-heal refresh so the next request authenticates freshly.
+			void this.refreshLatestIdentity(true);
+			return 'Cinephage API rejected authentication. Verify the configured version and commit.';
+		}
+		if (error instanceof Error && /HTTP 429/.test(error.message)) {
+			return options.playlist
+				? 'Cinephage API rate limited the IPTV request.'
+				: 'Cinephage API rate limited this request.';
+		}
+		return error instanceof Error ? error.message : String(error);
 	}
 
 	/**
@@ -188,7 +366,7 @@ export class CinephageCore {
 	private async fetchAndPersistLatestIdentity(): Promise<void> {
 		try {
 			const releaseResponse = await fetch(
-				`${this.githubApiBase}/repos/MoldyTaint/Cinephage/releases/latest`,
+				`${this.githubApiBase}/repos/Cinephage/Cinephage/releases/latest`,
 				{
 					headers: { Accept: 'application/vnd.github+json' },
 					signal: AbortSignal.timeout(15_000)
@@ -205,7 +383,7 @@ export class CinephageCore {
 			}
 
 			const commitResponse = await fetch(
-				`${this.githubApiBase}/repos/MoldyTaint/Cinephage/commits/${encodeURIComponent(tagName)}`,
+				`${this.githubApiBase}/repos/Cinephage/Cinephage/commits/${encodeURIComponent(tagName)}`,
 				{
 					headers: { Accept: 'application/vnd.github+json' },
 					signal: AbortSignal.timeout(15_000)

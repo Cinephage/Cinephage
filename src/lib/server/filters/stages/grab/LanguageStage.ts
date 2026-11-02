@@ -1,11 +1,11 @@
 import type { DecisionStage, StageResult } from '../../types.js';
 import type { GrabDecisionContext, GrabTarget } from './types.js';
-import { extractLanguages } from '$lib/server/indexers/parser/patterns/language';
+import { extractLanguages } from '#lib/server/indexers/parser/patterns/language.js';
 import {
 	AUDIO_PREFERENCE_BUCKETS,
 	rankLanguageEvidenceSet
-} from '$lib/server/languages/audio-preference';
-import { resolveAudioPreferenceForItem } from '$lib/server/languages/audio-preference-resolver';
+} from '#lib/server/languages/audio-preference.js';
+import { resolveAudioPreferenceForItem } from '#lib/server/languages/audio-preference-resolver.js';
 
 /**
  * Audio-language gate (audio-language acquisition design 2026-09-15, phase E).

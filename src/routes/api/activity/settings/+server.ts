@@ -1,13 +1,12 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import {
 	activityService,
 	activityStreamEvents,
 	DEFAULT_ACTIVITY_RETENTION_DAYS,
 	MAX_ACTIVITY_RETENTION_DAYS
-} from '$lib/server/activity';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { createChildLogger } from '$lib/logging';
+} from '#lib/server/activity/index.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { createChildLogger } from '#lib/logging/index.js';
 import { z } from 'zod';
 
 const logger = createChildLogger({ module: 'ActivitySettingsApi', logDomain: 'monitoring' });
@@ -30,7 +29,7 @@ export const GET: RequestHandler = async (event) => {
 
 	try {
 		const retentionDays = await activityService.getRetentionDays();
-		return json({
+		return Response.json({
 			success: true,
 			retentionDays,
 			defaultRetentionDays: DEFAULT_ACTIVITY_RETENTION_DAYS,
@@ -38,7 +37,10 @@ export const GET: RequestHandler = async (event) => {
 		});
 	} catch (error) {
 		logger.error('Failed to load activity retention settings', error);
-		return json({ success: false, error: 'Failed to load activity settings' }, { status: 500 });
+		return Response.json(
+			{ success: false, error: 'Failed to load activity settings' },
+			{ status: 500 }
+		);
 	}
 };
 
@@ -53,12 +55,12 @@ export const PUT: RequestHandler = async (event) => {
 	try {
 		body = await event.request.json();
 	} catch {
-		return json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
+		return Response.json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
 	}
 
 	const parsed = updateRetentionSchema.safeParse(body);
 	if (!parsed.success) {
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: 'Validation failed',
@@ -70,10 +72,13 @@ export const PUT: RequestHandler = async (event) => {
 
 	try {
 		const retentionDays = await activityService.setRetentionDays(parsed.data.retentionDays);
-		return json({ success: true, retentionDays });
+		return Response.json({ success: true, retentionDays });
 	} catch (error) {
 		logger.error('Failed to update activity retention settings', error);
-		return json({ success: false, error: 'Failed to update activity settings' }, { status: 500 });
+		return Response.json(
+			{ success: false, error: 'Failed to update activity settings' },
+			{ status: 500 }
+		);
 	}
 };
 
@@ -88,12 +93,12 @@ export const POST: RequestHandler = async (event) => {
 	try {
 		body = await event.request.json();
 	} catch {
-		return json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
+		return Response.json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
 	}
 
 	const parsed = purgeSchema.safeParse(body);
 	if (!parsed.success) {
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: 'Validation failed',
@@ -112,7 +117,7 @@ export const POST: RequestHandler = async (event) => {
 				action: 'purge_all',
 				timestamp: new Date().toISOString()
 			});
-			return json({
+			return Response.json({
 				success: true,
 				action: 'all',
 				...result
@@ -125,7 +130,7 @@ export const POST: RequestHandler = async (event) => {
 			action: 'purge_older_than_retention',
 			timestamp: new Date().toISOString()
 		});
-		return json({
+		return Response.json({
 			success: true,
 			action: 'older_than_retention',
 			retentionDays,
@@ -137,6 +142,6 @@ export const POST: RequestHandler = async (event) => {
 			error instanceof Error && error.message.includes('SQLITE_BUSY')
 				? 'Activity entries are busy right now. Please retry in a moment.'
 				: 'Failed to purge activity entries';
-		return json({ success: false, error: message }, { status: 500 });
+		return Response.json({ success: false, error: message }, { status: 500 });
 	}
 };

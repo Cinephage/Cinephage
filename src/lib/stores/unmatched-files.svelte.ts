@@ -5,7 +5,7 @@ import type {
 	UnmatchedFilters,
 	PaginationState,
 	ViewMode
-} from '$lib/types/unmatched.js';
+} from '#lib/types/unmatched.js';
 
 interface UnmatchedState {
 	files: UnmatchedFile[];

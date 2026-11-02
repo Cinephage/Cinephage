@@ -1,15 +1,15 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { db } from '$lib/server/db/index.js';
+import { db } from '#lib/server/db/index.js';
 import {
 	rejectedReleases,
 	importFailures,
 	renamingFailures,
 	unmatchedFiles,
 	downloadClients
-} from '$lib/server/db/schema.js';
+} from '#lib/server/db/schema.js';
 import { count, desc, asc, eq, ne, and, or, like, gt, inArray } from 'drizzle-orm';
-import { logger } from '$lib/logging';
+import { logger } from '#lib/logging/index.js';
+import { requireAdminLocals } from '#lib/server/auth/authorization.js';
 
 const VALID_TYPES = [
 	'rejected-releases',
@@ -47,11 +47,19 @@ function reportTypeDomain(type: ReportType): 'downloads' | 'imports' | 'scans' {
  * - status: filter by status string
  * - order: 'asc' | 'desc' (default: 'desc')
  */
-export const GET: RequestHandler = async ({ params, url }) => {
+export const GET: RequestHandler = async ({ params, url, locals }) => {
+	// Defense-in-depth: the hooks viewer gate confines this route; this
+	// guard keeps it admin-only even if the gate is ever refactored.
+	const authError = requireAdminLocals(locals);
+	if (authError) return authError;
+
 	const type = params.type as ReportType;
 
 	if (!VALID_TYPES.includes(type)) {
-		return json({ success: false, error: `Unknown report type: ${type}` }, { status: 400 });
+		return Response.json(
+			{ success: false, error: `Unknown report type: ${type}` },
+			{ status: 400 }
+		);
 	}
 
 	const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
@@ -312,7 +320,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
 			}
 		}
 
-		return json({
+		return Response.json({
 			success: true,
 			data: {
 				records,
@@ -329,7 +337,10 @@ export const GET: RequestHandler = async ({ params, url }) => {
 			{ err, type, logDomain: reportTypeDomain(type) },
 			'[Reports] Failed to load report records'
 		);
-		return json({ success: false, error: 'Failed to load report records' }, { status: 500 });
+		return Response.json(
+			{ success: false, error: 'Failed to load report records' },
+			{ status: 500 }
+		);
 	}
 };
 
@@ -337,26 +348,34 @@ export const GET: RequestHandler = async ({ params, url }) => {
  * PATCH /api/reports/[type]
  * Bulk-update record status. Body: { ids: string[], status: string }
  */
-export const PATCH: RequestHandler = async ({ params, request }) => {
+export const PATCH: RequestHandler = async ({ params, request, locals }) => {
+	// Defense-in-depth: the hooks viewer gate confines this route; this
+	// guard keeps it admin-only even if the gate is ever refactored.
+	const authError = requireAdminLocals(locals);
+	if (authError) return authError;
+
 	const type = params.type as ReportType;
 
 	if (!VALID_TYPES.includes(type)) {
-		return json({ success: false, error: `Unknown report type: ${type}` }, { status: 400 });
+		return Response.json(
+			{ success: false, error: `Unknown report type: ${type}` },
+			{ status: 400 }
+		);
 	}
 
 	let body: { ids?: string[]; status: string; resolveAll?: boolean };
 	try {
 		body = await request.json();
 	} catch {
-		return json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
+		return Response.json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
 	}
 
 	if (!body.status) {
-		return json({ success: false, error: 'status is required' }, { status: 400 });
+		return Response.json({ success: false, error: 'status is required' }, { status: 400 });
 	}
 
 	if (!body.resolveAll && (!Array.isArray(body.ids) || body.ids.length === 0)) {
-		return json(
+		return Response.json(
 			{ success: false, error: 'ids (array) or resolveAll (boolean) is required' },
 			{ status: 400 }
 		);
@@ -401,7 +420,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 					break;
 				}
 				case 'unmatched-imports':
-					return json(
+					return Response.json(
 						{ success: false, error: 'Unmatched imports are managed via the library page' },
 						{ status: 400 }
 					);
@@ -442,7 +461,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 					}
 					break;
 				case 'unmatched-imports':
-					return json(
+					return Response.json(
 						{ success: false, error: 'Unmatched imports are managed via the library page' },
 						{ status: 400 }
 					);
@@ -450,12 +469,12 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 			updated = ids.length;
 		}
 
-		return json({ success: true, data: { updated } });
+		return Response.json({ success: true, data: { updated } });
 	} catch (err) {
 		logger.error(
 			{ err, type, logDomain: reportTypeDomain(type) },
 			'[Reports] Failed to update record status'
 		);
-		return json({ success: false, error: 'Failed to update records' }, { status: 500 });
+		return Response.json({ success: false, error: 'Failed to update records' }, { status: 500 });
 	}
 };

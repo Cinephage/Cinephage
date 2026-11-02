@@ -5,8 +5,8 @@
  * releaseDate); Sonarr's returns EpisodeResource[] (filtered by airDate).
  */
 
-import { db } from '$lib/server/db/index.js';
-import { series } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { series } from '#lib/server/db/schema.js';
 import { buildMovies } from './movies.js';
 import { buildEpisodesForSeries } from './episodes.js';
 

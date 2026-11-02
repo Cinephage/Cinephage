@@ -75,20 +75,21 @@ export abstract class EmbyCompatibleProvider implements MediaServerStatsProvider
 			offset += PAGE_SIZE;
 		} while (offset < totalRecordCount);
 
-		// Backfill: episodes with null tmdbId inherit their parent series' tmdbId.
-		// This is the correct attribution — TMDB episode IDs are derived from the
-		// series ID, and the local reconciliation already uses the series tmdbId
-		// for episode matching.
+		// Backfill: every episode's tmdbId is forced to its parent series'
+		// tmdbId, overwriting whatever Jellyfin/Emby put in ProviderIds.Tmdb
+		// on the episode itself. TMDB assigns each episode its own
+		// standalone id (distinct from the show's id), and Jellyfin/Emby's
+		// TMDB metadata plugin does populate that per-episode id on episode
+		// items - not null, and not the show's id. Local reconciliation
+		// keys episodes by SERIES tmdbId + season + episode number, so
+		// leaving the per-episode id in place makes every episode look like
+		// an unmatched item (never equal to the series tmdbId used
+		// locally). Mirrors the Plex provider's equivalent fix in
+		// PlexStatsProvider.ts.
 		for (const item of items) {
-			if (item.itemType === 'episode' && item.tmdbId === null) {
-				const parentJfId = episodeParentJfId.get(item.serverItemId);
-				if (parentJfId) {
-					const seriesTmdb = seriesTmdbByJfId.get(parentJfId);
-					if (seriesTmdb != null) {
-						item.tmdbId = seriesTmdb;
-					}
-				}
-			}
+			if (item.itemType !== 'episode') continue;
+			const parentJfId = episodeParentJfId.get(item.serverItemId);
+			item.tmdbId = (parentJfId ? seriesTmdbByJfId.get(parentJfId) : null) ?? null;
 		}
 
 		const serverItemIds = new Set<string>(items.map((item) => item.serverItemId));

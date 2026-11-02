@@ -1,15 +1,15 @@
 <script lang="ts">
-	import { X, Loader2, XCircle, Plus, Trash2 } from 'lucide-svelte';
+	import { X, Loader2, XCircle, Plus, Trash2 } from '@lucide/svelte';
 	import type {
 		MediaBrowserServerPublic,
 		MediaBrowserServerType,
 		MediaBrowserPathMapping,
 		MediaBrowserTestResult
-	} from '$lib/server/notifications/mediabrowser/types';
-	import { isBlankOrRedacted } from '$lib/shared/sensitiveSettings';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
-	import { SectionHeader, TestResult, ToggleSetting } from '$lib/components/ui/modal';
-	import * as m from '$lib/paraglide/messages.js';
+	} from '#lib/server/notifications/mediabrowser/types.js';
+	import { isBlankOrRedacted } from '#lib/shared/sensitiveSettings.js';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
+	import { SectionHeader, TestResult, ToggleSetting } from '#lib/components/ui/modal/index.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface MediaBrowserFormData {
 		name: string;

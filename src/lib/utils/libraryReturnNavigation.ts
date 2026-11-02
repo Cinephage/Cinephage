@@ -25,31 +25,38 @@ export function getLibraryNavigationContext(pathname: string): LibraryNavigation
 	return null;
 }
 
+function returnToStorageKey(section: LibrarySection): string {
+	return `cinephage:library-return-to:${section}`;
+}
+
 /**
- * Build the canonical detail URL for a navigation originating from a library list.
- * The exact list pathname + query string is written into returnTo so the detail
- * page can restore every active filter, sort option, sub-library, and text search.
+ * Record the exact filtered list URL as the "back" target for a detail page,
+ * for a navigation going from a library list to its matching detail route.
+ * Stored in sessionStorage rather than the target URL, so the filtered list
+ * state still survives a refresh on the detail page without showing up as a
+ * `?returnTo=` query string in the address bar.
  */
-export function getLibraryDetailWithReturnTo(
+export function storeLibraryReturnTo(
 	fromPathname: string,
 	fromSearch: string,
 	target: string
-): string | null {
+): boolean {
+	if (typeof sessionStorage === 'undefined') return false;
+
 	const from = getLibraryNavigationContext(fromPathname);
-	if (!from || from.kind !== 'list') return null;
+	if (!from || from.kind !== 'list') return false;
 
 	try {
 		const targetUrl = new URL(target, 'http://cinephage.local');
-		if (targetUrl.origin !== 'http://cinephage.local') return null;
+		if (targetUrl.origin !== 'http://cinephage.local') return false;
 
 		const to = getLibraryNavigationContext(targetUrl.pathname);
-		if (!to || to.kind !== 'detail' || to.section !== from.section) return null;
+		if (!to || to.kind !== 'detail' || to.section !== from.section) return false;
 
-		const returnTo = `${fromPathname}${fromSearch}`;
-		targetUrl.searchParams.set('returnTo', returnTo);
-		return `${targetUrl.pathname}${targetUrl.search}${targetUrl.hash}`;
+		sessionStorage.setItem(returnToStorageKey(from.section), `${fromPathname}${fromSearch}`);
+		return true;
 	} catch {
-		return null;
+		return false;
 	}
 }
 
@@ -57,8 +64,8 @@ export function getLibraryDetailWithReturnTo(
  * Validate a return path before using it for navigation.
  *
  * Only the matching internal library list route is accepted. This keeps the
- * returnTo parameter useful for restoring filters/sort state without turning
- * it into an open redirect.
+ * stored return value useful for restoring filters/sort state without it
+ * becoming an open-redirect vector.
  */
 export function getSafeLibraryReturnTo(
 	value: string | null,
@@ -77,19 +84,18 @@ export function getSafeLibraryReturnTo(
 }
 
 /**
- * Compute the detail-page back-link target from the current page URL.
- *
- * Returns the validated absolute list URL (or null when no valid returnTo is
- * present) WITHOUT passing it through resolvePath(). The header components
- * apply resolvePath() to their backHref exactly once, and during SSR — with
- * kit.paths.relative at its default — resolve() returns a ../..-prefixed
- * relative path. Pre-resolving here would feed that relative value back into
- * the header's resolve() call, which throws on non-absolute input and turns
- * the whole detail page into a 500 (PR #518 regression).
+ * The detail-page back-link target, read from sessionStorage instead of the
+ * URL. Client-only: sessionStorage doesn't exist during SSR, so this returns
+ * null on the server and the header simply renders without a back link
+ * until hydration fills in the real value.
  */
 export function getLibraryDetailBackHref(
-	pageUrl: URL,
+	section: LibrarySection,
 	expectedListPath: '/library/movies' | '/library/tv'
 ): string | null {
-	return getSafeLibraryReturnTo(pageUrl.searchParams.get('returnTo'), expectedListPath);
+	if (typeof sessionStorage === 'undefined') return null;
+	return getSafeLibraryReturnTo(
+		sessionStorage.getItem(returnToStorageKey(section)),
+		expectedListPath
+	);
 }

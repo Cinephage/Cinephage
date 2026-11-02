@@ -1,0 +1,200 @@
+---
+# TorrentLeech (TL) — Private 0DAY / General tracker
+# Source port of Prowlarr's torrentleech.yml to the Cinephage Cardigann schema.
+# Search uses the site's internal JSON list endpoint after form login.
+# Keep requestdelay at 4.1s or higher: TL bans aggressive scrapers.
+id: torrentleech
+name: TorrentLeech
+description: A private torrent tracker for 0-day / general content
+type: private
+language: en-US
+encoding: UTF-8
+protocol: torrent
+requestdelay: 4.1
+
+links:
+  - https://www.torrentleech.org/
+  - https://www.torrentleech.cc/
+  - https://www.torrentleech.me/
+legacylinks:
+  - https://v4.torrentleech.org/
+  - https://www.tleechreload.org/
+  - https://www.tlgetin.cc/
+  - https://rss.torrentleech.cc/
+
+caps:
+  modes:
+    search: [q]
+    movie-search: [q, imdbid]
+    tv-search: [q, season, ep]
+  categorymappings:
+    - { id: 8, cat: Movies/SD, desc: Movies Cam }
+    - { id: 9, cat: Movies/SD, desc: Movies TS/TC }
+    - { id: 11, cat: Movies/SD, desc: Movies DVDRip/DVDScreener }
+    - { id: 37, cat: Movies/WEB-DL, desc: Movies WEBRip }
+    - { id: 43, cat: Movies/HD, desc: Movies HDRip }
+    - { id: 14, cat: Movies/HD, desc: Movies BlurayRip }
+    - { id: 12, cat: Movies/DVD, desc: Movies DVD-R }
+    - { id: 13, cat: Movies/BluRay, desc: Movies Bluray }
+    - { id: 47, cat: Movies/UHD, desc: Movies 4K }
+    - { id: 15, cat: Movies, desc: Movies Boxsets }
+    - { id: 29, cat: Movies/Other, desc: Documentaries }
+    - { id: 26, cat: TV/SD, desc: TV Episodes }
+    - { id: 32, cat: TV/HD, desc: TV Episodes HD }
+    - { id: 27, cat: TV, desc: TV Boxsets }
+    - { id: 34, cat: TV/Anime, desc: TV Anime }
+    - { id: 35, cat: TV, desc: TV Cartoons }
+    - { id: 36, cat: Movies/Foreign, desc: Movies Foreign }
+    - { id: 44, cat: TV/Foreign, desc: TV Foreign }
+    - { id: 17, cat: PC/Games, desc: Games PC }
+    - { id: 42, cat: PC/Mac, desc: Games Mac }
+    - { id: 18, cat: Console/XBox, desc: Games XBOX }
+    - { id: 19, cat: Console/XBox 360, desc: Games XBOX360 }
+    - { id: 40, cat: Console/XBox One, desc: Games XBOXONE }
+    - { id: 20, cat: Console/PS3, desc: Games PS2 }
+    - { id: 21, cat: Console/PS3, desc: Games Mac }
+    - { id: 39, cat: Console/PS4, desc: Games PS4 }
+    - { id: 49, cat: Console/PS4, desc: Games PS5 }
+    - { id: 22, cat: Console/PSP, desc: Games PSP }
+    - { id: 28, cat: Console/Wii, desc: Games Wii }
+    - { id: 30, cat: Console/NDS, desc: Games Nintendo DS }
+    - { id: 48, cat: Console/Other, desc: Games Nintendo Switch }
+    - { id: 23, cat: PC/ISO, desc: PC ISO }
+    - { id: 24, cat: PC/Mac, desc: PC Mac }
+    - { id: 25, cat: PC/Mobile-Other, desc: PC Mobile }
+    - { id: 33, cat: PC/0day, desc: PC 0-day }
+    - { id: 38, cat: Other, desc: Education }
+    - { id: 45, cat: Books/EBook, desc: Books EBooks }
+    - { id: 46, cat: Books/Comics, desc: Books Comics }
+    - { id: 31, cat: Audio, desc: Audio }
+    - { id: 16, cat: Audio/Video, desc: Music videos }
+    # Parent expansion so Movies/TV searches route to every matching tracker category
+    - { id: 34, cat: TV }
+    - { id: 35, cat: TV }
+
+settings:
+  - name: username
+    type: text
+    label: Username
+  - name: password
+    type: password
+    label: Password
+  - name: alt2fatoken
+    type: text
+    label: Alt 2FA Token
+  - name: info_alt2fatoken
+    type: info
+    label: About Alt 2FA Token
+    default: 'Only fill in the Alt 2FA Token if you have enabled 2FA on the TorrentLeech website. Otherwise leave it empty.'
+  - name: freeleech
+    type: checkbox
+    label: Search freeleech only
+    default: false
+  - name: sort
+    type: select
+    label: Sort requested from site
+    default: added
+    options:
+      added: created
+      seeders: seeders
+      size: size
+      nameSort: title
+  - name: type
+    type: select
+    label: Order requested from site
+    default: desc
+    options:
+      desc: desc
+      asc: asc
+  - name: info_tpp
+    type: info
+    label: Results Per Page
+    default: 'For best results, change the Torrents per page setting to 100 on your TorrentLeech account profile.'
+  - name: info_flaresolverr
+    type: info_flaresolverr
+
+login:
+  path: user/account/login/
+  method: form
+  form: form[name="login-form"]
+  inputs:
+    username: '{{ .Config.username }}'
+    password: '{{ .Config.password }}'
+    alt2FAToken: '{{ .Config.alt2fatoken }}'
+  error:
+    - selector: p.text-danger
+    - selector: .login-container h2:contains("One Time Password")
+      message:
+        text: 'Your TorrentLeech account has 2FA enabled. Please recheck your indexer settings.'
+    - selector: form[name="login-form"]
+      message:
+        text: 'Login page detected at TorrentLeech. Check your username and password.'
+  test:
+    path: /
+    selector: a[href="/user/account/logout"]
+
+search:
+  paths:
+    # newfilter/2 includes 0-day and music when no keywords are given
+    - path: torrents/browse/list{{ if .Categories }}/categories/{{ join .Categories "," }}{{ end }}{{ if .Config.freeleech }}/facets/tags:FREELEECH{{ end }}{{ if .Query.IMDBID }}/imdbID/{{ .Query.IMDBID }}{{ else }}/exact/1/query/{{ .Keywords }}{{ end }}{{ if .Keywords }}{{ else }}/newfilter/2{{ end }}/orderby/{{ .Config.sort }}/order/{{ .Config.type }}
+      response:
+        type: json
+
+  keywordsfilters:
+    # leading dashes exclude search strings on TL
+    - name: re_replace
+      args: ['(^|\s)-', ' ']
+
+  rows:
+    selector: torrentList
+    count:
+      selector: $.numFound
+
+  fields:
+    category:
+      selector: categoryID
+    title_test:
+      selector: name
+      optional: true
+      filters:
+        # remove [REQ]/[REQUEST]
+        - name: re_replace
+          args: ['(?i)^\[REQ(UEST(ED)?)?\]\s*', '']
+    title:
+      text: '{{ if .Result.title_test }}{{ .Result.title_test }}{{ else }}TorrentLeech did not provide a title{{ end }}'
+    _id:
+      selector: fid
+    _filename:
+      selector: filename
+    details:
+      text: '/torrent/{{ .Result._id }}'
+    download:
+      text: '/download/{{ .Result._id }}/{{ .Result._filename }}'
+    imdbid:
+      selector: imdbID
+    seeders:
+      selector: seeders
+    leechers:
+      selector: leechers
+    grabs:
+      selector: completed
+    date:
+      # 2021-10-25 02:18:31, auto adjusted by site account profile
+      selector: addedTimestamp
+      filters:
+        - name: dateparse
+          args: YYYY-MM-DD HH:mm:ss
+    size:
+      selector: size
+    downloadvolumefactor:
+      selector: download_multiplier
+      case:
+        '0': '0'
+        '*': '1'
+    uploadvolumefactor:
+      text: '1'
+    minimumratio:
+      text: '1.0'
+    minimumseedtime:
+      # 10 days for registered users, less for upgraded users
+      text: '864000'

@@ -1,9 +1,7 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { createChildLogger } from '$lib/logging';
-
-import { getLogoDownloadService } from '$lib/server/logos/LogoDownloadService.js';
-import { listLogos } from '$lib/server/logos/logo-library.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { getLogoDownloadService } from '#lib/server/logos/LogoDownloadService.js';
+import { listLogos } from '#lib/server/logos/logo-library.js';
 
 const logger = createChildLogger({ module: 'LogosApi', logDomain: 'system' });
 
@@ -23,7 +21,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		const isDownloaded = await service.isDownloaded();
 
 		if (!isDownloaded) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: 'Logos not downloaded',
@@ -45,7 +43,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			offset
 		});
 
-		return json({
+		return Response.json({
 			success: true,
 			data: result.data,
 			pagination: result.pagination,
@@ -53,7 +51,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		});
 	} catch (error) {
 		logger.error('[LogosAPI] Failed to list logos', error);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: 'Failed to load logos'

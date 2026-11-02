@@ -3,7 +3,7 @@ import {
 	getBaseUrlAsync,
 	getPlaybackSessionStore,
 	getSessionProxyService
-} from '$lib/server/streaming';
+} from '#lib/server/streaming/index.js';
 
 function normalizeResourceId(resource: string): string {
 	return resource.replace(/\.[^.]+$/i, '');

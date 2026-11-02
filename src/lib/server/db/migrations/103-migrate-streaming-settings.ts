@@ -1,6 +1,6 @@
 import type { MigrationDefinition } from '../migration-helpers.js';
 
-// Hardcoded (not imported from $lib/server/indexers/types) so migrations stay
+// Hardcoded (not imported from #lib/server/indexers/types) so migrations stay
 // decoupled from app code. See migration 102 for the same convention.
 const CINEPHAGE_STREAM_DEFINITION_ID = 'cinephage-stream';
 const LIBRARY_STREAMING_MODULE_ID = 'library-streaming';

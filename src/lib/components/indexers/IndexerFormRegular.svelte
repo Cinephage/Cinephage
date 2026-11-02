@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { ChevronDown, Lock, Unlock, Globe, Shield } from 'lucide-svelte';
-	import type { IndexerDefinition } from '$lib/types/indexer';
-	import * as m from '$lib/paraglide/messages.js';
+	import { ChevronDown, Lock, Unlock, Globe, Shield } from '@lucide/svelte';
+	import type { IndexerDefinition } from '#lib/types/indexer.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import IndexerSettingsFields from './IndexerSettingsFields.svelte';
-	import { SectionHeader, ToggleSetting } from '$lib/components/ui/modal';
-	import { isSensitiveDefinitionSetting } from '$lib/shared/sensitiveSettings';
+	import { SectionHeader, ToggleSetting } from '#lib/components/ui/modal/index.js';
+	import { isSensitiveDefinitionSetting } from '#lib/shared/sensitiveSettings.js';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 
 	interface Props {
@@ -13,6 +13,8 @@
 		url: string;
 		urlError: string;
 		priority: number;
+		/** User override for max requests/minute sent to this indexer. Null = use definition/default. */
+		rateLimitPerMinute: number | null;
 		enabled: boolean;
 		settings: Record<string, string>;
 		hasSensitiveSettings?: Record<string, boolean>;
@@ -39,6 +41,7 @@
 		onUrlChange: (value: string) => void;
 		onUrlBlur: () => void;
 		onPriorityChange: (value: number) => void;
+		onRateLimitPerMinuteChange: (value: number | null) => void;
 		onEnabledChange: (value: boolean) => void;
 		onSettingsChange: (settings: Record<string, string>) => void;
 		onAutomaticSearchChange: (value: boolean) => void;
@@ -60,6 +63,7 @@
 		url,
 		urlError,
 		priority,
+		rateLimitPerMinute,
 		enabled,
 		settings,
 		hasSensitiveSettings = {},
@@ -85,6 +89,7 @@
 		onUrlChange,
 		onUrlBlur,
 		onPriorityChange,
+		onRateLimitPerMinuteChange,
 		onEnabledChange,
 		onSettingsChange,
 		onAutomaticSearchChange,
@@ -365,6 +370,27 @@
 				oninput={(e) => onPriorityChange(parseInt(e.currentTarget.value) || 25)}
 				min="1"
 				max="100"
+			/>
+		</div>
+
+		<!-- Rate limit -->
+		<div class="form-control">
+			<label class="label py-1" for="regular-rate-limit">
+				<span class="label-text">Rate limit</span>
+				<span class="label-text-alt text-xs">requests/min, blank = default</span>
+			</label>
+			<input
+				id="regular-rate-limit"
+				type="number"
+				class="input-bordered input input-sm"
+				value={rateLimitPerMinute ?? ''}
+				oninput={(e) => {
+					const raw = e.currentTarget.value;
+					onRateLimitPerMinuteChange(raw === '' ? null : parseInt(raw) || null);
+				}}
+				min="1"
+				max="600"
+				placeholder="Default"
 			/>
 		</div>
 	</div>

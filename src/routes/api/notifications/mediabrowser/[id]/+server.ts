@@ -4,11 +4,10 @@
  * DELETE /api/notifications/mediabrowser/:id - Delete a server
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getMediaBrowserManager } from '$lib/server/notifications/mediabrowser';
-import { mediaBrowserServerUpdateSchema } from '$lib/validation/schemas';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
+import { getMediaBrowserManager } from '#lib/server/notifications/mediabrowser/index.js';
+import { mediaBrowserServerUpdateSchema } from '#lib/validation/schemas.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 
 /**
  * GET /api/notifications/mediabrowser/:id
@@ -19,10 +18,10 @@ export const GET: RequestHandler = async ({ params }) => {
 	const server = await manager.getServer(params.id);
 
 	if (!server) {
-		return json({ error: 'Server not found' }, { status: 404 });
+		return Response.json({ error: 'Server not found' }, { status: 404 });
 	}
 
-	return json(server);
+	return Response.json(server);
 };
 
 /**
@@ -38,13 +37,13 @@ export const PUT: RequestHandler = async (event) => {
 	try {
 		data = await request.json();
 	} catch {
-		return json({ error: 'Invalid JSON body' }, { status: 400 });
+		return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
 	}
 
 	const result = mediaBrowserServerUpdateSchema.safeParse(data);
 
 	if (!result.success) {
-		return json(
+		return Response.json(
 			{
 				error: 'Validation failed',
 				details: result.error.flatten()
@@ -57,7 +56,7 @@ export const PUT: RequestHandler = async (event) => {
 	const existing = await manager.getServerRecord(params.id);
 
 	if (!existing) {
-		return json({ error: 'Server not found' }, { status: 404 });
+		return Response.json({ error: 'Server not found' }, { status: 404 });
 	}
 
 	const effectiveEnabled = result.data.enabled ?? existing.enabled ?? true;
@@ -76,7 +75,7 @@ export const PUT: RequestHandler = async (event) => {
 		});
 
 		if (!testResult.success) {
-			return json(
+			return Response.json(
 				{
 					error: testResult.error
 						? `Connection test failed: ${testResult.error}`
@@ -90,12 +89,12 @@ export const PUT: RequestHandler = async (event) => {
 	const updated = await manager.updateServer(params.id, result.data);
 
 	if (!updated) {
-		return json({ error: 'Server not found' }, { status: 404 });
+		return Response.json({ error: 'Server not found' }, { status: 404 });
 	}
 
 	if (testResult) await manager.recordTestResult(params.id, testResult);
 
-	return json({ success: true, server: updated });
+	return Response.json({ success: true, server: updated });
 };
 
 /**
@@ -111,8 +110,8 @@ export const DELETE: RequestHandler = async (event) => {
 	const deleted = await manager.deleteServer(params.id);
 
 	if (!deleted) {
-		return json({ error: 'Server not found' }, { status: 404 });
+		return Response.json({ error: 'Server not found' }, { status: 404 });
 	}
 
-	return json({ success: true });
+	return Response.json({ success: true });
 };

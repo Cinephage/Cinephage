@@ -1,7 +1,7 @@
 import type { DecisionStage, StageResult } from '../../types.js';
 import type { GrabDecisionContext } from './types.js';
-import { parseRelease } from '$lib/server/indexers/parser/index.js';
-import { matchReleaseToTarget } from '$lib/server/releases/release-identity.js';
+import { parseRelease } from '#lib/server/indexers/parser/index.js';
+import { matchReleaseToTarget } from '#lib/server/releases/release-identity.js';
 
 /**
  * HARD stage: verifies the release actually refers to the target media.

@@ -2,12 +2,11 @@
  * POST /api/notifications/mediabrowser/:id/test - Test a saved server's connection
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getMediaBrowserManager } from '$lib/server/notifications/mediabrowser';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
+import { getMediaBrowserManager } from '#lib/server/notifications/mediabrowser/index.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 import { z } from 'zod/v4';
-import { mediaBrowserServerTestSchema } from '$lib/validation/schemas.js';
+import { mediaBrowserServerTestSchema } from '#lib/validation/schemas.js';
 
 /**
  * POST /api/notifications/mediabrowser/:id/test
@@ -30,15 +29,18 @@ export const POST: RequestHandler = async (event) => {
 	const rawBody = text.trim() ? JSON.parse(text) : {};
 	const parsed = testWithIdSchema.safeParse(rawBody);
 	if (!parsed.success) {
-		return json({ success: false, error: parsed.error.issues[0].message }, { status: 400 });
+		return Response.json(
+			{ success: false, error: parsed.error.issues[0].message },
+			{ status: 400 }
+		);
 	}
 	const body = parsed.data;
 
 	try {
 		const testResult = await manager.testServer(params.id, body);
-		return json(testResult);
+		return Response.json(testResult);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Unknown error';
-		return json({ success: false, error: message });
+		return Response.json({ success: false, error: message });
 	}
 };

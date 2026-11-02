@@ -8,7 +8,7 @@
  * - Idle connection cleanup
  */
 
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 import { NntpConnection, type NntpConnectionConfig } from './NntpConnection';
 
 const logger = createChildLogger({ logDomain: 'streams' as const });

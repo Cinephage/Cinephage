@@ -1,7 +1,6 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { db } from '$lib/server/db';
-import { subtitleHistory } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { subtitleHistory } from '#lib/server/db/schema.js';
 import { eq, desc, and, gte, lte } from 'drizzle-orm';
 
 /**
@@ -87,7 +86,7 @@ export const GET: RequestHandler = async ({ url }) => {
 
 	const total = allResults.length;
 
-	return json({
+	return Response.json({
 		items: results,
 		total,
 		limit,
@@ -120,10 +119,10 @@ export const DELETE: RequestHandler = async ({ url }) => {
 	}
 
 	if (conditions.length === 0) {
-		return json({ error: 'At least one filter is required for safety' }, { status: 400 });
+		return Response.json({ error: 'At least one filter is required for safety' }, { status: 400 });
 	}
 
 	await db.delete(subtitleHistory).where(and(...conditions));
 
-	return json({ success: true });
+	return Response.json({ success: true });
 };

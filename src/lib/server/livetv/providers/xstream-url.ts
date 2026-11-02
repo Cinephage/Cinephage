@@ -1,4 +1,4 @@
-import type { XstreamConfig } from '$lib/types/livetv';
+import type { XstreamConfig } from '#lib/types/livetv.js';
 
 const XTREAM_ENDPOINT_FILES = new Set(['get.php', 'xmltv.php', 'player_api.php', 'panel_api.php']);
 

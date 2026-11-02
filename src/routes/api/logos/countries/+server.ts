@@ -1,9 +1,7 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { createChildLogger } from '$lib/logging';
-
-import { getLogoDownloadService } from '$lib/server/logos/LogoDownloadService.js';
-import { listLogoCountries } from '$lib/server/logos/logo-library.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { getLogoDownloadService } from '#lib/server/logos/LogoDownloadService.js';
+import { listLogoCountries } from '#lib/server/logos/logo-library.js';
 
 const logger = createChildLogger({ module: 'LogosCountriesApi', logDomain: 'system' });
 
@@ -18,7 +16,7 @@ export const GET: RequestHandler = async () => {
 		const isDownloaded = await service.isDownloaded();
 
 		if (!isDownloaded) {
-			return json({
+			return Response.json({
 				success: false,
 				error: 'Logos not downloaded',
 				code: 'NOT_DOWNLOADED',
@@ -28,13 +26,13 @@ export const GET: RequestHandler = async () => {
 
 		const validCountries = await listLogoCountries();
 
-		return json({
+		return Response.json({
 			success: true,
 			data: validCountries
 		});
 	} catch (error) {
 		logger.error('[LogosAPI] Failed to list countries', error);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: 'Failed to load countries'

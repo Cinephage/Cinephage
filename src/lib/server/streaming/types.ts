@@ -3,7 +3,7 @@
  */
 
 import type { EffectiveAudioPreference } from './language-utils';
-import type { SubtitleRequirement } from '$lib/shared/language-profile';
+import type { SubtitleRequirement } from '#lib/shared/language-profile.js';
 
 export type StreamType = 'hls' | 'm3u8' | 'mp4' | 'dash' | 'file';
 

@@ -14,7 +14,7 @@
  * {/if}
  */
 
-import { browser } from '$app/environment';
+import { browser } from '$app/env';
 import { afterNavigate, beforeNavigate } from '$app/navigation';
 import type {
 	SSEHandlers,
@@ -257,12 +257,15 @@ export function createSSE<T = Record<string, unknown>>(
 		connect();
 	}
 
-	afterNavigate(() => {
+	afterNavigate(({ shallow, type }) => {
+		if (shallow && type === 'goto') return;
 		if (!browser) return;
 		connect();
 	});
 
 	beforeNavigate((navigation) => {
+		if (navigation.shallow && navigation.type === 'goto') return;
+
 		if (navigation.willUnload) {
 			closeConnection('closed');
 		}

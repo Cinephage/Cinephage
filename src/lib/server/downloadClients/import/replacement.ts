@@ -1,4 +1,4 @@
-import type { Resolution } from '$lib/server/indexers/parser/types.js';
+import type { Resolution } from '#lib/server/indexers/parser/types.js';
 
 /**
  * The ONE import-time replacement policy (acquisition-system redesign).

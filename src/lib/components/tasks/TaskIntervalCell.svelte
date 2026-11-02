@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import type { UnifiedTask } from '$lib/server/tasks/UnifiedTaskRegistry';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import { setTaskInterval } from '$lib/api/tasks.js';
+	import type { UnifiedTask } from '#lib/server/tasks/UnifiedTaskRegistry.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { setTaskInterval } from '#lib/api/tasks.js';
 
 	interface Props {
 		task: UnifiedTask;
@@ -60,26 +60,50 @@
 </script>
 
 {#if isEditing}
-	<div class="flex items-center gap-1">
-		<input
-			type="number"
-			step="0.25"
-			min={task.minIntervalHours ?? 0.25}
-			bind:this={editInput}
-			bind:value={editValue}
-			onkeydown={handleKeydown}
-			class="input-bordered input w-20 input-xs"
-		/>
-		<span class="text-xs">h</span>
-		<button
-			class="btn btn-square btn-ghost btn-xs"
-			onclick={saveInterval}
-			disabled={isSaving}
-			title="Save"
-		>
-			{#if isSaving}
-				<span class="loading loading-xs loading-spinner"></span>
-			{:else}
+	<div class="flex flex-col items-start gap-1">
+		<div class="flex items-center gap-1 whitespace-nowrap">
+			<input
+				type="number"
+				step="0.25"
+				min={task.minIntervalHours ?? 0.25}
+				bind:this={editInput}
+				bind:value={editValue}
+				onkeydown={handleKeydown}
+				class="input-bordered input w-16 input-xs"
+			/>
+			<span class="text-xs">h</span>
+		</div>
+		<div class="flex items-center gap-1">
+			<button
+				class="btn btn-square btn-ghost text-success btn-xs"
+				onclick={saveInterval}
+				disabled={isSaving}
+				title="Save"
+			>
+				{#if isSaving}
+					<span class="loading loading-xs loading-spinner"></span>
+				{:else}
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="14"
+						height="14"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<polyline points="20 6 9 17 4 12" />
+					</svg>
+				{/if}
+			</button>
+			<button
+				class="btn btn-square btn-ghost text-error btn-xs"
+				onclick={cancelEditing}
+				disabled={isSaving}
+				title="Cancel"
+			>
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
 					width="14"
@@ -91,31 +115,11 @@
 					stroke-linecap="round"
 					stroke-linejoin="round"
 				>
-					<polyline points="20 6 9 17 4 12" />
+					<line x1="18" y1="6" x2="6" y2="18" />
+					<line x1="6" y1="6" x2="18" y2="18" />
 				</svg>
-			{/if}
-		</button>
-		<button
-			class="btn btn-square btn-ghost btn-xs"
-			onclick={cancelEditing}
-			disabled={isSaving}
-			title="Cancel"
-		>
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				width="14"
-				height="14"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-			>
-				<line x1="18" y1="6" x2="6" y2="18" />
-				<line x1="6" y1="6" x2="18" y2="18" />
-			</svg>
-		</button>
+			</button>
+		</div>
 	</div>
 {:else}
 	<button

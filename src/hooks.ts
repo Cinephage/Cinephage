@@ -1,4 +1,4 @@
-import type { Reroute } from '@sveltejs/kit';
+import type { Reroute } from '@sveltejs/kit/hooks';
 
 /**
  * Universal hooks (shared by client and server) - this is the only file

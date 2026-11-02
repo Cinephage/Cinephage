@@ -12,7 +12,7 @@
  * throughout the codebase with a single, reliable HTTP layer.
  */
 
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 import { isCloudflareProtected, CloudflareProtectedError } from './CloudflareDetection';
 import {
 	RetryPolicy,
@@ -22,9 +22,9 @@ import {
 	type RetryConfig
 } from './RetryPolicy';
 import { getRateLimitRegistry, getHostRateLimiter } from '../ratelimit';
-import type { RateLimitConfig } from '../ratelimit/types';
-import { captchaSolverSettingsService, getCaptchaSolver } from '$lib/server/captcha';
-import { CloudflareBypassError } from '$lib/errors';
+import { DEFAULT_RATE_LIMIT, type RateLimitConfig } from '../ratelimit/types';
+import { captchaSolverSettingsService, getCaptchaSolver } from '#lib/server/captcha/index.js';
+import { CloudflareBypassError } from '#lib/errors/index.js';
 import { CookieStore } from '../auth/CookieStore';
 import { decodeBuffer } from './EncodingUtils';
 
@@ -116,7 +116,7 @@ export class IndexerHttp {
 			baseUrl: config.baseUrl.replace(/\/$/, ''),
 			alternateUrls: config.alternateUrls?.map((u) => u.replace(/\/$/, '')) ?? [],
 			userAgent: config.userAgent ?? 'Cinephage/1.0',
-			rateLimit: config.rateLimit ?? { requests: 30, periodMs: 60_000 },
+			rateLimit: config.rateLimit ?? DEFAULT_RATE_LIMIT,
 			retry: config.retry ?? { maxRetries: 2, initialDelayMs: 1000 },
 			defaultTimeout: config.defaultTimeout ?? 30000,
 			encoding: config.encoding ?? 'UTF-8'
@@ -350,6 +350,15 @@ export class IndexerHttp {
 						}
 
 						// Browser fetch failed
+						if (options.signal?.aborted) {
+							// The caller's abort (early-exit sibling or search
+							// timeout) closed the browser mid-solve. Classify as a
+							// clean cancellation so it is neither retried, recorded
+							// as a bypass failure, nor logged as a warning.
+							this.log.debug({ host, error: fetchResult.error }, 'Browser fetch cancelled');
+							throw new Error('Aborted');
+						}
+
 						this.log.warn(
 							{
 								host,

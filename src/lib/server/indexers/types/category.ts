@@ -458,3 +458,24 @@ export function indexerHasCategoriesForSearchType(
 
 	return categoryIds.some((cat) => categoryMatchesSearchType(cat, searchType));
 }
+
+/**
+ * Check whether a user's per-indexer category restriction (the
+ * "restrict searches to only these categories" picker - configured via
+ * `additionalCategories`) allows a given search type.
+ *
+ * `undefined` means the restriction isn't configured at all (no opinion,
+ * eligible). An empty array is the explicit "open search, no category
+ * filter" choice - also eligible for everything, since the user picked
+ * "no restriction" rather than "restrict to nothing". Only a *non-empty*
+ * restriction that shares no category range with the search type makes
+ * the indexer ineligible.
+ */
+export function restrictionAllowsSearchType(
+	restriction: number[] | undefined,
+	searchType: SearchTypeCategory
+): boolean {
+	if (!restriction || restriction.length === 0) return true;
+	if (searchType === 'basic') return true;
+	return restriction.some((cat) => categoryMatchesSearchType(cat, searchType));
+}

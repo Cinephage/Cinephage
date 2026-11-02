@@ -1,8 +1,7 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { requireArrCompatEnabled } from '$lib/server/arr/requireArrCompatEnabled.js';
-import { buildDownloadClients } from '$lib/server/arr/downloadClients.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { requireArrCompatEnabled } from '#lib/server/arr/requireArrCompatEnabled.js';
+import { buildDownloadClients } from '#lib/server/arr/downloadClients.js';
 
 /**
  * GET /api/radarr/api/v3/downloadclient
@@ -16,5 +15,5 @@ export const GET: RequestHandler = async (event) => {
 	const authError = requireAdmin(event);
 	if (authError) return authError;
 
-	return json(await buildDownloadClients());
+	return Response.json(await buildDownloadClients());
 };

@@ -1,11 +1,13 @@
-import { tmdb } from '$lib/server/tmdb';
-import { json } from '@sveltejs/kit';
+import { tmdb } from '#lib/server/tmdb.js';
 import type { RequestHandler } from './$types';
-import { createChildLogger } from '$lib/logging';
-import { isAppError, getErrorMessage } from '$lib/errors';
-import { checkRateLimit, rateLimitHeaders } from '$lib/server/rateLimit';
-import { enrichWithLibraryStatus, filterBlockedMedia } from '$lib/server/library/status';
-import { enrichWithReleaseDates } from '$lib/server/release-enrichment.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { isAppError, getErrorMessage } from '#lib/errors/index.js';
+import {
+	enrichWithLibraryStatus,
+	filterBlockedMedia,
+	annotateRequestState
+} from '#lib/server/library/status.js';
+import { enrichWithReleaseDates } from '#lib/server/release-enrichment.js';
 
 /**
  * Determine media type from TMDB endpoint path for library status enrichment
@@ -16,33 +18,19 @@ function getMediaTypeFromPath(path: string): 'movie' | 'tv' | 'all' {
 	return 'all';
 }
 
-const handler: RequestHandler = async ({ params, url, locals, getClientAddress }) => {
+const handler: RequestHandler = async ({ params, url, locals }) => {
 	const { correlationId } = locals;
 	const log = createChildLogger({ correlationId, service: 'tmdb-proxy' });
 
-	// Rate limiting - skip in development, generous limits in production
-	const isDev = import.meta.env.DEV;
-	if (!isDev) {
-		const clientIp = getClientAddress();
-		// 1000 requests per minute is generous enough for most use cases
-		const rateLimit = checkRateLimit(`tmdb:${clientIp}`, { windowMs: 60_000, maxRequests: 1000 });
-
-		if (!rateLimit.allowed) {
-			log.warn({ clientIp }, 'Rate limit exceeded');
-			return json(
-				{ error: 'Rate limit exceeded', correlationId },
-				{
-					status: 429,
-					headers: rateLimitHeaders(rateLimit)
-				}
-			);
-		}
-	}
+	// Rate limiting: the central /api gate in hooks.server.ts already caps
+	// unauthenticated clients far below anything this per-route limiter would
+	// have caught, and authenticated sessions are deliberately unthrottled —
+	// the old 1000/min in-memory limit here was unreachable dead weight.
 
 	const path = params.path;
 	if (!path) {
 		log.warn('Request missing path');
-		return json({ error: 'No path provided', correlationId }, { status: 400 });
+		return Response.json({ error: 'No path provided', correlationId }, { status: 400 });
 	}
 
 	// Forward query params
@@ -62,17 +50,24 @@ const handler: RequestHandler = async ({ params, url, locals, getClientAddress }
 			const enrichedResults = await enrichWithLibraryStatus(data.results, mediaType);
 			const filteredResults = await filterBlockedMedia(enrichedResults, mediaType);
 			const withReleaseDates = await enrichWithReleaseDates(filteredResults);
-			return json({ ...data, results: withReleaseDates });
+			// Request-state badges ride the same response (server truth, no
+			// client-side request-list filtering).
+			const withRequestState = await annotateRequestState(
+				withReleaseDates,
+				mediaType,
+				locals.user?.id ?? null
+			);
+			return Response.json({ ...data, results: withRequestState });
 		}
 
-		return json(data);
+		return Response.json(data);
 	} catch (e) {
 		const message = getErrorMessage(e);
 		const statusCode = isAppError(e) ? e.statusCode : 500;
 
 		log.error({ err: e, ...{ endpoint } }, 'TMDB proxy error');
 
-		return json({ error: message, correlationId }, { status: statusCode });
+		return Response.json({ error: message, correlationId }, { status: statusCode });
 	}
 };
 

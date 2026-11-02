@@ -9,18 +9,19 @@
  * - Search-on-add triggering
  */
 
-import { db } from '$lib/server/db/index.js';
-import { rootFolders, series } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { rootFolders, series } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { tmdb } from '$lib/server/tmdb.js';
-import { qualityFilter } from '$lib/server/quality/index.js';
+import { tmdb } from '#lib/server/tmdb.js';
+import { qualityFilter } from '#lib/server/quality/index.js';
 import { searchOnAdd } from './searchOnAdd.js';
-import { SearchWorker, workerManager } from '$lib/server/workers/index.js';
-import { ValidationError, NotFoundError, ExternalServiceError } from '$lib/errors';
-import { createChildLogger } from '$lib/logging';
+import { SearchWorker, workerManager } from '#lib/server/workers/index.js';
+import { ValidationError, NotFoundError, ExternalServiceError } from '#lib/errors/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
 import { getEffectiveAnimeRootFolderEnforcement } from './anime-root-enforcement-settings.js';
-import { evaluateIndexerSearchAvailability } from '$lib/server/indexers/search/availability.js';
-import { getIndexerManager } from '$lib/server/indexers/IndexerManager.js';
+import { evaluateIndexerSearchAvailability } from '#lib/server/indexers/search/availability.js';
+import { resolveAllowedIndexerIds } from '#lib/server/indexers/search/profile-indexer-filter.js';
+import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
 
 const logger = createChildLogger({ logDomain: 'scans' as const });
 
@@ -225,6 +226,7 @@ export async function triggerMovieSearch(params: {
 	const availability = evaluateIndexerSearchAvailability(await indexerManager.getIndexers(), {
 		searchType: 'movie',
 		searchSource: 'automatic',
+		allowedIndexerIds: await resolveAllowedIndexerIds(scoringProfileId),
 		scoringProfileId,
 		getDefinitionCapabilities: (id) => indexerManager.getDefinitionCapabilities(id)
 	});
@@ -308,9 +310,16 @@ export async function triggerSeriesSearch(params: {
 	const { seriesId, tmdbId, title } = params;
 
 	const indexerManager = await getIndexerManager();
+	const seriesRow = await db.query.series.findFirst({
+		where: eq(series.id, seriesId),
+		columns: { scoringProfileId: true }
+	});
+	const seriesProfileId = seriesRow?.scoringProfileId ?? undefined;
 	const availability = evaluateIndexerSearchAvailability(await indexerManager.getIndexers(), {
 		searchType: 'tv',
 		searchSource: 'automatic',
+		allowedIndexerIds: await resolveAllowedIndexerIds(seriesProfileId),
+		scoringProfileId: seriesProfileId,
 		getDefinitionCapabilities: (id) => indexerManager.getDefinitionCapabilities(id)
 	});
 

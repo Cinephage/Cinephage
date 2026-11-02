@@ -1,9 +1,9 @@
-import { normalizeLiveTvChannelName } from '$lib/livetv/channel-name-normalizer';
+import { normalizeLiveTvChannelName } from '#lib/livetv/channel-name-normalizer.js';
 import type {
 	ChannelLineupItemWithDetails,
 	EpgProgram,
 	LiveTvProviderType
-} from '$lib/types/livetv';
+} from '#lib/types/livetv.js';
 
 export interface ResolvedEpgChannelPlan {
 	requestedChannelIds: string[];

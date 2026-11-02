@@ -1,8 +1,8 @@
 import type { DecisionStage, StageResult } from '../../types.js';
 import type { SearchEligibilityContext } from './types.js';
-import { isMovieAvailableForSearch } from '$lib/utils/movieAvailability';
-import { tmdb } from '$lib/server/tmdb.js';
-import { getMovieAvailabilityLevel } from '$lib/utils/movieAvailability';
+import { isMovieAvailableForSearch } from '#lib/utils/movieAvailability.js';
+import { tmdb } from '#lib/server/tmdb.js';
+import { getMovieAvailabilityLevel } from '#lib/utils/movieAvailability.js';
 
 const AVAILABILITY_ORDER = ['announced', 'inCinemas', 'released'] as const;
 type AvailabilityLevel = (typeof AVAILABILITY_ORDER)[number];

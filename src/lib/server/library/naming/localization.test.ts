@@ -9,7 +9,7 @@ import { coreTokens } from './tokens/definitions/core';
 
 const tmdbFetch = vi.hoisted(() => vi.fn());
 
-vi.mock('$lib/server/tmdb', () => ({
+vi.mock('#lib/server/tmdb.js', () => ({
 	tmdb: {
 		fetch: tmdbFetch
 	}

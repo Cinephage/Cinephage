@@ -1,7 +1,13 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fsPromises from 'node:fs/promises';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../../test/db-helper';
-import { movieFiles, movies, rootFolders, subtitleHistory, subtitles } from '$lib/server/db/schema';
+import {
+	movieFiles,
+	movies,
+	rootFolders,
+	subtitleHistory,
+	subtitles
+} from '#lib/server/db/schema.js';
 
 const mockLogger = vi.hoisted(() => ({
 	info: vi.fn(),
@@ -13,7 +19,7 @@ const mockLogger = vi.hoisted(() => ({
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -23,7 +29,7 @@ vi.mock('$lib/server/db', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -33,7 +39,7 @@ vi.mock('$lib/server/db/index.js', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	logger: mockLogger,
 	createChildLogger: vi.fn(() => mockLogger)
 }));
@@ -204,20 +210,23 @@ describe('SubtitleScannerService scanMovieSubtitles movie-file linking', () => {
 		expect(savedSubtitles[0].movieFileId).toBe('movie-file-2160p');
 	});
 
-	it('registers a sidecar with null movieFileId when the movie has no movie files', async () => {
+	it('skips discovery entirely when the movie has no movie files (arr parity)', async () => {
 		await seedRootFolderAndMovie();
 
 		const service = SubtitleScannerService.getInstance();
-		vi.spyOn(service, 'discoverSubtitles').mockResolvedValue([buildSidecar('Movie.2024.2160p')]);
+		const discoverSpy = vi
+			.spyOn(service, 'discoverSubtitles')
+			.mockResolvedValue([buildSidecar('Movie.2024.2160p')]);
 
 		const result = await service.scanMovieSubtitles(MOVIE_ID);
 
-		expect(result.registered).toBe(1);
+		// No files means no folder read — nothing to discover or register.
+		expect(discoverSpy).not.toHaveBeenCalled();
+		expect(result.registered).toBe(0);
 		expect(result.errors).toHaveLength(0);
 
 		const savedSubtitles = await testDb.db.select().from(subtitles);
-		expect(savedSubtitles).toHaveLength(1);
-		expect(savedSubtitles[0].movieFileId).toBeNull();
+		expect(savedSubtitles).toHaveLength(0);
 	});
 
 	it('registers a sidecar with null movieFileId when videoFileName is undefined', async () => {

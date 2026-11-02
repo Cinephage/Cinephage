@@ -18,7 +18,7 @@ import { api } from '../../../../../test/api-helper';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -36,16 +36,17 @@ const mockLogger = vi.hoisted(() => ({
 	child: vi.fn().mockReturnThis()
 }));
 
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	logger: mockLogger,
 	createChildLogger: vi.fn(() => mockLogger)
 }));
 
-// Prevent the in-memory queue from processing test jobs in the background.
-const submitMock = vi.hoisted(() => vi.fn(() => 'test-job-id'));
-vi.mock('$lib/server/library/ManualImportQueueService.js', () => ({
-	manualImportQueueService: {
-		submit: submitMock
+// Stub out the library job service so this suite only exercises validation/
+// batching, not real job persistence (that's LibraryJobService's own tests).
+const enqueueJobMock = vi.hoisted(() => vi.fn());
+vi.mock('#lib/server/library/jobs/LibraryJobService.js', () => ({
+	libraryJobService: {
+		enqueueJob: enqueueJobMock
 	}
 }));
 
@@ -67,7 +68,9 @@ function buildJob(i: number) {
 
 describe('Bulk Import API', () => {
 	beforeEach(() => {
-		submitMock.mockClear();
+		enqueueJobMock.mockClear();
+		let counter = 0;
+		enqueueJobMock.mockImplementation(() => ({ id: `job-${++counter}` }));
 	});
 
 	afterAll(() => {
@@ -83,10 +86,14 @@ describe('Bulk Import API', () => {
 		expect(data).toEqual(
 			expect.objectContaining({
 				success: true,
-				data: expect.objectContaining({ jobId: 'test-job-id', totalGroups: 500 })
+				data: expect.objectContaining({
+					parentJobId: expect.any(String),
+					totalGroups: 500,
+					jobIds: expect.arrayContaining([expect.any(String)])
+				})
 			})
 		);
-		expect(submitMock).toHaveBeenCalledOnce();
+		expect(enqueueJobMock).toHaveBeenCalledTimes(500);
 	});
 
 	it('accepts a batch of 501 jobs without a batch-size rejection (bug #496)', async () => {
@@ -101,7 +108,7 @@ describe('Bulk Import API', () => {
 				error: 'Validation failed'
 			})
 		);
-		expect(submitMock).toHaveBeenCalledOnce();
+		expect(enqueueJobMock).toHaveBeenCalledTimes(501);
 	});
 
 	it('accepts a batch of 2600 jobs without a batch-size rejection (the reported scenario, bug #496)', async () => {
@@ -116,8 +123,12 @@ describe('Bulk Import API', () => {
 				error: 'Validation failed'
 			})
 		);
-		expect(submitMock).toHaveBeenCalledOnce();
-		expect(submitMock).toHaveBeenCalledWith(expect.arrayContaining([expect.anything()]));
+		expect(enqueueJobMock).toHaveBeenCalledTimes(2600);
+		// Every job in the batch shares the same parentJobId for later grouping.
+		const parentJobIds = new Set(
+			enqueueJobMock.mock.calls.map(([input]) => input.parentJobId as string)
+		);
+		expect(parentJobIds.size).toBe(1);
 	});
 
 	it('rejects batches above the 5000-job hard cap', async () => {
@@ -132,6 +143,24 @@ describe('Bulk Import API', () => {
 				error: 'Validation failed'
 			})
 		);
-		expect(submitMock).not.toHaveBeenCalled();
+		expect(enqueueJobMock).not.toHaveBeenCalled();
+	});
+
+	it('passes a per-import preferHardlink override through to the durable job (#584)', async () => {
+		// The stored request is replayed by the import worker without
+		// re-validation, so the override must survive the zod parse + enqueue
+		// round-trip or it is stripped for good.
+		const job = buildJob(0);
+		const { status } = await api.post(POST, {
+			jobs: [{ ...job, request: { ...job.request, preferHardlink: false } }]
+		});
+
+		expect(status).toBe(200);
+		expect(enqueueJobMock).toHaveBeenCalledTimes(1);
+		const enqueued = enqueueJobMock.mock.calls[0][0];
+		expect(enqueued.metadata.request).toMatchObject({
+			importMode: 'symlink',
+			preferHardlink: false
+		});
 	});
 });

@@ -25,19 +25,19 @@ function createEvent(
 			user: options.authenticatedUser
 				? ({
 						id: 'test-user',
-						name: null,
+						name: 'Test Admin',
 						email: 'admin@example.com',
-						emailVerified: 1,
+						emailVerified: false,
 						image: null,
 						username: 'admin',
 						displayUsername: 'admin',
 						role: 'admin',
 						language: 'en',
-						banned: 0,
+						banned: false,
 						banReason: null,
 						banExpires: null,
-						createdAt: new Date().toISOString(),
-						updatedAt: new Date().toISOString()
+						createdAt: new Date(),
+						updatedAt: new Date()
 					} as App.Locals['user'])
 				: null,
 			session: null,
@@ -49,17 +49,40 @@ function createEvent(
 }
 
 describe('checkApiRateLimit', () => {
-	it('bypasses shared API limits for authenticated internal requests', () => {
-		const userAgent = `auth-user-${Date.now()}`;
-		for (let i = 0; i < 150; i++) {
+	it('does not throttle normal authenticated browsing', () => {
+		// A page load plus its parallel API calls is well under a hundred
+		// requests; the limit must never bite during ordinary use.
+		const userAgent = `auth-browse-${Date.now()}`;
+		for (let i = 0; i < 100; i++) {
 			const response = checkApiRateLimit(
-				createEvent('/api/activity', {
+				createEvent('/api/library/series', {
 					authenticatedUser: true,
 					userAgent
 				})
 			);
 			expect(response).toBeNull();
 		}
+	});
+
+	it('still caps authenticated API traffic, at a higher ceiling', () => {
+		// Authenticated requests used to be exempt entirely, so any viewer could
+		// loop a fan-out endpoint without bound. They now get their own bucket:
+		// normal UI use stays far below it, a scripted loop does not.
+		const userAgent = `auth-loop-${Date.now()}`;
+		let blockedResponse: Response | null = null;
+
+		for (let i = 0; i < 3001; i++) {
+			blockedResponse = checkApiRateLimit(
+				createEvent('/api/library/movies', {
+					authenticatedUser: true,
+					userAgent
+				})
+			);
+			if (blockedResponse) break;
+		}
+
+		expect(blockedResponse).not.toBeNull();
+		expect(blockedResponse?.status).toBe(429);
 	});
 
 	it('continues to rate limit unauthenticated API requests', () => {
@@ -74,21 +97,17 @@ describe('checkApiRateLimit', () => {
 		expect(blockedResponse?.status).toBe(429);
 	});
 
-	it('keeps auth endpoint protection even when a user session exists', () => {
+	it('never applies the shared in-memory limiter to auth endpoints (Better Auth owns them)', () => {
 		const userAgent = `auth-route-${Date.now()}`;
-		let blockedResponse: Response | null = null;
-
-		for (let i = 0; i < 6; i++) {
-			blockedResponse = checkApiRateLimit(
+		for (let i = 0; i < 50; i++) {
+			const response = checkApiRateLimit(
 				createEvent('/api/auth/sign-in/email', {
-					authenticatedUser: true,
+					authenticatedUser: false,
 					userAgent
 				})
 			);
+			expect(response).toBeNull();
 		}
-
-		expect(blockedResponse).not.toBeNull();
-		expect(blockedResponse?.status).toBe(429);
 	});
 
 	it('bypasses shared limiter for validated streaming api-key traffic', () => {

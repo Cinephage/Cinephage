@@ -6,25 +6,25 @@
  * or MediaMatcher after new media is added to the library.
  */
 
-import { db } from '$lib/server/db';
-import { movies, series, episodes } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { movies, series, episodes } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { getSubtitleSearchService } from './SubtitleSearchService.js';
 import { getSubtitleDownloadService } from './SubtitleDownloadService.js';
 import { LanguageProfileService } from './LanguageProfileService.js';
-import type { SubtitleRequirement } from '$lib/shared/language-profile.js';
+import type { SubtitleRequirement } from '#lib/shared/language-profile.js';
 import { selectBestCandidate } from '../acquisition.js';
 import {
 	filterSearchEligible,
 	recordSearchFailure,
 	resetSearchFailure
 } from '../subtitle-search-state.js';
-import { DEFAULT_MINIMUM_SCORE, requirementKey } from '$lib/shared/language-profile.js';
-import { createChildLogger } from '$lib/logging';
+import { DEFAULT_MINIMUM_SCORE, requirementKey } from '#lib/shared/language-profile.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'subtitles' as const });
-import { normalizeLanguageCode } from '$lib/shared/languages';
-import { isMovieMonitored } from '$lib/server/monitoring/specifications/MonitoredSpecification.js';
+import { normalizeLanguageCode } from '#lib/shared/languages.js';
+import { isMovieMonitored } from '#lib/server/monitoring/specifications/MonitoredSpecification.js';
 import { LanguageSettingsService } from './LanguageSettingsService.js';
 
 /**

@@ -9,9 +9,10 @@
 	 * minimum score, and upgrade policy still come from the language profile
 	 * chain (spec: per-item language customization, 2026-09-14).
 	 */
-	import { m } from '$lib/paraglide/messages';
-	import { requirementKey, type SubtitleRequirement } from '$lib/shared/language-profile.js';
-	import { ALL_LANGUAGE_OPTIONS, getLanguageName } from '$lib/shared/languages.js';
+	import { untrack } from 'svelte';
+	import { m } from '#lib/paraglide/messages.js';
+	import { requirementKey, type SubtitleRequirement } from '#lib/shared/language-profile.js';
+	import { ALL_LANGUAGE_OPTIONS, getLanguageName } from '#lib/shared/languages.js';
 
 	interface Props {
 		/** Effective requirements in force (override or profile chain). */
@@ -50,8 +51,9 @@
 
 	// Working copy for editing; initialized from props so SSR renders the
 	// requirement rows ($effect below never runs server-side).
-	// svelte-ignore state_referenced_locally
-	let list = $state<SubtitleRequirement[]>(requirements.map((requirement) => ({ ...requirement })));
+	let list = $state<SubtitleRequirement[]>(
+		untrack(() => requirements.map((requirement) => ({ ...requirement })))
+	);
 	let dirty = $state(false);
 
 	$effect(() => {

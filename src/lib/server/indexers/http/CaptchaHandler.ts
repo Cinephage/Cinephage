@@ -12,7 +12,7 @@
  * - Simple image captchas (detection only)
  */
 
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'CaptchaHandler' });
 

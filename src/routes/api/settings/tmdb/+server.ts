@@ -1,13 +1,13 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { db } from '$lib/server/db';
-import { settings } from '$lib/server/db/schema';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { db } from '#lib/server/db/index.js';
+import { settings } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { tmdbApiKeySchema } from '$lib/validation/schemas';
-import { tmdb } from '$lib/server/tmdb';
+import { tmdbApiKeySchema } from '#lib/validation/schemas.js';
+import { tmdb } from '#lib/server/tmdb.js';
+import { encryptSettingValue } from '#lib/server/settings/secretSettings.js';
 import { z } from 'zod';
-import { parseBody } from '$lib/server/api/validate.js';
+import { parseBody } from '#lib/server/api/validate.js';
 
 const tmdbSettingsSchema = z.object({
 	apiKey: z.string().optional().default('')
@@ -22,7 +22,7 @@ export const GET: RequestHandler = async (event) => {
 		where: eq(settings.key, 'tmdb_api_key')
 	});
 
-	return json({
+	return Response.json({
 		success: true,
 		hasApiKey: Boolean(apiKeySetting)
 	});
@@ -38,12 +38,12 @@ export const PUT: RequestHandler = async (event) => {
 
 	const apiKey = parsedBody.apiKey.trim();
 	if (!apiKey) {
-		return json({ success: true, unchanged: true });
+		return Response.json({ success: true, unchanged: true });
 	}
 
 	const validation = tmdbApiKeySchema.safeParse(apiKey);
 	if (!validation.success) {
-		return json(
+		return Response.json(
 			{
 				error: validation.error.issues[0]?.message ?? 'Invalid TMDB API key'
 			},
@@ -51,12 +51,14 @@ export const PUT: RequestHandler = async (event) => {
 		);
 	}
 
+	const storedApiKey = encryptSettingValue('tmdb_api_key', apiKey);
+
 	await db
 		.insert(settings)
-		.values({ key: 'tmdb_api_key', value: apiKey })
-		.onConflictDoUpdate({ target: settings.key, set: { value: apiKey } });
+		.values({ key: 'tmdb_api_key', value: storedApiKey })
+		.onConflictDoUpdate({ target: settings.key, set: { value: storedApiKey } });
 
 	tmdb.invalidateSettings();
 
-	return json({ success: true });
+	return Response.json({ success: true });
 };

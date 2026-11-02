@@ -1,7 +1,6 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
-import { getCalendarData } from '$lib/server/calendar/queries.js';
+import { getCalendarData } from '#lib/server/calendar/queries.js';
 
 const calendarQuerySchema = z.object({
 	month: z
@@ -41,13 +40,31 @@ const calendarQuerySchema = z.object({
 	certifications: z
 		.string()
 		.optional()
-		.transform((v) => (v ? v.split(',').filter(Boolean) : []))
+		// Each entry fans out to its own TMDB discover request, so an uncapped
+		// list (a viewer can send thousands) exhausts sockets and the TMDB rate
+		// limit. Certifications are short codes ("PG-13", "R"); anything beyond
+		// a handful is not a meaningful filter.
+		.transform((v) =>
+			v
+				? [
+						...new Set(
+							v
+								.split(',')
+								.map((entry) => entry.trim())
+								.filter(Boolean)
+						)
+					].slice(0, 10)
+				: []
+		)
 });
 
 export const GET: RequestHandler = async ({ url }) => {
 	const result = calendarQuerySchema.safeParse(Object.fromEntries(url.searchParams));
 	if (!result.success) {
-		return json({ error: 'Invalid parameters', details: result.error.flatten() }, { status: 400 });
+		return Response.json(
+			{ error: 'Invalid parameters', details: result.error.flatten() },
+			{ status: 400 }
+		);
 	}
 
 	const { month, type, libraryOnly, minRating, genreIds, excludeAdult, certifications } =
@@ -61,5 +78,5 @@ export const GET: RequestHandler = async ({ url }) => {
 		excludeAdult,
 		certifications
 	);
-	return json(days);
+	return Response.json(days);
 };

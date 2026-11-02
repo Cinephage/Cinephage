@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { SvelteSet } from 'svelte/reactivity';
-	import { ShieldCheck, AlertTriangle } from 'lucide-svelte';
-	import { SettingsSection } from '$lib/components/ui/settings';
+	import { ShieldCheck, AlertTriangle } from '@lucide/svelte';
+	import { SettingsSection } from '#lib/components/ui/settings/index.js';
 	import InsightCard from './InsightCard.svelte';
 	import InsightDetailModal from './InsightDetailModal.svelte';
 	import type { Insight } from './utils.js';

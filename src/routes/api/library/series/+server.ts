@@ -1,33 +1,12 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { db } from '$lib/server/db/index.js';
-import { series, seasons, episodes, rootFolders } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { series, rootFolders } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { tmdb } from '$lib/server/tmdb.js';
-import { addSeriesSchema } from '$lib/validation/schemas.js';
-import { getLanguageProfileService } from '$lib/server/subtitles/services/LanguageProfileService.js';
-import {
-	fetchSeriesDetails,
-	fetchSeriesExternalIds,
-	validateRootFolder,
-	getAnimeSubtypeEnforcement,
-	getEffectiveScoringProfileId,
-	triggerSeriesSearch
-} from '$lib/server/library/LibraryAddService.js';
-import { isLikelyAnimeMedia } from '$lib/shared/anime-classification.js';
-import { fetchAndStoreSeriesAlternateTitles } from '$lib/server/services/AlternateTitleService.js';
-import {
-	getEffectiveEpisodeGroup,
-	buildSeasonsAndEpisodesFromGroup
-} from '$lib/server/metadata/EpisodeGroupService.js';
-import { ValidationError, isAppError } from '$lib/errors';
-import { requireAuth } from '$lib/server/auth/authorization.js';
-import { NamingService, type MediaNamingInfo } from '$lib/server/library/naming/NamingService.js';
-import { namingSettingsService } from '$lib/server/library/naming/NamingSettingsService.js';
-import { resolveLocalizedTitlesForFormats } from '$lib/server/library/naming/localization.js';
-import { getLibraryEntityService } from '$lib/server/library/LibraryEntityService.js';
-import { libraryMediaEvents } from '$lib/server/library/LibraryMediaEvents.js';
-import { createChildLogger } from '$lib/logging';
+import { addSeriesSchema } from '#lib/validation/schemas.js';
+import { addSeriesToLibrary } from '#lib/server/library/add/add-series.js';
+import { ValidationError, isAppError } from '#lib/errors/index.js';
+import { requireAuth } from '#lib/server/auth/authorization.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LibrarySeriesApi', logDomain: 'scans' });
 
@@ -35,30 +14,6 @@ const logger = createChildLogger({ module: 'LibrarySeriesApi', logDomain: 'scans
  * Generate a folder name for a series using the naming service
  * Uses database naming configuration instead of defaults
  */
-async function generateSeriesFolderName(
-	title: string,
-	year?: number,
-	tvdbId?: number,
-	tmdbId?: number,
-	imdbId?: string,
-	originalTitle?: string
-): Promise<string> {
-	const config = namingSettingsService.getConfigSync();
-	const namingService = new NamingService(config);
-	// Parity with rename preview: localized-title tokens resolve at add time.
-	const localizedTitles = tmdbId ? await resolveLocalizedTitlesForFormats('series', tmdbId) : {};
-	const info: MediaNamingInfo = {
-		title,
-		originalTitle,
-		year,
-		tvdbId,
-		tmdbId,
-		imdbId,
-		localizedTitles
-	};
-	return namingService.generateSeriesFolderName(info);
-}
-
 /**
  * GET /api/library/series
  * List all series in the library
@@ -108,14 +63,14 @@ export const GET: RequestHandler = async (event) => {
 					: 0
 		}));
 
-		return json({
+		return Response.json({
 			success: true,
 			series: seriesWithStats,
 			total: seriesWithStats.length
 		});
 	} catch (error) {
 		logger.error('[API] Error fetching series', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to fetch series'
@@ -146,335 +101,38 @@ export const POST: RequestHandler = async (event) => {
 			});
 		}
 
-		const {
-			tmdbId,
-			rootFolderId,
-			scoringProfileId,
-			monitored,
-			seasonFolder,
-			seriesType,
-			monitorType,
-			monitorNewItems,
-			monitorSpecials,
-			monitoredSeasons: selectedSeasons,
-			searchOnAdd: shouldSearch,
-			wantsSubtitles,
-			languageProfileId,
-			subtitleRequirementsOverride
-		} = result.data;
+		const addResult = await addSeriesToLibrary(result.data);
 
-		// A client-provided language profile must exist.
-		if (languageProfileId) {
-			const languageProfile = await getLanguageProfileService().getProfile(languageProfileId);
-			if (!languageProfile) {
-				return json(
-					{ success: false, error: `Language profile not found: ${languageProfileId}` },
-					{ status: 400 }
-				);
-			}
-		}
-
-		// Check if series already exists
-		const existingSeries = await db
-			.select({ id: series.id })
-			.from(series)
-			.where(eq(series.tmdbId, tmdbId))
-			.limit(1);
-
-		if (existingSeries.length > 0) {
-			return json(
+		if (addResult.outcome === 'exists') {
+			return Response.json(
 				{
 					success: false,
 					error: 'Series already exists in library',
-					seriesId: existingSeries[0].id
+					seriesId: addResult.seriesId
 				},
 				{ status: 409 }
 			);
 		}
 
-		// Fetch series details from TMDB (shared logic with error handling)
-		const tvDetails = await fetchSeriesDetails(tmdbId);
-		const enforceAnimeSubtype = await getAnimeSubtypeEnforcement();
-		const isAnimeMedia = isLikelyAnimeMedia({
-			genres: tvDetails.genres,
-			originalLanguage: tvDetails.original_language,
-			originCountries: tvDetails.origin_country,
-			productionCountries: tvDetails.production_countries,
-			title: tvDetails.name,
-			originalTitle: tvDetails.original_name
-		});
-
-		// Verify root folder exists and is for TV (with optional anime subtype enforcement)
-		await validateRootFolder(rootFolderId, 'tv', {
-			requireWritable: true,
-			enforceAnimeSubtype,
-			isAnimeMedia,
-			mediaTitle: tvDetails.name
-		});
-		const owningLibrary = await getLibraryEntityService().resolveOwningLibraryForRootFolder(
-			rootFolderId,
-			'tv'
-		);
-
-		// Extract external IDs (shared logic)
-		const { imdbId, tvdbId } = await fetchSeriesExternalIds(tmdbId);
-
-		// Generate folder path
-		const year = tvDetails.first_air_date
-			? new Date(tvDetails.first_air_date).getFullYear()
-			: undefined;
-		const folderName = await generateSeriesFolderName(
-			tvDetails.name,
-			year,
-			tvdbId ?? undefined,
-			tmdbId,
-			imdbId ?? undefined,
-			tvDetails.original_name ?? undefined
-		);
-
-		// Calculate total episode count (including specials if monitorSpecials is enabled)
-		const totalEpisodes =
-			tvDetails.seasons
-				?.filter((s) => s.season_number !== 0 || monitorSpecials)
-				.reduce((sum, s) => sum + (s.episode_count ?? 0), 0) ?? 0;
-
-		// Get the effective scoring profile (shared logic)
-		const effectiveProfileId = await getEffectiveScoringProfileId(scoringProfileId, owningLibrary);
-
-		// Auto-select episode group for correct season ordering (e.g. TVDB order for anime)
-		const { group: episodeGroup, selectedGroupId: episodeGroupId } = await getEffectiveEpisodeGroup(
-			tmdbId,
-			null
-		);
-
-		// Insert series into database
-		const [newSeries] = await db
-			.insert(series)
-			.values({
-				tmdbId,
-				tvdbId,
-				imdbId,
-				title: tvDetails.name,
-				originalLanguage: tvDetails.original_language,
-				originalTitle: tvDetails.original_name,
-				year,
-				overview: tvDetails.overview,
-				posterPath: tvDetails.poster_path,
-				backdropPath: tvDetails.backdrop_path,
-				status: tvDetails.status,
-				network: tvDetails.networks?.[0]?.name ?? null,
-				genres: tvDetails.genres?.map((g) => g.name) ?? [],
-				path: folderName,
-				libraryId: owningLibrary.id,
-				rootFolderId,
-				scoringProfileId: effectiveProfileId,
-				monitored,
-				monitorNewItems,
-				monitorSpecials,
-				seasonFolder,
-				seriesType,
-				episodeCount: totalEpisodes,
-				episodeFileCount: 0,
-				wantsSubtitles,
-				languageProfileId: languageProfileId ?? null,
-				subtitleRequirementsOverride: subtitleRequirementsOverride ?? null,
-				episodeGroupId
-			})
-			.returning();
-
-		// Fetch and store alternate titles from TMDB (non-blocking)
-		fetchAndStoreSeriesAlternateTitles(newSeries.id, tmdbId).catch((err) => {
-			logger.warn(
-				{
-					seriesId: newSeries.id,
-					tmdbId,
-					error: err instanceof Error ? err.message : String(err)
-				},
-				'Failed to fetch alternate titles for series'
-			);
-		});
-
-		// Insert seasons and episodes
-		if (episodeGroup) {
-			// Use episode group mapping (e.g. TVDB Order, Crunchyroll split)
-			const { seasonValues, episodeValues: groupEpisodeValues } = buildSeasonsAndEpisodesFromGroup(
-				newSeries.id,
-				episodeGroup
-			);
-
-			if (seasonValues.length > 0) {
-				const insertedSeasons = await db.insert(seasons).values(seasonValues).returning();
-				const seasonIdByNumber = new Map(insertedSeasons.map((s) => [s.seasonNumber, s.id]));
-
-				const enrichedEpisodes = groupEpisodeValues.map((ep) => ({
-					...ep,
-					seasonId: seasonIdByNumber.get(ep.seasonNumber!) ?? null,
-					monitored: ep.seasonNumber === 0 ? monitorSpecials : ep.monitored
-				}));
-
-				if (enrichedEpisodes.length > 0) {
-					await db.insert(episodes).values(enrichedEpisodes);
-				}
-			}
-		} else if (tvDetails.seasons && tvDetails.seasons.length > 0) {
-			// Default TMDB ordering
-			for (const s of tvDetails.seasons) {
-				// Determine if this season should be monitored
-				let shouldMonitorSeason = false;
-
-				if (selectedSeasons && selectedSeasons.length > 0) {
-					shouldMonitorSeason = selectedSeasons.includes(s.season_number);
-				} else {
-					const isSpecials = s.season_number === 0;
-					if (isSpecials && !monitorSpecials) {
-						shouldMonitorSeason = false;
-					} else {
-						switch (monitorType) {
-							case 'all':
-								shouldMonitorSeason = s.season_number > 0 || monitorSpecials;
-								break;
-							case 'firstSeason':
-								shouldMonitorSeason = s.season_number === 1;
-								break;
-							case 'lastSeason': {
-								const maxSeasonNumber = Math.max(
-									...tvDetails
-										.seasons!.filter((ss) => ss.season_number > 0)
-										.map((ss) => ss.season_number)
-								);
-								shouldMonitorSeason = s.season_number === maxSeasonNumber;
-								break;
-							}
-							case 'recent':
-								shouldMonitorSeason = s.season_number > 0 || monitorSpecials;
-								break;
-							case 'none':
-								shouldMonitorSeason = false;
-								break;
-							default:
-								shouldMonitorSeason = s.season_number > 0 || monitorSpecials;
-								break;
-						}
-					}
-				}
-
-				const [newSeason] = await db
-					.insert(seasons)
-					.values({
-						seriesId: newSeries.id,
-						seasonNumber: s.season_number,
-						monitored: shouldMonitorSeason,
-						name: s.name,
-						overview: s.overview,
-						posterPath: s.poster_path,
-						airDate: s.air_date,
-						episodeCount: s.episode_count ?? 0,
-						episodeFileCount: 0
-					})
-					.returning();
-
-				try {
-					const fullSeason = await tmdb.getSeason(tmdbId, s.season_number);
-
-					if (fullSeason.episodes && fullSeason.episodes.length > 0) {
-						const recentCutoffDate = new Date();
-						recentCutoffDate.setDate(recentCutoffDate.getDate() - 90);
-						const today = new Date();
-
-						const episodeValues = fullSeason.episodes.map((ep) => {
-							let shouldMonitorEpisode = shouldMonitorSeason;
-
-							if (shouldMonitorSeason && !selectedSeasons?.length) {
-								const airDate = ep.air_date ? new Date(ep.air_date) : null;
-								const hasAired = airDate ? airDate <= today : false;
-								const isRecent = airDate ? airDate >= recentCutoffDate : false;
-
-								switch (monitorType) {
-									case 'pilot':
-										shouldMonitorEpisode = ep.season_number === 1 && ep.episode_number === 1;
-										break;
-									case 'future':
-										shouldMonitorEpisode = !hasAired;
-										break;
-									case 'recent':
-										shouldMonitorEpisode = !hasAired || isRecent;
-										break;
-									case 'missing':
-									case 'existing':
-										shouldMonitorEpisode = shouldMonitorSeason;
-										break;
-									default:
-										shouldMonitorEpisode = shouldMonitorSeason;
-										break;
-								}
-							}
-
-							return {
-								seriesId: newSeries.id,
-								seasonId: newSeason.id,
-								tmdbId: ep.id,
-								seasonNumber: ep.season_number,
-								episodeNumber: ep.episode_number,
-								title: ep.name,
-								overview: ep.overview,
-								airDate: ep.air_date,
-								runtime: ep.runtime,
-								monitored: shouldMonitorEpisode,
-								hasFile: false
-							};
-						});
-
-						await db.insert(episodes).values(episodeValues);
-					}
-
-					await new Promise((resolve) => setTimeout(resolve, 50));
-				} catch {
-					logger.warn(
-						{ seasonNumber: s.season_number },
-						'[API] Failed to fetch episodes for season'
-					);
-				}
-			}
-		}
-
-		// Trigger search if explicitly requested regardless of monitoring state
-		let searchTriggered = false;
-		let searchWarning: string | undefined;
-		if (shouldSearch) {
-			const searchResult = await triggerSeriesSearch({
-				seriesId: newSeries.id,
-				tmdbId,
-				title: tvDetails.name
-			});
-			searchTriggered = searchResult.triggered;
-			searchWarning = searchResult.searchWarning;
-		}
-
-		libraryMediaEvents.emitLibraryDataChanged({
-			source: 'series',
-			reason: 'series-added',
-			entityId: newSeries.id
-		});
-
-		return json({
+		return Response.json({
 			success: true,
 			series: {
-				id: newSeries.id,
-				tmdbId: newSeries.tmdbId,
-				title: newSeries.title,
-				year: newSeries.year,
-				path: newSeries.path,
-				monitored: newSeries.monitored,
-				episodeCount: newSeries.episodeCount,
-				searchTriggered,
-				searchWarning
+				id: addResult.seriesId,
+				tmdbId: addResult.tmdbId,
+				title: addResult.title,
+				year: addResult.year,
+				path: addResult.path,
+				monitored: addResult.monitored,
+				episodeCount: addResult.episodeCount,
+				searchTriggered: addResult.searchTriggered,
+				searchWarning: addResult.searchWarning
 			}
 		});
 	} catch (error) {
 		logger.error('[API] Error adding series', error instanceof Error ? error : undefined);
 
 		if (isAppError(error)) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					...error.toJSON()
@@ -484,7 +142,7 @@ export const POST: RequestHandler = async (event) => {
 		}
 
 		if (error instanceof Error && /FOREIGN KEY constraint failed/i.test(error.message)) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error:
@@ -495,7 +153,7 @@ export const POST: RequestHandler = async (event) => {
 			);
 		}
 
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to add series'

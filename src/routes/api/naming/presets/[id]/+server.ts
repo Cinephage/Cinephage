@@ -1,16 +1,15 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { db } from '$lib/server/db';
-import { namingPresets } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { namingPresets } from '#lib/server/db/schema.js';
 import {
 	BUILT_IN_PRESETS,
 	getBuiltInPreset,
 	type NamingPreset
-} from '$lib/server/library/naming/presets';
+} from '#lib/server/library/naming/presets.js';
 import { eq } from 'drizzle-orm';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { namingPresetUpdateSchema } from '$lib/validation/schemas.js';
-import { createChildLogger } from '$lib/logging';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { namingPresetUpdateSchema } from '#lib/validation/schemas.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'NamingPresetByIdApi', logDomain: 'scans' });
 
@@ -25,17 +24,17 @@ export const GET: RequestHandler = async ({ params }) => {
 		// Check built-in presets first
 		const builtIn = getBuiltInPreset(id);
 		if (builtIn) {
-			return json({ preset: builtIn });
+			return Response.json({ preset: builtIn });
 		}
 
 		// Check custom presets
 		const [customPreset] = await db.select().from(namingPresets).where(eq(namingPresets.id, id));
 
 		if (!customPreset) {
-			return json({ error: 'Preset not found' }, { status: 404 });
+			return Response.json({ error: 'Preset not found' }, { status: 404 });
 		}
 
-		return json({
+		return Response.json({
 			preset: {
 				id: customPreset.id,
 				name: customPreset.name,
@@ -46,7 +45,7 @@ export const GET: RequestHandler = async ({ params }) => {
 		});
 	} catch (err) {
 		logger.error({ err, component: 'NamingPresetByIdApi' }, 'Error fetching naming preset');
-		return json({ error: 'Failed to fetch preset' }, { status: 500 });
+		return Response.json({ error: 'Failed to fetch preset' }, { status: 500 });
 	}
 };
 
@@ -65,19 +64,22 @@ export const PUT: RequestHandler = async (event) => {
 		// Check if it's a built-in preset
 		const builtIn = getBuiltInPreset(id);
 		if (builtIn) {
-			return json({ error: 'Cannot modify built-in presets' }, { status: 400 });
+			return Response.json({ error: 'Cannot modify built-in presets' }, { status: 400 });
 		}
 
 		// Check if custom preset exists
 		const [existing] = await db.select().from(namingPresets).where(eq(namingPresets.id, id));
 
 		if (!existing) {
-			return json({ error: 'Preset not found' }, { status: 404 });
+			return Response.json({ error: 'Preset not found' }, { status: 404 });
 		}
 
 		const parsed = namingPresetUpdateSchema.safeParse(await request.json());
 		if (!parsed.success) {
-			return json({ success: false, error: parsed.error.issues[0].message }, { status: 400 });
+			return Response.json(
+				{ success: false, error: parsed.error.issues[0].message },
+				{ status: 400 }
+			);
 		}
 		const { name, description, config } = parsed.data;
 
@@ -86,7 +88,7 @@ export const PUT: RequestHandler = async (event) => {
 				(p) => p.name.toLowerCase() === name.trim().toLowerCase()
 			);
 			if (builtInConflict) {
-				return json({ error: 'Cannot use a built-in preset name' }, { status: 400 });
+				return Response.json({ error: 'Cannot use a built-in preset name' }, { status: 400 });
 			}
 
 			// Check if name already exists in other custom presets
@@ -96,7 +98,7 @@ export const PUT: RequestHandler = async (event) => {
 				.where(eq(namingPresets.name, name.trim()));
 
 			if (existingCustom.length > 0 && existingCustom[0].id !== id) {
-				return json({ error: 'A preset with this name already exists' }, { status: 400 });
+				return Response.json({ error: 'A preset with this name already exists' }, { status: 400 });
 			}
 		}
 
@@ -111,7 +113,7 @@ export const PUT: RequestHandler = async (event) => {
 			.where(eq(namingPresets.id, id))
 			.returning();
 
-		return json({
+		return Response.json({
 			preset: {
 				id: updated.id,
 				name: updated.name,
@@ -122,7 +124,7 @@ export const PUT: RequestHandler = async (event) => {
 		});
 	} catch (err) {
 		logger.error({ err, component: 'NamingPresetByIdApi' }, 'Error updating naming preset');
-		return json({ error: 'Failed to update preset' }, { status: 500 });
+		return Response.json({ error: 'Failed to update preset' }, { status: 500 });
 	}
 };
 
@@ -141,19 +143,19 @@ export const DELETE: RequestHandler = async (event) => {
 		// Check if it's a built-in preset
 		const builtIn = getBuiltInPreset(id);
 		if (builtIn) {
-			return json({ error: 'Cannot delete built-in presets' }, { status: 400 });
+			return Response.json({ error: 'Cannot delete built-in presets' }, { status: 400 });
 		}
 
 		// Delete the preset
 		const deleted = await db.delete(namingPresets).where(eq(namingPresets.id, id)).returning();
 
 		if (deleted.length === 0) {
-			return json({ error: 'Preset not found' }, { status: 404 });
+			return Response.json({ error: 'Preset not found' }, { status: 404 });
 		}
 
-		return json({ success: true });
+		return Response.json({ success: true });
 	} catch (err) {
 		logger.error({ err, component: 'NamingPresetByIdApi' }, 'Error deleting naming preset');
-		return json({ error: 'Failed to delete preset' }, { status: 500 });
+		return Response.json({ error: 'Failed to delete preset' }, { status: 500 });
 	}
 };

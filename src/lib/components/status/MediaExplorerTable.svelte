@@ -10,11 +10,11 @@
 		ArrowUp,
 		ArrowDown,
 		Check
-	} from 'lucide-svelte';
-	import { formatBytes } from '$lib/utils/format';
-	import { formatRelativeDate } from '$lib/utils/format-relative-date.js';
-	import { getPosterUrl } from '$lib/utils/poster-url.js';
-	import * as m from '$lib/paraglide/messages.js';
+	} from '@lucide/svelte';
+	import { formatBytes } from '#lib/utils/format.js';
+	import { formatRelativeDate } from '#lib/utils/format-relative-date.js';
+	import { getPosterUrl } from '#lib/utils/poster-url.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	type MediaExplorerItem = {
 		id: string;

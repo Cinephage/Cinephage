@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
-import * as schema from '$lib/server/db/schema';
-import { syncSchema } from '$lib/server/db/schema-sync';
+import * as schema from '#lib/server/db/schema.js';
+import { syncSchema } from '#lib/server/db/schema-sync.js';
 
 export interface TestDatabase {
 	sqlite: ReturnType<typeof Database>;
@@ -34,6 +34,7 @@ const CORE_TABLES = [
 	'scoringProfiles',
 	'customFormats',
 	'blockedMedia',
+	'blocklist',
 	'downloadClients',
 	'movies',
 	'movieFiles',

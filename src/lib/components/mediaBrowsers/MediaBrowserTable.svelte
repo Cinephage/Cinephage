@@ -12,10 +12,10 @@
 		CheckCircle,
 		AlertTriangle,
 		XCircle
-	} from 'lucide-svelte';
-	import type { MediaBrowserServerPublic } from '$lib/server/notifications/mediabrowser/types';
-	import * as m from '$lib/paraglide/messages.js';
-	import { formatDisplayDate } from '$lib/utils/format.js';
+	} from '@lucide/svelte';
+	import type { MediaBrowserServerPublic } from '#lib/server/notifications/mediabrowser/types.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import { formatDisplayDate } from '#lib/utils/format.js';
 
 	interface Props {
 		servers: MediaBrowserServerPublic[];

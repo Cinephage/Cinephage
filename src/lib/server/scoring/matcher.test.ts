@@ -17,6 +17,7 @@ import type { ReleaseAttributes, CustomFormat, FormatCondition } from './types';
 
 // Helper to create a test release with defaults
 function createRelease(overrides: Partial<ReleaseAttributes> = {}): ReleaseAttributes {
+	const hdr = overrides.hdr === undefined ? 'dolby-vision' : overrides.hdr;
 	return {
 		title: 'Movie.2024.2160p.UHD.BluRay.REMUX.DV.HDR.TrueHD.Atmos.7.1-GROUP',
 		cleanTitle: 'Movie',
@@ -24,7 +25,8 @@ function createRelease(overrides: Partial<ReleaseAttributes> = {}): ReleaseAttri
 		resolution: '2160p',
 		source: 'bluray',
 		codec: 'h265',
-		hdr: 'dolby-vision',
+		hdr,
+		hdrFormats: overrides.hdrFormats ?? (hdr ? [hdr] : []),
 		audioCodec: 'truehd',
 		audioChannels: '7.1',
 		hasAtmos: true,
@@ -278,6 +280,21 @@ describe('Matcher', () => {
 
 				const result = evaluateCondition(condition, release);
 				expect(result.matches).toBe(false);
+			});
+
+			it('matches a format present alongside a better one (#640)', () => {
+				// DV is the headline format, but the release really is HDR10+ too.
+				const release = createRelease({ hdrFormats: ['dolby-vision', 'hdr10+'] });
+				const condition = createCondition({ type: 'hdr', hdr: 'hdr10+' });
+
+				expect(evaluateCondition(condition, release).matches).toBe(true);
+			});
+
+			it('does not match SDR when any HDR format was detected (#640)', () => {
+				const release = createRelease({ hdr: 'dolby-vision', hdrFormats: ['dolby-vision'] });
+				const condition = createCondition({ type: 'hdr', hdr: null });
+
+				expect(evaluateCondition(condition, release).matches).toBe(false);
 			});
 		});
 

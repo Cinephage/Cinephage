@@ -1,15 +1,13 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
-
-import { createChildLogger } from '$lib/logging';
-import { DEFAULT_CAPTURED_LOG_LEVEL } from '$lib/logging/log-capture';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { DEFAULT_CAPTURED_LOG_LEVEL } from '#lib/logging/log-capture.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 import {
 	DEFAULT_LOG_RETENTION_DAYS,
 	MAX_LOG_RETENTION_DAYS,
 	logHistoryService
-} from '$lib/server/logging/log-history.js';
+} from '#lib/server/logging/log-history.js';
 
 const logger = createChildLogger({ module: 'LogSettingsApi', logDomain: 'system' });
 
@@ -27,7 +25,7 @@ export const GET: RequestHandler = async (event) => {
 			logHistoryService.getRetentionDays(),
 			logHistoryService.getMinCaptureLevel()
 		]);
-		return json({
+		return Response.json({
 			success: true,
 			retentionDays,
 			defaultRetentionDays: DEFAULT_LOG_RETENTION_DAYS,
@@ -37,7 +35,7 @@ export const GET: RequestHandler = async (event) => {
 		});
 	} catch (error) {
 		logger.error({ err: error }, 'Failed to load log settings');
-		return json({ success: false, error: 'Failed to load log settings' }, { status: 500 });
+		return Response.json({ success: false, error: 'Failed to load log settings' }, { status: 500 });
 	}
 };
 
@@ -49,12 +47,12 @@ export const PUT: RequestHandler = async (event) => {
 	try {
 		body = await event.request.json();
 	} catch {
-		return json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
+		return Response.json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
 	}
 
 	const parsed = updateSettingsSchema.safeParse(body);
 	if (!parsed.success) {
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: 'Validation failed',
@@ -73,9 +71,12 @@ export const PUT: RequestHandler = async (event) => {
 				? logHistoryService.setMinCaptureLevel(parsed.data.minLevel)
 				: logHistoryService.getMinCaptureLevel()
 		]);
-		return json({ success: true, retentionDays, minLevel });
+		return Response.json({ success: true, retentionDays, minLevel });
 	} catch (error) {
 		logger.error({ err: error }, 'Failed to update log settings');
-		return json({ success: false, error: 'Failed to update log settings' }, { status: 500 });
+		return Response.json(
+			{ success: false, error: 'Failed to update log settings' },
+			{ status: 500 }
+		);
 	}
 };

@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/svelte';
 import SettingsPanel from './SettingsPanel.svelte';
-import type { RootFolderBasic } from '$lib/types/downloadClient.js';
+import type { RootFolderBasic } from '#lib/types/downloadClient.js';
 
 const scoringProfiles = [{ id: 'balanced', name: 'Balanced' }];
 

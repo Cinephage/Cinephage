@@ -13,7 +13,7 @@
  * `audio` / `subtitles` objects directly.
  */
 
-import { db } from '$lib/server/db';
+import { db } from '#lib/server/db/index.js';
 import {
 	episodes,
 	languageProfiles,
@@ -24,12 +24,12 @@ import {
 	smartLists,
 	subtitles,
 	type LanguageProfileRow
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { extname } from 'node:path';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'subtitles' as const });
 
@@ -56,24 +56,24 @@ function requirementLimit(
 	return cutoffIndex === null ? requirements.length : cutoffIndex + 1;
 }
 import type { SubtitleStatus } from '../types';
-import { normalizeLanguageCode } from '$lib/shared/languages';
+import { normalizeLanguageCode } from '#lib/shared/languages.js';
 import type {
 	AudioPreference,
 	EffectiveLanguageProfile,
 	EffectiveSubtitleRequirements,
 	EpisodeSubtitleCounts,
 	SubtitleRequirement
-} from '$lib/shared/language-profile.js';
-import { DEFAULT_MINIMUM_SCORE, requirementKey } from '$lib/shared/language-profile.js';
+} from '#lib/shared/language-profile.js';
+import { DEFAULT_MINIMUM_SCORE, requirementKey } from '#lib/shared/language-profile.js';
 import { matchesRequirement } from '../requirement-matcher.js';
 import { resolveStoredSubtitlePaths } from '../subtitle-paths.js';
 import { LanguageSettingsService } from './LanguageSettingsService.js';
 import {
 	languageProfileV2CreateSchema,
 	languageProfileV2UpdateSchema
-} from '$lib/validation/schemas';
+} from '#lib/validation/schemas.js';
 
-/** Language profile with all fields (v2 shape, see $lib/shared/language-profile). */
+/** Language profile with all fields (v2 shape, see #lib/shared/language-profile). */
 export type LanguageProfile = LanguageProfileRow;
 
 /** Create profile input */
@@ -665,13 +665,16 @@ export class LanguageProfileService {
 	async getSeriesEpisodesMissingSubtitles(seriesId: string): Promise<string[]> {
 		const base = await this.getEffectiveSubtitleRequirements({ seriesId });
 
+		// File-row-driven (arr parity): an episode without a media file is
+		// "missing content", not "missing subtitles" — subtitles attach to
+		// files, so file-less episodes never count as missing subtitles.
 		const seriesEpisodes = await db
 			.select({
 				id: episodes.id,
 				subtitleRequirementsOverride: episodes.subtitleRequirementsOverride
 			})
 			.from(episodes)
-			.where(eq(episodes.seriesId, seriesId));
+			.where(and(eq(episodes.seriesId, seriesId), eq(episodes.hasFile, true)));
 		if (seriesEpisodes.length === 0) return [];
 
 		// No series-level resolution at all: only episodes with an explicit
@@ -833,16 +836,24 @@ export class LanguageProfileService {
 		const base = await this.getEffectiveSubtitleRequirements({ seriesId });
 
 		// Per-episode overrides, fetched in one query for all seeded episodes.
+		// File-less episodes are excluded alongside (arr parity: subtitle
+		// status describes media you have).
 		const episodeIds = [...subtitlesByEpisode.keys()];
 		const overrideRows =
 			episodeIds.length > 0
 				? await db
-						.select({ id: episodes.id, override: episodes.subtitleRequirementsOverride })
+						.select({
+							id: episodes.id,
+							override: episodes.subtitleRequirementsOverride,
+							hasFile: episodes.hasFile
+						})
 						.from(episodes)
 						.where(inArray(episodes.id, episodeIds))
 				: [];
 		const overrideById = new Map(
-			overrideRows.map((row) => [row.id, row.override ?? null] as const)
+			overrideRows.map(
+				(row) => [row.id, { override: row.override ?? null, hasFile: row.hasFile }] as const
+			)
 		);
 
 		const allExternal = [...subtitlesByEpisode.values()]
@@ -852,7 +863,9 @@ export class LanguageProfileService {
 		const existsByPath = this.buildExistsByPath(allExternal, resolvedPaths, exists);
 
 		for (const [episodeId, rows] of subtitlesByEpisode) {
-			const override = overrideById.get(episodeId) ?? null;
+			const episodeInfo = overrideById.get(episodeId);
+			if (episodeInfo?.hasFile === false) continue;
+			const override = episodeInfo?.override ?? null;
 			const hasOverride = override !== null && override.length > 0;
 			// Contract: no entry when neither the series profile nor the
 			// episode's own override provides requirements.

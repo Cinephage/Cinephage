@@ -1,10 +1,10 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
-	import { Tv } from 'lucide-svelte';
-	import TmdbImage from '$lib/components/tmdb/TmdbImage.svelte';
-	import Skeleton from '$lib/components/ui/Skeleton.svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { Tv } from '@lucide/svelte';
+	import TmdbImage from '#lib/components/tmdb/TmdbImage.svelte';
+	import Skeleton from '#lib/components/ui/Skeleton.svelte';
 	import { resolve } from '$app/paths';
-	import type { RecentlyAddedSeries } from '$lib/types/dashboard.js';
+	import type { RecentlyAddedSeries } from '#lib/types/dashboard.js';
 
 	interface Props {
 		series: RecentlyAddedSeries[];
@@ -41,14 +41,15 @@
 					<Tv class="h-5 w-5" />
 					{m.dashboard_recentTvShows_title()}
 				</h2>
-				<a href={resolve('/library/tv')} class="btn btn-ghost btn-sm"
+
+				<a href={resolve('library/tv')} class="btn btn-ghost btn-sm"
 					>{m.dashboard_recentTvShows_viewAll()}</a
 				>
 			</div>
 			<div class="grid grid-cols-3 gap-2 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 lg:grid-cols-6">
 				{#each series as show (show.id)}
 					<a
-						href={resolve(`/library/tv/${show.id}`)}
+						href={resolve(`library/tv/${show.id}`)}
 						class="group relative aspect-2/3 overflow-hidden rounded-lg"
 					>
 						<TmdbImage

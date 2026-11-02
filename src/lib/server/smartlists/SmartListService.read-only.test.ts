@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 	insert: vi.fn()
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	db: {
 		query: {
 			smartListItems: { findFirst: mocks.findItem },
@@ -27,7 +27,7 @@ vi.mock('$lib/server/db/index.js', () => ({
 	sqlite: {},
 	initializeDatabase: vi.fn()
 }));
-vi.mock('$lib/server/library/LibraryAddService.js', () => ({
+vi.mock('#lib/server/library/LibraryAddService.js', () => ({
 	validateRootFolder: mocks.validateRootFolder,
 	getEffectiveScoringProfileId: mocks.getProfile,
 	getLanguageProfileId: vi.fn(),
@@ -38,16 +38,16 @@ vi.mock('$lib/server/library/LibraryAddService.js', () => ({
 	fetchSeriesExternalIds: vi.fn(),
 	triggerSeriesSearch: vi.fn()
 }));
-vi.mock('$lib/server/library/status.js', () => ({
+vi.mock('#lib/server/library/status.js', () => ({
 	getBlockedTmdbIdSet: mocks.getBlockedTmdbIdSet
 }));
-vi.mock('$lib/server/library/LibraryEntityService.js', () => ({
+vi.mock('#lib/server/library/LibraryEntityService.js', () => ({
 	getLibraryEntityService: vi.fn(() => ({
 		resolveOwningLibraryForRootFolder: mocks.resolveLibrary
 	}))
 }));
-vi.mock('$lib/server/tmdb.js', () => ({ tmdb: {} }));
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/server/tmdb.js', () => ({ tmdb: {} }));
+vi.mock('#lib/logging/index.js', () => ({
 	logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), child: vi.fn() },
 	createChildLogger: vi.fn(() => ({
 		info: vi.fn(),

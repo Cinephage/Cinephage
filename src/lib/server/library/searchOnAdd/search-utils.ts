@@ -5,27 +5,14 @@
 import {
 	CINEPHAGE_STREAM_DEFINITION_ID,
 	indexerHasCategoriesForSearchType
-} from '$lib/server/indexers/types';
-import type { IndexerCapabilities, IndexerConfig } from '$lib/server/indexers/types';
+} from '#lib/server/indexers/types/index.js';
+import type { IndexerCapabilities, IndexerConfig } from '#lib/server/indexers/types/index.js';
+import {
+	isRuTrackerHost,
+	isRuTrackerIndexerName
+} from '#lib/server/indexers/search/russian-trackers.js';
 
 export const AUTO_GRAB_MIN_SCORE = 0;
-
-export function isRuTrackerIndexerName(indexerName: string | undefined): boolean {
-	if (typeof indexerName !== 'string') return false;
-	const normalized = indexerName.toLowerCase();
-	return normalized.includes('rutracker') || normalized.includes('kinozal');
-}
-
-export function isRuTrackerHost(baseUrl: string | undefined): boolean {
-	if (!baseUrl) return false;
-	try {
-		const hostname = new URL(baseUrl).hostname.toLowerCase();
-		return hostname.includes('rutracker') || hostname.includes('kinozal');
-	} catch {
-		const host = baseUrl.toLowerCase();
-		return host.includes('rutracker') || host.includes('kinozal');
-	}
-}
 
 export function resolveAutoMissingSearchStrategy(
 	indexerConfigs: IndexerConfig[],

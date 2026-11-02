@@ -1,17 +1,22 @@
-import { json, error } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { db } from '$lib/server/db';
-import { downloadQueue, downloadClients } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { downloadQueue, downloadClients } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { getDownloadClientManager } from '$lib/server/downloadClients/DownloadClientManager';
-import { getImportService } from '$lib/server/downloadClients/import';
-import { getContentPath, buildTorrentRecoveryPath } from '$lib/server/downloadClients/monitoring';
-import type { DownloadInfo } from '$lib/server/downloadClients/core/interfaces';
-import { createChildLogger } from '$lib/logging';
-import { redactUrl } from '$lib/server/utils/urlSecurity';
-import { matchesImportError } from '$lib/types/activity.js';
-import { DebridHandler } from '$lib/server/downloads/handlers/DebridHandler.js';
-import { acquisitionService } from '$lib/server/acquisition/AcquisitionService.js';
+import { getDownloadClientManager } from '#lib/server/downloadClients/DownloadClientManager.js';
+import { getImportService } from '#lib/server/downloadClients/import/index.js';
+import {
+	getContentPath,
+	buildTorrentRecoveryPath,
+	isSafeRecoveryCandidate
+} from '#lib/server/downloadClients/monitoring/index.js';
+import type { DownloadInfo } from '#lib/server/downloadClients/core/interfaces.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { redactUrl } from '#lib/server/utils/urlSecurity.js';
+import { matchesImportError } from '#lib/types/activity.js';
+import { DebridHandler } from '#lib/server/downloads/handlers/DebridHandler.js';
+import { acquisitionService } from '#lib/server/acquisition/AcquisitionService.js';
+import { requireAdminLocals } from '#lib/server/auth/authorization.js';
 
 const logger = createChildLogger({ module: 'QueueRetryApi', logDomain: 'downloads' });
 
@@ -120,12 +125,6 @@ function matchesQueueItemByTitleAndSize(
 	return sizeDelta <= tolerance;
 }
 
-function hasReusableImportPath(queueItem: typeof downloadQueue.$inferSelect): boolean {
-	const outputPath = queueItem.outputPath?.trim();
-	const clientPath = queueItem.clientDownloadPath?.trim();
-	return Boolean(outputPath) || Boolean(clientPath);
-}
-
 function toSafeQueueItem(item: typeof downloadQueue.$inferSelect | undefined) {
 	if (!item) return null;
 	return {
@@ -140,7 +139,12 @@ function toSafeQueueItem(item: typeof downloadQueue.$inferSelect | undefined) {
  * If the client still reports the item as completed, retry import first.
  * Otherwise, fall back to download retry (native client retry or re-add).
  */
-export const POST: RequestHandler = async ({ params }) => {
+export const POST: RequestHandler = async ({ params, locals }) => {
+	// Defense-in-depth: the hooks viewer gate confines this route; this
+	// guard keeps it admin-only even if the gate is ever refactored.
+	const authError = requireAdminLocals(locals);
+	if (authError) return authError;
+
 	const { id } = params;
 
 	try {
@@ -162,7 +166,7 @@ export const POST: RequestHandler = async ({ params }) => {
 				result = await new DebridHandler().retry(queueItem);
 			} catch (retryError) {
 				if (isAmbiguousDebridSubmission(retryError)) {
-					return json(
+					return Response.json(
 						{
 							success: false,
 							error: 'Provider submission outcome is unknown; automatic retry was refused.'
@@ -171,7 +175,10 @@ export const POST: RequestHandler = async ({ params }) => {
 					);
 				}
 				if (isDebridConfigurationFailure(retryError)) {
-					return json({ success: false, error: DEBRID_CONFIGURATION_ERROR }, { status: 400 });
+					return Response.json(
+						{ success: false, error: DEBRID_CONFIGURATION_ERROR },
+						{ status: 400 }
+					);
 				}
 				throw retryError;
 			}
@@ -183,7 +190,7 @@ export const POST: RequestHandler = async ({ params }) => {
 					: isDebridConfigurationFailure(message)
 						? 400
 						: 500;
-				return json({ success: false, error: message }, { status });
+				return Response.json({ success: false, error: message }, { status });
 			}
 
 			const updatedItem = await db
@@ -192,7 +199,7 @@ export const POST: RequestHandler = async ({ params }) => {
 				.where(eq(downloadQueue.id, id))
 				.get();
 
-			return json({
+			return Response.json({
 				success: true,
 				message: 'Download retry initiated',
 				retryMode: 'debrid',
@@ -235,10 +242,10 @@ export const POST: RequestHandler = async ({ params }) => {
 		// 2) Otherwise probe client for a completed item and reuse that path.
 		if (isImportRetryCandidate(queueItem)) {
 			let completedClientDownload: DownloadInfo | null = null;
-			let importPathAvailable = hasReusableImportPath(queueItem);
+			let downloads: DownloadInfo[] = [];
 
 			try {
-				const downloads = await clientInstance.getDownloads();
+				downloads = await clientInstance.getDownloads();
 				completedClientDownload =
 					downloads.find(
 						(download) => matchesQueueItem(queueItem, download) && isCompletedInClient(download)
@@ -248,10 +255,6 @@ export const POST: RequestHandler = async ({ params }) => {
 							isCompletedInClient(download) && matchesQueueItemByTitleAndSize(queueItem, download)
 					) ??
 					null;
-				importPathAvailable =
-					importPathAvailable ||
-					Boolean(completedClientDownload?.contentPath) ||
-					Boolean(completedClientDownload?.savePath);
 			} catch (clientLookupError) {
 				if (clientLookupError instanceof Error && 'status' in clientLookupError) {
 					throw clientLookupError;
@@ -269,21 +272,33 @@ export const POST: RequestHandler = async ({ params }) => {
 				);
 			}
 
-			if (importPathAvailable) {
+			const mappedOutputPath = completedClientDownload
+				? getContentPath(
+						completedClientDownload.savePath || completedClientDownload.contentPath,
+						completedClientDownload.contentPath,
+						client.downloadPathLocal,
+						client.downloadPathRemote,
+						client.tempPathLocal,
+						client.tempPathRemote
+					)
+				: null;
+
+			// Stored queue paths predate the #532 recovery guard and may hold a
+			// client or category root left over from a metadata-less magnet.
+			// Only reuse them when they survive the same safety check the
+			// monitor applies. Paths probed from a completed client download
+			// above are per-torrent and trusted.
+			const storedOutputPath = queueItem.outputPath || queueItem.clientDownloadPath || null;
+			const safeStoredOutputPath =
+				storedOutputPath &&
+				(await isSafeRecoveryCandidate(storedOutputPath, queueItem, client, downloads))
+					? storedOutputPath
+					: null;
+
+			if (mappedOutputPath || safeStoredOutputPath) {
 				const now = new Date().toISOString();
 				const existingProgress = Number(queueItem.progress ?? 0);
 				const normalizedExistingProgress = Number.isFinite(existingProgress) ? existingProgress : 0;
-				const mappedOutputPath = completedClientDownload
-					? getContentPath(
-							completedClientDownload.savePath || completedClientDownload.contentPath,
-							completedClientDownload.contentPath,
-							client.downloadPathLocal,
-							client.downloadPathRemote,
-							client.tempPathLocal,
-							client.tempPathRemote
-						)
-					: null;
-				const fallbackOutputPath = queueItem.outputPath || queueItem.clientDownloadPath || null;
 				const mergedProgress = completedClientDownload
 					? Math.max(normalizedExistingProgress, completedClientDownload.progress)
 					: Math.max(normalizedExistingProgress, 1);
@@ -302,7 +317,7 @@ export const POST: RequestHandler = async ({ params }) => {
 							completedClientDownload?.contentPath ||
 							completedClientDownload?.savePath ||
 							queueItem.clientDownloadPath,
-						outputPath: mappedOutputPath || fallbackOutputPath,
+						outputPath: mappedOutputPath || safeStoredOutputPath,
 						errorMessage: null,
 						completedAt: queueItem.completedAt || now,
 						lastAttemptAt: now
@@ -337,7 +352,7 @@ export const POST: RequestHandler = async ({ params }) => {
 					'Import retry initiated for failed queue item'
 				);
 
-				return json({
+				return Response.json({
 					success: true,
 					message,
 					retryMode: 'import',
@@ -346,8 +361,13 @@ export const POST: RequestHandler = async ({ params }) => {
 				});
 			}
 
-			// If still no path, try filesystem recovery
-			if (!importPathAvailable && client.downloadPathLocal && queueItem.title) {
+			// If still no usable path, try filesystem recovery
+			if (
+				!mappedOutputPath &&
+				!safeStoredOutputPath &&
+				client.downloadPathLocal &&
+				queueItem.title
+			) {
 				const fsCategory = (queueItem.seriesId ? client.tvCategory : client.movieCategory) ?? '';
 				// Reuse the shared path reconstruction; fall back to the queue title
 				// when the stored outputPath has no usable last component.
@@ -358,10 +378,10 @@ export const POST: RequestHandler = async ({ params }) => {
 						fsCategory
 					) ?? `${client.downloadPathLocal.replace(/\/+$/, '')}/${fsCategory}/${queueItem.title}`;
 
-				try {
-					const { stat } = await import('fs/promises');
-					await stat(candidatePath);
-
+				// A reconstructed path is a guess: never import from a
+				// client/category root or a directory another active download
+				// owns (#532).
+				if (await isSafeRecoveryCandidate(candidatePath, queueItem, client, downloads)) {
 					// Found! Update and import
 					await db
 						.update(downloadQueue)
@@ -377,15 +397,14 @@ export const POST: RequestHandler = async ({ params }) => {
 						.where(eq(downloadQueue.id, id));
 
 					const importResult = await getImportService().requestImport(id);
-					return json({
+					return Response.json({
 						success: true,
 						message: 'Files located and import initiated',
 						retryMode: 'import',
 						importStatus: importResult.status
 					});
-				} catch {
-					// Not found, fall through to re-download
 				}
+				// Not safe or not found, fall through to re-download
 			}
 		}
 
@@ -405,7 +424,7 @@ export const POST: RequestHandler = async ({ params }) => {
 		// or a concurrent automatic grab can claim it.
 		const rearm = await acquisitionService.rearmForQueueId(id);
 		if (!rearm.ok) {
-			return json({ success: false, error: rearm.reason }, { status: 409 });
+			return Response.json({ success: false, error: rearm.reason }, { status: 409 });
 		}
 
 		// Try native client retry first (SABnzbd/NZBGet can retry from history cache)
@@ -466,7 +485,7 @@ export const POST: RequestHandler = async ({ params }) => {
 		// Redact sensitive URLs before returning
 		const safeItem = toSafeQueueItem(updatedItem);
 
-		return json({
+		return Response.json({
 			success: true,
 			message: 'Download retry initiated',
 			queueItem: safeItem
@@ -475,6 +494,6 @@ export const POST: RequestHandler = async ({ params }) => {
 		if (err instanceof Error && 'status' in err) throw err;
 		logger.error('Error retrying download', err instanceof Error ? err : undefined);
 		const message = err instanceof Error ? err.message : 'Failed to retry download';
-		return json({ success: false, error: message }, { status: 500 });
+		return Response.json({ success: false, error: message }, { status: 500 });
 	}
 };

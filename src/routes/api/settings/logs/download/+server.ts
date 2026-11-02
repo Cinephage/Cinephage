@@ -1,11 +1,9 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-
-import type { CapturedLogFilters } from '$lib/logging/log-capture';
-import { logger } from '$lib/logging';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { logHistoryService } from '$lib/server/logging/log-history.js';
-import { logDownloadQuerySchema } from '$lib/validation/schemas.js';
+import type { CapturedLogFilters } from '#lib/logging/log-capture.js';
+import { logger } from '#lib/logging/index.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { logHistoryService } from '#lib/server/logging/log-history.js';
+import { logDownloadQuerySchema } from '#lib/validation/schemas.js';
 
 function toFilters(query: {
 	level?: CapturedLogFilters['level'];
@@ -48,7 +46,7 @@ export const GET: RequestHandler = async (event) => {
 	const raw = Object.fromEntries(event.url.searchParams.entries());
 	const parsed = logDownloadQuerySchema.safeParse(raw);
 	if (!parsed.success) {
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: 'Validation failed',
@@ -63,7 +61,7 @@ export const GET: RequestHandler = async (event) => {
 		const entries = await logHistoryService.getSnapshot(toFilters(parsed.data));
 
 		if (format === 'json') {
-			return json({ success: true, entries, total: entries.length });
+			return Response.json({ success: true, entries, total: entries.length });
 		}
 
 		const body = entries.map((entry) => JSON.stringify(entry)).join('\n');
@@ -76,6 +74,9 @@ export const GET: RequestHandler = async (event) => {
 		});
 	} catch (error) {
 		logger.error({ err: error }, 'Failed to download log history');
-		return json({ success: false, error: 'Failed to download log history' }, { status: 500 });
+		return Response.json(
+			{ success: false, error: 'Failed to download log history' },
+			{ status: 500 }
+		);
 	}
 };

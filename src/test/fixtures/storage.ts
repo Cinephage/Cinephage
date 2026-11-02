@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { mediaServerSyncedItems, storageItems } from '$lib/server/db/schema.js';
+import type { mediaServerSyncedItems, storageItems } from '#lib/server/db/schema.js';
 
 type MediaServerSyncedItemInsert = typeof mediaServerSyncedItems.$inferInsert;
 type StorageItemInsert = typeof storageItems.$inferInsert;

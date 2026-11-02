@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { isActiveActivity, type UnifiedActivity } from '$lib/types/activity';
+import { isActiveActivity, type UnifiedActivity } from '#lib/types/activity.js';
 import { buildActivitySummary } from './activity-filters.js';
 import { mapQueueStatus, projectQueueActivity } from './projectors.js';
+import { mapFilterStatusToQueueStatuses } from './status-mappers.js';
 
 function projectWithQueueStatus(status: string): UnifiedActivity {
 	return projectQueueActivity(
@@ -34,8 +35,21 @@ describe('mapQueueStatus', () => {
 		expect(mapQueueStatus('paused')).toBe('paused');
 		expect(mapQueueStatus('failed')).toBe('failed');
 		expect(mapQueueStatus('imported')).toBe('imported');
-		expect(mapQueueStatus('seeding-imported')).toBe('imported');
+		expect(mapQueueStatus('seeding-imported')).toBe('seeding');
 		expect(mapQueueStatus('removed')).toBe('removed');
+	});
+});
+
+describe('imported torrents still seeding', () => {
+	it('keeps the queue row active and counts it as seeding', () => {
+		const activity = projectWithQueueStatus('seeding-imported');
+		const summary = buildActivitySummary([activity]);
+
+		expect(activity.status).toBe('seeding');
+		expect(activity.queueStatus).toBe('seeding-imported');
+		expect(isActiveActivity(activity)).toBe(true);
+		expect(mapFilterStatusToQueueStatuses('seeding')).toContain('seeding-imported');
+		expect(summary).toMatchObject({ totalCount: 1, seedingCount: 1, downloadingCount: 0 });
 	});
 });
 

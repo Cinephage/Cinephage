@@ -1,4 +1,4 @@
-import type { ReleaseDatesResponse } from '$lib/types/tmdb';
+import type { ReleaseDatesResponse } from '#lib/types/tmdb.js';
 import { RELEASE_TYPE } from './releaseTypes.js';
 
 export interface ExtractedReleaseDates {

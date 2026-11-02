@@ -1,6 +1,6 @@
-import { tmdb } from '$lib/server/tmdb.js';
-import { extractReleaseDates } from '$lib/utils/extractReleaseDates.js';
-import { TMDB } from '$lib/config/constants.js';
+import { tmdb } from '#lib/server/tmdb.js';
+import { extractReleaseDates } from '#lib/utils/extractReleaseDates.js';
+import { TMDB } from '#lib/config/constants.js';
 
 export async function enrichWithReleaseDates<T extends { id: number; media_type?: string }>(
 	items: T[],

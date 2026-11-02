@@ -1,4 +1,4 @@
-import type { downloadQueue, downloadHistory, monitoringHistory } from '$lib/server/db/schema';
+import type { downloadQueue, downloadHistory, monitoringHistory } from '#lib/server/db/schema.js';
 
 // Export inferred types from Drizzle schema
 export type DownloadQueueRecord = typeof downloadQueue.$inferSelect;

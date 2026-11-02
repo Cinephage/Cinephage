@@ -1,6 +1,6 @@
 import type { DecisionStage, StageResult } from '../../types.js';
 import type { GrabDecisionContext } from './types.js';
-import { delayProfileService } from '$lib/server/monitoring/specifications/DelaySpecification.js';
+import { delayProfileService } from '#lib/server/monitoring/specifications/DelaySpecification.js';
 
 export class DelayStage implements DecisionStage<GrabDecisionContext> {
 	name = 'delay';

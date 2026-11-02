@@ -4,7 +4,7 @@
  * Extracted from the accounts page (`src/routes/livetv/accounts/+page.svelte`)
  * so the request shapes stay unit-testable outside the route component.
  */
-import type { FormData, TestConfig } from '$lib/components/livetv/LiveTvAccountModal.svelte';
+import type { FormData, TestConfig } from '#lib/components/livetv/LiveTvAccountModal.svelte';
 
 /**
  * Build the request body for creating (mode 'add') or updating (mode 'edit')
@@ -58,6 +58,9 @@ export function buildAccountRequestBody(
 				body.cinephageIptvConfig = data.cinephageIptvConfig;
 			}
 			break;
+		case 'cinephage-live':
+			// No provider config: catalog + streams use the instance identity.
+			break;
 	}
 
 	return body;
@@ -70,6 +73,10 @@ export function buildAccountTestRequestBody(config: TestConfig): Record<string, 
 	const body: Record<string, unknown> = {
 		providerType: config.providerType
 	};
+
+	if (config.accountId) {
+		body.accountId = config.accountId;
+	}
 
 	switch (config.providerType) {
 		case 'stalker':
@@ -98,6 +105,9 @@ export function buildAccountTestRequestBody(config: TestConfig): Record<string, 
 			if (config.cinephageIptvConfig) {
 				body.cinephageIptvConfig = config.cinephageIptvConfig;
 			}
+			break;
+		case 'cinephage-live':
+			// No provider config: catalog + streams use the instance identity.
 			break;
 	}
 

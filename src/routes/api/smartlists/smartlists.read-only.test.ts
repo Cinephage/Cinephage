@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../test/db-helper.js';
 import { api } from '../../../test/api-helper.js';
-import { rootFolders } from '$lib/server/db/schema.js';
+import { rootFolders } from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 
@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 	updateSmartList: vi.fn()
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -23,7 +23,7 @@ vi.mock('$lib/server/db/index.js', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/smartlists/index.js', () => ({
+vi.mock('#lib/server/smartlists/index.js', () => ({
 	getSmartListService: () => mocks
 }));
 

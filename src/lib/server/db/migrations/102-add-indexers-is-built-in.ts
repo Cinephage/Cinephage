@@ -1,7 +1,7 @@
 import type { MigrationDefinition } from '../migration-helpers.js';
 import { columnExists } from '../migration-helpers.js';
 
-// Hardcoded (not imported from $lib/server/indexers/types) so migrations stay
+// Hardcoded (not imported from #lib/server/indexers/types) so migrations stay
 // decoupled from app code. This ID matches data/indexers/definitions/cinephage-stream.yaml
 // and is stable for the lifetime of this migration.
 const CINEPHAGE_STREAM_DEFINITION_ID = 'cinephage-stream';

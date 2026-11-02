@@ -1,7 +1,7 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
-	import ModalHeader from '$lib/components/ui/modal/ModalHeader.svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
+	import ModalHeader from '#lib/components/ui/modal/ModalHeader.svelte';
 	import {
 		TrendingUp,
 		TrendingDown,
@@ -10,8 +10,9 @@
 		AlertCircle,
 		ChevronDown,
 		ChevronRight
-	} from 'lucide-svelte';
-	import type { FileScoreResponse } from '$lib/types/score';
+	} from '@lucide/svelte';
+	import type { FileScoreResponse } from '#lib/types/score.js';
+	import { formatHdrFormats } from '#lib/types/format.js';
 
 	interface Props {
 		open: boolean;
@@ -280,7 +281,10 @@
 							</div>
 							<div>
 								<span class="text-base-content/50">{m.library_scoreDetail_hdrLabel()}</span>
-								<span class="ml-2">{scoreData.attributes.hdr || m.library_scoreDetail_none()}</span>
+								<span class="ml-2"
+									>{formatHdrFormats(scoreData.attributes.hdrFormats ?? scoreData.attributes.hdr) ||
+										m.library_scoreDetail_none()}</span
+								>
 							</div>
 							<div>
 								<span class="text-base-content/50">{m.library_scoreDetail_releaseGroupLabel()}</span

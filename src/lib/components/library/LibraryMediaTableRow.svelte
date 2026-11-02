@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { LibraryMovie, LibrarySeries } from '$lib/types/library';
-	import { displayTitle } from '$lib/types/library';
+	import type { LibraryMovie, LibrarySeries } from '#lib/types/library.js';
+	import { displayTitle } from '#lib/types/library.js';
 	import {
 		CheckCircle2,
 		XCircle,
@@ -13,13 +13,13 @@
 		Zap,
 		Search,
 		Download
-	} from 'lucide-svelte';
-	import { resolvePath } from '$lib/utils/routing';
-	import { formatBytes, getStatusColor } from '$lib/utils/format';
-	import { formatRelativeDate } from '$lib/utils/format-relative-date.js';
-	import { formatSeriesStatus } from '$lib/utils/format-status.js';
-	import { getPosterUrl } from '$lib/utils/poster-url.js';
-	import type { MediaType } from '$lib/utils/media-type';
+	} from '@lucide/svelte';
+	import { resolvePath } from '#lib/utils/routing.js';
+	import { formatBytes, getStatusColor } from '#lib/utils/format.js';
+	import { formatRelativeDate } from '#lib/utils/format-relative-date.js';
+	import { formatSeriesStatus } from '#lib/utils/format-status.js';
+	import { getPosterUrl } from '#lib/utils/poster-url.js';
+	import type { MediaType } from '#lib/utils/media-type.js';
 	import {
 		isMovie,
 		isSeries,
@@ -27,7 +27,7 @@
 		getQualityBadges,
 		isItemMissing
 	} from './mediaTableUtils.ts';
-	import * as m from '$lib/paraglide/messages.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
 		item: LibraryMovie | LibrarySeries;
@@ -41,10 +41,10 @@
 		profileName: string | null;
 		isTv: boolean;
 		onSelectChange: (id: string, selected: boolean) => void;
-		onMonitorToggle: (id: string) => void;
+		onMonitorToggle?: (id: string) => void;
 		onAutoGrab?: (id: string) => void;
 		onManualGrab?: (id: string) => void;
-		onDelete: (id: string) => void;
+		onDelete?: (id: string) => void;
 		onNavigate: () => void;
 		/** Instance default for items with no explicit prefer-original flag. */
 		preferOriginalTitleDefault?: boolean | null;
@@ -237,54 +237,60 @@
 	</td>
 
 	<td>
-		<div class="dropdown dropdown-end" class:dropdown-top={isNearBottom}>
-			<div
-				tabindex={isLoading ? -1 : 0}
-				role="button"
-				class="btn btn-ghost btn-xs"
-				class:btn-disabled={isLoading}
-			>
-				<MoreVertical class="h-4 w-4" />
+		{#if onMonitorToggle || onAutoGrab || onManualGrab || onDelete}
+			<div class="dropdown dropdown-end" class:dropdown-top={isNearBottom}>
+				<div
+					tabindex={isLoading ? -1 : 0}
+					role="button"
+					class="btn btn-ghost btn-xs"
+					class:btn-disabled={isLoading}
+				>
+					<MoreVertical class="h-4 w-4" />
+				</div>
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+				<ul
+					tabindex="0"
+					class="menu dropdown-content z-50 w-40 rounded-box border border-base-content/10 bg-base-200 p-2 shadow-lg"
+				>
+					{#if onMonitorToggle}
+						<li>
+							<button onclick={() => onMonitorToggle(item.id)}>
+								{#if item.monitored}
+									<EyeOff class="mr-2 h-4 w-4" />
+									{m.library_libraryMediaTable_unmonitorButton()}
+								{:else}
+									<Eye class="mr-2 h-4 w-4" />
+									{m.library_libraryMediaTable_monitorButton()}
+								{/if}
+							</button>
+						</li>
+					{/if}
+					{#if onAutoGrab}
+						<li>
+							<button onclick={() => onAutoGrab(item.id)}>
+								<Zap class="mr-2 h-4 w-4" />
+								{m.library_libraryMediaTable_autoGrabButton()}
+							</button>
+						</li>
+					{/if}
+					{#if onManualGrab}
+						<li>
+							<button onclick={() => onManualGrab(item.id)}>
+								<Search class="mr-2 h-4 w-4" />
+								{m.library_libraryMediaTable_manualGrabButton()}
+							</button>
+						</li>
+					{/if}
+					{#if onDelete}
+						<li>
+							<button class="text-error" onclick={() => onDelete(item.id)}>
+								<Trash2 class="mr-2 h-4 w-4" />
+								{m.action_delete()}
+							</button>
+						</li>
+					{/if}
+				</ul>
 			</div>
-			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-			<ul
-				tabindex="0"
-				class="menu dropdown-content z-50 w-40 rounded-box border border-base-content/10 bg-base-200 p-2 shadow-lg"
-			>
-				<li>
-					<button onclick={() => onMonitorToggle(item.id)}>
-						{#if item.monitored}
-							<EyeOff class="mr-2 h-4 w-4" />
-							{m.library_libraryMediaTable_unmonitorButton()}
-						{:else}
-							<Eye class="mr-2 h-4 w-4" />
-							{m.library_libraryMediaTable_monitorButton()}
-						{/if}
-					</button>
-				</li>
-				{#if onAutoGrab}
-					<li>
-						<button onclick={() => onAutoGrab(item.id)}>
-							<Zap class="mr-2 h-4 w-4" />
-							{m.library_libraryMediaTable_autoGrabButton()}
-						</button>
-					</li>
-				{/if}
-				{#if onManualGrab}
-					<li>
-						<button onclick={() => onManualGrab(item.id)}>
-							<Search class="mr-2 h-4 w-4" />
-							{m.library_libraryMediaTable_manualGrabButton()}
-						</button>
-					</li>
-				{/if}
-				<li>
-					<button class="text-error" onclick={() => onDelete(item.id)}>
-						<Trash2 class="mr-2 h-4 w-4" />
-						{m.action_delete()}
-					</button>
-				</li>
-			</ul>
-		</div>
+		{/if}
 	</td>
 </tr>

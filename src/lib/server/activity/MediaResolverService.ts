@@ -1,5 +1,5 @@
-import { db } from '$lib/server/db';
-import { movies, series, episodes } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { movies, series, episodes } from '#lib/server/db/schema.js';
 import { eq, inArray } from 'drizzle-orm';
 
 /** Cache TTL in milliseconds (5 minutes) */

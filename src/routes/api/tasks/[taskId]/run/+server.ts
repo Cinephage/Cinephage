@@ -13,14 +13,13 @@
  * (which triggers MonitoringScheduler event emission natively).
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getUnifiedTaskById } from '$lib/server/tasks/UnifiedTaskRegistry';
-import { taskHistoryService } from '$lib/server/tasks/TaskHistoryService';
-import { monitoringScheduler } from '$lib/server/monitoring/MonitoringScheduler';
-import { createChildLogger } from '$lib/logging';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { getRecoverableApiKeyByType } from '$lib/server/auth/index.js';
+import { getUnifiedTaskById } from '#lib/server/tasks/UnifiedTaskRegistry.js';
+import { taskHistoryService } from '#lib/server/tasks/TaskHistoryService.js';
+import { monitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { getRecoverableApiKeyByType } from '#lib/server/auth/index.js';
 
 const logger = createChildLogger({ module: 'TaskRunAPI' });
 
@@ -110,12 +109,15 @@ export const POST: RequestHandler = async (event) => {
 	// Validate task exists in registry
 	const taskDef = getUnifiedTaskById(taskId);
 	if (!taskDef) {
-		return json({ success: false, error: `Task '${taskId}' not found` }, { status: 404 });
+		return Response.json({ success: false, error: `Task '${taskId}' not found` }, { status: 404 });
 	}
 
 	// Check if task is already running
 	if (taskHistoryService.isTaskRunning(taskId)) {
-		return json({ success: false, error: `Task '${taskId}' is already running` }, { status: 409 });
+		return Response.json(
+			{ success: false, error: `Task '${taskId}' is already running` },
+			{ status: 409 }
+		);
 	}
 
 	// For streaming-related tasks, fetch the Media Streaming API Key
@@ -123,7 +125,7 @@ export const POST: RequestHandler = async (event) => {
 	if (taskDef.id === 'update-strm-urls' && locals.user) {
 		streamingApiKey = await getUserStreamingApiKey(locals.user.id);
 		if (!streamingApiKey) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: 'Media Streaming API Key not found. Generate API keys in Settings > System.'
@@ -147,7 +149,7 @@ export const POST: RequestHandler = async (event) => {
 		historyId = await taskHistoryService.startTask(taskId);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Failed to start task';
-		return json({ success: false, error: message }, { status: 500 });
+		return Response.json({ success: false, error: message }, { status: 500 });
 	}
 
 	// Emit SSE event: task started
@@ -187,7 +189,7 @@ export const POST: RequestHandler = async (event) => {
 				errors: getErrorCount(summarySource.errors)
 			});
 
-			return json({ success: true, historyId, ...result });
+			return Response.json({ success: true, historyId, ...result });
 		} else {
 			const errors = [result.error || 'Task endpoint returned failure'];
 			await taskHistoryService.failTask(historyId, errors);
@@ -196,7 +198,7 @@ export const POST: RequestHandler = async (event) => {
 			// Emit SSE event: task failed
 			monitoringScheduler.emit('manualTaskFailed', taskId, new Error(errors[0]));
 
-			return json({ success: false, historyId, ...result });
+			return Response.json({ success: false, historyId, ...result });
 		}
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Unknown error';
@@ -206,6 +208,6 @@ export const POST: RequestHandler = async (event) => {
 		// Emit SSE event: task failed
 		monitoringScheduler.emit('manualTaskFailed', taskId, error);
 
-		return json({ success: false, historyId, error: message }, { status: 500 });
+		return Response.json({ success: false, historyId, error: message }, { status: 500 });
 	}
 };

@@ -8,6 +8,11 @@
 	"automergeType": "pr",
 	"packageRules": [
 		{
+			"description": "playwright-core is capped by camoufox at <1.63: the launcher and the paired Camoufox browser build implement the Juggler protocol for the Playwright versions the release was tested with. Lift only after the package raises its peer range.",
+			"matchPackageNames": ["playwright-core"],
+			"allowedVersions": "<1.63"
+		},
+		{
 			"description": "Schedule all dependency and CI updates to Monday mornings only",
 			"matchManagers": ["npm", "github-actions"],
 			"schedule": ["before 6am on Monday"]

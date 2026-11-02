@@ -1,8 +1,8 @@
-import { db } from '$lib/server/db/index.js';
-import { blockedKeywords, settings } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { blockedKeywords, settings } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
-import { tmdb } from '$lib/server/tmdb.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { tmdb } from '#lib/server/tmdb.js';
 
 const SEED_DONE_KEY = 'keyword_defaults_seeded';
 

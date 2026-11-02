@@ -1,5 +1,5 @@
 import type { PageServerLoad } from './$types';
-import { getExtractionCacheManager } from '$lib/server/streaming/nzb/extraction/ExtractionCacheManager';
+import { getExtractionCacheManager } from '#lib/server/streaming/nzb/extraction/ExtractionCacheManager.js';
 
 export const load: PageServerLoad = async () => {
 	const cacheManager = getExtractionCacheManager();

@@ -376,6 +376,11 @@ export async function main(argv = process.argv.slice(2)) {
 	const dbPath = resolveDbPath();
 	assertDbPath(dbPath);
 	const db = new Database(dbPath);
+	// Match the shared app connection's pragmas (src/lib/server/db/connection.ts)
+	// so the script cooperates with a possibly-running instance.
+	db.pragma('journal_mode = WAL');
+	db.pragma('busy_timeout = 5000');
+	db.pragma('foreign_keys = ON');
 
 	try {
 		if (options.listAdmins) {

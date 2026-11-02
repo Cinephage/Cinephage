@@ -3,7 +3,7 @@ import {
 	getBaseUrlAsync,
 	getPlaybackSessionStore,
 	getSessionProxyService
-} from '$lib/server/streaming';
+} from '#lib/server/streaming/index.js';
 
 function normalizeSubtitleId(subtitle: string): string {
 	return subtitle.replace(/\.(m3u8|vtt)$/i, '');

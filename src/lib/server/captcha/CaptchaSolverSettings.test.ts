@@ -3,7 +3,7 @@ import { createTestDb, destroyTestDb, type TestDatabase } from '../../../test/db
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -16,7 +16,7 @@ vi.mock('$lib/server/db', () => ({
 const { CaptchaSolverSettingsService, captchaSolverSettingsService } =
 	await import('./CaptchaSolverSettings');
 const { DEFAULT_CONFIG } = await import('./types');
-const { captchaSolverSettings } = await import('$lib/server/db/schema');
+const { captchaSolverSettings } = await import('#lib/server/db/schema.js');
 
 describe('CaptchaSolverSettingsService', () => {
 	beforeEach(() => {

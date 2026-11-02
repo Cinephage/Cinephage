@@ -4,8 +4,8 @@
  */
 
 import * as cheerio from 'cheerio';
-import { InvalidNzbError } from '$lib/errors';
-import { createChildLogger } from '$lib/logging';
+import { InvalidNzbError } from '#lib/errors/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'imports' as const });
 

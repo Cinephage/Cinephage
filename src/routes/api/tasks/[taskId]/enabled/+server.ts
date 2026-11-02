@@ -3,12 +3,11 @@
  *
  * PUT /api/tasks/[taskId]/enabled - Enable or disable a task
  */
-
-import { json, error } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getUnifiedTaskById } from '$lib/server/tasks/UnifiedTaskRegistry';
-import { taskSettingsService } from '$lib/server/tasks/TaskSettingsService';
-import { monitoringScheduler } from '$lib/server/monitoring/MonitoringScheduler';
+import { getUnifiedTaskById } from '#lib/server/tasks/UnifiedTaskRegistry.js';
+import { taskSettingsService } from '#lib/server/tasks/TaskSettingsService.js';
+import { monitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.js';
 import { z } from 'zod';
 
 const bodySchema = z.object({
@@ -58,7 +57,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 	// Emit settings change event for SSE clients
 	monitoringScheduler.emit('taskSettingsUpdated', { taskId, enabled });
 
-	return json({
+	return Response.json({
 		success: true,
 		taskId,
 		enabled

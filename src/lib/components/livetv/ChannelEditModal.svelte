@@ -1,17 +1,17 @@
 <script lang="ts">
-	import { AlertCircle, Archive, Link, Loader2, Search, Tv, X } from 'lucide-svelte';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
-	import { normalizeLiveTvChannelName } from '$lib/livetv/channel-name-normalizer';
-	import { copyToClipboard as copyTextToClipboard } from '$lib/utils/clipboard';
-	import { toasts } from '$lib/stores/toast.svelte';
+	import { AlertCircle, Archive, Link, Loader2, Search, Tv, X } from '@lucide/svelte';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
+	import { normalizeLiveTvChannelName } from '#lib/livetv/channel-name-normalizer.js';
+	import { copyToClipboard as copyTextToClipboard } from '#lib/utils/clipboard.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
 	import type {
 		ChannelBackupLink,
 		ChannelCategory,
 		ChannelLineupItemWithDetails,
 		UpdateChannelRequest
-	} from '$lib/types/livetv';
-	import * as m from '$lib/paraglide/messages.js';
-	import { getLineupBackups, deleteLineupBackup, reorderLineupBackups } from '$lib/api/livetv.js';
+	} from '#lib/types/livetv.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import { getLineupBackups, deleteLineupBackup, reorderLineupBackups } from '#lib/api/livetv.js';
 	import LogoLibraryPicker from './LogoLibraryPicker.svelte';
 	import ChannelTechnicalDetails from './ChannelTechnicalDetails.svelte';
 	import BackupSourceList from './BackupSourceList.svelte';

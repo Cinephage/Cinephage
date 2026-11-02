@@ -12,6 +12,7 @@ import { ScoringStage } from './stages/grab/ScoringStage.js';
 import { BannedFormatStage } from './stages/grab/BannedFormatStage.js';
 import { SizeValidationStage } from './stages/grab/SizeValidationStage.js';
 import { ProtocolStage } from './stages/grab/ProtocolStage.js';
+import { IndexerStage } from './stages/grab/IndexerStage.js';
 import { MinimumScoreStage } from './stages/grab/MinimumScoreStage.js';
 import { DuplicateHashStage } from './stages/grab/DuplicateHashStage.js';
 import { MediaOccupancyStage } from './stages/grab/MediaOccupancyStage.js';
@@ -31,6 +32,7 @@ export class GrabDecisionPipeline {
 		new LanguageStage(),
 		new SizeValidationStage(),
 		new ProtocolStage(),
+		new IndexerStage(),
 		new MinimumScoreStage(),
 		new DuplicateHashStage(),
 		new MediaOccupancyStage(),
@@ -95,6 +97,7 @@ export class GrabDecisionPipeline {
 			requiredFormats: 'missing_required_format',
 			sizeValidation: 'size_rejected',
 			protocol: 'protocol_rejected',
+			indexer: 'indexer_not_allowed',
 			minimumScore: 'below_minimum',
 			duplicateHash: 'duplicate_hash',
 			mediaOccupancy: 'media_occupied',

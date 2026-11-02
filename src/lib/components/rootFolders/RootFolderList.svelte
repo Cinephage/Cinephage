@@ -1,5 +1,5 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import {
 		Folder,
 		Settings,
@@ -14,9 +14,9 @@
 		ShieldX,
 		GitBranchMinus,
 		GitBranchPlus
-	} from 'lucide-svelte';
-	import type { RootFolder } from '$lib/types/downloadClient';
-	import { sortRootFoldersForMediaType } from '$lib/utils/root-folders.js';
+	} from '@lucide/svelte';
+	import type { RootFolder } from '#lib/types/downloadClient.js';
+	import { sortRootFoldersForMediaType } from '#lib/utils/root-folders.js';
 
 	interface Props {
 		folders: RootFolder[];

@@ -1,7 +1,7 @@
 import type { DecisionStage, StageResult } from '../../types.js';
 import type { SearchEligibilityContext } from './types.js';
-import { db } from '$lib/server/db/index.js';
-import { seasons } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { seasons } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 
 export class MonitoredStage implements DecisionStage<SearchEligibilityContext> {

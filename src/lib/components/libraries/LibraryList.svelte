@@ -1,5 +1,5 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import {
 		Film,
 		Tv,
@@ -9,7 +9,7 @@
 		SearchSlash,
 		Captions,
 		CaptionsOff
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 	import type { PageData } from '../../../routes/settings/library/libraries/$types';
 
 	type LibraryRootFolder = {

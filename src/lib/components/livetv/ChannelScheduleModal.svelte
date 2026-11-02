@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { X, Loader2, Tv, Clock, Calendar } from 'lucide-svelte';
-	import * as m from '$lib/paraglide/messages.js';
-	import type { ChannelLineupItemWithDetails, EpgProgram } from '$lib/types/livetv';
-	import { getEpgChannel, getStoredEpgDisplayLanguage } from '$lib/api/livetv.js';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
-	import { getLocale } from '$lib/paraglide/runtime.js';
+	import { X, Loader2, Tv, Clock, Calendar } from '@lucide/svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import type { ChannelLineupItemWithDetails, EpgProgram } from '#lib/types/livetv.js';
+	import { getEpgChannel, getStoredEpgDisplayLanguage } from '#lib/api/livetv.js';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
+	import { getLocale } from '#lib/paraglide/runtime.js';
 
 	interface Props {
 		open: boolean;

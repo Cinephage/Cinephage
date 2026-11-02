@@ -9,10 +9,10 @@ import type {
 	CapturedLogEntry,
 	CapturedLogFilters,
 	CapturedLogLevel
-} from '$lib/logging/log-capture';
-import { DEFAULT_CAPTURED_LOG_LEVEL } from '$lib/logging/log-capture';
-import { db } from '$lib/server/db/index.js';
-import { settings } from '$lib/server/db/schema.js';
+} from '#lib/logging/log-capture.js';
+import { DEFAULT_CAPTURED_LOG_LEVEL } from '#lib/logging/log-capture.js';
+import { db } from '#lib/server/db/index.js';
+import { settings } from '#lib/server/db/schema.js';
 
 const serviceLogger = {
 	warn(context: Record<string, unknown>, message: string): void {

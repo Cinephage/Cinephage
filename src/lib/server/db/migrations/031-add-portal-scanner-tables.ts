@@ -1,6 +1,6 @@
 import type { MigrationDefinition } from '../migration-helpers.js';
 import { columnExists, tableExists } from '../migration-helpers.js';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 // Version 31: Add portal scanner tables (stalker_portals, portal_scan_results, portal_scan_history)

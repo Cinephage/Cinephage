@@ -1,13 +1,13 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
-	import { ChevronRight, CheckCircle, AlertCircle } from 'lucide-svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { ChevronRight, CheckCircle, AlertCircle } from '@lucide/svelte';
 	import type { LayoutData } from '../$types';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import { invalidateAll, goto } from '$app/navigation';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { refreshAll, goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { ModalWrapper, ModalHeader, ModalFooter } from '$lib/components/ui/modal';
-	import { SettingsPage, SettingsSection } from '$lib/components/ui/settings';
-	import { updateMetadataProviderSettings, updateTmdbSettings } from '$lib/api/settings.js';
+	import { ModalWrapper, ModalHeader, ModalFooter } from '#lib/components/ui/modal/index.js';
+	import { SettingsPage, SettingsSection } from '#lib/components/ui/settings/index.js';
+	import { updateMetadataProviderSettings, updateTmdbSettings } from '#lib/api/settings.js';
 
 	let { data }: { data: LayoutData } = $props();
 
@@ -37,10 +37,10 @@
 		tmdbError = null;
 		tmdbModalOpen = false;
 
-		const url = new URL(page.url);
+		const url = new URL(page.url.href);
 		if (url.searchParams.get('open') === 'tmdb') {
 			url.searchParams.delete('open');
-			goto(url.toString(), { replaceState: true, noScroll: true });
+			goto(url.toString(), { replace: true, reset: false });
 		}
 	}
 
@@ -62,7 +62,7 @@
 		try {
 			await updateTmdbSettings(tmdbApiKey);
 
-			await invalidateAll();
+			await refreshAll();
 			toasts.success(m.settings_integrations_tmdbKeySaved());
 			closeTmdbModal();
 		} catch (error) {
@@ -78,7 +78,7 @@
 		enrichmentError = null;
 		try {
 			await updateMetadataProviderSettings({ animeEnrichmentEnabled });
-			await invalidateAll();
+			await refreshAll();
 			toasts.success('Anime enrichment settings saved');
 			closeEnrichmentModal();
 		} catch (error) {

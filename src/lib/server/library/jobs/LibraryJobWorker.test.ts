@@ -1,11 +1,11 @@
 import { describe, it, expect, afterAll, beforeAll, vi, beforeEach } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../../test/db-helper.js';
-import { libraryJobs, rootFolders } from '$lib/server/db/schema.js';
+import { libraryJobs, rootFolders } from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -232,5 +232,144 @@ describe('match_unmatched cursor paging (issue #513)', () => {
 		expect(processFn).toHaveBeenCalledTimes(2);
 		expect(processFn.mock.calls[0][2]).toBeNull();
 		expect(processFn.mock.calls[1][2]).toBe('a2');
+	});
+});
+
+describe('manual_import job (issue #530)', () => {
+	const request = {
+		sourcePath: '/downloads/movie.mkv',
+		mediaType: 'movie' as const,
+		tmdbId: 155,
+		importTarget: 'new' as const
+	};
+
+	it('runs the injected import and marks the job completed', async () => {
+		const executeFn = vi.fn().mockResolvedValue({
+			success: true,
+			mediaType: 'movie',
+			tmdbId: 155,
+			libraryId: 'movie-1',
+			importedPath: '/library/movie.mkv',
+			importedPaths: ['/library/movie.mkv'],
+			importedCount: 1
+		});
+
+		const job = libraryJobService.enqueueJob({
+			type: 'manual_import',
+			dedupeKey: 'manual_import:test-1',
+			metadata: { request }
+		});
+
+		const worker = new LibraryJobWorker({ executeManualImport: executeFn });
+		const processed = await worker.processOne();
+		expect(processed).toBe(true);
+		expect(executeFn).toHaveBeenCalledWith(request);
+
+		const updated = libraryJobService.getJob(job.id);
+		expect(updated!.status).toBe('completed');
+		expect(updated!.phase).toBe('done');
+		expect(updated!.filesAdded).toBe(1);
+		expect(updated!.progressCurrent).toBe(1);
+		expect(updated!.progressTotal).toBe(1);
+		expect(updated!.metadata).toEqual({
+			request,
+			result: {
+				libraryId: 'movie-1',
+				mediaType: 'movie',
+				tmdbId: 155,
+				importedPaths: ['/library/movie.mkv']
+			}
+		});
+	});
+
+	it('marks the job failed when the import throws', async () => {
+		const executeFn = vi.fn().mockRejectedValue(new Error('no space left on device'));
+
+		const job = libraryJobService.enqueueJob({
+			type: 'manual_import',
+			dedupeKey: 'manual_import:test-2',
+			metadata: { request }
+		});
+
+		await new LibraryJobWorker({ executeManualImport: executeFn }).processOne();
+
+		const updated = libraryJobService.getJob(job.id);
+		expect(updated!.status).toBe('failed');
+		expect(updated!.errorMessage).toBe('no space left on device');
+	});
+
+	it('marks the job failed when request metadata is missing', async () => {
+		const executeFn = vi.fn();
+
+		const job = libraryJobService.enqueueJob({
+			type: 'manual_import',
+			dedupeKey: 'manual_import:test-3',
+			metadata: {}
+		});
+
+		await new LibraryJobWorker({ executeManualImport: executeFn }).processOne();
+
+		const updated = libraryJobService.getJob(job.id);
+		expect(updated!.status).toBe('failed');
+		expect(updated!.errorMessage).toContain('missing request metadata');
+		expect(executeFn).not.toHaveBeenCalled();
+	});
+
+	it('fails declared-but-unsupported job types instead of leaving them running', async () => {
+		const job = libraryJobService.enqueueJob({
+			type: 'watcher_path_change',
+			dedupeKey: 'watcher_path_change:test',
+			metadata: {}
+		});
+
+		await new LibraryJobWorker().processOne();
+
+		const updated = libraryJobService.getJob(job.id);
+		expect(updated!.status).toBe('failed');
+		expect(updated!.errorMessage).toContain('Unsupported library job type');
+	});
+});
+
+describe('worker pool scoping (jobTypes)', () => {
+	it('a worker restricted to manual_import never claims a scan job', async () => {
+		libraryJobService.enqueueRootFolderScan('root-1');
+
+		const importWorker = new LibraryJobWorker({ jobTypes: ['manual_import'] });
+		const processed = await importWorker.processOne();
+
+		expect(processed).toBe(false);
+		expect(libraryJobService.listJobs({ type: 'scan_root_folder' })[0].status).toBe('queued');
+	});
+
+	it('a worker restricted to manual_import claims one when queued alongside a scan job', async () => {
+		libraryJobService.enqueueRootFolderScan('root-1');
+		const executeFn = vi.fn().mockResolvedValue({
+			success: true,
+			mediaType: 'movie',
+			tmdbId: 1,
+			libraryId: 'lib-1',
+			importedPath: '/x',
+			importedPaths: ['/x'],
+			importedCount: 1
+		});
+		const importJob = libraryJobService.enqueueJob({
+			type: 'manual_import',
+			dedupeKey: 'manual_import:pool-test',
+			metadata: {
+				request: { sourcePath: '/x', mediaType: 'movie', tmdbId: 1, importTarget: 'new' }
+			}
+		});
+
+		const importWorker = new LibraryJobWorker({
+			jobTypes: ['manual_import'],
+			executeManualImport: executeFn
+		});
+		const processed = await importWorker.processOne();
+
+		expect(processed).toBe(true);
+		expect(executeFn).toHaveBeenCalled();
+		expect(libraryJobService.getJob(importJob.id)?.status).toBe('completed');
+		// The scan job was never touched by this scoped worker.
+		expect(libraryJobService.listJobs({ type: 'scan_root_folder' })[0].status).toBe('queued');
 	});
 });

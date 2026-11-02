@@ -4,7 +4,7 @@ import {
 	audioPreferencesEqual,
 	type EffectiveAudioPreference
 } from '../language-utils';
-import type { SubtitleRequirement } from '$lib/shared/language-profile';
+import type { SubtitleRequirement } from '#lib/shared/language-profile.js';
 import type {
 	PlaybackMediaType,
 	PlaybackSession,

@@ -1,36 +1,38 @@
-import { building } from '$app/environment';
-import { createChildLogger, registerServerLogSinks } from '$lib/logging';
-import { getLibraryScheduler } from '$lib/server/library/library-scheduler.js';
-import { libraryJobWorker } from '$lib/server/library/jobs/LibraryJobWorker.js';
-import { isFFprobeAvailable, getFFprobeVersion } from '$lib/server/library/ffprobe.js';
-import { getDownloadMonitor } from '$lib/server/downloadClients/monitoring';
-import { getImportService } from '$lib/server/downloadClients/import/ImportService.js';
-import { getMonitoringScheduler } from '$lib/server/monitoring/MonitoringScheduler.js';
-import { getExternalIdService } from '$lib/server/services/ExternalIdService.js';
-import { getDataRepairService } from '$lib/server/services/DataRepairService.js';
-import { qualityFilter } from '$lib/server/quality';
-import { initializeDatabase } from '$lib/server/db';
-import { getCaptchaSolver } from '$lib/server/captcha';
-import { getServiceManager } from '$lib/server/services/service-manager.js';
-import { getNntpManager } from '$lib/server/streaming/usenet/NntpManager';
-import { getExtractionCacheManager } from '$lib/server/streaming/nzb/extraction/ExtractionCacheManager';
-import { getMediaBrowserNotifier } from '$lib/server/notifications/mediabrowser';
-import { getMediaServerStatsSyncService } from '$lib/server/mediaServerStats/MediaServerStatsSyncService.js';
-import { getReconciliationService } from '$lib/server/storage/reconciliation/ReconciliationService.js';
-import { getInsightsService } from '$lib/server/storage/insights/InsightsService.js';
-import { getEpgScheduler } from '$lib/server/livetv/epg';
-import { getLiveTvAccountManager } from '$lib/server/livetv/LiveTvAccountManager';
-import { getProwlarrSyncScheduler } from '$lib/server/indexers/prowlarr/ProwlarrSyncScheduler.js';
-import { getJackettSyncScheduler } from '$lib/server/indexers/jackett/JackettSyncScheduler.js';
-import { getLiveTvChannelService } from '$lib/server/livetv/LiveTvChannelService';
-import { getLiveTvStreamService } from '$lib/server/livetv/streaming/LiveTvStreamService';
-import { getStalkerPortalManager } from '$lib/server/livetv/stalker/StalkerPortalManager';
-import { initializeProviderFactory } from '$lib/server/subtitles/providers/SubtitleProviderFactory.js';
-import { ensureStreamingApiKeyRateLimit } from '$lib/server/auth/index.js';
-import { logCaptureStore } from '$lib/server/logging/log-capture-store.js';
-import { logHistoryService } from '$lib/server/logging/log-history.js';
-import { getCinephageApiService } from '$lib/server/cinephage/CinephageApiService.js';
-import { getDebridPollService } from '$lib/server/downloadClients/debrid/DebridPollService.js';
+import { building } from '$app/env';
+import { createChildLogger, registerServerLogSinks } from '#lib/logging/index.js';
+import { getLibraryScheduler } from '#lib/server/library/library-scheduler.js';
+import { libraryJobWorker, LibraryJobWorker } from '#lib/server/library/jobs/LibraryJobWorker.js';
+import { isFFprobeAvailable, getFFprobeVersion } from '#lib/server/library/ffprobe.js';
+import { getDownloadMonitor } from '#lib/server/downloadClients/monitoring/index.js';
+import { getImportService } from '#lib/server/downloadClients/import/ImportService.js';
+import { getMonitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.js';
+import { getExternalIdService } from '#lib/server/services/ExternalIdService.js';
+import { getDataRepairService } from '#lib/server/services/DataRepairService.js';
+import { qualityFilter } from '#lib/server/quality/index.js';
+import { initializeDatabase } from '#lib/server/db/index.js';
+import { getCaptchaSolver } from '#lib/server/captcha/index.js';
+import { ensureCamoufoxBrowserInBackground } from '#lib/server/captcha/browser/browserProvisioning.js';
+import { getServiceManager } from '#lib/server/services/service-manager.js';
+import { getNntpManager } from '#lib/server/streaming/usenet/NntpManager.js';
+import { getExtractionCacheManager } from '#lib/server/streaming/nzb/extraction/ExtractionCacheManager.js';
+import { getMediaBrowserNotifier } from '#lib/server/notifications/mediabrowser/index.js';
+import { getMediaServerStatsSyncService } from '#lib/server/mediaServerStats/MediaServerStatsSyncService.js';
+import { getReconciliationService } from '#lib/server/storage/reconciliation/ReconciliationService.js';
+import { getInsightsService } from '#lib/server/storage/insights/InsightsService.js';
+import { getEpgScheduler } from '#lib/server/livetv/epg/index.js';
+import { getLiveTvAccountManager } from '#lib/server/livetv/LiveTvAccountManager.js';
+import { getProwlarrSyncScheduler } from '#lib/server/indexers/prowlarr/ProwlarrSyncScheduler.js';
+import { getJackettSyncScheduler } from '#lib/server/indexers/jackett/JackettSyncScheduler.js';
+import { getLiveTvChannelService } from '#lib/server/livetv/LiveTvChannelService.js';
+import { getLiveTvStreamService } from '#lib/server/livetv/streaming/LiveTvStreamService.js';
+import { getStalkerPortalManager } from '#lib/server/livetv/stalker/StalkerPortalManager.js';
+import { initializeProviderFactory } from '#lib/server/subtitles/providers/SubtitleProviderFactory.js';
+import { ensureStreamingApiKeyRateLimit } from '#lib/server/auth/index.js';
+import { logCaptureStore } from '#lib/server/logging/log-capture-store.js';
+import { logHistoryService } from '#lib/server/logging/log-history.js';
+import { getCinephageApiService } from '#lib/server/cinephage/CinephageApiService.js';
+import { getDebridPollService } from '#lib/server/downloadClients/debrid/DebridPollService.js';
+import { getRequestAvailabilityProjector } from '#lib/server/requests/RequestAvailabilityProjector.js';
 
 const logger = createChildLogger({ module: 'Initializer', logDomain: 'system' });
 
@@ -86,8 +88,27 @@ async function initializeServices(): Promise<void> {
 
 			serviceManager.register(libraryJobWorker);
 
+			// Manual imports (single and bulk) can pile up into a long queue and
+			// don't touch diskScanService, so a few dedicated workers can safely
+			// run them alongside the primary worker without racing scan jobs.
+			const IMPORT_WORKER_POOL_SIZE = 3;
+			for (let i = 1; i <= IMPORT_WORKER_POOL_SIZE; i++) {
+				serviceManager.register(
+					new LibraryJobWorker({
+						name: `LibraryJobWorker:import-${i}`,
+						jobTypes: ['manual_import']
+					})
+				);
+			}
+
 			await getLibraryScheduler().initialize();
 			logger.info('Library scheduler initialized');
+
+			// Event-driven request fulfillment (media appearing flips active
+			// requests to fulfilled). The hourly sweep task registers with the
+			// monitoring scheduler separately.
+			getRequestAvailabilityProjector().start();
+			logger.info('Request availability projector started');
 
 			await initializeProviderFactory();
 			logger.info('Provider registry initialized with 13 providers');
@@ -188,6 +209,13 @@ async function initializeServices(): Promise<void> {
 			serviceManager.startAll();
 
 			logger.info('All background services initialized and started');
+
+			// Non-blocking: keep the browser build paired with the installed
+			// Camoufox launcher provisioned for self-hosted deployments
+			// (see browserProvisioning.ts).
+			setImmediate(() => {
+				void ensureCamoufoxBrowserInBackground();
+			});
 		} catch (error) {
 			logger.error('Failed to initialize services', error);
 			throw error;

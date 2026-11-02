@@ -1,12 +1,12 @@
 import type { RequestHandler } from './$types';
-import { createSSEStream } from '$lib/server/sse';
-import { downloadMonitor } from '$lib/server/downloadClients/monitoring';
-import { mediaResolver } from '$lib/server/activity';
-import { activityStreamEvents } from '$lib/server/activity/ActivityStreamEvents';
-import type { UnifiedActivity, ActivityStatus } from '$lib/types/activity';
-import type { ActivityRefreshEvent } from '$lib/types/sse/events/activity-events.js';
-import { createChildLogger } from '$lib/logging';
-import { mapQueueStatus, projectQueueActivity } from '$lib/server/activity/projectors';
+import { createSSEStream } from '#lib/server/sse.js';
+import { downloadMonitor } from '#lib/server/downloadClients/monitoring/index.js';
+import { mediaResolver } from '#lib/server/activity/index.js';
+import { activityStreamEvents } from '#lib/server/activity/ActivityStreamEvents.js';
+import type { UnifiedActivity, ActivityStatus } from '#lib/types/activity.js';
+import type { ActivityRefreshEvent } from '#lib/types/sse/events/activity-events.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { mapQueueStatus, projectQueueActivity } from '#lib/server/activity/projectors.js';
 
 const logger = createChildLogger({ module: 'ActivityStreamApi', logDomain: 'monitoring' });
 

@@ -6,7 +6,7 @@
  */
 
 import type { Page } from 'playwright-core';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'indexers' as const });
 import type {
@@ -91,6 +91,12 @@ async function waitForChallengeComplete(page: Page, timeout = 30000): Promise<bo
 	let lastClickAttempt = 0;
 
 	while (Date.now() - startTime < timeout) {
+		if (page.isClosed()) {
+			// The browser was closed out from under the solve (caller abort or
+			// reaper); stop spinning instead of burning the budget holding a slot.
+			logger.debug('[CamoufoxSolver] Page closed during challenge wait; stopping early');
+			return false;
+		}
 		try {
 			const title = await page.title();
 
@@ -285,6 +291,7 @@ async function runSolveAttempt(
 			headless: config.headless,
 			proxy: request.proxy,
 			acquireTimeoutMs: timeout,
+			signal: request.signal ?? undefined,
 			shadowUnlockAddon: opts.shadowUnlockAddon
 		});
 
@@ -556,6 +563,7 @@ async function runBrowserFetchAttempt(
 			headless: config.headless,
 			proxy: request.proxy,
 			acquireTimeoutMs: timeout,
+			signal: request.signal ?? undefined,
 			shadowUnlockAddon: opts.shadowUnlockAddon
 		});
 

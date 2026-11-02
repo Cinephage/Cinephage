@@ -3,19 +3,19 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/svelte';
 import SeriesEditModal, { type SeriesEditData } from './SeriesEditModal.svelte';
 
-vi.mock('$lib/api/settings.js', () => ({
+vi.mock('#lib/api/settings.js', () => ({
 	getLibraryClassificationSettings: vi.fn().mockResolvedValue({})
 }));
 
-vi.mock('$lib/api/discover.js', () => ({
+vi.mock('#lib/api/discover.js', () => ({
 	getTmdb: vi.fn().mockResolvedValue(null)
 }));
 
-vi.mock('$lib/api/library.js', () => ({
+vi.mock('#lib/api/library.js', () => ({
 	getSeriesEpisodeGroups: vi.fn().mockResolvedValue([])
 }));
 
-vi.mock('$lib/stores/toast.svelte', () => ({
+vi.mock('#lib/stores/toast.svelte.js', () => ({
 	toasts: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() }
 }));
 

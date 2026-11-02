@@ -1,7 +1,6 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getLogoDownloadService } from '$lib/server/logos/LogoDownloadService.js';
-import { createChildLogger } from '$lib/logging';
+import { getLogoDownloadService } from '#lib/server/logos/LogoDownloadService.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LogosStatusApi', logDomain: 'system' });
 
@@ -14,13 +13,13 @@ export const GET: RequestHandler = async () => {
 		const service = getLogoDownloadService();
 		const status = await service.getStatus();
 
-		return json({
+		return Response.json({
 			success: true,
 			data: status
 		});
 	} catch (error) {
 		logger.error('[LogosStatusAPI] Failed to get status', error);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: 'Failed to get logo status'

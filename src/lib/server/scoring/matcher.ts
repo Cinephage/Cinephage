@@ -6,7 +6,8 @@
  * optional conditions use OR logic (at least one must match).
  */
 
-import { languageMatches } from '$lib/server/languages/audio-preference';
+import { languageMatches } from '#lib/server/languages/audio-preference.js';
+import { createSafeRegex } from '#lib/server/indexers/engine/safeRegex.js';
 import type {
 	CustomFormat,
 	FormatCondition,
@@ -14,27 +15,30 @@ import type {
 	MatchedFormat,
 	ReleaseAttributes
 } from './types.js';
-
+import type { HdrFormat } from '../indexers/parser/types.js';
 // =============================================================================
 // Regex Pattern Cache
 // =============================================================================
 
 const patternCache = new Map<string, RegExp>();
 
+const NEVER_MATCHES = /(?!)/;
+
 /**
- * Get a compiled regex pattern, using cache for performance
+ * Get a compiled regex pattern, using cache for performance.
+ *
+ * Patterns come from admin-authored custom formats but run against every
+ * scraped release title, so they go through createSafeRegex: a pathological
+ * pattern (nested quantifiers, overlapping alternation) or an over-long one
+ * is rejected instead of hanging each release evaluation. Rejected and
+ * invalid patterns compile to a never-matching regex, not an error — a bad
+ * format must degrade scoring for itself only.
  */
 function getPattern(pattern: string): RegExp {
 	let regex = patternCache.get(pattern);
 	if (!regex) {
-		try {
-			regex = new RegExp(pattern, 'i'); // Case-insensitive by default
-			patternCache.set(pattern, regex);
-		} catch {
-			// Invalid regex, return a pattern that never matches
-			regex = /(?!)/;
-			patternCache.set(pattern, regex);
-		}
+		regex = createSafeRegex(pattern, 'i') ?? NEVER_MATCHES;
+		patternCache.set(pattern, regex);
 	}
 	return regex;
 }
@@ -94,14 +98,22 @@ export function evaluateCondition(
 			rawMatch = release.hasAtmos === true;
 			break;
 
-		case 'hdr':
-			// Handle null HDR (SDR) matching
-			if (condition.hdr === null || condition.hdr === 'sdr') {
-				rawMatch = release.hdr === null || release.hdr === 'sdr';
+		case 'hdr': {
+			// Match against every detected format, not just the headline one: a
+			// DV+HDR10+ release must satisfy an HDR10+ requirement even though
+			// scoring counts it as Dolby Vision.
+			const detected = release.hdrFormats ?? (release.hdr ? [release.hdr] : []);
+			const expected = condition.hdr;
+			if (expected === null || expected === 'sdr') {
+				rawMatch = detected.length === 0 || detected.includes('sdr');
+			} else if (expected === undefined) {
+				// Malformed condition: no format asserted, so it cannot match.
+				rawMatch = false;
 			} else {
-				rawMatch = condition.hdr === release.hdr;
+				rawMatch = detected.includes(expected);
 			}
 			break;
+		}
 
 		case 'streaming_service':
 			rawMatch =
@@ -255,6 +267,7 @@ export function extractAttributes(parsed: {
 	source: string;
 	codec: string;
 	hdr: string | null;
+	hdrFormats?: string[];
 	audioCodec: string;
 	audioChannels: string;
 	hasAtmos: boolean;
@@ -279,6 +292,7 @@ export function extractAttributes(parsed: {
 		source: parsed.source as ReleaseAttributes['source'],
 		codec: parsed.codec as ReleaseAttributes['codec'],
 		hdr: parsed.hdr as ReleaseAttributes['hdr'],
+		hdrFormats: (parsed.hdrFormats ?? (parsed.hdr ? [parsed.hdr] : [])) as HdrFormat[],
 		audioCodec: parsed.audioCodec as ReleaseAttributes['audioCodec'],
 		audioChannels: parsed.audioChannels as ReleaseAttributes['audioChannels'],
 		hasAtmos: parsed.hasAtmos,

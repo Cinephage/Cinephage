@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
 
-import { logger } from '$lib/logging';
+import { logger } from '#lib/logging/index.js';
 import { getAuthSecret } from '../auth/secret.js';
 
 const ALGORITHM = 'aes-256-gcm';

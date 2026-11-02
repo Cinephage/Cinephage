@@ -19,8 +19,8 @@
  * below threshold Y" instead of a misleading "no results".
  */
 
-import type { SubtitleRequirement } from '$lib/shared/language-profile.js';
-import { DEFAULT_MINIMUM_SCORE } from '$lib/shared/language-profile.js';
+import type { SubtitleRequirement } from '#lib/shared/language-profile.js';
+import { DEFAULT_MINIMUM_SCORE } from '#lib/shared/language-profile.js';
 import { matchesRequirement, type SubtitleLike } from './requirement-matcher.js';
 
 /** Minimal search-result shape needed for candidate selection. */

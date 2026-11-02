@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { ArrowLeft, Loader2, Film, Tv, Save } from 'lucide-svelte';
-	import * as m from '$lib/paraglide/messages.js';
+	import { ArrowLeft, Loader2, Film, Tv, Save } from '@lucide/svelte';
+	import * as m from '#lib/paraglide/messages.js';
 	import { onMount } from 'svelte';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import type { SmartListRecord, SmartListFilters } from '$lib/server/db/schema.js';
-	import type { SmartListCreateRequest } from '$lib/validation/schemas.js';
-	import type { RootFolderBasic as RootFolder } from '$lib/types/downloadClient.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import type { SmartListRecord, SmartListFilters } from '#lib/server/db/schema.js';
+	import type { SmartListCreateRequest } from '#lib/validation/schemas.js';
+	import type { RootFolderBasic as RootFolder } from '#lib/types/downloadClient.js';
 	import FilterBuilder from './FilterBuilder.svelte';
 	import PreviewPanel from './PreviewPanel.svelte';
 	import SettingsPanel from './SettingsPanel.svelte';
@@ -16,7 +16,7 @@
 		getExternalListPreview,
 		createSmartList,
 		updateSmartList
-	} from '$lib/api/smartlists.js';
+	} from '#lib/api/smartlists.js';
 
 	interface ScoringProfile {
 		id: string;
@@ -166,7 +166,7 @@
 				sortBy,
 				itemLimit: effectivePreviewItemLimit,
 				page: previewPage
-			} as unknown as import('$lib/validation/schemas.js').SmartListPreviewRequest);
+			} as unknown as import('#lib/validation/schemas.js').SmartListPreviewRequest);
 			previewItems = data.items;
 			previewTotalResults = data.totalResults;
 			previewTotalPages = data.totalPages;

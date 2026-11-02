@@ -1,6 +1,6 @@
 import type { PageServerLoad } from './$types';
-import { getSubtitleProviderManager } from '$lib/server/subtitles/services/SubtitleProviderManager';
-import { ensureProvidersRegistered } from '$lib/server/subtitles/providers/registry';
+import { getSubtitleProviderManager } from '#lib/server/subtitles/services/SubtitleProviderManager.js';
+import { ensureProvidersRegistered } from '#lib/server/subtitles/providers/registry.js';
 
 export const load: PageServerLoad = async () => {
 	await ensureProvidersRegistered();

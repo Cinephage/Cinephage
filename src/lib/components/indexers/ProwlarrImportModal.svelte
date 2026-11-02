@@ -11,14 +11,14 @@
 		Settings,
 		Trash2,
 		ArrowLeft
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 	import { untrack } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
-	import { createIndexer, ApiError } from '$lib/api';
-	import { getResponseErrorMessage } from '$lib/utils/http';
-	import { invalidateAll } from '$app/navigation';
-	import { formatRelativeTime } from '$lib/components/activity/activity-display-utils.js';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
+	import { createIndexer, ApiError } from '#lib/api/index.js';
+	import { getResponseErrorMessage } from '#lib/utils/http.js';
+	import { refreshAll } from '$app/navigation';
+	import { formatRelativeTime } from '#lib/components/activity/activity-display-utils.js';
 
 	interface ProwlarrIndexer {
 		id: number;
@@ -69,7 +69,7 @@
 	let connection = $state<StoredConnection | null>(null);
 
 	// Re-initialize state only when the modal transitions to open.
-	// storedConnection is read via untrack so mid-session invalidateAll() calls
+	// storedConnection is read via untrack so mid-session refreshAll() calls
 	// don't reset in-progress toggle changes.
 	$effect(() => {
 		if (open) {
@@ -136,7 +136,7 @@
 					body: JSON.stringify({ url: connection.url, autoSync, syncIntervalHours, syncAddNew })
 				});
 				if (res.ok) {
-					await invalidateAll();
+					await refreshAll();
 				}
 			} finally {
 				savingSettings = false;
@@ -248,7 +248,7 @@
 		importing = false;
 		doneResult = { type: 'import', result };
 		step = 'done';
-		await invalidateAll();
+		await refreshAll();
 	}
 
 	async function browseAndImport() {
@@ -288,7 +288,7 @@
 			await refreshConnection();
 			doneResult = { type: 'sync', result: data.result as SyncResult };
 			step = 'done';
-			await invalidateAll();
+			await refreshAll();
 		} catch {
 			syncError = 'Sync failed. Check that Prowlarr is still accessible.';
 		} finally {
@@ -306,7 +306,7 @@
 			autoSync = false;
 			syncIntervalHours = 24;
 			confirmingDelete = false;
-			await invalidateAll();
+			await refreshAll();
 		} catch {
 			// ignore
 		}
@@ -352,7 +352,7 @@
 				return;
 			}
 			useAggregateEndpoint = true;
-			await invalidateAll();
+			await refreshAll();
 			await fetchProwlarrIndexerCount();
 		} catch {
 			aggregateError = 'Failed to enable aggregate mode.';
@@ -377,7 +377,7 @@
 			}
 			useAggregateEndpoint = false;
 			prowlarrIndexerCount = null;
-			await invalidateAll();
+			await refreshAll();
 			// Open the import screen so the user can re-add individual indexers
 			await browseAndImport();
 		} catch {

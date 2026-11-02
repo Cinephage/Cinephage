@@ -9,7 +9,7 @@
  */
 
 import type { RequestHandler } from './$types';
-import { getBaseUrl } from '$lib/server/streaming/url';
+import { getBaseUrl } from '#lib/server/streaming/url.js';
 
 export const GET: RequestHandler = async ({ url, request }) => {
 	const subtitleUrl = url.searchParams.get('url');

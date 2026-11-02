@@ -11,7 +11,7 @@
 
 import type { ISubtitleProvider, ProviderDefinition } from './interfaces';
 import type { SubtitleProviderConfig } from '../types';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'subtitles' as const });
 

@@ -1,19 +1,19 @@
 import { stat } from 'node:fs/promises';
 import { and, eq, isNull, notInArray } from 'drizzle-orm';
-import { db } from '$lib/server/db';
-import { downloadQueue, episodes, movies, rootFolders, series } from '$lib/server/db/schema';
-import { createChildLogger } from '$lib/logging';
-import type { BackgroundService, ServiceStatus } from '$lib/server/services/background-service.js';
-import { isImportedQueueStatus } from '$lib/types/queue';
-import { NamingService } from '$lib/server/library/naming/NamingService';
-import { namingSettingsService } from '$lib/server/library/naming/NamingSettingsService';
+import { db } from '#lib/server/db/index.js';
+import { downloadQueue, episodes, movies, rootFolders, series } from '#lib/server/db/schema.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import type { BackgroundService, ServiceStatus } from '#lib/server/services/background-service.js';
+import { isImportedQueueStatus } from '#lib/types/queue.js';
+import { NamingService } from '#lib/server/library/naming/NamingService.js';
+import { namingSettingsService } from '#lib/server/library/naming/NamingSettingsService.js';
 import { getDownloadClientManager } from '../DownloadClientManager';
 import { DebridImportFinalizer } from './DebridImportFinalizer';
-import { mediaInfoService } from '$lib/server/library/media-info';
+import { mediaInfoService } from '#lib/server/library/media-info.js';
 import {
 	recalculateMovieShortfall,
 	recalculateSeriesShortfall
-} from '$lib/server/languages/language-shortfall';
+} from '#lib/server/languages/language-shortfall.js';
 
 /** Best-effort local probe; empty mediaInfo when ffprobe cannot answer. */
 async function probeLocalMediaInfo(path: string): Promise<Record<string, unknown>> {
@@ -222,7 +222,7 @@ export class DebridPollService implements BackgroundService {
 		if (!media || media.type !== 'movie' || !media.movie.id) return [];
 		try {
 			const { resolveAudioPreferenceForItem } =
-				await import('$lib/server/languages/audio-preference-resolver');
+				await import('#lib/server/languages/audio-preference-resolver.js');
 			const preference = await resolveAudioPreferenceForItem('movie', media.movie.id);
 			const ordered = [
 				...(preference.preferOriginal && preference.originalLanguage

@@ -17,11 +17,11 @@ import type { ScoreComponents } from './types.js';
 import type { ScoringProfile, SizeValidationContext, PackPreference } from '../scoring/index.js';
 import { calculatePackBonus } from '../scoring/types.js';
 import { getFormat } from '../scoring/formats/index.js';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'indexers' as const });
 import { getProtocolHandler, type ProtocolContext } from '../indexers/protocols';
-import type { ProtocolSettings } from '$lib/server/indexers/types/index.js';
+import type { ProtocolSettings } from '#lib/server/indexers/types/index.js';
 
 /**
  * Indexer configuration for protocol-specific rejection
@@ -262,6 +262,19 @@ export class ReleaseEnricher {
 		if (!protocolAllowed) {
 			rejections.push(
 				`Protocol '${release.protocol}' not allowed for profile '${profile?.name || 'default'}' (allowed: ${allowedProtocols.join(', ')})`
+			);
+		}
+
+		// Add indexer-allowlist rejection (soft — release stays visible as rejected)
+		const allowedIndexerIds = profile?.allowedIndexerIds;
+		if (
+			allowedIndexerIds &&
+			allowedIndexerIds.length > 0 &&
+			release.indexerId &&
+			!allowedIndexerIds.includes(release.indexerId)
+		) {
+			rejections.push(
+				`Indexer '${release.indexerName ?? release.indexerId}' is not selected in profile '${profile?.name || 'default'}'`
 			);
 		}
 

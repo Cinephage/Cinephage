@@ -12,16 +12,16 @@
  * - epg:syncFailed: EPG sync failed
  */
 
-import { createSSEStream } from '$lib/server/sse';
-import { liveTvEvents } from '$lib/server/livetv/LiveTvEvents';
-import { channelLineupService } from '$lib/server/livetv/lineup';
-import { getEpgService, getEpgScheduler } from '$lib/server/livetv/epg';
-import { getEpgSyncState } from '$lib/server/livetv/epg/EpgSyncState';
-import { db } from '$lib/server/db';
-import { livetvAccounts } from '$lib/server/db/schema';
+import { createSSEStream } from '#lib/server/sse.js';
+import { liveTvEvents } from '#lib/server/livetv/LiveTvEvents.js';
+import { channelLineupService } from '#lib/server/livetv/lineup/index.js';
+import { getEpgService, getEpgScheduler } from '#lib/server/livetv/epg/index.js';
+import { getEpgSyncState } from '#lib/server/livetv/epg/EpgSyncState.js';
+import { db } from '#lib/server/db/index.js';
+import { livetvAccounts } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LiveTVEPGStream' });
 

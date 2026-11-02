@@ -11,15 +11,20 @@
  */
 
 import type { RequestHandler } from './$types';
-import { getBaseUrlAsync } from '$lib/server/streaming/url';
-import { resolveAndValidateUrl, fetchWithTimeout } from '$lib/server/http/ssrf-protection';
+import { getBaseUrlAsync } from '#lib/server/streaming/url.js';
+import {
+	resolveAndValidateUrl,
+	fetchWithTimeout,
+	UnsafeUrlError
+} from '#lib/server/http/ssrf-protection.js';
 import {
 	getStreamUrlCache,
 	HLS_STREAM_TIMEOUT_MS
-} from '$lib/server/livetv/streaming/StreamUrlCache.js';
-import { rewriteHlsPlaylistUrls } from '$lib/server/streaming/utils/hls-rewrite.js';
-import { STB_USER_AGENT } from '$lib/server/livetv/stalker/StalkerPortalClient.js';
-import { createChildLogger } from '$lib/logging';
+} from '#lib/server/livetv/streaming/StreamUrlCache.js';
+import { createCamoUnwrapTransform } from '#lib/server/livetv/streaming/camo-unwrap.js';
+import { rewriteHlsPlaylistUrls } from '#lib/server/streaming/utils/hls-rewrite.js';
+import { STB_USER_AGENT } from '#lib/server/livetv/stalker/StalkerPortalClient.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LiveTvStreamProxy', logDomain: 'livetv' });
 
@@ -184,6 +189,9 @@ async function fetchWithRetry(
 			if (error instanceof Error && error.message.startsWith('Refreshed stream URL blocked:')) {
 				throw error;
 			}
+			// A URL the SSRF policy rejected will be rejected every time; retrying
+			// only delays the 403 the caller should get.
+			if (error instanceof UnsafeUrlError) throw error;
 			if (options.signal?.aborted) throw error;
 			lastError = error instanceof Error ? error : new Error(String(error));
 
@@ -357,6 +365,34 @@ async function validateAndRefreshUrl(
 	return { url: originalUrl, headers: providerHeaders || {} };
 }
 
+/**
+ * Headers sent when proxying segment bytes.
+ */
+function segmentHeaders(contentType: string, cacheMaxAge: number): Headers {
+	return new Headers({
+		'Content-Type': contentType,
+		'Accept-Ranges': 'none',
+		'Access-Control-Allow-Origin': '*',
+		'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+		'Access-Control-Allow-Headers': 'Range, Content-Type',
+		'Cache-Control': `public, max-age=${cacheMaxAge}`,
+		'X-Content-Type-Options': 'nosniff'
+	});
+}
+
+/**
+ * Content type for the segment response. Camouflaged segments arrive with
+ * image/* (or unset) content types even though the unwrapped payload is
+ * MPEG-TS, so anything that is not a media type is reported as TS.
+ */
+function segmentResponseContentType(upstreamContentType: string): string {
+	const contentType = upstreamContentType.trim().toLowerCase();
+	if (contentType.startsWith('video/') || contentType.startsWith('audio/')) {
+		return upstreamContentType.trim();
+	}
+	return 'video/mp2t';
+}
+
 export const GET: RequestHandler = async ({ params, url, request }) => {
 	const { lineupId } = params;
 
@@ -377,6 +413,8 @@ export const GET: RequestHandler = async ({ params, url, request }) => {
 	const encodedHeaders = url.searchParams.get('h');
 	let providerHeaders = decodeProviderHeaders(encodedHeaders);
 
+	const urlCache = getStreamUrlCache();
+
 	// Validate and refresh URL if needed (Stalkerhek pattern)
 	try {
 		const validated = await validateAndRefreshUrl(lineupId, decodedUrl, providerHeaders);
@@ -391,6 +429,28 @@ export const GET: RequestHandler = async ({ params, url, request }) => {
 			status: 502,
 			headers: { 'Content-Type': 'application/json' }
 		});
+	}
+
+	// The upstream URL arrives as a query parameter, so it must be bound to
+	// what this lineup item legitimately streams. Without this, any holder of
+	// a streaming key — a credential designed to sit in .m3u/.strm files —
+	// could use this route as a general-purpose outbound proxy.
+	const requestedHost = (() => {
+		try {
+			return new URL(decodedUrl).hostname.toLowerCase();
+		} catch {
+			return null;
+		}
+	})();
+	if (!requestedHost || !urlCache.isHostAllowed(lineupId, requestedHost)) {
+		logger.warn(
+			{ lineupId, host: requestedHost },
+			'[LiveTV Segment] Rejected URL for a host this lineup does not stream from'
+		);
+		return new Response(
+			JSON.stringify({ error: 'URL not allowed for this lineup', reason: 'unbound-host' }),
+			{ status: 403, headers: { 'Content-Type': 'application/json' } }
+		);
 	}
 
 	// SSRF protection (with DNS resolution)
@@ -516,12 +576,22 @@ export const GET: RequestHandler = async ({ params, url, request }) => {
 
 			if (playlist.includes('#EXTM3U')) {
 				const baseUrl = await getBaseUrlAsync(request);
-				// Pass through provider headers so nested sub-playlists/segments also get them
 				const rewritten = rewriteHlsPlaylistUrls(
 					playlist,
 					decodedUrl,
 					makeLiveTvProxyUrlBuilder(baseUrl, lineupId, encodeProviderHeaders(providerHeaders))
 				);
+
+				// A playlist's segment URLs frequently live on a different host
+				// (CDN) than the playlist itself. Learn those hosts here, otherwise
+				// the binding check would reject every segment the playlist points at.
+				for (const match of playlist.matchAll(/^\s*(https?:\/\/[^\s#]+)\s*$/gm)) {
+					try {
+						urlCache.allowHost(lineupId, new URL(match[1]).hostname);
+					} catch {
+						// Malformed line — rewriteHlsPlaylistUrls already ignored it.
+					}
+				}
 
 				return new Response(rewritten, {
 					status: 200,
@@ -542,18 +612,24 @@ export const GET: RequestHandler = async ({ params, url, request }) => {
 			return new Response(null, { status: 204 });
 		}
 
-		return new Response(limitStream(inspected.body, LIVETV_SEGMENT_MAX_SIZE), {
+		// Camouflaged segments (images/marker-wrapped TS) are unwrapped on the
+		// way through; plain TS streams out untouched. An unrecognized container
+		// errors the stream, which surfaces as a failed segment fetch upstream.
+		// The size limit stays closest to the upstream reader so oversized
+		// bodies are cut off before unwrapping.
+		const body = limitStream(inspected.body, LIVETV_SEGMENT_MAX_SIZE).pipeThrough(
+			createCamoUnwrapTransform({
+				onFormat: (format) => {
+					if (format !== 'plain-ts') {
+						logger.info({ lineupId, format }, '[LiveTV Segment] Unwrapped camouflaged segment');
+					}
+				}
+			})
+		);
+
+		return new Response(body, {
 			status: 200,
-			headers: {
-				'Content-Type':
-					contentType && contentType !== 'application/octet-stream' ? contentType : 'video/mp2t',
-				'Accept-Ranges': 'none',
-				'Access-Control-Allow-Origin': '*',
-				'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-				'Access-Control-Allow-Headers': 'Range, Content-Type',
-				'Cache-Control': `public, max-age=${LIVETV_SEGMENT_CACHE_MAX_AGE}`,
-				'X-Content-Type-Options': 'nosniff'
-			}
+			headers: segmentHeaders(segmentResponseContentType(contentType), LIVETV_SEGMENT_CACHE_MAX_AGE)
 		});
 	} catch (error) {
 		logger.error(
@@ -647,10 +723,13 @@ export const HEAD: RequestHandler = async ({ params, url, request }) => {
 			});
 		}
 
-		const contentType = response.headers.get('content-type') || 'video/mp2t';
-		const isPlaylist = contentType.includes('mpegurl') || contentType.includes('m3u8');
+		const upstreamContentType = response.headers.get('content-type') || '';
+		const isPlaylist =
+			upstreamContentType.includes('mpegurl') || upstreamContentType.includes('m3u8');
 		const headers = new Headers({
-			'Content-Type': contentType,
+			'Content-Type': isPlaylist
+				? upstreamContentType
+				: segmentResponseContentType(upstreamContentType),
 			'Accept-Ranges': 'none',
 			'Access-Control-Allow-Origin': '*',
 			'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',

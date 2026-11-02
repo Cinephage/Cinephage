@@ -3,8 +3,8 @@ import type {
 	DownloadHistoryRecord,
 	MonitoringHistoryRecord
 } from './types.js';
-import type { ActivityEvent } from '$lib/types/activity';
-import { parseRelease } from '$lib/server/indexers/parser/ReleaseParser.js';
+import type { ActivityEvent } from '#lib/types/activity.js';
+import { parseRelease } from '#lib/server/indexers/parser/ReleaseParser.js';
 
 export interface MediaInfo {
 	id: string;
@@ -262,7 +262,53 @@ export function findFailedQueueItemId(
 	return undefined;
 }
 
-export function buildHistoryTimeline(history: DownloadHistoryRecord): ActivityEvent[] {
+export interface BlocklistEntryInfo {
+	createdAt: string | null;
+	reason: string;
+	expiresAt: string | null;
+}
+
+/**
+ * Index blocklist rows by the same identity (title + associated movie/series)
+ * BlocklistService.addToBlocklist dedupes on, so a history/queue item can be
+ * matched back to its blocklist entry without a per-item query.
+ */
+export interface BlocklistIndexRow extends BlocklistEntryInfo {
+	title: string;
+	movieId: string | null;
+	seriesId: string | null;
+}
+
+export function buildBlocklistIndex(entries: BlocklistIndexRow[]): Map<string, BlocklistEntryInfo> {
+	const index = new Map<string, BlocklistEntryInfo>();
+	for (const entry of entries) {
+		const key = `${entry.title.toLowerCase()}|${entry.movieId ?? ''}|${entry.seriesId ?? ''}`;
+		index.set(key, {
+			createdAt: entry.createdAt,
+			reason: entry.reason,
+			expiresAt: entry.expiresAt
+		});
+	}
+	return index;
+}
+
+export function findBlocklistEntry(
+	item: { title: string | null; movieId?: string | null; seriesId?: string | null },
+	blocklistIndex?: Map<string, BlocklistEntryInfo>
+): BlocklistEntryInfo | undefined {
+	if (!blocklistIndex || !item.title) return undefined;
+	const key = `${item.title.toLowerCase()}|${item.movieId ?? ''}|${item.seriesId ?? ''}`;
+	return blocklistIndex.get(key);
+}
+
+export function isBlocklistEntryActive(entry: BlocklistEntryInfo): boolean {
+	return !entry.expiresAt || new Date(entry.expiresAt).getTime() > Date.now();
+}
+
+export function buildHistoryTimeline(
+	history: DownloadHistoryRecord,
+	blocklistEntry?: BlocklistEntryInfo
+): ActivityEvent[] {
 	const timeline: ActivityEvent[] = [];
 
 	if (history.grabbedAt) {
@@ -286,6 +332,14 @@ export function buildHistoryTimeline(history: DownloadHistoryRecord): ActivityEv
 			type: 'rejected',
 			timestamp: history.createdAt,
 			details: history.statusReason ?? undefined
+		});
+	}
+	if (blocklistEntry?.createdAt) {
+		timeline.push({
+			type: 'blocklisted',
+			timestamp: blocklistEntry.createdAt,
+			details:
+				blocklistEntry.reason === 'manual' ? 'Manually added to blocklist' : blocklistEntry.reason
 		});
 	}
 

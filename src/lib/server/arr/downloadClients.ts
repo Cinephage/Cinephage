@@ -10,8 +10,8 @@
  * else, which is what broke completion status tracking.
  */
 
-import { db } from '$lib/server/db/index.js';
-import { downloadClients } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { downloadClients } from '#lib/server/db/schema.js';
 import { getOrAssignArrId } from './ArrIdMappingService.js';
 
 // -> DownloadProtocol enum (unknown | usenet | torrent). Same convention as

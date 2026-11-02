@@ -6,12 +6,11 @@
  * DELETE /api/livetv/channel-categories/[id] - Delete category
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { channelCategoryService } from '$lib/server/livetv/categories';
-import { ValidationError } from '$lib/errors';
-import { createChildLogger } from '$lib/logging';
-import type { ChannelCategoryFormData } from '$lib/types/livetv';
+import { channelCategoryService } from '#lib/server/livetv/categories/index.js';
+import { ValidationError } from '#lib/errors/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import type { ChannelCategoryFormData } from '#lib/types/livetv.js';
 
 const logger = createChildLogger({ module: 'LiveTvChannelCategoryById', logDomain: 'livetv' });
 
@@ -20,7 +19,7 @@ export const GET: RequestHandler = async ({ params }) => {
 		const category = await channelCategoryService.getCategoryById(params.id);
 
 		if (!category) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: 'Category not found'
@@ -29,7 +28,7 @@ export const GET: RequestHandler = async ({ params }) => {
 			);
 		}
 
-		return json({
+		return Response.json({
 			success: true,
 			category
 		});
@@ -38,7 +37,7 @@ export const GET: RequestHandler = async ({ params }) => {
 			'[API] Failed to get channel category',
 			error instanceof Error ? error : undefined
 		);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to get channel category'
@@ -63,7 +62,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		});
 
 		if (!category) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: 'Category not found'
@@ -72,14 +71,14 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			);
 		}
 
-		return json({
+		return Response.json({
 			success: true,
 			category
 		});
 	} catch (error) {
 		// Validation errors
 		if (error instanceof ValidationError) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: error.message,
@@ -92,7 +91,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			'[API] Failed to update channel category',
 			error instanceof Error ? error : undefined
 		);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to update channel category'
@@ -107,7 +106,7 @@ export const DELETE: RequestHandler = async ({ params }) => {
 		const success = await channelCategoryService.deleteCategory(params.id);
 
 		if (!success) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: 'Category not found'
@@ -116,7 +115,7 @@ export const DELETE: RequestHandler = async ({ params }) => {
 			);
 		}
 
-		return json({
+		return Response.json({
 			success: true
 		});
 	} catch (error) {
@@ -124,7 +123,7 @@ export const DELETE: RequestHandler = async ({ params }) => {
 			'[API] Failed to delete channel category',
 			error instanceof Error ? error : undefined
 		);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to delete channel category'

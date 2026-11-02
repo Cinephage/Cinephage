@@ -1,6 +1,6 @@
 import type { MigrationDefinition } from '../migration-helpers.js';
 import { columnExists, tableExists } from '../migration-helpers.js';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 // Version 79: Convert saved custom format audio conditions to canonical fields

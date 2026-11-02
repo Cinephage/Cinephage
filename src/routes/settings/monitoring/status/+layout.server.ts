@@ -1,133 +1,150 @@
 import type { LayoutServerLoad } from './$types';
-import { db } from '$lib/server/db';
+import { db } from '#lib/server/db/index.js';
 import {
 	mediaServerSyncedItems,
 	mediaServerSyncedRuns,
 	mediaBrowserServers,
+	movies,
+	movieFiles,
+	series,
+	episodeFiles,
 	storageInsights
-} from '$lib/server/db/schema';
-import { desc, sql } from 'drizzle-orm';
+} from '#lib/server/db/schema.js';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import {
+	extractResolution,
+	extractVideoCodec,
+	extractHdrFormat,
+	extractAudioCodec,
+	extractContainer
+} from '#lib/server/storage/reconciliation/matchers.js';
 
 export const load: LayoutServerLoad = async ({ parent }) => {
 	await parent();
 
 	const servers = await db.select().from(mediaBrowserServers);
+	// A disabled server's synced data is kept (not deleted) so re-enabling and
+	// re-syncing is cheap, but it must stop counting toward every aggregate
+	// stat below - including the per-server serverStatuses list, which is
+	// fully hidden (not just its data) once a server is disabled.
+	const enabledServerIds = servers.filter((s) => s.enabled).map((s) => s.id);
+	const enabledFilter = inArray(mediaServerSyncedItems.serverId, enabledServerIds);
 
-	const playsResult = await db
-		.select({ total: sql<number>`coalesce(sum(${mediaServerSyncedItems.playCount}), 0)` })
-		.from(mediaServerSyncedItems);
+	const playsResult =
+		enabledServerIds.length === 0
+			? [{ total: 0 }]
+			: await db
+					.select({ total: sql<number>`coalesce(sum(${mediaServerSyncedItems.playCount}), 0)` })
+					.from(mediaServerSyncedItems)
+					.where(enabledFilter);
 	const totalPlays = playsResult[0]?.total ?? 0;
 
-	const uniqueResult = await db
+	// Quality data (resolution/codec/HDR/audio/container, and which items
+	// have it at all) is Cinephage's own - extracted via ffprobe at import
+	// time - and has nothing to do with whether a media server is connected,
+	// enabled, or synced. Unlike play counts (only a media server can report
+	// those), source these from local movie/episode files instead of
+	// mediaServerSyncedItems, reusing the same extraction helpers the Media
+	// Explorer page uses so labels stay consistent everywhere.
+	const localMovieFiles = db
 		.select({
-			count: sql<number>`count(distinct coalesce(${mediaServerSyncedItems.tmdbId}, ${mediaServerSyncedItems.serverItemId}))`
+			movieId: movieFiles.movieId,
+			quality: movieFiles.quality,
+			mediaInfo: movieFiles.mediaInfo
 		})
-		.from(mediaServerSyncedItems);
-	const uniqueItems = uniqueResult[0]?.count ?? 0;
+		.from(movieFiles)
+		.all();
+	const localEpisodeFiles = db
+		.select({
+			seriesId: episodeFiles.seriesId,
+			quality: episodeFiles.quality,
+			mediaInfo: episodeFiles.mediaInfo
+		})
+		.from(episodeFiles)
+		.all();
+	const localFiles: Array<{ quality: unknown; mediaInfo: unknown }> = [
+		...localMovieFiles.map((f) => ({ quality: f.quality, mediaInfo: f.mediaInfo })),
+		...localEpisodeFiles.map((f) => ({ quality: f.quality, mediaInfo: f.mediaInfo }))
+	];
 
-	const syncedServersResult = await db
-		.select({ serverId: mediaServerSyncedItems.serverId })
-		.from(mediaServerSyncedItems)
-		.groupBy(mediaServerSyncedItems.serverId);
+	const uniqueItems =
+		new Set(localMovieFiles.map((f) => f.movieId)).size +
+		new Set(localEpisodeFiles.map((f) => f.seriesId)).size;
+
+	function tallyLocalFiles(
+		extractLabel: (
+			quality: Parameters<typeof extractResolution>[0],
+			mediaInfo: Parameters<typeof extractResolution>[1]
+		) => string | null
+	): Array<{ label: string; count: number }> {
+		const counts = new Map<string, number>();
+		for (const f of localFiles) {
+			const label = extractLabel(
+				f.quality as Parameters<typeof extractResolution>[0],
+				f.mediaInfo as Parameters<typeof extractResolution>[1]
+			);
+			if (!label) continue;
+			counts.set(label, (counts.get(label) ?? 0) + 1);
+		}
+		return [...counts.entries()]
+			.map(([label, count]) => ({ label, count }))
+			.sort((a, b) => b.count - a.count);
+	}
+
+	const resolutionBreakdown = tallyLocalFiles((q, m) => extractResolution(q, m));
+	const codecBreakdown = tallyLocalFiles((q, m) => extractVideoCodec(q, m));
+	// Non-HDR files report null from extractHdrFormat - bucket them as a
+	// single explicit "SDR" entry rather than dropping them from the chart.
+	const hdrBreakdown = tallyLocalFiles((q, m) => extractHdrFormat(q, m) ?? 'SDR');
+	const audioCodecBreakdown = tallyLocalFiles((_q, m) => extractAudioCodec(m));
+	const containerBreakdown = tallyLocalFiles((_q, m) => extractContainer(m));
+
+	const syncedServersResult =
+		enabledServerIds.length === 0
+			? []
+			: await db
+					.select({ serverId: mediaServerSyncedItems.serverId })
+					.from(mediaServerSyncedItems)
+					.where(enabledFilter)
+					.groupBy(mediaServerSyncedItems.serverId);
 	const serversSynced = syncedServersResult.length;
 
-	const sizeResult = await db
-		.select({ total: sql<number>`coalesce(sum(${mediaServerSyncedItems.fileSize}), 0)` })
-		.from(mediaServerSyncedItems);
+	const sizeResult =
+		enabledServerIds.length === 0
+			? [{ total: 0 }]
+			: await db
+					.select({ total: sql<number>`coalesce(sum(${mediaServerSyncedItems.fileSize}), 0)` })
+					.from(mediaServerSyncedItems)
+					.where(enabledFilter);
 	const totalFileSize = sizeResult[0]?.total ?? 0;
 
-	const codecRows = await db
-		.select({
-			codec: mediaServerSyncedItems.videoCodec,
-			count: sql<number>`count(*)`
-		})
-		.from(mediaServerSyncedItems)
-		.where(sql`${mediaServerSyncedItems.videoCodec} IS NOT NULL`)
-		.groupBy(mediaServerSyncedItems.videoCodec)
-		.orderBy(sql`count(*) desc`);
-
-	const resolutionBucket = sql`CASE
-		WHEN ${mediaServerSyncedItems.height} >= 2160 THEN '4K'
-		WHEN ${mediaServerSyncedItems.height} >= 1080 THEN '1080p'
-		WHEN ${mediaServerSyncedItems.height} >= 720 THEN '720p'
-		WHEN ${mediaServerSyncedItems.height} >= 480 THEN '480p'
-		ELSE 'SD'
-	END`;
-	const resolutionRows = await db
-		.select({
-			label: resolutionBucket.as('label'),
-			count: sql<number>`count(*)`
-		})
-		.from(mediaServerSyncedItems)
-		.where(sql`${mediaServerSyncedItems.height} IS NOT NULL`)
-		.groupBy(resolutionBucket);
-	const resolutionBreakdown = resolutionRows
-		.map((r) => ({ label: r.label as string, count: r.count }))
-		.sort((a, b) => b.count - a.count);
-
-	const hdrRows = await db
-		.select({
-			isHDR: mediaServerSyncedItems.isHDR,
-			hdrFormat: mediaServerSyncedItems.hdrFormat,
-			count: sql<number>`count(*)`
-		})
-		.from(mediaServerSyncedItems)
-		.groupBy(mediaServerSyncedItems.isHDR, mediaServerSyncedItems.hdrFormat);
-
-	const hdrBreakdown: Array<{ label: string; count: number }> = [];
-	let sdrCount = 0;
-	for (const row of hdrRows) {
-		if (!row.isHDR) {
-			sdrCount += row.count;
-		} else {
-			hdrBreakdown.push({ label: row.hdrFormat ?? 'HDR', count: row.count });
-		}
-	}
-	if (sdrCount > 0) hdrBreakdown.unshift({ label: 'SDR', count: sdrCount });
-	hdrBreakdown.sort((a, b) => b.count - a.count);
-
-	const audioCodecRows = await db
-		.select({
-			codec: mediaServerSyncedItems.audioCodec,
-			count: sql<number>`count(*)`
-		})
-		.from(mediaServerSyncedItems)
-		.where(sql`${mediaServerSyncedItems.audioCodec} IS NOT NULL`)
-		.groupBy(mediaServerSyncedItems.audioCodec)
-		.orderBy(sql`count(*) desc`);
-
-	const containerRows = await db
-		.select({
-			container: mediaServerSyncedItems.containerFormat,
-			count: sql<number>`count(*)`
-		})
-		.from(mediaServerSyncedItems)
-		.where(sql`${mediaServerSyncedItems.containerFormat} IS NOT NULL`)
-		.groupBy(mediaServerSyncedItems.containerFormat)
-		.orderBy(sql`count(*) desc`);
-
+	// Disabled servers are fully hidden from Storage Maintenance (not just
+	// their data) - admins see disabled servers' status on the Media Servers
+	// settings page instead, where re-enabling them lives.
 	const serverStatuses = await Promise.all(
-		servers.map(async (server) => {
-			const itemCount = await db
-				.select({ count: sql<number>`count(*)` })
-				.from(mediaServerSyncedItems)
-				.where(sql`${mediaServerSyncedItems.serverId} = ${server.id}`);
-			const lastRun = await db
-				.select()
-				.from(mediaServerSyncedRuns)
-				.where(sql`${mediaServerSyncedRuns.serverId} = ${server.id}`)
-				.orderBy(desc(mediaServerSyncedRuns.startedAt))
-				.limit(1);
-			return {
-				serverId: server.id,
-				serverName: server.name,
-				serverType: server.serverType,
-				itemCount: itemCount[0]?.count ?? 0,
-				lastSyncAt: lastRun[0]?.completedAt ?? null,
-				lastSyncStatus: lastRun[0]?.status ?? null,
-				enabled: server.enabled ?? false
-			};
-		})
+		servers
+			.filter((server) => server.enabled)
+			.map(async (server) => {
+				const itemCount = await db
+					.select({ count: sql<number>`count(*)` })
+					.from(mediaServerSyncedItems)
+					.where(sql`${mediaServerSyncedItems.serverId} = ${server.id}`);
+				const lastRun = await db
+					.select()
+					.from(mediaServerSyncedRuns)
+					.where(sql`${mediaServerSyncedRuns.serverId} = ${server.id}`)
+					.orderBy(desc(mediaServerSyncedRuns.startedAt))
+					.limit(1);
+				return {
+					serverId: server.id,
+					serverName: server.name,
+					serverType: server.serverType,
+					itemCount: itemCount[0]?.count ?? 0,
+					lastSyncAt: lastRun[0]?.completedAt ?? null,
+					lastSyncStatus: lastRun[0]?.status ?? null,
+					enabled: server.enabled ?? false
+				};
+			})
 	);
 
 	const insights = db
@@ -160,35 +177,85 @@ export const load: LayoutServerLoad = async ({ parent }) => {
 		)
 		.all();
 
-	const topItems = db
-		.select({
-			title: mediaServerSyncedItems.title,
-			seriesName: mediaServerSyncedItems.seriesName,
-			playCount: mediaServerSyncedItems.playCount,
-			height: mediaServerSyncedItems.height,
-			fileSize: mediaServerSyncedItems.fileSize,
-			itemType: mediaServerSyncedItems.itemType
-		})
-		.from(mediaServerSyncedItems)
-		.where(sql`${mediaServerSyncedItems.playCount} > 0`)
-		.orderBy(desc(mediaServerSyncedItems.playCount))
-		.limit(5)
-		.all();
+	const topItems =
+		enabledServerIds.length === 0
+			? []
+			: db
+					.select({
+						title: mediaServerSyncedItems.title,
+						seriesName: mediaServerSyncedItems.seriesName,
+						playCount: mediaServerSyncedItems.playCount,
+						height: mediaServerSyncedItems.height,
+						fileSize: mediaServerSyncedItems.fileSize,
+						itemType: mediaServerSyncedItems.itemType
+					})
+					.from(mediaServerSyncedItems)
+					.where(and(sql`${mediaServerSyncedItems.playCount} > 0`, enabledFilter))
+					.orderBy(desc(mediaServerSyncedItems.playCount))
+					.limit(5)
+					.all();
 
-	const largestItems = db
+	// Unlike Most Played (which only a media server can report), file size is
+	// Cinephage's own data - it has nothing to do with whether a media server
+	// is connected, enabled, or synced. Source it straight from the local
+	// movie/episode file records instead of mediaServerSyncedItems, so
+	// Largest Files keeps working with zero media servers configured.
+	const topMovieFiles = db
 		.select({
-			title: mediaServerSyncedItems.title,
-			seriesName: mediaServerSyncedItems.seriesName,
-			fileSize: mediaServerSyncedItems.fileSize,
-			height: mediaServerSyncedItems.height,
-			videoCodec: mediaServerSyncedItems.videoCodec,
-			itemType: mediaServerSyncedItems.itemType
+			title: movies.title,
+			fileSize: movieFiles.size,
+			quality: movieFiles.quality,
+			mediaInfo: movieFiles.mediaInfo
 		})
-		.from(mediaServerSyncedItems)
-		.where(sql`${mediaServerSyncedItems.fileSize} IS NOT NULL`)
-		.orderBy(desc(mediaServerSyncedItems.fileSize))
+		.from(movieFiles)
+		.innerJoin(movies, eq(movieFiles.movieId, movies.id))
+		.where(sql`${movieFiles.size} IS NOT NULL`)
+		.orderBy(desc(movieFiles.size))
 		.limit(5)
 		.all();
+	const topEpisodeFiles = db
+		.select({
+			seriesName: series.title,
+			fileSize: episodeFiles.size,
+			quality: episodeFiles.quality,
+			mediaInfo: episodeFiles.mediaInfo
+		})
+		.from(episodeFiles)
+		.innerJoin(series, eq(episodeFiles.seriesId, series.id))
+		.where(sql`${episodeFiles.size} IS NOT NULL`)
+		.orderBy(desc(episodeFiles.size))
+		.limit(5)
+		.all();
+	const toRawHeight = (mediaInfo: Parameters<typeof extractResolution>[1]): number | null => {
+		const height = (mediaInfo as { height?: number } | null | undefined)?.height;
+		return typeof height === 'number' ? height : null;
+	};
+	const largestItems = [
+		...topMovieFiles.map((f) => ({
+			title: f.title,
+			seriesName: null as string | null,
+			fileSize: f.fileSize,
+			height: toRawHeight(f.mediaInfo as Parameters<typeof extractResolution>[1]),
+			videoCodec: extractVideoCodec(
+				f.quality as Parameters<typeof extractVideoCodec>[0],
+				f.mediaInfo as Parameters<typeof extractVideoCodec>[1]
+			),
+			itemType: 'movie'
+		})),
+		...topEpisodeFiles.map((f) => ({
+			title: f.seriesName,
+			seriesName: f.seriesName as string | null,
+			fileSize: f.fileSize,
+			height: toRawHeight(f.mediaInfo as Parameters<typeof extractResolution>[1]),
+			videoCodec: extractVideoCodec(
+				f.quality as Parameters<typeof extractVideoCodec>[0],
+				f.mediaInfo as Parameters<typeof extractVideoCodec>[1]
+			),
+			itemType: 'episode'
+		}))
+	]
+		.sort((a, b) => (b.fileSize ?? 0) - (a.fileSize ?? 0))
+		.slice(0, 5);
 
 	return {
 		mediaServerStats: {
@@ -197,19 +264,10 @@ export const load: LayoutServerLoad = async ({ parent }) => {
 			serversSynced,
 			totalFileSize,
 			resolutionBreakdown,
-			codecBreakdown: codecRows.map((r) => ({
-				label: (r.codec ?? 'Unknown').toUpperCase(),
-				count: r.count
-			})),
+			codecBreakdown,
 			hdrBreakdown,
-			audioCodecBreakdown: audioCodecRows.map((r) => ({
-				label: (r.codec ?? 'Unknown').toUpperCase(),
-				count: r.count
-			})),
-			containerBreakdown: containerRows.map((r) => ({
-				label: (r.container ?? 'Unknown').toUpperCase(),
-				count: r.count
-			}))
+			audioCodecBreakdown,
+			containerBreakdown
 		},
 		serverStatuses,
 		servers,

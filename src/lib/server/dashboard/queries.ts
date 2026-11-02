@@ -1,6 +1,6 @@
 import { stat, statfs } from 'node:fs/promises';
-import { db } from '$lib/server/db';
-import { toDateString, todayDateString } from '$lib/utils/format.js';
+import { db } from '#lib/server/db/index.js';
+import { toDateString, todayDateString } from '#lib/utils/format.js';
 import {
 	movies,
 	series,
@@ -14,13 +14,13 @@ import {
 	indexers,
 	downloadClients,
 	settings
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 import { count, eq, desc, and, inArray, sql, gte, ne } from 'drizzle-orm';
 import {
 	computeMissingMovieAvailabilityCounts,
 	enrichMoviesWithAvailability
 } from './movie-availability.js';
-import type { DashboardStats, RecentlyAddedData } from '$lib/types/dashboard.js';
+import type { DashboardStats, RecentlyAddedData } from '#lib/types/dashboard.js';
 
 /**
  * Shared dashboard query functions used by both the page server loader

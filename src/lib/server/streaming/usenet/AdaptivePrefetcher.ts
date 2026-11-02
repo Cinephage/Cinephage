@@ -9,7 +9,7 @@
  * - Checks persistent DB cache before NNTP fetch
  */
 
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 import type { NntpManager } from './NntpManager';
 
 const logger = createChildLogger({ logDomain: 'streams' as const });

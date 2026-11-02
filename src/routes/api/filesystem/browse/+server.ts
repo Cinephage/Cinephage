@@ -1,4 +1,3 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { readdir, stat } from 'fs/promises';
 import { join, dirname, resolve } from 'path';
@@ -7,8 +6,8 @@ import {
 	isManagedRootPath,
 	isPathAllowed,
 	isPathInsideManagedRoot
-} from '$lib/server/filesystem/path-guard.js';
-import { isVideoFile } from '$lib/server/library/media-info.js';
+} from '#lib/server/filesystem/path-guard.js';
+import { isVideoFile } from '#lib/server/library/media-info.js';
 
 export interface DirectoryEntry {
 	name: string;
@@ -33,7 +32,7 @@ export const GET: RequestHandler = async ({ url }) => {
 
 	// Validate path is within allowed boundaries
 	if (!(await isPathAllowed(requestedPath))) {
-		return json(
+		return Response.json(
 			{
 				currentPath: requestedPath,
 				parentPath: null,
@@ -45,7 +44,7 @@ export const GET: RequestHandler = async ({ url }) => {
 	}
 
 	if (excludeManagedRoots && (await isPathInsideManagedRoot(requestedPath))) {
-		return json(
+		return Response.json(
 			{
 				currentPath: requestedPath,
 				parentPath: dirname(requestedPath),
@@ -59,7 +58,7 @@ export const GET: RequestHandler = async ({ url }) => {
 	try {
 		const stats = await stat(requestedPath);
 		if (!stats.isDirectory()) {
-			return json({
+			return Response.json({
 				currentPath: requestedPath,
 				parentPath: dirname(requestedPath),
 				entries: [],
@@ -119,14 +118,14 @@ export const GET: RequestHandler = async ({ url }) => {
 		const parentPath =
 			potentialParent && (await isPathAllowed(potentialParent)) ? potentialParent : null;
 
-		return json({
+		return Response.json({
 			currentPath: requestedPath,
 			parentPath,
 			entries
 		} satisfies BrowseResponse);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Unknown error';
-		return json(
+		return Response.json(
 			{
 				currentPath: requestedPath,
 				parentPath: dirname(requestedPath),

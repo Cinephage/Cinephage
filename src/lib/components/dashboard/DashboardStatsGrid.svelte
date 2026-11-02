@@ -1,5 +1,5 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import {
 		Clapperboard,
 		Tv,
@@ -11,11 +11,11 @@
 		HardDrive,
 		ChevronDown,
 		ChevronUp
-	} from 'lucide-svelte';
-	import Skeleton from '$lib/components/ui/Skeleton.svelte';
+	} from '@lucide/svelte';
+	import Skeleton from '#lib/components/ui/Skeleton.svelte';
 	import { resolve } from '$app/paths';
-	import { formatBytes } from '$lib/utils/format.js';
-	import type { DashboardStats } from '$lib/types/dashboard.js';
+	import { formatBytes } from '#lib/utils/format.js';
+	import type { DashboardStats } from '#lib/types/dashboard.js';
 
 	interface Props {
 		stats: DashboardStats;
@@ -141,7 +141,7 @@
 <div class="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] items-start gap-3 sm:gap-4">
 	<div class="card relative bg-base-200 transition-colors hover:bg-base-300">
 		<a
-			href={resolve('/library/movies')}
+			href={resolve('library/movies')}
 			class="absolute inset-0 z-0"
 			aria-label={m.dashboard_stats_movies()}
 		></a>
@@ -193,7 +193,7 @@
 
 	<div class="card relative bg-base-200 transition-colors hover:bg-base-300">
 		<a
-			href={resolve('/library/tv')}
+			href={resolve('library/tv')}
 			class="absolute inset-0 z-0"
 			aria-label={m.dashboard_stats_tvShows()}
 		></a>
@@ -245,7 +245,7 @@
 
 	<div class="card relative bg-base-200 transition-colors hover:bg-base-300">
 		<a
-			href={resolve('/activity')}
+			href={resolve('activity')}
 			class="absolute inset-0 z-0"
 			aria-label={m.dashboard_stats_downloads()}
 		></a>
@@ -299,7 +299,7 @@
 
 	{#if stats.unmatchedFiles > 0}
 		<a
-			href={resolve('/library/unmatched')}
+			href={resolve('library/unmatched')}
 			class="card bg-base-200 transition-colors hover:bg-base-300"
 		>
 			<div class="card-body gap-1.5 p-3">
@@ -320,7 +320,7 @@
 		</a>
 	{:else if stats.missingRootFolders > 0}
 		<a
-			href={resolve('/library/unmatched')}
+			href={resolve('library/unmatched')}
 			class="card bg-base-200 transition-colors hover:bg-base-300"
 		>
 			<div class="card-body gap-1.5 p-3">
@@ -356,7 +356,7 @@
 	{/if}
 
 	<a
-		href={resolve('/settings/monitoring/status')}
+		href={resolve('settings/monitoring/status')}
 		class="card bg-base-200 transition-colors hover:bg-base-300"
 	>
 		<div class="card-body gap-1.5 p-3">

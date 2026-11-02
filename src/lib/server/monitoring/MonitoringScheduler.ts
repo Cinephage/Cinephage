@@ -11,17 +11,17 @@
  * - Provides grace period after startup before any automated tasks run
  */
 
-import { db } from '$lib/server/db/index.js';
-import { monitoringSettings } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { monitoringSettings } from '#lib/server/db/schema.js';
 import { EventEmitter } from 'events';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'monitoring' as const });
-import { taskHistoryService } from '$lib/server/tasks/TaskHistoryService.js';
-import { taskSettingsService } from '$lib/server/tasks/TaskSettingsService.js';
-import type { TaskExecutionContext } from '$lib/server/tasks/TaskExecutionContext.js';
-import { TaskCancelledException } from '$lib/server/tasks/TaskCancelledException.js';
-import type { BackgroundService, ServiceStatus } from '$lib/server/services/background-service.js';
+import { taskHistoryService } from '#lib/server/tasks/TaskHistoryService.js';
+import { taskSettingsService } from '#lib/server/tasks/TaskSettingsService.js';
+import type { TaskExecutionContext } from '#lib/server/tasks/TaskExecutionContext.js';
+import { TaskCancelledException } from '#lib/server/tasks/TaskCancelledException.js';
+import type { BackgroundService, ServiceStatus } from '#lib/server/services/background-service.js';
 
 /**
  * Default intervals in hours for each task type
@@ -37,7 +37,9 @@ const DEFAULT_INTERVALS = {
 	smartListRefresh: 1, // Hourly (checks which smart lists are due based on their individual intervals)
 	historyCleanup: 24, // Daily
 	libraryReconcile: 6, // Every 6 hours
-	dbBackup: 24 // Daily
+	requestSweep: 1, // Hourly (request TTL expiry + availability re-check)
+	dbBackup: 24, // Daily
+	metadataRefresh: 24 // Daily
 } as const;
 
 /**
@@ -125,8 +127,10 @@ export interface MonitoringStatus {
 		subtitleUpgrade: TaskStatus;
 		smartListRefresh: TaskStatus;
 		historyCleanup: TaskStatus;
-		libraryReconcile: TaskStatus;
+		'library-reconcile': TaskStatus;
 		dbBackup: TaskStatus;
+		'metadata-refresh': TaskStatus;
+		'request-sweep': TaskStatus;
 	};
 }
 
@@ -205,7 +209,12 @@ export class MonitoringScheduler extends EventEmitter implements BackgroundServi
 			'subtitleUpgrade',
 			'smartListRefresh',
 			'historyCleanup',
-			'dbBackup'
+			'dbBackup',
+			// Restore persisted last-run times for the registry-based tasks
+			// too, or they re-run right after every restart.
+			'library-reconcile',
+			'metadata-refresh',
+			'request-sweep'
 		];
 		for (const taskType of taskTypes) {
 			// First try to load from task_settings (new system)
@@ -513,6 +522,12 @@ export class MonitoringScheduler extends EventEmitter implements BackgroundServi
 			DEFAULT_INTERVALS.libraryReconcile;
 		const dbBackupInterval =
 			(await taskSettingsService.getTaskInterval('dbBackup')) ?? DEFAULT_INTERVALS.dbBackup;
+		const requestSweepInterval =
+			(await taskSettingsService.getTaskInterval('request-sweep')) ??
+			DEFAULT_INTERVALS.requestSweep;
+		const metadataRefreshInterval =
+			(await taskSettingsService.getTaskInterval('metadata-refresh')) ??
+			DEFAULT_INTERVALS.metadataRefresh;
 
 		this.taskIntervals.set('missing', Math.max(missingInterval, MIN_INTERVAL_HOURS));
 		this.taskIntervals.set('upgrade', Math.max(upgradeInterval, MIN_INTERVAL_HOURS));
@@ -537,6 +552,11 @@ export class MonitoringScheduler extends EventEmitter implements BackgroundServi
 			Math.max(libraryReconcileInterval, MIN_INTERVAL_HOURS)
 		);
 		this.taskIntervals.set('dbBackup', Math.max(dbBackupInterval, MIN_INTERVAL_HOURS));
+		this.taskIntervals.set('request-sweep', Math.max(requestSweepInterval, MIN_INTERVAL_HOURS));
+		this.taskIntervals.set(
+			'metadata-refresh',
+			Math.max(metadataRefreshInterval, MIN_INTERVAL_HOURS)
+		);
 
 		// Log scheduled intervals
 		for (const [taskType, intervalHours] of this.taskIntervals.entries()) {
@@ -851,6 +871,10 @@ export class MonitoringScheduler extends EventEmitter implements BackgroundServi
 				const { executeMetadataRefreshTask } = await import('./tasks/MetadataRefreshTask.js');
 				return await executeMetadataRefreshTask(ctx);
 			}
+			case 'request-sweep': {
+				const { executeRequestSweepTask } = await import('./tasks/RequestSweepTask.js');
+				return await executeRequestSweepTask(ctx);
+			}
 			case 'original-language-backfill': {
 				const { executeOriginalLanguageBackfillTask } =
 					await import('./tasks/OriginalLanguageBackfillTask.js');
@@ -910,6 +934,10 @@ export class MonitoringScheduler extends EventEmitter implements BackgroundServi
 
 	async runMetadataRefresh(): Promise<TaskResult> {
 		return await this.executeTaskManually('metadata-refresh');
+	}
+
+	async runRequestSweep(): Promise<TaskResult> {
+		return await this.executeTaskManually('request-sweep');
 	}
 
 	async runOriginalLanguageBackfill(): Promise<TaskResult> {
@@ -1080,11 +1108,16 @@ export class MonitoringScheduler extends EventEmitter implements BackgroundServi
 					DEFAULT_INTERVALS.smartListRefresh
 				),
 				historyCleanup: await getTaskStatus('historyCleanup', DEFAULT_INTERVALS.historyCleanup),
-				libraryReconcile: await getTaskStatus(
+				'library-reconcile': await getTaskStatus(
 					'library-reconcile',
 					DEFAULT_INTERVALS.libraryReconcile
 				),
-				dbBackup: await getTaskStatus('dbBackup', DEFAULT_INTERVALS.dbBackup)
+				dbBackup: await getTaskStatus('dbBackup', DEFAULT_INTERVALS.dbBackup),
+				'metadata-refresh': await getTaskStatus(
+					'metadata-refresh',
+					DEFAULT_INTERVALS.metadataRefresh
+				),
+				'request-sweep': await getTaskStatus('request-sweep', DEFAULT_INTERVALS.requestSweep)
 			}
 		};
 	}

@@ -1,5 +1,5 @@
-import { createChildLogger } from '$lib/logging';
-import type { ServiceStatus } from '$lib/server/services/background-service.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import type { ServiceStatus } from '#lib/server/services/background-service.js';
 import type { CinephageSettingsService } from './settings/CinephageSettingsService.js';
 import { getCinephageSettingsService } from './settings/CinephageSettingsService.js';
 import type { CinephageCore } from './core/CinephageCore.js';

@@ -125,7 +125,7 @@ const tvFixtureDir = join(tmpdir(), `cinephage-bench-tv-${runId}`);
 const fixtureDir = join(tmpdir(), `cinephage-bench-fixture-${runId}`);
 const dataDir = join(tmpdir(), `cinephage-bench-data-${runId}`);
 
-// Set DATA_DIR before importing any $lib module so the DB connection
+// Set DATA_DIR before importing any #lib module so the DB connection
 // points at our temp directory, not the production database.
 // Silence pino so benchmark output is not drowned in JSON log lines.
 process.env.DATA_DIR = dataDir;

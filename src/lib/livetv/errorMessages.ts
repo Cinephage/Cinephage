@@ -1,4 +1,4 @@
-import type { LiveTvProviderType } from '$lib/types/livetv';
+import type { LiveTvProviderType } from '#lib/types/livetv.js';
 
 function extractHttpStatus(raw: string): number | null {
 	const match = raw.match(/\bHTTP\s+(\d{3})\b/i) ?? raw.match(/\b(\d{3})\b/);
@@ -15,6 +15,8 @@ function getProviderLabel(providerType?: LiveTvProviderType): string {
 			return 'XStream server';
 		case 'stalker':
 			return 'Stalker portal';
+		case 'cinephage-live':
+			return 'Cinephage Live API';
 		default:
 			return 'provider';
 	}

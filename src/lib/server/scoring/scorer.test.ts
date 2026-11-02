@@ -7,8 +7,9 @@ vi.mock('./formats/registry.js', () => ({
 	invalidateFormatCache: () => {}
 }));
 
-import { scoreRelease, isUpgrade } from './scorer';
-import { DEFAULT_PROFILES } from './profiles';
+import { scoreRelease, isUpgrade, parseRelease } from './scorer';
+import { DEFAULT_PROFILES, BALANCED_PROFILE } from './profiles';
+import { BANNED_SCORE } from './types';
 import type { ScoringProfile } from './types';
 
 // Profiles that support torrent-based release scoring (excludes streaming-only)
@@ -638,5 +639,77 @@ describe('Season Pack and Episode Scoring', () => {
 		// Current implementation: same quality = same score
 		// (Pack bonuses are not applied in current scorer implementation)
 		expect(singleEpisode.totalScore).toBe(seasonPack.totalScore);
+	});
+});
+
+describe('Glued channel-digit audio parsing (#585)', () => {
+	it('detects FLAC1.0 and lets the Bluray encode outrank the REMUX under Balanced', () => {
+		const remux = scoreRelease(
+			'And.Justice.for.All.1979.1080p.BluRay.REMUX.AVC.FLAC.1.0-ZnP',
+			BALANCED_PROFILE
+		);
+		const encode = scoreRelease(
+			'And.Justice.for.All.1979.1080p.BluRay.FLAC1.0.x264-ZoroSenpai',
+			BALANCED_PROFILE
+		);
+
+		// Both detect FLAC now, so the encode's +50 Bluray-vs-Remux source
+		// edge decides: 200+200+10+80 = 490 beats 200+150+10+80 = 440.
+		// Before the parser fix the encode lost FLAC's 80 points (410 < 440).
+		expect(encode.totalScore).toBe(490);
+		expect(remux.totalScore).toBe(440);
+	});
+});
+
+describe('Combo HDR releases (#640)', () => {
+	const COMBO = 'Movie.2024.2160p.WEB-DL.DDP5.1.DV.HDR10+.H.265-GROUP';
+	const DV_ONLY = 'Movie.2024.2160p.WEB-DL.DDP5.1.DV.H.265-GROUP';
+
+	it('detects both formats and keeps the best as the headline', () => {
+		const result = scoreRelease(COMBO, BALANCED_PROFILE);
+		const parsed = parseRelease(COMBO);
+
+		expect(parsed.hdrFormats).toEqual(['dolby-vision', 'hdr10+']);
+		expect(parsed.hdr).toBe('dolby-vision');
+		expect(result.matchedFormats.map((f) => f.format.id)).toContain('hdr-hdr10plus');
+	});
+
+	it('scores HDR once so a combo is not double-counted', () => {
+		const combo = scoreRelease(COMBO, BALANCED_PROFILE);
+		const dvOnly = scoreRelease(DV_ONLY, BALANCED_PROFILE);
+
+		expect(combo.breakdown.hdr.score).toBe(dvOnly.breakdown.hdr.score);
+		expect(combo.breakdown.hdr.formats).toEqual(['Dolby Vision']);
+	});
+
+	it('exposes every detected format for requirement and ban checks', () => {
+		// matchedFormats is the full detection set, not the scoring subset.
+		const result = scoreRelease(COMBO, BALANCED_PROFILE);
+		const ids = result.matchedFormats.map((f) => f.format.id);
+
+		expect(ids).toContain('hdr-dolby-vision');
+		expect(ids).toContain('hdr-hdr10plus');
+	});
+
+	it('bans a combo when the lower-priority format is banned', () => {
+		// A banned HDR10+ must not be hidden by DV winning mutual exclusivity.
+		const profile = createScoringProfile({
+			id: 'ban-hdr10plus',
+			formatScores: { 'hdr-hdr10plus': BANNED_SCORE, 'hdr-dolby-vision': 100 }
+		}) as unknown as ScoringProfile;
+		const result = scoreRelease(COMBO, profile);
+
+		expect(result.isBanned).toBe(true);
+		expect(result.bannedReasons).toContain('HDR10+');
+		expect(result.totalScore).toBe(-Infinity);
+	});
+
+	it('does not ban a DV-only release for the HDR10+ rule', () => {
+		const profile = createScoringProfile({
+			id: 'ban-hdr10plus-dv-only',
+			formatScores: { 'hdr-hdr10plus': BANNED_SCORE, 'hdr-dolby-vision': 100 }
+		}) as unknown as ScoringProfile;
+
+		expect(scoreRelease(DV_ONLY, profile).isBanned).toBe(false);
 	});
 });

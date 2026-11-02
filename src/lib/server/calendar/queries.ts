@@ -1,10 +1,10 @@
-import { db } from '$lib/server/db';
-import { movies, series, episodes } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { movies, series, episodes } from '#lib/server/db/schema.js';
 import { eq, and, gte, lte, inArray } from 'drizzle-orm';
-import { tmdb } from '$lib/server/tmdb.js';
-import type { DiscoverItem } from '$lib/server/tmdb.js';
-import { toDateString, todayDateString } from '$lib/utils/format.js';
-import * as m from '$lib/paraglide/messages.js';
+import { tmdb } from '#lib/server/tmdb.js';
+import type { DiscoverItem } from '#lib/server/tmdb.js';
+import { toDateString, todayDateString } from '#lib/utils/format.js';
+import * as m from '#lib/paraglide/messages.js';
 
 export interface CalendarMovieItem {
 	tmdbId: number;

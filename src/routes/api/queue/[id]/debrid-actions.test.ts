@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 	buildTorrentRecoveryPath: vi.fn()
 }));
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	db: {
 		select: vi.fn(() => ({
 			from: vi.fn(() => ({
@@ -30,7 +30,7 @@ vi.mock('$lib/server/db', () => ({
 	}
 }));
 
-vi.mock('$lib/server/downloadClients/monitoring', () => ({
+vi.mock('#lib/server/downloadClients/monitoring/index.js', () => ({
 	downloadMonitor: {
 		pauseDownload: mocks.pauseDownload,
 		resumeDownload: mocks.resumeDownload
@@ -39,24 +39,24 @@ vi.mock('$lib/server/downloadClients/monitoring', () => ({
 	buildTorrentRecoveryPath: mocks.buildTorrentRecoveryPath
 }));
 
-vi.mock('$lib/server/downloadClients/DownloadClientManager', () => ({
+vi.mock('#lib/server/downloadClients/DownloadClientManager.js', () => ({
 	getDownloadClientManager: () => ({
 		getClientInstance: mocks.getClientInstance,
 		getClient: vi.fn()
 	})
 }));
 
-vi.mock('$lib/server/downloads/handlers/DebridHandler.js', () => ({
+vi.mock('#lib/server/downloads/handlers/DebridHandler.js', () => ({
 	DebridHandler: class {
 		retry = mocks.debridRetry;
 	}
 }));
 
-vi.mock('$lib/server/downloadClients/import', () => ({
+vi.mock('#lib/server/downloadClients/import/index.js', () => ({
 	getImportService: vi.fn()
 }));
 
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	createChildLogger: () => ({
 		info: vi.fn(),
 		warn: vi.fn(),
@@ -143,7 +143,8 @@ describe('debrid queue actions', () => {
 						method: 'PATCH',
 						headers: { 'content-type': 'application/json' },
 						body: JSON.stringify({ action })
-					})
+					}),
+					locals: { user: { id: 'admin-1', role: 'admin' } }
 				} as never)
 			);
 
@@ -166,7 +167,10 @@ describe('debrid queue actions', () => {
 		});
 		const { POST } = await import('./retry/+server');
 
-		const response = await POST({ params: { id: original.id } } as never);
+		const response = await POST({
+			params: { id: original.id },
+			locals: { user: { id: 'admin-1', role: 'admin' } }
+		} as never);
 		const body = await response.json();
 
 		expect(response.status).toBe(200);
@@ -195,7 +199,10 @@ describe('debrid queue actions', () => {
 		});
 		const { POST } = await import('./retry/+server');
 
-		const response = await POST({ params: { id: original.id } } as never);
+		const response = await POST({
+			params: { id: original.id },
+			locals: { user: { id: 'admin-1', role: 'admin' } }
+		} as never);
 		const body = await response.json();
 
 		expect(response.status).toBe(400);
@@ -219,7 +226,10 @@ describe('debrid queue actions', () => {
 		});
 		const { POST } = await import('./retry/+server');
 
-		const response = await POST({ params: { id: original.id } } as never);
+		const response = await POST({
+			params: { id: original.id },
+			locals: { user: { id: 'admin-1', role: 'admin' } }
+		} as never);
 		const body = await response.json();
 
 		expect(response.status).toBe(409);

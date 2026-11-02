@@ -15,10 +15,10 @@
  * flattening a download down to a single final-outcome row.
  */
 
-import { db } from '$lib/server/db/index.js';
-import { downloadHistory } from '$lib/server/db/schema.js';
-import { buildHistoryTimeline } from '$lib/server/activity/activity-transformers.js';
-import type { ActivityEventType } from '$lib/types/activity.js';
+import { db } from '#lib/server/db/index.js';
+import { downloadHistory } from '#lib/server/db/schema.js';
+import { buildHistoryTimeline } from '#lib/server/activity/activity-transformers.js';
+import type { ActivityEventType } from '#lib/types/activity.js';
 import { getOrAssignArrId, getOrAssignArrIds } from './ArrIdMappingService.js';
 import type { ArrAppName } from './systemStatus.js';
 

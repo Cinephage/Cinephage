@@ -1,13 +1,13 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
-	import { updateTmdbFilters } from '$lib/api/settings.js';
-	import TmdbConfigRequired from '$lib/components/ui/TmdbConfigRequired.svelte';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import { SettingsPage, SettingsSection } from '$lib/components/ui/settings';
-	import type { GlobalTmdbFilters } from '$lib/types/tmdb';
+	import * as m from '#lib/paraglide/messages.js';
+	import { updateTmdbFilters } from '#lib/api/settings.js';
+	import TmdbConfigRequired from '#lib/components/ui/TmdbConfigRequired.svelte';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { SettingsPage, SettingsSection } from '#lib/components/ui/settings/index.js';
+	import type { GlobalTmdbFilters } from '#lib/types/tmdb.js';
 	import type { PageData } from './$types';
 	import { page } from '$app/state';
-	import { TMDB } from '$lib/config/constants.js';
+	import { TMDB } from '#lib/config/constants.js';
 
 	let { data }: { data: PageData } = $props();
 	let filtersState = $state<GlobalTmdbFilters>({

@@ -1,7 +1,7 @@
-import { tmdb } from '$lib/server/tmdb';
-import { createChildLogger } from '$lib/logging';
-import { getLanguageSettingsService } from '$lib/server/subtitles/services/LanguageSettingsService';
-import { LanguageProfileService } from '$lib/server/subtitles/services/LanguageProfileService';
+import { tmdb } from '#lib/server/tmdb.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { getLanguageSettingsService } from '#lib/server/subtitles/services/LanguageSettingsService.js';
+import { LanguageProfileService } from '#lib/server/subtitles/services/LanguageProfileService.js';
 import type { PageServerLoad } from './$types';
 
 const logger = createChildLogger({ module: 'LanguagesSettingsPage', logDomain: 'system' });
@@ -10,7 +10,7 @@ const logger = createChildLogger({ module: 'LanguagesSettingsPage', logDomain: '
  * Library > Languages tab. Loads the language-settings singleton, the
  * language profiles, and the TMDB country catalogue for the region select.
  * Language dropdowns use the client-safe shared registry
- * ($lib/shared/languages) directly, so no TMDB language fetch is needed.
+ * (#lib/shared/languages) directly, so no TMDB language fetch is needed.
  */
 export const load: PageServerLoad = async () => {
 	const [settings, profiles] = await Promise.all([

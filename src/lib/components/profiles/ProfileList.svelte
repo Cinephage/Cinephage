@@ -1,8 +1,8 @@
 <script lang="ts">
-	import type { ScoringProfile } from '$lib/types/profile';
+	import type { ScoringProfile } from '#lib/types/profile.js';
 	import ProfileTable from './ProfileTable.svelte';
-	import { Plus } from 'lucide-svelte';
-	import * as m from '$lib/paraglide/messages.js';
+	import { Plus } from '@lucide/svelte';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
 		profiles: ScoringProfile[];

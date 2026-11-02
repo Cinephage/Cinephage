@@ -1,8 +1,8 @@
 import type { DecisionStage, StageResult } from '../../types.js';
 import type { GrabDecisionContext } from './types.js';
-import { qualityFilter } from '$lib/server/quality/QualityFilter.js';
-import { ReleaseParser } from '$lib/server/indexers/parser/ReleaseParser.js';
-import type { SizeValidationContext } from '$lib/server/scoring/types.js';
+import { qualityFilter } from '#lib/server/quality/QualityFilter.js';
+import { ReleaseParser } from '#lib/server/indexers/parser/ReleaseParser.js';
+import type { SizeValidationContext } from '#lib/server/scoring/types.js';
 
 const parser = new ReleaseParser();
 

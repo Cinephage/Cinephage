@@ -1,11 +1,10 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { db } from '$lib/server/db/index.js';
-import { rejectedReleases, movies, series } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { rejectedReleases, movies, series } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { grabService } from '$lib/server/downloads/GrabService.js';
-import { requireAuth } from '$lib/server/auth/authorization.js';
-import { createChildLogger } from '$lib/logging';
+import { grabService } from '#lib/server/downloads/GrabService.js';
+import { requireAuth } from '#lib/server/auth/authorization.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'ReportsRejectedOverride', logDomain: 'downloads' });
 
@@ -25,11 +24,11 @@ export const POST: RequestHandler = async (event) => {
 	});
 
 	if (!record) {
-		return json({ success: false, error: 'Record not found' }, { status: 404 });
+		return Response.json({ success: false, error: 'Record not found' }, { status: 404 });
 	}
 
 	if (!record.downloadUrl && !record.magnetUrl && !record.infoHash) {
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error:
@@ -46,7 +45,10 @@ export const POST: RequestHandler = async (event) => {
 			where: eq(movies.tmdbId, record.tmdbId)
 		});
 		if (!movie) {
-			return json({ success: false, error: 'Linked movie not found in library' }, { status: 422 });
+			return Response.json(
+				{ success: false, error: 'Linked movie not found in library' },
+				{ status: 422 }
+			);
 		}
 		target = { type: 'movie', movieId: movie.id };
 	} else if (record.mediaType === 'tv' && record.tmdbId) {
@@ -54,11 +56,14 @@ export const POST: RequestHandler = async (event) => {
 			where: eq(series.tmdbId, record.tmdbId)
 		});
 		if (!show) {
-			return json({ success: false, error: 'Linked series not found in library' }, { status: 422 });
+			return Response.json(
+				{ success: false, error: 'Linked series not found in library' },
+				{ status: 422 }
+			);
 		}
 		target = { type: 'series', seriesId: show.id, episodeIds: [] };
 	} else {
-		return json(
+		return Response.json(
 			{ success: false, error: 'Cannot resolve grab target — no linked media' },
 			{ status: 422 }
 		);
@@ -96,7 +101,10 @@ export const POST: RequestHandler = async (event) => {
 				{ id, title: record.releaseTitle, error: result.error },
 				'[Reports] Override grab failed'
 			);
-			return json({ success: false, error: result.error ?? 'Grab failed' }, { status: 500 });
+			return Response.json(
+				{ success: false, error: result.error ?? 'Grab failed' },
+				{ status: 500 }
+			);
 		}
 
 		// Mark record as overridden
@@ -105,9 +113,9 @@ export const POST: RequestHandler = async (event) => {
 			.set({ status: 'overridden' })
 			.where(eq(rejectedReleases.id, id));
 
-		return json({ success: true, data: { download: result.download } });
+		return Response.json({ success: true, data: { download: result.download } });
 	} catch (err) {
 		logger.error({ err, id, title: record.releaseTitle }, '[Reports] Override grab threw');
-		return json({ success: false, error: 'Internal error during grab' }, { status: 500 });
+		return Response.json({ success: false, error: 'Internal error during grab' }, { status: 500 });
 	}
 };

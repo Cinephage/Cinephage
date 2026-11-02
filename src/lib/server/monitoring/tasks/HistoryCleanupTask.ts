@@ -11,14 +11,14 @@
  * Runs daily (default: every 24 hours) to keep the database lean.
  */
 
-import { db } from '$lib/server/db/index.js';
-import { subtitleHistory } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { subtitleHistory } from '#lib/server/db/schema.js';
 import { lt } from 'drizzle-orm';
-import { ActivityService } from '$lib/server/activity/ActivityService.js';
-import { getTaskHistoryService } from '$lib/server/tasks/TaskHistoryService.js';
-import { createChildLogger } from '$lib/logging/index.js';
+import { ActivityService } from '#lib/server/activity/ActivityService.js';
+import { getTaskHistoryService } from '#lib/server/tasks/TaskHistoryService.js';
+import { createChildLogger } from '#lib/logging/index.js';
 import type { TaskResult } from '../MonitoringScheduler.js';
-import type { TaskExecutionContext } from '$lib/server/tasks/TaskExecutionContext.js';
+import type { TaskExecutionContext } from '#lib/server/tasks/TaskExecutionContext.js';
 
 const logger = createChildLogger({ module: 'HistoryCleanupTask', logDomain: 'monitoring' });
 

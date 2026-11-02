@@ -52,14 +52,20 @@ Cinephage is designed for use on trusted local networks. When exposing the appli
    - Configure SSL/TLS with valid certificates
    - Enable HTTPS-only access
 
-2. **Configure CSRF Protection**
+2. **Configure Trusted Origins**
    - Set the `ORIGIN` environment variable to your access URL
    - Example: `ORIGIN=https://cinephage.example.com`
    - Set `BETTER_AUTH_URL` to the same public URL for auth callbacks and redirects
+   - When the instance is NOT behind a reverse proxy, set
+     `BETTER_AUTH_TRUST_FORWARDED_ORIGINS=false` so a caller cannot nominate
+     its own host as trusted via `X-Forwarded-Host`
+   - Narrow `BETTER_AUTH_TRUSTED_ORIGINS` to the exact origins you use
 
-3. **Authentication**
-   - Cinephage does not currently include built-in authentication
-   - Use reverse proxy authentication (basic auth, OAuth proxy, etc.)
+3. **Accounts and Roles**
+   - The first account created by the setup wizard is the administrator
+   - Admins can create additional accounts; non-admin accounts are confined
+     to the read-only library/discover/calendar surfaces plus their own
+     preferences, sessions, notifications, and media requests
    - Consider VPN access for remote usage
 
 ### Application Security
@@ -76,7 +82,10 @@ Cinephage is designed for use on trusted local networks. When exposing the appli
 3. **API Keys**
    - Store API keys securely
    - Use separate API keys for production and development
-   - Revoke unused or compromised keys immediately
+   - Revoke or regenerate unused or compromised keys immediately
+   - Streaming keys are embedded in `.strm` files and playlist/stream URLs,
+     so treat media directories and reverse-proxy logs as credential-adjacent;
+     reserve the main API key for automation that needs full API access
 
 4. **File System**
    - Configure appropriate permissions on media directories
@@ -96,29 +105,56 @@ Cinephage is designed for use on trusted local networks. When exposing the appli
 
 ## Known Security Considerations
 
-### No Built-in Authentication
+### Authentication and Authorization
 
-Cinephage does not currently implement user authentication. Anyone with network access to the application can:
+Cinephage ships with built-in username/password authentication (Better Auth)
+and role-based access:
 
-- View and modify library contents
-- Trigger downloads
-- Modify settings
+- The first account created by the setup wizard is the administrator; only
+  admins can create further accounts, and the last admin cannot be demoted
+  or deleted
+- Non-admin accounts are confined to read-only shared surfaces plus their own
+  preferences, sessions, notifications, and media requests; admin-only pages
+  and API routes return 403
+- Sessions are database-backed and revocable; banning an account revokes its
+  sessions and disables its API keys
+- API access uses per-account keys: a "main" key has full API access, while a
+  "streaming" key only authenticates Live TV and streaming endpoints
 
-**Mitigation**: Use reverse proxy authentication or restrict network access.
+**Mitigation**: keep `BETTER_AUTH_SECRET` secret (it signs sessions and
+encrypts stored API-key material), rotate credentials if the environment or
+database was ever exposed, and still restrict network access — the app is
+designed for trusted networks.
 
-### API Access
+### Stored Credentials
 
-All API endpoints are accessible without authentication. This is by design for local network use but requires consideration for exposed installations.
+Integration credentials (indexers, download clients, subtitle providers,
+Live TV portals, media servers) and metadata API keys (TMDB/TVDB) are stored
+in the SQLite database **encrypted at rest** (schema 161+), and the database
+also holds password hashes and session rows. Encryption details:
 
-**Mitigation**: Implement authentication at the reverse proxy level.
+- AES-256-GCM with per-value random nonces, keys derived via HKDF-SHA256 from
+  a master key, and each ciphertext bound to its owning record — relocated
+  ciphertexts fail to decrypt
+- Key custody: `ENCRYPTION_MASTER_KEY` (or `ENCRYPTION_MASTER_KEY_FILE` for
+  Docker secrets) when set; otherwise derived from `BETTER_AUTH_SECRET`
+- Key rotation: set the new master key plus `ENCRYPTION_PREVIOUS_KEYS` (old
+  secrets), run the `rotate-credentials` task in Settings → Tasks to
+  re-encrypt everything, then remove the fallback variable
+- Configuration backups deliberately carry credentials in plaintext so they
+  restore onto instances with different master keys — protect backup files
+  accordingly (the optional backup passphrase encrypts the whole payload)
+- A wrong/rotated-away master key fails closed: affected credentials are
+  dropped and must be re-entered
 
-### Indexer Credentials
+Ensure:
 
-Credentials for private indexers are stored in the SQLite database. While the database is local, ensure:
-
-- Appropriate file system permissions on `data/cinephage.db`
+- Restrictive file permissions on `data/cinephage.db`, its `-wal`/`-shm`
+  companions, `data/logs/`, and the `.env` holding `BETTER_AUTH_SECRET`
+  (600/640)
 - Backups are stored securely
-- Database is not exposed via web server misconfiguration
+- The database is not exposed via web server misconfiguration or shared mounts
+- Rotate stored credentials if the database or a backup was ever exposed
 
 ### Logging
 

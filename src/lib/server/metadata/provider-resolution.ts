@@ -12,8 +12,8 @@
 import { buildMetadataProviderRegistry } from './provider-registry.js';
 import { resolveAnimeProviderRef } from './provider-ref-resolver.js';
 import type { MetadataDetails, MetadataMediaType, MetadataProviderId } from './providers/types.js';
-import { storeProviderTitleVariants } from '$lib/server/services/AlternateTitleService.js';
-import { createChildLogger } from '$lib/logging';
+import { storeProviderTitleVariants } from '#lib/server/services/AlternateTitleService.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 

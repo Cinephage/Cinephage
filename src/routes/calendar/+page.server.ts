@@ -1,13 +1,13 @@
 import type { PageServerLoad } from './$types';
-import { getCalendarData } from '$lib/server/calendar/queries.js';
-import { getCalendarPreferences } from '$lib/server/settings/calendar-preferences.js';
-import { calendarPreferencesSchema } from '$lib/validation/schemas.js';
-import { tmdb } from '$lib/server/tmdb.js';
-import { createChildLogger } from '$lib/logging';
+import { getCalendarData } from '#lib/server/calendar/queries.js';
+import { getUserPreference } from '#lib/server/preferences/user-preferences.js';
+import { calendarPreferencesSchema } from '#lib/validation/schemas.js';
+import { tmdb } from '#lib/server/tmdb.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'CalendarPage', logDomain: 'system' });
 
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
 	const monthParam = url.searchParams.get('month');
 	const now = new Date();
 	let currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -16,9 +16,13 @@ export const load: PageServerLoad = async ({ url }) => {
 		currentMonth = monthParam;
 	}
 
+	if (!locals.user) {
+		return { days: [], currentMonth, preferences: calendarPreferencesSchema.parse({}), genres: [] };
+	}
+
 	try {
 		const [preferences, movieGenresRes, tvGenresRes] = await Promise.all([
-			getCalendarPreferences(),
+			getUserPreference(locals.user.id, 'calendar'),
 			tmdb.getMovieGenres().catch(() => ({ genres: [] })),
 			tmdb.getTvGenres().catch(() => ({ genres: [] }))
 		]);

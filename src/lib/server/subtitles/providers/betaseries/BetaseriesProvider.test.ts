@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BetaseriesProvider } from './BetaseriesProvider';
+import { BetaseriesProvider, mapBetaseriesLanguage } from './BetaseriesProvider';
 import type { SubtitleProviderConfig } from '../../types';
 
 const DOWNLOAD_URL = 'https://betaseries.test/subtitles/55.srt';
@@ -34,40 +34,36 @@ interface FetchCall {
 }
 
 function stubFetch(provider: BetaseriesProvider, calls: FetchCall[]) {
-	// @ts-expect-error spying on a protected method
-	vi.spyOn(provider, 'fetchWithTimeout').mockImplementation(
-		// @ts-expect-error mock implementation type mismatch for protected method
-		async (url: string) => {
-			calls.push({ url });
+	vi.spyOn(provider, 'fetchWithTimeout').mockImplementation(async (url: string) => {
+		calls.push({ url });
 
-			if (url.includes('episodes/display')) {
-				return {
-					ok: true,
-					json: async () => ({
-						episode: {
-							subtitles: [
-								{
-									id: 55,
-									language: 'VF',
-									file: 'Show.S01E02.FR.srt',
-									url: DOWNLOAD_URL
-								}
-							]
-						}
-					})
-				} as Response;
-			}
-
-			if (url === DOWNLOAD_URL) {
-				return {
-					ok: true,
-					arrayBuffer: async () => new TextEncoder().encode(SRT_CONTENT).buffer
-				} as Response;
-			}
-
-			throw new Error(`Unexpected fetch URL in test: ${url}`);
+		if (url.includes('episodes/display')) {
+			return {
+				ok: true,
+				json: async () => ({
+					episode: {
+						subtitles: [
+							{
+								id: 55,
+								language: 'VF',
+								file: 'Show.S01E02.FR.srt',
+								url: DOWNLOAD_URL
+							}
+						]
+					}
+				})
+			} as Response;
 		}
-	);
+
+		if (url === DOWNLOAD_URL) {
+			return {
+				ok: true,
+				arrayBuffer: async () => new TextEncoder().encode(SRT_CONTENT).buffer
+			} as Response;
+		}
+
+		throw new Error(`Unexpected fetch URL in test: ${url}`);
+	});
 }
 
 describe('BetaseriesProvider manual download', () => {
@@ -161,5 +157,87 @@ describe('BetaseriesProvider manual download', () => {
 				matchScore: 0
 			})
 		).rejects.toThrow('No download URL available');
+	});
+});
+
+describe('BetaseriesProvider language mapping', () => {
+	describe('mapBetaseriesLanguage', () => {
+		it('maps VF and ISO French markers to French', () => {
+			expect(mapBetaseriesLanguage('VF')).toBe('fr');
+			expect(mapBetaseriesLanguage('fr')).toBe('fr');
+			expect(mapBetaseriesLanguage('fra')).toBe('fr');
+		});
+
+		it('maps VO to the media original language when it is known', () => {
+			expect(mapBetaseriesLanguage('VO', 'es')).toBe('es');
+			expect(mapBetaseriesLanguage('VO', 'ja')).toBe('ja');
+		});
+
+		it('falls back to English for VO when the original language is unknown', () => {
+			expect(mapBetaseriesLanguage('VO')).toBe('en');
+		});
+
+		it('maps English markers and skips unresolvable ones', () => {
+			expect(mapBetaseriesLanguage('en')).toBe('en');
+			expect(mapBetaseriesLanguage('eng')).toBe('en');
+			expect(mapBetaseriesLanguage('zzz-not-a-language')).toBeNull();
+		});
+	});
+
+	function stubSubtitleLanguage(provider: BetaseriesProvider, language: string) {
+		vi.spyOn(provider, 'fetchWithTimeout').mockImplementation(
+			async () =>
+				({
+					ok: true,
+					json: async () => ({
+						episode: {
+							subtitles: [{ id: 55, language, file: 'Show.S01E02.srt', url: DOWNLOAD_URL }]
+						}
+					})
+				}) as Response
+		);
+	}
+
+	function searchCriteria(languages: string[], originalLanguage?: string) {
+		return {
+			title: 'Show',
+			seriesTitle: 'Show',
+			tvdbId: 12345,
+			season: 1,
+			episode: 2,
+			languages,
+			...(originalLanguage ? { originalLanguage } : {})
+		};
+	}
+
+	it('labels a VO result with the media original language when requested', async () => {
+		const provider = new BetaseriesProvider(makeConfig());
+		stubSubtitleLanguage(provider, 'VO');
+
+		const results = await provider.search(searchCriteria(['en'], 'en'));
+
+		expect(results).toHaveLength(1);
+		expect(results[0].language).toBe('en');
+	});
+
+	it('falls back to English for VO when the original language is unknown', async () => {
+		const provider = new BetaseriesProvider(makeConfig());
+		stubSubtitleLanguage(provider, 'VO');
+
+		const results = await provider.search(searchCriteria(['en']));
+
+		expect(results).toHaveLength(1);
+		expect(results[0].language).toBe('en');
+	});
+
+	it('drops a VO result whose real language is not the requested one', async () => {
+		// A VO subtitle for a Spanish show is Spanish; an English request must
+		// not receive it mislabeled as English.
+		const provider = new BetaseriesProvider(makeConfig());
+		stubSubtitleLanguage(provider, 'VO');
+
+		const results = await provider.search(searchCriteria(['en'], 'es'));
+
+		expect(results).toHaveLength(0);
 	});
 });

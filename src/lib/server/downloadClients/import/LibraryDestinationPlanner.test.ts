@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NamingService } from '$lib/server/library/naming/NamingService';
+import { NamingService } from '#lib/server/library/naming/NamingService.js';
 import { LibraryDestinationPlanner } from './LibraryDestinationPlanner';
 
 describe('LibraryDestinationPlanner', () => {

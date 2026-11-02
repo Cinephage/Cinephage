@@ -21,7 +21,7 @@
  * acquisition.
  */
 
-import { calculateTitleSimilarity } from '$lib/server/library/title-matching.js';
+import { calculateTitleSimilarity } from '#lib/server/library/title-matching.js';
 
 const LEADING_ARTICLES = new Set(['the', 'a', 'an']);
 
@@ -106,7 +106,20 @@ export function matchReleaseToTarget(input: ReleaseIdentityInput): ReleaseIdenti
 		return { matched: false, method: 'none', bestSimilarity: 0, reason: 'no_candidates' };
 	}
 
-	const releaseNorm = normalizeIdentityTitle(input.releaseTitle);
+	// Dual-language releases often join the primary and alternate titles with
+	// " / " ("Оригинал / Original Title"). The library's target title is
+	// usually single-language, so comparing the whole joined string drags
+	// similarity down with tokens that were never meant to match; comparing
+	// each segment too lets a clean match on either side decide identity
+	// without weakening the full-string comparison (still tried first).
+	const releaseCandidates = Array.from(
+		new Set(
+			[input.releaseTitle, ...input.releaseTitle.split(/\s*\/\s*/)]
+				.map((segment) => segment.trim())
+				.filter((segment) => segment.length > 0)
+		)
+	);
+
 	let best: ReleaseIdentityMatch = {
 		matched: false,
 		method: 'none',
@@ -116,39 +129,44 @@ export function matchReleaseToTarget(input: ReleaseIdentityInput): ReleaseIdenti
 
 	for (const candidate of candidates) {
 		const candidateNorm = normalizeIdentityTitle(candidate);
-		if (releaseNorm.length === 0 || candidateNorm.length === 0) continue;
+		if (candidateNorm.length === 0) continue;
 
-		let similarity: number;
-		let method: 'exact' | 'similarity';
-		if (releaseNorm === candidateNorm) {
-			similarity = 1;
-			method = 'exact';
-		} else {
-			similarity = calculateTitleSimilarity(releaseNorm, candidateNorm);
-			method = 'similarity';
-		}
+		for (const releaseCandidate of releaseCandidates) {
+			const releaseNorm = normalizeIdentityTitle(releaseCandidate);
+			if (releaseNorm.length === 0) continue;
 
-		if (similarity > best.bestSimilarity) {
-			best = {
-				matched: false,
-				method,
-				bestSimilarity: similarity,
-				bestCandidate: candidate,
-				reason: 'title_mismatch'
-			};
-		}
-		if (similarity >= (input.minimumSimilarity ?? 0.7)) {
-			const yearMode = input.yearMode ?? 'strict';
-			if (!yearsAgree(input.releaseYear, input.targetYear, yearMode)) {
-				return {
+			let similarity: number;
+			let method: 'exact' | 'similarity';
+			if (releaseNorm === candidateNorm) {
+				similarity = 1;
+				method = 'exact';
+			} else {
+				similarity = calculateTitleSimilarity(releaseNorm, candidateNorm);
+				method = 'similarity';
+			}
+
+			if (similarity > best.bestSimilarity) {
+				best = {
 					matched: false,
-					method: 'none',
+					method,
 					bestSimilarity: similarity,
-					reason: 'year_mismatch',
-					bestCandidate: candidate
+					bestCandidate: candidate,
+					reason: 'title_mismatch'
 				};
 			}
-			return { matched: true, method, bestSimilarity: similarity, bestCandidate: candidate };
+			if (similarity >= (input.minimumSimilarity ?? 0.7)) {
+				const yearMode = input.yearMode ?? 'strict';
+				if (!yearsAgree(input.releaseYear, input.targetYear, yearMode)) {
+					return {
+						matched: false,
+						method: 'none',
+						bestSimilarity: similarity,
+						reason: 'year_mismatch',
+						bestCandidate: candidate
+					};
+				}
+				return { matched: true, method, bestSimilarity: similarity, bestCandidate: candidate };
+			}
 		}
 	}
 

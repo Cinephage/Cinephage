@@ -1,9 +1,8 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { monitoringScheduler } from '$lib/server/monitoring/MonitoringScheduler.js';
-import { monitoringSearchService } from '$lib/server/monitoring/search/MonitoringSearchService.js';
-import { createChildLogger } from '$lib/logging';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
+import { monitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.js';
+import { monitoringSearchService } from '#lib/server/monitoring/search/MonitoringSearchService.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 
 const logger = createChildLogger({ module: 'MonitoringSearchUpgradeApi', logDomain: 'monitoring' });
 
@@ -31,7 +30,7 @@ export const POST: RequestHandler = async (event) => {
 				dryRun: true
 			});
 
-			return json({
+			return Response.json({
 				success: true,
 				message: 'Upgrade search dry-run completed (no grabs performed)',
 				dryRun: true,
@@ -44,14 +43,14 @@ export const POST: RequestHandler = async (event) => {
 		// Normal mode: actually grab upgrades
 		const result = await monitoringScheduler.runUpgradeSearch();
 
-		return json({
+		return Response.json({
 			success: true,
 			message: 'Upgrade search completed',
 			result
 		});
 	} catch (error) {
 		logger.error('[API] Failed to run upgrade search', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: 'Failed to run upgrade search',

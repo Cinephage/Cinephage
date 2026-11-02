@@ -18,13 +18,13 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vites
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { createTestDb, destroyTestDb, clearTestDb } from '../../../../test/db-helper';
-import { downloadClients, downloadQueue } from '$lib/server/db/schema';
-import type { DownloadClient } from '$lib/types/downloadClient';
+import { downloadClients, downloadQueue, blocklist } from '#lib/server/db/schema.js';
+import type { DownloadClient } from '#lib/types/downloadClient.js';
 import type { DownloadInfo } from '../core/interfaces';
 
 const testDb = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -34,7 +34,7 @@ vi.mock('$lib/server/db', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -141,6 +141,49 @@ beforeEach(async () => {
 });
 
 describe('updateQueueItem stalled clock across failed recovery', () => {
+	it('does not persist the client save-path root when torrent metadata is unavailable', async () => {
+		// #532: a metadata-less magnet reports an empty contentPath and the
+		// save root as savePath. Storing that root as outputPath let recovery
+		// adopt every other torrent under it, so it must stay null until the
+		// client reports a real per-torrent content path.
+		const row = await insertQueueRow({ outputPath: null, clientDownloadPath: null });
+
+		await callUpdateQueueItem(row, makeDownload({ contentPath: '', savePath: '/downloads' }));
+
+		const updated = await getRow(row.id);
+		expect(updated?.outputPath).toBeNull();
+		expect(updated?.clientDownloadPath).toBeNull();
+	});
+
+	it('stores the content path once torrent metadata resolves', async () => {
+		const row = await insertQueueRow({ outputPath: null, clientDownloadPath: null });
+
+		await callUpdateQueueItem(
+			row,
+			makeDownload({
+				contentPath: '/downloads/tv/Show.S01E01',
+				savePath: '/downloads/tv',
+				status: 'downloading',
+				progress: 0.2
+			})
+		);
+
+		const updated = await getRow(row.id);
+		expect(updated?.outputPath).toBe('/downloads/tv/Show.S01E01');
+		expect(updated?.clientDownloadPath).toBe('/downloads/tv/Show.S01E01');
+	});
+
+	it('keeps the savePath fallback for usenet downloads', async () => {
+		const row = await insertQueueRow({ protocol: 'usenet', outputPath: null });
+
+		await callUpdateQueueItem(
+			row,
+			makeDownload({ contentPath: '', savePath: '/downloads/movies/Release' })
+		);
+
+		const updated = await getRow(row.id);
+		expect(updated?.outputPath).toBe('/downloads/movies/Release');
+	});
 	it('clears stale stalledSince when a failed row recovers to stalled (re-grab of same torrent)', async () => {
 		const staleTimestamp = new Date(Date.now() - 4 * 24 * 60 * 60_000).toISOString();
 		const row = await insertQueueRow({
@@ -191,5 +234,70 @@ describe('updateQueueItem stalled clock across failed recovery', () => {
 		const updated = await getRow(row.id);
 		expect(updated?.status).toBe('downloading');
 		expect(updated?.stalledSince).toBeNull();
+	});
+});
+
+describe('updateQueueItem auto-blocklists on the generic failed transition (issue #618)', () => {
+	it('blocklists a usenet download the client reports as errored', async () => {
+		const row = await insertQueueRow({
+			protocol: 'usenet',
+			status: 'downloading',
+			title: 'Some.Usenet.Release.2024'
+		});
+
+		await callUpdateQueueItem(
+			row,
+			makeDownload({ status: 'error', errorMessage: 'PAR2 repair failed' })
+		);
+
+		const updated = await getRow(row.id);
+		expect(updated?.status).toBe('failed');
+
+		const entries = await testDb.db
+			.select()
+			.from(blocklist)
+			.where(eq(blocklist.title, 'Some.Usenet.Release.2024'));
+		expect(entries).toHaveLength(1);
+		expect(entries[0].reason).toBe('download_failed');
+		expect(entries[0].protocol).toBe('usenet');
+	});
+
+	it('blocklists a torrent download the client reports as errored', async () => {
+		const row = await insertQueueRow({
+			protocol: 'torrent',
+			status: 'downloading',
+			title: 'Some.Torrent.Release.2024',
+			infoHash: 'abc123'
+		});
+
+		await callUpdateQueueItem(
+			row,
+			makeDownload({ status: 'error', errorMessage: 'Tracker banned' })
+		);
+
+		const entries = await testDb.db
+			.select()
+			.from(blocklist)
+			.where(eq(blocklist.title, 'Some.Torrent.Release.2024'));
+		expect(entries).toHaveLength(1);
+		expect(entries[0].infoHash).toBe('abc123');
+	});
+
+	it('does not blocklist a transition that stays non-failed', async () => {
+		const row = await insertQueueRow({
+			status: 'downloading',
+			title: 'Still.Downloading.2024'
+		});
+
+		await callUpdateQueueItem(
+			row,
+			makeDownload({ status: 'downloading', progress: 0.5, downloadSpeed: 100_000 })
+		);
+
+		const entries = await testDb.db
+			.select()
+			.from(blocklist)
+			.where(eq(blocklist.title, 'Still.Downloading.2024'));
+		expect(entries).toHaveLength(0);
 	});
 });

@@ -59,6 +59,99 @@ describe('DelugeClient', () => {
 		vi.unstubAllGlobals();
 	});
 
+	function mockAddFlow(
+		captured: RpcRequestPayload[],
+		downloadLocation = '/downloads'
+	): ReturnType<typeof vi.fn> {
+		return vi.fn(async (_url: string, init?: RequestInit) => {
+			const payload = JSON.parse(String(init?.body ?? '{}')) as RpcRequestPayload;
+			captured.push(payload);
+
+			switch (payload.method) {
+				case 'auth.login':
+				case 'web.connected':
+					return new Response(JSON.stringify({ result: true, error: null }), {
+						status: 200,
+						headers: { 'Content-Type': 'application/json' }
+					});
+				case 'web.get_torrent_status':
+					return new Response(JSON.stringify({ result: {}, error: null }), {
+						status: 200,
+						headers: { 'Content-Type': 'application/json' }
+					});
+				case 'web.update_ui':
+					return new Response(JSON.stringify({ result: { torrents: {} }, error: null }), {
+						status: 200,
+						headers: { 'Content-Type': 'application/json' }
+					});
+				case 'core.get_config_values':
+					return new Response(
+						JSON.stringify({ result: { download_location: downloadLocation }, error: null }),
+						{ status: 200, headers: { 'Content-Type': 'application/json' } }
+					);
+				case 'label.add':
+					return new Response(JSON.stringify({ result: true, error: null }), {
+						status: 200,
+						headers: { 'Content-Type': 'application/json' }
+					});
+				case 'core.add_torrent_magnet':
+					return new Response(
+						JSON.stringify({
+							result: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+							error: null
+						}),
+						{ status: 200, headers: { 'Content-Type': 'application/json' } }
+					);
+				default:
+					return new Response(JSON.stringify({ result: {}, error: null }), {
+						status: 200,
+						headers: { 'Content-Type': 'application/json' }
+					});
+			}
+		});
+	}
+
+	describe('addDownload category paths', () => {
+		it('derives download_location from category when savePath is absent', async () => {
+			const captured: RpcRequestPayload[] = [];
+			vi.stubGlobal('fetch', mockAddFlow(captured));
+
+			const client = createClient();
+			const hash = await client.addDownload({
+				magnetUri: 'magnet:?xt=urn:btih:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+				category: 'movies'
+			});
+
+			expect(hash).toBe('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+			const addCall = captured.find((call) => call.method === 'core.add_torrent_magnet');
+			const addOptions = addCall?.params?.[1] as Record<string, unknown>;
+			expect(addOptions.download_location).toBe('/downloads/movies');
+			// The classic label plugin has no label add-option; it must be applied
+			// via label.set_torrent after the add succeeds, not in addOptions.
+			expect(addOptions.label).toBeUndefined();
+			expect(captured.some((call) => call.method === 'label.add')).toBe(true);
+			const labelSetCall = captured.find((call) => call.method === 'label.set_torrent');
+			expect(labelSetCall?.params).toEqual(['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'movies']);
+		});
+
+		it('prefers an explicit savePath over the derived category path', async () => {
+			const captured: RpcRequestPayload[] = [];
+			vi.stubGlobal('fetch', mockAddFlow(captured));
+
+			const client = createClient();
+			await client.addDownload({
+				magnetUri: 'magnet:?xt=urn:btih:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+				category: 'movies',
+				savePath: '/custom/path'
+			});
+
+			const addCall = captured.find((call) => call.method === 'core.add_torrent_magnet');
+			const addOptions = addCall?.params?.[1] as Record<string, unknown>;
+			expect(addOptions.download_location).toBe('/custom/path');
+			expect(captured.some((call) => call.method === 'core.get_config_values')).toBe(false);
+		});
+	});
+
 	describe('canBeRemoved', () => {
 		const baseTorrent = {
 			name: 'test',

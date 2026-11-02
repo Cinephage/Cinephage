@@ -7,8 +7,8 @@ import { AUTH_BASE_PATH } from './config.js';
  * Better Auth client for Svelte
  * Username-based authentication with admin capabilities
  *
- * This is the client-side auth client - import from $lib/auth/client
- * NOT from $lib/server/auth/client
+ * This is the client-side auth client - import from #lib/auth/client
+ * NOT from #lib/server/auth/client
  */
 export const authClient = createAuthClient({
 	basePath: AUTH_BASE_PATH,

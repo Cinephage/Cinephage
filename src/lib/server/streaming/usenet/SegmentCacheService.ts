@@ -13,10 +13,10 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { db } from '$lib/server/db';
-import { nzbSegmentCache } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { nzbSegmentCache } from '#lib/server/db/schema.js';
 import { eq, and } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 import type { NzbFile } from './types';
 
 const logger = createChildLogger({

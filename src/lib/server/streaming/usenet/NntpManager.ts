@@ -8,8 +8,8 @@
  * - Automatic provider reloading
  */
 
-import type { BackgroundService, ServiceStatus } from '$lib/server/services/background-service';
-import { createChildLogger } from '$lib/logging';
+import type { BackgroundService, ServiceStatus } from '#lib/server/services/background-service.js';
+import { createChildLogger } from '#lib/logging/index.js';
 import { getNntpServerService } from '../nzb/NntpServerService';
 
 const logger = createChildLogger({ logDomain: 'streams' as const, component: 'NntpManager' });

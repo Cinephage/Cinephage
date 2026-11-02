@@ -1,12 +1,13 @@
-import { getDownloadClientManager } from '$lib/server/downloadClients/DownloadClientManager.js';
-import type { AutoSearchIssue } from '$lib/server/library/autoSearchIssues.js';
-import { getIndexerManager } from '$lib/server/indexers/IndexerManager.js';
+import { getDownloadClientManager } from '#lib/server/downloadClients/DownloadClientManager.js';
+import type { AutoSearchIssue } from '#lib/server/library/autoSearchIssues.js';
+import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
 import {
 	CINEPHAGE_STREAM_DEFINITION_ID,
 	indexerHasCategoriesForSearchType,
 	type IndexerCapabilities,
 	type SearchType
-} from '$lib/server/indexers/types';
+} from '#lib/server/indexers/types/index.js';
+import { resolveAllowedIndexerIds } from '#lib/server/indexers/search/profile-indexer-filter.js';
 
 function supportsSearchType(
 	capabilities: IndexerCapabilities | undefined,
@@ -59,10 +60,13 @@ export async function getAutoSearchPreflightIssue(
 
 	const indexerManager = await getIndexerManager();
 	const indexers = await indexerManager.getIndexers();
+	const allowedIndexerIds = await resolveAllowedIndexerIds(scoringProfileId);
 	const profileScoped =
 		scoringProfileId === 'streamer'
 			? indexers.filter((indexer) => indexer.definitionId === CINEPHAGE_STREAM_DEFINITION_ID)
-			: indexers;
+			: allowedIndexerIds
+				? indexers.filter((indexer) => allowedIndexerIds.includes(indexer.id))
+				: indexers;
 	const eligibleIndexers = profileScoped.filter((indexer) => {
 		if (!indexer.enabled) return false;
 		if (indexer.enableInteractiveSearch === false) return false;

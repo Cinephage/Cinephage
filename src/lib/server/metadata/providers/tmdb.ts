@@ -1,4 +1,4 @@
-import { tmdb } from '$lib/server/tmdb.js';
+import { tmdb } from '#lib/server/tmdb.js';
 import type {
 	MetadataDetails,
 	MetadataMediaType,

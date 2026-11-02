@@ -1,9 +1,8 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { unmatchedFileService } from '$lib/server/library/unmatched-file-service.js';
-import { libraryJobService } from '$lib/server/library/jobs/LibraryJobService.js';
-import type { UnmatchedFilters } from '$lib/types/unmatched.js';
-import { createChildLogger } from '$lib/logging';
+import { unmatchedFileService } from '#lib/server/library/unmatched-file-service.js';
+import { libraryJobService } from '#lib/server/library/jobs/LibraryJobService.js';
+import type { UnmatchedFilters } from '#lib/types/unmatched.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LibraryUnmatchedApi', logDomain: 'scans' });
 
@@ -42,7 +41,7 @@ export const GET: RequestHandler = async ({ url }) => {
 				groupBy: groupBy as 'immediate' | 'show'
 			});
 
-			return json({
+			return Response.json({
 				success: true,
 				data: {
 					folders,
@@ -65,7 +64,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			sortOrder
 		});
 
-		return json({
+		return Response.json({
 			success: true,
 			data: {
 				files: result.files,
@@ -81,7 +80,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			'[API] Error fetching unmatched files',
 			error instanceof Error ? error : undefined
 		);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to fetch unmatched files',
@@ -105,7 +104,7 @@ export const POST: RequestHandler = async () => {
 	try {
 		const jobs = libraryJobService.enqueueMatchUnmatchedForAllFolders();
 
-		return json({
+		return Response.json({
 			success: true,
 			data: {
 				queued: true,
@@ -121,7 +120,7 @@ export const POST: RequestHandler = async () => {
 			'[API] Error queueing unmatched file processing',
 			error instanceof Error ? error : undefined
 		);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to queue unmatched file processing',
@@ -149,7 +148,7 @@ export const DELETE: RequestHandler = async ({ request }) => {
 		};
 
 		if (!Array.isArray(fileIds) || fileIds.length === 0) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: 'fileIds array is required and must not be empty',
@@ -161,7 +160,7 @@ export const DELETE: RequestHandler = async ({ request }) => {
 
 		const result = await unmatchedFileService.deleteUnmatchedFiles(fileIds, deleteFromDisk);
 
-		return json({
+		return Response.json({
 			success: result.deleted > 0,
 			data: result,
 			meta: {
@@ -173,7 +172,7 @@ export const DELETE: RequestHandler = async ({ request }) => {
 			'[API] Error deleting unmatched files',
 			error instanceof Error ? error : undefined
 		);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to delete unmatched files',

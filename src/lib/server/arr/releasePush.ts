@@ -15,14 +15,14 @@
  */
 
 import { eq } from 'drizzle-orm';
-import { db } from '$lib/server/db/index.js';
-import { movies, series, episodes } from '$lib/server/db/schema.js';
-import { calculateMatchConfidence } from '$lib/server/library/title-matching.js';
-import { parseRelease } from '$lib/server/indexers/parser/ReleaseParser.js';
-import { scoreRelease } from '$lib/server/scoring/scorer.js';
-import { QualityFilter } from '$lib/server/quality/QualityFilter.js';
-import { BALANCED_PROFILE } from '$lib/server/scoring/profiles.js';
-import type { ScoringProfile, ScoringResult } from '$lib/server/scoring/types.js';
+import { db } from '#lib/server/db/index.js';
+import { movies, series, episodes } from '#lib/server/db/schema.js';
+import { calculateMatchConfidence } from '#lib/server/library/title-matching.js';
+import { parseRelease } from '#lib/server/indexers/parser/ReleaseParser.js';
+import { scoreRelease } from '#lib/server/scoring/scorer.js';
+import { QualityFilter } from '#lib/server/quality/QualityFilter.js';
+import { BALANCED_PROFILE } from '#lib/server/scoring/profiles.js';
+import type { ScoringProfile, ScoringResult } from '#lib/server/scoring/types.js';
 
 type FetchFn = typeof fetch;
 type Movie = typeof movies.$inferSelect;
@@ -180,8 +180,8 @@ async function rejectOnLanguageShortfall(
 ): Promise<string[] | null> {
 	try {
 		const { resolveAudioPreferenceForItem } =
-			await import('$lib/server/languages/audio-preference-resolver');
-		const { evaluatePushLanguageGate } = await import('$lib/server/arr/language-gate');
+			await import('#lib/server/languages/audio-preference-resolver.js');
+		const { evaluatePushLanguageGate } = await import('#lib/server/arr/language-gate.js');
 		return evaluatePushLanguageGate(title, await resolveAudioPreferenceForItem(mediaType, itemId));
 	} catch {
 		return null;

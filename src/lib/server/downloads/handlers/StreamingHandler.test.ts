@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
 	getStreamingBaseUrl: vi.fn().mockResolvedValue('http://localhost:3000')
 }));
 
-vi.mock('$lib/server/streaming/index.js', () => {
+vi.mock('#lib/server/streaming/index.js', () => {
 	class MockStrmService {
 		static parseStreamUrl = mocks.parseStreamUrl;
 		createStrmFile = vi.fn();
@@ -29,7 +29,7 @@ vi.mock('$lib/server/streaming/index.js', () => {
 	};
 });
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	db: {
 		query: {
 			series: { findFirst: mocks.findSeries },
@@ -44,44 +44,44 @@ vi.mock('$lib/server/db/index.js', () => ({
 	}
 }));
 
-vi.mock('$lib/server/auth/index.js', () => ({
-	getRecoverableApiKeyByType: vi.fn().mockResolvedValue({ id: 'streaming-key' })
+vi.mock('#lib/server/auth/index.js', () => ({
+	getOwnerStreamingApiKey: vi.fn().mockResolvedValue({ id: 'streaming-key' })
 }));
 
-vi.mock('$lib/server/subtitles/services/SubtitleImportService.js', () => ({
+vi.mock('#lib/server/subtitles/services/SubtitleImportService.js', () => ({
 	searchSubtitlesForNewMedia: vi.fn()
 }));
 
-vi.mock('$lib/server/downloadClients/import/index.js', () => ({
+vi.mock('#lib/server/downloadClients/import/index.js', () => ({
 	fileExists: vi.fn(),
 	importService: {}
 }));
 
-vi.mock('$lib/server/downloadClients/import/FileTransfer.js', () => ({
+vi.mock('#lib/server/downloadClients/import/FileTransfer.js', () => ({
 	deletePhysicalFile: vi.fn()
 }));
 
-vi.mock('$lib/server/settings/file-management.js', () => ({
+vi.mock('#lib/server/settings/file-management.js', () => ({
 	getFileManagementSettings: vi.fn().mockResolvedValue({})
 }));
 
-vi.mock('$lib/server/monitoring/MonitoringScheduler.js', () => ({
+vi.mock('#lib/server/monitoring/MonitoringScheduler.js', () => ({
 	monitoringScheduler: { getSettings: vi.fn().mockResolvedValue({}) }
 }));
 
-vi.mock('$lib/server/sse/EventBuffer.js', () => ({
+vi.mock('#lib/server/sse/EventBuffer.js', () => ({
 	eventBuffer: { push: vi.fn() }
 }));
 
-vi.mock('$lib/server/library/LibraryMediaEvents.js', () => ({
+vi.mock('#lib/server/library/LibraryMediaEvents.js', () => ({
 	libraryMediaEvents: { emitSeriesUpdated: vi.fn() }
 }));
 
-vi.mock('$lib/server/library/media-info.js', () => ({
+vi.mock('#lib/server/library/media-info.js', () => ({
 	mediaInfoService: { extractMediaInfo: vi.fn() }
 }));
 
-vi.mock('$lib/logging/index.js', () => {
+vi.mock('#lib/logging/index.js', () => {
 	const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 	return { createChildLogger: vi.fn(() => logger), logger };
 });
@@ -133,7 +133,7 @@ describe('StreamingHandler complete-series routing', () => {
 		expect(seasonPackSpy.mock.calls.map((call) => call[4])).toEqual([1, 2]);
 
 		// The single-episode fallthrough must not have run.
-		const strmInstance = (await import('$lib/server/streaming/index.js'))
+		const strmInstance = (await import('#lib/server/streaming/index.js'))
 			.strmService as unknown as {
 			createStrmFile: ReturnType<typeof vi.fn>;
 		};

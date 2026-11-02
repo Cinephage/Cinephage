@@ -1,7 +1,7 @@
 import type { MigrationDefinition } from '../migration-helpers.js';
 import { columnExists, tableExists } from '../migration-helpers.js';
-import { createChildLogger } from '$lib/logging';
-import { ReleaseParser } from '$lib/server/indexers/parser/ReleaseParser.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { ReleaseParser } from '#lib/server/indexers/parser/ReleaseParser.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 

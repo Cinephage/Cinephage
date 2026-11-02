@@ -6,7 +6,7 @@
  *
  * Full ISO 639-2/3 resolution for arbitrary observed tags (ffprobe, media
  * servers, release names) lives in the server-only normalizer at
- * `$lib/server/languages/normalize.ts`.
+ * `#lib/server/languages/normalize.ts`.
  */
 
 /** Canonical BCP-47 language tag: 'en', 'pt-BR', 'zh-Hans', 'und' */

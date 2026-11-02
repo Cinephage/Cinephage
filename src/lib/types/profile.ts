@@ -4,7 +4,7 @@
  * Types for managing quality profiles
  */
 
-import type { Resolution } from '$lib/server/scoring/types';
+import type { Resolution } from '#lib/server/scoring/types.js';
 
 // =============================================================================
 // Scoring Profile Types
@@ -13,7 +13,7 @@ import type { Resolution } from '$lib/server/scoring/types';
 /**
  * Profile category for UI grouping and styling
  */
-type ProfileCategory = 'quality' | 'efficient' | 'micro' | 'streaming' | 'custom';
+type ProfileCategory = 'quality' | 'efficient' | 'micro' | 'streaming' | 'anime' | 'custom';
 
 /**
  * A single entry in the required formats list.
@@ -51,6 +51,11 @@ export interface ScoringProfile {
 	formatScores: Record<string, number>;
 	/** Required format entries. AND entries all must match; OR entries need at least one match. */
 	requiredFormats?: RequiredFormatEntry[];
+	/**
+	 * Indexer IDs this profile may search. `null` means all indexers; a non-empty
+	 * array restricts searches and grabs to those indexers.
+	 */
+	allowedIndexerIds?: string[] | null;
 	isDefault: boolean;
 	isBuiltIn?: boolean;
 	// Media-specific file size limits
@@ -88,6 +93,8 @@ export interface ScoringProfileFormData {
 	resolutionOrder?: Resolution[];
 	formatScores?: Record<string, number>;
 	requiredFormats?: RequiredFormatEntry[];
+	/** Indexer IDs to restrict this profile to; `null`/absent means all indexers. */
+	allowedIndexerIds?: string[] | null;
 	isDefault?: boolean;
 	movieMinSizeGb?: number | null;
 	movieMaxSizeGb?: number | null;

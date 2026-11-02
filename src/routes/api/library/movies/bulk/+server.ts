@@ -1,15 +1,14 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { db } from '$lib/server/db/index.js';
-import { movies } from '$lib/server/db/schema.js';
+import { db } from '#lib/server/db/index.js';
+import { movies } from '#lib/server/db/schema.js';
 import { inArray } from 'drizzle-orm';
-import { bulkAddMoviesSchema } from '$lib/validation/schemas.js';
-import { buildMovieFolderName } from '$lib/server/library/naming/naming-helpers.js';
-import { namingSettingsService } from '$lib/server/library/naming/NamingSettingsService.js';
+import { bulkAddMoviesSchema } from '#lib/validation/schemas.js';
+import { buildMovieFolderName } from '#lib/server/library/naming/naming-helpers.js';
+import { namingSettingsService } from '#lib/server/library/naming/NamingSettingsService.js';
 import {
 	extractLanguageCodes,
 	resolveLocalizedTitles
-} from '$lib/server/library/naming/localization.js';
+} from '#lib/server/library/naming/localization.js';
 import {
 	validateRootFolder,
 	getAnimeSubtypeEnforcement,
@@ -17,12 +16,12 @@ import {
 	fetchMovieDetails,
 	fetchMovieExternalIds,
 	triggerMovieSearch
-} from '$lib/server/library/LibraryAddService.js';
-import { isLikelyAnimeMedia } from '$lib/shared/anime-classification.js';
-import { getLibraryEntityService } from '$lib/server/library/LibraryEntityService.js';
-import { ValidationError } from '$lib/errors';
-import { libraryMediaEvents } from '$lib/server/library/LibraryMediaEvents.js';
-import { createChildLogger } from '$lib/logging';
+} from '#lib/server/library/LibraryAddService.js';
+import { isLikelyAnimeMedia } from '#lib/shared/anime-classification.js';
+import { getLibraryEntityService } from '#lib/server/library/LibraryEntityService.js';
+import { ValidationError } from '#lib/errors/index.js';
+import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LibraryMoviesBulkApi', logDomain: 'scans' });
 
@@ -209,13 +208,13 @@ export const POST: RequestHandler = async ({ request }) => {
 			});
 		}
 
-		return json({
+		return Response.json({
 			success: true,
 			...results
 		});
 	} catch (error) {
 		logger.error('[API] Error in bulk movie add', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to add movies'

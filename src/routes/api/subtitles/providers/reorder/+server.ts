@@ -1,9 +1,8 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
-import { getSubtitleProviderManager } from '$lib/server/subtitles/services/SubtitleProviderManager';
-import { createChildLogger } from '$lib/logging';
-import { parseBody } from '$lib/server/api/validate.js';
+import { getSubtitleProviderManager } from '#lib/server/subtitles/services/SubtitleProviderManager.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { parseBody } from '#lib/server/api/validate.js';
 
 const logger = createChildLogger({ module: 'SubtitleProviderReorderApi', logDomain: 'subtitles' });
 
@@ -30,7 +29,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	for (const id of providerIds) {
 		if (!existingIds.has(id)) {
-			return json({ error: `Provider not found: ${id}` }, { status: 404 });
+			return Response.json({ error: `Provider not found: ${id}` }, { status: 404 });
 		}
 	}
 
@@ -53,7 +52,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		'[ProviderReorder] Reordered provider priorities'
 	);
 
-	return json({
+	return Response.json({
 		success: true,
 		updated: updates.length
 	});

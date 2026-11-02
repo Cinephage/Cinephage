@@ -17,7 +17,7 @@ import type {
 import { GenericSubtitle } from '../../subtitle';
 import { Language } from '../../language';
 import { LEGENDASDIVX_LANGUAGES, LEGENDASDIVX_BASE_URL, type LegendasdivxConfig } from './types';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'subtitles' as const });
 import * as cheerio from 'cheerio';

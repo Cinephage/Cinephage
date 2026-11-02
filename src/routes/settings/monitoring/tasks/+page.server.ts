@@ -9,12 +9,12 @@ import {
 	UNIFIED_TASK_DEFINITIONS,
 	type UnifiedTask,
 	type UnifiedTaskDefinition
-} from '$lib/server/tasks/UnifiedTaskRegistry';
-import { monitoringScheduler } from '$lib/server/monitoring/MonitoringScheduler';
-import { taskHistoryService } from '$lib/server/tasks/TaskHistoryService';
-import { librarySchedulerService } from '$lib/server/library/index';
-import type { TaskHistoryEntry } from '$lib/types/task';
-import { taskSettingsService } from '$lib/server/tasks/TaskSettingsService';
+} from '#lib/server/tasks/UnifiedTaskRegistry.js';
+import { monitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.js';
+import { taskHistoryService } from '#lib/server/tasks/TaskHistoryService.js';
+import { librarySchedulerService } from '#lib/server/library/index.js';
+import type { TaskHistoryEntry } from '#lib/types/task.js';
+import { taskSettingsService } from '#lib/server/tasks/TaskSettingsService.js';
 
 export const load: PageServerLoad = async ({ depends }) => {
 	depends('app:tasks');

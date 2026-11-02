@@ -10,7 +10,7 @@
 		Copy,
 		Check,
 		Image
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 	import type { PageData } from './$types';
 	import {
 		ChannelLineupTable,
@@ -22,27 +22,27 @@
 		ChannelBrowserModal,
 		EpgSourcePickerModal,
 		ChannelScheduleModal
-	} from '$lib/components/livetv';
+	} from '#lib/components/livetv/index.js';
 	import type {
 		BulkApplyCleanNamesResult,
 		ChannelLineupItemWithDetails,
 		ChannelCategory,
 		ChannelCleanNamePreview,
 		UpdateChannelRequest
-	} from '$lib/types/livetv';
+	} from '#lib/types/livetv.js';
 	import { onDestroy, onMount } from 'svelte';
-	import { createSSE } from '$lib/sse';
-	import { layoutState, deriveMobileSseStatus } from '$lib/layout.svelte';
-	import { resolvePath } from '$lib/utils/routing';
-	import { copyToClipboard as copyTextToClipboard } from '$lib/utils/clipboard';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import * as m from '$lib/paraglide/messages.js';
+	import { createSSE } from '#lib/sse/index.js';
+	import { layoutState, deriveMobileSseStatus } from '#lib/layout.svelte.js';
+	import { resolvePath } from '#lib/utils/routing.js';
+	import { copyToClipboard as copyTextToClipboard } from '#lib/utils/clipboard.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import type {
 		ChannelStreamEvents,
 		NowNextEntry
-	} from '$lib/types/sse/events/livetv-channel-events.js';
-	import type { LogoDownloadProgress } from '$lib/server/logos/LogoDownloadService';
-	import { normalizeLiveTvChannelName } from '$lib/livetv/channel-name-normalizer';
+	} from '#lib/types/sse/events/livetv-channel-events.js';
+	import type { LogoDownloadProgress } from '#lib/server/logos/LogoDownloadService.js';
+	import { normalizeLiveTvChannelName } from '#lib/livetv/channel-name-normalizer.js';
 	import {
 		getLogoStatus,
 		downloadLogos as apiDownloadLogos,
@@ -55,7 +55,7 @@
 		bulkCleanChannelNames,
 		updateLineupItem,
 		deleteLineupItem
-	} from '$lib/api';
+	} from '#lib/api/index.js';
 
 	// Receive data from server load function (includes streaming API key)
 	let { data }: { data: PageData } = $props();

@@ -29,10 +29,10 @@ import type {
 	TvSearchCriteria
 } from '../types';
 import { Category } from '../types/category';
-import { db } from '$lib/server/db';
-import { movies, series, episodes } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { movies, series, episodes } from '#lib/server/db/schema.js';
 import { eq, and, like, sql } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 /**
  * Context passed to the database query executor

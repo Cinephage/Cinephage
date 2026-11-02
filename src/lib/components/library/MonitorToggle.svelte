@@ -1,6 +1,6 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
-	import { Eye, EyeOff } from 'lucide-svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { Eye, EyeOff } from '@lucide/svelte';
 
 	interface Props {
 		monitored: boolean;

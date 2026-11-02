@@ -11,7 +11,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/svelte';
 import FileCard from './FileCard.svelte';
-import type { SubtitleRequirementProgress } from '$lib/utils/subtitle-status-display.js';
+import type { SubtitleRequirementProgress } from '#lib/utils/subtitle-status-display.js';
 
 const fileStub = {
 	id: 'file-1',

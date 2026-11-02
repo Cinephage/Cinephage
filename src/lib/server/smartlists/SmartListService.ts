@@ -5,7 +5,7 @@
  * Handles CRUD operations, refresh logic, and library integration.
  */
 
-import { db } from '$lib/server/db/index.js';
+import { db } from '#lib/server/db/index.js';
 import {
 	smartLists,
 	smartListItems,
@@ -17,14 +17,14 @@ import {
 	type SmartListFilters,
 	type SmartListRecord,
 	type SmartListItemRecord
-} from '$lib/server/db/schema.js';
+} from '#lib/server/db/schema.js';
 import { eq, and, desc, asc, sql, lt, inArray } from 'drizzle-orm';
-import { tmdb, type DiscoverParams, type DiscoverItem } from '$lib/server/tmdb.js';
-import { createChildLogger } from '$lib/logging';
-import { todayDateString } from '$lib/utils/format.js';
+import { tmdb, type DiscoverParams, type DiscoverItem } from '#lib/server/tmdb.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { todayDateString } from '#lib/utils/format.js';
 
 const logger = createChildLogger({ logDomain: 'monitoring' as const });
-import { ValidationError } from '$lib/errors';
+import { ValidationError } from '#lib/errors/index.js';
 import {
 	validateRootFolder,
 	getEffectiveScoringProfileId,
@@ -34,12 +34,12 @@ import {
 	fetchSeriesExternalIds,
 	triggerMovieSearch,
 	triggerSeriesSearch
-} from '$lib/server/library/LibraryAddService.js';
-import { NamingService, type MediaNamingInfo } from '$lib/server/library/naming/NamingService.js';
-import { namingSettingsService } from '$lib/server/library/naming/NamingSettingsService.js';
-import { resolveLocalizedTitlesForFormats } from '$lib/server/library/naming/localization.js';
-import { getLibraryEntityService } from '$lib/server/library/LibraryEntityService.js';
-import { getBlockedTmdbIdSet } from '$lib/server/library/status.js';
+} from '#lib/server/library/LibraryAddService.js';
+import { NamingService, type MediaNamingInfo } from '#lib/server/library/naming/NamingService.js';
+import { namingSettingsService } from '#lib/server/library/naming/NamingSettingsService.js';
+import { resolveLocalizedTitlesForFormats } from '#lib/server/library/naming/localization.js';
+import { getLibraryEntityService } from '#lib/server/library/LibraryEntityService.js';
+import { getBlockedTmdbIdSet } from '#lib/server/library/status.js';
 import type {
 	CreateSmartListInput,
 	UpdateSmartListInput,

@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { X, Loader2, AlertTriangle, Trash2, Download } from 'lucide-svelte';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
-	import { mediaTypeCountLabel, type MediaType } from '$lib/utils/media-type';
-	import * as m from '$lib/paraglide/messages.js';
+	import { X, Loader2, AlertTriangle, Trash2, Download } from '@lucide/svelte';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
+	import { mediaTypeCountLabel, type MediaType } from '#lib/utils/media-type.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
 		open: boolean;

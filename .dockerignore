@@ -6,8 +6,23 @@ src/lib/paraglide
 .gitignore
 .gitattributes
 logs
-data/*.db
-data/*.db-*
+# Runtime data must never enter the build context. Patterns like `data/*.db`
+# are not enough: Docker's ignore matching does not let `*` cross a `/`, so
+# data/test/*.db, data/backups/**/*.db and data/logs/*.jsonl still matched.
+# The database holds password hashes, raw session tokens and credential
+# ciphertext; logs can hold streaming keys.
+#
+# Re-include only the bundled read-only assets the runtime image ships. A file
+# cannot be re-included while its parent directory stays excluded, so each
+# directory is restored explicitly, and the user-writable `custom` dirs are
+# re-excluded after the broad `**` re-include (last match wins).
+data/**
+!data/indexers
+!data/indexers/**
+data/indexers/definitions/custom
+!data/external-lists
+!data/external-lists/**
+data/external-lists/presets/custom
 .env
 .env.*
 !.env.example

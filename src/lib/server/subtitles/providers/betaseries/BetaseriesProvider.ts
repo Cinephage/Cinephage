@@ -26,6 +26,24 @@ import {
 import { extractFromZip } from '../mixins';
 import { AuthenticationError, ConfigurationError } from '../../errors/ProviderErrors';
 import { languageSatisfies } from '../../requirement-matcher';
+import { normalizeLanguageTag } from '#lib/server/languages/normalize.js';
+
+/**
+ * Map a Betaseries language marker to a canonical tag.
+ *
+ * Betaseries labels subtitles VF (French version) or VO (original version).
+ * VO is not a language: its tag is the media's original language, which the
+ * search criteria carry when known. English is the fallback when the original
+ * language is unknown (Betaseries' dominant VO language). Markers the
+ * registry cannot resolve keep the previous behavior of being skipped.
+ */
+export function mapBetaseriesLanguage(raw: string, originalLanguage?: string): LanguageCode | null {
+	const normalized = normalizeLanguageTag(raw);
+	if (raw === 'VF' || normalized === 'fr') return 'fr';
+	if (raw === 'VO') return originalLanguage ?? 'en';
+	if (normalized === 'en') return 'en';
+	return null;
+}
 
 /**
  * Betaseries Provider
@@ -213,15 +231,8 @@ export class BetaseriesProvider extends BaseSubtitleProvider implements ISubtitl
 		const results: SubtitleSearchResult[] = [];
 
 		for (const sub of subtitles) {
-			// Map Betaseries language codes
-			let langCode: LanguageCode;
-			if (sub.language === 'VF' || sub.language === 'fr') {
-				langCode = 'fr';
-			} else if (sub.language === 'VO' || sub.language === 'en') {
-				langCode = 'en';
-			} else {
-				continue;
-			}
+			const langCode = mapBetaseriesLanguage(sub.language, criteria.originalLanguage);
+			if (!langCode) continue;
 
 			if (!languages.some((requested) => languageSatisfies(langCode, requested))) {
 				continue;

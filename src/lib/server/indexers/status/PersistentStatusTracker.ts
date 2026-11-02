@@ -7,18 +7,19 @@
  */
 
 import { eq, inArray } from 'drizzle-orm';
-import { db } from '$lib/server/db';
-import { indexerStatus, indexers } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { indexerStatus, indexers } from '#lib/server/db/schema.js';
 import {
 	type IndexerStatus,
 	type FailureRecord,
 	type StatusTrackerConfig,
 	type HealthStatus,
 	DEFAULT_STATUS_CONFIG,
-	createDefaultStatus
+	createDefaultStatus,
+	nextUtcMidnight
 } from './types';
 import { BackoffCalculator } from './BackoffCalculator';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'indexers' as const });
 
@@ -218,6 +219,7 @@ export class PersistentStatusTracker {
 			status.isDisabled = false;
 			status.disabledAt = undefined;
 			status.disabledUntil = undefined;
+			status.disabledReason = undefined;
 			logger.info({ indexerId }, 'Indexer re-enabled after success');
 		}
 
@@ -273,6 +275,49 @@ export class PersistentStatusTracker {
 	}
 
 	/**
+	 * Record a request rejected by the indexer's own API quota (daily/hourly
+	 * request limit, rate limit, etc). Unlike recordFailure, this disables the
+	 * indexer immediately and for a much longer window (until the next UTC
+	 * day boundary, a reasonable default reset point) than the generic failure backoff,
+	 * which would otherwise keep re-hitting the same exhausted quota within a minute.
+	 */
+	async recordQuotaExceeded(
+		indexerId: string,
+		message: string,
+		requestUrl?: string
+	): Promise<void> {
+		const status = await this.getOrCreateStatus(indexerId);
+		const now = new Date();
+
+		status.totalRequests++;
+		status.totalFailures++;
+		status.lastFailure = now;
+
+		const failure: FailureRecord = { timestamp: now, message, requestUrl };
+		status.recentFailures.unshift(failure);
+		if (status.recentFailures.length > this.config.maxRecentFailures) {
+			status.recentFailures.pop();
+		}
+
+		status.isDisabled = true;
+		status.disabledAt = now;
+		status.disabledUntil = nextUtcMidnight(now);
+		status.disabledReason = 'quota_exceeded';
+		status.health = 'disabled';
+
+		logger.warn(
+			{
+				indexerId,
+				message,
+				disabledUntil: status.disabledUntil.toISOString()
+			},
+			'Indexer auto-disabled: API quota exceeded'
+		);
+
+		this.markDirty(indexerId);
+	}
+
+	/**
 	 * Manually enable an indexer.
 	 */
 	async enable(indexerId: string): Promise<void> {
@@ -281,6 +326,7 @@ export class PersistentStatusTracker {
 		status.isDisabled = false;
 		status.disabledAt = undefined;
 		status.disabledUntil = undefined;
+		status.disabledReason = undefined;
 		status.consecutiveFailures = 0;
 		status.health = this.calculateHealth(status);
 		this.markDirty(indexerId);
@@ -292,6 +338,7 @@ export class PersistentStatusTracker {
 	async disable(indexerId: string): Promise<void> {
 		const status = await this.getOrCreateStatus(indexerId);
 		status.isEnabled = false;
+		status.disabledReason = 'manual';
 		status.health = 'disabled';
 		this.markDirty(indexerId);
 	}
@@ -318,9 +365,16 @@ export class PersistentStatusTracker {
 		if (status.disabledUntil && new Date() >= status.disabledUntil) {
 			// Reset for retry
 			status.isDisabled = false;
-			// Keep failure history in warning state after backoff so status does not
-			// jump directly back to healthy without sustained successful requests.
-			status.consecutiveFailures = Math.max(2, Math.floor(status.consecutiveFailures / 2));
+			if (status.disabledReason === 'quota_exceeded') {
+				// A quota reset isn't a sign the indexer was ever unhealthy -
+				// go straight back to healthy instead of lingering in "warning".
+				status.consecutiveFailures = 0;
+			} else {
+				// Keep failure history in warning state after backoff so status does not
+				// jump directly back to healthy without sustained successful requests.
+				status.consecutiveFailures = Math.max(2, Math.floor(status.consecutiveFailures / 2));
+			}
+			status.disabledReason = undefined;
 			status.health = this.calculateHealth(status);
 			this.markDirty(indexerId);
 			logger.info({ indexerId }, 'Indexer backoff period expired, re-enabling for retry');
@@ -440,6 +494,7 @@ export class PersistentStatusTracker {
 							isDisabled: status.isDisabled,
 							disabledAt: status.disabledAt?.toISOString() ?? null,
 							disabledUntil: status.disabledUntil?.toISOString() ?? null,
+							disabledReason: status.disabledReason ?? null,
 							lastSuccess: status.lastSuccess?.toISOString() ?? null,
 							lastFailure: status.lastFailure?.toISOString() ?? null,
 							avgResponseTime: status.avgResponseTime ?? null,
@@ -487,6 +542,7 @@ export class PersistentStatusTracker {
 		status.isDisabled = true;
 		status.disabledAt = new Date();
 		status.disabledUntil = new Date(Date.now() + backoffMs);
+		status.disabledReason = 'consecutive_failures';
 		status.health = 'disabled';
 
 		logger.warn(
@@ -535,6 +591,7 @@ export class PersistentStatusTracker {
 			isDisabled: row.isDisabled ?? false,
 			disabledAt: row.disabledAt ? new Date(row.disabledAt) : undefined,
 			disabledUntil: row.disabledUntil ? new Date(row.disabledUntil) : undefined,
+			disabledReason: (row.disabledReason as IndexerStatus['disabledReason']) ?? undefined,
 			health: (row.health as HealthStatus) ?? 'healthy',
 			consecutiveFailures: row.consecutiveFailures ?? 0,
 			recentFailures: (row.recentFailures ?? []).map((f) => ({
@@ -561,6 +618,7 @@ export class PersistentStatusTracker {
 			isDisabled: status.isDisabled,
 			disabledAt: status.disabledAt?.toISOString() ?? null,
 			disabledUntil: status.disabledUntil?.toISOString() ?? null,
+			disabledReason: status.disabledReason ?? null,
 			lastSuccess: status.lastSuccess?.toISOString() ?? null,
 			lastFailure: status.lastFailure?.toISOString() ?? null,
 			avgResponseTime: status.avgResponseTime ?? null,

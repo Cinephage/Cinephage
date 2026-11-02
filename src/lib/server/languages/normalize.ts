@@ -7,7 +7,7 @@
  * English and never silently disappear.
  */
 
-import { canonicalizeLanguageTag, type LanguageTag } from '$lib/shared/languages.js';
+import { canonicalizeLanguageTag, type LanguageTag } from '#lib/shared/languages.js';
 import { ISO_TO_CANONICAL } from './iso-data.generated.js';
 
 const UNKNOWN: LanguageTag = 'und';

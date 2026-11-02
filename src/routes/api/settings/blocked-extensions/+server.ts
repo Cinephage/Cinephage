@@ -1,21 +1,20 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { globalBlockedVideoExtensionsSchema } from '$lib/validation/schemas.js';
-import { parseBody } from '$lib/server/api/validate.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { globalBlockedVideoExtensionsSchema } from '#lib/validation/schemas.js';
+import { parseBody } from '#lib/server/api/validate.js';
 import {
 	getBlockedVideoExtensions,
 	setBlockedVideoExtensions,
 	invalidateBlockedVideoExtensionsCache
-} from '$lib/server/settings/blocked-extensions.js';
-import { downloadMonitor } from '$lib/server/downloadClients/monitoring/DownloadMonitorService.js';
+} from '#lib/server/settings/blocked-extensions.js';
+import { downloadMonitor } from '#lib/server/downloadClients/monitoring/DownloadMonitorService.js';
 
 export const GET: RequestHandler = async (event) => {
 	const authError = requireAdmin(event);
 	if (authError) return authError;
 
 	const data = await getBlockedVideoExtensions();
-	return json({ success: true, ...data });
+	return Response.json({ success: true, ...data });
 };
 
 export const PUT: RequestHandler = async (event) => {
@@ -30,5 +29,5 @@ export const PUT: RequestHandler = async (event) => {
 
 	downloadMonitor.checkBlockedExtensions().catch(() => {});
 
-	return json({ success: true, ...result });
+	return Response.json({ success: true, ...result });
 };

@@ -1,9 +1,8 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { db } from '$lib/server/db';
-import { downloadHistory, movies, series } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { downloadHistory, movies, series } from '#lib/server/db/schema.js';
 import { eq, desc, and, isNotNull, isNull, inArray } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'QueueHistoryApi', logDomain: 'downloads' });
 
@@ -23,8 +22,10 @@ export const GET: RequestHandler = async ({ url }) => {
 		const limitParam = url.searchParams.get('limit');
 		const offsetParam = url.searchParams.get('offset');
 
-		const limit = limitParam ? parseInt(limitParam, 10) : 50;
-		const offset = offsetParam ? parseInt(offsetParam, 10) : 0;
+		// Clamp: an unbounded limit materialises the whole table into memory and
+		// into a single JSON response.
+		const limit = Math.min(Math.max(parseInt(limitParam ?? '50', 10) || 50, 1), 500);
+		const offset = Math.max(parseInt(offsetParam ?? '0', 10) || 0, 0);
 
 		// Build where conditions
 		const conditions = [];
@@ -107,7 +108,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			removed: historyItems.filter((h) => h.status === 'removed').length
 		};
 
-		return json({
+		return Response.json({
 			items: enrichedItems,
 			pagination: {
 				limit,
@@ -119,7 +120,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		});
 	} catch (err) {
 		logger.error('Error fetching history', err instanceof Error ? err : undefined);
-		return json({ error: 'Failed to fetch history' }, { status: 500 });
+		return Response.json({ error: 'Failed to fetch history' }, { status: 500 });
 	}
 };
 
@@ -133,7 +134,7 @@ export const DELETE: RequestHandler = async ({ url }) => {
 
 		// Require confirmation
 		if (confirm !== 'true') {
-			return json(
+			return Response.json(
 				{ error: 'Confirmation required. Add ?confirm=true to delete history.' },
 				{ status: 400 }
 			);
@@ -143,7 +144,7 @@ export const DELETE: RequestHandler = async ({ url }) => {
 			// Delete specific status
 			await db.delete(downloadHistory).where(eq(downloadHistory.status, status));
 
-			return json({
+			return Response.json({
 				success: true,
 				message: `Cleared history with status: ${status}`
 			});
@@ -152,12 +153,12 @@ export const DELETE: RequestHandler = async ({ url }) => {
 		// Delete all
 		await db.delete(downloadHistory);
 
-		return json({
+		return Response.json({
 			success: true,
 			message: 'Cleared all download history'
 		});
 	} catch (err) {
 		logger.error('Error clearing history', err instanceof Error ? err : undefined);
-		return json({ error: 'Failed to clear history' }, { status: 500 });
+		return Response.json({ error: 'Failed to clear history' }, { status: 500 });
 	}
 };

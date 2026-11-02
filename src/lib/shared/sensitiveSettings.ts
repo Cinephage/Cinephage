@@ -1,6 +1,8 @@
 const SENSITIVE_KEY_PATTERNS = ['key', 'password', 'secret', 'token', 'cookie', 'passkey'];
 const REDACTED_VALUE = '[REDACTED]';
 
+export { REDACTED_VALUE };
+
 export interface SensitiveSettingLike {
 	name: string;
 	type: string;

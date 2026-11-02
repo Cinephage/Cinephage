@@ -1,14 +1,13 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getIndexerManager } from '$lib/server/indexers/IndexerManager';
-import { CINEPHAGE_STREAM_DEFINITION_ID } from '$lib/server/indexers/types';
-import { indexerUpdateSchema } from '$lib/validation/schemas';
-import { mergeBlankSensitiveIndexerSettings } from '$lib/server/indexers/settingsSecrets';
-import { createChildLogger } from '$lib/logging';
-import { assertFound, parseBody } from '$lib/server/api/validate';
-import { NotFoundError } from '$lib/errors';
-import { redactIndexer } from '$lib/server/utils/redaction.js';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
+import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
+import { CINEPHAGE_STREAM_DEFINITION_ID } from '#lib/server/indexers/types/index.js';
+import { indexerUpdateSchema } from '#lib/validation/schemas.js';
+import { mergeBlankSensitiveIndexerSettings } from '#lib/server/indexers/settingsSecrets.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { assertFound, parseBody } from '#lib/server/api/validate.js';
+import { NotFoundError } from '#lib/errors/index.js';
+import { redactIndexer } from '#lib/server/utils/redaction.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 
 const logger = createChildLogger({ module: 'IndexerAPI' });
 
@@ -20,7 +19,7 @@ export const GET: RequestHandler = async (event) => {
 	const manager = await getIndexerManager();
 	const indexer = assertFound(await manager.getIndexer(params.id), 'Indexer', params.id);
 
-	return json(redactIndexer(indexer));
+	return Response.json(redactIndexer(indexer));
 };
 
 export const DELETE: RequestHandler = async (event) => {
@@ -32,12 +31,12 @@ export const DELETE: RequestHandler = async (event) => {
 
 	try {
 		await manager.deleteIndexer(params.id);
-		return json({ success: true });
+		return Response.json({ success: true });
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		// Built-in indexer delete attempts return a clear 403.
 		if (message.includes('built-in indexer')) {
-			return json({ error: message }, { status: 403 });
+			return Response.json({ error: message }, { status: 403 });
 		}
 		if (message.includes('not found')) {
 			throw new NotFoundError('Indexer', params.id);
@@ -85,6 +84,7 @@ export const PUT: RequestHandler = async (event) => {
 			baseUrl: validated.baseUrl,
 			alternateUrls: validated.alternateUrls,
 			priority: validated.priority,
+			rateLimitPerMinute: validated.rateLimitPerMinute,
 			settings,
 
 			// Search capability toggles
@@ -121,7 +121,7 @@ export const PUT: RequestHandler = async (event) => {
 			);
 
 			// Run in background to not block the response
-			import('$lib/server/streaming')
+			import('#lib/server/streaming/index.js')
 				.then(async ({ strmService, getStreamingBaseUrl }) => {
 					const baseUrl = await getStreamingBaseUrl(newBaseUrl);
 					const result = await strmService.bulkUpdateStrmUrls(baseUrl);
@@ -144,11 +144,11 @@ export const PUT: RequestHandler = async (event) => {
 				});
 		}
 
-		return json({ success: true, indexer: redactIndexer(updated) });
+		return Response.json({ success: true, indexer: redactIndexer(updated) });
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		if (message.includes('built-in indexer') || message.includes('restricted field')) {
-			return json({ error: message }, { status: 403 });
+			return Response.json({ error: message }, { status: 403 });
 		}
 		if (message.includes('not found')) {
 			throw new NotFoundError('Indexer', params.id);

@@ -1,14 +1,13 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import {
 	NamingService,
 	type MediaNamingInfo,
 	type NamingConfig
-} from '$lib/server/library/naming/NamingService';
-import { namingSettingsService } from '$lib/server/library/naming/NamingSettingsService';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { namingPreviewSchema } from '$lib/validation/schemas.js';
-import { createChildLogger } from '$lib/logging';
+} from '#lib/server/library/naming/NamingService.js';
+import { namingSettingsService } from '#lib/server/library/naming/NamingSettingsService.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { namingPreviewSchema } from '#lib/validation/schemas.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'NamingPreviewApi', logDomain: 'scans' });
 
@@ -113,7 +112,10 @@ export const POST: RequestHandler = async (event) => {
 	try {
 		const parsed = namingPreviewSchema.safeParse(await request.json());
 		if (!parsed.success) {
-			return json({ success: false, error: parsed.error.issues[0].message }, { status: 400 });
+			return Response.json(
+				{ success: false, error: parsed.error.issues[0].message },
+				{ status: 400 }
+			);
 		}
 		const { config: customConfig } = parsed.data;
 
@@ -137,7 +139,7 @@ export const POST: RequestHandler = async (event) => {
 			},
 			series: {
 				folder: namingService.generateSeriesFolderName(SAMPLE_EPISODE),
-				season: namingService.generateSeasonFolderName(1)
+				season: namingService.generateSeasonFolderName(1, SAMPLE_EPISODE)
 			},
 			episode: {
 				file: namingService.generateEpisodeFileName(SAMPLE_EPISODE)
@@ -153,7 +155,7 @@ export const POST: RequestHandler = async (event) => {
 			}
 		};
 
-		return json({
+		return Response.json({
 			previews,
 			config: mergedConfig,
 			sampleData: {
@@ -163,7 +165,7 @@ export const POST: RequestHandler = async (event) => {
 		});
 	} catch (error) {
 		logger.error('Error generating naming preview', error instanceof Error ? error : undefined);
-		return json({ error: 'Failed to generate naming preview' }, { status: 500 });
+		return Response.json({ error: 'Failed to generate naming preview' }, { status: 500 });
 	}
 };
 
@@ -187,7 +189,7 @@ export const GET: RequestHandler = async () => {
 			},
 			series: {
 				folder: namingService.generateSeriesFolderName(SAMPLE_EPISODE),
-				season: namingService.generateSeasonFolderName(1)
+				season: namingService.generateSeasonFolderName(1, SAMPLE_EPISODE)
 			},
 			episode: {
 				file: namingService.generateEpisodeFileName(SAMPLE_EPISODE)
@@ -203,12 +205,12 @@ export const GET: RequestHandler = async () => {
 			}
 		};
 
-		return json({
+		return Response.json({
 			previews,
 			config
 		});
 	} catch (error) {
 		logger.error('Error getting naming preview', error instanceof Error ? error : undefined);
-		return json({ error: 'Failed to get naming preview' }, { status: 500 });
+		return Response.json({ error: 'Failed to get naming preview' }, { status: 500 });
 	}
 };

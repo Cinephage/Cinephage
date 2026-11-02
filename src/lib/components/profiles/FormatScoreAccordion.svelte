@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { SvelteSet, SvelteMap } from 'svelte/reactivity';
-	import type { FormatCategory } from '$lib/types/format';
-	import type { RequiredFormatEntry } from '$lib/types/profile';
-	import * as m from '$lib/paraglide/messages.js';
+	import type { FormatCategory } from '#lib/types/format.js';
+	import type { RequiredFormatEntry } from '#lib/types/profile.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import {
 		FORMAT_CATEGORY_LABELS,
 		FORMAT_CATEGORY_ORDER,
 		type FormatScoreEntry,
 		filterFormatScores,
 		countNonZeroScores
-	} from '$lib/types/format';
+	} from '#lib/types/format.js';
 	import {
 		Search,
 		ChevronDown,
@@ -25,7 +25,7 @@
 		Sparkles,
 		FileCode,
 		MoreHorizontal
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 
 	interface Props {
 		formatScores: Map<FormatCategory, FormatScoreEntry[]>;

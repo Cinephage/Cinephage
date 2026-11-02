@@ -1,7 +1,7 @@
 import type { RequestHandler } from './$types.js';
-import { createSSEStream } from '$lib/server/sse.js';
-import { getMediaServerStatsSyncService } from '$lib/server/mediaServerStats/MediaServerStatsSyncService.js';
-import { requireAuth } from '$lib/server/auth/authorization.js';
+import { createSSEStream } from '#lib/server/sse.js';
+import { getMediaServerStatsSyncService } from '#lib/server/mediaServerStats/MediaServerStatsSyncService.js';
+import { requireAuth } from '#lib/server/auth/authorization.js';
 
 /**
  * GET /api/media-server-stats/sync/status

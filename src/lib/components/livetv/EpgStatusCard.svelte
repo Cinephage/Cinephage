@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { RefreshCw, Calendar, AlertTriangle, Check, Info, Loader2 } from 'lucide-svelte';
-	import type { EpgStatus } from '$lib/types/livetv';
-	import * as m from '$lib/paraglide/messages.js';
+	import { RefreshCw, Calendar, AlertTriangle, Check, Info, Loader2 } from '@lucide/svelte';
+	import type { EpgStatus } from '#lib/types/livetv.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
 		status: EpgStatus | null;

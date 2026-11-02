@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Loader2, Tv, Radio, List, Plus, Check } from 'lucide-svelte';
-	import type { LiveTvProviderType, CachedChannel } from '$lib/types/livetv';
-	import * as m from '$lib/paraglide/messages.js';
+	import { Loader2, Tv, Radio, List, Plus, Check } from '@lucide/svelte';
+	import type { LiveTvProviderType, CachedChannel } from '#lib/types/livetv.js';
+	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
 		channels: CachedChannel[];
@@ -73,6 +73,8 @@
 					icon: List,
 					label: m.livetv_channelBrowserModal_providerM3u()
 				};
+			case 'cinephage-live':
+				return { class: 'badge-info', icon: Tv, label: 'Cinephage Live' };
 			default:
 				return { class: 'badge-ghost', icon: Tv, label: type };
 		}

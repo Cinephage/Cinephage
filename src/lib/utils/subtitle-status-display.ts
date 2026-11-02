@@ -2,14 +2,14 @@
  * Requirement-aware subtitle status display.
  *
  * Turns the server-computed `SubtitleStatus` (see
- * `$lib/server/subtitles/types.js`) plus the effective language profile into a
+ * `#lib/server/subtitles/types.js`) plus the effective language profile into a
  * small view-model for the library badges ("2 of 3", "Cutoff met").
  *
- * Lives outside `$lib/server` so client components can import it; the status
+ * Lives outside `#lib/server` so client components can import it; the status
  * shape below is a structural subset of the server type (loader-serialized).
  */
 
-import type { LanguageProfileV2 } from '$lib/shared/language-profile.js';
+import type { LanguageProfileV2 } from '#lib/shared/language-profile.js';
 
 /** Client-safe subset of the server's SubtitleStatus. */
 export interface SubtitleStatusSummary {

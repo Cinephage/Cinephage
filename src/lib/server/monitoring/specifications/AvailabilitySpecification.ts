@@ -21,11 +21,11 @@ import type {
 	ReleaseCandidate
 } from './types.js';
 import { reject, accept } from './types.js';
-import { tmdb, type MovieReleaseInfo } from '$lib/server/tmdb.js';
-import { createChildLogger } from '$lib/logging';
+import { tmdb, type MovieReleaseInfo } from '#lib/server/tmdb.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'monitoring' as const });
-import { getMovieAvailabilityLevel } from '$lib/utils/movieAvailability';
+import { getMovieAvailabilityLevel } from '#lib/utils/movieAvailability.js';
 
 /**
  * Availability levels in order of "availability"
@@ -67,7 +67,7 @@ export class MovieAvailabilitySpecification implements IMonitoringSpecification<
 			movie.releaseDate;
 
 		if (hasStoredDates) {
-			const { isMovieAvailableForSearch } = await import('$lib/utils/movieAvailability');
+			const { isMovieAvailableForSearch } = await import('#lib/utils/movieAvailability.js');
 			const available = isMovieAvailableForSearch({
 				minimumAvailability,
 				releaseDate: movie.releaseDate ?? null,

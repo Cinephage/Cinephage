@@ -32,7 +32,6 @@
       || (baseName == "vite.config.ts")
       || (baseName == "vite.config.js")
       || (baseName == "tsconfig.json")
-      || (baseName == "svelte.config.js")
       || (baseName == "tailwind.config.js")
       || (baseName == "tailwind.config.ts")
       || (baseName == "eslint.config.js")

@@ -9,8 +9,8 @@
  * languages identically.
  */
 
-import { normalizeLanguageCode, type LanguageTag } from '$lib/shared/languages';
-import type { AudioAcquisitionMode } from '$lib/shared/language-profile';
+import { normalizeLanguageCode, type LanguageTag } from '#lib/shared/languages.js';
+import type { AudioAcquisitionMode } from '#lib/shared/language-profile.js';
 
 export function languageMatches(candidateLang: string | undefined, prefCode: string): boolean {
 	if (!candidateLang) return false;

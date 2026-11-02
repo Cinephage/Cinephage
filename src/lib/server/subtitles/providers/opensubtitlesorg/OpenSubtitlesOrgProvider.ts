@@ -24,7 +24,7 @@ import {
 	ORG_LANGUAGE_REVERSE,
 	ORG_SUPPORTED_LANGUAGES
 } from './types';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'subtitles' as const });
 import {

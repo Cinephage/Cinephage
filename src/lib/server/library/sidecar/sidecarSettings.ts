@@ -4,8 +4,8 @@
  */
 
 import { eq } from 'drizzle-orm';
-import { db } from '$lib/server/db';
-import { settings } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { settings } from '#lib/server/db/schema.js';
 
 const KEYS = {
 	enabled: 'sidecar_enabled',

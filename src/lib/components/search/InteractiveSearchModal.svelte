@@ -1,20 +1,20 @@
 <script lang="ts">
 	import { SvelteSet, SvelteMap } from 'svelte/reactivity';
 	import { setContext } from 'svelte';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
 	import SearchHeader from './SearchHeader.svelte';
 	import SearchStats from './SearchStats.svelte';
 	import SearchFilters from './SearchFilters.svelte';
 	import SearchResultsList from './SearchResultsList.svelte';
-	import { BlockReleaseModal } from '$lib/components/blocklist';
-	import { getUsenetServers } from '$lib/api/usenet.js';
-	import { searchReleases } from '$lib/api/indexers.js';
-	import { addToBlocklist } from '$lib/api/settings.js';
-	import { isMultiSeasonPack } from '$lib/utils/release-analysis.js';
+	import { BlockReleaseModal } from '#lib/components/blocklist/index.js';
+	import { getUsenetServers } from '#lib/api/usenet.js';
+	import { searchReleases } from '#lib/api/indexers.js';
+	import { addToBlocklist } from '#lib/api/settings.js';
+	import { isMultiSeasonPack } from '#lib/utils/release-analysis.js';
 	import { getGrabErrorMessage } from './grab-errors.js';
 	import { downloadDebugJson as downloadJsonFile } from './debug-export.js';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import * as m from '$lib/paraglide/messages.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import type { Release } from './SearchResultRow.svelte';
 
 	interface IndexerResult {

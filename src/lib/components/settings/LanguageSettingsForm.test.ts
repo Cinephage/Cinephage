@@ -7,14 +7,17 @@ const { updateLanguageSettings } = vi.hoisted(() => ({
 	updateLanguageSettings: vi.fn()
 }));
 
-vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
+vi.mock('$app/paths', () => ({
+	// Mirrors kit's resolve(): pathnames get a leading slash, route IDs pass through.
+	resolve: (path: string) => (path.startsWith('/') ? path : `/${path}`)
+}));
 
-vi.mock('$lib/api', () => ({
+vi.mock('#lib/api/index.js', () => ({
 	updateLanguageSettings,
 	ApiError: class ApiError extends Error {}
 }));
 
-vi.mock('$lib/stores/toast.svelte', () => ({
+vi.mock('#lib/stores/toast.svelte.js', () => ({
 	toasts: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() }
 }));
 

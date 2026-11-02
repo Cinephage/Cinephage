@@ -1,9 +1,9 @@
 <script lang="ts">
 	import CommonOptions from './add/CommonOptions.svelte';
-	import type { SubtitleRequirement } from '$lib/shared/language-profile.js';
+	import type { SubtitleRequirement } from '#lib/shared/language-profile.js';
 	import MovieAddOptions, { type MinimumAvailability } from './add/MovieAddOptions.svelte';
-	import type { RootFolderWithSpaceAndDefault as RootFolder } from '$lib/types/downloadClient.js';
-	import type { DesiredQuality } from '$lib/types/library.js';
+	import type { RootFolderWithSpaceAndDefault as RootFolder } from '#lib/types/downloadClient.js';
+	import type { DesiredQuality } from '#lib/types/library.js';
 
 	interface ScoringProfile {
 		id: string;

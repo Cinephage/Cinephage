@@ -3,7 +3,7 @@ import { createTestDb, type TestDatabase } from '../../../test/db-helper';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -74,7 +74,7 @@ describe('recalculateMovieShortfall (persistence)', () => {
 	it('flags a movie whose only file contradicts the preference', async () => {
 		const movieId = 'movie-1';
 		testDb.db
-			.insert((await import('$lib/server/db/schema')).movies)
+			.insert((await import('#lib/server/db/schema.js')).movies)
 			.values({
 				id: movieId,
 				title: 'Dual Audio Dream',
@@ -85,7 +85,7 @@ describe('recalculateMovieShortfall (persistence)', () => {
 			})
 			.run();
 		testDb.db
-			.insert((await import('$lib/server/db/schema')).movieFiles)
+			.insert((await import('#lib/server/db/schema.js')).movieFiles)
 			.values({
 				id: 'file-1',
 				movieId,
@@ -97,7 +97,7 @@ describe('recalculateMovieShortfall (persistence)', () => {
 
 		// Preference: es+en via an instance-default profile
 		testDb.db
-			.insert((await import('$lib/server/db/schema')).languageProfiles)
+			.insert((await import('#lib/server/db/schema.js')).languageProfiles)
 			.values({
 				id: 'profile-es',
 				name: 'ES First',
@@ -109,10 +109,10 @@ describe('recalculateMovieShortfall (persistence)', () => {
 			})
 			.run();
 		testDb.db
-			.insert((await import('$lib/server/db/schema')).languageSettings)
+			.insert((await import('#lib/server/db/schema.js')).languageSettings)
 			.values({ id: 'singleton', defaultProfileId: 'profile-es' })
 			.onConflictDoUpdate({
-				target: (await import('$lib/server/db/schema')).languageSettings.id,
+				target: (await import('#lib/server/db/schema.js')).languageSettings.id,
 				set: { defaultProfileId: 'profile-es' }
 			})
 			.run();
@@ -121,7 +121,7 @@ describe('recalculateMovieShortfall (persistence)', () => {
 		expect(flagged).toBe(true);
 		const row = testDb.db
 			.select()
-			.from((await import('$lib/server/db/schema')).movies)
+			.from((await import('#lib/server/db/schema.js')).movies)
 			.all()
 			.find((m) => m.id === movieId);
 		expect(row?.languageShortfall).toBe(true);
@@ -129,7 +129,7 @@ describe('recalculateMovieShortfall (persistence)', () => {
 
 	it('leaves the flag off when the audio satisfies the preference', async () => {
 		const movieId = 'movie-2';
-		const schema = await import('$lib/server/db/schema');
+		const schema = await import('#lib/server/db/schema.js');
 		testDb.db
 			.insert(schema.movies)
 			.values({
@@ -158,7 +158,7 @@ describe('recalculateMovieShortfall (persistence)', () => {
 
 	it('never flags unprobed files (absence of evidence is not a shortfall)', async () => {
 		const movieId = 'movie-3';
-		const schema = await import('$lib/server/db/schema');
+		const schema = await import('#lib/server/db/schema.js');
 		testDb.db
 			.insert(schema.movies)
 			.values({

@@ -10,7 +10,7 @@
 
 import { RateLimiter } from './RateLimiter';
 import { type RateLimitConfig } from './types';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const log = createChildLogger({ module: 'HostRateLimiter' });
 

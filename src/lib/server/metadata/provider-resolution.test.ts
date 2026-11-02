@@ -5,13 +5,13 @@ vi.mock('./provider-registry.js', () => ({
 	buildMetadataProviderRegistry: vi.fn()
 }));
 
-vi.mock('$lib/server/services/AlternateTitleService.js', () => ({
+vi.mock('#lib/server/services/AlternateTitleService.js', () => ({
 	storeProviderTitleVariants: vi.fn().mockResolvedValue(0)
 }));
 
 const { buildMetadataProviderRegistry } = await import('./provider-registry.js');
 const { storeProviderTitleVariants } =
-	await import('$lib/server/services/AlternateTitleService.js');
+	await import('#lib/server/services/AlternateTitleService.js');
 const { persistEnrichmentTitleVariants, persistLinkedProviderTitleVariants } =
 	await import('./provider-resolution.js');
 

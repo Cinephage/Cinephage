@@ -1,6 +1,6 @@
 /**
  * Client-safe (no server imports) ranking mirror of the server
- * {@link import('$lib/server/quality/buckets.js').selectBestFile}. Used by
+ * {@link import('#lib/server/quality/buckets.js').selectBestFile}. Used by
  * client-side code (types, utils, Svelte components) that cannot import the
  * server helper directly.
  *
@@ -57,7 +57,7 @@ const MULTI_QUALITY_MIN_BUCKETS = 2;
 
 /**
  * Approximate client-side mirror of the server
- * {@link import('$lib/server/quality/buckets.js').effectiveBuckets}: clamps the
+ * {@link import('#lib/server/quality/buckets.js').effectiveBuckets}: clamps the
  * desired resolutions to the scoring profile's resolution range using
  * RESOLUTION_RANK, dropping unknown/unrecognized values and deduping while
  * preserving declared order.
@@ -90,7 +90,7 @@ export function effectiveResolutions(
 
 /**
  * Client-safe mirror of the server
- * {@link import('$lib/server/quality/buckets.js').redundantFileIds}. Returns the
+ * {@link import('#lib/server/quality/buckets.js').redundantFileIds}. Returns the
  * IDs of existing files that don't fit the movie's effective desired-quality
  * tiers:
  *  - Multi-quality (effective length >= 2): files whose KNOWN resolution is NOT

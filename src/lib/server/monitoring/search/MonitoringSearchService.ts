@@ -8,8 +8,8 @@
  * - Auto-grabs best releases
  */
 
-import { db } from '$lib/server/db/index.js';
-import { todayDateString } from '$lib/utils/format.js';
+import { db } from '#lib/server/db/index.js';
+import { todayDateString } from '#lib/utils/format.js';
 import {
 	movies,
 	movieFiles,
@@ -19,28 +19,33 @@ import {
 	scoringProfiles,
 	downloadQueue,
 	settings
-} from '$lib/server/db/schema.js';
+} from '#lib/server/db/schema.js';
 import { eq, and, lte, gte, inArray, isNotNull } from 'drizzle-orm';
-import { getIndexerManager } from '$lib/server/indexers/IndexerManager.js';
+import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
+import {
+	isRuTrackerHost,
+	isRuTrackerIndexerName
+} from '#lib/server/indexers/search/russian-trackers.js';
+import { AUTO_GRAB_MIN_SCORE } from '#lib/server/library/searchOnAdd/search-utils.js';
 
 import {
 	parseEpisodePointerFromGuid,
 	parseEpisodePointerFromTitle
-} from '$lib/server/downloads/episode-pointer.js';
-import { ReleaseParser } from '$lib/server/indexers/parser/ReleaseParser.js';
-import { createChildLogger } from '$lib/logging/index.js';
-import type { SearchCriteria, EnhancedReleaseResult } from '$lib/server/indexers/types';
-import { scoreRelease, isUpgrade } from '$lib/server/scoring/scorer.js';
-import type { ScoringProfile } from '$lib/server/scoring/types.js';
-import { qualityFilter } from '$lib/server/quality';
-import { resolveMovieMultiQuality } from '$lib/server/quality/movie-buckets.js';
-import { getFilledResolutions } from '$lib/server/quality/buckets.js';
-import type { Resolution } from '$lib/server/indexers/parser/types.js';
-import { TaskCancelledException } from '$lib/server/tasks/TaskCancelledException.js';
+} from '#lib/server/downloads/episode-pointer.js';
+import { ReleaseParser } from '#lib/server/indexers/parser/ReleaseParser.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import type { SearchCriteria, EnhancedReleaseResult } from '#lib/server/indexers/types/index.js';
+import { scoreRelease, isUpgrade } from '#lib/server/scoring/scorer.js';
+import type { ScoringProfile } from '#lib/server/scoring/types.js';
+import { qualityFilter } from '#lib/server/quality/index.js';
+import { resolveMovieMultiQuality } from '#lib/server/quality/movie-buckets.js';
+import { getFilledResolutions } from '#lib/server/quality/buckets.js';
+import type { Resolution } from '#lib/server/indexers/parser/types.js';
+import { TaskCancelledException } from '#lib/server/tasks/TaskCancelledException.js';
 import {
 	getMovieSearchTitles,
 	getSeriesSearchTitles
-} from '$lib/server/services/AlternateTitleService.js';
+} from '#lib/server/services/AlternateTitleService.js';
 
 // Specifications
 import {
@@ -53,6 +58,7 @@ import {
 	MovieUpgradeableSpecification,
 	EpisodeUpgradeableSpecification,
 	NewEpisodeSpecification,
+	NEW_EPISODE_LOOKBACK_HOURS,
 	MovieAvailabilitySpecification,
 	MovieSearchCooldownSpecification,
 	EpisodeSearchCooldownSpecification,
@@ -177,8 +183,15 @@ interface MissingSearchOptions {
  * MonitoringSearchService - Coordinate searches for monitoring
  */
 export class MonitoringSearchService {
-	private readonly AUTO_GRAB_MIN_SCORE = 0;
 	private readonly MAX_CONCURRENT_SEARCHES = 10;
+
+	// Ceiling on individual per-episode indexer searches within a single
+	// series search invocation. Without this, an automatic/manual search on
+	// a large back-catalog series with hundreds of missing episodes falls
+	// through the season-pack strategy (skipped below 50% missing per
+	// season) into this per-episode loop and can fire hundreds of
+	// sequential indexer requests, exhausting a real indexer's API quota.
+	private readonly MAX_INDIVIDUAL_EPISODE_SEARCHES_PER_SERIES = 40;
 
 	// Queue statuses that can block new searches for the same media.
 	// 'paused' and 'seeding' are only blocking when import has not completed yet.
@@ -777,7 +790,7 @@ export class MonitoringSearchService {
 				enrichment: {
 					scoringProfileId: movie.scoringProfileId ?? undefined,
 					filterRejected: true,
-					minScore: this.AUTO_GRAB_MIN_SCORE
+					minScore: AUTO_GRAB_MIN_SCORE
 				}
 			});
 
@@ -876,7 +889,7 @@ export class MonitoringSearchService {
 			enrichment: {
 				scoringProfileId: movie.scoringProfileId ?? undefined,
 				filterRejected: true,
-				minScore: this.AUTO_GRAB_MIN_SCORE
+				minScore: AUTO_GRAB_MIN_SCORE
 			}
 		});
 
@@ -1266,61 +1279,103 @@ export class MonitoringSearchService {
 			await new Promise((resolve) => setTimeout(resolve, 500));
 		}
 
-		// Strategy 2: Search for remaining individual episodes
+		// Strategy 2: Search for remaining individual episodes, oldest-searched first.
+		// The per-series cap means a series with more missing episodes than the
+		// cap can't be fully covered in one run; ordering by lastSearchTime (never
+		// searched = treated as oldest) ensures each run advances through a different
+		// slice of the backlog instead of always hitting the same cap on the same
+		// low-numbered episodes and never reaching the rest.
+		const pendingEpisodes: Array<{
+			seasonNumber: number;
+			episode: typeof episodes.$inferSelect;
+		}> = [];
 		for (const [seasonNumber, missingEpisodes] of seasonMap) {
 			for (const episode of missingEpisodes) {
-				// Check for cancellation before each episode
-				if (signal?.aborted) {
-					throw new TaskCancelledException('search');
-				}
-
-				// Skip if already grabbed via pack
-				if (grabbedEpisodeIds.has(episode.id)) {
-					continue;
-				}
-
-				// Update lastSearchTime before searching
-				await db
-					.update(episodes)
-					.set({ lastSearchTime: new Date().toISOString() })
-					.where(eq(episodes.id, episode.id));
-
-				// Search and grab individual episode
-				// Note: searchAndGrabEpisode now includes packs in results due to filterBySeasonEpisode change
-				// Pack bonus scoring will naturally prioritize packs if they're of similar quality
-				const searchResult = await this.searchAndGrabEpisode(seriesData, episode);
-
-				// If we grabbed a pack, mark all episodes in that season as handled.
-				// Episode pointers intentionally look like packs in title shape, but only grab one episode.
-				if (searchResult.grabbed) {
-					grabbedEpisodeIds.add(episode.id);
-				}
-				if (searchResult.grabbed && searchResult.grabbedRelease) {
-					const isEpisodePointer = Boolean(
-						parseEpisodePointerFromTitle(searchResult.grabbedRelease)
-					);
-					const parsed = parser.parse(searchResult.grabbedRelease);
-					if (!isEpisodePointer && parsed.episode?.isSeasonPack) {
-						// Mark all episodes in this season as handled
-						for (const ep of missingEpisodes) {
-							grabbedEpisodeIds.add(ep.id);
-						}
-						logger.info(
-							{
-								seriesTitle: seriesData.title,
-								season: seasonNumber,
-								releaseName: searchResult.grabbedRelease
-							},
-							'[MonitoringSearch] Season pack grabbed via episode search'
-						);
-					}
-				}
-
-				results.push(searchResult);
-
-				// Rate limiting
-				await new Promise((resolve) => setTimeout(resolve, 500));
+				if (grabbedEpisodeIds.has(episode.id)) continue;
+				pendingEpisodes.push({ seasonNumber, episode });
 			}
+		}
+		pendingEpisodes.sort((a, b) => {
+			const aTime = a.episode.lastSearchTime ? new Date(a.episode.lastSearchTime).getTime() : 0;
+			const bTime = b.episode.lastSearchTime ? new Date(b.episode.lastSearchTime).getTime() : 0;
+			return aTime - bTime;
+		});
+
+		let individualSearchCount = 0;
+		for (const { seasonNumber, episode } of pendingEpisodes) {
+			// Check for cancellation before each episode
+			if (signal?.aborted) {
+				throw new TaskCancelledException('search');
+			}
+
+			// Skip if already grabbed via a pack (strategy 1, or a sibling episode
+			// grabbing a pack earlier in this same loop)
+			if (grabbedEpisodeIds.has(episode.id)) {
+				continue;
+			}
+
+			if (individualSearchCount >= this.MAX_INDIVIDUAL_EPISODE_SEARCHES_PER_SERIES) {
+				logger.warn(
+					{
+						seriesTitle: seriesData.title,
+						season: seasonNumber,
+						limit: this.MAX_INDIVIDUAL_EPISODE_SEARCHES_PER_SERIES
+					},
+					'[MonitoringSearch] Hit per-series individual episode search cap, remaining episodes will be picked up on a later search'
+				);
+				results.push({
+					itemId: episode.id,
+					itemType: 'episode',
+					title: `${seriesData.title} S${seasonNumber.toString().padStart(2, '0')}E${episode.episodeNumber.toString().padStart(2, '0')}`,
+					searched: false,
+					releasesFound: 0,
+					grabbed: false,
+					skipped: true,
+					skipReason: 'Per-series individual episode search cap reached for this run'
+				});
+				continue;
+			}
+			individualSearchCount++;
+
+			// Update lastSearchTime before searching
+			await db
+				.update(episodes)
+				.set({ lastSearchTime: new Date().toISOString() })
+				.where(eq(episodes.id, episode.id));
+
+			// Search and grab individual episode
+			// Note: searchAndGrabEpisode now includes packs in results due to filterBySeasonEpisode change
+			// Pack bonus scoring will naturally prioritize packs if they're of similar quality
+			const searchResult = await this.searchAndGrabEpisode(seriesData, episode);
+
+			// If we grabbed a pack, mark all episodes in that season as handled.
+			// Episode pointers intentionally look like packs in title shape, but only grab one episode.
+			if (searchResult.grabbed) {
+				grabbedEpisodeIds.add(episode.id);
+			}
+			if (searchResult.grabbed && searchResult.grabbedRelease) {
+				const isEpisodePointer = Boolean(parseEpisodePointerFromTitle(searchResult.grabbedRelease));
+				const parsed = parser.parse(searchResult.grabbedRelease);
+				if (!isEpisodePointer && parsed.episode?.isSeasonPack) {
+					// Mark all episodes in this season as handled
+					for (const ep of seasonMap.get(seasonNumber) ?? []) {
+						grabbedEpisodeIds.add(ep.id);
+					}
+					logger.info(
+						{
+							seriesTitle: seriesData.title,
+							season: seasonNumber,
+							releaseName: searchResult.grabbedRelease
+						},
+						'[MonitoringSearch] Season pack grabbed via episode search'
+					);
+				}
+			}
+
+			results.push(searchResult);
+
+			// Rate limiting
+			await new Promise((resolve) => setTimeout(resolve, 500));
 		}
 
 		return results;
@@ -1371,7 +1426,7 @@ export class MonitoringSearchService {
 				enrichment: {
 					scoringProfileId: seriesData.scoringProfileId ?? undefined,
 					filterRejected: true,
-					minScore: this.AUTO_GRAB_MIN_SCORE,
+					minScore: AUTO_GRAB_MIN_SCORE,
 					seasonEpisodeCount
 				}
 			});
@@ -1433,7 +1488,7 @@ export class MonitoringSearchService {
 				seasonEpisodeCount > 0 && missingEpisodes.length >= seasonEpisodeCount;
 
 			for (const release of seasonPacks) {
-				if (this.isRuTrackerIndexerName(release.indexerName) && !isEntireSeasonMissing) {
+				if (isRuTrackerIndexerName(release.indexerName) && !isEntireSeasonMissing) {
 					logger.debug(
 						{
 							seriesId: seriesData.id,
@@ -2032,7 +2087,7 @@ export class MonitoringSearchService {
 				enrichment: {
 					scoringProfileId: movie.scoringProfileId ?? undefined,
 					filterRejected: true,
-					minScore: this.AUTO_GRAB_MIN_SCORE
+					minScore: AUTO_GRAB_MIN_SCORE
 				}
 			});
 
@@ -2400,7 +2455,7 @@ export class MonitoringSearchService {
 				enrichment: {
 					scoringProfileId: seriesData.scoringProfileId ?? undefined,
 					filterRejected: true,
-					minScore: this.AUTO_GRAB_MIN_SCORE,
+					minScore: AUTO_GRAB_MIN_SCORE,
 					seasonEpisodeCount
 				}
 			});
@@ -2686,9 +2741,13 @@ export class MonitoringSearchService {
 				throw new TaskCancelledException('search');
 			}
 
-			// Calculate cutoff date
+			// Calculate cutoff date. This pre-filter must be at least as wide as
+			// NewEpisodeSpecification's own lookback window (NEW_EPISODE_LOOKBACK_HOURS),
+			// which is fixed and independent of intervalHours (the task's scheduling
+			// cadence) - otherwise this query could exclude episodes the spec would
+			// have accepted.
 			const cutoffDate = new Date();
-			cutoffDate.setHours(cutoffDate.getHours() - intervalHours);
+			cutoffDate.setHours(cutoffDate.getHours() - NEW_EPISODE_LOOKBACK_HOURS);
 
 			// Query recently aired episodes without files
 			// airDate is stored date-only ("YYYY-MM-DD") while the cutoff is a full
@@ -2727,9 +2786,14 @@ export class MonitoringSearchService {
 			await this.preloadSeasonEpisodeCounts(uniqueSeriesIds);
 
 			// Filter through specifications
-			const newEpisodeSpec = new NewEpisodeSpecification({ intervalHours });
+			const newEpisodeSpec = new NewEpisodeSpecification({});
 			const monitoredSpec = new EpisodeMonitoredSpecification();
 			const readOnlySpec = new EpisodeReadOnlyFolderSpecification();
+			// Cooldown is keyed off the task's own scheduling interval (how often this
+			// task runs), not the fixed air-date lookback window - without it, a
+			// frequently-scheduled task would re-query the indexer for the same
+			// not-yet-found episode on every single run for up to 48h.
+			const cooldownSpec = new EpisodeSearchCooldownSpecification(intervalHours);
 
 			for (const episode of recentEpisodes) {
 				// Check for cancellation before each episode
@@ -2782,6 +2846,19 @@ export class MonitoringSearchService {
 				if (!newEpisodeResult.accepted) {
 					continue; // Skip silently if not in time window
 				}
+
+				// Check search cooldown (prevent hammering indexers for the same
+				// not-yet-found episode across frequent runs within the lookback window)
+				const cooldownResult = await cooldownSpec.isSatisfied(context);
+				if (!cooldownResult.accepted) {
+					continue; // Skip silently - will be retried once cooldown passes
+				}
+
+				// Update lastSearchTime before searching
+				await db
+					.update(episodes)
+					.set({ lastSearchTime: new Date().toISOString() })
+					.where(eq(episodes.id, episode.id));
 
 				// Search and grab
 				const searchResult = await this.searchAndGrabEpisode(episode.series, episode);
@@ -2856,7 +2933,7 @@ export class MonitoringSearchService {
 				enrichment: {
 					scoringProfileId: movie.scoringProfileId ?? undefined,
 					filterRejected: true,
-					minScore: this.AUTO_GRAB_MIN_SCORE
+					minScore: AUTO_GRAB_MIN_SCORE
 				}
 			});
 
@@ -3031,7 +3108,7 @@ export class MonitoringSearchService {
 				enrichment: {
 					scoringProfileId: seriesData.scoringProfileId ?? undefined,
 					filterRejected: true,
-					minScore: this.AUTO_GRAB_MIN_SCORE,
+					minScore: AUTO_GRAB_MIN_SCORE,
 					seasonEpisodeCount
 				}
 			});
@@ -3075,7 +3152,7 @@ export class MonitoringSearchService {
 				// Pointer-indexer episode-targeted missing-content search should not grab
 				// full season packs.
 				// Allow virtual episode pointers because they resolve to per-episode file selection.
-				if (this.isRuTrackerIndexerName(release.indexerName) && isSeasonPack && !isEpisodePointer) {
+				if (isRuTrackerIndexerName(release.indexerName) && isSeasonPack && !isEpisodePointer) {
 					logger.debug(
 						{
 							seriesId: seriesData.id,
@@ -3159,27 +3236,6 @@ export class MonitoringSearchService {
 		);
 	}
 
-	private isRuTrackerIndexerName(indexerName: string | undefined): boolean {
-		if (typeof indexerName !== 'string') {
-			return false;
-		}
-		const normalized = indexerName.toLowerCase();
-		return normalized.includes('rutracker') || normalized.includes('kinozal');
-	}
-
-	private isRuTrackerHost(baseUrl: string | undefined): boolean {
-		if (!baseUrl) {
-			return false;
-		}
-		try {
-			const hostname = new URL(baseUrl).hostname.toLowerCase();
-			return hostname.includes('rutracker.') || hostname.includes('kinozal.');
-		} catch {
-			const normalized = baseUrl.toLowerCase();
-			return normalized.includes('rutracker.') || normalized.includes('kinozal.');
-		}
-	}
-
 	private async shouldApplyRuTrackerEpisodePointerPolicy(): Promise<boolean> {
 		try {
 			const indexerManager = await getIndexerManager();
@@ -3209,11 +3265,11 @@ export class MonitoringSearchService {
 
 			const hasRuTracker = automaticTvIndexers.some((indexer) => {
 				const config = indexer as { name?: string; baseUrl?: string };
-				return this.isRuTrackerIndexerName(config.name) || this.isRuTrackerHost(config.baseUrl);
+				return isRuTrackerIndexerName(config.name) || isRuTrackerHost(config.baseUrl);
 			});
 			const hasNonRuTracker = automaticTvIndexers.some((indexer) => {
 				const config = indexer as { name?: string; baseUrl?: string };
-				return !(this.isRuTrackerIndexerName(config.name) || this.isRuTrackerHost(config.baseUrl));
+				return !(isRuTrackerIndexerName(config.name) || isRuTrackerHost(config.baseUrl));
 			});
 
 			return hasRuTracker && !hasNonRuTracker;
@@ -3245,7 +3301,7 @@ export class MonitoringSearchService {
 		queueItemId?: string;
 		addedToQueue?: boolean;
 	}> {
-		const { grabService } = await import('$lib/server/downloads/GrabService.js');
+		const { grabService } = await import('#lib/server/downloads/GrabService.js');
 
 		let target;
 		if (options.movieId) {

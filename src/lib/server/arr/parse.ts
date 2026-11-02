@@ -5,7 +5,7 @@
  * ParsedMovieInfo in Radarr's actual openapi.json.
  */
 
-import { ReleaseParser } from '$lib/server/indexers/parser/ReleaseParser.js';
+import { ReleaseParser } from '#lib/server/indexers/parser/ReleaseParser.js';
 
 const parser = new ReleaseParser();
 

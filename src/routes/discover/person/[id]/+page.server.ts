@@ -1,7 +1,7 @@
-import { tmdb } from '$lib/server/tmdb';
+import { tmdb } from '#lib/server/tmdb.js';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'DiscoverPersonPage', logDomain: 'system' });
 
@@ -14,10 +14,10 @@ export const load: PageServerLoad = async ({ params }) => {
 	// Check if TMDB is configured
 	const tmdbConfigured = await tmdb.isConfigured();
 	if (!tmdbConfigured) {
-		throw error(503, {
-			message:
-				'TMDB API key not configured. Please configure your TMDB API key in Settings > Integrations.'
-		});
+		throw error(
+			503,
+			'TMDB API key not configured. Please configure your TMDB API key in Settings > Integrations.'
+		);
 	}
 
 	try {
@@ -28,10 +28,10 @@ export const load: PageServerLoad = async ({ params }) => {
 
 		// Handle null response (shouldn't happen since we checked config, but be safe)
 		if (!person) {
-			throw error(503, {
-				message:
-					'TMDB API key not configured. Please configure your TMDB API key in Settings > Integrations.'
-			});
+			throw error(
+				503,
+				'TMDB API key not configured. Please configure your TMDB API key in Settings > Integrations.'
+			);
 		}
 
 		return { person };

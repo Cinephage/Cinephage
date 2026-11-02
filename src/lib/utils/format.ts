@@ -1,4 +1,4 @@
-import { getLocale } from '$lib/paraglide/runtime.js';
+import { getLocale } from '#lib/paraglide/runtime.js';
 
 /**
  * Format a number as USD currency
@@ -29,11 +29,11 @@ export function todayDateString(): string {
 }
 
 /**
- * Format a date string for display using the current Paraglide locale.
+ * Format a date string or Date for display using the current Paraglide locale.
  * This is the primary display-date function — use it instead of raw toLocaleDateString().
  */
 export function formatDisplayDate(
-	dateStr: string | null | undefined,
+	dateStr: string | Date | null | undefined,
 	options?: Intl.DateTimeFormatOptions
 ): string {
 	if (!dateStr) return '';

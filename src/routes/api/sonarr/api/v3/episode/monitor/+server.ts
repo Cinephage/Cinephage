@@ -1,9 +1,8 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { requireArrCompatEnabled } from '$lib/server/arr/requireArrCompatEnabled.js';
-import { monitorEpisodesFromArr } from '$lib/server/arr/libraryWrite.js';
-import { withForwardedApiKey } from '$lib/server/arr/internalFetch.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { requireArrCompatEnabled } from '#lib/server/arr/requireArrCompatEnabled.js';
+import { monitorEpisodesFromArr } from '#lib/server/arr/libraryWrite.js';
+import { withForwardedApiKey } from '#lib/server/arr/internalFetch.js';
 
 /**
  * PUT /api/sonarr/api/v3/episode/monitor - bulk episode monitoring.
@@ -24,5 +23,5 @@ export const PUT: RequestHandler = async (event) => {
 	const monitored = typeof body.monitored === 'boolean' ? body.monitored : true;
 
 	const result = await monitorEpisodesFromArr(withForwardedApiKey(event), episodeIds, monitored);
-	return json(result.body, { status: result.status });
+	return Response.json(result.body, { status: result.status });
 };

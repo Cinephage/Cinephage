@@ -7,12 +7,12 @@ import {
 	rootFolders,
 	series,
 	subtitles
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 import { join } from 'node:path';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},

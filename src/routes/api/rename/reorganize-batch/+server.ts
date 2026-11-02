@@ -11,16 +11,15 @@
  * partial success.
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { RenamePreviewService } from '$lib/server/library/naming/RenamePreviewService.js';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { parseBody } from '$lib/server/api/validate.js';
-import { diskScanService } from '$lib/server/library/disk-scan.js';
+import { RenamePreviewService } from '#lib/server/library/naming/RenamePreviewService.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { parseBody } from '#lib/server/api/validate.js';
+import { diskScanService } from '#lib/server/library/disk-scan.js';
 import { z } from 'zod';
-import { libraryMediaEvents } from '$lib/server/library/LibraryMediaEvents.js';
-import type { ReorganizeBatchResult } from '$lib/library/naming/types.js';
-import { createChildLogger } from '$lib/logging/index.js';
+import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
+import type { ReorganizeBatchResult } from '#lib/library/naming/types.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'RenameReorganizeBatchApi', logDomain: 'scans' });
 
@@ -41,7 +40,7 @@ export const POST: RequestHandler = async (event) => {
 	if (authError) return authError;
 
 	if (diskScanService.scanning) {
-		return json(
+		return Response.json(
 			{ error: 'A library scan is in progress. Wait for it to finish, then retry the rename.' },
 			{ status: 409 }
 		);
@@ -71,7 +70,7 @@ export const POST: RequestHandler = async (event) => {
 			'[ReorganizeBatch API] Batch reorganization complete'
 		);
 
-		return json({
+		return Response.json({
 			success: batch.failed === 0,
 			organized: batch.organized,
 			failed: batch.failed,
@@ -80,7 +79,7 @@ export const POST: RequestHandler = async (event) => {
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		if (/scan is in progress/i.test(message)) {
-			return json({ error: message }, { status: 409 });
+			return Response.json({ error: message }, { status: 409 });
 		}
 
 		logger.error(
@@ -90,7 +89,7 @@ export const POST: RequestHandler = async (event) => {
 			'[ReorganizeBatch API] Failed to reorganize folders'
 		);
 
-		return json(
+		return Response.json(
 			{
 				error: 'Failed to reorganize folders',
 				details: error instanceof Error ? error.message : 'Unknown error'

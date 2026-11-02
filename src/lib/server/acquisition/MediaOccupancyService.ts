@@ -1,15 +1,15 @@
 import { and, eq, inArray } from 'drizzle-orm';
-import { db } from '$lib/server/db/index.js';
+import { db } from '#lib/server/db/index.js';
 import {
 	downloadQueue,
 	episodeFiles,
 	episodes,
 	movieFiles,
 	movies
-} from '$lib/server/db/schema.js';
-import type { GrabTarget } from '$lib/server/filters/stages/grab/types.js';
-import { resolveMovieMultiQuality } from '$lib/server/quality/movie-buckets.js';
-import type { Resolution } from '$lib/server/indexers/parser/types.js';
+} from '#lib/server/db/schema.js';
+import type { GrabTarget } from '#lib/server/filters/stages/grab/types.js';
+import { resolveMovieMultiQuality } from '#lib/server/quality/movie-buckets.js';
+import type { Resolution } from '#lib/server/indexers/parser/types.js';
 import { acquisitionService, episodeTargetKey, movieTargetKey } from './AcquisitionService.js';
 import { computeMovieQualitySlot } from './slot-keys.js';
 

@@ -1,8 +1,7 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { monitoringScheduler } from '$lib/server/monitoring/MonitoringScheduler.js';
-import { createChildLogger } from '$lib/logging';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
+import { monitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 
 const logger = createChildLogger({
 	module: 'MonitoringSearchOriginalLanguageBackfillApi',
@@ -16,7 +15,7 @@ export const POST: RequestHandler = async (event) => {
 	try {
 		const result = await monitoringScheduler.runOriginalLanguageBackfill();
 
-		return json({
+		return Response.json({
 			success: true,
 			message: 'Original language backfill completed',
 			result
@@ -26,7 +25,7 @@ export const POST: RequestHandler = async (event) => {
 			'[API] Failed to run original language backfill',
 			error instanceof Error ? error : undefined
 		);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: 'Failed to run original language backfill',

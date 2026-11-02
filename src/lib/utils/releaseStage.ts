@@ -1,4 +1,4 @@
-import { RELEASE } from '$lib/config/constants.js';
+import { RELEASE } from '#lib/config/constants.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

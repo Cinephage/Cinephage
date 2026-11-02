@@ -10,30 +10,32 @@
 
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { createSSEOperationStream } from '$lib/server/sse';
-import { db } from '$lib/server/db/index.js';
-import { series, seasons, episodes, episodeFiles } from '$lib/server/db/schema.js';
+import { createSSEOperationStream } from '#lib/server/sse.js';
+import { db } from '#lib/server/db/index.js';
+import { series, seasons, episodes, episodeFiles } from '#lib/server/db/schema.js';
 import { eq, inArray } from 'drizzle-orm';
-import { tmdb } from '$lib/server/tmdb.js';
-import { todayDateString } from '$lib/utils/format.js';
+import { tmdb } from '#lib/server/tmdb.js';
+import { todayDateString } from '#lib/utils/format.js';
 import {
 	enrichAnimeMetadata,
 	persistEnrichmentTitleVariants
-} from '$lib/server/metadata/provider-resolution.js';
+} from '#lib/server/metadata/provider-resolution.js';
 import {
-	getEffectiveEpisodeGroup,
-	buildSeasonsAndEpisodesFromGroup,
-	deleteAllSeasonsAndEpisodes
-} from '$lib/server/metadata/EpisodeGroupService.js';
-import { isLikelyAnimeMedia } from '$lib/shared/anime-classification.js';
-import { resolveLanguage } from '$lib/server/metadata/metadata-refresh.js';
-import { libraryMediaEvents } from '$lib/server/library/LibraryMediaEvents';
-import { createChildLogger } from '$lib/logging';
+	buildDefaultOrderingPlan,
+	persistEpisodePlan,
+	resolveEpisodeGroupPlan,
+	type SeriesEpisodePlan
+} from '#lib/server/metadata/series-episode-plan.js';
+import { getLibraryScheduler } from '#lib/server/library/library-scheduler.js';
+import { isLikelyAnimeMedia } from '#lib/shared/anime-classification.js';
+import { resolveLanguage } from '#lib/server/metadata/metadata-refresh.js';
+import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
+import { createChildLogger } from '#lib/logging/index.js';
 import {
 	startRefresh,
 	stopRefresh,
 	isSeriesRefreshing
-} from '$lib/server/library/ActiveSearchTracker.js';
+} from '#lib/server/library/ActiveSearchTracker.js';
 
 const logger = createChildLogger({ module: 'LibrarySeriesRefreshApi', logDomain: 'scans' });
 
@@ -49,6 +51,8 @@ interface CompleteEvent {
 	success: true;
 	episodeCount: number;
 	episodeFileCount: number;
+	/** Non-fatal conditions the user should know about (surfaces in the UI). */
+	warning?: string;
 }
 
 interface ErrorEvent {
@@ -188,17 +192,34 @@ export const POST: RequestHandler = async ({ params, request }) => {
 					})
 					.where(eq(series.id, id));
 
-				// Get the effective episode group and rebuild seasons/episodes
-				const { group: episodeGroup, selectedGroupId: newEpisodeGroupId } =
-					await getEffectiveEpisodeGroup(seriesData.tmdbId, seriesData.episodeGroupId);
+				// Resolve the ordering plan before anything destructive. The scheme
+				// is stable across refreshes: a stored group that cannot be fetched
+				// leaves the current rows untouched, and an unusable one falls back
+				// to default TMDB ordering instead of wiping into a broken series.
+				const resolution = await resolveEpisodeGroupPlan({
+					seriesId: id,
+					tmdbId: seriesData.tmdbId,
+					storedEpisodeGroupId: seriesData.episodeGroupId,
+					selection: 'stored-only'
+				});
 
-				const episodeGroupChanged = newEpisodeGroupId !== (seriesData.episodeGroupId ?? null);
-
-				if (episodeGroupChanged) {
-					await db
-						.update(series)
-						.set({ episodeGroupId: newEpisodeGroupId })
+				if (resolution.kind === 'group-unavailable') {
+					const [current] = await db
+						.select({
+							episodeCount: series.episodeCount,
+							episodeFileCount: series.episodeFileCount
+						})
+						.from(series)
 						.where(eq(series.id, id));
+					sendEvent({
+						type: 'complete',
+						success: true,
+						episodeCount: current?.episodeCount ?? 0,
+						episodeFileCount: current?.episodeFileCount ?? 0,
+						warning:
+							'Metadata was refreshed, but episode data was left unchanged: the episode group could not be fetched from TMDB. Try again later to keep the current numbering.'
+					});
+					return;
 				}
 
 				// Capture (fileId -> episode numbers) before wiping episodes so we can
@@ -212,13 +233,20 @@ export const POST: RequestHandler = async ({ params, request }) => {
 					.select({
 						id: episodes.id,
 						seasonNumber: episodes.seasonNumber,
-						episodeNumber: episodes.episodeNumber
+						episodeNumber: episodes.episodeNumber,
+						monitored: episodes.monitored
 					})
 					.from(episodes)
 					.where(eq(episodes.seriesId, id));
 
 				const epNumByOldId = new Map(
 					existingEpisodeRows.map((e) => [e.id, { s: e.seasonNumber, e: e.episodeNumber }])
+				);
+
+				// Per-episode monitored overrides within a season must also survive
+				// the rebuild, same reasoning as priorSeasonMonitored below.
+				const priorEpisodeMonitored = new Map(
+					existingEpisodeRows.map((e) => [`${e.seasonNumber}-${e.episodeNumber}`, e.monitored])
 				);
 				const fileEpNumbers = new Map(
 					existingEpFiles.map((f) => [
@@ -230,109 +258,104 @@ export const POST: RequestHandler = async ({ params, request }) => {
 					])
 				);
 
-				// Delete existing seasons/episodes and rebuild
-				await deleteAllSeasonsAndEpisodes(id);
+				// Capture each season's current monitored flag before wiping, so the
+				// rebuild below can preserve a user's per-season unmonitor choice
+				// instead of recomputing it from scratch (which only knows "is this
+				// specials" and the series-level monitorSpecials flag, and so was
+				// silently re-monitoring every season on every refresh).
+				const priorSeasonMonitored = new Map(
+					(
+						await db
+							.select({ seasonNumber: seasons.seasonNumber, monitored: seasons.monitored })
+							.from(seasons)
+							.where(eq(seasons.seriesId, id))
+					).map((s) => [s.seasonNumber, s.monitored])
+				);
 
-				if (episodeGroup) {
-					// Use episode group mapping (e.g. TVDB Order)
-					const { seasonValues, episodeValues: groupEpisodeValues } =
-						buildSeasonsAndEpisodesFromGroup(id, episodeGroup);
-
-					if (seasonValues.length > 0) {
-						const monitorSpecials = seriesData.monitorSpecials ?? false;
-
-						// Respect monitorSpecials setting for season 0 seasons/episodes
-						if (monitorSpecials) {
-							for (const sv of seasonValues) {
-								if (sv.seasonNumber === 0) {
-									sv.monitored = true;
-								}
-							}
-							for (const ev of groupEpisodeValues) {
-								if (ev.seasonNumber === 0) {
-									ev.monitored = true;
-								}
-							}
+				const monitorSpecials = seriesData.monitorSpecials ?? false;
+				const fallbackReason =
+					resolution.kind === 'default-ordering' ? resolution.fallbackReason : undefined;
+				const failedSeasonNumbers: number[] = [];
+				let rebuildPlan: SeriesEpisodePlan;
+				if (resolution.kind === 'episode-group') {
+					rebuildPlan = resolution.plan;
+					// Preserve existing per-season/per-episode monitored choices
+					// across the rebuild instead of recomputing from scratch (which
+					// only knows "is this specials" and the series-level
+					// monitorSpecials flag, and so silently re-monitored every season
+					// the user had explicitly turned off).
+					for (const sv of rebuildPlan.seasons) {
+						const prior = priorSeasonMonitored.get(sv.seasonNumber ?? Number.NaN);
+						if (prior !== undefined) sv.monitored = prior;
+					}
+					for (const ev of rebuildPlan.episodes) {
+						const prior = priorEpisodeMonitored.get(`${ev.seasonNumber}-${ev.episodeNumber}`);
+						if (prior !== undefined) ev.monitored = prior;
+					}
+					// Respect monitorSpecials setting for season 0 seasons/episodes
+					if (monitorSpecials) {
+						for (const sv of rebuildPlan.seasons) {
+							if (sv.seasonNumber === 0) sv.monitored = true;
 						}
-
-						const insertedSeasons = await db.insert(seasons).values(seasonValues).returning();
-						const seasonIdByNumber = new Map(insertedSeasons.map((s) => [s.seasonNumber, s.id]));
-
-						const enrichedEpisodes = groupEpisodeValues.map((ep) => ({
-							...ep,
-							seasonId: seasonIdByNumber.get(ep.seasonNumber!) ?? null
-						}));
-
-						if (enrichedEpisodes.length > 0) {
-							await db.insert(episodes).values(enrichedEpisodes);
+						for (const ev of rebuildPlan.episodes) {
+							if (ev.seasonNumber === 0) ev.monitored = true;
 						}
 					}
 				} else {
-					// Default TMDB ordering
-					if (tmdbSeries.seasons) {
-						for (const tmdbSeasonInfo of tmdbSeries.seasons) {
-							if (signal.aborted) return;
-
-							try {
-								const tmdbSeason = await tmdb.getSeason(
-									seriesData.tmdbId,
-									tmdbSeasonInfo.season_number,
-									fetchLanguage
-								);
-
-								const isSpecials = tmdbSeasonInfo.season_number === 0;
-								const monitorSpecials = seriesData.monitorSpecials ?? false;
-								const seasonMonitored = !isSpecials || monitorSpecials;
-
-								const [newSeason] = await db
-									.insert(seasons)
-									.values({
-										seriesId: id,
-										seasonNumber: tmdbSeasonInfo.season_number,
-										name: tmdbSeason.name || tmdbSeasonInfo.name,
-										overview: tmdbSeason.overview || tmdbSeasonInfo.overview,
-										posterPath: tmdbSeason.poster_path || tmdbSeasonInfo.poster_path,
-										airDate: tmdbSeason.air_date || tmdbSeasonInfo.air_date,
-										episodeCount: tmdbSeason.episodes?.length ?? tmdbSeasonInfo.episode_count ?? 0,
-										episodeFileCount: 0,
-										monitored: seasonMonitored
-									})
-									.returning();
-
-								if (tmdbSeason.episodes) {
-									const episodeValues = tmdbSeason.episodes.map((ep) => ({
-										seriesId: id,
-										seasonId: newSeason.id,
-										tmdbId: ep.id,
-										seasonNumber: ep.season_number,
-										episodeNumber: ep.episode_number,
-										title: ep.name,
-										overview: ep.overview,
-										airDate: ep.air_date,
-										runtime: ep.runtime,
-										monitored: seasonMonitored,
-										hasFile: false
-									}));
-
-									if (episodeValues.length > 0) {
-										await db.insert(episodes).values(episodeValues);
-									}
-								}
-
-								await new Promise((resolve) => setTimeout(resolve, 100));
-							} catch {
-								logger.warn(
-									{ seasonNumber: tmdbSeasonInfo.season_number },
-									'[RefreshSeries] Failed to fetch season'
-								);
-							}
-						}
+					if (fallbackReason) {
+						logger.warn(
+							{ seriesId: id, tmdbId: seriesData.tmdbId, reason: fallbackReason },
+							'[RefreshSeries] Episode group unusable; rebuilding with default TMDB ordering'
+						);
+					}
+					// A group -> default fallback renumbers the series; clear the
+					// stored group so future refreshes stay stable under default.
+					if (seriesData.episodeGroupId) {
+						await db.update(series).set({ episodeGroupId: null }).where(eq(series.id, id));
+					}
+					const built = await buildDefaultOrderingPlan({
+						seriesId: id,
+						seasonsSummary: tmdbSeries.seasons ?? [],
+						fetchSeason: (seasonNumber) =>
+							tmdb.getSeason(seriesData.tmdbId, seasonNumber, fetchLanguage),
+						assignSeasonMonitored: (seasonNumber, isSpecials) =>
+							priorSeasonMonitored.get(seasonNumber) ?? (!isSpecials || monitorSpecials),
+						assignEpisodeMonitored: ({ seasonNumber, episodeNumber, seasonMonitored }) =>
+							priorEpisodeMonitored.get(`${seasonNumber}-${episodeNumber}`) ?? seasonMonitored,
+						paceMs: 100
+					});
+					rebuildPlan = built.plan;
+					failedSeasonNumbers.push(...built.failedSeasonNumbers);
+					if (built.failedSeasonNumbers.length > 0) {
+						logger.warn(
+							{ seriesId: id, failedSeasonNumbers: built.failedSeasonNumbers },
+							'[RefreshSeries] Some seasons had no fetchable episode list'
+						);
 					}
 				}
 
+				if (signal.aborted) return;
+
+				// Rebuild atomically: the wipe commits together with the
+				// replacements, so a failure anywhere leaves the previous rows
+				// intact instead of a half-rebuilt series.
+				persistEpisodePlan(id, rebuildPlan, { wipe: true });
+
+				// A group -> default fallback renumbers the series; queue a rescan
+				// so existing files re-match under the new numbering.
+				if (
+					resolution.kind === 'default-ordering' &&
+					seriesData.episodeGroupId &&
+					fileEpNumbers.size > 0 &&
+					seriesData.rootFolderId
+				) {
+					getLibraryScheduler().queueFolderScan(seriesData.rootFolderId);
+				}
+
 				// Re-link episodeFiles to new episode UUIDs by matching season/episode number.
-				// deleteAllSeasonsAndEpisodes wiped the old UUIDs so episodeFiles.episodeIds
-				// would otherwise point at non-existent rows, making every file appear missing.
+				// The transactional wipe removed the old UUIDs so
+				// episodeFiles.episodeIds would otherwise point at non-existent
+				// rows, making every file appear missing.
 				if (fileEpNumbers.size > 0) {
 					const newEpisodeRows = await db
 						.select({
@@ -371,7 +394,6 @@ export const POST: RequestHandler = async ({ params, request }) => {
 
 				// Update series episode counts (include specials if monitorSpecials is enabled)
 				const allEpisodes = await db.select().from(episodes).where(eq(episodes.seriesId, id));
-				const monitorSpecials = seriesData.monitorSpecials ?? false;
 				const today = todayDateString();
 				const isAired = (episode: typeof episodes.$inferSelect) =>
 					episode.airDate && episode.airDate !== '' && episode.airDate <= today;
@@ -408,12 +430,27 @@ export const POST: RequestHandler = async ({ params, request }) => {
 
 				libraryMediaEvents.emitSeriesUpdated(id);
 
+				// Surface non-fatal conditions so a degraded refresh is visible
+				// instead of silently looking like a clean one.
+				const warnings: string[] = [];
+				if (fallbackReason) {
+					warnings.push(
+						'Episode data was rebuilt with default TMDB ordering because the episode group was unusable.'
+					);
+				}
+				if (failedSeasonNumbers.length > 0) {
+					warnings.push(
+						`Some seasons had no fetchable episode list and may be incomplete: ${failedSeasonNumbers.join(', ')}.`
+					);
+				}
+
 				// Send completion event
 				sendEvent({
 					type: 'complete',
 					success: true,
 					episodeCount,
-					episodeFileCount
+					episodeFileCount,
+					warning: warnings.length > 0 ? warnings.join(' ') : undefined
 				});
 			} catch (err) {
 				logger.error(

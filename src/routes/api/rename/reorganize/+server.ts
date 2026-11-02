@@ -10,15 +10,14 @@
  * Pattern: Radarr's MoveMovieService / Sonarr's MoveSeriesService.
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { RenamePreviewService } from '$lib/server/library/naming/RenamePreviewService';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { parseBody } from '$lib/server/api/validate.js';
-import { diskScanService } from '$lib/server/library/disk-scan.js';
+import { RenamePreviewService } from '#lib/server/library/naming/RenamePreviewService.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { parseBody } from '#lib/server/api/validate.js';
+import { diskScanService } from '#lib/server/library/disk-scan.js';
 import { z } from 'zod';
-import { libraryMediaEvents } from '$lib/server/library/LibraryMediaEvents.js';
-import { createChildLogger } from '$lib/logging';
+import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'RenameReorganizeApi', logDomain: 'scans' });
 
@@ -36,7 +35,7 @@ export const POST: RequestHandler = async (event) => {
 	if (authError) return authError;
 
 	if (diskScanService.scanning) {
-		return json(
+		return Response.json(
 			{ error: 'A library scan is in progress. Wait for it to finish, then retry the rename.' },
 			{ status: 409 }
 		);
@@ -59,7 +58,7 @@ export const POST: RequestHandler = async (event) => {
 		);
 
 		if (!result.success) {
-			return json({ success: false, error: result.error }, { status: 400 });
+			return Response.json({ success: false, error: result.error }, { status: 400 });
 		}
 
 		libraryMediaEvents.emitLibraryDataChanged({
@@ -68,7 +67,7 @@ export const POST: RequestHandler = async (event) => {
 			entityId: mediaId
 		});
 
-		return json({ ...result, success: true });
+		return Response.json({ ...result, success: true });
 	} catch (error) {
 		logger.error(
 			{
@@ -77,7 +76,7 @@ export const POST: RequestHandler = async (event) => {
 			'[Reorganize API] Failed to reorganize folder'
 		);
 
-		return json(
+		return Response.json(
 			{
 				error: 'Failed to reorganize folder',
 				details: error instanceof Error ? error.message : 'Unknown error'

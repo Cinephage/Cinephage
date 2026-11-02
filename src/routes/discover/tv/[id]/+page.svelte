@@ -1,13 +1,16 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import type { PageData } from './$types';
-	import MediaHero from '$lib/components/tmdb/MediaHero.svelte';
-	import PersonCard from '$lib/components/tmdb/PersonCard.svelte';
-	import SeasonList from '$lib/components/tmdb/SeasonList.svelte';
-	import SectionRow from '$lib/components/discover/SectionRow.svelte';
-	import { ArrowLeft } from 'lucide-svelte';
+	import MediaHero from '#lib/components/tmdb/MediaHero.svelte';
+	import PersonCard from '#lib/components/tmdb/PersonCard.svelte';
+	import SeasonList from '#lib/components/tmdb/SeasonList.svelte';
+	import SectionRow from '#lib/components/discover/SectionRow.svelte';
+	import { ArrowLeft } from '@lucide/svelte';
 
 	let { data }: { data: PageData } = $props();
+
+	// Only admins add content from Discover.
+	const isAdminUser = $derived(data.user?.role === 'admin');
 
 	function goBack(e: MouseEvent) {
 		e.preventDefault();
@@ -48,7 +51,7 @@
 				<ArrowLeft class="h-4 w-4" />
 				{m.action_back()}
 			</a>
-			<MediaHero item={data.tv} />
+			<MediaHero item={data.tv} readOnly={!isAdminUser} requestState={data.requestState} />
 		</div>
 
 		<!-- Cast Section -->

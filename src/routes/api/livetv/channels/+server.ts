@@ -4,11 +4,10 @@
  * GET /api/livetv/channels - List cached channels with filtering and pagination
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getLiveTvChannelService } from '$lib/server/livetv/LiveTvChannelService';
-import { createChildLogger } from '$lib/logging';
-import type { ChannelQueryOptions } from '$lib/types/livetv';
+import { getLiveTvChannelService } from '#lib/server/livetv/LiveTvChannelService.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import type { ChannelQueryOptions } from '#lib/types/livetv.js';
 
 const logger = createChildLogger({ module: 'LiveTvChannels', logDomain: 'livetv' });
 
@@ -19,6 +18,7 @@ export const GET: RequestHandler = async ({ url }) => {
 	const accountIdsParam = url.searchParams.get('accountIds');
 	const categoryIdsParam = url.searchParams.get('categoryIds');
 	const providerTypesParam = url.searchParams.get('providerTypes');
+	const countryParam = url.searchParams.get('country');
 	const search = url.searchParams.get('search');
 	const hasArchiveParam = url.searchParams.get('hasArchive');
 	const pageParam = url.searchParams.get('page');
@@ -34,6 +34,10 @@ export const GET: RequestHandler = async ({ url }) => {
 
 	if (categoryIdsParam) {
 		options.categoryIds = categoryIdsParam.split(',').filter(Boolean);
+	}
+
+	if (countryParam) {
+		options.countryCodes = countryParam.split(',').filter(Boolean);
 	}
 
 	if (providerTypesParam) {
@@ -60,7 +64,9 @@ export const GET: RequestHandler = async ({ url }) => {
 	if (pageSizeParam) {
 		const pageSize = parseInt(pageSizeParam, 10);
 		if (!isNaN(pageSize) && pageSize > 0) {
-			options.pageSize = pageSize;
+			// Clamp: a caller-supplied page size of 10^8 materialises the whole
+			// channel table per request.
+			options.pageSize = Math.min(pageSize, 500);
 		}
 	}
 
@@ -74,7 +80,7 @@ export const GET: RequestHandler = async ({ url }) => {
 
 	try {
 		const result = await channelService.getChannels(options);
-		return json({
+		return Response.json({
 			success: true,
 			channels: result.items,
 			total: result.total,
@@ -84,7 +90,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		});
 	} catch (error) {
 		logger.error('[API] Failed to get channels', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to get channels'

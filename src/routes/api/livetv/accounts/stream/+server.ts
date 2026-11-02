@@ -15,20 +15,25 @@
  * - channels:syncFailed: Channel sync failed
  */
 
-import { createSSEStream } from '$lib/server/sse';
-import { liveTvEvents } from '$lib/server/livetv/LiveTvEvents';
-import { getLiveTvAccountManager } from '$lib/server/livetv/LiveTvAccountManager';
+import { createSSEStream } from '#lib/server/sse.js';
+import { liveTvEvents } from '#lib/server/livetv/LiveTvEvents.js';
+import { getLiveTvAccountManager } from '#lib/server/livetv/LiveTvAccountManager.js';
+import { redactAccountSecrets } from '#lib/server/livetv/accountRedaction.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
 import type { RequestHandler } from './$types';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LiveTVAccountsStream' });
 
-export const GET: RequestHandler = async () => {
+export const GET: RequestHandler = async (event) => {
+	const authError = requireAdmin(event);
+	if (authError) return authError;
+
 	return createSSEStream((send) => {
 		const sendInitialState = async () => {
 			try {
 				const manager = getLiveTvAccountManager();
-				const accounts = await manager.getAccounts();
+				const accounts = (await manager.getAccounts()).map(redactAccountSecrets);
 				send('accounts:initial', { accounts });
 			} catch (error) {
 				logger.error(
@@ -45,19 +50,19 @@ export const GET: RequestHandler = async () => {
 
 		const onAccountCreated = async (_event: { accountId: string }) => {
 			const manager = getLiveTvAccountManager();
-			const accounts = await manager.getAccounts();
+			const accounts = (await manager.getAccounts()).map(redactAccountSecrets);
 			send('account:created', { accounts });
 		};
 
 		const onAccountUpdated = async (_event: { accountId: string }) => {
 			const manager = getLiveTvAccountManager();
-			const accounts = await manager.getAccounts();
+			const accounts = (await manager.getAccounts()).map(redactAccountSecrets);
 			send('account:updated', { accounts });
 		};
 
 		const onAccountDeleted = async (_event: { accountId: string }) => {
 			const manager = getLiveTvAccountManager();
-			const accounts = await manager.getAccounts();
+			const accounts = (await manager.getAccounts()).map(redactAccountSecrets);
 			send('account:deleted', { accounts });
 		};
 

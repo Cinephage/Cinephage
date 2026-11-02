@@ -1,18 +1,19 @@
-import { tmdb } from '$lib/server/tmdb';
+import { tmdb } from '#lib/server/tmdb.js';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 import {
 	enrichWithLibraryStatus,
 	getLibraryStatus,
-	filterBlockedMedia
-} from '$lib/server/library/status';
-import { keywordBlocklistService } from '$lib/server/settings/KeywordBlocklistService.js';
+	filterBlockedMedia,
+	getRequestStateMap
+} from '#lib/server/library/status.js';
+import { keywordBlocklistService } from '#lib/server/settings/KeywordBlocklistService.js';
 
 const logger = createChildLogger({ module: 'DiscoverTvPage', logDomain: 'system' });
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, locals }) => {
 	const id = parseInt(params.id);
 	if (isNaN(id)) {
 		throw error(400, 'Invalid TV Show ID');
@@ -21,10 +22,10 @@ export const load: PageServerLoad = async ({ params }) => {
 	// Check if TMDB is configured
 	const tmdbConfigured = await tmdb.isConfigured();
 	if (!tmdbConfigured) {
-		throw error(503, {
-			message:
-				'TMDB API key not configured. Please configure your TMDB API key in Settings > Integrations.'
-		});
+		throw error(
+			503,
+			'TMDB API key not configured. Please configure your TMDB API key in Settings > Integrations.'
+		);
 	}
 
 	try {
@@ -32,10 +33,10 @@ export const load: PageServerLoad = async ({ params }) => {
 
 		// Handle null response (shouldn't happen since we checked config, but be safe)
 		if (!tv) {
-			throw error(503, {
-				message:
-					'TMDB API key not configured. Please configure your TMDB API key in Settings > Integrations.'
-			});
+			throw error(
+				503,
+				'TMDB API key not configured. Please configure your TMDB API key in Settings > Integrations.'
+			);
 		}
 
 		const blockedKeywordIds = await keywordBlocklistService.getBlockedKeywordIds();
@@ -45,6 +46,8 @@ export const load: PageServerLoad = async ({ params }) => {
 
 		// Get library status for the TV show itself
 		const tvStatus = await getLibraryStatus([id], 'tv');
+		const requestState =
+			(await getRequestStateMap([id], 'tv', locals.user?.id ?? null))[id] ?? null;
 		const tvWithStatus = {
 			...tv,
 			inLibrary: tvStatus[id]?.inLibrary ?? false,
@@ -81,6 +84,7 @@ export const load: PageServerLoad = async ({ params }) => {
 
 		return {
 			tv: tvWithStatus,
+			requestState,
 			hasBlockedKeywords,
 			blockedKeywords: blockedMatches.map((k) => k.name)
 		};

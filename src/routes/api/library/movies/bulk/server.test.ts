@@ -6,11 +6,11 @@ import {
 	type TestDatabase
 } from '../../../../../test/db-helper';
 import { api } from '../../../../../test/api-helper';
-import { movies, rootFolders } from '$lib/server/db/schema.js';
+import { movies, rootFolders } from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -20,7 +20,7 @@ vi.mock('$lib/server/db/index.js', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/logging', () => ({
+vi.mock('#lib/logging/index.js', () => ({
 	logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn(), child: vi.fn() },
 	createChildLogger: vi.fn(() => ({
 		info: vi.fn(),
@@ -31,8 +31,8 @@ vi.mock('$lib/logging', () => ({
 	}))
 }));
 
-vi.mock('$lib/server/library/LibraryAddService.js', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/server/library/LibraryAddService.js')>();
+vi.mock('#lib/server/library/LibraryAddService.js', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/server/library/LibraryAddService.js')>();
 	return {
 		...actual,
 		validateRootFolder: actual.validateRootFolder,
@@ -43,7 +43,7 @@ vi.mock('$lib/server/library/LibraryAddService.js', async (importOriginal) => {
 	};
 });
 
-vi.mock('$lib/server/library/naming/NamingSettingsService.js', () => ({
+vi.mock('#lib/server/library/naming/NamingSettingsService.js', () => ({
 	namingSettingsService: {
 		getConfigSync: vi.fn(() => ({
 			movieFolderFormat: '{Title} ({Year})',
@@ -52,7 +52,7 @@ vi.mock('$lib/server/library/naming/NamingSettingsService.js', () => ({
 	}
 }));
 
-vi.mock('$lib/server/library/naming/localization.js', () => ({
+vi.mock('#lib/server/library/naming/localization.js', () => ({
 	extractLanguageCodes: vi.fn(() => []),
 	resolveLocalizedTitles: vi.fn().mockResolvedValue(undefined)
 }));
@@ -87,7 +87,7 @@ describe('Bulk movie additions', () => {
 	});
 
 	it('adds movies without stamping a language profile override', async () => {
-		const { fetchMovieDetails } = await import('$lib/server/library/LibraryAddService.js');
+		const { fetchMovieDetails } = await import('#lib/server/library/LibraryAddService.js');
 		vi.mocked(fetchMovieDetails).mockResolvedValue({
 			id: 9002,
 			title: 'Bulk Movie',

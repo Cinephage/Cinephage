@@ -1,16 +1,16 @@
 <script lang="ts">
-	import * as m from '$lib/paraglide/messages.js';
-	import { Loader2, CheckCircle2, XCircle, FolderOpen, Info } from 'lucide-svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import { Loader2, CheckCircle2, XCircle, FolderOpen, Info } from '@lucide/svelte';
 	import type {
 		RootFolder,
 		RootFolderFormData,
 		PathValidationResult
-	} from '$lib/types/downloadClient';
-	import { FolderBrowser } from '$lib/components/library';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
-	import ModalHeader from '$lib/components/ui/modal/ModalHeader.svelte';
-	import ModalFooter from '$lib/components/ui/modal/ModalFooter.svelte';
-	import TagInput from '$lib/components/ui/TagInput.svelte';
+	} from '#lib/types/downloadClient.js';
+	import { FolderBrowser } from '#lib/components/library/index.js';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
+	import ModalHeader from '#lib/components/ui/modal/ModalHeader.svelte';
+	import ModalFooter from '#lib/components/ui/modal/ModalFooter.svelte';
+	import TagInput from '#lib/components/ui/TagInput.svelte';
 
 	interface Props {
 		open: boolean;
@@ -70,6 +70,12 @@
 		const subtypeLabel = mediaSubType === 'anime' ? 'Anime' : 'Standard';
 		return `${subtypeLabel} ${mediaLabel}`;
 	});
+	// This folder is already the default for its type - unsetting it here
+	// directly is rejected server-side (there must always be a default
+	// once any root folder exists for a type). The only way to change it is
+	// to open a different folder and mark that one as default instead, so
+	// disable the checkbox rather than let the user hit the rejection.
+	const isCurrentDefault = $derived(mode === 'edit' && (folder?.isDefault ?? false));
 
 	// Reset form when modal opens or folder changes
 	$effect(() => {
@@ -227,18 +233,28 @@
 				</div>
 			</div>
 
-			<label class="flex cursor-pointer items-center gap-3 py-2">
+			<label
+				class="flex items-center gap-3 py-2 {isCurrentDefault
+					? 'cursor-not-allowed'
+					: 'cursor-pointer'}"
+			>
 				<input
 					type="checkbox"
 					class="checkbox shrink-0 checkbox-sm checkbox-primary"
 					bind:checked={isDefault}
+					disabled={isCurrentDefault}
 				/>
-				<span class="text-sm"
+				<span class="text-sm {isCurrentDefault ? 'text-base-content/50' : ''}"
 					>{m.rootFolders_setAsDefault({
 						mediaType: defaultScopeLabel
 					})}</span
 				>
 			</label>
+			{#if isCurrentDefault}
+				<p class="-mt-1 pb-2 pl-9 text-xs text-base-content/50">
+					{m.rootFolders_unsetDefaultHint()}
+				</p>
+			{/if}
 
 			<label class="flex cursor-pointer items-center gap-3 py-2">
 				<input

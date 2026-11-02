@@ -5,12 +5,11 @@
  * DELETE /api/smartlists/[id] - Delete a smart list
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getSmartListService } from '$lib/server/smartlists/index.js';
-import { db } from '$lib/server/db/index.js';
-import { rootFolders } from '$lib/server/db/schema.js';
-import { isAppError } from '$lib/errors';
+import { getSmartListService } from '#lib/server/smartlists/index.js';
+import { db } from '#lib/server/db/index.js';
+import { rootFolders } from '#lib/server/db/schema.js';
+import { isAppError } from '#lib/errors/index.js';
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 
@@ -96,10 +95,10 @@ export const GET: RequestHandler = async ({ params }) => {
 	const list = await service.getSmartList(params.id);
 
 	if (!list) {
-		return json({ error: 'Smart list not found' }, { status: 404 });
+		return Response.json({ error: 'Smart list not found' }, { status: 404 });
 	}
 
-	return json(list);
+	return Response.json(list);
 };
 
 export const PUT: RequestHandler = async ({ params, request }) => {
@@ -125,7 +124,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		const service = getSmartListService();
 		const existing = await service.getSmartList(params.id);
 		if (!existing) {
-			return json({ error: 'Smart list not found' }, { status: 404 });
+			return Response.json({ error: 'Smart list not found' }, { status: 404 });
 		}
 
 		const effectiveAutoAddBehavior =
@@ -137,7 +136,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		const effectiveMediaType = existing.mediaType === 'movie' ? 'movie' : 'tv';
 
 		if (effectiveAutoAddBehavior !== 'disabled' && !effectiveRootFolderId) {
-			return json(
+			return Response.json(
 				{ error: 'Root folder is required when Auto Search is enabled' },
 				{ status: 400 }
 			);
@@ -155,13 +154,13 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 				.limit(1);
 
 			if (!folder) {
-				return json({ error: 'Selected root folder was not found' }, { status: 400 });
+				return Response.json({ error: 'Selected root folder was not found' }, { status: 400 });
 			}
 
 			if (folder.mediaType !== effectiveMediaType) {
 				const expected = effectiveMediaType === 'movie' ? 'movie' : 'TV';
 				const actual = folder.mediaType === 'movie' ? 'movie' : 'TV';
-				return json(
+				return Response.json(
 					{
 						error: `Selected root folder is a ${actual} folder. Choose a ${expected} folder.`
 					},
@@ -170,7 +169,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			}
 
 			if (folder.readOnly) {
-				return json(
+				return Response.json(
 					{ error: 'Selected root folder is read-only. Choose a writable folder.' },
 					{ status: 400 }
 				);
@@ -180,19 +179,19 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		const list = await service.updateSmartList(params.id, normalizedData);
 
 		if (!list) {
-			return json({ error: 'Smart list not found' }, { status: 404 });
+			return Response.json({ error: 'Smart list not found' }, { status: 404 });
 		}
 
-		return json(list);
+		return Response.json(list);
 	} catch (error) {
 		if (error instanceof z.ZodError) {
-			return json({ error: 'Validation failed', details: error.issues }, { status: 400 });
+			return Response.json({ error: 'Validation failed', details: error.issues }, { status: 400 });
 		}
 		if (isAppError(error)) {
-			return json(error.toJSON(), { status: error.statusCode });
+			return Response.json(error.toJSON(), { status: error.statusCode });
 		}
 		const message = error instanceof Error ? error.message : 'Unknown error';
-		return json({ error: message }, { status: 500 });
+		return Response.json({ error: message }, { status: 500 });
 	}
 };
 
@@ -201,8 +200,8 @@ export const DELETE: RequestHandler = async ({ params }) => {
 	const deleted = await service.deleteSmartList(params.id);
 
 	if (!deleted) {
-		return json({ error: 'Smart list not found' }, { status: 404 });
+		return Response.json({ error: 'Smart list not found' }, { status: 404 });
 	}
 
-	return json({ success: true });
+	return Response.json({ success: true });
 };

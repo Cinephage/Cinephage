@@ -15,8 +15,8 @@
  */
 
 import { eq } from 'drizzle-orm';
-import { db } from '$lib/server/db';
-import { settings } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { settings } from '#lib/server/db/schema.js';
 
 export const ARR_COMPAT_ENABLED_KEY = 'arr_compat_enabled';
 

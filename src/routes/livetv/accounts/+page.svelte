@@ -1,20 +1,20 @@
 <script lang="ts">
-	import { Plus, RefreshCw, Loader2 } from 'lucide-svelte';
-	import { LiveTvAccountTable, LiveTvAccountModal } from '$lib/components/livetv';
-	import { toFriendlyLiveTvTestError } from '$lib/livetv/errorMessages';
-	import { ConfirmationModal } from '$lib/components/ui/modal';
-	import type { LiveTvAccount, LiveTvAccountTestResult } from '$lib/types/livetv';
-	import type { FormData, TestConfig } from '$lib/components/livetv/LiveTvAccountModal.svelte';
-	import { createSSE } from '$lib/sse';
-	import { resolvePath } from '$lib/utils/routing';
+	import { Plus, RefreshCw, Loader2 } from '@lucide/svelte';
+	import { LiveTvAccountTable, LiveTvAccountModal } from '#lib/components/livetv/index.js';
+	import { toFriendlyLiveTvTestError } from '#lib/livetv/errorMessages.js';
+	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
+	import type { LiveTvAccount, LiveTvAccountTestResult } from '#lib/types/livetv.js';
+	import type { FormData, TestConfig } from '#lib/components/livetv/LiveTvAccountModal.svelte';
+	import { createSSE } from '#lib/sse/index.js';
+	import { resolvePath } from '#lib/utils/routing.js';
 	import {
 		buildAccountRequestBody,
 		buildAccountTestRequestBody
-	} from '$lib/livetv/accountFormPayload';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import type { AccountStreamEvents } from '$lib/types/sse/events/livetv-account-events.js';
-	import { layoutState, deriveMobileSseStatus } from '$lib/layout.svelte';
-	import * as m from '$lib/paraglide/messages.js';
+	} from '#lib/livetv/accountFormPayload.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import type { AccountStreamEvents } from '#lib/types/sse/events/livetv-account-events.js';
+	import { layoutState, deriveMobileSseStatus } from '#lib/layout.svelte.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import {
 		getAccounts,
 		createAccount,
@@ -23,7 +23,7 @@
 		testAccount,
 		syncChannels,
 		testAccountConfig
-	} from '$lib/api';
+	} from '#lib/api/index.js';
 
 	// State
 	let accounts = $state<LiveTvAccount[]>([]);

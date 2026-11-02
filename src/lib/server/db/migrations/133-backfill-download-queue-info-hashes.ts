@@ -1,8 +1,8 @@
 import type Database from 'better-sqlite3';
-import { resolveInfoHash } from '$lib/server/downloadClients/utils/hashUtils.js';
+import { resolveInfoHash } from '#lib/server/downloadClients/utils/hashUtils.js';
 import { columnExists } from '../migration-helpers.js';
 import type { MigrationDefinition } from '../migration-helpers.js';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 

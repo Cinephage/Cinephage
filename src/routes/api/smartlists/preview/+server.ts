@@ -3,14 +3,13 @@
  * POST /api/smartlists/preview - Preview filter results without saving
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { tmdb, type DiscoverParams } from '$lib/server/tmdb.js';
-import { type SmartListFilters } from '$lib/server/db/schema.js';
-import { contentFilterPipeline } from '$lib/server/filters/ContentFilterPipeline.js';
-import { createChildLogger } from '$lib/logging';
+import { tmdb, type DiscoverParams } from '#lib/server/tmdb.js';
+import { type SmartListFilters } from '#lib/server/db/schema.js';
+import { contentFilterPipeline } from '#lib/server/filters/ContentFilterPipeline.js';
+import { createChildLogger } from '#lib/logging/index.js';
 import { z } from 'zod';
-import { smartListPreviewSchema } from '$lib/validation/schemas.js';
+import { smartListPreviewSchema } from '#lib/validation/schemas.js';
 
 const logger = createChildLogger({ module: 'SmartListsPreviewApi', logDomain: 'monitoring' });
 
@@ -121,7 +120,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		const totalPages = Math.ceil(cappedTotalResults / PREVIEW_PAGE_SIZE);
 
 		if (cappedTotalResults === 0 || data.page > totalPages) {
-			return json({
+			return Response.json({
 				items: [],
 				page: data.page,
 				totalPages,
@@ -149,7 +148,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			mediaType: data.mediaType
 		});
 
-		return json({
+		return Response.json({
 			items: itemsWithLibraryStatus,
 			page: data.page,
 			totalPages,
@@ -160,10 +159,10 @@ export const POST: RequestHandler = async ({ request }) => {
 	} catch (error) {
 		if (error instanceof z.ZodError) {
 			logger.error({ issues: error.issues }, '[Preview API] Validation error');
-			return json({ error: 'Validation failed', details: error.issues }, { status: 400 });
+			return Response.json({ error: 'Validation failed', details: error.issues }, { status: 400 });
 		}
 		logger.error('[Preview API] Error', error);
 		const message = error instanceof Error ? error.message : 'Unknown error';
-		return json({ error: message }, { status: 500 });
+		return Response.json({ error: message }, { status: 500 });
 	}
 };

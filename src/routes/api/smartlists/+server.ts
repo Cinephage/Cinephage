@@ -4,19 +4,18 @@
  * POST /api/smartlists - Create a new smart list
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getSmartListService } from '$lib/server/smartlists/index.js';
-import { db } from '$lib/server/db/index.js';
-import { rootFolders } from '$lib/server/db/schema.js';
-import { smartListCreateSchema } from '$lib/validation/schemas.js';
+import { getSmartListService } from '#lib/server/smartlists/index.js';
+import { db } from '#lib/server/db/index.js';
+import { rootFolders } from '#lib/server/db/schema.js';
+import { smartListCreateSchema } from '#lib/validation/schemas.js';
 import { eq } from 'drizzle-orm';
-import { parseBody } from '$lib/server/api/validate.js';
+import { parseBody } from '#lib/server/api/validate.js';
 
 export const GET: RequestHandler = async () => {
 	const service = getSmartListService();
 	const lists = await service.getAllSmartLists();
-	return json(lists);
+	return Response.json(lists);
 };
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -25,7 +24,10 @@ export const POST: RequestHandler = async ({ request }) => {
 	const autoAddBehavior = data.autoAddBehavior ?? 'disabled';
 	const rootFolderId = data.rootFolderId?.trim();
 	if (autoAddBehavior !== 'disabled' && !rootFolderId) {
-		return json({ error: 'Root folder is required when Auto Search is enabled' }, { status: 400 });
+		return Response.json(
+			{ error: 'Root folder is required when Auto Search is enabled' },
+			{ status: 400 }
+		);
 	}
 
 	if (autoAddBehavior !== 'disabled' && rootFolderId) {
@@ -40,13 +42,13 @@ export const POST: RequestHandler = async ({ request }) => {
 			.limit(1);
 
 		if (!folder) {
-			return json({ error: 'Selected root folder was not found' }, { status: 400 });
+			return Response.json({ error: 'Selected root folder was not found' }, { status: 400 });
 		}
 
 		if (folder.mediaType !== data.mediaType) {
 			const expected = data.mediaType === 'movie' ? 'movie' : 'TV';
 			const actual = folder.mediaType === 'movie' ? 'movie' : 'TV';
-			return json(
+			return Response.json(
 				{
 					error: `Selected root folder is a ${actual} folder. Choose a ${expected} folder.`
 				},
@@ -55,7 +57,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		if (folder.readOnly) {
-			return json(
+			return Response.json(
 				{ error: 'Selected root folder is read-only. Choose a writable folder.' },
 				{ status: 400 }
 			);
@@ -68,5 +70,5 @@ export const POST: RequestHandler = async ({ request }) => {
 		rootFolderId: rootFolderId || undefined
 	});
 
-	return json(list, { status: 201 });
+	return Response.json(list, { status: 201 });
 };

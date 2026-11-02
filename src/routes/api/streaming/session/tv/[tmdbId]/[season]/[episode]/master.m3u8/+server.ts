@@ -1,5 +1,5 @@
 import type { RequestHandler } from './$types';
-import { getBaseUrlAsync } from '$lib/server/streaming';
+import { getBaseUrlAsync } from '#lib/server/streaming/index.js';
 
 /**
  * Legacy .strm entry points end in master.m3u8; the native endpoints dropped

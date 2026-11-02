@@ -1,16 +1,16 @@
 <script lang="ts">
-	import { X, Plus, GripVertical, Pencil, Trash2, Check, Loader2 } from 'lucide-svelte';
-	import type { ChannelCategory, ChannelLineupItemWithDetails } from '$lib/types/livetv';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
-	import { ConfirmationModal } from '$lib/components/ui/modal';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import * as m from '$lib/paraglide/messages.js';
+	import { X, Plus, GripVertical, Pencil, Trash2, Check, Loader2 } from '@lucide/svelte';
+	import type { ChannelCategory, ChannelLineupItemWithDetails } from '#lib/types/livetv.js';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
+	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import {
 		updateChannelCategory,
 		deleteChannelCategory,
 		createChannelCategory,
 		reorderChannelCategories
-	} from '$lib/api/livetv.js';
+	} from '#lib/api/livetv.js';
 
 	interface Props {
 		open: boolean;

@@ -2,7 +2,7 @@ import {
 	DEFAULT_SETUP_NAMING_CONFIG,
 	type NamingConfigShape,
 	type NamingPreset
-} from '$lib/naming/setup-presets';
+} from '#lib/naming/setup-presets.js';
 
 export interface NamingPresetSelection {
 	selectedServerPresetId: string;

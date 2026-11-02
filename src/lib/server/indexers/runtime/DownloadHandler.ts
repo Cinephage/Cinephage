@@ -14,7 +14,7 @@ import { FilterEngine } from '../engine/FilterEngine';
 import { SelectorEngine } from '../engine/SelectorEngine';
 import { CookieStore } from '../auth/CookieStore';
 import { cloudflareFetch } from '../http/cloudflare-fetch';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 export interface DownloadContext {
 	baseUrl: string;

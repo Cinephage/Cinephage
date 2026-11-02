@@ -5,12 +5,11 @@
  * POST /api/livetv/lineup - Add channels to lineup
  */
 
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { channelLineupService } from '$lib/server/livetv/lineup';
-import { ValidationError } from '$lib/errors';
-import { createChildLogger } from '$lib/logging';
-import type { AddToLineupRequest } from '$lib/types/livetv';
+import { channelLineupService } from '#lib/server/livetv/lineup/index.js';
+import { ValidationError } from '#lib/errors/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import type { AddToLineupRequest } from '#lib/types/livetv.js';
 
 const logger = createChildLogger({ module: 'LiveTvLineup', logDomain: 'livetv' });
 
@@ -19,7 +18,7 @@ export const GET: RequestHandler = async () => {
 		const lineup = await channelLineupService.getLineup();
 		const lineupChannelIds = await channelLineupService.getLineupChannelIds();
 
-		return json({
+		return Response.json({
 			success: true,
 			lineup,
 			lineupChannelIds: Array.from(lineupChannelIds),
@@ -27,7 +26,7 @@ export const GET: RequestHandler = async () => {
 		});
 	} catch (error) {
 		logger.error('[API] Failed to get lineup', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to get lineup'
@@ -46,7 +45,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		if (body.channels.length === 0) {
-			return json({
+			return Response.json({
 				success: true,
 				added: 0,
 				skipped: 0
@@ -62,7 +61,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		const result = await channelLineupService.addToLineup(body);
 
-		return json(
+		return Response.json(
 			{
 				success: true,
 				...result
@@ -72,7 +71,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	} catch (error) {
 		// Validation errors
 		if (error instanceof ValidationError) {
-			return json(
+			return Response.json(
 				{
 					success: false,
 					error: error.message,
@@ -82,7 +81,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			);
 		}
 		logger.error('[API] Failed to add to lineup', error instanceof Error ? error : undefined);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Failed to add to lineup'

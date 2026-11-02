@@ -1,11 +1,11 @@
-import { db } from '$lib/server/db';
-import { settings } from '$lib/server/db/schema';
-import { tmdb } from '$lib/server/tmdb';
+import { db } from '#lib/server/db/index.js';
+import { settings } from '#lib/server/db/schema.js';
+import { tmdb } from '#lib/server/tmdb.js';
 import { eq } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
-import type { GlobalTmdbFilters } from '$lib/types/tmdb';
-import { createChildLogger } from '$lib/logging';
-import { TMDB } from '$lib/config/constants.js';
+import type { GlobalTmdbFilters } from '#lib/types/tmdb.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { TMDB } from '#lib/config/constants.js';
 
 // TMDB content-filter settings (genre exclusions etc.), not disk scanning - 'system' fits better than 'scans'.
 const logger = createChildLogger({ module: 'LibraryFiltersSettingsPage', logDomain: 'system' });

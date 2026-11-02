@@ -1,18 +1,17 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { db } from '$lib/server/db';
-import { namingPresets } from '$lib/server/db/schema';
+import { db } from '#lib/server/db/index.js';
+import { namingPresets } from '#lib/server/db/schema.js';
 import {
 	BUILT_IN_PRESETS,
 	NAMING_DETAIL_PRESETS,
 	NAMING_SERVER_PRESETS,
 	NAMING_STYLE_PRESETS,
 	type NamingPreset
-} from '$lib/server/library/naming/presets';
+} from '#lib/server/library/naming/presets.js';
 import { eq } from 'drizzle-orm';
-import { requireAdmin } from '$lib/server/auth/authorization.js';
-import { namingPresetCreateSchema } from '$lib/validation/schemas.js';
-import { createChildLogger } from '$lib/logging';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { namingPresetCreateSchema } from '#lib/validation/schemas.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'NamingPresetsApi', logDomain: 'scans' });
 
@@ -37,7 +36,7 @@ export const GET: RequestHandler = async () => {
 			}))
 		];
 
-		return json({
+		return Response.json({
 			presets: allPresets,
 			builtInIds: BUILT_IN_PRESETS.map((p) => p.id),
 			setupPresets: {
@@ -48,7 +47,7 @@ export const GET: RequestHandler = async () => {
 		});
 	} catch (err) {
 		logger.error({ err, component: 'NamingPresetsApi' }, 'Error fetching naming presets');
-		return json({ error: 'Failed to fetch presets' }, { status: 500 });
+		return Response.json({ error: 'Failed to fetch presets' }, { status: 500 });
 	}
 };
 
@@ -64,7 +63,10 @@ export const POST: RequestHandler = async (event) => {
 	try {
 		const parsed = namingPresetCreateSchema.safeParse(await request.json());
 		if (!parsed.success) {
-			return json({ success: false, error: parsed.error.issues[0].message }, { status: 400 });
+			return Response.json(
+				{ success: false, error: parsed.error.issues[0].message },
+				{ status: 400 }
+			);
 		}
 		const { name, description, config } = parsed.data;
 
@@ -73,7 +75,7 @@ export const POST: RequestHandler = async (event) => {
 			(p) => p.name.toLowerCase() === name.trim().toLowerCase()
 		);
 		if (builtInConflict) {
-			return json({ error: 'Cannot use a built-in preset name' }, { status: 400 });
+			return Response.json({ error: 'Cannot use a built-in preset name' }, { status: 400 });
 		}
 
 		// Check if name already exists in custom presets
@@ -83,7 +85,7 @@ export const POST: RequestHandler = async (event) => {
 			.where(eq(namingPresets.name, name.trim()));
 
 		if (existingCustom.length > 0) {
-			return json({ error: 'A preset with this name already exists' }, { status: 400 });
+			return Response.json({ error: 'A preset with this name already exists' }, { status: 400 });
 		}
 
 		// Create the preset
@@ -97,7 +99,7 @@ export const POST: RequestHandler = async (event) => {
 			})
 			.returning();
 
-		return json({
+		return Response.json({
 			preset: {
 				id: newPreset.id,
 				name: newPreset.name,
@@ -108,6 +110,6 @@ export const POST: RequestHandler = async (event) => {
 		});
 	} catch (err) {
 		logger.error({ err, component: 'NamingPresetsApi' }, 'Error creating naming preset');
-		return json({ error: 'Failed to create preset' }, { status: 500 });
+		return Response.json({ error: 'Failed to create preset' }, { status: 500 });
 	}
 };

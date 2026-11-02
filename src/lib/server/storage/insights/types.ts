@@ -3,7 +3,7 @@
  * upserts them into the storage_insights table.
  */
 
-import type { db } from '$lib/server/db/index.js';
+import type { db } from '#lib/server/db/index.js';
 
 export type InsightType =
 	| 'orphaned-files'

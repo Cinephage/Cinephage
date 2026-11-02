@@ -1,6 +1,5 @@
-import { json } from '@sveltejs/kit';
-import { backfillReleaseMetadata } from '$lib/server/library/release-metadata-backfill.js';
-import { createChildLogger } from '$lib/logging';
+import { backfillReleaseMetadata } from '#lib/server/library/release-metadata-backfill.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({
 	module: 'LibraryBackfillReleaseMetadataApi',
@@ -16,7 +15,7 @@ export async function POST({ request }: { request: Request }) {
 		logger.info({ apply, sampleLimit }, '[API] Starting release metadata backfill');
 		const result = await backfillReleaseMetadata({ apply, sampleLimit });
 
-		return json({
+		return Response.json({
 			success: true,
 			...result
 		});
@@ -25,7 +24,7 @@ export async function POST({ request }: { request: Request }) {
 			'[API] Release metadata backfill failed',
 			error instanceof Error ? error : undefined
 		);
-		return json(
+		return Response.json(
 			{
 				success: false,
 				error: error instanceof Error ? error.message : 'Unknown error'

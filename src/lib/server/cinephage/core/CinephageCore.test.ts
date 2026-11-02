@@ -10,6 +10,7 @@ function createMockSettings(
 		autoUpdate: boolean;
 		latestVersion: string | null;
 		latestCommit: string | null;
+		apiKey: string | null;
 	}> = {}
 ): CinephageSettingsService {
 	const state = {
@@ -26,6 +27,10 @@ function createMockSettings(
 		updateConfig: vi.fn(async (updates: Record<string, unknown>) => {
 			Object.assign(state, updates);
 		}),
+		getInstallApiKey: vi.fn(async () => overrides.apiKey ?? null),
+		getOrCreateInstallId: vi.fn(async () => '11111111-2222-3333-4444-555555555555'),
+		storeInstallApiKey: vi.fn(),
+		clearInstallApiKey: vi.fn(),
 		getModuleConfig: vi.fn(),
 		setModuleEnabled: vi.fn(),
 		updateModuleSettings: vi.fn(),
@@ -163,10 +168,10 @@ describe('CinephageCore', () => {
 
 			expect(fetchMock).toHaveBeenCalledTimes(2);
 			expect(fetchMock.mock.calls[0][0]).toBe(
-				'https://gh.example.com/repos/MoldyTaint/Cinephage/releases/latest'
+				'https://gh.example.com/repos/Cinephage/Cinephage/releases/latest'
 			);
 			expect(fetchMock.mock.calls[1][0]).toBe(
-				'https://gh.example.com/repos/MoldyTaint/Cinephage/commits/v0.15.0'
+				'https://gh.example.com/repos/Cinephage/Cinephage/commits/v0.15.0'
 			);
 			expect(settings.updateConfig).toHaveBeenCalledWith({
 				latestVersion: 'v0.15.0',
@@ -300,6 +305,170 @@ describe('CinephageCore', () => {
 			const core = new CinephageCore(createMockSettings());
 			const headers = await core.getAuthHeaders();
 			expect(headers).toEqual({});
+		});
+
+		it('attaches X-API-Key when an install key is registered', async () => {
+			process.env.APP_VERSION = '2.0.0';
+			process.env.APP_COMMIT = 'feedface';
+			const { CinephageCore } = await import('./CinephageCore.js');
+			const core = new CinephageCore(createMockSettings({ apiKey: 'ck_testkey1234567890' }));
+			const headers = await core.getAuthHeaders();
+			expect(headers['X-API-Key']).toBe('ck_testkey1234567890');
+			expect(headers['X-Cinephage-Version']).toBe('2.0.0');
+		});
+
+		it('attaches X-API-Key even when identity is unresolved', async () => {
+			delete process.env.APP_COMMIT;
+			const { CinephageCore } = await import('./CinephageCore.js');
+			const core = new CinephageCore(createMockSettings({ apiKey: 'ck_testkey1234567890' }));
+			const headers = await core.getAuthHeaders();
+			expect(headers['X-API-Key']).toBe('ck_testkey1234567890');
+			expect(headers['X-Cinephage-Version']).toBeUndefined();
+		});
+	});
+
+	describe('install key registration', () => {
+		const REGISTER_URL = 'https://api.cinephage.net/api/v1/auth/register';
+		const REVOKE_URL = 'https://api.cinephage.net/api/v1/auth/revoke';
+
+		afterEach(() => {
+			vi.restoreAllMocks();
+		});
+
+		it('registers, stores the key encrypted, and returns it once', async () => {
+			const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+				new Response(
+					JSON.stringify({
+						key: 'ck_newkey00000000000000000000000',
+						key_prefix: 'ck_newke',
+						rotated: false,
+						install_id: '11111111-2222-3333-4444-555555555555'
+					}),
+					{ status: 201 }
+				)
+			);
+			const settings = createMockSettings();
+			const { CinephageCore } = await import('./CinephageCore.js');
+			const core = new CinephageCore(settings);
+
+			const result = await core.registerInstallKey('user@example.com');
+
+			expect(fetchMock.mock.calls[0][0]).toBe(REGISTER_URL);
+			const init = fetchMock.mock.calls[0][1] as RequestInit;
+			const body = JSON.parse(init.body as string) as Record<string, string>;
+			expect(body.installId).toBe('11111111-2222-3333-4444-555555555555');
+			expect(body.email).toBe('user@example.com');
+			expect(result.key).toBe('ck_newkey00000000000000000000000');
+			expect(result.rotated).toBe(false);
+			expect(settings.storeInstallApiKey).toHaveBeenCalledWith(
+				'ck_newkey00000000000000000000000',
+				'ck_newke',
+				'user@example.com'
+			);
+		});
+
+		it('surfaces rate limiting as a typed error, never retrying', async () => {
+			vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+				new Response('{"error":{}}', { status: 429 })
+			);
+			const { CinephageCore, CinephageRegistrationError } = await import('./CinephageCore.js');
+			const core = new CinephageCore(createMockSettings());
+
+			await expect(core.registerInstallKey('user@example.com')).rejects.toMatchObject({
+				code: 'rate_limited'
+			});
+			expect(() => {
+				throw new CinephageRegistrationError('rate_limited', 'x');
+			}).toThrow();
+		});
+
+		it('rejects a 201 response that carries no key', async () => {
+			vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+				new Response(JSON.stringify({ ok: true }), { status: 201 })
+			);
+			const { CinephageCore } = await import('./CinephageCore.js');
+			const core = new CinephageCore(createMockSettings());
+			await expect(core.registerInstallKey('user@example.com')).rejects.toMatchObject({
+				code: 'gateway_error'
+			});
+		});
+
+		it('revokes via the stored key and clears local state', async () => {
+			const fetchMock = vi
+				.spyOn(globalThis, 'fetch')
+				.mockResolvedValue(new Response(JSON.stringify({ revoked: true }), { status: 200 }));
+			const settings = createMockSettings({ apiKey: 'ck_livekey0000000000000000000' });
+			const { CinephageCore } = await import('./CinephageCore.js');
+			const core = new CinephageCore(settings);
+
+			const result = await core.revokeInstallKey();
+
+			expect(fetchMock.mock.calls[0][0]).toBe(REVOKE_URL);
+			const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string) as {
+				key: string;
+			};
+			expect(body.key).toBe('ck_livekey0000000000000000000');
+			expect(result).toEqual({ revoked: true, wasRegistered: true });
+			expect(settings.clearInstallApiKey).toHaveBeenCalled();
+		});
+
+		it('revoke is a no-op when nothing is registered', async () => {
+			const fetchMock = vi.spyOn(globalThis, 'fetch');
+			const { CinephageCore } = await import('./CinephageCore.js');
+			const core = new CinephageCore(createMockSettings());
+
+			const result = await core.revokeInstallKey();
+
+			expect(result).toEqual({ revoked: false, wasRegistered: false });
+			expect(fetchMock).not.toHaveBeenCalled();
+		});
+
+		it('revoke clears local state even when the gateway already forgot the key', async () => {
+			vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('gone', { status: 404 }));
+			const settings = createMockSettings({ apiKey: 'ck_stale00000000000000000000' });
+			const { CinephageCore } = await import('./CinephageCore.js');
+			const core = new CinephageCore(settings);
+
+			const result = await core.revokeInstallKey();
+			expect(result.revoked).toBe(false);
+			expect(settings.clearInstallApiKey).toHaveBeenCalled();
+		});
+	});
+
+	describe('toGatewayErrorMessage', () => {
+		it('points unregistered installs at registration on 401', async () => {
+			const { CinephageCore } = await import('./CinephageCore.js');
+			const core = new CinephageCore(createMockSettings());
+			const message = await core.toGatewayErrorMessage(
+				new Error('All URLs failed: https://x: HTTP 401: Unauthorized')
+			);
+			expect(message).toContain('register');
+		});
+
+		it('keeps the identity self-heal path for registered installs on 401', async () => {
+			// autoUpdate disabled keeps the self-heal refresh from hitting GitHub.
+			const settings = createMockSettings({
+				apiKey: 'ck_livekey0000000000000000000',
+				autoUpdate: false
+			});
+			const { CinephageCore } = await import('./CinephageCore.js');
+			const core = new CinephageCore(settings);
+			const message = await core.toGatewayErrorMessage(new Error('HTTP 401: Unauthorized'));
+			expect(message).toContain('rejected authentication');
+		});
+
+		it('maps 429 to a rate-limit message', async () => {
+			const { CinephageCore } = await import('./CinephageCore.js');
+			const core = new CinephageCore(createMockSettings());
+			const message = await core.toGatewayErrorMessage(new Error('HTTP 429: Too Many Requests'));
+			expect(message).toContain('rate limited');
+		});
+
+		it('passes through unrelated errors', async () => {
+			const { CinephageCore } = await import('./CinephageCore.js');
+			const core = new CinephageCore(createMockSettings());
+			const message = await core.toGatewayErrorMessage(new Error('socket hang up'));
+			expect(message).toBe('socket hang up');
 		});
 	});
 

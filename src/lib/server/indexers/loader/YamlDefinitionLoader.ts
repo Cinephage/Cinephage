@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { type YamlDefinition, safeValidateYamlDefinition } from '../schema/yamlDefinition';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 import { yamlToUnifiedDefinition, type IndexerDefinition } from './types';
 
 const log = createChildLogger({ module: 'YamlDefinitionLoader' });

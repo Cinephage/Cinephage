@@ -9,8 +9,8 @@
  */
 
 import { isCloudflareProtected } from './CloudflareDetection';
-import { captchaSolverSettingsService, getCaptchaSolver } from '$lib/server/captcha';
-import { createChildLogger } from '$lib/logging';
+import { captchaSolverSettingsService, getCaptchaSolver } from '#lib/server/captcha/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'indexers' as const });
 import { decodeBuffer } from './EncodingUtils';

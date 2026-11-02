@@ -3,16 +3,15 @@
  *
  * PUT /api/tasks/[taskId]/interval - Updates the interval for a scheduled task
  */
-
-import { json, error } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import {
 	getUnifiedTaskById,
 	isScheduledTask,
 	isIntervalEditable
-} from '$lib/server/tasks/UnifiedTaskRegistry';
-import { taskSettingsService } from '$lib/server/tasks/TaskSettingsService';
-import { monitoringScheduler } from '$lib/server/monitoring/MonitoringScheduler';
+} from '#lib/server/tasks/UnifiedTaskRegistry.js';
+import { taskSettingsService } from '#lib/server/tasks/TaskSettingsService.js';
+import { monitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.js';
 import { z } from 'zod';
 
 const bodySchema = z.object({
@@ -88,7 +87,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		nextRunTime
 	});
 
-	return json({
+	return Response.json({
 		success: true,
 		taskId,
 		intervalHours

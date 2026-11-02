@@ -1,0 +1,176 @@
+---
+# LST — Private ENGLISH Movies / TV / General tracker (UNIT3D direct JSON API)
+# Source port of Prowlarr's lst.yml to the Cinephage Cardigann schema, following
+# the locally-proven seedpool/blutopia UNIT3D API patterns.
+# UNIT3D API docs: GET /api/torrents/filter (name, seasonNumber, episodeNumber,
+# imdbId, tmdbId, tvdbId, categories[], free[], sortField, sortDirection, perPage)
+id: lst
+name: LST
+description: A private torrent tracker for movies / TV / general content (UNIT3D direct API)
+type: private
+language: en-US
+encoding: UTF-8
+protocol: torrent
+requestdelay: 2
+
+links:
+  - https://lst.gg/
+
+caps:
+  modes:
+    search: [q]
+    movie-search: [q, imdbid, tmdbid]
+    tv-search: [q, season, ep, imdbid, tvdbid, tmdbid]
+  categorymappings:
+    - { id: 1, cat: Movies, desc: Movies }
+    - { id: 2, cat: TV, desc: TV }
+    - { id: 6, cat: TV/Anime, desc: Anime }
+    - { id: 3, cat: Audio, desc: Music }
+    - { id: 4, cat: Console, desc: Game }
+    - { id: 5, cat: PC, desc: Application }
+    - { id: 8, cat: XXX, desc: XXX }
+    - { id: 9, cat: Books/EBook, desc: Ebook/Manga }
+    - { id: 10, cat: Other, desc: Education }
+    - { id: 11, cat: Movies/Other, desc: FANRES }
+    # Parent expansion so Movies/TV searches route to every matching tracker category
+    - { id: 6, cat: TV }
+    - { id: 11, cat: Movies }
+
+settings:
+  - name: apikey
+    type: password
+    label: API Key
+    required: true
+  - name: info_key
+    type: info
+    label: About your API key
+    default: 'Find or generate a new API token in LST > My Settings > API Key tab.'
+  - name: freeleech
+    type: checkbox
+    label: Search freeleech only
+    default: false
+  - name: sort
+    type: select
+    label: Sort requested from site
+    default: created_at
+    options:
+      created_at: created
+      seeders: seeders
+      size: size
+      name: title
+  - name: type
+    type: select
+    label: Order requested from site
+    default: desc
+    options:
+      desc: desc
+      asc: asc
+  - name: info_activity
+    type: info
+    label: Account Inactivity
+    default: 'Accounts get disabled after 90 days of no logins or any sort of activity.'
+
+login:
+  method: get
+  path: /api/torrents
+  headers:
+    Authorization:
+      - 'Bearer {{ .Config.apikey }}'
+  error:
+    - selector: a[href*="/login"]
+      message:
+        text: 'The API key was not accepted by LST.'
+
+search:
+  paths:
+    - path: api/torrents/filter?name={{ .Keywords }}{{ range .Categories }}&categories[]={{.}}{{end}}{{ if .Query.Season }}&seasonNumber={{ .Query.Season }}{{ end }}{{ if .Query.Ep }}&episodeNumber={{ .Query.Ep }}{{ end }}{{ if .Query.IMDBIDShort }}&imdbId={{ .Query.IMDBIDShort }}{{ end }}{{ if .Query.TMDBID }}&tmdbId={{ .Query.TMDBID }}{{ end }}{{ if .Query.TVDBID }}&tvdbId={{ .Query.TVDBID }}{{ end }}{{ if .Config.freeleech }}&free[]=100{{ end }}&sortField={{ .Config.sort }}&sortDirection={{ .Config.type }}&perPage=100
+      method: get
+      response:
+        type: json
+
+  headers:
+    Authorization:
+      - 'Bearer {{ .Config.apikey }}'
+
+  keywordsfilters:
+    - name: re_replace
+      args: ['\\.', ' ']
+
+  rows:
+    selector: data
+
+  fields:
+    title:
+      selector: attributes.name
+    details:
+      selector: attributes.details_link
+    download:
+      selector: attributes.download_link
+    infohash:
+      selector: attributes.info_hash
+      optional: true
+    size:
+      selector: attributes.size
+    seeders:
+      selector: attributes.seeders
+      optional: true
+    leechers:
+      selector: attributes.leechers
+      optional: true
+    grabs:
+      selector: attributes.times_completed
+      optional: true
+    date:
+      selector: attributes.created_at
+      filters:
+        - name: re_replace
+          args:
+            - \.\d+Z$
+            - Z
+        - name: dateparse
+          args: YYYY-MM-DDTHH:mm:ssZ
+    category:
+      selector: attributes.category_id
+      optional: true
+    imdbid:
+      selector: attributes.imdb_id
+      optional: true
+    tmdbid:
+      selector: attributes.tmdb_id
+      optional: true
+    tvdbid:
+      selector: attributes.tvdb_id
+      optional: true
+    poster:
+      selector: attributes.meta.poster
+      optional: true
+      filters:
+        - name: replace
+          args:
+            - 'https://via.placeholder.com/90x135'
+            - ''
+    downloadvolumefactor:
+      selector: attributes.freeleech
+      optional: true
+      case:
+        '0%': '1'
+        '0': '1'
+        '25%': '0.75'
+        '25': '0.75'
+        '50%': '0.5'
+        '50': '0.5'
+        '75%': '0.25'
+        '75': '0.25'
+        '100%': '0'
+        '100': '0'
+        '*': '1'
+    uploadvolumefactor:
+      selector: attributes.double_upload
+      optional: true
+      case:
+        'True': '2'
+        'true': '2'
+        '*': '1'
+    minimumseedtime:
+      # LST global rules: seed 3 days regardless of ratio
+      text: '259200'

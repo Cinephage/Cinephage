@@ -4,7 +4,7 @@
  * A fully reactive, Svelte-native SSE connection manager.
  *
  * @example
- * import { createSSE } from '$lib/sse';
+ * import { createSSE } from '#lib/sse/index.js';
  *
  * const sse = createSSE('/api/stream', {
  *   'event:name': (data) => console.log(data)

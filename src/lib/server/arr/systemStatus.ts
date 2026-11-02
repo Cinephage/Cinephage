@@ -12,7 +12,7 @@
  * the two personas; everything else is shared, honest-effort metadata.
  */
 
-import { resolveAppVersion } from '$lib/server/version.js';
+import { resolveAppVersion } from '#lib/server/version.js';
 
 export type ArrAppName = 'Radarr' | 'Sonarr';
 

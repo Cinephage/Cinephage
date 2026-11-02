@@ -1,36 +1,37 @@
 <script lang="ts">
 	import type { PageData } from './$types';
-	import type { LibraryMovie, MovieFile } from '$lib/types/library';
+	import type { LibraryMovie, MovieFile } from '#lib/types/library.js';
 	import {
 		LibraryMovieHeader,
 		MovieFilesTab,
 		MovieEditModal,
 		RenamePreviewModal,
-		ScoreDetailModal
-	} from '$lib/components/library';
-	import type { FileScoreResponse } from '$lib/types/score';
-	import { MediaSearchModal } from '$lib/components/search';
-	import { SubtitleSearchModal } from '$lib/components/subtitles';
-	import SubtitleSyncModal from '$lib/components/subtitles/SubtitleSyncModal.svelte';
-	import SubtitleRequirementsSection from '$lib/components/subtitles/SubtitleRequirementsSection.svelte';
-	import DeleteConfirmationModal from '$lib/components/ui/modal/DeleteConfirmationModal.svelte';
+		ScoreDetailModal,
+		ChangeMatchModal
+	} from '#lib/components/library/index.js';
+	import type { FileScoreResponse } from '#lib/types/score.js';
+	import { MediaSearchModal } from '#lib/components/search/index.js';
+	import { SubtitleSearchModal } from '#lib/components/subtitles/index.js';
+	import SubtitleSyncModal from '#lib/components/subtitles/SubtitleSyncModal.svelte';
+	import SubtitleRequirementsSection from '#lib/components/subtitles/SubtitleRequirementsSection.svelte';
+	import DeleteConfirmationModal from '#lib/components/ui/modal/DeleteConfirmationModal.svelte';
 	import {
 		ConfirmationModal,
 		ModalWrapper,
 		ModalHeader,
 		ModalFooter
-	} from '$lib/components/ui/modal';
-	import { toasts } from '$lib/stores/toast.svelte';
-	import { autoSearchSubtitles, syncSubtitle } from '$lib/api/subtitles.js';
+	} from '#lib/components/ui/modal/index.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { autoSearchSubtitles, syncSubtitle } from '#lib/api/subtitles.js';
 	import {
 		getMovie,
 		updateMovie,
 		deleteMovie,
 		deleteMovieFile,
 		getMovieScore
-	} from '$lib/api/library.js';
-	import { apiGetStream } from '$lib/api';
-	import type { MovieEditData } from '$lib/components/library/MovieEditModal.svelte';
+	} from '#lib/api/library.js';
+	import { apiGetStream } from '#lib/api/index.js';
+	import type { MovieEditData } from '#lib/components/library/MovieEditModal.svelte';
 	import {
 		FileEdit,
 		Loader2,
@@ -42,21 +43,24 @@
 		Eye,
 		EyeOff,
 		Info
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 	import { page } from '$app/state';
-	import { goto, invalidateAll } from '$app/navigation';
-	import { resolvePath } from '$lib/utils/routing';
-	import { getLibraryDetailBackHref } from '$lib/utils/libraryReturnNavigation';
-	import { deriveSubtitleProgress } from '$lib/utils/subtitle-status-display.js';
-	import { requirementKey, type SubtitleRequirement } from '$lib/shared/language-profile.js';
-	import { createDynamicSSE } from '$lib/sse';
-	import { getFileName } from '$lib/utils/format.js';
-	import { layoutState, deriveMobileSseStatus } from '$lib/layout.svelte';
-	import * as m from '$lib/paraglide/messages.js';
-	import { ACTIVE_DOWNLOAD_STATUSES } from '$lib/types/queue';
-	import { createSubtitleProgress } from '$lib/stores/subtitleProgress.svelte';
+	import { goto, refreshAll } from '$app/navigation';
+	import { resolvePath } from '#lib/utils/routing.js';
+	import { getLibraryDetailBackHref } from '#lib/utils/libraryReturnNavigation.js';
+	import { deriveSubtitleProgress } from '#lib/utils/subtitle-status-display.js';
+	import { requirementKey, type SubtitleRequirement } from '#lib/shared/language-profile.js';
+	import { createDynamicSSE } from '#lib/sse/index.js';
+	import { getFileName } from '#lib/utils/format.js';
+	import { layoutState, deriveMobileSseStatus } from '#lib/layout.svelte.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import { ACTIVE_DOWNLOAD_STATUSES } from '#lib/types/queue.js';
+	import { createSubtitleProgress } from '#lib/stores/subtitleProgress.svelte.js';
 
 	let { data }: { data: PageData } = $props();
+
+	// Viewer accounts browse a read-only library; admin controls stay hidden.
+	const isAdminUser = $derived(data.user?.role === 'admin');
 
 	const activeStatusSet: Set<string> = new Set(ACTIVE_DOWNLOAD_STATUSES);
 
@@ -73,11 +77,11 @@
 		deriveSubtitleProgress(data.subtitleStatus, data.effectiveLanguageProfile?.profile ?? null)
 	);
 
-	// Back link target: the validated returnTo URL carries the exact filtered
-	// list state from the page the user navigated from (issue #515). It stays
-	// absolute — LibraryMovieHeader applies resolvePath() exactly once, and
-	// pre-resolving here relativizes it during SSR and throws (PR #518).
-	const moviesBackHref = $derived(getLibraryDetailBackHref(page.url, '/library/movies'));
+	// Back link target: the exact filtered list state from the page the user
+	// navigated from (issue #515), read from sessionStorage rather than a
+	// `?returnTo=` URL param so it doesn't show up in the address bar. Null
+	// during SSR (sessionStorage is client-only); fills in after hydration.
+	const moviesBackHref = $derived(getLibraryDetailBackHref('movies', '/library/movies'));
 
 	function describeError(error: unknown, fallback: string): string {
 		return error instanceof Error ? error.message : fallback;
@@ -94,6 +98,35 @@
 			queueItemState = $state.snapshot(data.queueItem);
 			lastMovieId = incomingMovieId;
 		}
+	});
+
+	// AniList/MAL provider refs are resolved client-side after the page has
+	// already rendered, not in the page load - a slow/rate-limited upstream
+	// must never delay first paint. (An earlier version streamed this lookup
+	// as an unawaited promise from +page.server.ts, but that still visibly
+	// delayed first paint in practice.) Skip the fetch entirely when nothing
+	// is missing - most movies already have their refs stored from the last
+	// visit. Merge the result in once it lands; guard against having
+	// navigated to a different movie in the meantime.
+	$effect(() => {
+		const forMovieId = data.movie.id;
+		const providers = data.configuredMetadataProviders;
+		const refs = data.movie.providerRefs ?? {};
+		const missingEnabledProvider =
+			(providers.anilist && !refs.anilist) || (providers.mal && !refs.mal);
+		if (!missingEnabledProvider) return;
+
+		fetch(`/api/library/movies/${forMovieId}/anime-refs`)
+			.then((res) => (res.ok ? res.json() : null))
+			.then((body: { providerRefs?: Record<string, string> } | null) => {
+				if (body?.providerRefs && movieState && movieState.id === forMovieId) {
+					movieState.providerRefs = body.providerRefs;
+				}
+			})
+			.catch(() => {
+				// Best-effort enrichment; the page already rendered with whatever
+				// refs were already stored.
+			});
 	});
 
 	// SSE Connection - internally handles browser/SSR
@@ -155,12 +188,12 @@
 				movie.files = [...movie.files, payload.file];
 			}
 			movie.hasFile = movie.files.length > 0;
-			invalidateAll();
+			refreshAll();
 		},
 		'file:removed': (payload) => {
 			movie.files = movie.files.filter((f) => f.id !== payload.fileId);
 			movie.hasFile = movie.files.length > 0;
-			invalidateAll();
+			refreshAll();
 		}
 	});
 
@@ -193,6 +226,7 @@
 
 	// State
 	let isEditModalOpen = $state(false);
+	let isChangeMatchModalOpen = $state(false);
 	let isSearchModalOpen = $state(false);
 	let isSubtitleSearchModalOpen = $state(false);
 	let isSubtitleSyncModalOpen = $state(false);
@@ -263,7 +297,7 @@
 			if (!res.ok) throw new Error(result.error ?? 'Failed to add movie');
 			toasts.success(`${addingPart.title} added to library`);
 			addingPart = null;
-			await invalidateAll();
+			await refreshAll();
 		} catch (err) {
 			showActionError('Failed to add movie', err);
 		} finally {
@@ -290,7 +324,7 @@
 			if (result.added > 0) {
 				toasts.success(`Added ${result.added} movie${result.added === 1 ? '' : 's'} to library`);
 				trackPanelOpen = false;
-				await invalidateAll();
+				await refreshAll();
 			}
 		} catch (err) {
 			showActionError('Failed to add collection', err);
@@ -402,7 +436,11 @@
 	);
 
 	function buildProviderSearchLink(provider: 'anilist' | 'mal'): string {
-		const query = `${movie.title}${movie.year ? ` ${movie.year}` : ''}`;
+		// Title only - AniList/MAL's own search often returns nothing when the
+		// year is appended to the query text (e.g. "Movie Title 1992" frequently
+		// fails where "Movie Title" alone succeeds). The year is shown alongside
+		// the results for the user to confirm visually instead.
+		const query = movie.title;
 		if (provider === 'anilist') {
 			return `https://anilist.co/search/anime?search=${encodeURIComponent(query)}`;
 		}
@@ -473,8 +511,8 @@
 		isSearchModalOpen = true;
 	}
 
-	import { createSearchProgress } from '$lib/stores/searchProgress.svelte';
-	import { getPrimaryAutoSearchIssue } from '$lib/utils/autoSearchIssues';
+	import { createSearchProgress } from '#lib/stores/searchProgress.svelte.js';
+	import { getPrimaryAutoSearchIssue } from '#lib/utils/autoSearchIssues.js';
 
 	// Per-item subtitle requirement override (details-page editing).
 	let savingRequirements = $state(false);
@@ -494,7 +532,7 @@
 				const body = (await response.json().catch(() => ({}))) as { error?: string };
 				throw new Error(body.error ?? 'Failed to save subtitle languages');
 			}
-			await invalidateAll();
+			await refreshAll();
 		} finally {
 			savingRequirements = false;
 		}
@@ -511,7 +549,7 @@
 				const body = (await response.json().catch(() => ({}))) as { error?: string };
 				throw new Error(body.error ?? 'Search failed');
 			}
-			await invalidateAll();
+			await refreshAll();
 		} catch (error) {
 			toasts.error(error instanceof Error ? error.message : 'Subtitle search failed');
 		}
@@ -580,10 +618,19 @@
 		isEditModalOpen = true;
 	}
 
+	function handleChangeMatch() {
+		isChangeMatchModalOpen = true;
+	}
+
+	function handleChangeMatchSuccess() {
+		isChangeMatchModalOpen = false;
+		window.location.reload();
+	}
+
 	function handleEditClose() {
 		isEditModalOpen = false;
 		if (page.url.searchParams.get('edit') === '1') {
-			goto(page.url.pathname, { replaceState: true, keepFocus: true, noScroll: true });
+			goto(page.url.pathname, { replace: true, reset: false });
 		}
 	}
 
@@ -641,7 +688,11 @@
 					// Navigate to library since the movie no longer exists
 					goto(resolvePath('/library/movies'));
 				} else {
-					toasts.success(m.toast_library_movieDetail_movieFilesDeleted());
+					toasts.success(
+						deleteFiles
+							? m.toast_library_movieDetail_movieFilesDeleted()
+							: m.toast_library_movieDetail_movieUnmatched()
+					);
 					movie.files = [];
 					movie.hasFile = false;
 					queueItemState = null;
@@ -917,6 +968,7 @@
 		onImport={handleImport}
 		onEdit={handleEdit}
 		onDelete={handleDelete}
+		onChangeMatch={handleChangeMatch}
 		onScoreClick={handleScoreClick}
 		{autoSearching}
 		{autoSearchResult}
@@ -924,6 +976,7 @@
 		{scoreLoading}
 		subtitleProgress={subtitleRequirementProgress}
 		preferOriginalTitleDefault={data.preferOriginalTitleDefault}
+		readOnly={!isAdminUser}
 	/>
 
 	<!-- Subtitle requirements (per-item override editing) -->
@@ -933,7 +986,7 @@
 		source={data.effectiveSubtitleRequirements?.source ?? null}
 		profileName={data.effectiveLanguageProfile?.profile.name ?? null}
 		audioShortfall={data.movie.languageShortfall ?? false}
-		editable
+		editable={isAdminUser}
 		saving={savingRequirements}
 		onSave={handleRequirementsSave}
 		onSearch={handleRequirementSearch}
@@ -947,13 +1000,13 @@
 				<div class="mb-4 flex items-center justify-between">
 					<h2 class="text-lg font-semibold">{m.library_movieDetail_filesHeading()}</h2>
 					<div class="flex flex-wrap items-center gap-2">
-						{#if !isStreamerProfile && (movie.subtitles?.length ?? 0) > 0}
+						{#if isAdminUser && !isStreamerProfile && (movie.subtitles?.length ?? 0) > 0}
 							<button class="btn gap-1 btn-ghost btn-sm" onclick={handleSubtitleSync}>
 								<RefreshCw class="h-4 w-4" />
 								{m.library_movieDetail_syncSubtitles()}
 							</button>
 						{/if}
-						{#if movie.files.length > 0}
+						{#if isAdminUser && movie.files.length > 0}
 							<button class="btn gap-1 btn-ghost btn-sm" onclick={() => (isRenameModalOpen = true)}>
 								<FileEdit class="h-4 w-4" />
 								{m.library_movieDetail_rename()}
@@ -966,6 +1019,7 @@
 					subtitles={movie.subtitles}
 					subtitleProgress={subtitleRequirementProgress}
 					{isStreamerProfile}
+					readOnly={!isAdminUser}
 					onDeleteFile={handleDeleteFile}
 					onSearch={handleSearch}
 					onSubtitleSearch={handleSubtitleSearch}
@@ -986,7 +1040,7 @@
 							</h2>
 						</div>
 						<div class="flex items-center gap-1">
-							{#if trackedMissingFile.length > 0}
+							{#if isAdminUser && trackedMissingFile.length > 0}
 								<button
 									class="btn gap-2 btn-ghost btn-sm"
 									onclick={handleCollectionSearch}
@@ -1000,7 +1054,7 @@
 									{/if}
 								</button>
 							{/if}
-							{#if trackedMissingSubtitles.length > 0}
+							{#if isAdminUser && trackedMissingSubtitles.length > 0}
 								<button
 									class="btn gap-2 btn-ghost btn-sm"
 									onclick={handleCollectionSubtitleAutoSearch}
@@ -1341,7 +1395,7 @@
 							</h2>
 						</div>
 						<div class="flex shrink-0 items-center gap-1">
-							{#if trackedMissingFile.length > 0}
+							{#if isAdminUser && trackedMissingFile.length > 0}
 								<button
 									class="btn gap-2 btn-ghost btn-sm"
 									onclick={handleCollectionSearch}
@@ -1355,7 +1409,7 @@
 									{/if}
 								</button>
 							{/if}
-							{#if trackedMissingSubtitles.length > 0}
+							{#if isAdminUser && trackedMissingSubtitles.length > 0}
 								<button
 									class="btn gap-2 btn-ghost btn-sm"
 									onclick={handleCollectionSubtitleAutoSearch}
@@ -1603,6 +1657,17 @@
 	saving={isSaving}
 	onClose={handleEditClose}
 	onSave={handleEditSave}
+/>
+
+<!-- Change Match Modal -->
+<ChangeMatchModal
+	open={isChangeMatchModalOpen}
+	mediaType="movie"
+	mediaId={movie.id}
+	currentTitle={movie.title}
+	currentYear={movie.year}
+	onClose={() => (isChangeMatchModalOpen = false)}
+	onSuccess={handleChangeMatchSuccess}
 />
 
 <!-- Search Modal -->

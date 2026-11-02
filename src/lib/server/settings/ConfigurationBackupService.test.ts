@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createTestDb } from '../../../test/db-helper';
-import { downloadClients, namingPresets } from '$lib/server/db/schema';
+import { downloadClients, namingPresets } from '#lib/server/db/schema.js';
 
 const testDb = createTestDb();
 const DEFAULT_SECRET = process.env.BETTER_AUTH_SECRET ?? 'test-secret';
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -15,7 +15,7 @@ vi.mock('$lib/server/db', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/server/db/index.js', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -33,8 +33,7 @@ describe('ConfigurationBackupService debrid safety', () => {
 
 	it('restores plaintext tokens without guessing their format', async () => {
 		const { getConfigurationBackupService } = await import('./ConfigurationBackupService');
-		const { encryptBackupPayload } = await import('$lib/server/crypto/backupCrypto');
-		const { decryptDebridToken } = await import('$lib/server/crypto/debridTokenCrypto');
+		const { encryptBackupPayload } = await import('#lib/server/crypto/backupCrypto.js');
 		const clientId = 'debrid-client-1';
 		const token = 'looks:like:encrypted:but:is:plaintext';
 		const backup = {
@@ -73,12 +72,14 @@ describe('ConfigurationBackupService debrid safety', () => {
 			.prepare(`SELECT "api_token" FROM "download_clients" WHERE "id" = ?`)
 			.get(clientId) as { api_token: string };
 
-		expect(decryptDebridToken(row.api_token)).toBe(token);
+		// Restored under the versioned envelope bound to the client id.
+		const { decryptCredential } = await import('#lib/server/crypto/credentialsCrypto.js');
+		expect(decryptCredential('debrid-token', clientId, row.api_token)).toBe(token);
 	});
 
 	it('fails export closed when a stored token cannot be decrypted', async () => {
 		const { DownloadClientManager } =
-			await import('$lib/server/downloadClients/DownloadClientManager');
+			await import('#lib/server/downloadClients/DownloadClientManager.js');
 		const { getConfigurationBackupService } = await import('./ConfigurationBackupService');
 
 		process.env.BETTER_AUTH_SECRET = 'backup-export-secret-A';
@@ -139,7 +140,7 @@ describe('ConfigurationBackupService timestamp round-trip', () => {
 
 	it('restores legacy backups whose Date columns were exported as empty objects', async () => {
 		const { getConfigurationBackupService } = await import('./ConfigurationBackupService');
-		const { encryptBackupPayload } = await import('$lib/server/crypto/backupCrypto');
+		const { encryptBackupPayload } = await import('#lib/server/crypto/backupCrypto.js');
 
 		process.env.BETTER_AUTH_SECRET = 'backup-legacy-secret';
 		const backup = {

@@ -47,6 +47,19 @@ export function redactUrl(url: string): string {
 
 		for (const [key] of parsed.searchParams) {
 			const lowerKey = key.toLowerCase();
+			// Magnet `tr=` values are themselves announce URLs that often carry a
+			// passkey query parameter; recurse so those are redacted too.
+			if (lowerKey === 'tr' || lowerKey === 'xs') {
+				const value = parsed.searchParams.get(key);
+				if (value) {
+					const nested = redactUrl(value);
+					if (nested !== value) {
+						parsed.searchParams.set(key, nested);
+						hasRedactions = true;
+					}
+				}
+				continue;
+			}
 			if (SENSITIVE_PARAMS.some((param) => lowerKey.includes(param))) {
 				parsed.searchParams.set(key, '[REDACTED]');
 				hasRedactions = true;

@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import type { FilterBlock } from '../schema/yamlDefinition';
 import type { TemplateEngine } from './TemplateEngine';
 import { createSafeRegex, safeMatch, safeReplace } from './safeRegex';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 import { parse as dateParse } from 'date-format-parse';
 
 const logger = createChildLogger({ logDomain: 'indexers' as const });
@@ -25,6 +25,12 @@ export type FilterFunction = (
 function parseDateWithLayout(dateStr: string, layout: string): Date | null {
 	if (!dateStr || !layout) return null;
 
+	// date-format-parse matches literal whitespace in the layout exactly, so
+	// incidental leading/trailing whitespace or doubled spaces (common in
+	// pretty-printed RSS/XML pubDate text nodes) fails to parse even though
+	// the date is perfectly well-formed.
+	dateStr = dateStr.trim().replace(/[ \t]+/g, ' ');
+
 	// Handle special unix layouts
 	if (layout === 'unix' || layout === 'Unix') {
 		const timestamp = parseInt(dateStr, 10);
@@ -38,10 +44,34 @@ function parseDateWithLayout(dateStr: string, layout: string): Date | null {
 		return new Date(timestamp);
 	}
 
+	// date-format-parse validates weekdays against the host's local day after
+	// applying the offset. For RSS-style dates, validate the weekday in the
+	// source offset instead, which may be a different calendar day.
+	const weekdayPrefix = /^(dddd|ddd), /.exec(layout);
+	const offset = /(?:([+-])(\d{2}):?(\d{2})|Z)$/.exec(dateStr);
+	let expectedWeekday: number | undefined;
+	let offsetMinutes = 0;
+	if (weekdayPrefix && /Z{1,2}$/.test(layout) && offset) {
+		const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+		const names = weekdayPrefix[1] === 'ddd' ? weekdays.map((day) => day.slice(0, 3)) : weekdays;
+		const separator = dateStr.indexOf(', ');
+		expectedWeekday = names.indexOf(dateStr.slice(0, separator));
+		if (expectedWeekday < 0) return null;
+		if (offset[1]) {
+			offsetMinutes = (Number(offset[2]) * 60 + Number(offset[3])) * (offset[1] === '+' ? 1 : -1);
+		}
+		dateStr = dateStr.slice(separator + 2);
+		layout = layout.slice(weekdayPrefix[0].length);
+	}
+
 	let parsedDate: Date = dateParse(dateStr, layout);
 	if (isNaN(parsedDate.getTime()) && dateStr.endsWith('Z') && /Z\s*$/.test(layout)) {
 		const normalised = dateStr.replace(/Z$/, '+00:00');
 		parsedDate = dateParse(normalised, layout);
+	}
+	if (expectedWeekday !== undefined && !isNaN(parsedDate.getTime())) {
+		const sourceDate = new Date(parsedDate.getTime() + offsetMinutes * 60 * 1000);
+		if (sourceDate.getUTCDay() !== expectedWeekday) return null;
 	}
 	if (isNaN(parsedDate.getTime())) {
 		logger.error({ dateStr, layout }, `Parsing date failed`);

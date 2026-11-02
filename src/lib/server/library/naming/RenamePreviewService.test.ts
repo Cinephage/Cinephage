@@ -17,12 +17,12 @@ import { clearLocalizationCaches } from './localization';
 import { namingSettingsService } from './NamingSettingsService';
 import { libraryOperationLock } from '../library-operation-lock';
 import { diskScanService } from '../disk-scan.js';
-import * as schema from '$lib/server/db/schema';
+import * as schema from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 
 const testDb = createTestDb();
 
-vi.mock('$lib/server/db', () => ({
+vi.mock('#lib/server/db/index.js', () => ({
 	get db() {
 		return testDb.db;
 	},
@@ -34,8 +34,8 @@ vi.mock('$lib/server/db', () => ({
 
 const tmdbFetch = vi.hoisted(() => vi.fn());
 
-vi.mock('$lib/server/tmdb', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/server/tmdb')>();
+vi.mock('#lib/server/tmdb.js', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/server/tmdb.js')>();
 	return { ...actual, tmdb: { ...actual.tmdb, fetch: tmdbFetch } };
 });
 
@@ -44,7 +44,7 @@ const notifierMocks = vi.hoisted(() => ({
 	deleteMediaItemByTmdb: vi.fn().mockResolvedValue(1)
 }));
 
-vi.mock('$lib/server/notifications/mediabrowser', () => ({
+vi.mock('#lib/server/notifications/mediabrowser/index.js', () => ({
 	getMediaBrowserNotifier: () => ({ queueUpdate: notifierMocks.queueUpdate }),
 	getMediaBrowserManager: () => ({ deleteMediaItemByTmdb: notifierMocks.deleteMediaItemByTmdb })
 }));
@@ -52,7 +52,7 @@ vi.mock('$lib/server/notifications/mediabrowser', () => ({
 const mockedMoveFile = vi.fn();
 const mockedFileExists = vi.fn();
 
-vi.mock('$lib/server/downloadClients/import/FileTransfer', () => ({
+vi.mock('#lib/server/downloadClients/import/FileTransfer.js', () => ({
 	get moveFile() {
 		return mockedMoveFile;
 	},
@@ -2680,6 +2680,92 @@ describe('in-place subtitle companion renames', () => {
 		expect(result.success).toBe(true);
 		expect(mockFs.readdir).not.toHaveBeenCalled();
 		expect(mockFs.rename).not.toHaveBeenCalled();
+	});
+});
+
+describe('.nfo companion renames (no stale orphan left under the old name)', () => {
+	const dir = '/media/Season 01';
+
+	beforeEach(() => {
+		resetAllMocks();
+	});
+
+	function buildItem(
+		currentName: string,
+		newName: string,
+		overrides: { currentParentPath?: string; newParentPath?: string; newDir?: string } = {}
+	) {
+		const newDir = overrides.newDir ?? dir;
+		return {
+			fileId: 'file-1',
+			mediaType: 'movie' as const,
+			mediaId: 'movie-1',
+			mediaTitle: 'Test',
+			currentParentPath: overrides.currentParentPath ?? 'Season 01',
+			currentRelativePath: currentName,
+			currentFullPath: `${dir}/${currentName}`,
+			newParentPath: overrides.newParentPath ?? 'Season 01',
+			newRelativePath: newName,
+			newFullPath: `${newDir}/${newName}`,
+			status: 'will_change' as const
+		};
+	}
+
+	it('renames the .nfo sidecar alongside an in-place video rename', async () => {
+		const service = new RenamePreviewService();
+		mockedFileExists.mockImplementation(
+			async (p: string) => p === `${dir}/Old.mkv` || p === `${dir}/Old.nfo`
+		);
+
+		// @ts-expect-error accessing private method for testing
+		const result = await service.executeFileRename(buildItem('Old.mkv', 'New.mkv'), []);
+
+		expect(result.success).toBe(true);
+		expect(mockFs.rename).toHaveBeenCalledWith(`${dir}/Old.nfo`, `${dir}/New.nfo`);
+	});
+
+	it('also carries the .nfo across a folder-changing rename (not restricted to same-dir)', async () => {
+		const service = new RenamePreviewService();
+		const newDir = '/media/Specials';
+		mockedFileExists.mockImplementation(
+			async (p: string) => p === `${dir}/Old.mkv` || p === `${dir}/Old.nfo`
+		);
+
+		// @ts-expect-error accessing private method for testing
+		const result = await service.executeFileRename(
+			buildItem('Old.mkv', 'New.mkv', { newParentPath: 'Specials', newDir }),
+			[]
+		);
+
+		expect(result.success).toBe(true);
+		expect(mockFs.rename).toHaveBeenCalledWith(`${dir}/Old.nfo`, `${newDir}/New.nfo`);
+	});
+
+	it('does nothing when there is no .nfo to carry', async () => {
+		const service = new RenamePreviewService();
+		mockedFileExists.mockImplementation(async (p: string) => p === `${dir}/Old.mkv`);
+
+		// @ts-expect-error accessing private method for testing
+		const result = await service.executeFileRename(buildItem('Old.mkv', 'New.mkv'), []);
+
+		expect(result.success).toBe(true);
+		expect(mockFs.rename).not.toHaveBeenCalledWith(`${dir}/Old.nfo`, `${dir}/New.nfo`);
+	});
+
+	it('skips the .nfo carry when a .nfo already exists at the destination', async () => {
+		const service = new RenamePreviewService();
+		mockedFileExists.mockImplementation(
+			async (p: string) =>
+				p === `${dir}/Old.mkv` || p === `${dir}/Old.nfo` || p === `${dir}/New.nfo`
+		);
+		const warnings: string[] = [];
+
+		// @ts-expect-error accessing private method for testing
+		const result = await service.executeFileRename(buildItem('Old.mkv', 'New.mkv'), warnings);
+
+		expect(result.success).toBe(true);
+		expect(mockFs.rename).not.toHaveBeenCalledWith(`${dir}/Old.nfo`, `${dir}/New.nfo`);
+		expect(warnings).toHaveLength(0);
 	});
 });
 

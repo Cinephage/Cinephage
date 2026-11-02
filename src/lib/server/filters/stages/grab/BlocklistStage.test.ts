@@ -4,7 +4,7 @@ import { makeGrabDecisionContext } from '../../../../../test/fixtures/filters.js
 
 const mockIsBlocklisted = vi.hoisted(() => vi.fn());
 
-vi.mock('$lib/server/blocklist/BlocklistService.js', () => ({
+vi.mock('#lib/server/blocklist/BlocklistService.js', () => ({
 	blocklistService: { isBlocklisted: mockIsBlocklisted }
 }));
 

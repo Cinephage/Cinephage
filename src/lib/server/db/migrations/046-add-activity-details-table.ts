@@ -1,5 +1,5 @@
 import type { MigrationDefinition } from '../migration-helpers.js';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 // Migration 46: Add activity_details table for granular activity logging

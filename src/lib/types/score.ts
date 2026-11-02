@@ -4,7 +4,11 @@
  * Types for score visibility API responses
  */
 
-import type { ScoringResult, ReleaseAttributes, ScoreBreakdown } from '$lib/server/scoring/types';
+import type {
+	ScoringResult,
+	ReleaseAttributes,
+	ScoreBreakdown
+} from '#lib/server/scoring/types.js';
 
 /**
  * Upgrade status for a file

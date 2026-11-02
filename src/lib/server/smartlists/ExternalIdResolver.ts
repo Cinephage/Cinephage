@@ -5,8 +5,8 @@
  * Uses TMDB's find API and search APIs
  */
 
-import { tmdb } from '$lib/server/tmdb.js';
-import { createChildLogger } from '$lib/logging';
+import { tmdb } from '#lib/server/tmdb.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'monitoring' as const });
 

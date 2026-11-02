@@ -1,8 +1,7 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getSubtitleSyncService } from '$lib/server/subtitles/services/SubtitleSyncService';
-import { subtitleSyncSchema } from '$lib/validation/schemas';
-import { parseBody } from '$lib/server/api/validate.js';
+import { getSubtitleSyncService } from '#lib/server/subtitles/services/SubtitleSyncService.js';
+import { subtitleSyncSchema } from '#lib/validation/schemas.js';
+import { parseBody } from '#lib/server/api/validate.js';
 
 /**
  * POST /api/subtitles/sync
@@ -20,14 +19,14 @@ export const POST: RequestHandler = async ({ request }) => {
 	});
 
 	if (!syncResult.success && syncResult.error?.startsWith('Subtitle not found:')) {
-		return json({ error: 'Subtitle not found' }, { status: 404 });
+		return Response.json({ error: 'Subtitle not found' }, { status: 404 });
 	}
 
 	if (!syncResult.success && syncResult.error === 'Video file not found for syncing') {
-		return json({ error: syncResult.error }, { status: 400 });
+		return Response.json({ error: syncResult.error }, { status: 400 });
 	}
 
-	return json({
+	return Response.json({
 		success: syncResult.success,
 		offsetMs: syncResult.offsetMs,
 		error: syncResult.error
@@ -42,7 +41,7 @@ export const GET: RequestHandler = async () => {
 	const syncService = getSubtitleSyncService();
 	const isAvailable = await syncService.isAvailable();
 
-	return json({
+	return Response.json({
 		available: isAvailable,
 		message: isAvailable
 			? 'alass is available'

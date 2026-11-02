@@ -6,7 +6,7 @@
  * and replaying them on connection.
  */
 
-import type { QualityInfo, MediaInfo } from '$lib/types/library';
+import type { QualityInfo, MediaInfo } from '#lib/types/library.js';
 
 interface BufferedFileImportedEvent {
 	timestamp: number;

@@ -1,24 +1,24 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
-	import { Plus, Search } from 'lucide-svelte';
+	import { refreshAll } from '$app/navigation';
+	import { Plus, Search } from '@lucide/svelte';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { toasts } from '$lib/stores/toast.svelte';
+	import { toasts } from '#lib/stores/toast.svelte.js';
 	import type { PageData } from './$types';
 	import {
 		NntpServerBulkActions,
 		NntpServerModal,
 		NntpServerTable
-	} from '$lib/components/nntpServers';
-	import { ConfirmationModal } from '$lib/components/ui/modal';
-	import { SettingsPage } from '$lib/components/ui/settings';
-	import * as m from '$lib/paraglide/messages.js';
+	} from '#lib/components/nntpServers/index.js';
+	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
+	import { SettingsPage } from '#lib/components/ui/settings/index.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import {
 		createUsenetServer,
 		updateUsenetServer,
 		deleteUsenetServer,
 		testUsenetServer,
 		ApiError
-	} from '$lib/api';
+	} from '#lib/api/index.js';
 
 	interface NntpServer {
 		id: string;
@@ -218,7 +218,7 @@
 				await createUsenetServer(formData);
 			}
 
-			await invalidateAll();
+			await refreshAll();
 			closeModal();
 		} catch (error) {
 			if (error instanceof ApiError) {
@@ -240,7 +240,7 @@
 		} catch {
 			// silently fail for modal delete
 		}
-		await invalidateAll();
+		await refreshAll();
 		closeModal();
 	}
 
@@ -257,7 +257,7 @@
 		} catch {
 			// silently fail
 		}
-		await invalidateAll();
+		await refreshAll();
 		confirmDeleteOpen = false;
 		deleteTarget = null;
 	}
@@ -268,14 +268,14 @@
 		} catch {
 			// silently fail
 		}
-		await invalidateAll();
+		await refreshAll();
 	}
 
 	async function handleNntpTest(server: NntpServer) {
 		testingId = server.id;
 		try {
 			await testUsenetServer(server.id);
-			await invalidateAll();
+			await refreshAll();
 		} finally {
 			testingId = null;
 		}
@@ -306,7 +306,7 @@
 			for (const id of selectedIds) {
 				await updateUsenetServer(id, { enabled: true });
 			}
-			await invalidateAll();
+			await refreshAll();
 			selectedIds.clear();
 		} finally {
 			bulkLoading = false;
@@ -320,7 +320,7 @@
 			for (const id of selectedIds) {
 				await updateUsenetServer(id, { enabled: false });
 			}
-			await invalidateAll();
+			await refreshAll();
 			selectedIds.clear();
 		} finally {
 			bulkLoading = false;
@@ -343,7 +343,7 @@
 			for (const id of selectedIds) {
 				await deleteUsenetServer(id);
 			}
-			await invalidateAll();
+			await refreshAll();
 			selectedIds.clear();
 			confirmBulkDeleteOpen = false;
 		} finally {
@@ -365,7 +365,7 @@
 					failCount += 1;
 				}
 			}
-			await invalidateAll();
+			await refreshAll();
 			toasts.info(
 				m.settings_integrations_bulkTestComplete({
 					successCount: String(successCount),
@@ -385,7 +385,7 @@
 		} catch (error) {
 			toasts.error(error instanceof Error ? error.message : 'Failed to reorder priorities');
 		} finally {
-			await invalidateAll();
+			await refreshAll();
 		}
 	}
 </script>

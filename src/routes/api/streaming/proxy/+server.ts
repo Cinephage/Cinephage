@@ -16,24 +16,25 @@
  */
 
 import type { RequestHandler } from './$types';
-import { getBaseUrlAsync } from '$lib/server/streaming';
-import { logger } from '$lib/logging';
+import { getBaseUrlAsync } from '#lib/server/streaming/index.js';
+import { logger } from '#lib/logging/index.js';
 import {
 	PROXY_FETCH_TIMEOUT_MS,
 	PROXY_SEGMENT_MAX_SIZE,
 	PROXY_MAX_RETRIES,
 	DEFAULT_PROXY_REFERER,
 	PROXY_REFERER_MAP
-} from '$lib/server/streaming/constants';
-import { validatePlaylist, sanitizePlaylist, isHLSPlaylist } from '$lib/server/streaming/hls';
+} from '#lib/server/streaming/constants.js';
+import { validatePlaylist, sanitizePlaylist, isHLSPlaylist } from '#lib/server/streaming/hls.js';
 import {
 	resolveAndValidateUrl,
 	fetchWithTimeout,
+	UnsafeUrlError,
 	MAX_REDIRECTS
-} from '$lib/server/http/ssrf-protection';
-import { rewriteHlsPlaylistUrls } from '$lib/server/streaming/utils/hls-rewrite.js';
-import { getCachedSession } from '$lib/server/streaming/utils/cloudflare-streaming';
-import { isPngWrappedSegment, stripPngWrapper } from '$lib/server/streaming/utils/png-wrapper';
+} from '#lib/server/http/ssrf-protection.js';
+import { rewriteHlsPlaylistUrls } from '#lib/server/streaming/utils/hls-rewrite.js';
+import { getCachedSession } from '#lib/server/streaming/utils/cloudflare-streaming.js';
+import { isPngWrappedSegment, stripPngWrapper } from '#lib/server/streaming/utils/png-wrapper.js';
 
 const streamLog = { logDomain: 'streams' as const };
 
@@ -122,6 +123,9 @@ async function fetchWithRetry(
 		} catch (error) {
 			lastError = error instanceof Error ? error : new Error(String(error));
 
+			// An SSRF rejection is deterministic; retrying just delays the 403.
+			if (error instanceof UnsafeUrlError) throw error;
+
 			// Don't retry on abort (timeout) - those are intentional
 			if (lastError.name === 'AbortError') {
 				throw new Error(`Proxy timeout after ${PROXY_FETCH_TIMEOUT_MS}ms`, { cause: error });
@@ -181,13 +185,17 @@ export const GET: RequestHandler = async ({ url, request }) => {
 			);
 		}
 
-		// Note: Don't send Origin header - some CDNs reject it
+		// Note: Don't send Origin header - some CDNs reject it. A Referer is only
+		// sent when the caller supplied one or the host has a known mapping;
+		// inventing one breaks providers that reject foreign referers.
 		const headers: HeadersInit = {
 			'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
 			Accept: '*/*',
-			'Accept-Encoding': 'identity',
-			Referer: referer
+			'Accept-Encoding': 'identity'
 		};
+		if (referer) {
+			headers.Referer = referer;
+		}
 
 		// Add cached Cloudflare cookies if available for this domain
 		try {

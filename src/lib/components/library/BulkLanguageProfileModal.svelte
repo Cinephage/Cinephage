@@ -7,9 +7,9 @@
 	 * wants-subtitles gate, and optionally clear per-item subtitle
 	 * requirement overrides so items follow the chosen profile again.
 	 */
-	import { Loader2 } from 'lucide-svelte';
-	import { m } from '$lib/paraglide/messages.js';
-	import { getLanguageProfiles } from '$lib/api/subtitles.js';
+	import { Loader2 } from '@lucide/svelte';
+	import { m } from '#lib/paraglide/messages.js';
+	import { getLanguageProfiles } from '#lib/api/subtitles.js';
 
 	interface Props {
 		open: boolean;

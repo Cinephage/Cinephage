@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PlaybackSessionStore } from './session-store';
 import { DEFAULT_EFFECTIVE_AUDIO_PREFERENCE } from '../language-utils';
-import type { SubtitleRequirement } from '$lib/shared/language-profile';
+import type { SubtitleRequirement } from '#lib/shared/language-profile.js';
 
 function createStore(): PlaybackSessionStore {
 	return new PlaybackSessionStore();

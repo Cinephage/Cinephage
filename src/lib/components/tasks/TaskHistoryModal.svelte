@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { ChevronDown, ChevronRight, MessageSquare } from 'lucide-svelte';
-	import * as m from '$lib/paraglide/messages.js';
-	import type { UnifiedTask } from '$lib/server/tasks/UnifiedTaskRegistry';
-	import type { TaskHistoryEntry } from '$lib/types/task';
-	import ModalWrapper from '$lib/components/ui/modal/ModalWrapper.svelte';
-	import { formatDateRange, formatDisplayDate } from '$lib/utils/format.js';
+	import { ChevronDown, ChevronRight, MessageSquare } from '@lucide/svelte';
+	import * as m from '#lib/paraglide/messages.js';
+	import type { UnifiedTask } from '#lib/server/tasks/UnifiedTaskRegistry.js';
+	import type { TaskHistoryEntry } from '#lib/types/task.js';
+	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
+	import { formatDateRange, formatDisplayDate } from '#lib/utils/format.js';
 
 	interface Props {
 		task: UnifiedTask;

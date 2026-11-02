@@ -20,7 +20,7 @@ vi.mock('./HlsToTsConverter.js', () => ({
 	createHlsToTsStream: createHlsToTsStreamMock
 }));
 
-vi.mock('$lib/server/streaming/url', () => ({
+vi.mock('#lib/server/streaming/url.js', () => ({
 	getBaseUrlAsync: vi.fn().mockResolvedValue('http://cinephage.test')
 }));
 

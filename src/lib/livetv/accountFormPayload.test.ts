@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildAccountRequestBody, buildAccountTestRequestBody } from './accountFormPayload';
-import type { FormData, TestConfig } from '$lib/components/livetv/LiveTvAccountModal.svelte';
+import type { FormData, TestConfig } from '#lib/components/livetv/LiveTvAccountModal.svelte';
 
 const baseFormData: FormData = {
 	name: 'My Portal',
@@ -89,5 +89,30 @@ describe('buildAccountTestRequestBody stalker language', () => {
 			epgUrl: undefined
 		});
 		expect(body.stalkerConfig).toBeUndefined();
+	});
+});
+
+describe('buildAccountRequestBody cinephage-live', () => {
+	it('sends only the common fields (no provider config exists)', () => {
+		const body = buildAccountRequestBody(
+			{ ...baseFormData, providerType: 'cinephage-live', name: 'Cinephage Live Sports' },
+			'add'
+		);
+
+		expect(body).toEqual({
+			name: 'Cinephage Live Sports',
+			providerType: 'cinephage-live',
+			testFirst: false,
+			enabled: true
+		});
+	});
+
+	it('test payload carries only providerType and accountId in edit mode', () => {
+		const body = buildAccountTestRequestBody({
+			providerType: 'cinephage-live',
+			accountId: 'account-1'
+		});
+
+		expect(body).toEqual({ providerType: 'cinephage-live', accountId: 'account-1' });
 	});
 });

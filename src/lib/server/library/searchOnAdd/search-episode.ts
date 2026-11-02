@@ -3,16 +3,17 @@
  */
 
 import { eq } from 'drizzle-orm';
-import { db } from '$lib/server/db/index.js';
-import { series, episodes, episodeFiles } from '$lib/server/db/schema.js';
-import { getIndexerManager } from '$lib/server/indexers/IndexerManager.js';
-import { evaluateIndexerSearchAvailability } from '$lib/server/indexers/search/availability';
-import { grabService } from '$lib/server/downloads/GrabService.js';
-import type { SearchCriteria } from '$lib/server/indexers/types';
+import { db } from '#lib/server/db/index.js';
+import { series, episodes, episodeFiles } from '#lib/server/db/schema.js';
+import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
+import { evaluateIndexerSearchAvailability } from '#lib/server/indexers/search/availability.js';
+import { resolveAllowedIndexerIds } from '#lib/server/indexers/search/profile-indexer-filter.js';
+import { grabService } from '#lib/server/downloads/GrabService.js';
+import type { SearchCriteria } from '#lib/server/indexers/types/index.js';
 import type { SearchForEpisodeParams, GrabResult } from './types.js';
 import type { AltTitleRefresher } from './alt-titles.js';
 import { AUTO_GRAB_MIN_SCORE } from './search-utils.js';
-import { createChildLogger } from '$lib/logging/index.js';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'SearchEpisode', logDomain: 'scans' });
 
@@ -65,11 +66,13 @@ export async function searchForEpisode(
 
 		const indexerManager = await getIndexerManager();
 		const searchSource: 'interactive' | 'automatic' = 'automatic';
+		const allowedIndexerIds = await resolveAllowedIndexerIds(seriesData.scoringProfileId);
 		const indexerAvailability = evaluateIndexerSearchAvailability(
 			await indexerManager.getIndexers(),
 			{
 				searchType: 'tv',
 				searchSource,
+				allowedIndexerIds,
 				scoringProfileId: seriesData.scoringProfileId ?? undefined,
 				getDefinitionCapabilities: (definitionId) =>
 					indexerManager.getDefinitionCapabilities(definitionId)

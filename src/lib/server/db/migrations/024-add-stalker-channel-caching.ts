@@ -1,6 +1,6 @@
 import type { MigrationDefinition } from '../migration-helpers.js';
 import { columnExists, tableExists } from '../migration-helpers.js';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'system' as const });
 // Version 24: Add stalker_categories and stalker_channels tables for channel caching

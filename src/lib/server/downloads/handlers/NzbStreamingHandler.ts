@@ -1,13 +1,13 @@
-import { ReleaseParser } from '$lib/server/indexers/parser/ReleaseParser.js';
-import { getIndexerManager } from '$lib/server/indexers/IndexerManager.js';
-import { getNzbMountManager } from '$lib/server/streaming/nzb/index.js';
-import { strmService, getStreamingBaseUrl } from '$lib/server/streaming/index.js';
-import { getUsenetStreamService } from '$lib/server/streaming/usenet/UsenetStreamService.js';
-import { mediaInfoService } from '$lib/server/library/media-info.js';
-import { getLibraryRelativePath } from '$lib/server/library/media-paths.js';
-import { libraryMediaEvents } from '$lib/server/library/LibraryMediaEvents.js';
-import { createChildLogger } from '$lib/logging/index.js';
-import { db } from '$lib/server/db/index.js';
+import { ReleaseParser } from '#lib/server/indexers/parser/ReleaseParser.js';
+import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
+import { getNzbMountManager } from '#lib/server/streaming/nzb/index.js';
+import { strmService, getStreamingBaseUrl } from '#lib/server/streaming/index.js';
+import { getUsenetStreamService } from '#lib/server/streaming/usenet/UsenetStreamService.js';
+import { mediaInfoService } from '#lib/server/library/media-info.js';
+import { getLibraryRelativePath } from '#lib/server/library/media-paths.js';
+import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
+import { createChildLogger } from '#lib/logging/index.js';
+import { db } from '#lib/server/db/index.js';
 import {
 	movies,
 	movieFiles,
@@ -15,7 +15,7 @@ import {
 	episodes,
 	episodeFiles,
 	downloadHistory
-} from '$lib/server/db/schema.js';
+} from '#lib/server/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { statSync } from 'node:fs';

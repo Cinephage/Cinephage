@@ -2,19 +2,19 @@
  * ChannelCategoryService - Manages user-defined categories for organizing channel lineup.
  */
 
-import { db } from '$lib/server/db';
+import { db } from '#lib/server/db/index.js';
 import {
 	channelCategories,
 	channelLineupItems,
 	type ChannelCategoryRecord
-} from '$lib/server/db/schema';
+} from '#lib/server/db/schema.js';
 import { eq, asc, sql } from 'drizzle-orm';
-import { createChildLogger } from '$lib/logging';
+import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'livetv' as const });
 import { randomUUID } from 'node:crypto';
 import { liveTvEvents } from '../LiveTvEvents';
-import type { ChannelCategory, ChannelCategoryFormData } from '$lib/types/livetv';
+import type { ChannelCategory, ChannelCategoryFormData } from '#lib/types/livetv.js';
 
 /**
  * Convert database record to API response

@@ -1,7 +1,7 @@
 import { basename, dirname, resolve } from 'node:path';
 import { getMediaParseStem } from './media-utils.js';
-import { parseRelease } from '$lib/server/indexers/parser/ReleaseParser.js';
-import type { ParsedRelease } from '$lib/server/indexers/parser/types.js';
+import { parseRelease } from '#lib/server/indexers/parser/ReleaseParser.js';
+import type { ParsedRelease } from '#lib/server/indexers/parser/types.js';
 
 export type SeriesType = 'standard' | 'anime' | 'daily';
 
@@ -195,10 +195,36 @@ export function matchEpisodesByIdentifier<T extends EpisodeRecordLike>(
 			);
 		case 'daily':
 			return episodes.filter((episode) => episode.airDate === identifier.airDate);
-		case 'absolute':
-			return episodes.filter(
+		case 'absolute': {
+			const exact = episodes.filter(
 				(episode) => episode.absoluteEpisodeNumber === identifier.absoluteEpisode
 			);
+			if (exact.length > 0) {
+				return exact;
+			}
+
+			// absoluteEpisodeNumber is not populated by any metadata flow today,
+			// so exact absolute lookups miss. For a series with a single REGULAR
+			// season the absolute number unambiguously names that season's
+			// episode ("Episode 13 - <title>" in a one-season documentary,
+			// absolute numbering in a one-season anime). Season 0 specials must
+			// not make the series look multi-season (Cosmos has 14 of them).
+			const regularSeasons = new Set(
+				episodes
+					.filter((episode) => episode.seasonNumber > 0)
+					.map((episode) => episode.seasonNumber)
+			);
+			if (regularSeasons.size === 1) {
+				const [seasonNumber] = regularSeasons;
+				return episodes.filter(
+					(episode) =>
+						episode.seasonNumber === seasonNumber &&
+						episode.episodeNumber === identifier.absoluteEpisode
+				);
+			}
+
+			return exact;
+		}
 	}
 }
 
