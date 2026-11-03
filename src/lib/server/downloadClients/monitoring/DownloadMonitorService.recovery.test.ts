@@ -63,7 +63,7 @@ function buildTorrentRecoveryPath_spec(params: RecoveryPathParams): string {
 
 // ---------------------------------------------------------------------------
 // Unit tests: path construction
-// These test the spec inline — they always pass and document expected behaviour.
+// These test the spec inline - they always pass and document expected behaviour.
 // ---------------------------------------------------------------------------
 
 describe('buildTorrentRecoveryPath (specification)', () => {
@@ -121,7 +121,7 @@ describe('buildTorrentRecoveryPath (specification)', () => {
 		expect(result).toBe('/downloads/tv/Show.S01E01');
 	});
 
-	it('handles deeply nested output paths — only the last component matters', () => {
+	it('handles deeply nested output paths - only the last component matters', () => {
 		const result = buildTorrentRecoveryPath_spec({
 			outputPath: '/data/torrents/incomplete/subdir/Another.Show.S03E05',
 			downloadPathLocal: '/data/torrents',
@@ -171,12 +171,12 @@ describe('buildTorrentRecoveryPath (specification)', () => {
 //   3. Auto-removes the torrent before the next poll
 //
 // The old code in handleMissingDownload() checks the stored outputPath
-// (which points to .incomplete/ — gone) and marks the download as failed.
+// (which points to .incomplete/ - gone) and marks the download as failed.
 // After the fix, buildTorrentRecoveryPath computes the completed path,
 // stat() confirms files exist, and the download is marked completed.
 // ---------------------------------------------------------------------------
 
-describe('handleMissingDownload torrent recovery — filesystem integration', () => {
+describe('handleMissingDownload torrent recovery - filesystem integration', () => {
 	const testRunId = randomUUID().slice(0, 8);
 	let baseDir: string;
 	let incompletePath: string;
@@ -192,7 +192,7 @@ describe('handleMissingDownload torrent recovery — filesystem integration', ()
 		completedPath = join(baseDir, tvCategory, showName);
 		testFileName = 'test.show.s01e01.1080p.mkv';
 
-		// Create the completed path with a file — qBittorrent moved it here
+		// Create the completed path with a file - qBittorrent moved it here
 		await mkdir(completedPath, { recursive: true });
 		await writeFile(join(completedPath, testFileName), 'fake video content');
 
@@ -270,7 +270,7 @@ describe('handleMissingDownload torrent recovery — filesystem integration', ()
 			category: 'tv'
 		});
 
-		// The recovery path DOES exist — the fix should use this instead.
+		// The recovery path DOES exist - the fix should use this instead.
 		const recoveryStats = await stat(recoveryPath);
 		expect(recoveryStats.isDirectory()).toBe(true);
 	});
@@ -280,7 +280,7 @@ describe('handleMissingDownload torrent recovery — filesystem integration', ()
 // Edge cases for recovery path
 // ---------------------------------------------------------------------------
 
-describe('buildTorrentRecoveryPath — edge cases', () => {
+describe('buildTorrentRecoveryPath - edge cases', () => {
 	it('works when downloadPathLocal contains spaces', () => {
 		const result = buildTorrentRecoveryPath_spec({
 			outputPath: '/My Downloads/.incomplete/Show.Name',
@@ -328,7 +328,7 @@ describe('buildTorrentRecoveryPath — edge cases', () => {
 });
 
 // ---------------------------------------------------------------------------
-// FAILING TEST — FIX REQUIRED
+// FAILING TEST - FIX REQUIRED
 //
 // This dynamic import checks that buildTorrentRecoveryPath is exported from
 // DownloadMonitorService. It will FAIL until the fix extracts this function
@@ -339,7 +339,7 @@ describe('buildTorrentRecoveryPath — edge cases', () => {
 // stat() the recovery path before falling through to the "mark as failed" path.
 // ---------------------------------------------------------------------------
 
-describe('buildTorrentRecoveryPath — export check (currently FAILING)', () => {
+describe('buildTorrentRecoveryPath - export check (currently FAILING)', () => {
 	it('is exported from DownloadMonitorService', async () => {
 		const mod = await import('./DownloadMonitorService');
 		expect(mod).toHaveProperty('buildTorrentRecoveryPath');

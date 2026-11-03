@@ -1,5 +1,5 @@
 ---
-# C411 (Community 411) — French private tracker (native Torznab API)
+# C411 (Community 411) - French private tracker (native Torznab API)
 # Source port of Jackett's c411.yml to Cinephage Cardigann schema.
 # Torznab endpoint: GET /api/torznab?apikey=...&t=search|movie|tvsearch|music|book
 # Cinephage's .Query.Type is basic/movie/tv/music/book, so `t` is remapped below.

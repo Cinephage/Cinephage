@@ -140,7 +140,7 @@
 	let unmatchedCount = $state<number | null>(null);
 
 	// Unmatched total for the stat card. Deliberately lightweight (limit 1:
-	// items discarded, suggestions computed for one row at most) and silent —
+	// items discarded, suggestions computed for one row at most) and silent -
 	// a dead client must never break the cards. Refreshed on mount and
 	// whenever returning to the active tab.
 	async function refreshUnmatchedCount(): Promise<void> {

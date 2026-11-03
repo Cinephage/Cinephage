@@ -173,7 +173,7 @@ class DelayProfileService {
 			if (profile) return profile;
 		}
 
-		// No media-specific profile — use the first enabled profile (global default)
+		// No media-specific profile - use the first enabled profile (global default)
 		const profiles = await db.query.delayProfiles.findMany({
 			where: eq(delayProfiles.enabled, true),
 			orderBy: [delayProfiles.sortOrder],

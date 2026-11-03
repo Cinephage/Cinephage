@@ -6,10 +6,10 @@
  * points invoke these hooks:
  *
  *  (a) `LibrarySchedulerService.runFullScan` / `runFolderScan` after the disk
- *      scan completes — covers scheduled/startup scans and manual/hosted scans
+ *      scan completes - covers scheduled/startup scans and manual/hosted scans
  *      (LibraryJobWorker delegates to these).
  *  (b) `LibraryWatcherService.processPendingChanges` after its incremental scan
- *      — covers filesystem add/change/delete events.
+ *      - covers filesystem add/change/delete events.
  *
  * Both call `scheduleReconcileRootFolder(rootFolderId)`, which enumerates the
  * media items in that root folder and schedules a per-item reconciliation.
@@ -69,8 +69,8 @@ export function scheduleReconcileSeries(seriesId: string): void {
  * reconciliation for each. Never throws.
  *
  * File-row-driven (Sonarr parity: subtitle scans ride on existing media
- * files, not on library rows). Items with no files — wanted-but-missing
- * entries whose folders don't exist yet, or rows whose files were removed —
+ * files, not on library rows). Items with no files - wanted-but-missing
+ * entries whose folders don't exist yet, or rows whose files were removed -
  * have nothing to discover and no folder to read, so they are not scheduled.
  */
 export async function scheduleReconcileRootFolder(rootFolderId: string): Promise<void> {

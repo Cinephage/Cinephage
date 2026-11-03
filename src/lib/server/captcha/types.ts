@@ -119,7 +119,7 @@ export interface SolveRequest {
 	cookies?: Cookie[];
 	/** Proxy override for this request */
 	proxy?: ProxyConfig;
-	/** Abort signal — closes the browser and cancels the solve when fired */
+	/** Abort signal - closes the browser and cancels the solve when fired */
 	signal?: AbortSignal;
 }
 
@@ -139,7 +139,7 @@ export interface BrowserFetchRequest {
 	timeout?: number;
 	/** Proxy override for this request */
 	proxy?: ProxyConfig;
-	/** Abort signal — closes the browser and cancels the fetch when fired */
+	/** Abort signal - closes the browser and cancels the fetch when fired */
 	signal?: AbortSignal;
 	/**
 	 * When true, only the clearance cookies + user agent are needed; the page

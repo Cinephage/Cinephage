@@ -507,7 +507,7 @@ describe('JellyfinStatsProvider', () => {
 	});
 
 	it('should backfill episode tmdbId from parent series when ProviderIds.Tmdb is missing', async () => {
-		// Jellyfin doesn't populate ProviderIds.Tmdb on episodes — only on series.
+		// Jellyfin doesn't populate ProviderIds.Tmdb on episodes - only on series.
 		// The provider should inherit the series tmdbId onto episodes via SeriesId.
 		const seriesItem = makeJellyfinItem({
 			Id: 'series-jf-1',
@@ -523,7 +523,7 @@ describe('JellyfinStatsProvider', () => {
 			SeriesId: 'series-jf-1',
 			ParentIndexNumber: 1,
 			IndexNumber: 1,
-			ProviderIds: { Tvdb: '3415731' } // No Tmdb key — this is the real Jellyfin behavior
+			ProviderIds: { Tvdb: '3415731' } // No Tmdb key - this is the real Jellyfin behavior
 		});
 
 		mockFetch.mockResolvedValueOnce(mockAdminResponse());
@@ -598,7 +598,7 @@ describe('JellyfinStatsProvider', () => {
 	});
 
 	it('should backfill episode tmdbId across different series in one fetch', async () => {
-		// Multiple series with their episodes — verifies the seriesId map correctly
+		// Multiple series with their episodes - verifies the seriesId map correctly
 		// routes each episode to its own parent series
 		const series1 = makeJellyfinItem({
 			Id: 'series-A',

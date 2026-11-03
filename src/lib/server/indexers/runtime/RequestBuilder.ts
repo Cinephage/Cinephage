@@ -174,7 +174,7 @@ export class CategoryMapper {
 	 * Map Newznab category IDs to tracker-specific category IDs.
 	 */
 	mapToTracker(newznabIds: number[]): string[] {
-		// Empty input means explicit open search — return no filter, not the defaults
+		// Empty input means explicit open search - return no filter, not the defaults
 		if (newznabIds.length === 0) return [];
 
 		const trackerIds: string[] = [];
@@ -229,7 +229,7 @@ export class RequestBuilder {
 	private baseUrl: string;
 	/** Supported params per search mode (e.g. 'movie' -> ['q', 'imdbid']) */
 	private supportedParams: Map<string, string[]> = new Map();
-	/** Override for the 'limit' input — set from live indexer caps */
+	/** Override for the 'limit' input - set from live indexer caps */
 	private limitOverride: number | null = null;
 
 	constructor(
@@ -313,7 +313,7 @@ export class RequestBuilder {
 		this.templateEngine.setVariable('.Categories', catTrackerIds);
 		this.templateEngine.setVariable('.Query.IdTokens', this.buildIdTokens(pathCriteria));
 
-		// Get search paths — filtered by content-type, not by the category restriction
+		// Get search paths - filtered by content-type, not by the category restriction
 		const paths = this.getSearchPaths(search);
 		const filteredPaths = this.filterPathsForSearchType(paths, pathCriteria, pathTrackerCats);
 
@@ -336,8 +336,8 @@ export class RequestBuilder {
 	 */
 	private withDefaultCategories(criteria: SearchCriteria): SearchCriteria {
 		// undefined  → fill in content-type defaults
-		// []         → explicit open search (no cat= param) — do not override
-		// [...]      → explicit restriction — do not override
+		// []         → explicit open search (no cat= param) - do not override
+		// [...]      → explicit restriction - do not override
 		if (criteria.categories !== undefined) {
 			return criteria;
 		}
@@ -430,7 +430,7 @@ export class RequestBuilder {
 	 * Prowlarr's search API ignores separate imdbId/tmdbId params and only reads
 	 * IDs embedded in the query as tokens. It also skips a tracker outright when
 	 * asked for an ID the tracker doesn't support, so only IDs confirmed by live
-	 * caps are emitted — and none at all when the supported params are unknown.
+	 * caps are emitted - and none at all when the supported params are unknown.
 	 * Season/episode tokens only accompany an ID; on their own they are not an
 	 * ID search. Returns '' when there is nothing to emit.
 	 */
@@ -848,7 +848,7 @@ export class RequestBuilder {
 		}
 
 		try {
-			// Torznab paths are always empty strings — the base URL IS the endpoint.
+			// Torznab paths are always empty strings - the base URL IS the endpoint.
 			// Jackett URLs like http://host/torznab/all must end with /api, but users often omit it.
 			// Apply the same normalization that the caps-fetch does so searches hit the right endpoint.
 			if (this.definition.id === 'torznab' && !path) {

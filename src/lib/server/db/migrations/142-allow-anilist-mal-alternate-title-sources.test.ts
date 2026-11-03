@@ -57,7 +57,7 @@ afterEach(() => {
 	}
 });
 
-describe('migration v142 — allow anilist/mal alternate title sources', () => {
+describe('migration v142 - allow anilist/mal alternate title sources', () => {
 	it('rebuilds the table so anilist/mal sources pass the source CHECK', () => {
 		const sqlite = createPreMigrationDatabase();
 

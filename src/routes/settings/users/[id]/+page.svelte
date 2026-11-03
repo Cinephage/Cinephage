@@ -233,7 +233,7 @@
 	async function handleRevokeSession(target: { id: string }) {
 		revokingSessionId = target.id;
 		try {
-			// Revocation resolves the session token server-side by id — the
+			// Revocation resolves the session token server-side by id - the
 			// raw token is a live bearer credential and never ships to the
 			// browser.
 			const ok = await runAction(() =>
@@ -444,7 +444,7 @@
 						</div>
 						<div class="flex items-center gap-2">
 							<dt class="w-28 shrink-0 text-base-content/50">{m.users_columnCreated()}</dt>
-							<dd>{data.profile.createdAt ? formatDisplayDate(data.profile.createdAt) : '—'}</dd>
+							<dd>{data.profile.createdAt ? formatDisplayDate(data.profile.createdAt) : '-'}</dd>
 						</div>
 						{#if data.profile.username}
 							<div class="flex items-center gap-2">

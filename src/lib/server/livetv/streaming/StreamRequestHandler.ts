@@ -7,19 +7,19 @@
  *
  * STREAMING MODES:
  *
- * 1. Default (no format param) — Server-side HLS-to-TS conversion
+ * 1. Default (no format param) - Server-side HLS-to-TS conversion
  *    This is the primary mode, used by media servers (Jellyfin/Plex/Emby) when
  *    they tune to a channel from the M3U playlist. Media servers' M3U tuners
- *    expect a continuous MPEG-TS byte stream — they cannot consume HLS playlists.
+ *    expect a continuous MPEG-TS byte stream - they cannot consume HLS playlists.
  *    The HlsToTsConverter fetches HLS playlists from the portal (getting a fresh
  *    play_token via createLink each cycle), downloads segments in sequence order,
  *    and pipes them as one continuous TS stream.
  *
- * 2. HLS mode (format=hls) — Returns the raw HLS playlist with rewritten URLs
+ * 2. HLS mode (format=hls) - Returns the raw HLS playlist with rewritten URLs
  *    Segment URLs are rewritten to go through the segment proxy.
  *    Used by HLS-aware clients that can handle playlist refreshes themselves.
  *
- * 3. Direct TS mode (format=ts) — Resolve URL, fetch, pipe body directly
+ * 3. Direct TS mode (format=ts) - Resolve URL, fetch, pipe body directly
  *    No reconnection logic. When upstream closes (~24s on stalker), response ends.
  *
  * ENDPOINTS:
@@ -220,7 +220,7 @@ export async function handleStreamGet(
 			{
 				const baseUrl = await getBaseUrlAsync(request);
 
-				// Invalidate cache BEFORE fetching — the token is consumed by the fetch
+				// Invalidate cache BEFORE fetching - the token is consumed by the fetch
 				urlCache.invalidate(lineupId);
 
 				const { response, finalUrl } = await streamService.fetchFromUrl(
@@ -395,7 +395,7 @@ export async function handleStreamGet(
 				});
 			}
 
-			// Non-HLS stream (e.g., M3U provider with direct TS URL) — pipe directly
+			// Non-HLS stream (e.g., M3U provider with direct TS URL) - pipe directly
 			logger.info(
 				{
 					lineupId,

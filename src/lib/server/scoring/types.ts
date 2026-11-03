@@ -83,7 +83,7 @@ export interface FormatCondition {
 	/**
 	 * For HDR conditions.
 	 *
-	 * `null` intentionally means "no HDR / SDR" — the format builder stores it
+	 * `null` intentionally means "no HDR / SDR" - the format builder stores it
 	 * that way. The parser's HdrFormat no longer carries null so that detected
 	 * sets stay free of sentinel values.
 	 */

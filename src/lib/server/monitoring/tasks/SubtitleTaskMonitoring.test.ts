@@ -39,7 +39,7 @@ const { searchService, downloadService, providerManager, profileService, missing
 			getEnabledProviders: vi.fn().mockResolvedValue([{ name: 'TestProvider' }])
 		};
 
-		// v2 profile shape (LanguageProfileRow) — the tasks consume the
+		// v2 profile shape (LanguageProfileRow) - the tasks consume the
 		// subtitles requirements directly (no legacy adapter anymore).
 		const defaultProfile = {
 			id: 'profile-1',

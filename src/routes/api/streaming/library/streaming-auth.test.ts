@@ -247,7 +247,7 @@ async function callViaHooks(method: string, apiKey: string | null): Promise<Resp
 	});
 }
 
-describe('streaming library auth — Media Streaming API Key', () => {
+describe('streaming library auth - Media Streaming API Key', () => {
 	it('GET: accepts a valid streaming key and returns 200', async () => {
 		const res = await callViaHooks('GET', STREAMING_KEY);
 		expect(res.status).toBe(200);
@@ -261,7 +261,7 @@ describe('streaming library auth — Media Streaming API Key', () => {
 	});
 });
 
-describe('streaming library auth — Main API Key', () => {
+describe('streaming library auth - Main API Key', () => {
 	it('GET: accepts the main key (full-access fallback) and returns 200', async () => {
 		const res = await callViaHooks('GET', MAIN_KEY);
 		expect(res.status).toBe(200);
@@ -272,7 +272,7 @@ describe('streaming library auth — Main API Key', () => {
 		expect(res.status).toBe(200);
 	});
 
-	it('verifyApiKey is called twice for the main key — streaming check then full-access fallback', async () => {
+	it('verifyApiKey is called twice for the main key - streaming check then full-access fallback', async () => {
 		await callViaHooks('GET', MAIN_KEY);
 		expect(verifyApiKeyMock).toHaveBeenCalledTimes(2);
 		const [first, second] = verifyApiKeyMock.mock.calls;
@@ -281,7 +281,7 @@ describe('streaming library auth — Main API Key', () => {
 	});
 });
 
-describe('streaming library auth — rejected requests', () => {
+describe('streaming library auth - rejected requests', () => {
 	it('GET: returns 401 when no API key is provided', async () => {
 		const res = await callViaHooks('GET', null);
 		expect(res.status).toBe(401);

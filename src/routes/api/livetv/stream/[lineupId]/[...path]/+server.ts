@@ -433,7 +433,7 @@ export const GET: RequestHandler = async ({ params, url, request }) => {
 
 	// The upstream URL arrives as a query parameter, so it must be bound to
 	// what this lineup item legitimately streams. Without this, any holder of
-	// a streaming key — a credential designed to sit in .m3u/.strm files —
+	// a streaming key - a credential designed to sit in .m3u/.strm files -
 	// could use this route as a general-purpose outbound proxy.
 	const requestedHost = (() => {
 		try {
@@ -589,7 +589,7 @@ export const GET: RequestHandler = async ({ params, url, request }) => {
 					try {
 						urlCache.allowHost(lineupId, new URL(match[1]).hostname);
 					} catch {
-						// Malformed line — rewriteHlsPlaylistUrls already ignored it.
+						// Malformed line - rewriteHlsPlaylistUrls already ignored it.
 					}
 				}
 

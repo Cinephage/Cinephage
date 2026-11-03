@@ -1,7 +1,7 @@
 /**
  * Install key revocation
  *
- * POST /api/cinephage/revoke — retire this install's gateway API key at the
+ * POST /api/cinephage/revoke - retire this install's gateway API key at the
  * gateway and drop the stored copy (the installId is kept, so registering
  * again later just works). Admin-gated.
  */

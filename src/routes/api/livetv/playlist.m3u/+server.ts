@@ -96,7 +96,7 @@ function escapeM3UAttribute(value: string): string {
  * Sanitize the playlist display name (the text after the EXTINF comma).
  *
  * This is not a quoted attribute, so a newline would start a new playlist
- * line — letting a provider inject its own entries.
+ * line - letting a provider inject its own entries.
  */
 function sanitizeM3UDisplayName(value: string): string {
 	return value.replace(/[\r\n]+/g, ' ').trim();

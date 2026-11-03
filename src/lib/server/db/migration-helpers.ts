@@ -321,7 +321,7 @@ export function createBetterAuthIndexes(sqlite: Database.Database): void {
  * Runs at auth module init, before betterAuth() is constructed: better-auth
  * >= 1.7 validates the schema on first access and latches a mismatch for the
  * process lifetime, so a pre-1.5 database must be converged before the first
- * auth request — it cannot wait for schema-sync migrations 065/066.
+ * auth request - it cannot wait for schema-sync migrations 065/066.
  */
 export function convergeApikeySchemaToV15(sqlite: Database.Database): void {
 	if (!tableExists(sqlite, 'apikey')) {
@@ -797,7 +797,7 @@ export function applyMigration(sqlite: Database.Database, migration: MigrationDe
 	logger.info(`[SchemaSync] Applying migration v${migration.version}: ${migration.name}`);
 
 	// Migrations perform schema surgery (table rebuilds, drops) that must not fire
-	// FK actions — e.g. dropping a parent table while children reference it would
+	// FK actions - e.g. dropping a parent table while children reference it would
 	// otherwise cascade-delete child rows. PRAGMA foreign_keys is a no-op inside a
 	// transaction, so it is toggled here, before the migration transaction opens,
 	// and restored afterwards.

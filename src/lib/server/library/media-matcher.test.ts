@@ -746,7 +746,7 @@ describe('title matching hardening (issue #513 leftovers)', () => {
 describe('special episode title fallback (AroTheHawk report)', () => {
 	// Episode titles below are LIVE TMDB season-0 data, verified 2026-09-20
 	// (BSG tmdb 1972, Cosmos tmdb 1430). Do not "fix" them to match
-	// expectations — change the matcher instead.
+	// expectations - change the matcher instead.
 
 	it('acceptMatch resolves a title-only special via season 0 title match', async () => {
 		await insertRootFolder('rf-bsg', '/mnt/tv-bsg', 'tv');

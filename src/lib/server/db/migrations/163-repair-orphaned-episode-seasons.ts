@@ -10,7 +10,7 @@ const logger = createChildLogger({ module: 'migration-v163' });
  *
  * EpisodeMonitoredSpecification (fixed alongside this migration) used to
  * treat a broken season link as "default to monitored", silently bypassing
- * whatever the user set on the season — those episodes kept getting
+ * whatever the user set on the season - those episodes kept getting
  * re-searched and re-grabbed no matter how many times they were unmonitored.
  * The specification now fails closed instead, but that leaves existing
  * orphaned links stuck rejecting forever (SEASON_LINK_MISSING) unless they're

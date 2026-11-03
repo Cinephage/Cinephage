@@ -5,7 +5,7 @@
  * pairing (or an admin-mediated assignment as fallback when a server has
  * Quick Connect disabled). The link is an identity mapping only:
  * serverUserId plus a username snapshot. The per-user access token that
- * the Quick Connect exchange returns is read for identity and discarded —
+ * the Quick Connect exchange returns is read for identity and discarded -
  * no user credentials are ever stored.
  *
  * Pairing secrets stay entirely server-side: the client only ever sees the

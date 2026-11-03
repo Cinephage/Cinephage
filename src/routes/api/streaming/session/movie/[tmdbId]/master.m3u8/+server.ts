@@ -5,7 +5,7 @@ import { getBaseUrlAsync } from '#lib/server/streaming/index.js';
  * Legacy .strm entry points end in master.m3u8; the native endpoints dropped
  * the suffix so media servers treat the source as remuxable. The target is
  * built from the configured base URL rather than request.url, which can be a
- * non-routable origin (e.g. https://localhost) behind a proxy — a malformed
+ * non-routable origin (e.g. https://localhost) behind a proxy - a malformed
  * Location fails hard for ffmpeg-based clients like Jellyfin, surfacing as
  * "FFmpeg exited with code 251".
  */

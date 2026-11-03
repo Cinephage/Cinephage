@@ -394,7 +394,7 @@ afterEach(() => {
 	}
 });
 
-describe('migration v140 — language system reset', () => {
+describe('migration v140 - language system reset', () => {
 	it('resets profiles, seeds language_settings, and canonicalizes legacy language data', () => {
 		const sqlite = createLegacyDatabase();
 

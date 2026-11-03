@@ -5,7 +5,7 @@
  * proxy endpoints. Used by both the Live TV stream proxy and the general
  * streaming proxy.
  *
- * The core parsing logic is the same everywhere — only the proxy URL format
+ * The core parsing logic is the same everywhere - only the proxy URL format
  * differs between consumers. Callers provide a `makeProxyUrl` callback that
  * builds the final proxy URL for each rewritten entry.
  */
@@ -120,7 +120,7 @@ export function rewriteHlsPlaylistUrls(
 			}
 		}
 
-		// Track EXTINF lines — the next URL line is always a segment
+		// Track EXTINF lines - the next URL line is always a segment
 		if (trimmed.startsWith('#EXTINF:')) {
 			result.push(line);
 			previousWasExtinf = true;
@@ -134,7 +134,7 @@ export function rewriteHlsPlaylistUrls(
 			continue;
 		}
 
-		// URL line — rewrite it
+		// URL line - rewrite it
 		if (trimmed) {
 			try {
 				const absoluteUrl = resolveHlsUrl(trimmed, base, basePath);
@@ -145,7 +145,7 @@ export function rewriteHlsPlaylistUrls(
 					trimmed.includes('.mp4');
 				result.push(makeProxyUrl(absoluteUrl, isSegment));
 			} catch {
-				// Malformed URL — keep original
+				// Malformed URL - keep original
 				result.push(line);
 			}
 		} else {

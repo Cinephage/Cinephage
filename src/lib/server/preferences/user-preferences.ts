@@ -46,7 +46,7 @@ function schemaFallback(schema: z.ZodType): unknown {
 
 type CacheEntry = { value: unknown; expiresAt: number };
 const CACHE_TTL_MS = 30_000;
-/** Process-lifetime cache keyed `${userId}:${key}` — these rows change rarely. */
+/** Process-lifetime cache keyed `${userId}:${key}` - these rows change rarely. */
 const cache = new Map<string, CacheEntry>();
 
 function cacheKey(userId: string, key: PreferenceKey): string {

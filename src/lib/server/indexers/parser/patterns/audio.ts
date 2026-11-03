@@ -188,7 +188,7 @@ const CHANNEL_PATTERNS: Array<{ pattern: RegExp; channels: AudioChannels }> = [
  * or HDR10+ base layer), and the previous first-match-wins list silently
  * discarded everything after the first hit (#640).
  *
- * Order here is irrelevant to detection — it exists only so `extractHdr` can
+ * Order here is irrelevant to detection - it exists only so `extractHdr` can
  * report the best match. Canonical priority lives in HDR_FORMAT_ORDER.
  */
 const HDR_DETECTORS: Array<{ hdr: HdrFormat; patterns: RegExp[] }> = [

@@ -32,7 +32,7 @@ const MAX_BUCKET_SORT_RANGE = 2_000_000;
 
 /**
  * Compute the offset bounds for alignment.
- * Returns [minOffset, maxOffset] — the range of possible constant offsets.
+ * Returns [minOffset, maxOffset] - the range of possible constant offsets.
  *
  * Port of alass-core `Aligner::get_offsets_bounds`.
  */

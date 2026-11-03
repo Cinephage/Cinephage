@@ -394,7 +394,7 @@
 		return t === 'episode' ? m.reports_type_tv() : m.reports_type_movie();
 	}
 	function mediaTypeLabel(t: string | null | undefined) {
-		return t === 'tv' ? m.reports_type_tv() : t === 'movie' ? m.reports_type_movie() : (t ?? '—');
+		return t === 'tv' ? m.reports_type_tv() : t === 'movie' ? m.reports_type_movie() : (t ?? '-');
 	}
 
 	async function copyRenamingBundle(record: Record<string, unknown>) {
@@ -1295,7 +1295,7 @@
 										<span class="font-medium">{top.title}</span>
 										{#if top.year}<span class="text-base-content/50"> ({top.year})</span>{/if}
 									{:else}
-										<span class="text-base-content/25">—</span>
+										<span class="text-base-content/25">-</span>
 									{/if}
 								</td>
 								<td
@@ -1304,7 +1304,7 @@
 									{#if top}
 										{pct(top.confidence)}
 									{:else}
-										<span class="text-base-content/25">—</span>
+										<span class="text-base-content/25">-</span>
 									{/if}
 								</td>
 								<td class="hidden text-sm whitespace-nowrap text-base-content/50 sm:table-cell">
@@ -1499,7 +1499,7 @@
 															<button
 																class="btn cursor-not-allowed gap-1.5 border border-base-content/10 bg-base-100 text-base-content/30 btn-xs"
 																disabled
-																title="No trace available — this record was not correlated to a log session"
+																title="No trace available - this record was not correlated to a log session"
 																onclick={(e) => e.stopPropagation()}
 															>
 																<ExternalLink class="h-3 w-3" />

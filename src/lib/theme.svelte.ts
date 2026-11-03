@@ -12,7 +12,7 @@ class ThemeStore {
 			try {
 				stored = localStorage.getItem(THEME_KEY) as Theme | null;
 			} catch {
-				// Storage blocked (e.g. Firefox ETP / blocked cookies) — use system theme.
+				// Storage blocked (e.g. Firefox ETP / blocked cookies) - use system theme.
 			}
 			if (stored) {
 				this.current = stored;
@@ -34,7 +34,7 @@ class ThemeStore {
 			try {
 				localStorage.setItem(THEME_KEY, theme);
 			} catch {
-				// Storage blocked — theme still applies for this session.
+				// Storage blocked - theme still applies for this session.
 			}
 		}
 	}

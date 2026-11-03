@@ -249,7 +249,7 @@ export class LibraryJobWorker extends EventEmitter implements BackgroundService 
 				this.jobService.markCompleted(queuedJob.id, { ...totals, phase: 'done' });
 			} else {
 				// Declared job types without a handler must never sit in `running`
-				// forever — fail them visibly so retry/cancel stays available.
+				// forever - fail them visibly so retry/cancel stays available.
 				await this.jobService.markFailed(
 					queuedJob.id,
 					`Unsupported library job type: ${queuedJob.type}`

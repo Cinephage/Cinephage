@@ -44,7 +44,7 @@ export type AddMovieResult =
 
 /**
  * Shared movie-add orchestration. This is the single implementation behind
- * both POST /api/library/movies and request approval — do not duplicate it
+ * both POST /api/library/movies and request approval - do not duplicate it
  * in new call sites. App-level validation errors (root folder, language
  * profile, anime subtype enforcement) throw ValidationError; TMDB failures
  * surface as fetchMovieDetails rejections, same as the HTTP path.

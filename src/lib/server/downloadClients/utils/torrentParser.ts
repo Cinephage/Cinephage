@@ -138,7 +138,7 @@ export async function parseTorrentFile(data: Buffer | Uint8Array): Promise<Torre
  */
 export async function extractInfoHashFromMagnet(magnetUrl: string): Promise<string | undefined> {
 	try {
-		// Try hex format first (40 chars) — sync regex, no need for async
+		// Try hex format first (40 chars) - sync regex, no need for async
 		const hexMatch = magnetUrl.match(/xt=urn:btih:([a-fA-F0-9]{40})/i);
 		if (hexMatch) {
 			return hexMatch[1].toLowerCase();

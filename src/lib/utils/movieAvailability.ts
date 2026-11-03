@@ -180,7 +180,7 @@ export function isMovieAvailableForSearch(
 		releaseDate?: string | null;
 		digitalReleaseDate?: string | null;
 		physicalReleaseDate?: string | null;
-		/** Earliest downloadable (digital/physical/TV) date — covers straight-to-streaming. */
+		/** Earliest downloadable (digital/physical/TV) date - covers straight-to-streaming. */
 		downloadReleaseDate?: string | null;
 		availabilityDelay?: number;
 	},

@@ -213,7 +213,7 @@ export class ReleaseDeduplicator {
 		// This is less reliable but better than nothing.
 		// Include the release year: otherwise "Movie (1994)" and "Movie (2019)"
 		// normalize identically (parenthetical years are stripped) and distinct
-		// films/editions get merged — the survivor may not be the wanted one.
+		// films/editions get merged - the survivor may not be the wanted one.
 		const yearMatch =
 			release.title.match(/\((19|20)\d{2}\)/) ?? release.title.match(/\b(?:19|20)\d{2}\b/);
 		const yearSuffix = yearMatch ? `:${yearMatch[0].replace(/[()]/g, '')}` : '';

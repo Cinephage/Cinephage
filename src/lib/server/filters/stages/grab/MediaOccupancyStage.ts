@@ -12,7 +12,7 @@ export class MediaOccupancyStage implements DecisionStage<GrabDecisionContext> {
 	// authoritative enforcement is the DB-level reservation in
 	// AcquisitionService.createIntent, which applies to manual grabs too.
 	// This stage runs for manual (non-automatic) grabs as well; only an
-	// explicit force skips it — and force never bypasses the reservation.
+	// explicit force skips it - and force never bypasses the reservation.
 	isEnabled(ctx: GrabDecisionContext): boolean {
 		return ctx.options.overrideHardStages !== true;
 	}

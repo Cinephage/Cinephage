@@ -4,7 +4,7 @@
  * Provider configs carry portal credentials (stalker token/password, Xtream
  * password/auth token). API responses never ship them: the edit form omits
  * unchanged secrets and the test endpoint resolves stored values server-side
- * by accountId, so `[REDACTED]` round-trips cleanly. Usernames stay visible —
+ * by accountId, so `[REDACTED]` round-trips cleanly. Usernames stay visible -
  * the edit form prefills them and they double as account identifiers.
  */
 

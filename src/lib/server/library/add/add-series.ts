@@ -80,9 +80,9 @@ async function generateSeriesFolderName(
 
 /**
  * Shared series-add orchestration behind both POST /api/library/series and
- * request approval — the single implementation, not duplicated anywhere.
+ * request approval - the single implementation, not duplicated anywhere.
  *
- * Episode-selection semantics: when `monitoredEpisodes` is provided it wins —
+ * Episode-selection semantics: when `monitoredEpisodes` is provided it wins -
  * exactly the listed episodes are monitored, and a season is monitored iff
  * it contains at least one listed episode. Otherwise the historical
  * monitorType / monitoredSeasons / monitorSpecials logic applies unchanged.

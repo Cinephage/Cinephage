@@ -1,5 +1,5 @@
 ---
-# TR4KER — French semi-private tracker (native Torznab API)
+# TR4KER - French semi-private tracker (native Torznab API)
 # Source port of Jackett's tr4ker.yml to Cinephage Cardigann schema.
 # Torznab endpoint: GET /api/torznab/all?apikey=...&t=search|movie|tvsearch|music|book
 # Cinephage's .Query.Type is basic/movie/tv/music/book, so `t` is remapped below.

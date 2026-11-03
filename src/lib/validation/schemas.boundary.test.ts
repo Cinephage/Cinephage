@@ -6,7 +6,7 @@ import { join } from 'node:path';
  * Guard: `src/lib/validation/schemas.ts` is imported by client-safe modules
  * (`src/lib/api/*`, stores, components). A value import of anything under
  * `#lib/server` would ship server code (e.g. the 65KB generated ISO 639
- * table) to the browser — it only stayed out of the bundle so far because
+ * table) to the browser - it only stayed out of the bundle so far because
  * tree-shaking happened to drop the unused exports. Type-only imports are
  * erased at compile time and are always allowed.
  */

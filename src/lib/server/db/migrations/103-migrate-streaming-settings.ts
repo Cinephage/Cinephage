@@ -13,7 +13,7 @@ const LIBRARY_STREAMING_MODULE_ID = 'library-streaming';
  *
  * After:
  *   - cinephage_api_config.version_override / commit_override hold the manual
- *     version/commit escape-hatch values (null on a fresh install — subsystem
+ *     version/commit escape-hatch values (null on a fresh install - subsystem
  *     auto-detects from APP_VERSION / APP_COMMIT env vars)
  *   - cinephage_api_modules.settings for 'library-streaming' holds
  *     { useHttps: boolean, externalHost: string }
@@ -32,17 +32,17 @@ export const migration_v103: MigrationDefinition = {
 			.get(CINEPHAGE_STREAM_DEFINITION_ID) as { settings: string | null } | undefined;
 
 		if (!row) {
-			// No cinephage-stream indexer row yet — module will seed it on init.
+			// No cinephage-stream indexer row yet - module will seed it on init.
 			return;
 		}
 
 		const rawSettings = row.settings ? JSON.parse(row.settings) : null;
 		if (!rawSettings || typeof rawSettings !== 'object') {
-			// Already migrated (or never set) — nothing to do.
+			// Already migrated (or never set) - nothing to do.
 			return;
 		}
 
-		// Extract values — be tolerant of strings/booleans and empty strings
+		// Extract values - be tolerant of strings/booleans and empty strings
 		// (the old form submitted empty strings for unfilled fields).
 		const versionOverride = pickNonEmptyString(rawSettings.cinephageVersion);
 		const commitOverride = pickNonEmptyString(rawSettings.cinephageCommit);
@@ -78,7 +78,7 @@ export const migration_v103: MigrationDefinition = {
 		// Always write useHttps (it has a meaningful default of false; preserve
 		// the user's previous choice even if it was the default).
 		merged.useHttps = useHttps;
-		// Only set externalHost when we have a real value — otherwise leave
+		// Only set externalHost when we have a real value - otherwise leave
 		// any existing value intact (could have been set by an earlier migration
 		// attempt or by the module itself).
 		if (externalHost) {

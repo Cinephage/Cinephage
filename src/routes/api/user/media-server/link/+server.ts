@@ -1,10 +1,10 @@
 /**
  * Self-service media-server account linking (Jellyfin Quick Connect).
  *
- * GET    /api/user/media-server/link          — own links + linkable servers
- * POST   /api/user/media-server/link          — start pairing { serverId }
- * PUT    /api/user/media-server/link          — poll pairing status { serverId }
- * DELETE /api/user/media-server/link?serverId — unlink own account
+ * GET    /api/user/media-server/link          - own links + linkable servers
+ * POST   /api/user/media-server/link          - start pairing { serverId }
+ * PUT    /api/user/media-server/link          - poll pairing status { serverId }
+ * DELETE /api/user/media-server/link?serverId - unlink own account
  *
  * Auth: any authenticated user; everything is scoped to locals.user.id and
  * pairing secrets never leave the server (the client only sees the code).

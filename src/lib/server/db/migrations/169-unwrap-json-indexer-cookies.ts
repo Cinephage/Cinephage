@@ -6,14 +6,14 @@ import type { MigrationDefinition } from '../migration-helpers.js';
  * `indexer_status.cookies` was declared JSON-mode in drizzle while the
  * schema-161 credential pass (and key rotation) writes plain `cphg1.`
  * envelope strings via raw SQL. Those raw envelopes failed the column's
- * JSON mapping and poisoned every typed read of the table — CookieStore
+ * JSON mapping and poisoned every typed read of the table - CookieStore
  * load/save and status loading all threw, losing health state each boot.
  *
  * Schema 169 declares the column plain text (the raw envelope, like every
  * other scalar secret column). This migration unwraps the rows the old
  * app-side CookieStore path had JSON-encoded (a JSON string containing the
  * envelope) so both conventions converge on the raw envelope. Raw envelope
- * rows — exactly what the migration/rotation writers produced — already
+ * rows - exactly what the migration/rotation writers produced - already
  * match the new convention and pass through untouched.
  */
 export const migration_v169: MigrationDefinition = {

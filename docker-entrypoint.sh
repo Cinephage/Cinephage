@@ -171,7 +171,7 @@ if [ "$(id -u)" = "0" ] && [ -z "${CINEPHAGE_REEXEC:-}" ]; then
   if should_run_recursive_ownership_fix "$TARGET_UID" "$TARGET_GID"; then
     echo "Setting ownership on application directories..."
     chown -R "$TARGET_UID:$TARGET_GID" "$CONFIG_ROOT" 2>/dev/null || true
-    # Exclude node_modules — owned by root, never written to at runtime,
+    # Exclude node_modules - owned by root, never written to at runtime,
     # and walking it on every boot adds meaningful startup latency
     find /app -mindepth 1 -maxdepth 1 -not -name 'node_modules' \
       -exec chown -R "$TARGET_UID:$TARGET_GID" {} +

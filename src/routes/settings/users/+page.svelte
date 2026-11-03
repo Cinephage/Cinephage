@@ -189,7 +189,7 @@
 												: null
 										]
 											.filter(Boolean)
-											.join(' — ')}
+											.join(' - ')}
 									>
 										{m.users_bannedStatus()}
 									</span>

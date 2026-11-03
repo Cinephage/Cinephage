@@ -20,7 +20,7 @@ const logger = createChildLogger({ logDomain: 'system' as const });
  * AES-256-GCM format bound to its record via AAD.
  *
  * The three legacy encrypted surfaces (user API key secrets, media-browser
- * API keys, debrid tokens — `iv:tag:ct` from apiKeyCrypto/debridTokenCrypto)
+ * API keys, debrid tokens - `iv:tag:ct` from apiKeyCrypto/debridTokenCrypto)
  * are decrypted with their legacy modules and re-encoded onto the same
  * envelope so a single rotation path covers everything.
  *
@@ -64,7 +64,7 @@ function reencryptLegacy(
 		if (plaintext === null) {
 			logger.error(
 				{ table: options.table, id: row.id },
-				'[SchemaSync v161] Legacy credential failed to decrypt; row left untouched — ' +
+				'[SchemaSync v161] Legacy credential failed to decrypt; row left untouched - ' +
 					're-enter the credential in settings after startup completes.'
 			);
 			continue;

@@ -119,7 +119,7 @@ afterAll(() => {
 	destroyTestDb(testDb);
 });
 
-describe('EpgService storeEpgData — i18n columns', () => {
+describe('EpgService storeEpgData - i18n columns', () => {
 	it('stores the complete i18n variant lists alongside the plain columns', async () => {
 		await syncWithPrograms([makeProgram()]);
 

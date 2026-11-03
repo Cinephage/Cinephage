@@ -2,7 +2,7 @@
  * Detection of TMDB-generated placeholder episode titles.
  *
  * When an episode has no translation for the requested language, TMDB does
- * not omit the field — it synthesizes one from the "Episode N" template in
+ * not omit the field - it synthesizes one from the "Episode N" template in
  * that language (e.g. German "Folge 4", French "Épisode 3", Russian
  * "Эпизод 9"). Storing such a name destroys the real title. This matcher
  * recognizes the generated templates across languages so callers can fall

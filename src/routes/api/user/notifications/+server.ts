@@ -1,7 +1,7 @@
 /**
  * Own in-app notification feed (request lifecycle events).
  *
- * GET /api/user/notifications — own rows; ?unread=true filters; ?take=N.
+ * GET /api/user/notifications - own rows; ?unread=true filters; ?take=N.
  */
 
 import type { RequestHandler } from './$types.js';

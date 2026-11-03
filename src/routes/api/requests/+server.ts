@@ -1,10 +1,10 @@
 /**
  * User-facing request list + creation.
  *
- * GET  /api/requests — viewers see only their own (server-enforced);
+ * GET  /api/requests - viewers see only their own (server-enforced);
  *                      admins see all. Query: filter, mediaType, take, skip,
  *                      sort (added|modified).
- * POST /api/requests — create a request (any non-banned account; further
+ * POST /api/requests - create a request (any non-banned account; further
  *                      gating lives in RequestService with machine codes).
  *
  * The viewer allowlist in hooks.server.ts admits both verbs for non-admins;
@@ -39,7 +39,7 @@ const FILTER_TO_STATUSES: Record<string, RequestStatus[]> = {
 /**
  * Explicit response DTO: everything the client type declares plus display
  * names. actingUserId / ignoreQuota / episodeCountSnapshot never cross the
- * wire — the row spread that preceded this leaked them to viewers.
+ * wire - the row spread that preceded this leaked them to viewers.
  */
 function toRequestDto(
 	r: RequestRecord,

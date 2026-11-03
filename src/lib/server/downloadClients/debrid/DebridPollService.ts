@@ -213,7 +213,7 @@ export class DebridPollService implements BackgroundService {
 
 	/**
 	 * Ordered audio languages for the item's effective language profile
-	 * (original first when preferOriginal) — drives the debrid movie
+	 * (original first when preferOriginal) - drives the debrid movie
 	 * file-choice tiebreaker. Best-effort: empty when unresolvable.
 	 */
 	private async resolvePreferredAudioLanguages(
@@ -311,7 +311,7 @@ export class DebridPollService implements BackgroundService {
 							codec?: string;
 							hdr?: string;
 						},
-						// The materialized file is on local disk — probe it here
+						// The materialized file is on local disk - probe it here
 						// instead of persisting empty mediaInfo (phase D fix).
 						mediaInfo: await probeLocalMediaInfo(receipt.finalPath)
 					}

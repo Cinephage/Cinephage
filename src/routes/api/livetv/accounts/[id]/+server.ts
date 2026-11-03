@@ -180,7 +180,7 @@ export const PUT: RequestHandler = async (event) => {
 			updates.xstreamConfig.epgUrl = undefined;
 		}
 
-		// A [REDACTED] secret from the edit form means "unchanged" — drop it so
+		// A [REDACTED] secret from the edit form means "unchanged" - drop it so
 		// the merge keeps the stored credential instead of overwriting it with
 		// the marker.
 		if (updates.xstreamConfig?.password === REDACTED_VALUE) {

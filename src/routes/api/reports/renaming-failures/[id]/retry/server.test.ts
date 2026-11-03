@@ -319,7 +319,7 @@ describe('Renaming Failures Retry API', () => {
 			.insert(renamingFailures)
 			.values({
 				id,
-				fileId: randomUUID(), // non-existent fileId — update will be a no-op, not a throw
+				fileId: randomUUID(), // non-existent fileId - update will be a no-op, not a throw
 				fileType: 'movie',
 				sourcePath: '/movies/test/orphan.mkv',
 				intendedPath: '/movies/test/orphan-new.mkv',
@@ -332,7 +332,7 @@ describe('Renaming Failures Retry API', () => {
 		mockAccess.mockResolvedValue(undefined);
 		mockRename.mockResolvedValue(undefined);
 
-		// No movieFile seeded for the fileId — the update runs but affects 0 rows (no throw)
+		// No movieFile seeded for the fileId - the update runs but affects 0 rows (no throw)
 		const { status, data } = await call(id);
 		expect(status).toBe(200);
 		expect((data as any).success).toBe(true);

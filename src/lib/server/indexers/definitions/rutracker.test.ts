@@ -61,7 +61,7 @@ const RUTRACKER_TITLE_FILTERS: FilterBlock[] = [
 	// For testing, we skip this or assume Cyrillic is preserved
 
 	// PHASE 6: Clean up formatting
-	{ name: 're_replace', args: ['^\\s*[-–—]+\\s*/\\s*', ''] },
+	{ name: 're_replace', args: ['^\\s*[-–-]+\\s*/\\s*', ''] },
 	{ name: 're_replace', args: ['^\\s*/\\s*', ''] },
 	{
 		name: 're_replace',

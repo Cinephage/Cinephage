@@ -24,7 +24,7 @@ export const TERMINAL_REQUEST_STATUSES: readonly RequestStatus[] = [
 	'cancelled',
 	'fulfilled',
 	// Failed rows keep their Retry action while they exist, but the owner
-	// (or an admin) may also remove them outright — e.g. requests failed by
+	// (or an admin) may also remove them outright - e.g. requests failed by
 	// media deletion, where the requester re-requests instead of retrying.
 	'failed'
 ] as const;
@@ -95,7 +95,7 @@ export interface RequesterContext {
 	actingUserId?: string | null;
 	/**
 	 * Re-checked at create: the hooks gate routes banned sessions through
-	 * the viewer allowlist, which permits request creation — the service
+	 * the viewer allowlist, which permits request creation - the service
 	 * must fail closed on its own.
 	 */
 	banned?: boolean;

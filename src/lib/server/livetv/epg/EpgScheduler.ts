@@ -376,7 +376,7 @@ export class EpgScheduler extends EventEmitter implements BackgroundService {
 
 	/**
 	 * Update the EPG sync interval (hours). Takes effect on the next
-	 * isSyncDue() evaluation — no restart needed.
+	 * isSyncDue() evaluation - no restart needed.
 	 */
 	setSyncIntervalHours(hours: number): void {
 		if (!Number.isFinite(hours) || hours < 1 || hours > 168) {

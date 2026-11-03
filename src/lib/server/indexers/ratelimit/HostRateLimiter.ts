@@ -48,7 +48,7 @@ function extractHost(url: string): string {
  */
 function getBaseDomain(hostWithPort: string): string {
 	// Separate port suffix (e.g., "example.com:8080" -> host="example.com", suffix=":8080")
-	// Safe for IPv4 — IPv6 would be "[::1]:port" which we don't currently handle.
+	// Safe for IPv4 - IPv6 would be "[::1]:port" which we don't currently handle.
 	let host = hostWithPort;
 	let portSuffix = '';
 	const lastColon = hostWithPort.lastIndexOf(':');
@@ -60,7 +60,7 @@ function getBaseDomain(hostWithPort: string): string {
 		}
 	}
 
-	// IP addresses and localhost — return full host:port, no stripping
+	// IP addresses and localhost - return full host:port, no stripping
 	if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host === 'localhost' || host === '127.0.0.1') {
 		return hostWithPort;
 	}
@@ -285,7 +285,7 @@ export class HostRateLimiter {
 	 * This prevents the thundering-herd bug where all parallel callers see count=0
 	 * when recording is deferred to after the response.
 	 *
-	 * When canProceed is false the request has NOT been recorded — the caller must
+	 * When canProceed is false the request has NOT been recorded - the caller must
 	 * wait the returned waitTimeMs and then record manually before dispatching.
 	 */
 	checkAndRecord(
@@ -295,7 +295,7 @@ export class HostRateLimiter {
 	): { canProceed: boolean; waitTimeMs: number; reason: string } {
 		const hostLimiter = this.getLimiterForUrl(url);
 
-		// Synchronous — no await between check and record
+		// Synchronous - no await between check and record
 		if (indexerLimiter.canProceed() && hostLimiter.canProceed()) {
 			indexerLimiter.recordRequest();
 			hostLimiter.recordRequest();

@@ -155,7 +155,7 @@ class MediaMoveService {
 
 			// The media physically moved roots, which no scan of either root will
 			// fully explain (source scan sees a deletion, destination an addition).
-			// Notify both paths as a rename so Jellyfin/Emby/Plex reconcile —
+			// Notify both paths as a rename so Jellyfin/Emby/Plex reconcile -
 			// Deleted for the old path, Modified for the new one. Different paths,
 			// so both survive the notifier's per-path dedup.
 			const notifier = getMediaBrowserNotifier();

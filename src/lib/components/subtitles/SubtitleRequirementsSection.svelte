@@ -5,7 +5,7 @@
 	 * per-row status and, when editable, add/remove/reorder controls that
 	 * persist a per-item override (null = reset to inherited).
 	 *
-	 * The requirement list is the only thing this edits — audio preference,
+	 * The requirement list is the only thing this edits - audio preference,
 	 * minimum score, and upgrade policy still come from the language profile
 	 * chain (spec: per-item language customization, 2026-09-14).
 	 */
@@ -24,7 +24,7 @@
 		/** Name of the governing profile (for the inherited label). */
 		profileName?: string | null;
 		/** True when probed audio languages contradict the effective audio
-		 * preference (import verifier, phase D) — renders a warning badge. */
+		 * preference (import verifier, phase D) - renders a warning badge. */
 		audioShortfall?: boolean;
 		editable?: boolean;
 		saving?: boolean;
@@ -58,7 +58,7 @@
 
 	$effect(() => {
 		// Re-sync the working copy whenever the server-provided list changes
-		// (after save or prop refresh) — but never clobber in-flight edits.
+		// (after save or prop refresh) - but never clobber in-flight edits.
 		// Reads `requirements` so prop changes re-run this effect.
 		void requirements;
 		if (!dirty) {

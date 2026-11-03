@@ -2,7 +2,7 @@
  * Isolated tests for the avatar proxy routes.
  *
  * The self route serves only the caller's own linked avatar; the admin
- * route serves any account but is admin-gated. The service is mocked —
+ * route serves any account but is admin-gated. The service is mocked -
  * its own suite covers the Jellyfin fetch.
  */
 

@@ -150,7 +150,7 @@ beforeEach(async () => {
 	});
 });
 
-describe('handleMissingDownload — initial recovery (vanished download)', () => {
+describe('handleMissingDownload - initial recovery (vanished download)', () => {
 	it('Tier 1: recovers when the stored outputPath still exists', async () => {
 		const dir = join(baseDir, 'tier1', randomUUID());
 		await mkdir(dir, { recursive: true });
@@ -322,7 +322,7 @@ describe('handleMissingDownload — initial recovery (vanished download)', () =>
 	);
 });
 
-describe('handleMissingDownload — awaiting backoff retry', () => {
+describe('handleMissingDownload - awaiting backoff retry', () => {
 	it('re-checks Tier 1 (stored outputPath) on retry once files appear (delayed sync)', async () => {
 		// The fix: awaiting retry must re-stat the stored outputPath, not only Tier 2.
 		const dir = join(baseDir, 'awaiting-tier1', randomUUID());
@@ -393,7 +393,7 @@ describe('handleMissingDownload — awaiting backoff retry', () => {
 	});
 });
 
-describe('handleMissingDownload — completed grace period (addedAt fallback)', () => {
+describe('handleMissingDownload - completed grace period (addedAt fallback)', () => {
 	it('keeps a recently-added completed item without completedAt inside the grace window', async () => {
 		// No completedAt recorded: the grace period must fall back to addedAt, not Date.now(),
 		// otherwise a genuinely old completion would be treated as fresh forever.
@@ -421,7 +421,7 @@ describe('handleMissingDownload — completed grace period (addedAt fallback)', 
 	});
 });
 
-describe('handleMissingDownload — permanently failed import (importFailed guard)', () => {
+describe('handleMissingDownload - permanently failed import (importFailed guard)', () => {
 	/**
 	 * Regression test for a real report: an item whose import attempts were
 	 * already exhausted (status 'failed', importFailed true) kept getting

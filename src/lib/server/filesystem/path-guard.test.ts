@@ -77,7 +77,7 @@ describe('path-guard', () => {
 		expect(mockGetFolders).toHaveBeenCalledTimes(2);
 	});
 
-	it('confines browsing to common bases and root folders — system paths are denied', async () => {
+	it('confines browsing to common bases and root folders - system paths are denied', async () => {
 		const { isPathAllowed } = await import('./path-guard.js');
 
 		await expect(isPathAllowed('/mnt/media')).resolves.toBe(true);

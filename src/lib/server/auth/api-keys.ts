@@ -33,7 +33,7 @@ export type ManagedApiKeyType = 'main' | 'streaming';
 
 type ApiKeyPermissions = Record<string, string[]>;
 
-/** What auth.api.createApiKey actually returns — inferred, no hand-mirror. */
+/** What auth.api.createApiKey actually returns - inferred, no hand-mirror. */
 type CreatedApiKey = Awaited<ReturnType<typeof auth.api.createApiKey>>;
 
 const DEFAULT_STREAMING_API_KEY_RATE_LIMIT_WINDOW_MS = 1000 * 60 * 60;
@@ -62,7 +62,7 @@ const STREAMING_API_KEY_RATE_LIMIT_MAX = getPositiveIntegerEnv(
 	DEFAULT_STREAMING_API_KEY_RATE_LIMIT_MAX
 );
 
-/** Shape of a key as returned by auth.api.listApiKeys — inferred, no hand-mirror. */
+/** Shape of a key as returned by auth.api.listApiKeys - inferred, no hand-mirror. */
 type ListedApiKey = Awaited<ReturnType<typeof auth.api.listApiKeys>>['apiKeys'][number];
 
 export type RecoverableApiKey = {
@@ -193,7 +193,7 @@ export async function ensureStreamingApiKeyRateLimit(userId?: string): Promise<n
  * Enable or disable every API key owned by an account. The ban flow uses this
  * to neutralize keys (verifyApiKey rejects disabled keys immediately, closing
  * the streaming surface that sessions-based revocation never covered); unbans
- * re-enable them. Idempotent by design — managed keys have no other disabled
+ * re-enable them. Idempotent by design - managed keys have no other disabled
  * state in this app, so re-running on unrelated user updates is a no-op.
  */
 export async function setManagedApiKeysEnabled(userId: string, enabled: boolean): Promise<number> {
@@ -342,7 +342,7 @@ export async function getManagedApiKeysForRequest(headers: Headers): Promise<{
 /**
  * Recover a managed key's plaintext. With userId this returns that account's
  * most recent matching key. Without userId it falls back to the most recent
- * matching key of ANY account — only correct while a single admin exists.
+ * matching key of ANY account - only correct while a single admin exists.
  */
 export async function getRecoverableApiKeyByType(
 	type: ManagedApiKeyType,
@@ -371,7 +371,7 @@ export async function getRecoverableApiKeyByType(
 /**
  * The instance-level streaming key for background jobs with no user session
  * (STRM generation, streaming availability checks). Deterministically the
- * oldest admin's key — the owner account — so multi-user instances always
+ * oldest admin's key - the owner account - so multi-user instances always
  * stamp .strm files and stream checks with the same, stable credential.
  */
 export async function getOwnerStreamingApiKey(): Promise<string | null> {

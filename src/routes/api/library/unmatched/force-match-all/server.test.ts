@@ -88,7 +88,7 @@ describe('Force Match All API', () => {
 		expect((data as any).data).toEqual({ matched: 0, failed: 0, eligible: 0 });
 	});
 
-	it('excludes ambiguous reason — only multiple_matches is eligible', async () => {
+	it('excludes ambiguous reason - only multiple_matches is eligible', async () => {
 		testDb.db
 			.insert(unmatchedFiles)
 			.values([
@@ -205,7 +205,7 @@ describe('Force Match All API', () => {
 			])
 			.run();
 
-		// confidence 0.9 >= 0.9 (default) — should be eligible
+		// confidence 0.9 >= 0.9 (default) - should be eligible
 		const { data } = await postForceMatch();
 		expect((data as any).data.eligible).toBe(1);
 		expect((data as any).data.matched).toBe(1);

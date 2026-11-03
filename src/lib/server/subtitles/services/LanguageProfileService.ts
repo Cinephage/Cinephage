@@ -9,7 +9,7 @@
  * The status/cutoff matching is v2-native: it iterates the ordered
  * `subtitles` requirements through the shared requirement matcher and only
  * counts a requirement satisfied when a matching row's file exists on disk.
- * There is no legacy (v1) preference adapter anymore — consumers read the v2
+ * There is no legacy (v1) preference adapter anymore - consumers read the v2
  * `audio` / `subtitles` objects directly.
  */
 
@@ -479,7 +479,7 @@ export class LanguageProfileService {
 	 * Resolve the subtitle requirements actually in force for an item.
 	 *
 	 * A per-item override (movies/series/episodes.subtitle_requirements_override)
-	 * replaces ONLY the requirement list — the audio/score/upgrade policy still
+	 * replaces ONLY the requirement list - the audio/score/upgrade policy still
 	 * comes from the profile chain, and the cutoff never applies to an override
 	 * (an explicit list means "acquire exactly these"). Without an override the
 	 * requirements are the profile chain's subtitles with full cutoff semantics.
@@ -666,7 +666,7 @@ export class LanguageProfileService {
 		const base = await this.getEffectiveSubtitleRequirements({ seriesId });
 
 		// File-row-driven (arr parity): an episode without a media file is
-		// "missing content", not "missing subtitles" — subtitles attach to
+		// "missing content", not "missing subtitles" - subtitles attach to
 		// files, so file-less episodes never count as missing subtitles.
 		const seriesEpisodes = await db
 			.select({
@@ -812,7 +812,7 @@ export class LanguageProfileService {
 	 * all path resolution happens in a single batched pass
 	 * (resolveStoredSubtitlePaths is N+1-free) and each distinct resolved path
 	 * is stat'ed at most once, so the cost is O(1) queries regardless of
-	 * episode count — safe for 12k-episode libraries, unlike per-episode
+	 * episode count - safe for 12k-episode libraries, unlike per-episode
 	 * getEpisodeSubtitleStatus calls.
 	 *
 	 * Returns an empty map when the series has no effective requirements
@@ -820,11 +820,11 @@ export class LanguageProfileService {
 	 * seeded in the input map always get an entry; requirements beyond the
 	 * cutoff rank are excluded from both counts. `satisfiedViaCutoff` is true
 	 * only when the cutoff-rank requirement itself is satisfied (never for
-	 * override-driven episodes — they have no cutoff).
+	 * override-driven episodes - they have no cutoff).
 	 *
 	 * @param seriesId - The series whose effective requirements govern episodes
 	 * @param subtitlesByEpisode - Subtitle rows grouped by episode id (seed
-	 *   every episode — even with an empty array — to get a counts entry)
+	 *   every episode - even with an empty array - to get a counts entry)
 	 * @param exists - File-existence predicate (defaults to fs.existsSync)
 	 */
 	async getSeriesEpisodeSubtitleCounts(

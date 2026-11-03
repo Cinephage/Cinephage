@@ -1,6 +1,6 @@
 /**
  * Shared validation + handling for the unmatched POST actions (track,
- * enroll). One schema base, one responder — `requests/bulk`-style:
+ * enroll). One schema base, one responder - `requests/bulk`-style:
  * `{ pairs }` in, per-pair outcomes out. URLs stay separate; only the
  * boilerplate is shared.
  */

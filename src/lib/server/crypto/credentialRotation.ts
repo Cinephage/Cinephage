@@ -14,7 +14,7 @@ const logger = createChildLogger({ component: 'CredentialRotation', logDomain: '
  * dedicated key is set) with the old key(s) listed in ENCRYPTION_PREVIOUS_KEYS:
  * decryption resolves old-key envelopes through the fallback list, then every
  * value is re-encrypted under the current key. Values that fail to decrypt
- * (no fallback covers them) are left untouched and reported — re-enter those
+ * (no fallback covers them) are left untouched and reported - re-enter those
  * credentials in settings.
  */
 
@@ -74,7 +74,7 @@ export function rotateCredentials(): CredentialRotationResult {
 
 	// Registry surfaces: decrypt (kid fallback inside decryptCredential), then
 	// re-encrypt. A row whose secret fails to decrypt is left untouched and
-	// reported — never rewritten with the null the failed decrypt produced.
+	// reported - never rewritten with the null the failed decrypt produced.
 	for (const spec of SECRET_FIELD_SPECS) {
 		if (!tableExists(spec.table)) continue;
 

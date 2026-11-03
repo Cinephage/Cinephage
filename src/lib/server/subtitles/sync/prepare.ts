@@ -60,12 +60,12 @@ function mergeOverlapping(spans: TimeSpan[]): { spans: TimeSpan[]; indices: numb
 
 	for (const span of spans) {
 		if (span.start < currentEnd) {
-			// Overlapping — extend current span
+			// Overlapping - extend current span
 			const lastIdx = result.length - 1;
 			currentEnd = Math.max(currentEnd, span.end);
 			result[lastIdx] = { start: result[lastIdx].start, end: currentEnd };
 		} else {
-			// Non-overlapping — start new span
+			// Non-overlapping - start new span
 			result.push({ start: span.start, end: span.end });
 			currentEnd = span.end;
 		}
@@ -90,13 +90,13 @@ function removeZeroLength(spans: TimeSpan[]): { spans: TimeSpan[]; indices: numb
 
 	for (const span of spans) {
 		if (span.end - span.start > 0) {
-			// Non-zero span — maps to its position in the nonZero array
+			// Non-zero span - maps to its position in the nonZero array
 			indices.push(newIndex);
 			newIndex++;
 			continue;
 		}
 
-		// Zero-length span — assign to nearest non-zero neighbor
+		// Zero-length span - assign to nearest non-zero neighbor
 		const prevSpan = newIndex > 0 ? nonZero[newIndex - 1] : null;
 		const nextSpan = newIndex < nonZero.length ? nonZero[newIndex] : null;
 

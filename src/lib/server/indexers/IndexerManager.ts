@@ -119,7 +119,7 @@ export class IndexerManager {
 	/**
 	 * Consult the Cinephage module registry for modules that publish virtual
 	 * indexer rows (capability: providesIndexer). Each such module owns its
-	 * row's lifecycle — we ask it to sync, and it handles idempotent seeding.
+	 * row's lifecycle - we ask it to sync, and it handles idempotent seeding.
 	 */
 	private async syncBuiltinIndexers(): Promise<void> {
 		const registry = getCinephageModuleRegistry();
@@ -367,7 +367,7 @@ export class IndexerManager {
 		// Built-in indexers (e.g. cinephage-stream owned by the CinephageAPI
 		// subsystem's library-streaming module) reject edits to fields the
 		// owning subsystem manages. User can still toggle enable state,
-		// search-mode toggles, and priority — those reflect search behavior
+		// search-mode toggles, and priority - those reflect search behavior
 		// and don't conflict with subsystem-owned config.
 		if (existing.isBuiltIn) {
 			const restricted: Array<keyof typeof updates> = [
@@ -496,7 +496,7 @@ export class IndexerManager {
 
 	/** Delete an indexer */
 	async deleteIndexer(id: string): Promise<void> {
-		// Built-in indexers cannot be deleted — they are owned by a subsystem
+		// Built-in indexers cannot be deleted - they are owned by a subsystem
 		// (e.g. CinephageAPI library-streaming owns cinephage-stream). The
 		// subsystem would re-seed the row on the next init anyway.
 		const existing = await this.getIndexer(id);
@@ -745,7 +745,7 @@ export class IndexerManager {
 			rateLimitPerMinute: row.rateLimitPerMinute ?? null,
 			protocol,
 			// Note: cinephage-stream's settings JSON is no longer used as a
-			// source of truth after migration 103 — its config lives in the
+			// source of truth after migration 103 - its config lives in the
 			// CinephageAPI subsystem tables. The row's settings are null/empty.
 			settings: decryptIndexerSettings(
 				row.id,

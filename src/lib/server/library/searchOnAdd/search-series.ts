@@ -1,5 +1,5 @@
 /**
- * Search On Add — Series search logic
+ * Search On Add - Series search logic
  */
 
 import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';

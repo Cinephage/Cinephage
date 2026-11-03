@@ -139,7 +139,7 @@ function mapTransmissionStatus(
 	//   2 = tracker error  (transient, e.g. HTTP 520, "not registered")
 	//   3 = local error    (persistent, e.g. missing files, bad permissions)
 	// Only code 3 represents a genuinely broken torrent. Tracker errors are
-	// transient and should not override the actual download state — the torrent
+	// transient and should not override the actual download state - the torrent
 	// may still be downloading from peers (DHT/PEX) or simply paused by the user.
 	if (errorCode === 3) {
 		return 'error';
@@ -275,7 +275,7 @@ export class TransmissionClient implements IDownloadClient {
 			canMoveFiles: status !== 'downloading' && status !== 'seeding' && status !== 'queued',
 			// A torrent is only removable once Transmission has stopped it (status
 			// maps to 'completed') AND its seed limits are verifiably met. While it
-			// is still seeding (status 'seeding') it is never removable — isFinished
+			// is still seeding (status 'seeding') it is never removable - isFinished
 			// alone stays true for the entire seeding phase and must not gate removal.
 			canBeRemoved: status === 'completed' && this.hasReachedSeedLimit(torrent, session),
 			errorMessage

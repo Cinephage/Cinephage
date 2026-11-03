@@ -1,5 +1,5 @@
 ---
-# Blutopia (BLU) — Private HD Movies / TV Shows tracker (UNIT3D direct JSON API)
+# Blutopia (BLU) - Private HD Movies / TV Shows tracker (UNIT3D direct JSON API)
 # Source port of Jackett's blutopia-api.yml to Cinephage Cardigann schema.
 # UNIT3D API docs: GET /api/torrents/filter (name, seasonNumber, episodeNumber,
 # imdbId, tmdbId, tvdbId, categories[], free[], sortField, sortDirection, perPage)

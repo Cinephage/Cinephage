@@ -1,5 +1,5 @@
 /**
- * MediaBrowserClient — product detection and shared auth headers.
+ * MediaBrowserClient - product detection and shared auth headers.
  *
  * Connect/test must decide the server type from what the running server
  * reports (ProductName / Plex identity), never from a hardcoded assumption.

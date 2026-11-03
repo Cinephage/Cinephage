@@ -7,7 +7,7 @@
  * `stalledSince` timestamp. When a NEW grab of the same torrent re-activates
  * the row (failed -> stalled recovery), the preserved stale timestamp makes
  * handleStalledDownloads() instantly delete the brand-new torrent from the
- * client — the "add, removed 1 second later" grab loop.
+ * client - the "add, removed 1 second later" grab loop.
  *
  * A re-grab after failure is a NEW download attempt: the stalled clock must
  * restart. The anti-flap rule (keep the clock across metaDL flapping) only
@@ -207,7 +207,7 @@ describe('updateQueueItem stalled clock across failed recovery', () => {
 
 		const updated = await getRow(row.id);
 		// The clock must not carry the old value: a fresh stalled timer either starts
-		// now or is null (to be stamped by the next stalled poll) — never the stale one.
+		// now or is null (to be stamped by the next stalled poll) - never the stale one.
 		expect(updated?.stalledSince).not.toBe(staleTimestamp);
 	});
 

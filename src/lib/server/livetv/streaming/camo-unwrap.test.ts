@@ -156,7 +156,7 @@ function pngWithRaster(
 /**
  * Length-prefixed TIKTIKPX raster content (magic + u32be length + gzip).
  * The live upstream spells the magic `TIKTIKPX` (8 bytes); older experiments
- * used the 7-byte `TIKTIPX` — both must decode.
+ * used the 7-byte `TIKTIPX` - both must decode.
  */
 function tiktipxRasterContent(ts: Uint8Array, magic = 'TIKTIKPX'): Uint8Array {
 	const gz = gzipSync(ts);

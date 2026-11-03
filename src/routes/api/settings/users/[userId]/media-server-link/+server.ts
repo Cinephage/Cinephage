@@ -2,11 +2,11 @@
  * Admin-managed media-server links for a specific account.
  *
  * GET    /api/settings/users/[userId]/media-server-link?serverId=
- *        — current link plus, with serverId, that server's user list for the picker
+ *        - current link plus, with serverId, that server's user list for the picker
  * POST   /api/settings/users/[userId]/media-server-link  { serverId, serverUserId }
- *        — admin-mediated link (server user must exist)
+ *        - admin-mediated link (server user must exist)
  * DELETE /api/settings/users/[userId]/media-server-link?serverId=
- *        — unlink
+ *        - unlink
  *
  * Auth: admin only (enforced here; the settings subtree is also gated by the
  * viewer allowlist in hooks.server.ts).

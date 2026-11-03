@@ -298,7 +298,7 @@ describe('M3uProvider normalizeChannelLookupKey (Unicode-aware)', () => {
 
 	it('produces stable keys for Cyrillic names', () => {
 		// NFKD decomposes й into и + combining breve, which the marks-strip
-		// removes — the same trade-off Latin diacritics always had. The key is
+		// removes - the same trade-off Latin diacritics always had. The key is
 		// stable and non-null, which is what matching needs.
 		expect(normalize('Первый канал')).toBe('первыиканал');
 		expect(normalize('Первый')).toBe(normalize('ПЕРВЫЙ'));
@@ -400,7 +400,7 @@ describe('M3uProvider Unicode channel matching', () => {
 		const programs = await fetchUnicodeEpg();
 
 		// The XMLTV channel id normalizes to null exactly like the M3U tvg-id,
-		// and null keys are never entered into the lookup map — so the two
+		// and null keys are never entered into the lookup map - so the two
 		// punctuation-only names must not cross-match.
 		const punct = programs.filter((program) => program.channelId === 'chan-punct');
 		expect(punct).toHaveLength(0);

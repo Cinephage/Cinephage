@@ -348,7 +348,7 @@ describe('rating-buffer', () => {
 				}
 			];
 			const result = leftToRightMaximum(segs, 0);
-			// Rising segment — the maximum at each point IS the segment itself
+			// Rising segment - the maximum at each point IS the segment itself
 			expect(result.length).toBe(1);
 			expect(result[0].data.ratingInfo.delta).toBe(1);
 		});

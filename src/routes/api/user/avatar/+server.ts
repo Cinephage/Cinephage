@@ -1,6 +1,6 @@
 /**
- * POST   /api/user/avatar — upload the caller's own avatar (multipart/form-data, field "avatar")
- * DELETE /api/user/avatar — remove the caller's own self-uploaded avatar
+ * POST   /api/user/avatar - upload the caller's own avatar (multipart/form-data, field "avatar")
+ * DELETE /api/user/avatar - remove the caller's own self-uploaded avatar
  */
 
 import type { RequestHandler } from './$types.js';

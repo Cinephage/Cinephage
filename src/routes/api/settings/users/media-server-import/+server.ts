@@ -2,10 +2,10 @@
  * Admin bulk import of media server users into local accounts.
  *
  * GET  /api/settings/users/media-server-import?serverId=
- *      — supported-server list plus, with serverId, the classified roster
+ *      - supported-server list plus, with serverId, the classified roster
  *        (importable / linked / disabled / blocked-with-reason)
  * POST /api/settings/users/media-server-import  { serverId, serverUserIds }
- *      — create and link the selected accounts; temporary passwords are
+ *      - create and link the selected accounts; temporary passwords are
  *        generated server-side and returned once, never accepted as input
  *
  * Auth: admin only (enforced here; the settings subtree is also gated by the

@@ -900,7 +900,7 @@ describe('rename transition healing', () => {
 
 		// External-correlation candidate: same basename and byte size as the
 		// missing tracked file under a different folder, and unique by
-		// basename — so the external branch COULD also heal the row, but to a
+		// basename - so the external branch COULD also heal the row, but to a
 		// different path. Only rename_history winning keeps the correct target.
 		const extDir = join(scanRoot, 'Moved Externally (2020)');
 		await mkdir(extDir, { recursive: true });
@@ -981,7 +981,7 @@ describe('title-only special auto-link (season 0, AroTheHawk report)', () => {
 
 	// Episode titles below are LIVE TMDB season-0 data, verified 2026-09-20
 	// (BSG tmdb 1972, Cosmos tmdb 1430). Do not "fix" them to match
-	// expectations — change the matcher instead.
+	// expectations - change the matcher instead.
 
 	it('links "Razor (2007).mp4" to the matching season 0 special', async () => {
 		const db = testDb.db;

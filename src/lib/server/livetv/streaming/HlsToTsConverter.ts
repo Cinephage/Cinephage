@@ -413,7 +413,7 @@ export function createHlsToTsStream(options: HlsToTsConverterOptions): ReadableS
 					// 1. Resolve a fresh stream URL (new play_token via createLink)
 					const resolved = await urlCache.getStream(lineupItemId, tsFallbackActive ? 'ts' : 'hls');
 
-					// 2. Invalidate cache immediately — the token will be consumed by the fetch
+					// 2. Invalidate cache immediately - the token will be consumed by the fetch
 					urlCache.invalidate(lineupItemId);
 
 					// 3. Fetch the HLS playlist (or TS stream in fallback mode)
@@ -455,7 +455,7 @@ export function createHlsToTsStream(options: HlsToTsConverterOptions): ReadableS
 					throw new Error(`Playlist fetch failed: ${response.status}`);
 				}
 
-				// TS fallback mode — pipe response body directly
+				// TS fallback mode - pipe response body directly
 				if (tsFallbackActive) {
 					if (!response.body) {
 						throw new Error('TS stream has no body');
@@ -590,7 +590,7 @@ export function createHlsToTsStream(options: HlsToTsConverterOptions): ReadableS
 						if (cancelled) break;
 						const msg = error instanceof Error ? error.message : String(error);
 						if (error instanceof CamoUnwrapError) {
-							// Unknown container magic — upstream rotates experiments, so
+							// Unknown container magic - upstream rotates experiments, so
 							// surface the leading bytes for triage instead of failing
 							// silently as a generic segment error.
 							logger.warn(
@@ -628,7 +628,7 @@ export function createHlsToTsStream(options: HlsToTsConverterOptions): ReadableS
 				);
 
 				if (newSegmentsDelivered === 0) {
-					// No new segments — playlist hasn't advanced yet, wait a bit
+					// No new segments - playlist hasn't advanced yet, wait a bit
 					logger.debug(
 						{
 							lineupItemId,

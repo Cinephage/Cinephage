@@ -2,7 +2,7 @@
  * Redaction for subtitle provider API responses.
  *
  * `rowToConfig` decrypts the stored credential columns before returning, so
- * every route that serialises a provider must redact — GET, POST and PUT
+ * every route that serialises a provider must redact - GET, POST and PUT
  * alike. The single-provider GET previously spread `...provider`, which
  * returned the decrypted `settings` object (where definition keys like
  * `token` live) even though the top-level fields were redacted.

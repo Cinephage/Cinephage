@@ -8,7 +8,7 @@
  *                 Kept in DATA_DIR/backups/scheduled/ (or user-defined path).
  *
  * Both use better-sqlite3's sqlite.backup() which performs a hot, consistent
- * backup that includes WAL frames — safe to run while the app is live.
+ * backup that includes WAL frames - safe to run while the app is live.
  */
 
 import Database from 'better-sqlite3';
@@ -153,7 +153,7 @@ async function pruneBackups(dir: string, keep: number): Promise<void> {
 					await unlink(p);
 					if (suffix === '') logger.info({ path: p }, '[DbBackup] Pruned old backup');
 				} catch {
-					// companion may not exist — that's fine
+					// companion may not exist - that's fine
 				}
 			}
 		}
@@ -169,7 +169,7 @@ async function pruneBackups(dir: string, keep: number): Promise<void> {
 			try {
 				await stat(dbPath);
 			} catch {
-				// .db is gone — remove the orphaned companion
+				// .db is gone - remove the orphaned companion
 				await unlink(join(dir, entry)).catch(() => {});
 			}
 		}
@@ -227,7 +227,7 @@ export class DbBackupService {
 		if (!ok) {
 			logger.error(
 				{ destPath },
-				'[DbBackup] Pre-update backup failed integrity check — not pruning old backups'
+				'[DbBackup] Pre-update backup failed integrity check - not pruning old backups'
 			);
 			return;
 		}

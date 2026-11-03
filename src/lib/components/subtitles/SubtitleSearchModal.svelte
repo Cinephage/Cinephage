@@ -526,7 +526,7 @@
 			<Info size={16} />
 			<span>
 				{thresholdNotice.total} results, best score {thresholdNotice.score} below threshold
-				{thresholdNotice.threshold ?? '—'}{#if bestRejectedReason === 'requirement'}
+				{thresholdNotice.threshold ?? '-'}{#if bestRejectedReason === 'requirement'}
 					(no result matched the required language/variant){/if}
 			</span>
 		</div>

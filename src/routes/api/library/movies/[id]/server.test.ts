@@ -165,7 +165,7 @@ beforeEach(resetTables);
 
 afterAll(() => destroyTestDb(testDb));
 
-describe('GET /api/library/movies/[id] — effectiveLanguageProfile', () => {
+describe('GET /api/library/movies/[id] - effectiveLanguageProfile', () => {
 	it('returns the effective profile with its source (override > library > default)', async () => {
 		await seedLanguageProfile(LANGUAGE_PROFILE_ID, 'Override');
 		await seedLanguageProfile(OTHER_PROFILE_ID, 'Library');
@@ -229,7 +229,7 @@ describe('GET /api/library/movies/[id] — effectiveLanguageProfile', () => {
 	});
 });
 
-describe('PATCH /api/library/movies/[id] — languageProfileId', () => {
+describe('PATCH /api/library/movies/[id] - languageProfileId', () => {
 	it('assigns an existing profile via the override column', async () => {
 		await seedLanguageProfile(LANGUAGE_PROFILE_ID, 'Assign Me');
 		const movieId = await seedMovie();
@@ -291,7 +291,7 @@ describe('PATCH /api/library/movies/[id] — languageProfileId', () => {
 	});
 });
 
-describe('DELETE /api/library/movies/[id] — unmatch releases client tracking', () => {
+describe('DELETE /api/library/movies/[id] - unmatch releases client tracking', () => {
 	it('file-less unmatch releases indexer-less rows back to Unmatched', async () => {
 		const movieId = await seedMovie();
 		await seedClient();

@@ -17,7 +17,7 @@ interface RequestOptions {
 	auth?: TestAuthMode;
 	/**
 	 * When set alongside auth, locals.session carries this token for the same
-	 * synthetic user — for endpoints that reason about the current session.
+	 * synthetic user - for endpoints that reason about the current session.
 	 */
 	sessionToken?: string;
 }

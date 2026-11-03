@@ -549,7 +549,7 @@ export class M3uProvider implements LiveTvProvider {
 
 				if (playlistContent) {
 					const parsed = this.parseM3u(playlistContent);
-					// The header attribute is third-party content — only honor
+					// The header attribute is third-party content - only honor
 					// it when it parses as an ordinary http(s) URL.
 					epgUrl = resolveHttpUrl(parsed.headerEpgUrl)?.toString() ?? undefined;
 					if (parsed.headerEpgUrl && !epgUrl) {
@@ -948,7 +948,7 @@ export class M3uProvider implements LiveTvProvider {
 	 * Unicode letters and numbers (`\p{L}`/`\p{N}`), so Latin diacritics
 	 * collapse ('Café' → 'cafe') while non-Latin scripts (CJK, Cyrillic,
 	 * Arabic, …) keep a stable key instead of collapsing to nothing. Returns
-	 * null when nothing usable remains — null keys are never entered into or
+	 * null when nothing usable remains - null keys are never entered into or
 	 * looked up in the lookup map, so two punctuation-only names can never
 	 * cross-match.
 	 */

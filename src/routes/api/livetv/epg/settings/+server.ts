@@ -4,7 +4,7 @@
  * GET /api/livetv/epg/settings - Current EPG scheduler settings
  * PUT /api/livetv/epg/settings - Update sync interval and retention
  *
- * Changes take effect on the scheduler's next evaluation — no restart.
+ * Changes take effect on the scheduler's next evaluation - no restart.
  */
 
 import type { RequestHandler } from './$types';

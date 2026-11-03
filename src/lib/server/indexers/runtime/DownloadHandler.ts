@@ -390,7 +390,7 @@ export class DownloadHandler {
 				// This supports the downloadVariables pattern where the selector value
 				// IS the download URL (e.g., nCore: {{ .Variables.fullDownloadUrl }}).
 				// Discriminator: URL-as-selector has no 'attribute' field, since the expanded
-				// template IS the URL — there's no HTML element to extract an attribute from.
+				// template IS the URL - there's no HTML element to extract an attribute from.
 				// All CSS-based selectors have 'attribute: href' to extract the link.
 				if (selector.selector && !selector.attribute) {
 					const expanded = this.templateEngine.expand(selector.selector);

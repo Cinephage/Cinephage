@@ -62,7 +62,7 @@ export function scoreRelease(
 	const detectedFormats = matchFormats(attrs, getActiveFormats());
 
 	// 3. Collapse mutually exclusive formats (HDR) for scoring only. A
-	//    DV+HDR10+ release is one HDR pick, not two — but collapsing the
+	//    DV+HDR10+ release is one HDR pick, not two - but collapsing the
 	//    detected set would hide an HDR10+ requirement or ban.
 	const scoredFormatSelection = applyMutualExclusivity(detectedFormats, profile);
 

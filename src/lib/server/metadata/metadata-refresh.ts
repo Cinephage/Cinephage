@@ -311,18 +311,18 @@ async function refreshEpisodeMetadata(
 
 			// TMDB synthesizes "Episode N"-style names in the requested language
 			// when no real translation exists (e.g. German "Folge 4"). Those are
-			// not translations — fall back to the series' original-language data
+			// not translations - fall back to the series' original-language data
 			// rather than clobbering the real title.
 			const needsFallback = name === undefined || isGeneratedEpisodeTitle(name);
 			let fallbackLanguage: string | null | undefined;
 			if (needsFallback) {
 				if (originalLanguage !== null) {
-					// Refetch in the series' original language — the authoritative
-					// title source — unless the primary request already used it (then
+					// Refetch in the series' original language - the authoritative
+					// title source - unless the primary request already used it (then
 					// the response we have IS the original-language data).
 					fallbackLanguage = originalLanguage === language ? undefined : originalLanguage;
 				} else if (language !== null) {
-					// Original language genuinely unknown — retry unlocalized.
+					// Original language genuinely unknown - retry unlocalized.
 					fallbackLanguage = null;
 				}
 				// language === null && originalLanguage === null: the primary request

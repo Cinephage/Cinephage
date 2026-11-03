@@ -331,7 +331,7 @@ export function fixEncodingIssues(text: string): string {
 		[/â€/g, '"'],
 		[/â€˜/g, "'"],
 		[/â€™/g, "'"],
-		[/â€"/g, '—'],
+		[/â€"/g, '-'],
 		[/â€"/g, '–'],
 		[/â€¦/g, '…'],
 		[/Â /g, ' '],

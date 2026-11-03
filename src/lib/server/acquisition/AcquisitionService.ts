@@ -85,14 +85,14 @@ function isUniqueViolation(error: unknown): boolean {
  * Durable acquisition authority (migration 148).
  *
  * An intent reserves its target slots for the full lifetime of the
- * acquisition — from approval, through download (including stalled,
+ * acquisition - from approval, through download (including stalled,
  * completed-but-unimported, and postprocessing states), until the import
  * finalizer completes it or it fails/cancels. Exclusivity is enforced by
  * the database (partial unique indexes), so it holds across restarts,
  * concurrent tasks, and every entrypoint, unlike the previous in-process
  * locks and queue-status inference.
  *
- * Policy: a slot conflict blocks the grab — manual included — with the
+ * Policy: a slot conflict blocks the grab - manual included - with the
  * conflicting acquisition's details so the caller/UI can surface "already
  * acquiring X" and offer cancel-first. A manual grab may override scoring
  * policy, never slot exclusivity.
@@ -201,7 +201,7 @@ export class AcquisitionService {
 	/**
 	 * Record the canonical release identity once resolved (e.g. torrent info
 	 * hash discovered after metadata fetch). Returns a conflict when the
-	 * identity is already actively reserved by another intent — the caller
+	 * identity is already actively reserved by another intent - the caller
 	 * must abort and release the duplicate acquisition.
 	 */
 	setIdentity(
@@ -221,7 +221,7 @@ export class AcquisitionService {
 				if (existing && existing.id !== intentId) {
 					return { ok: false, conflict: toConflict(existing, 'identity') };
 				}
-				// Our own row already carries this identity — not a conflict.
+				// Our own row already carries this identity - not a conflict.
 				return { ok: true };
 			}
 			throw error;
@@ -392,7 +392,7 @@ export class AcquisitionService {
 				reason:
 					kind === 'identity_conflict'
 						? `Duplicate release "${conflict.releaseTitle}" is already being acquired`
-						: `"${conflict.releaseTitle}" is already being acquired for this slot — wait for it or remove it first`
+						: `"${conflict.releaseTitle}" is already being acquired for this slot - wait for it or remove it first`
 			};
 		}
 
@@ -477,7 +477,7 @@ export class AcquisitionService {
 		return { ...intent, targetKey: activeReservation.targetKey };
 	}
 
-	/** Active reservation keys for a target — the occupancy read path. */
+	/** Active reservation keys for a target - the occupancy read path. */
 	getActiveReservationKeys(keys: string[]): string[] {
 		if (keys.length === 0) return [];
 		const rows = db
@@ -494,7 +494,7 @@ export class AcquisitionService {
 	}
 
 	/**
-	 * Any active reservation on any quality slot of a movie — used when the
+	 * Any active reservation on any quality slot of a movie - used when the
 	 * candidate's bucket is unknown or single-quality, where any active
 	 * acquisition for the movie should block.
 	 */
@@ -531,7 +531,7 @@ export class AcquisitionService {
 		return { ...intent, targetKey: activeReservation.targetKey };
 	}
 
-	/** Count of active intents — for reports/reconciliation diagnostics. */
+	/** Count of active intents - for reports/reconciliation diagnostics. */
 	countActiveIntents(): number {
 		const row = db
 			.select({ count: sql<number>`count(*)` })
@@ -558,7 +558,7 @@ export class AcquisitionService {
 		let reconciled = 0;
 		for (const intent of activeIntents) {
 			// Intents without a queue row yet are in-flight grabs (handler
-			// running); only age them out — 6h means the process died mid-grab.
+			// running); only age them out - 6h means the process died mid-grab.
 			if (!intent.queueId) {
 				const stale = db
 					.select({ createdAt: acquisitionIntents.createdAt })

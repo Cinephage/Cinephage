@@ -64,7 +64,7 @@ describe('POST /api/rename/execute', () => {
 
 	it('returns 409 before body validation when a library scan is in progress', async () => {
 		scanState.scanning = true;
-		// Invalid body ({ fileIds: [] } fails min(1)) — a 400 would mean the scan
+		// Invalid body ({ fileIds: [] } fails min(1)) - a 400 would mean the scan
 		// guard fires after parseBody, so the response must still be 409.
 		const { status, data } = await callHandler(POST, 'POST', { fileIds: [] });
 		expect(status).toBe(409);

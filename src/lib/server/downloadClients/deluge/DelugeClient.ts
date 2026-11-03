@@ -387,7 +387,7 @@ export class DelugeClient implements IDownloadClient {
 			try {
 				await this.ensureCategory(options.category.trim());
 			} catch {
-				// Label plugin is optional — never block the download on it.
+				// Label plugin is optional - never block the download on it.
 			}
 		}
 		if (options.paused) {

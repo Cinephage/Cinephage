@@ -5,8 +5,8 @@ import type { MigrationDefinition } from '../migration-helpers.js';
  *
  * Per-account preference storage (userId + key + JSON value). Preferences
  * are personal by definition, so nothing here falls back to a global row.
- * As part of this migration the one global-but-personal setting — the
- * calendar preferences blob in the shared settings table — moves to the
+ * As part of this migration the one global-but-personal setting - the
+ * calendar preferences blob in the shared settings table - moves to the
  * oldest admin account, since that account was the only one able to write
  * it.
  */

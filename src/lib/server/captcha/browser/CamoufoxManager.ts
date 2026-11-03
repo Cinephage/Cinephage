@@ -46,7 +46,7 @@ function resolveAddonPath(): string | null {
 	try {
 		candidates.push(join(dirname(fileURLToPath(import.meta.url)), 'addon'));
 	} catch {
-		// import.meta.url unavailable (unexpected) — fall through to other candidates
+		// import.meta.url unavailable (unexpected) - fall through to other candidates
 	}
 	// Bare-metal deployments run from a source checkout, where the build output
 	// does not include the addon (Docker copies it to /app/camoufox-addon).

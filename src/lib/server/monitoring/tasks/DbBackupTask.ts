@@ -12,7 +12,7 @@ export async function executeDbBackupTask(ctx: TaskExecutionContext | null): Pro
 
 	const settings = await dbBackupService.getSettings();
 	if (!settings.enabled) {
-		logger.info('[DbBackupTask] Scheduled backups disabled — skipping');
+		logger.info('[DbBackupTask] Scheduled backups disabled - skipping');
 		return { taskType: 'dbBackup', itemsProcessed: 0, itemsGrabbed: 0, errors: 0, executedAt };
 	}
 

@@ -15,7 +15,7 @@ export type ReleaseLineKey =
 	| 'announced';
 
 export interface SmartReleaseLineResult {
-	/** Translation key — render via `formatReleaseLine` from `releaseLineText.ts`. */
+	/** Translation key - render via `formatReleaseLine` from `releaseLineText.ts`. */
 	key: ReleaseLineKey;
 	/** Parameters for the translation (currently only a day count). */
 	params?: { days: number };

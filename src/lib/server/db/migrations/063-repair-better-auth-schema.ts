@@ -131,7 +131,7 @@ export const migration_v063: MigrationDefinition = {
 		ensureColumn(sqlite, 'apikey', 'prefix', '"prefix" text');
 		ensureColumn(sqlite, 'apikey', 'key', '"key" text');
 		// apikey v1.5+ shape: never re-introduce the legacy userId column on a
-		// table already in the new shape — a table with BOTH columns breaks
+		// table already in the new shape - a table with BOTH columns breaks
 		// migration 065's rename. Legacy v1.4 tables keep userId here and 065
 		// performs the data-preserving rename.
 		if (

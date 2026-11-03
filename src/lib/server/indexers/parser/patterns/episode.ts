@@ -372,7 +372,7 @@ const EPISODE_PATTERNS: EpisodePattern[] = [
 		}
 	},
 
-	// Bracketed season/episode notation — common in renamed media libraries:
+	// Bracketed season/episode notation - common in renamed media libraries:
 	// "[3x13]", "[S03E13]", "[s01e25 - s01e26]"
 	// Must precede the unbracketed forms: their trailing lookaheads require
 	// whitespace/separator, which a closing bracket fails (#513).

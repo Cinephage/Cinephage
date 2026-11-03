@@ -213,7 +213,7 @@ export function ensureEncryptedCredential(
 /**
  * Decrypt a credential. Tries the envelope's key id first, then the current
  * key, then the ENCRYPTION_PREVIOUS_KEYS fallback list. Returns null (with a
- * loud, contextual error log) when nothing decrypts — callers fail closed.
+ * loud, contextual error log) when nothing decrypts - callers fail closed.
  */
 export function decryptCredential(
 	purpose: string,
@@ -251,7 +251,7 @@ export function decryptCredential(
 			]).toString('utf8');
 			return plaintext;
 		} catch {
-			// Wrong key, wrong record binding, or corruption — try the next candidate.
+			// Wrong key, wrong record binding, or corruption - try the next candidate.
 		}
 	}
 
@@ -264,7 +264,7 @@ export function decryptCredential(
 			kid: envelope.kid,
 			context
 		},
-		'[CredentialsCrypto] Stored credential failed to decrypt — the value is being dropped. ' +
+		'[CredentialsCrypto] Stored credential failed to decrypt - the value is being dropped. ' +
 			'If the encryption master key was rotated, set ENCRYPTION_PREVIOUS_KEYS or re-enter the credential.'
 	);
 	return null;

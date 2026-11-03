@@ -501,7 +501,7 @@ describe('stale queued-job aging (issue #513)', () => {
 			expect(libraryJobService.getJob(job.id)?.acknowledgedAt).not.toBeNull();
 		});
 
-		it('is idempotent — re-acknowledging an already-dismissed batch changes nothing', () => {
+		it('is idempotent - re-acknowledging an already-dismissed batch changes nothing', () => {
 			const job = libraryJobService.enqueueJob({
 				type: 'manual_import',
 				dedupeKey: 'manual_import:ack-idempotent'
@@ -545,7 +545,7 @@ describe('stale queued-job aging (issue #513)', () => {
 			libraryJobService.markRunning(running.id);
 
 			const result = libraryJobService.cancelBatch(parentJobId);
-			// A running job isn't counted as "cancelled" — it wasn't stopped,
+			// A running job isn't counted as "cancelled" - it wasn't stopped,
 			// only flagged for cooperative cancellation.
 			expect(result.cancelled).toBe(0);
 			const reloaded = libraryJobService.getJob(running.id);

@@ -4,11 +4,11 @@
  * For a release candidate that is about to be grabbed, ask the configured
  * debrid provider(s) for the torrent's cached file list WITHOUT downloading:
  * file names carry language tokens far more reliably than release titles
- * (the Torrentio mechanism — see the 2026-09-15 design spec §2.2). Results
+ * (the Torrentio mechanism - see the 2026-09-15 design spec §2.2). Results
  * are cached by infohash; uncached/unsupported answers are cached as null
  * (negative cache) so repeated grabs don't re-probe.
  *
- * Best-effort by design: any failure returns null and logs at debug — this
+ * Best-effort by design: any failure returns null and logs at debug - this
  * must never block or slow a grab decision beyond the single probe call.
  */
 

@@ -37,7 +37,7 @@ export function resetSetupCompleteCache(): void {
 
 // The first-user bootstrap must be atomic: two parallel sign-up requests on a
 // fresh instance would otherwise both observe "no users" and both insert with
-// role admin. The claim row is the mutex — INSERT OR IGNORE wins once, and a
+// role admin. The claim row is the mutex - INSERT OR IGNORE wins once, and a
 // guarded UPDATE recovers it if the winning request died before its user row
 // landed (fresh-install sign-up failure), so a stuck claim cannot permanently
 // lock the instance out of bootstrap.

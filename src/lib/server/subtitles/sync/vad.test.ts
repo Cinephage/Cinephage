@@ -111,9 +111,9 @@ describe('vad', () => {
 		it('should handle mix of mergeable and non-mergeable segments', () => {
 			const segs: TimeSpan[] = [
 				{ start: 0, end: 100 },
-				{ start: 200, end: 300 }, // gap 100 — merge with first
-				{ start: 1000, end: 1100 }, // gap 700 — new segment
-				{ start: 1200, end: 1300 } // gap 100 — merge with third
+				{ start: 200, end: 300 }, // gap 100 - merge with first
+				{ start: 1000, end: 1100 }, // gap 700 - new segment
+				{ start: 1200, end: 1300 } // gap 100 - merge with third
 			];
 			const result = mergeCloseSegments(segs, 150);
 			expect(result).toHaveLength(2);
@@ -148,7 +148,7 @@ describe('vad', () => {
 		});
 
 		it('should return empty for silence', () => {
-			// All zeros — energy is 0, threshold is 0, no speech
+			// All zeros - energy is 0, threshold is 0, no speech
 			const silence = new Int16Array(16000); // 1 second of silence
 			const result = vadFromSamples(silence, testVadOptions());
 			expect(result).toEqual([]);
@@ -187,7 +187,7 @@ describe('vad', () => {
 		it('should filter short segments below minSpeechDuration', () => {
 			const sampleRate = 16000;
 			const totalSamples = sampleRate * 2; // 2 seconds
-			// Loud segment of ~150ms (2400 samples) — above VAD threshold but
+			// Loud segment of ~150ms (2400 samples) - above VAD threshold but
 			// below minSpeechDurationMs=500. With a large loud region to set a
 			// meaningful mean energy, the short burst should still be filtered.
 			const pcm = generatePcm(totalSamples, [

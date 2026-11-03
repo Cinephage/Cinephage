@@ -114,7 +114,7 @@ afterEach(() => {
 	}
 });
 
-describe('migration v140 — media-server language normalization', () => {
+describe('migration v140 - media-server language normalization', () => {
 	it('adds the nullable raw language columns', () => {
 		const sqlite = createPreMigrationDatabase();
 
@@ -213,7 +213,7 @@ describe('migration v140 — media-server language normalization', () => {
 	});
 });
 
-describe('migration v140 — epg_programs i18n columns (Phase 5 Task 3)', () => {
+describe('migration v140 - epg_programs i18n columns (Phase 5 Task 3)', () => {
 	it('adds the nullable i18n JSON columns', () => {
 		const sqlite = createPreMigrationDatabase();
 

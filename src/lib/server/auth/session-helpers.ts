@@ -36,7 +36,7 @@ async function resolveAccountTheme(userId: string): Promise<string | null> {
 		const preference = await getUserPreference(userId, 'theme');
 		value = typeof preference === 'string' ? preference : null;
 	} catch {
-		// Preference storage unavailable (fresh DB, tests) — fall through to null.
+		// Preference storage unavailable (fresh DB, tests) - fall through to null.
 	}
 
 	themeCache.set(userId, { value, expiresAt: Date.now() + THEME_CACHE_TTL_MS });
@@ -105,7 +105,7 @@ async function touchLastActive(event: Parameters<Handle>[0]['event']): Promise<v
  * Populate event.locals from a resolved Better Auth session.
  *
  * The session objects are assigned as-is (typed by auth.$Infer via
- * AuthSessionUser/AuthSessionRecord) — no shape normalization. Consumers
+ * AuthSessionUser/AuthSessionRecord) - no shape normalization. Consumers
  * only read id/role/language, all plain strings in the inferred shape.
  */
 function setAuthenticatedLocals(

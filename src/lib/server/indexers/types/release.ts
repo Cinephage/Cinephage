@@ -82,7 +82,7 @@ export interface ReleaseResult {
 	/** IMDB ID if known */
 	imdbId?: string;
 	/** Audio languages reported by the indexer as structured data (torznab/newznab
-	 * `language` attr). Title-parsed tokens live on `parsed.languages` instead —
+	 * `language` attr). Title-parsed tokens live on `parsed.languages` instead -
 	 * these are indexer-asserted, not filename-derived. */
 	languages?: string[];
 	/** Subtitle languages reported by the indexer (torznab/newznab `subs` attr) */

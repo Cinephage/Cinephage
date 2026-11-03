@@ -1666,7 +1666,7 @@ describe('SearchOrchestrator.filterByTitleRelevance', () => {
 describe('SearchOrchestrator season-only category filter', () => {
 	// Regression: a season-only TV search reduces the candidate pool to only season packs
 	// (via filterBySeasonEpisode). If those packs are categorized outside the TV range
-	// (Movies/XXX/Other — common on Jackett/Prowlarr and anime trackers), the broad
+	// (Movies/XXX/Other - common on Jackett/Prowlarr and anime trackers), the broad
 	// filterByCategoryMatch guard would reject every pack and yield zero results.
 	// The category guard is therefore skipped for season-only TV searches.
 	const tvCaps = { ...mockCapabilities, categories: new Map([[Category.TV_HD, 'TV/HD']]) };
@@ -1737,7 +1737,7 @@ describe('SearchOrchestrator.filterByCategoryMatch', () => {
 	const orchestrator = new SearchOrchestrator();
 
 	it('rejects a Music-categorized release for a movie search', () => {
-		// Guards against soundtracks masquerading as movies — the original purpose of this filter.
+		// Guards against soundtracks masquerading as movies - the original purpose of this filter.
 		const releases = [
 			createRelease({ title: 'Awesome Movie Soundtrack 2024', categories: [Category.AUDIO_MP3] })
 		];
@@ -2121,10 +2121,10 @@ describe('filterByCategoryMatch ID-first (audit follow-up)', () => {
 	});
 });
 
-describe('filterOutNonVideoArtifacts — title-embedded artifact tokens (audit)', () => {
+describe('filterOutNonVideoArtifacts - title-embedded artifact tokens (audit)', () => {
 	const orchestrator = new SearchOrchestrator();
 
-	it('keeps "Trailer Park Boys" — the token is part of the title, before quality', () => {
+	it('keeps "Trailer Park Boys" - the token is part of the title, before quality', () => {
 		const criteria = createTvCriteria({ query: 'Trailer Park Boys', season: 1, episode: 1 });
 		const releases = [
 			createRelease({ title: 'Trailer.Park.Boys.S01E01.1080p.WEB-DL.DD5.1.H.264' })
@@ -2145,7 +2145,7 @@ describe('filterOutNonVideoArtifacts — title-embedded artifact tokens (audit)'
 	});
 });
 
-describe('SearchOrchestrator.searchIndexer — quota-exceeded detection', () => {
+describe('SearchOrchestrator.searchIndexer - quota-exceeded detection', () => {
 	it('disables the indexer via recordQuotaExceeded instead of the generic failure path', async () => {
 		const orchestrator = new SearchOrchestrator();
 		const api = privateApi(orchestrator);

@@ -4,7 +4,7 @@
  * These schemas validate request bodies against server-side registries: the
  * subtitle provider implementation list (`#lib/server/subtitles/types.js`) and
  * the ISO 639 language normalizer (`#lib/server/languages/normalize.js`). They
- * must never be imported as values from client-safe modules — that would ship
+ * must never be imported as values from client-safe modules - that would ship
  * the generated ISO table to the browser. Client code consumes their inferred
  * types via `import type`, which is erased at compile time.
  */

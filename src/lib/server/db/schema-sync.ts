@@ -152,19 +152,19 @@ import {
  * Version 145: Drop deprecated per-item adaptive subtitle columns (movies/episodes failed_subtitle_attempts, first_subtitle_search_at)
  * Version 146: Per-item subtitle requirement overrides on movies/series/episodes + inheritance repair
  * Version 147: language_shortfall flags on movies/series (audio-preference verification)
- * Version 148: Acquisition intents + reservations — durable acquisition authority and slot exclusivity
- * Version 149: Import operations journal — durable multi-step import record for recovery and reports
+ * Version 148: Acquisition intents + reservations - durable acquisition authority and slot exclusivity
+ * Version 149: Import operations journal - durable multi-step import record for recovery and reports
  * Version 150: movie_files (movie_id, relative_path) unique index (legacy duplicates deduped)
- * Version 151: Language-system column guards — idempotent ALTERs for the m140-146 columns on legacy databases (episodes.wants_subtitles_override et al.)
+ * Version 151: Language-system column guards - idempotent ALTERs for the m140-146 columns on legacy databases (episodes.wants_subtitles_override et al.)
  * Version 152: Drop the legacy subtitle_settings key-value table (superseded by language_settings + subtitle_providers)
  * Version 153: Backfill remove_after_import = 1 for existing non-debrid download clients
- * Version 154: library_jobs.acknowledged_at — dismiss failed background-import batches from Activity
- * Version 155: indexers.rate_limit_per_minute — manual per-indexer request cap override
- * Version 156: indexer_status.disabled_reason — distinguish quota_exhausted from consecutive-failure disables
- * Version 157: user_media_server_links — Cinephage account <-> media-server identity pairing (no tokens)
+ * Version 154: library_jobs.acknowledged_at - dismiss failed background-import batches from Activity
+ * Version 155: indexers.rate_limit_per_minute - manual per-indexer request cap override
+ * Version 156: indexer_status.disabled_reason - distinguish quota_exhausted from consecutive-failure disables
+ * Version 157: user_media_server_links - Cinephage account <-> media-server identity pairing (no tokens)
  * Version 158: user_preferences table; global calendar preferences migrated to the first admin
  * Version 159: Encrypt media_browser_servers.api_key at rest (AES-256-GCM under BETTER_AUTH_SECRET)
- * Version 160: Request system foundation — requests, user_request_settings, request_notifications tables
+ * Version 160: Request system foundation - requests, user_request_settings, request_notifications tables
  * Version 161: Encrypt remaining plaintext credentials at rest (secret-field registry walk) and re-encode
  *   the legacy iv:tag:ct surfaces (user API key secrets, media-browser keys, debrid tokens) onto the
  *   versioned cphg1 envelope
@@ -179,13 +179,13 @@ import {
  * Version 165: Add `origin` column to `download_queue` (marks Unmatched-tab
  *   track/enroll rows so unmatching a movie/series can't mistake a legitimate
  *   arr_push-pushed grab for one of its own rows).
- * Version 166: scoring_profiles.allowed_indexers — per-profile indexer allowlist
+ * Version 166: scoring_profiles.allowed_indexers - per-profile indexer allowlist
  *   (NULL = all indexers, preserving pre-existing behavior).
- * Version 167: livetv_channels.cinephage_data — Cinephage Live channel metadata
+ * Version 167: livetv_channels.cinephage_data - Cinephage Live channel metadata
  *   (taxonomy category + country code from the Cinephage API).
  * Version 168: cinephage_api_config per-install gateway key columns
  *   (install_id / api_key / api_key_prefix / registration_email).
- * Version 169: indexer_status.cookies — unwrap the JSON-encoded credential
+ * Version 169: indexer_status.cookies - unwrap the JSON-encoded credential
  *   envelopes the old JSON-mode app path stored; the column is plain text
  *   (raw `cphg1.` envelope) from here on.
  */
@@ -873,7 +873,7 @@ const TABLE_DEFINITIONS: string[] = [
 		"updated_at" text
 	)`,
 
-	// Acquisition Intents + Reservations (v148) — durable acquisition
+	// Acquisition Intents + Reservations (v148) - durable acquisition
 	// authority and per-slot exclusivity. See schema.ts docs.
 	`CREATE TABLE IF NOT EXISTS "acquisition_intents" (
 		"id" text PRIMARY KEY NOT NULL,

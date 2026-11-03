@@ -9,7 +9,7 @@ import type { StorageInsightRule, RuleContext, InsightFinding } from '../types.j
  * files at the SAME resolution (e.g. two 1080p encodes) that the user may want to
  * clean up.
  *
- * Episode duplicate detection is deferred — it requires comparing
+ * Episode duplicate detection is deferred - it requires comparing
  * episodeIds JSON arrays across episode_files to find overlapping
  * episode coverage, which is non-trivial in SQLite.
  */

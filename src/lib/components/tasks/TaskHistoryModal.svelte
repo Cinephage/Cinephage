@@ -16,7 +16,7 @@
 	let expandedResultErrors = $state<Record<string, boolean>>({});
 
 	function formatDuration(startedAt: string, completedAt: string | null): string {
-		if (!completedAt) return '—';
+		if (!completedAt) return '-';
 		return formatDateRange(new Date(startedAt), new Date(completedAt));
 	}
 
@@ -207,7 +207,7 @@
 											{/if}
 										</div>
 									{:else}
-										<span class="text-base-content/40">—</span>
+										<span class="text-base-content/40">-</span>
 									{/if}
 								</td>
 							</tr>

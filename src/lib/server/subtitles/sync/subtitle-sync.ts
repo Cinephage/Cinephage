@@ -1,5 +1,5 @@
 /**
- * Subtitle Sync Engine — High-Level Orchestrator
+ * Subtitle Sync Engine - High-Level Orchestrator
  *
  * Provides the main entry point for subtitle synchronization.
  * Handles the full pipeline:
@@ -130,7 +130,7 @@ export async function syncSubtitles(options: SyncOptions): Promise<SyncResult> {
 		}
 
 		// Step 5: Run alignment
-		// Force nosplit mode for video references — split-mode DP with dense VAD
+		// Force nosplit mode for video references - split-mode DP with dense VAD
 		// segments causes excessive memory usage and produces worse results.
 		// This matches alass's default behavior for audio-based alignment.
 		const effectiveNoSplits = noSplits || options.referenceType === 'video';

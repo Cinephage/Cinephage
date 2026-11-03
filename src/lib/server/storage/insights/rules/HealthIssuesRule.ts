@@ -17,7 +17,7 @@ export class HealthIssuesRule implements StorageInsightRule {
 		// Load all root folders
 		const folders = ctx.db.select().from(rootFolders).all();
 
-		// 1. Inaccessible root folders (critical) — path doesn't exist or not readable
+		// 1. Inaccessible root folders (critical) - path doesn't exist or not readable
 		const inaccessibleFolders = folders.filter((f) => !existsSync(f.path));
 		if (inaccessibleFolders.length > 0) {
 			findings.push({
@@ -34,7 +34,7 @@ export class HealthIssuesRule implements StorageInsightRule {
 			});
 		}
 
-		// 2. Read-only root folders (info) — informational, not an error
+		// 2. Read-only root folders (info) - informational, not an error
 		const readOnlyFolders = folders.filter((f) => f.readOnly);
 		if (readOnlyFolders.length > 0) {
 			findings.push({
@@ -48,7 +48,7 @@ export class HealthIssuesRule implements StorageInsightRule {
 			});
 		}
 
-		// 3. Root folders needing scan (warning) — no completed scan history.
+		// 3. Root folders needing scan (warning) - no completed scan history.
 		// Scoped to one row per root folder (the most recent scan) via a
 		// correlated MAX(startedAt) subquery, instead of loading the entire
 		// scan-history table.

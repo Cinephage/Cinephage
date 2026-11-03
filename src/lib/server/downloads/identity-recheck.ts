@@ -13,12 +13,12 @@ export interface ResolvedIdentityRecheck {
  *
  * The grab pipeline runs before the canonical torrent info hash is
  * resolvable for .torrent download URLs (only magnet links carry the hash
- * upfront). Handlers fetch the torrent metainfo during resolution — this
+ * upfront). Handlers fetch the torrent metainfo during resolution - this
  * check runs at that point, BEFORE the release is submitted to the download
  * client, and re-verifies the now-known hash against:
  *
  *   1. active acquisition intents (including this one, via setIdentity's
- *      unique-active-identity enforcement — catches cross-target dupes)
+ *      unique-active-identity enforcement - catches cross-target dupes)
  *   2. the download queue (any non-terminal row)
  *   3. imported download history
  *
@@ -43,7 +43,7 @@ export async function recheckResolvedIdentity(
 	}
 
 	// 2. Queue rows (covers pre-migration rows without intents). Any
-	//    non-terminal row with this hash is an active duplicate — including
+	//    non-terminal row with this hash is an active duplicate - including
 	//    completed-but-unimported and stalled downloads.
 	const existingQueue = await db
 		.select({ id: downloadQueue.id })

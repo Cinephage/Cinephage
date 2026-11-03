@@ -126,7 +126,7 @@ export class ReadyProviderFileMapper {
 
 	/**
 	 * Pick the movie file: largest eligible video wins, with a language
-	 * tiebreaker among near-equal sizes — packs often carry per-language
+	 * tiebreaker among near-equal sizes - packs often carry per-language
 	 * video variants of the same size, and file names are the only pre-download
 	 * signal for which is which.
 	 */

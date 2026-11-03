@@ -66,7 +66,7 @@ describe('storeLibraryReturnTo + getLibraryDetailBackHref', () => {
 		);
 	});
 
-	it('never puts returnTo in the URL — nothing to inspect on the target itself', () => {
+	it('never puts returnTo in the URL - nothing to inspect on the target itself', () => {
 		// storeLibraryReturnTo returns a boolean, not a rewritten URL; the
 		// navigation target passed in is never touched.
 		const target = '/library/tv/series-id';
@@ -103,7 +103,7 @@ describe('storeLibraryReturnTo + getLibraryDetailBackHref', () => {
 		);
 	});
 
-	it('is scoped per section — recording one does not affect the other', () => {
+	it('is scoped per section - recording one does not affect the other', () => {
 		storeLibraryReturnTo('/library/movies', '?monitored=true', '/library/movie/movie-id');
 		expect(getLibraryDetailBackHref('movies', '/library/movies')).toBe(
 			'/library/movies?monitored=true'

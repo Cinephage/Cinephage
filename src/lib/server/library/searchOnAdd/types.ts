@@ -1,5 +1,5 @@
 /**
- * Search On Add — shared types
+ * Search On Add - shared types
  */
 
 import type {

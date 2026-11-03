@@ -64,10 +64,10 @@ const UPCOMING_KIND: Record<HomeMedium, ReleaseStageKind> = {
  *
  * Classification is driven purely by the release DATES, never by TMDB's
  * `status` field. TMDB reports `status: "Released"` as soon as a film opens in
- * theaters, which says nothing about home/digital availability — so a movie is
+ * theaters, which says nothing about home/digital availability - so a movie is
  * only "Available" when it has a past digital, physical, or TV/streaming
  * release date. A movie whose theatrical date is past but has no home-release
- * date is "In Theaters" — until enough time has passed
+ * date is "In Theaters" - until enough time has passed
  * ({@link RELEASE.THEATRICAL_ONLY_TO_RELEASED_DAYS}, ~3 years), after which it
  * is presumed generally "Released" (covers older catalog titles TMDB never gave
  * granular digital/physical dates).

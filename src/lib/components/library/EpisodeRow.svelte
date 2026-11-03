@@ -463,7 +463,7 @@
 					{#if episode.file?.size}
 						{formatBytes(episode.file.size)}
 					{:else}
-						—
+						-
 					{/if}
 				</span>
 			</div>
@@ -624,7 +624,7 @@
 		{#if episode.file?.size}
 			{formatBytes(episode.file.size)}
 		{:else}
-			—
+			-
 		{/if}
 	</td>
 

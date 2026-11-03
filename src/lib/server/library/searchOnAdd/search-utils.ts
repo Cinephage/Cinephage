@@ -1,5 +1,5 @@
 /**
- * Search On Add — shared utilities and constants
+ * Search On Add - shared utilities and constants
  */
 
 import {

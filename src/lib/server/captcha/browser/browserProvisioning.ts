@@ -28,7 +28,7 @@ const FETCH_TIMEOUT_MS = 30 * 60_000;
  *
  * `pairedInstalled` says whether the build the launcher pins is present, and
  * `pinTag` is that pin ("v156.0.1-beta.34") or null in a dev checkout that
- * pins nothing — there the launcher's own on-demand install is good enough, so
+ * pins nothing - there the launcher's own on-demand install is good enough, so
  * do not churn. Checking the pinned build rather than the active build means a
  * deliberate `camoufox set` choice is left alone.
  */

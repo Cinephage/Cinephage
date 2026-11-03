@@ -2,10 +2,10 @@
  * Integration tests for the two-tier stalled download policy in
  * DownloadMonitorService.handleStalledDownloads.
  *
- * Policy (2026-08-27 audit follow-up): stalling is not inherently bad —
+ * Policy (2026-08-27 audit follow-up): stalling is not inherently bad -
  * torrents routinely resume when a seeder returns. Two tiers:
  * - Low progress (at/below threshold): removed after a LONG window (3 days,
- *   was 1 hour) — these never got off the ground.
+ *   was 1 hour) - these never got off the ground.
  * - Meaningful progress (above threshold): previously never reaped (zombie
  *   accumulation); now removed after an even longer window (14 days) so the
  *   system eventually tries a different release.

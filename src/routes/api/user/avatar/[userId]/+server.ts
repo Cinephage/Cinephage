@@ -2,11 +2,11 @@
  * GET /api/user/avatar/[userId]
  *
  * Serves a self-uploaded avatar for any authenticated account (not just the
- * owner) — like the Jellyfin avatar proxy, this can render in shared UI
+ * owner) - like the Jellyfin avatar proxy, this can render in shared UI
  * (e.g. admin user management, session lists). Every /api/* route requires
  * auth by default in this app (see hooks.server.ts); this is listed in the
  * viewer allowlist there (GET-only) the same way the Jellyfin proxy is.
- * 404 when the account has no self-uploaded avatar — the UI renders the
+ * 404 when the account has no self-uploaded avatar - the UI renders the
  * initial-letter fallback in that case.
  */
 

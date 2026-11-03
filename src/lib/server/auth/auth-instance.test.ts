@@ -56,7 +56,7 @@ afterAll(() => {
 	harness.cleanup();
 });
 
-describe('real Better Auth instance — setup and single-admin policy', () => {
+describe('real Better Auth instance - setup and single-admin policy', () => {
 	it('signs up the first user as the sole admin via /sign-up/email', async () => {
 		const response = await harness.authRequest('/sign-up/email', {
 			method: 'POST',
@@ -116,7 +116,7 @@ describe('real Better Auth instance — setup and single-admin policy', () => {
 	});
 });
 
-describe('real Better Auth instance — username sign-in and sessions', () => {
+describe('real Better Auth instance - username sign-in and sessions', () => {
 	it('issues a session cookie on successful username sign-in', async () => {
 		const response = await harness.authRequest('/sign-in/username', {
 			method: 'POST',
@@ -146,7 +146,7 @@ describe('real Better Auth instance — username sign-in and sessions', () => {
 	});
 });
 
-describe('real Better Auth instance — managed API keys', () => {
+describe('real Better Auth instance - managed API keys', () => {
 	it('creates main and streaming keys that round-trip through encrypted recovery', async () => {
 		const signIn = await harness.authRequest('/sign-in/username', {
 			method: 'POST',
@@ -228,7 +228,7 @@ describe('real Better Auth instance — managed API keys', () => {
 
 		// Sign-out deletes the session row and clears the cookie. With the
 		// cookie cache disabled, a replayed old cookie value resolves to
-		// nothing — revocation is immediate.
+		// nothing - revocation is immediate.
 		const rows = db.select().from(session).where(eq(session.token, token)).all();
 		expect(rows).toHaveLength(0);
 
@@ -237,7 +237,7 @@ describe('real Better Auth instance — managed API keys', () => {
 	});
 });
 
-describe('real Better Auth instance — multi-user readiness', () => {
+describe('real Better Auth instance - multi-user readiness', () => {
 	it('admin plugin createUser adds a user-role account once setup is complete', async () => {
 		const signIn = await harness.authRequest('/sign-in/username', {
 			method: 'POST',
@@ -331,7 +331,7 @@ describe('real Better Auth instance — multi-user readiness', () => {
 	});
 });
 
-describe('real Better Auth instance — last-admin guards', () => {
+describe('real Better Auth instance - last-admin guards', () => {
 	// The admin plugin's user endpoints read the request event internally.
 	function adminCall() {
 		return harness.makeEvent('POST', '/api/auth/admin/set-role').event;
@@ -445,7 +445,7 @@ describe('real Better Auth instance — last-admin guards', () => {
 	});
 });
 
-describe('real Better Auth instance — ban lifecycle', () => {
+describe('real Better Auth instance - ban lifecycle', () => {
 	it('a banned viewer cannot sign in until unbanned', async () => {
 		const signIn = await harness.authRequest('/sign-in/username', {
 			method: 'POST',
@@ -546,7 +546,7 @@ describe('real Better Auth instance — ban lifecycle', () => {
 	});
 });
 
-describe('real Better Auth instance — adversarial escalation matrix', () => {
+describe('real Better Auth instance - adversarial escalation matrix', () => {
 	// Every test here signs in as the viewer and tries to become someone or
 	// something they are not. State: secondadmin (admin) + testviewer (viewer).
 	let viewerHeaders: Headers;
@@ -688,7 +688,7 @@ describe('real Better Auth instance — adversarial escalation matrix', () => {
 				body: JSON.stringify({ username })
 			});
 			// 400 from the username plugin's own validation, 422 from the
-			// backstop hook in auth.ts — both must leave the row unchanged.
+			// backstop hook in auth.ts - both must leave the row unchanged.
 			expect([400, 422], username).toContain(response.status);
 		}
 		// The viewer's username is unchanged.

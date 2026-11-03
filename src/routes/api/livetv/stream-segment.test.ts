@@ -34,7 +34,7 @@ describe('Live TV segment proxy', () => {
 	});
 
 	it('passes through a TS response body without buffering when the path looks like HLS', async () => {
-		// Two well-formed TS packets — the smallest body the camo sniff chain
+		// Two well-formed TS packets - the smallest body the camo sniff chain
 		// accepts as valid MPEG-TS and streams through unmodified.
 		const segment = new Uint8Array(376);
 		for (let packet = 0; packet < 2; packet++) {

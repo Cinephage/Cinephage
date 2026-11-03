@@ -93,7 +93,7 @@
 	});
 
 	// Re-sync the drafts when the loader data changes (navigation, profile CRUD
-	// invalidations) — but never clobber unsaved edits, and never clobber the
+	// invalidations) - but never clobber unsaved edits, and never clobber the
 	// drafts right after our own save: dirtyState flipping back to false then
 	// must not re-apply the (stale) loader prop over the saved response.
 	let lastSyncedSettings: LanguageSettingsValues | null = null;

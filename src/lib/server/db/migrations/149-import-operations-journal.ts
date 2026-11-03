@@ -5,7 +5,7 @@ import { createChildLogger } from '#lib/logging/index.js';
 const logger = createChildLogger({ logDomain: 'system' as const });
 
 /**
- * Version 149: Import operations journal — durable record of each multi-step
+ * Version 149: Import operations journal - durable record of each multi-step
  * import (transfer → register → retire old files → complete) so startup
  * recovery resumes or compensates deterministically. See schema.ts docs.
  *

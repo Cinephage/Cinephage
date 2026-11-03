@@ -79,7 +79,7 @@ afterEach(() => {
 	}
 });
 
-describe('migration v151 — language system column guards', () => {
+describe('migration v151 - language system column guards', () => {
 	it('adds the episode tri-state gate and the other missing language columns', () => {
 		const sqlite = createPreMigrationDatabase();
 

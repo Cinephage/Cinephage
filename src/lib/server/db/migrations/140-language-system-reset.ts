@@ -696,7 +696,7 @@ export const migration_v140: MigrationDefinition = {
 			)
 			.run(globalFilters.metadataLocale, globalFilters.region);
 
-		// 5. Null every profile reference — profile data is intentionally dropped.
+		// 5. Null every profile reference - profile data is intentionally dropped.
 		//    Only done on an actual reset so re-runs keep valid v2 assignments.
 		if (profilesWereReset) {
 			const nulled = nullProfileReferences(sqlite, [
@@ -754,7 +754,7 @@ export const migration_v140: MigrationDefinition = {
 
 		// 10. Rebuild tables to attach real FKs and constraints (only when missing).
 		// Backfill legacy NULL adult values before tightening the column to NOT NULL
-		// below — v096 no-ops if `adult` already exists, so a pre-existing weaker
+		// below - v096 no-ops if `adult` already exists, so a pre-existing weaker
 		// column definition (bare `integer`, no NOT NULL/DEFAULT) can leave real
 		// NULL rows on older databases, which would otherwise fail the rebuild.
 		if (tableExists(sqlite, 'movies')) {

@@ -1,5 +1,5 @@
 /**
- * CinephageAPI subsystem — first-class integration with api.cinephage.net.
+ * CinephageAPI subsystem - first-class integration with api.cinephage.net.
  *
  * Public API surface. Consumers should import from this barrel rather than
  * reaching into subpaths directly.

@@ -14,7 +14,7 @@ import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'scans' as const });
 
-// Hardcoded fallback patterns — used only when ScannerOptions.patterns is
+// Hardcoded fallback patterns - used only when ScannerOptions.patterns is
 // absent (backward-compatible path). When patterns are provided, the
 // PatternRecognitionService handles all filtering.
 const EXCLUDED_FOLDER_PATTERNS = [
@@ -68,7 +68,7 @@ function shouldExcludeFolderLegacy(name: string, customPatterns: string[]): bool
 	// Skip directories whose name is exactly a video-file pattern (e.g. "matrix.mkv/").
 	// isVideoFile() uses path.extname(), which only tests the LAST extension, so
 	// "my.mkv.assets" (ext: .assets) and "render.mp4_temp" (ext: .mp4_temp) are
-	// NOT excluded — only names whose final segment is a recognised video extension.
+	// NOT excluded - only names whose final segment is a recognised video extension.
 	const folderExt = extname(name).toLowerCase();
 	return folderExt.length > 1 && isVideoFile(name);
 }
@@ -88,7 +88,7 @@ function shouldExcludeFileLegacy(
 	}
 	if (skipFolderExclusions) return false;
 
-	// Only check directory segments — the final part is the filename itself,
+	// Only check directory segments - the final part is the filename itself,
 	// not a directory, so shouldExcludeFolderLegacy must not test it (our
 	// video-extension check would otherwise exclude every .mkv/.mp4 file).
 	const pathParts = filePath.split('/');

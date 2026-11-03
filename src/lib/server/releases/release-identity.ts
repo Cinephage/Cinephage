@@ -3,7 +3,7 @@
  *
  * One implementation shared by the grab-time IdentityStage, the automatic
  * search filters, and arr release pushes. Never hand-compare release titles
- * to library titles anywhere else — substring containment in particular is
+ * to library titles anywhere else - substring containment in particular is
  * forbidden: "halloween" is contained in "detective conan the bride of
  * halloween" and caused wrong-target imports.
  *
@@ -94,7 +94,7 @@ function yearsAgree(
  * Decide whether a release title refers to the target media.
  *
  * Year arbitration runs only when both sides carry a year. When the release
- * carries no year the title decides alone — callers enforcing stricter
+ * carries no year the title decides alone - callers enforcing stricter
  * evidence rules (e.g. automatic movie grabs) must treat a missing year as
  * insufficient separately.
  */
@@ -180,7 +180,7 @@ export interface TitleContainmentResult {
 }
 
 /**
- * Restricted token containment — DISPLAY-ONLY (interactive search lists).
+ * Restricted token containment - DISPLAY-ONLY (interactive search lists).
  * Requires the shorter side to span at least two tokens and allows at most
  * one extra token on the longer side, so "Show Name" still matches a release
  * titled "Show Name Special" in a result list, while "Halloween" can never

@@ -11,7 +11,7 @@ export interface CinephageModuleCapabilities {
 	/**
 	 * Set when the module publishes one or more virtual indexer rows that
 	 * surface on the indexers page (read-only, toggle-only). The definition
-	 * IDs listed here are owned by the module — IndexerManager will not
+	 * IDs listed here are owned by the module - IndexerManager will not
 	 * permit user delete/edit on them.
 	 */
 	readonly providesIndexer?: { readonly definitionId: string };
@@ -44,7 +44,7 @@ export interface CinephageModuleContext {
 }
 
 /**
- * CinephageModule — a feature that runs under the CinephageAPI subsystem.
+ * CinephageModule - a feature that runs under the CinephageAPI subsystem.
  *
  * Modules are NOT interchangeable backends of the same function (that's the
  * existing `*Provider` pattern in this codebase). Each module is a distinct
@@ -95,7 +95,7 @@ export interface CinephageModule {
 
 	/**
 	 * Reports whether this module is currently active. The module is the
-	 * authority on its own enable state — typically by consulting the
+	 * authority on its own enable state - typically by consulting the
 	 * CinephageSettingsService. Subsystem-level disable cascades: if the
 	 * subsystem is disabled, isEnabled() MUST return false regardless of
 	 * per-module state.

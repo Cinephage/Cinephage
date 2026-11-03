@@ -213,7 +213,7 @@ export class LibraryJobService {
 
 	/**
 	 * Aggregate manual_import jobs into batches (grouped by parentJobId, or
-	 * standalone by id when there is none) without shipping every raw row —
+	 * standalone by id when there is none) without shipping every raw row -
 	 * a bulk batch can have thousands of jobs, so the Activity page's summary
 	 * card needs true totals, not whatever fits under a row-count limit.
 	 * Uses raw SQL because SQLite's GROUP BY has no drizzle query-builder path

@@ -160,7 +160,7 @@ beforeEach(resetTables);
 
 afterAll(() => destroyTestDb(testDb));
 
-describe('GET /api/library/series/[id] — effectiveLanguageProfile', () => {
+describe('GET /api/library/series/[id] - effectiveLanguageProfile', () => {
 	it('returns the effective profile with its source (override)', async () => {
 		await seedLanguageProfile(LANGUAGE_PROFILE_ID, 'SeriesOverride');
 		const seriesId = await seedSeries({ languageProfileId: LANGUAGE_PROFILE_ID });
@@ -206,7 +206,7 @@ describe('GET /api/library/series/[id] — effectiveLanguageProfile', () => {
 	});
 });
 
-describe('PATCH /api/library/series/[id] — languageProfileId', () => {
+describe('PATCH /api/library/series/[id] - languageProfileId', () => {
 	it('assigns an existing profile via the override column', async () => {
 		await seedLanguageProfile(LANGUAGE_PROFILE_ID, 'Assign Series');
 		const seriesId = await seedSeries();
@@ -268,7 +268,7 @@ describe('PATCH /api/library/series/[id] — languageProfileId', () => {
 	});
 });
 
-describe('DELETE /api/library/series/[id] — unmatch releases client tracking', () => {
+describe('DELETE /api/library/series/[id] - unmatch releases client tracking', () => {
 	it('file-less unmatch releases indexer-less rows back to Unmatched', async () => {
 		const seriesId = await seedSeries();
 		await seedClient();

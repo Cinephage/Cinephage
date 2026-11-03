@@ -4,7 +4,7 @@ export type MetadataProviderSelection = 'auto' | MetadataProviderId;
 
 /**
  * A provider-supplied title variant (AniList romaji/english/native, MAL titles[]).
- * `language` is set ONLY when the provider itself supplies a language code —
+ * `language` is set ONLY when the provider itself supplies a language code -
  * the kind labels ('romaji', 'Japanese', …) are never mapped onto one.
  */
 export interface MetadataTitleVariant {

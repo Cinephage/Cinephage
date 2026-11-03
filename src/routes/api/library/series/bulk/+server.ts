@@ -22,7 +22,7 @@ interface BulkAddResult {
 /**
  * POST /api/library/series/bulk
  * Add multiple TV series to the library by TMDB IDs. Thin batching layer over
- * addSeriesToLibrary — the single-add implementation stays the only writer.
+ * addSeriesToLibrary - the single-add implementation stays the only writer.
  */
 export const POST: RequestHandler = async (event) => {
 	const authError = requireAdmin(event);

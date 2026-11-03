@@ -725,7 +725,7 @@ export class ResponseParser {
 			if (!isNaN(tvdbId)) result.tvdbId = tvdbId;
 		}
 
-		// Structured language attrs (torznab/newznab `language`/`subs`) — the
+		// Structured language attrs (torznab/newznab `language`/`subs`) - the
 		// indexer asserts these; title-token parsing stays on `parsed.languages`.
 		const audioLanguages = this.parseLanguageList(values['language'] ?? values['languages']);
 		if (audioLanguages.length > 0) {
@@ -906,7 +906,7 @@ export class ResponseParser {
 	/**
 	 * Make URL absolute using base URL. Only http(s) and magnet survive
 	 * verbatim; everything else is resolved against the indexer base, and the
-	 * result is scheme-checked — scraped content is untrusted, and a
+	 * result is scheme-checked - scraped content is untrusted, and a
 	 * `javascript:`/`data:` value that survives parsing would be rendered as a
 	 * clickable link in the search UI.
 	 */

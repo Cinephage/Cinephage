@@ -51,7 +51,7 @@ export class MacGenerator {
 	 */
 	static generateRandomMac(prefix: string = '00:1A:79'): string {
 		const normalizedPrefix = this.normalizePrefix(prefix);
-		// Portals key device identity to the MAC — use the CSPRNG so one
+		// Portals key device identity to the MAC - use the CSPRNG so one
 		// account's MAC is not predictable from another's.
 		const suffix = Array.from({ length: 3 }, () =>
 			randomInt(256).toString(16).padStart(2, '0').toUpperCase()

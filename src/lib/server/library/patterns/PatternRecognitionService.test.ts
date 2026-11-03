@@ -133,7 +133,7 @@ describe('PatternRecognitionService.classifyFile', () => {
 			ignore: { defaultEnabled: false, defaults: [], user: ['*trailer*'] },
 			bonus: { patterns: ['*trailer*'] }
 		});
-		// Both ignore and bonus match — ignore takes precedence.
+		// Both ignore and bonus match - ignore takes precedence.
 		expect(classifyFile('Avengers-trailer.mkv', compiled)).toBeNull();
 	});
 
@@ -225,7 +225,7 @@ describe('PatternRecognitionService.recognizeStructure (regex mode)', () => {
 				episodeFileRegexes: []
 			}
 		});
-		// The series regex requires (YYYY) suffix — neither segment has it
+		// The series regex requires (YYYY) suffix - neither segment has it
 		const result = recognizeStructure('random/file.mkv', strict);
 		expect(result).toBeNull();
 	});

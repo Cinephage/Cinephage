@@ -61,7 +61,7 @@ describe('fetchWithTimeout signal handling', () => {
 
 	it('pins hostname fetches through undici fetch, not global fetch', async () => {
 		// Regression: passing an npm-undici Agent to Node's global fetch mixes
-		// two undici copies with incompatible Dispatcher contracts — every
+		// two undici copies with incompatible Dispatcher contracts - every
 		// proxied hostname fetch failed at connect with `invalid onRequestStart
 		// method`. The Agent and the fetch must come from the same package.
 		dnsLookupMock.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);

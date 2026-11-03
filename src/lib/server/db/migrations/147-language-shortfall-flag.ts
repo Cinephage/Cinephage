@@ -12,7 +12,7 @@ const logger = createChildLogger({ logDomain: 'system' as const });
  * Adds `language_shortfall` (boolean, default false) to movies and series.
  * The flag is set by the import verifier when probed audio languages
  * (mediaInfo.audioLanguages, the only definitive signal) contradict the
- * item's effective audio preference — e.g. a MULTi pack that turned out to
+ * item's effective audio preference - e.g. a MULTi pack that turned out to
  * lack the preferred language. It marks the item as a candidate for a
  * better-language upgrade re-grab. Never set when audio languages are
  * unknown (absence of evidence never punishes) or when the preference is

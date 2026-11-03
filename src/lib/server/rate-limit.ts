@@ -42,7 +42,7 @@ function shouldEnforceApiRateLimit(event: RequestEvent): boolean {
 		return false;
 	}
 
-	// Better Auth enforces its own database-backed limiter on /api/auth —
+	// Better Auth enforces its own database-backed limiter on /api/auth -
 	// a second in-memory limit here would double-lock sign-in attempts.
 	if (pathname.startsWith('/api/auth/')) {
 		return false;

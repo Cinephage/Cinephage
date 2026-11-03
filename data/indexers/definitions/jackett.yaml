@@ -56,7 +56,7 @@ caps:
 
 search:
   paths:
-    # Movie search — category-filtered
+    # Movie search - category-filtered
     - path: api/v2.0/indexers/all/results
       method: get
       categories: [Movies]
@@ -65,7 +65,7 @@ search:
         apikey: '{{ .Config.apikey }}'
         $raw: 'Tracker[]={{ .Config.trackerId }}{{ if .Categories }}&Category[]={{ join .Categories "&Category[]=" }}{{ end }}'
 
-    # TV search — category-filtered
+    # TV search - category-filtered
     - path: api/v2.0/indexers/all/results
       method: get
       categories: [TV]

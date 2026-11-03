@@ -28,7 +28,7 @@ function engineWithConfig(stripcyrillic: boolean): FilterEngine {
 	return new FilterEngine(templateEngine);
 }
 
-describe('RuTracker title filters — dub-studio normalization', () => {
+describe('RuTracker title filters - dub-studio normalization', () => {
 	it('normalizes Cyrillic dub words to latin tokens that survive Cyrillic stripping', async () => {
 		const filters = await loadTitleFilters();
 		const engine = engineWithConfig(true);

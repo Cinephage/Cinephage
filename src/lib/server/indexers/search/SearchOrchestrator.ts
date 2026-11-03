@@ -213,7 +213,7 @@ const VIDEO_SIGNAL_PATTERN =
 /**
  * Hardcoded pattern for executable/dangerous file extensions in release titles.
  * Built from DANGEROUS_EXTENSIONS + EXECUTABLE_EXTENSIONS in constants.ts.
- * Not user-configurable — these are security rules, not preferences.
+ * Not user-configurable - these are security rules, not preferences.
  */
 function buildDangerousExtensionPattern(extensions: string[]): RegExp {
 	const alternation = extensions
@@ -401,7 +401,7 @@ export class SearchOrchestrator {
 		// Boost releases matching preferred language
 		filtered = this.boostByLanguage(filtered, criteriaWithSource);
 		// Graded ordered-preference boost from the effective language profile.
-		// Uses enrichedCriteria — the preference is attached during criteria
+		// Uses enrichedCriteria - the preference is attached during criteria
 		// enrichment, not on the caller's object.
 		filtered = this.boostByAudioPreference(filtered, enrichedCriteria);
 
@@ -452,8 +452,8 @@ export class SearchOrchestrator {
 		// resolve its indexer allowlist here so every automatic search path
 		// (search-on-add, monitoring, cascading, multi-season) honours it without
 		// each site repeating the lookup. When no profile is named, the resolver
-		// falls back to the default profile — the same one the enricher scores
-		// with — so search scope and scoring never disagree.
+		// falls back to the default profile - the same one the enricher scores
+		// with - so search scope and scoring never disagree.
 		if (opts.allowedIndexerIds === undefined && opts.enrichment) {
 			opts.allowedIndexerIds = await resolveAllowedIndexerIds(opts.enrichment.scoringProfileId);
 		}
@@ -678,9 +678,9 @@ export class SearchOrchestrator {
 		// Preferred-language boost for the enhanced path: applied AFTER enrichment
 		// (protocol seeder checks during enrich saw the real seeders) as an
 		// explicit totalScore contribution, re-sorted by totalScore. Semantics
-		// match the rank path's boostByLanguage — see applyLanguageScoreBonus.
+		// match the rank path's boostByLanguage - see applyLanguageScoreBonus.
 		const languageBoosted = this.applyLanguageScoreBonus(blocklistAnnotated, enrichedCriteria);
-		// Graded ordered-preference boost (effective language profile) — see
+		// Graded ordered-preference boost (effective language profile) - see
 		// applyAudioPreferenceBonus. Applied after the legacy single-code bonus
 		// so both can contribute when a manual search also carries a profile.
 		const audioPreferenceBoosted = this.applyAudioPreferenceBonus(
@@ -1046,7 +1046,7 @@ export class SearchOrchestrator {
 		try {
 			const limiter = this.rateLimitRegistry.get(indexer.id);
 
-			// Atomically check and record rate limits — concurrent callers each see
+			// Atomically check and record rate limits - concurrent callers each see
 			// the updated count, preventing all-zero thundering-herd reads.
 			const rateCheck = this.hostRateLimiter.checkAndRecord(indexer.id, indexer.baseUrl, limiter);
 
@@ -1072,7 +1072,7 @@ export class SearchOrchestrator {
 				this.hostRateLimiter.recordRequest(indexer.baseUrl);
 			}
 
-			// Acquire a concurrency slot — limits simultaneous in-flight requests to
+			// Acquire a concurrency slot - limits simultaneous in-flight requests to
 			// the same host (e.g., many Prowlarr indexers sharing one instance).
 			const remainingMs = timeout - (Date.now() - startTime);
 			const acquired = await this.hostConcurrencyLimiter.acquire(indexer.baseUrl, remainingMs);
@@ -1647,7 +1647,7 @@ export class SearchOrchestrator {
 			}
 
 			// Poison-cache guard: when EVERY variant failed (timeout, abort, auth),
-			// the accumulated empty set is not a truthful answer — caching it would
+			// the accumulated empty set is not a truthful answer - caching it would
 			// serve "no results" for the whole TTL and never retry. Only cache when
 			// at least one query actually reached the indexer.
 			if (anyTitleSucceeded) {
@@ -1863,7 +1863,7 @@ export class SearchOrchestrator {
 			const searchImdbId = criteria.imdbId;
 
 			return releases.filter((release) => {
-				// ID-first classification: when the release carries an ID, it decides —
+				// ID-first classification: when the release carries an ID, it decides -
 				// an ID match means the release IS the searched movie, and title-based
 				// parsing (which can misread titles like "Open Season 3" as TV season
 				// packs) never overrides it. Native-Cyrillic tracker ID mismatches are
@@ -2295,7 +2295,7 @@ export class SearchOrchestrator {
 
 	private formatPointerDisplayTitle(title: string): string {
 		let normalized = title.trim();
-		normalized = normalized.replace(/^\s*[-–—]+\s*\/\s*/u, '');
+		normalized = normalized.replace(/^\s*[-–-]+\s*\/\s*/u, '');
 		normalized = normalized.replace(/^\s*\/\s*/u, '');
 		normalized = normalized.replace(/\b(S\d+E\d+(?:-\d+)?)\s+(\d{1,2})(?=\s*\[)/iu, '$1 of $2');
 		normalized = normalized.replace(
@@ -2349,8 +2349,8 @@ export class SearchOrchestrator {
 	): ReleaseResult[] {
 		return releases.filter((release) => {
 			// ID-first: a release whose content ID matches the search target IS the
-			// right content type. Indexer categories are noisy — aggregators mis-file
-			// TV packs as Movies, anime as Other, soundtracks with their movie — and
+			// right content type. Indexer categories are noisy - aggregators mis-file
+			// TV packs as Movies, anime as Other, soundtracks with their movie - and
 			// must not override an authoritative ID match.
 			const searchTmdbId = criteria && 'tmdbId' in criteria ? criteria.tmdbId : undefined;
 			const searchImdbId = criteria && 'imdbId' in criteria ? criteria.imdbId : undefined;
@@ -2489,7 +2489,7 @@ export class SearchOrchestrator {
 			const title = release.title ?? '';
 
 			// Hard-reject executable/dangerous file extensions masquerading as video.
-			// No escape hatch — these are never legitimate video content.
+			// No escape hatch - these are never legitimate video content.
 			if (DEFAULT_DANGEROUS_EXTENSION_PATTERN.test(title)) {
 				logger.debug(
 					{
@@ -2509,7 +2509,7 @@ export class SearchOrchestrator {
 			if (this.matchesTrailerArtifactTitle(title)) {
 				// Context check: when the searched movie/series title itself contains
 				// the artifact token ("Trailer Park Boys"), the token is part of the
-				// name — not an appended artifact. Otherwise ("Movie.2020.1080p.BluRay
+				// name - not an appended artifact. Otherwise ("Movie.2020.1080p.BluRay
 				// .Trailer") the release is a promo/teaser artifact.
 				const queryCandidates = [criteria.query, ...(criteria.searchTitles ?? [])]
 					.filter((candidate): candidate is string => !!candidate)
@@ -2606,7 +2606,7 @@ export class SearchOrchestrator {
 	 *
 	 * A bare `en` preference (the ecosystem default) is a no-op: English
 	 * releases are the baseline, so boosting them would only add noise. An
-	 * explicit locale like 'en-US' is NOT skipped — after title matching is
+	 * explicit locale like 'en-US' is NOT skipped - after title matching is
 	 * base-normalized it boosts releases explicitly tagged english/eng, which
 	 * is what a user preferring that locale wants (untagged releases assert no
 	 * language at all, so they are never boosted).
@@ -2658,7 +2658,7 @@ export class SearchOrchestrator {
 			boostedCount += 1;
 			return {
 				...release,
-				// The ReleaseRanker weights seeders at 0.4 — a 30x multiplier pushes
+				// The ReleaseRanker weights seeders at 0.4 - a 30x multiplier pushes
 				// matching releases well above non-matching ones.
 				seeders: typeof release.seeders === 'number' ? Math.max(1, release.seeders * 30) : 1
 			};
@@ -2683,7 +2683,7 @@ export class SearchOrchestrator {
 	 *
 	 * Applied AFTER enrichment so protocol checks (minimumSeeders, dead-torrent
 	 * rejection) still see the real seeders, and expressed as an explicit
-	 * totalScore contribution instead of seeders inflation — enrichment
+	 * totalScore contribution instead of seeders inflation - enrichment
 	 * recomputes totalScore from scratch, so a pre-enrichment adjustment would
 	 * be silently discarded. +20 points mirrors the rank path's magnitude: the
 	 * 30x seeders multiplier at the ranker's 0.4 seeders weight is worth
@@ -2774,7 +2774,7 @@ export class SearchOrchestrator {
 	 * (rank path). Ranks release language evidence with the shared
 	 * four-bucket policy (`rankLanguageEvidenceSet`) and inflates seeders by
 	 * a bucket-scaled multiplier: original ×30, preferred ×(30−4·index,
-	 * floor 10), multi-pack ×8, everything else unchanged. Soft only — no
+	 * floor 10), multi-pack ×8, everything else unchanged. Soft only - no
 	 * release is ever demoted or dropped here.
 	 */
 	private boostByAudioPreference<T extends ReleaseResult>(
@@ -3002,7 +3002,7 @@ export class SearchOrchestrator {
 			if (searchTmdbId && release.tmdbId) {
 				if (release.tmdbId === searchTmdbId) return true;
 				// Native-Cyrillic trackers (RuTracker, Kinozal, etc.) attach their own
-				// authoritative IDs — mismatch is definitive, not an aggregator artifact.
+				// authoritative IDs - mismatch is definitive, not an aggregator artifact.
 				if (releasePrefersNativeCyrillic) return false;
 				logger.debug(
 					{
@@ -3138,7 +3138,7 @@ export class SearchOrchestrator {
 					// Interactive searches should not blank out results when title validation
 					// is impossible due to script mismatch (e.g. Cyrillic-only tracker titles).
 					// Automatic searches get the same escape when the release comes from a
-					// native-Cyrillic tracker (RuTracker, Kinozal, …) — otherwise auto-grab
+					// native-Cyrillic tracker (RuTracker, Kinozal, …) - otherwise auto-grab
 					// can never pick up releases it found.
 					titleMatch =
 						(isInteractiveSearch || releasePrefersNativeCyrillic) &&
@@ -3159,7 +3159,7 @@ export class SearchOrchestrator {
 				if (!titleMatch || !yearMatch) {
 					// Interactive fallback for localized/transliterated indexer titles that
 					// don't match stored title variants yet. The year is allowed within ±1
-					// (festival vs. wide release — matches the hard year check above).
+					// (festival vs. wide release - matches the hard year check above).
 					// Automatic searches are included when the release comes from a
 					// native-Cyrillic tracker: its bracketed year is authoritative, so a
 					// script-mismatched title + in-range year is a trustworthy match.
@@ -3485,7 +3485,7 @@ export class SearchOrchestrator {
 	/**
 	 * Attach the effective audio preference (from the item's language profile
 	 * chain) to automatic movie/TV searches so both ranking paths express the
-	 * profile's ordered audio preference. Interactive searches are skipped —
+	 * profile's ordered audio preference. Interactive searches are skipped -
 	 * the manual `?language=` parameter keeps its own single-code semantics
 	 * and stacking both boosts would double-count. No-op when the caller
 	 * already set a preference, the search carries no TMDB id, or resolution

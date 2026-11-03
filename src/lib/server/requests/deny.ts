@@ -6,7 +6,7 @@ import { getRequestNotificationService } from './RequestNotificationService.js';
 
 /**
  * Leaf module for the blocked-media deny path. It must never import
- * blocked-media services (they import this) — keep it to db + notifications.
+ * blocked-media services (they import this) - keep it to db + notifications.
  *
  * Declines every active request for the blocked media with a clear reason;
  * the requester is notified.

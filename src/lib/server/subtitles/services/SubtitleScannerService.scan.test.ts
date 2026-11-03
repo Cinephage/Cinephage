@@ -220,7 +220,7 @@ describe('SubtitleScannerService scanMovieSubtitles movie-file linking', () => {
 
 		const result = await service.scanMovieSubtitles(MOVIE_ID);
 
-		// No files means no folder read — nothing to discover or register.
+		// No files means no folder read - nothing to discover or register.
 		expect(discoverSpy).not.toHaveBeenCalled();
 		expect(result.registered).toBe(0);
 		expect(result.errors).toHaveLength(0);

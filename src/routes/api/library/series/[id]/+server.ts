@@ -503,7 +503,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 
 		// Manual anime provider link: fetch the linked AniList/MAL entries and
 		// persist their title variants as alternate titles (idempotent). Runs in
-		// the background — external provider latency must not stall the PATCH.
+		// the background - external provider latency must not stall the PATCH.
 		if (providerRefs?.anilist || providerRefs?.mal) {
 			persistLinkedProviderTitleVariants('series', params.id, providerRefs).catch((err) => {
 				logger.warn(

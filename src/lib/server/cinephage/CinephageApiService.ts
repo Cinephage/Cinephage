@@ -10,7 +10,7 @@ import type { CinephageModuleContext } from './modules/types.js';
 import { registerBuiltinModules } from './modules/index.js';
 
 /**
- * CinephageApiService — the top-level background service for the CinephageAPI
+ * CinephageApiService - the top-level background service for the CinephageAPI
  * subsystem. Implements BackgroundService so the existing ServiceManager
  * (src/lib/server/services/) owns its lifecycle.
  *
@@ -19,7 +19,7 @@ import { registerBuiltinModules } from './modules/index.js';
  *   - Initialize the module registry (init() every registered module)
  *   - Tear down the registry on stop()
  *
- * Phase 1: ships with zero registered modules — no behavior change.
+ * Phase 1: ships with zero registered modules - no behavior change.
  * Modules (library-streaming, remote-streaming) land in subsequent phases
  * and register themselves via static imports at module load time.
  */
@@ -84,7 +84,7 @@ export class CinephageApiService {
 
 		// Keep the gateway identity fresh: the api.cinephage.net gateway only
 		// accepts the newest release pair, so sync to the latest at boot.
-		// Best-effort and non-blocking — readiness does not wait on GitHub.
+		// Best-effort and non-blocking - readiness does not wait on GitHub.
 		if (config.enabled) {
 			void this.core.refreshLatestIdentity().then(() => {
 				logger.debug('Cinephage identity sync completed at boot');
@@ -92,7 +92,7 @@ export class CinephageApiService {
 		}
 
 		// Register built-in feature modules (library-streaming, future modules).
-		// Idempotent — skips modules that are already registered.
+		// Idempotent - skips modules that are already registered.
 		registerBuiltinModules(this.registry);
 
 		const ctx: CinephageModuleContext = {
@@ -107,7 +107,7 @@ export class CinephageApiService {
 			}
 		};
 
-		// initializeAll() is best-effort — failing modules are logged but
+		// initializeAll() is best-effort - failing modules are logged but
 		// don't block the rest. Subsystem reaches ready either way.
 		await this.registry.initializeAll(ctx);
 

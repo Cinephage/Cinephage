@@ -92,7 +92,7 @@ export function alignWithSplits(
 		const spanDistance = inSpan.start - lastInSpan.end;
 
 		// -----------------------------------------------------------
-		// Candidate 1: SPLIT — use best offset from previous spans, shifted
+		// Candidate 1: SPLIT - use best offset from previous spans, shifted
 		// Apply split penalty, shift by span distance, compute left-to-right max
 		// -----------------------------------------------------------
 		const splitRatingBuf = extendBufferTo(
@@ -121,7 +121,7 @@ export function alignWithSplits(
 		}));
 
 		// -----------------------------------------------------------
-		// Candidate 2: NO-SPLIT — use same offset as current span (identity mapping)
+		// Candidate 2: NO-SPLIT - use same offset as current span (identity mapping)
 		// -----------------------------------------------------------
 		const nosplitDualFull: DualFullSegment[] = [];
 		for (const seg of iterateRatingBuffer(cumulativeRatingBuffer)) {

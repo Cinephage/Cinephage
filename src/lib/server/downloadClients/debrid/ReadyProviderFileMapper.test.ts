@@ -132,7 +132,7 @@ describe('ReadyProviderFileMapper', () => {
 			preferredAudioLanguages: ['es']
 		});
 
-		// The ESP file is far smaller — size wins, the tiebreaker only applies
+		// The ESP file is far smaller - size wins, the tiebreaker only applies
 		// among near-equal candidates.
 		expect(result.files[0].providerFileRef.providerFileId).toBe('big');
 	});
