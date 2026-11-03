@@ -298,6 +298,7 @@ export class StrmService {
 				}
 
 				destinationPath = await this.buildMovieStrmPath(rootFolder.path, movie);
+				resolvedRootFolderId = rootFolder.id;
 			} else if (mediaType === 'tv' && seriesId && season !== undefined && episode !== undefined) {
 				// Get series details
 				const show = await db.query.series.findFirst({

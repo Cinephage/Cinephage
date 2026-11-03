@@ -1,7 +1,47 @@
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { isRootFolderWritable } from '#lib/server/filesystem/writable-guard.js';
 
 import { StrmService } from './StrmService';
+
+vi.mock('#lib/server/db/index.js', () => ({
+	db: {
+		query: {
+			movies: {
+				findFirst: vi.fn(async () => ({
+					id: 'movie-1',
+					tmdbId: 13824,
+					title: 'Superstar',
+					year: 1999,
+					path: null,
+					rootFolderId: 'root-1'
+				}))
+			},
+			rootFolders: {
+				findFirst: vi.fn(async () => ({
+					id: 'root-1',
+					path: '/tmp/strm-test-root',
+					readOnly: false
+				}))
+			}
+		}
+	}
+}));
+
+vi.mock('#lib/server/filesystem/writable-guard.js', () => ({
+	isRootFolderWritable: vi.fn()
+}));
+
+vi.mock('#lib/server/filesystem/mkdir-helpers.js', () => ({
+	ensureMediaDirectory: vi.fn(async (dir: string) => {
+		const { mkdirSync } = await import('node:fs');
+		mkdirSync(dir, { recursive: true });
+	}),
+	applyMediaFileMode: vi.fn()
+}));
 
 describe('StrmService', () => {
 	const service = StrmService.getInstance();
@@ -223,6 +263,89 @@ describe('StrmService', () => {
 					'Test Episode'
 				)
 			).toBe(join('/library/tv', 'Series Folder', 'Collection 03', 'Episode 08.strm'));
+		});
+	});
+
+	describe('createStrmFile read-only guard', () => {
+		let tmpRoot: string;
+
+		afterEach(() => {
+			if (tmpRoot) {
+				rmSync(tmpRoot, { recursive: true, force: true });
+				tmpRoot = '';
+			}
+			vi.mocked(isRootFolderWritable).mockReset();
+		});
+
+		function stubNamingService() {
+			(
+				service as unknown as {
+					getNamingService: () => {
+						generateMovieFolderName: () => string;
+						generateMovieFileName: () => string;
+					};
+				}
+			).getNamingService = () => ({
+				generateMovieFolderName: () => 'Movie Folder',
+				generateMovieFileName: () => 'Movie File.strm'
+			});
+		}
+
+		it('writes movie .strm files into a writable root using the resolved root folder id', async () => {
+			tmpRoot = mkdtempSync(join(tmpdir(), 'strm-test-'));
+			stubNamingService();
+
+			const { db } = await import('#lib/server/db/index.js');
+			const writableRoot = { id: 'root-1', path: tmpRoot, readOnly: false } as Awaited<
+				ReturnType<typeof db.query.rootFolders.findFirst>
+			>;
+			vi.mocked(db.query.rootFolders.findFirst).mockResolvedValue(writableRoot);
+			vi.mocked(isRootFolderWritable).mockResolvedValue(true);
+
+			const result = await service.createStrmFile({
+				mediaType: 'movie',
+				tmdbId: '13824',
+				movieId: 'movie-1',
+				baseUrl: 'https://new.example.com',
+				apiKey: 'active-key'
+			});
+
+			expect(result.success).toBe(true);
+			// Regression: the movie branch must resolve the root folder id, or the
+			// guard rejects every movie grab as "read-only".
+			expect(isRootFolderWritable).toHaveBeenCalledWith('root-1');
+
+			const written = join(tmpRoot, 'Movie Folder', 'Movie File.strm');
+			expect(existsSync(written)).toBe(true);
+			expect(readFileSync(written, 'utf8')).toBe(
+				'https://new.example.com/api/streaming/session/movie/13824?api_key=active-key'
+			);
+		});
+
+		it('still rejects movie .strm writes when the root folder is read-only', async () => {
+			tmpRoot = mkdtempSync(join(tmpdir(), 'strm-test-'));
+			stubNamingService();
+
+			const { db } = await import('#lib/server/db/index.js');
+			const readOnlyRoot = { id: 'root-1', path: tmpRoot, readOnly: true } as Awaited<
+				ReturnType<typeof db.query.rootFolders.findFirst>
+			>;
+			vi.mocked(db.query.rootFolders.findFirst).mockResolvedValue(readOnlyRoot);
+			vi.mocked(isRootFolderWritable).mockResolvedValue(false);
+
+			const result = await service.createStrmFile({
+				mediaType: 'movie',
+				tmdbId: '13824',
+				movieId: 'movie-1',
+				baseUrl: 'https://new.example.com',
+				apiKey: 'active-key'
+			});
+
+			expect(result).toEqual({
+				success: false,
+				error: 'Cannot write .strm placeholder into a read-only root folder'
+			});
+			expect(existsSync(join(tmpRoot, 'Movie Folder'))).toBe(false);
 		});
 	});
 });
