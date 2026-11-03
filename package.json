@@ -103,7 +103,7 @@
 		"guessit-js": "^4.8.0",
 		"iconv-lite": "^0.7.3",
 		"js-yaml": "^5.5.0",
-		"minimatch": "^10.2.6",
+		"minimatch": "^11.0.0",
 		"parse-torrent": "^11.0.24",
 		"pino": "^10.4.0",
 		"playwright-core": "~1.62.0",
