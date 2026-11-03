@@ -27,7 +27,7 @@ COPY static ./static
 COPY data ./data
 COPY messages ./messages
 COPY project.inlang ./project.inlang
-COPY scripts/fix-tv-subtitle-paths.js ./scripts/fix-tv-subtitle-paths.js
+COPY scripts/fix-tv-subtitle-paths.js scripts/reset-admin-password.js ./scripts/
 COPY server.js tsconfig.json vite.config.ts ./
 
 ARG APP_VERSION=dev
@@ -51,7 +51,7 @@ COPY .npmrc ./
 # platform-native bindings through optionalDependencies.
 # The doc/docs pruning must not touch */dist/* trees: the yaml package ships
 # actual code in dist/doc/ (its document AST), required at runtime via
-# camoufox — deleting it crashes the server on require.
+# camoufox - deleting it crashes the server on require.
 RUN npm ci --omit=dev --no-audit --no-fund \
 	&& find node_modules -type f -name '*.map' -delete \
 	&& find node_modules -type d \
