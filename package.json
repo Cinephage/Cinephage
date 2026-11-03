@@ -64,7 +64,7 @@
 		"npm": "file:tools/npm-stub",
 		"semantic-release": "^25.0.9",
 		"svelte": "^5.57.2",
-		"svelte-check": "^4.7.6",
+		"svelte-check": "4.7.6",
 		"tailwindcss": "^4.3.3",
 		"typescript": "^6.0.3",
 		"typescript-eslint": "^8.71.1",
