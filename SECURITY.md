@@ -123,7 +123,7 @@ and role-based access:
 
 **Mitigation**: keep `BETTER_AUTH_SECRET` secret (it signs sessions and
 encrypts stored API-key material), rotate credentials if the environment or
-database was ever exposed, and still restrict network access — the app is
+database was ever exposed, and still restrict network access - the app is
 designed for trusted networks.
 
 ### Stored Credentials
@@ -134,7 +134,7 @@ in the SQLite database **encrypted at rest** (schema 161+), and the database
 also holds password hashes and session rows. Encryption details:
 
 - AES-256-GCM with per-value random nonces, keys derived via HKDF-SHA256 from
-  a master key, and each ciphertext bound to its owning record — relocated
+  a master key, and each ciphertext bound to its owning record - relocated
   ciphertexts fail to decrypt
 - Key custody: `ENCRYPTION_MASTER_KEY` (or `ENCRYPTION_MASTER_KEY_FILE` for
   Docker secrets) when set; otherwise derived from `BETTER_AUTH_SECRET`
@@ -142,7 +142,7 @@ also holds password hashes and session rows. Encryption details:
   secrets), run the `rotate-credentials` task in Settings → Tasks to
   re-encrypt everything, then remove the fallback variable
 - Configuration backups deliberately carry credentials in plaintext so they
-  restore onto instances with different master keys — protect backup files
+  restore onto instances with different master keys - protect backup files
   accordingly (the optional backup passphrase encrypts the whole payload)
 - A wrong/rotated-away master key fails closed: affected credentials are
   dropped and must be re-entered

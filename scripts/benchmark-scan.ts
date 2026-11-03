@@ -184,7 +184,7 @@ async function generateTvFixtures(dir: string, count: number): Promise<void> {
 // DB seeding (reconcile mode)
 // ---------------------------------------------------------------------------
 
-const SEED_BATCH = 100; // rows per transaction — stays well within SQLite's variable limit
+const SEED_BATCH = 100; // rows per transaction - stays well within SQLite's variable limit
 const FIXED_DATE = new Date().toISOString();
 const EPISODES_PER_SERIES = 50;
 
@@ -316,7 +316,7 @@ async function runReconcile(label: string): Promise<ReconcileSummary> {
 }
 
 // ---------------------------------------------------------------------------
-// Main — reconcile benchmark
+// Main - reconcile benchmark
 // ---------------------------------------------------------------------------
 
 if (isReconcile) {
@@ -350,10 +350,10 @@ if (isReconcile) {
 	seedSeriesSync(tvCount);
 	console.log(`done (${((Date.now() - seedStart) / 1000).toFixed(1)}s)`);
 
-	// Pass 1: all inserts (cold start — storageItems is empty)
+	// Pass 1: all inserts (cold start - storageItems is empty)
 	const pass1 = await runReconcile('Pass 1 - insert');
 
-	// Pass 2: all updates (steady state — every key already exists)
+	// Pass 2: all updates (steady state - every key already exists)
 	const pass2 = await runReconcile('Pass 2 - update');
 
 	// Pass 3: seed 10% more items, then reconcile (mix of inserts + updates)
@@ -399,7 +399,7 @@ if (isReconcile) {
 }
 
 // ---------------------------------------------------------------------------
-// Main — scan benchmark
+// Main - scan benchmark
 // ---------------------------------------------------------------------------
 
 const mode = isMix ? 'Mix (movies + TV)' : isTV ? 'TV only' : 'Movies only';

@@ -47,7 +47,7 @@
 
 	// Live-computed "time until" string that updates every second
 	const liveTimeUntil = $derived.by(() => {
-		if (!task.nextRunTime) return '—';
+		if (!task.nextRunTime) return '-';
 		const date = new Date(task.nextRunTime).getTime();
 		const diffMs = date - now;
 		if (diffMs <= 0) return 'Overdue';
@@ -164,7 +164,7 @@
 					{liveTimeUntil}
 				</span>
 			{:else}
-				<span class="text-base-content/40">—</span>
+				<span class="text-base-content/40">-</span>
 			{/if}
 		</td>
 	{:else}

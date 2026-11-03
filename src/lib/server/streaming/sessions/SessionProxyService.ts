@@ -383,7 +383,7 @@ export class SessionProxyService {
 	/**
 	 * Serve a DASH source's MPD, rewritten through the session so segments are
 	 * fetched via our proxy (which attaches the signed session headers, e.g.
-	 * CloudFront cookies). Served as application/dash+xml — the content type
+	 * CloudFront cookies). Served as application/dash+xml - the content type
 	 * identifies the manifest, no .m3u path involved.
 	 */
 	private async renderDashManifestResponse(
@@ -552,12 +552,12 @@ export class SessionProxyService {
 	/**
 	 * Classify a progressive source with a 1 KB Range request.
 	 *
-	 * 'real'    — the source honours Range (206 with Content-Range, or an
+	 * 'real'    - the source honours Range (206 with Content-Range, or an
 	 *             explicit Content-Range on a 200) or serves a whole object
 	 *             clearly larger than the ~31 KB decoy.
-	 * 'decoy'   — the source answered 200 with a body at or below the decoy
+	 * 'decoy'   - the source answered 200 with a body at or below the decoy
 	 *             size and no Content-Range.
-	 * 'unknown' — the probe failed or was inconclusive; callers must not treat
+	 * 'unknown' - the probe failed or was inconclusive; callers must not treat
 	 *             a transient failure as proof the source is dead.
 	 */
 	private async probeRange(

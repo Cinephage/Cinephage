@@ -566,7 +566,7 @@ export class RenamePreviewService {
 		}
 
 		// Warn when the folder template uses {Collection} but this movie has no
-		// collection data — the token resolves to empty string, so the preview
+		// collection data - the token resolves to empty string, so the preview
 		// will show the movie moving OUT of its collection folder.
 		const namingConfig = namingSettingsService.getConfigSync();
 		if (namingConfig.movieFolderFormat?.includes('{Collection}') && !movie.collectionName) {
@@ -740,7 +740,7 @@ export class RenamePreviewService {
 					status: item.status
 				}))
 			},
-			'[RenamePreviewService] Rename audit log — pre-execution state'
+			'[RenamePreviewService] Rename audit log - pre-execution state'
 		);
 
 		// Group items by mediaId for parallel processing.
@@ -1054,7 +1054,7 @@ export class RenamePreviewService {
 			const actualNewFolder = join(rootFolderPath, newFolderName);
 
 			// Never reorganize a movie/series whose tracked path IS the root folder
-			// (path '.' or '' — root-level files from media-matcher, or healed rows).
+			// (path '.' or '' - root-level files from media-matcher, or healed rows).
 			// Renaming the root itself would uproot every other title in the library
 			// and queue a Deleted for the root, wiping the media server's library.
 			if (
@@ -1098,7 +1098,7 @@ export class RenamePreviewService {
 
 			// The target parent may not exist yet (e.g. letter-bucket naming like
 			// "T/Title (2026) [tmdbid-x]") and rename() does not create intermediate
-			// directories — create the parent chain before the move.
+			// directories - create the parent chain before the move.
 			await ensureMediaDirectory(dirname(actualNewFolder));
 
 			// Atomically rename the folder on disk.
@@ -1115,7 +1115,7 @@ export class RenamePreviewService {
 				};
 			}
 
-			// Update the DB record. If this fails the disk is already renamed —
+			// Update the DB record. If this fails the disk is already renamed -
 			// roll the rename back so disk and DB stay consistent, otherwise the
 			// next scan would delete every file row for this title (stale path).
 			try {
@@ -1135,7 +1135,7 @@ export class RenamePreviewService {
 							mediaId,
 							mediaType
 						},
-						'[RenamePreviewService] CRITICAL: DB update failed AND disk rollback failed — disk and DB are now inconsistent. Resolve the underlying error and rescan.'
+						'[RenamePreviewService] CRITICAL: DB update failed AND disk rollback failed - disk and DB are now inconsistent. Resolve the underlying error and rescan.'
 					);
 				}
 				await recordRenamingFailure({
@@ -1152,7 +1152,7 @@ export class RenamePreviewService {
 					success: false,
 					error: rollbackSucceeded
 						? `Folder was renamed on disk but the database update failed; the rename was rolled back. (${dbMessage})`
-						: `Database update failed after the folder rename AND the rollback failed — the folder remains at its new path on disk while the database still references the old one. Resolve the underlying error and rescan. (${dbMessage})`,
+						: `Database update failed after the folder rename AND the rollback failed - the folder remains at its new path on disk while the database still references the old one. Resolve the underlying error and rescan. (${dbMessage})`,
 					oldPath: currentPath,
 					newPath: newFolderName
 				};
@@ -1162,7 +1162,7 @@ export class RenamePreviewService {
 			// the move has completed and the DB is updated. The server's stored
 			// path is stale at this point, so its file-location deletion is a
 			// no-op on disk and only the stale library entry (and its children)
-			// is removed — preventing the ghost-entry resurrection loop
+			// is removed - preventing the ghost-entry resurrection loop
 			// (jellyfin#16883) without ever touching media files. Plex has no
 			// item-delete API and reconciles renames via section refreshes.
 			// Best-effort: failures don't block the rename.
@@ -1218,7 +1218,7 @@ export class RenamePreviewService {
 	 * so their relativePath values are unchanged).
 	 *
 	 * Best-effort audit: history writing must NEVER block or fail the
-	 * reorganize — same philosophy as writeRenameHistory.
+	 * reorganize - same philosophy as writeRenameHistory.
 	 */
 	private async writeReorganizeHistory(
 		mediaType: 'movie' | 'series',
@@ -1289,7 +1289,7 @@ export class RenamePreviewService {
 	 * lock once for the entire batch, so no library scan can interleave
 	 * between items. Per-item failures are isolated and counted.
 	 *
-	 * Calls the private reorganizeFolderLocked for each item — the lock is
+	 * Calls the private reorganizeFolderLocked for each item - the lock is
 	 * already held and is NOT re-entrant, so the public reorganizeFolder
 	 * wrapper must not be used here (it would deadlock).
 	 */
@@ -1493,7 +1493,7 @@ export class RenamePreviewService {
 	 * Execute a single file rename with safety guards:
 	 * - Skips no-op moves (source === dest).
 	 * - Verifies the destination exists and has size after a successful move.
-	 * - Does NOT delete DB records on failure — that is the reconcile pass's job.
+	 * - Does NOT delete DB records on failure - that is the reconcile pass's job.
 	 */
 	private async executeFileRename(
 		item: RenamePreviewItem,
@@ -1603,15 +1603,15 @@ export class RenamePreviewService {
 						await rename(item.newFullPath, item.currentFullPath);
 						logger.info(
 							{ fileId: item.fileId, from: item.currentFullPath },
-							'[RenamePreviewService] Rolled back — restored from incomplete destination'
+							'[RenamePreviewService] Rolled back - restored from incomplete destination'
 						);
 					} else if (destIncomplete) {
-						// Destination exists incompletely, source still safe — delete dest.
+						// Destination exists incompletely, source still safe - delete dest.
 						const { unlink } = await import('node:fs/promises');
 						await unlink(item.newFullPath);
 						logger.info(
 							{ fileId: item.fileId, path: item.newFullPath },
-							'[RenamePreviewService] Rolled back — removed incomplete destination'
+							'[RenamePreviewService] Rolled back - removed incomplete destination'
 						);
 					} else if (!sourceStillExists) {
 						logger.error(
@@ -1619,7 +1619,7 @@ export class RenamePreviewService {
 								fileId: item.fileId,
 								path: item.currentFullPath
 							},
-							'[RenamePreviewService] Source file lost during failed move — data may be unrecoverable'
+							'[RenamePreviewService] Source file lost during failed move - data may be unrecoverable'
 						);
 					}
 				} catch (rollbackError) {
@@ -1752,7 +1752,7 @@ export class RenamePreviewService {
 	/**
 	 * Rename sibling subtitle files whose stem matches the old video stem to
 	 * the new video stem, preserving language/flag suffix chains (.en.hi,
-	 * .forced, .sdh, ...). Only applies to same-directory renames — folder
+	 * .forced, .sdh, ...). Only applies to same-directory renames - folder
 	 * changes carry all companions via applyFolderRename. Best-effort:
 	 * failures produce warnings, never fail the rename.
 	 */
@@ -1796,7 +1796,7 @@ export class RenamePreviewService {
 				}
 			}
 		} catch (err) {
-			// Directory unreadable — non-fatal.
+			// Directory unreadable - non-fatal.
 			logger.warn({ err, dir }, '[RenamePreviewService] Could not scan for subtitle companions');
 		}
 
@@ -1921,7 +1921,7 @@ export class RenamePreviewService {
 
 			// 1. Update DB path record so the library entry shows the correct folder.
 			// A failure here leaves series.path/movies.path stale while files have
-			// already moved — surface it loudly and record it for the failures
+			// already moved - surface it loudly and record it for the failures
 			// report instead of silently reporting batch success.
 			try {
 				this.updateMediaFolderPath(
@@ -1956,7 +1956,7 @@ export class RenamePreviewService {
 
 			// Notify media servers of the folder change so Jellyfin/Emby drops the
 			// old path (Deleted) and scans the new one (Modified). Skipped when the
-			// old folder is the library root — a Deleted for the root folder would
+			// old folder is the library root - a Deleted for the root folder would
 			// wipe the whole library entry on the media server. Different paths, so
 			// both survive the notifier's per-path dedup.
 			if (!isRootFolder && oldFolder !== newFolder) {
@@ -2040,11 +2040,11 @@ export class RenamePreviewService {
 					);
 				}
 			} catch {
-				// Old folder may not exist or be unreadable — not fatal.
+				// Old folder may not exist or be unreadable - not fatal.
 			}
 
 			// 3. Remove the old folder tree if empty (handles empty season subfolders for series).
-			// Skip when the old folder is the root — never remove the root folder.
+			// Skip when the old folder is the root - never remove the root folder.
 			if (!isRootFolder) {
 				await this.tryRemoveEmptyDir(oldFolder);
 			}
@@ -2076,7 +2076,7 @@ export class RenamePreviewService {
 			}
 			await rmdir(dirPath); // no-op fails silently if not empty
 		} catch {
-			// Directory has remaining files or doesn't exist — both are fine.
+			// Directory has remaining files or doesn't exist - both are fine.
 		}
 	}
 
@@ -2284,7 +2284,7 @@ export class RenamePreviewService {
 			//   2. parsedFromFilename (fallback if no scan data)
 			//
 			// For AUDIO LANGUAGES: only FFprobe scan data is evidence. Filename-
-			// parsed languages are never proof — absent scan data renders `und`.
+			// parsed languages are never proof - absent scan data renders `und`.
 			// Rationale: Audio codec in release names is frequently mislabeled (e.g., labeled as
 			// DTS but actually contains EAC3). FFprobe scans the actual file and reports what's
 			// really there, so renamed files will reflect the true audio format.
@@ -2439,7 +2439,7 @@ export class RenamePreviewService {
 			//   2. parsedFromFilename (fallback if no scan data)
 			//
 			// For AUDIO LANGUAGES: only FFprobe scan data is evidence. Filename-
-			// parsed languages are never proof — absent scan data renders `und`.
+			// parsed languages are never proof - absent scan data renders `und`.
 			// Rationale: Audio codec in release names is frequently mislabeled (e.g., labeled as
 			// DTS but actually contains EAC3). FFprobe scans the actual file and reports what's
 			// really there, so renamed files will reflect the true audio format.

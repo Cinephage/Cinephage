@@ -409,7 +409,7 @@ export interface EffectiveSubtitleProfile {
 /**
  * Resolve the effective subtitle profile for a NEW library item
  * (?mediaType=movie|series). Returns null when no default profile is
- * configured — the add flow surfaces this as a warning.
+ * configured - the add flow surfaces this as a warning.
  */
 export async function getEffectiveSubtitleProfile(
 	mediaType: 'movie' | 'series',

@@ -5,7 +5,7 @@ import type { MigrationDefinition } from '../migration-helpers.js';
 // We import after defining the schema manually so the migration runs against
 // a representative pre-migration database. We don't use createTestDb() because
 // it runs syncSchema() which already creates the cinephage_api_* tables and
-// fresh-DB migrations — we want to validate the data-move logic specifically.
+// fresh-DB migrations - we want to validate the data-move logic specifically.
 
 const CINEPHAGE_STREAM_DEFINITION_ID = 'cinephage-stream';
 
@@ -148,12 +148,12 @@ describe('migration 103: migrate-streaming-settings', () => {
 		const row = sqlite
 			.prepare(`SELECT settings FROM indexers WHERE definition_id = ?`)
 			.get(CINEPHAGE_STREAM_DEFINITION_ID) as { settings: string | null };
-		// Settings should be empty (null or '{}' — either is acceptable; the
+		// Settings should be empty (null or '{}' - either is acceptable; the
 		// indexer row no longer owns any settings after migration).
 		expect(row.settings === null || row.settings === '{}').toBe(true);
 	});
 
-	it('is idempotent — running twice is a no-op', () => {
+	it('is idempotent - running twice is a no-op', () => {
 		insertStreamingIndexer(sqlite, {
 			cinephageVersion: '2.3.3',
 			cinephageCommit: 'abc1234',
@@ -170,7 +170,7 @@ describe('migration 103: migrate-streaming-settings', () => {
 			.prepare(`SELECT settings FROM cinephage_api_modules WHERE module_id = 'library-streaming'`)
 			.get() as { settings: string };
 
-		// Re-run — should not throw, should not double-write
+		// Re-run - should not throw, should not double-write
 		migration.apply(sqlite);
 
 		const config2 = sqlite
@@ -206,7 +206,7 @@ describe('migration 103: migrate-streaming-settings', () => {
 
 	it('handles missing cinephage-stream row gracefully (fresh install case)', () => {
 		// A brand-new install that goes straight to v103 might not have the
-		// cinephage-stream indexer row yet — the module will seed it on init.
+		// cinephage-stream indexer row yet - the module will seed it on init.
 		// Migration must be a no-op in that case.
 		expect(() => migration.apply(sqlite)).not.toThrow();
 

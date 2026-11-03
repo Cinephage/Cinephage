@@ -46,7 +46,7 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	// Resolve the content-origin filter. Order: explicit URL param →
 	// language_settings.discover_original_filter (canonical base tag) → none.
-	// The response locale is deliberately NOT used here — localization and
+	// The response locale is deliberately NOT used here - localization and
 	// content-origin filtering are separate concerns (language-system spec §5).
 	let storedOriginalFilter: string | null = null;
 	try {
@@ -384,7 +384,7 @@ export const load: PageServerLoad = async ({ url }) => {
 					tmdb.getNowPlaying()
 				])) as TmdbPaginatedResult[];
 
-			// Discover endpoints don't tag media_type — add it so downstream
+			// Discover endpoints don't tag media_type - add it so downstream
 			// code (library status, filters) can identify the media type.
 			popularMovies.results = popularMovies.results.map((r) => ({ ...r, media_type: 'movie' }));
 			popularTV.results = popularTV.results.map((r) => ({ ...r, media_type: 'tv' }));

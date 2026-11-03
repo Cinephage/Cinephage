@@ -503,7 +503,7 @@
 			}
 		});
 
-	// Global sync SSE — shows start/complete toasts from any page.
+	// Global sync SSE - shows start/complete toasts from any page.
 	// svelte-ignore state_referenced_locally
 	const _syncSse =
 		isAdminUser &&

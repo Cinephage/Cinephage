@@ -43,7 +43,7 @@ export const migration_v145: MigrationDefinition = {
 				// the column as dead data rather than failing startup.
 				logger.warn(
 					{ err: e instanceof Error ? e.message : String(e) },
-					`[migration v142] Could not drop ${table}.${column} — column left as dead data`
+					`[migration v142] Could not drop ${table}.${column} - column left as dead data`
 				);
 			}
 		}

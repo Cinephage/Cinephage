@@ -52,7 +52,7 @@ afterEach(() => {
 	}
 });
 
-describe('migration v141 — language_settings.prefer_original_title', () => {
+describe('migration v141 - language_settings.prefer_original_title', () => {
 	it('adds the prefer_original_title column (NOT NULL, default 0)', () => {
 		const sqlite = createPreMigrationDatabase();
 

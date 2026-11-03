@@ -1,5 +1,5 @@
 /**
- * Search On Add — missing episodes search
+ * Search On Add - missing episodes search
  */
 
 import { todayDateString } from '#lib/utils/format.js';

@@ -7,7 +7,7 @@
  * any request, and content-derived URLs are only honored when they parse as
  * ordinary web URLs.
  *
- * Note: hosts are not restricted to public ranges on purpose — LAN-hosted IPTV
+ * Note: hosts are not restricted to public ranges on purpose - LAN-hosted IPTV
  * aggregators are a legitimate deployment shape for this feature. The guard
  * exists to stop scheme abuse and malformed values, not to police topology.
  */

@@ -1,5 +1,5 @@
 ---
-# Aither (ATH) — Private HD Movies / TV tracker (UNIT3D direct JSON API)
+# Aither (ATH) - Private HD Movies / TV tracker (UNIT3D direct JSON API)
 # Source port of Prowlarr's aither-api.yml to the Cinephage Cardigann schema,
 # following the locally-proven seedpool/blutopia UNIT3D API patterns.
 # UNIT3D API docs: GET /api/torrents/filter (name, seasonNumber, episodeNumber,

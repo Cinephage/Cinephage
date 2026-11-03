@@ -5,7 +5,7 @@ import type { MigrationDefinition } from '../migration-helpers.js';
  *
  * Three tables: `requests` (user-submitted media requests carrying TMDB
  * identity until approval creates the library row), `user_request_settings`
- * (admin-managed per-user overrides — never in the self-writable
+ * (admin-managed per-user overrides - never in the self-writable
  * user_preferences table), and `request_notifications` (durable in-app
  * notification feed). Global request configuration lives in the settings
  * table under the `request_settings` key (written by the settings service,

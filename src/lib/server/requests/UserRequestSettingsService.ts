@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 /**
  * Admin-managed per-user request overrides. Null values inherit the global
- * `request_settings` defaults. This is deliberately a dedicated table —
+ * `request_settings` defaults. This is deliberately a dedicated table -
  * `user_preferences` is self-writable by the account owner and must never
  * hold admin-controlled values.
  */

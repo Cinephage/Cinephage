@@ -10,7 +10,7 @@ const mockLogger = vi.hoisted(() => ({
 	child: vi.fn().mockReturnThis()
 }));
 
-// discover.ts imports tmdb (which opens the real database at import time) —
+// discover.ts imports tmdb (which opens the real database at import time) -
 // mock the db module before importing it.
 const testDb: TestDatabase = createTestDb();
 

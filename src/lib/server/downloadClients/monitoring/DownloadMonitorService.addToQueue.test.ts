@@ -130,7 +130,7 @@ describe('DownloadMonitorService.addToQueue', () => {
 
 	it('creates a fresh row instead of resurrecting a failed row with the same hash', async () => {
 		// Resurrecting a failed row returned the PREVIOUS target and upgrade
-		// flags to the new grab (stale-row reuse bug) — a new grab must get a
+		// flags to the new grab (stale-row reuse bug) - a new grab must get a
 		// clean row.
 		const infoHash = '0123456789abcdef0123456789abcdef01234567';
 		testDb.db

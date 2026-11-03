@@ -3,7 +3,7 @@ import { matchSpecialEpisodeByTitle } from './episode-title-matcher';
 
 // Fixtures below are LIVE TMDB season-0 data, verified 2026-09-20:
 // Battlestar Galactica tmdb 1972, Pokémon tmdb 60572, The Blue Planet tmdb
-// 13579, Firefly tmdb 1437. Do not "fix" titles to match expectations —
+// 13579, Firefly tmdb 1437. Do not "fix" titles to match expectations -
 // change the matcher instead.
 
 const bsgSpecials = [
@@ -27,7 +27,7 @@ const pokemonSpecials = [
 ];
 
 describe('episode-title-matcher (season 0 specials)', () => {
-	it('matches "Razor (2007)" via containment — "razor2" is contained in "razor2007", "razor1" is not', () => {
+	it('matches "Razor (2007)" via containment - "razor2" is contained in "razor2007", "razor1" is not', () => {
 		const match = matchSpecialEpisodeByTitle(
 			bsgSpecials,
 			['Razor (2007)'],
@@ -159,7 +159,7 @@ describe('episode-title-matcher (season 0 specials)', () => {
 	it('rejects token-subset matches whose air year disagrees with the parsed year', () => {
 		// Word order keeps containment from firing ("returnsofmewtwo" is not
 		// a substring of "mewtworeturns1990"), so only the token-subset pass
-		// can match — and its year guard must reject a decade-off year.
+		// can match - and its year guard must reject a decade-off year.
 		const specials = [
 			{ seasonNumber: 0, episodeNumber: 1, title: 'Returns of Mewtwo', airDate: '2000-12-30' }
 		];

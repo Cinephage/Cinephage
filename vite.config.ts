@@ -89,7 +89,7 @@ export default defineConfig({
 					'frame-ancestors': ['self']
 				}
 			},
-			// SvelteKit's csrf.trustedOrigins uses Array.includes() — exact string match only,
+			// SvelteKit's csrf.trustedOrigins uses Array.includes() - exact string match only,
 			// wildcards like 'http://10.*:*' are never expanded and have no effect.
 			// We disable the built-in check via '*' and implement proper origin validation in
 			// hooks.server.ts using isLocalNetworkOrigin + BETTER_AUTH_TRUSTED_ORIGINS.

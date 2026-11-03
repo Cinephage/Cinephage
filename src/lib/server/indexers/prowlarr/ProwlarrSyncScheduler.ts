@@ -77,7 +77,7 @@ export class ProwlarrSyncScheduler implements BackgroundService {
 		if (!conn?.autoSync) return;
 
 		if (!conn.lastSyncAt) {
-			// Never synced — run immediately
+			// Never synced - run immediately
 			await this.runSync();
 			return;
 		}

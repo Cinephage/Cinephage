@@ -2,7 +2,7 @@
  * Stream URL Cache
  *
  * Manages cached stream URL resolutions with expiration tracking for Live TV streaming.
- * Only caches URL metadata (URL, type, headers) — does NOT open HTTP connections.
+ * Only caches URL metadata (URL, type, headers) - does NOT open HTTP connections.
  * The actual stream fetch happens at the point of use in the route handler.
  *
  * Based on Stalkerhek pattern:
@@ -85,7 +85,7 @@ class StreamUrlCache {
 
 	/**
 	 * Get or create a cached stream resolution for a lineup item.
-	 * Returns URL metadata only — caller is responsible for HTTP fetch.
+	 * Returns URL metadata only - caller is responsible for HTTP fetch.
 	 *
 	 * @param lineupItemId - The lineup item ID
 	 * @param format - Preferred format: 'ts' for direct MPEG-TS, 'hls' for HLS playlist (default)

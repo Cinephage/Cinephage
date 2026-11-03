@@ -204,7 +204,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 					freeSpaceByDevice.set(fileStat.dev, fsStat.bfree * fsStat.bsize);
 				}
 			} catch {
-				// Path inaccessible — fall back to stored value from DB
+				// Path inaccessible - fall back to stored value from DB
 				fallbackFreeBytes += freeSpaceBytes ?? 0;
 			}
 		})

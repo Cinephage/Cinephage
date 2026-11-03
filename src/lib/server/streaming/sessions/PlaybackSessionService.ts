@@ -172,7 +172,7 @@ export class PlaybackSessionService {
 
 		// The API returns pre-validated sources; rank them by the resolved audio
 		// preference (original language first, then profile fallback languages,
-		// then untagged/neutral, then everything else — stable within buckets)
+		// then untagged/neutral, then everything else - stable within buckets)
 		// and use the winner directly for instant playback startup.
 		const rankedSources = sortSourcesByAudioPreference(lookup.sources, audioPreference);
 		const source = rankedSources[0];

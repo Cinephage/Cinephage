@@ -283,7 +283,7 @@ function normalizeSource(entry: unknown, apiBaseUrl: string): StreamSource | nul
 		: undefined;
 	const headerReferer = headers && headerRefererKey ? headers[headerRefererKey] : undefined;
 	const requiresProxy = entry.requiresProxy === true;
-	// An explicit empty referer — top-level or inside headers — means "fetch
+	// An explicit empty referer - top-level or inside headers - means "fetch
 	// this source without a Referer header": some CDNs reject any request
 	// carrying one. An empty headers entry is dropped so no empty Referer is
 	// transmitted. A proxy-only source with no referer anywhere gets none
@@ -338,7 +338,7 @@ function normalizeSource(entry: unknown, apiBaseUrl: string): StreamSource | nul
 /**
  * CinephageStreamingModule
  *
- * The single module for all Cinephage streaming — local library search
+ * The single module for all Cinephage streaming - local library search
  * (the cinephage-stream indexer row, useHttps/externalHost config) AND
  * remote VOD playback via api.cinephage.net.
  *

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 /**
  * End-to-end checks for the security boundaries fixed in the audit.
  *
- * These run the real modules — no mocks for the code under test — against
+ * These run the real modules - no mocks for the code under test - against
  * fixture inputs derived from the audit's exploit scenarios. Each test names
  * the vulnerability it pins.
  */

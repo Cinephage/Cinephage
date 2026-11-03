@@ -120,7 +120,7 @@ afterEach(() => {
 	}
 });
 
-describe('migration v141 — subtitle search state + episode path base', () => {
+describe('migration v141 - subtitle search state + episode path base', () => {
 	it('adds subtitles.last_checked_at and creates subtitle_search_state with its index', () => {
 		const sqlite = createPreMigrationDatabase();
 

@@ -61,8 +61,8 @@
 		The inner <input> gets outline-none so only the wrapper's focus ring is visible.
 	-->
 	<!-- Outer div acts as the compound input wrapper.
-		 Mirrors layout.css's global :focus rule — border-color → transparent, outline → none,
-		 inset box-shadow with --color-primary — applied via :focus-within since the div
+		 Mirrors layout.css's global :focus rule - border-color → transparent, outline → none,
+		 inset box-shadow with --color-primary - applied via :focus-within since the div
 		 itself is never directly focused (only the inner <input> is). -->
 	<div
 		class="input flex flex-wrap items-center gap-1 input-sm focus-within:border-transparent focus-within:[box-shadow:inset_0_0_0_2px_var(--color-primary,oklch(var(--p)))] focus-within:[outline:none]"

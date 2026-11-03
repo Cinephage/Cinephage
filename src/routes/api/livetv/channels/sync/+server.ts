@@ -32,7 +32,7 @@ export const POST: RequestHandler = async ({ request }) => {
 					results[account.id] = result;
 					liveTvEvents.emitChannelsSyncCompleted(account.id, result);
 					if (result.success) {
-						// Channel ids changed — refresh the guide for this account
+						// Channel ids changed - refresh the guide for this account
 						// instead of waiting out the global EPG interval.
 						queueAccountEpgSync(account.id, 'channel-sync');
 					}

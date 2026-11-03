@@ -34,7 +34,7 @@ const logger = createChildLogger({ module: 'LiveTvAccountManager' });
 
 /**
  * Generate a random serial number (like MAG devices use).
- * Stalker portals treat these as device identity — use the CSPRNG, not
+ * Stalker portals treat these as device identity - use the CSPRNG, not
  * Math.random, so one account's device identity is not guessable from
  * another's.
  */

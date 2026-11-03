@@ -56,7 +56,7 @@ describe('OriginalTitle token', () => {
 	});
 
 	describe('{OriginalCleanTitle}', () => {
-		it('renders cleaned info.originalTitle when present — removes special chars but preserves colons', () => {
+		it('renders cleaned info.originalTitle when present - removes special chars but preserves colons', () => {
 			expect(
 				originalCleanTitleToken.render(
 					{ title: 'Fallback', originalTitle: 'The Movie?' },

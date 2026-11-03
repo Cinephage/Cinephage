@@ -6,7 +6,7 @@
  * to outrun Better Auth 1.7's first-access schema validation latch), the
  * Drizzle mirror in schema.ts (typed access + direct updates), and the
  * schema-sync splice. A column added to one but not the others fails loudly
- * at runtime — the 1.7 latch bricks auth for the process lifetime — so this
+ * at runtime - the 1.7 latch bricks auth for the process lifetime - so this
  * test fails at compile/test time instead, before anything ships.
  */
 import { describe, expect, it } from 'vitest';

@@ -251,7 +251,7 @@ describe('OpenSubtitlesProvider - authentication (Bug #180)', () => {
 		await provider.search({ title: 'Inception', year: 2010, languages: ['en'] });
 		await provider.search({ title: 'Inception', year: 2010, languages: ['en'] });
 
-		// Login should only be called once — token is cached for 23h
+		// Login should only be called once - token is cached for 23h
 		expect(loginCount).toBe(1);
 	});
 });

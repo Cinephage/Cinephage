@@ -34,9 +34,9 @@ export async function fetchEpisodeGroups(tmdbId: number): Promise<EpisodeGroupsR
  * Auto-select the best episode group for a show using type priority heuristics.
  *
  * Priority:
- *   1. Type 1 (TVDB Order) — locked groups preferred
- *   2. Type 2 (Seasons) — locked groups preferred
- *   3. Type 4 (Streaming) — e.g. Crunchyroll, locked preferred
+ *   1. Type 1 (TVDB Order) - locked groups preferred
+ *   2. Type 2 (Seasons) - locked groups preferred
+ *   3. Type 4 (Streaming) - e.g. Crunchyroll, locked preferred
  * Falls back to null (default TMDB ordering) if no suitable group exists.
  *
  * Locked groups are verified by TMDB moderators and preferred.
@@ -45,7 +45,7 @@ export function autoSelectEpisodeGroup(groups: EpisodeGroupSummary[]): EpisodeGr
 	if (groups.length === 0) return null;
 
 	for (const type of AUTO_SELECTION_GROUP_TYPES) {
-		// A zero-episode group is an empty shell (abandoned community work —
+		// A zero-episode group is an empty shell (abandoned community work -
 		// SpongeBob's "Production Order" and Ben 10's "Absolute Order" both sat
 		// at 0 episodes for years). Selecting one used to add the series with
 		// no seasons or episodes at all; type priority must not beat content.

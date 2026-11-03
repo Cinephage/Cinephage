@@ -1,8 +1,8 @@
 /**
  * Self-service per-account preferences.
  *
- * GET /api/user/preferences/[key] — the caller's parsed value (defaults when unset)
- * PUT /api/user/preferences/[key] — validate and save for the caller
+ * GET /api/user/preferences/[key] - the caller's parsed value (defaults when unset)
+ * PUT /api/user/preferences/[key] - validate and save for the caller
  *
  * Auth: any authenticated user; rows are hard-scoped to locals.user.id and
  * keys are restricted to the server-side registry (no arbitrary keys).

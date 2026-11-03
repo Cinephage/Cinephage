@@ -223,7 +223,7 @@
 
 	const baseUrl = '/settings/monitoring/status';
 
-	// Chart card helper — keeps the repeated pattern DRY
+	// Chart card helper - keeps the repeated pattern DRY
 	const chartSections = $derived(
 		[
 			{

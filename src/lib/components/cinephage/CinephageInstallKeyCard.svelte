@@ -198,7 +198,7 @@
 			</button>
 		</div>
 	{:else}
-		<!-- Unregistered: the old build-auth way is going away — say so, loudly -->
+		<!-- Unregistered: the old build-auth way is going away - say so, loudly -->
 		<div role="alert" class="alert items-start text-sm alert-warning">
 			<TriangleAlert class="h-4 w-4 shrink-0" />
 			<div>

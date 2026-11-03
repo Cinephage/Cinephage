@@ -6,10 +6,10 @@
  *
  * Surfaces the previously-hidden librarySettings keys that controlled
  * the LibraryScheduler but had no UI:
- *   - scan_interval_hours (default 12) — periodic scan interval
- *   - watch_enabled (default true)     — filesystem watching
- *   - auto_match_threshold (default 0.8) — auto-match confidence
- *   - scan_on_startup (default true)   — scan on app startup
+ *   - scan_interval_hours (default 12) - periodic scan interval
+ *   - watch_enabled (default true)     - filesystem watching
+ *   - auto_match_threshold (default 0.8) - auto-match confidence
+ *   - scan_on_startup (default true)   - scan on app startup
  *
  * Phase 4 (per-library scan modes) will give these proper per-library
  * treatment; this interim UI makes them visible and editable now.

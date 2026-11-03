@@ -13,7 +13,7 @@ import { resolveAudioPreferenceForItem } from '#lib/server/languages/audio-prefe
  * Enforces the effective profile's `audio.mode: 'require'` at grab approval.
  * Rejects ONLY on affirmative contradiction: the release title carries
  * explicit language tags and NONE of them matches the preference (bucket
- * 'other'). Untagged releases and multi-audio packs always pass — titles are
+ * 'other'). Untagged releases and multi-audio packs always pass - titles are
  * claims, not proof, and a pack's contents are unknowable pre-download (the
  * import verifier + shortfall loop catches those after the fact). 'prefer'
  * mode never rejects; ranking already expressed the preference.

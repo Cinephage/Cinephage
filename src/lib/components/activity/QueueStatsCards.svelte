@@ -29,7 +29,7 @@
 
 	function cardClass(status: QueueCardStatusFilter): string {
 		// Status filters don't apply on the unmatched tab (different data
-		// source) — only the Unmatched tile highlights there.
+		// source) - only the Unmatched tile highlights there.
 		if (unmatchedActive) return INACTIVE_TILE;
 		return activeFilter === status ? ACTIVE_TILE : INACTIVE_TILE;
 	}

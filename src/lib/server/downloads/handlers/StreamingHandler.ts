@@ -280,7 +280,7 @@ export class StreamingHandler {
 		await db.update(movies).set({ hasFile: true }).where(eq(movies.id, movieId));
 
 		// Retire AFTER registration, selected from current state via the
-		// shared policy. The just-written row is excluded by id — the old
+		// shared policy. The just-written row is excluded by id - the old
 		// delete-before-insert order unlinked the fresh .strm.
 		await this.retireMovieFiles(movieId, movie.rootFolder.path, movie.path, {
 			multiQuality,

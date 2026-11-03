@@ -65,7 +65,7 @@ export interface BaseSearchCriteria {
 	/**
 	 * Optional abort signal. Propagated to the underlying HTTP client (and any
 	 * browser-based Cloudflare bypass) so a timed-out or cancelled search stops
-	 * in-flight work — notably closing headless browsers promptly.
+	 * in-flight work - notably closing headless browsers promptly.
 	 */
 	signal?: AbortSignal;
 }

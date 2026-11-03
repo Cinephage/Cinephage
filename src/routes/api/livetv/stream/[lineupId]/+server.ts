@@ -6,21 +6,21 @@
  *
  * STREAMING MODES:
  *
- * 1. Default (no format param) — Server-side HLS-to-TS conversion
+ * 1. Default (no format param) - Server-side HLS-to-TS conversion
  *    This is the primary mode, used by media servers (Jellyfin/Plex/Emby) when
  *    they tune to a channel from the M3U playlist. Media servers' M3U tuners
- *    expect a continuous MPEG-TS byte stream — they cannot consume HLS playlists.
+ *    expect a continuous MPEG-TS byte stream - they cannot consume HLS playlists.
  *    The HlsToTsConverter fetches HLS playlists from the portal (getting a fresh
  *    play_token via createLink each cycle), downloads segments in sequence order,
  *    and pipes them as one continuous TS stream. This avoids the stalker portal
  *    replay issue entirely (see below).
  *
- * 2. HLS mode (format=hls) — Returns the raw HLS playlist with rewritten URLs
+ * 2. HLS mode (format=hls) - Returns the raw HLS playlist with rewritten URLs
  *    Segment URLs are rewritten to go through the segment proxy at
  *    /api/livetv/stream/:lineupId/segment.ts. Used by HLS-aware clients that
  *    can handle playlist refreshes themselves.
  *
- * 3. Direct TS mode (format=ts) — Resolve URL, fetch, pipe body directly
+ * 3. Direct TS mode (format=ts) - Resolve URL, fetch, pipe body directly
  *    No reconnection logic. When upstream closes (~24s on stalker), response ends.
  *    WARNING: Stalker portals cause ~20s content overlap/replay on reconnect
  *    because play_tokens are single-use and the server restarts from its internal

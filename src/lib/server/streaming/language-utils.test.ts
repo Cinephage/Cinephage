@@ -39,8 +39,8 @@ describe('sortSourcesByAudioPreference', () => {
 		const sorted = sortSourcesByAudioPreference(
 			[
 				source('de'),
-				source('eng'), // 'eng' normalizes to 'en' — must NOT match 'ja'
-				source('jpn'), // 'jpn' normalizes to 'ja' — original match
+				source('eng'), // 'eng' normalizes to 'en' - must NOT match 'ja'
+				source('jpn'), // 'jpn' normalizes to 'ja' - original match
 				source(),
 				source('ko')
 			],

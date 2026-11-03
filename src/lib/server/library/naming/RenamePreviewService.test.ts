@@ -1277,7 +1277,7 @@ describe('RenamePreviewService', () => {
 		});
 	});
 
-	describe('OriginalTitle Token — NamingService integration (WP-2)', () => {
+	describe('OriginalTitle Token - NamingService integration (WP-2)', () => {
 		/**
 		 * These tests verify that when originalTitle is present in MediaNamingInfo,
 		 * the {OriginalTitle} and {OriginalCleanTitle} tokens render correctly
@@ -2104,7 +2104,7 @@ describe('reorganizeFolder nested (letter-bucket) targets', () => {
 
 			expect(result.success).toBe(true);
 			expect(mockFs.mkdir).toHaveBeenCalledWith(`${root}/T`, { recursive: true });
-			// mkdir must happen BEFORE the rename — rename() cannot create parents.
+			// mkdir must happen BEFORE the rename - rename() cannot create parents.
 			const mkdirOrder = (mockFs.mkdir as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0];
 			const renameOrder = (mockFs.rename as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0];
 			expect(mkdirOrder).toBeLessThan(renameOrder);
@@ -2332,7 +2332,7 @@ describe('rename media-server notifications', () => {
 			name: 'rootguard-root'
 		});
 		// Root-level file: media-matcher tracks these with path '.' and the
-		// scan-heal path can write '' — either resolves to the root folder itself.
+		// scan-heal path can write '' - either resolves to the root folder itself.
 		await db.insert(schema.movies).values({
 			id: movieId,
 			rootFolderId,
@@ -2380,7 +2380,7 @@ describe('rename media-server notifications', () => {
 
 		const svc = new RenamePreviewService();
 		// oldParentPath '.' makes join(root, oldParentPath) resolve to the root
-		// itself — the guard must suppress Deleted(root)/Modified(root).
+		// itself - the guard must suppress Deleted(root)/Modified(root).
 		await svc['applyFolderRename'](movieId, 'movie', '.', 'Root Movie (2020)', 'stem');
 
 		expect(notifierMocks.queueUpdate).not.toHaveBeenCalled();

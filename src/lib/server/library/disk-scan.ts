@@ -97,14 +97,14 @@ export function findRenameHealTarget(
 
 /**
  * Correlate missing tracked paths with newly-seen on-disk paths that share
- * the same file basename and size — the signature of a folder rename made
+ * the same file basename and size - the signature of a folder rename made
  * outside Cinephage (user, Sonarr, file manager). Returns a map
  * oldFullPath → newFullPath for confident matches only: same basename, same
  * size (when the DB row has a size), unambiguous (exactly one candidate),
  * and one-to-one (each new path is claimed by at most one missing row).
  *
  * Heuristic limits: a false positive requires an identical filename AND an
- * identical byte size within a single root scan — e.g. two copies of the
+ * identical byte size within a single root scan - e.g. two copies of the
  * same release kept under different folders (one tracked at the old path,
  * one newly discovered) would heal the tracked row onto the copy. Duplicate
  * basenames with equal sizes are treated as ambiguous and never matched,
@@ -1259,7 +1259,7 @@ export class DiskScanService extends EventEmitter {
 				} else {
 					// Sonarr-style fallback: title-only files ("Razor (2007).mp4")
 					// match season 0 specials by contained episode title. The
-					// series folder itself is not a candidate — a special sharing
+					// series folder itself is not a candidate - a special sharing
 					// the series title would self-match.
 					const parentFolder = basename(dirname(file.path));
 					const candidates =
@@ -1507,7 +1507,7 @@ export class DiskScanService extends EventEmitter {
 	 *
 	 * Returns 'healed' when the DB rows were updated, or 'skipped-stale' when
 	 * nothing was healed (the row was already consistent or could not be
-	 * resolved) — the caller leaves such rows alone so they self-heal on the
+	 * resolved) - the caller leaves such rows alone so they self-heal on the
 	 * next scan.
 	 *
 	 * Public (not private) so tests can exercise the healing logic directly

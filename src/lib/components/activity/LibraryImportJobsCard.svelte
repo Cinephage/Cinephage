@@ -32,7 +32,7 @@
 
 	let { batches: initialBatches = [] as Batch[] }: { batches?: Batch[] } = $props();
 
-	// Deliberately a one-time snapshot, not a live mirror of the prop — this
+	// Deliberately a one-time snapshot, not a live mirror of the prop - this
 	// component manages `batches` itself from here on (polling, dismiss,
 	// retry, cancel), and re-fetches fresh data on mount anyway (see the
 	// refresh() effect below), so it doesn't need to track prop changes.
@@ -45,7 +45,7 @@
 	let loadingDetailsKey = $state<string | null>(null);
 
 	// Only worth showing while something is actually running, or there's a
-	// failure the user hasn't already dismissed — a card full of past
+	// failure the user hasn't already dismissed - a card full of past
 	// successes (or things the user already dealt with) is just noise.
 	const activeBatches = $derived(batches.filter((b) => b.active));
 	const actionableBatches = $derived(
@@ -69,7 +69,7 @@
 			const rows = (response as { batches?: Batch[] } | undefined)?.batches;
 			if (rows) batches = rows;
 		} catch {
-			// Transient poll errors — keep the last known state, try again next tick.
+			// Transient poll errors - keep the last known state, try again next tick.
 		}
 	}
 
@@ -163,7 +163,7 @@
 	}
 
 	// The initial `batches` prop is whatever the page's server load saw at
-	// that request — SvelteKit's client-side router can reuse that same load
+	// that request - SvelteKit's client-side router can reuse that same load
 	// result across a soft navigation away and back, so a dismiss/retry done
 	// in a previous mount of this component wouldn't otherwise show up until
 	// a hard refresh forced the load to rerun. Always get the live state once

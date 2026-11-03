@@ -1,5 +1,5 @@
 ---
-# TorrentLeech (TL) — Private 0DAY / General tracker
+# TorrentLeech (TL) - Private 0DAY / General tracker
 # Source port of Prowlarr's torrentleech.yml to the Cinephage Cardigann schema.
 # Search uses the site's internal JSON list endpoint after form login.
 # Keep requestdelay at 4.1s or higher: TL bans aggressive scrapers.

@@ -53,16 +53,16 @@ export function isMultiSeasonPack(
 	}
 
 	const t = release.title;
-	if (/\bS\d{1,2}[\s._-]*[-–—][\s._-]*S?\d{1,2}\b/i.test(t)) return true;
-	if (/\bS\d{1,2}[\s._-]?E\d{1,3}\s*[-–—]\s*S\d{1,2}[\s._-]?E\d{1,3}\b/i.test(t)) return true;
-	if (/\b\d{1,2}x\d{1,3}\s*[-–—]\s*\d{1,2}x\d{1,3}\b/i.test(t)) return true;
+	if (/\bS\d{1,2}[\s._-]*[-–-][\s._-]*S?\d{1,2}\b/i.test(t)) return true;
+	if (/\bS\d{1,2}[\s._-]?E\d{1,3}\s*[-–-]\s*S\d{1,2}[\s._-]?E\d{1,3}\b/i.test(t)) return true;
+	if (/\b\d{1,2}x\d{1,3}\s*[-–-]\s*\d{1,2}x\d{1,3}\b/i.test(t)) return true;
 	if (
-		/\bSeasons?[\s:._-]*\d{1,2}\s*(?:[-–—]|to|through|thru)\s*\d{1,2}(?:\s*(?:of|\/)\s*\d{1,2})?\b/i.test(
+		/\bSeasons?[\s:._-]*\d{1,2}\s*(?:[-–-]|to|through|thru)\s*\d{1,2}(?:\s*(?:of|\/)\s*\d{1,2})?\b/i.test(
 			t
 		)
 	)
 		return true;
-	if (/\bСезоны?[\s:._-]*\d{1,2}\s*(?:[-–—]|до)\s*\d{1,2}(?:\s*(?:из|of|\/)\s*\d{1,2})?\b/i.test(t))
+	if (/\bСезоны?[\s:._-]*\d{1,2}\s*(?:[-–-]|до)\s*\d{1,2}(?:\s*(?:из|of|\/)\s*\d{1,2})?\b/i.test(t))
 		return true;
 	if (
 		/\b(?:every[\s._-]?season|all[\s._-]?seasons?|полный[\s._-]*сериал|все[\s._-]*сезоны)\b/i.test(

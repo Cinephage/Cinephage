@@ -1,7 +1,7 @@
 ---
-# PassThePopcorn (PTP) — private movie tracker, custom JSON API
+# PassThePopcorn (PTP) - private movie tracker, custom JSON API
 # No Prowlarr/Jackett bridge needed. Auth via ApiUser/ApiKey HTTP headers
-# (query-param auth gets a login redirect — headers are required).
+# (query-param auth gets a login redirect - headers are required).
 # API port of Prowlarr's Definitions/PassThePopcorn + FlexGet's plugin:
 #   GET torrents.php?action=advanced&json=noredirect&searchstr={q}
 #     headers ApiUser/ApiKey, response {TotalResults, Movies[]}
@@ -9,7 +9,7 @@
 # attaches the search headers automatically (see Prowlarr GetDownloadRequest).
 # NOTE: searchstr is embedded in the path template (like seedpool.yaml) because
 # `searchstr` is not in Cinephage's known-search-param list.
-# NOTE: no tv-search mode — PTP rejects TV searches (HTTP 429).
+# NOTE: no tv-search mode - PTP rejects TV searches (HTTP 429).
 id: passthepopcorn
 name: PassThePopcorn (PTP)
 description: A private torrent tracker for movies (direct API)
@@ -70,7 +70,7 @@ settings:
 
 search:
   paths:
-    # Movie search — full-IMDb-ID when available, else keywords
+    # Movie search - full-IMDb-ID when available, else keywords
     - path: 'torrents.php?action=advanced&json=noredirect&searchstr={{ if .Query.IMDBID }}{{ .Query.IMDBID }}{{ else }}{{ .Keywords }}{{ end }}'
       method: get
       categories: [Movies]
@@ -103,7 +103,7 @@ search:
 
   rows:
     selector: Movies
-    # Each movie group contains a nested Torrents array — one release per torrent
+    # Each movie group contains a nested Torrents array - one release per torrent
     multiple: Torrents
 
   fields:

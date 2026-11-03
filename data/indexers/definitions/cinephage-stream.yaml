@@ -5,7 +5,7 @@
 #
 # Auto-managed by the CinephageAPI subsystem's library-streaming module.
 # Config (useHttps, externalHost, version/commit) lives in the subsystem
-# settings UI, NOT here — this YAML is only the search-execution template.
+# settings UI, NOT here - this YAML is only the search-execution template.
 #
 # Quality is determined at playback time by the streaming proxy,
 # which extracts streams from providers and selects the best available quality.

@@ -1,7 +1,7 @@
 /**
  * Live request updates over SSE.
  *
- * GET /api/requests/stream — 'requests:refresh' events, filtered per user:
+ * GET /api/requests/stream - 'requests:refresh' events, filtered per user:
  * admins receive everything, viewers only events about their own requests
  * or their own notifications.
  */

@@ -72,7 +72,7 @@ beforeEach(() => {
 		.run();
 });
 
-describe('media-browser key encryption — manager roundtrip', () => {
+describe('media-browser key encryption - manager roundtrip', () => {
 	it('stores ciphertext from createServer and returns plaintext from reads', async () => {
 		const manager = getMediaBrowserManager();
 		await manager.createServer({
@@ -115,7 +115,7 @@ describe('media-browser key encryption — manager roundtrip', () => {
 	});
 });
 
-describe('media-browser key encryption — migration 159', () => {
+describe('media-browser key encryption - migration 159', () => {
 	it('encrypts legacy plaintext rows and is idempotent', async () => {
 		// Start from a legacy plaintext row (as if the migration had not run).
 		testDb.db

@@ -10,7 +10,7 @@ const databases: Database.Database[] = [];
 /**
  * Legacy (pre-v142) shape: movies/episodes still carry the per-item adaptive
  * columns added by migration 072 (deprecated since 138) alongside the columns
- * that must survive — notably last_search_time, which remains in active use by
+ * that must survive - notably last_search_time, which remains in active use by
  * the release-search cooldown.
  */
 const PRE_MIGRATION_DDL = `
@@ -74,7 +74,7 @@ afterEach(() => {
 	}
 });
 
-describe('migration v142 — drop deprecated adaptive subtitle columns', () => {
+describe('migration v142 - drop deprecated adaptive subtitle columns', () => {
 	it('drops the deprecated columns from movies and episodes and keeps other data intact', () => {
 		const sqlite = createPreMigrationDatabase();
 

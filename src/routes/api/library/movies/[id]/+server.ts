@@ -466,7 +466,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 
 	// Manual anime provider link: fetch the linked AniList/MAL entries and
 	// persist their title variants as alternate titles (idempotent). Runs in
-	// the background — external provider latency must not stall the PATCH.
+	// the background - external provider latency must not stall the PATCH.
 	if (providerRefs?.anilist || providerRefs?.mal) {
 		persistLinkedProviderTitleVariants('movie', params.id, providerRefs).catch((err) => {
 			logger.warn(
@@ -804,7 +804,7 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 						);
 					}
 				}
-				// Delete queue record — cancel the acquisition intent first so the
+				// Delete queue record - cancel the acquisition intent first so the
 				// slot is released rather than leaking until restart.
 				acquisitionService.cancelByQueueId(queueItem.id, 'media removed from library');
 				await db.delete(downloadQueue).where(eq(downloadQueue.id, queueItem.id));

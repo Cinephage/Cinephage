@@ -1,7 +1,7 @@
 /**
  * Local ESLint rule: no-emoji
  *
- * Disallows pictographic emoji anywhere in a linted source file — string
+ * Disallows pictographic emoji anywhere in a linted source file - string
  * literals, template literals, comments, AND Svelte template markup. Emoji in
  * code/PRs is the most widely recognized low-quality / AI-generated tell, and
  * they render as tofu boxes on systems without an emoji font.
@@ -10,7 +10,7 @@
  * (the high pictographic Unicode planes plus a few BMP emoji-presentation
  * characters). Unicode *symbols* that Google's JS style guide explicitly
  * endorses as readable (arrows like `→`, `★`, `✓`, `✗`, `⚠`, `♪`) are NOT
- * banned — they are not the AI tell and render widely. Escapes such as
+ * banned - they are not the AI tell and render widely. Escapes such as
  * `\u266A` are allowed because the raw source text contains the six characters
  * `\`,`u`,`2`,`6`,`6`,`A` and no actual emoji codepoint.
  *
@@ -51,7 +51,7 @@ export default {
 		schema: [],
 		messages: {
 			emoji:
-				'Pictographic emoji are not allowed in source (found U+{{cp}}). Emoji in code/PRs is a common low-quality signal and renders inconsistently; use text, an icon component, or a \\u escape. Unicode symbols (arrows, stars, check marks) are fine — only pictographic emoji are banned.'
+				'Pictographic emoji are not allowed in source (found U+{{cp}}). Emoji in code/PRs is a common low-quality signal and renders inconsistently; use text, an icon component, or a \\u escape. Unicode symbols (arrows, stars, check marks) are fine - only pictographic emoji are banned.'
 		}
 	},
 	create(context) {

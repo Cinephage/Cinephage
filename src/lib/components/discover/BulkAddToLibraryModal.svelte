@@ -51,7 +51,7 @@
 	let scoringProfiles = $state<ScoringProfile[]>([]);
 	let isLoading = $state(false);
 	let isSubmitting = $state(false);
-	/** Items dispatched so far, 0..items.length — drives the progress line. */
+	/** Items dispatched so far, 0..items.length - drives the progress line. */
 	let submittedCount = $state(0);
 	let error = $state<string | null>(null);
 

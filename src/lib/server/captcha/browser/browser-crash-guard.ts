@@ -9,7 +9,7 @@
  *     at FFBrowserContext ... FFPage._onUncaughtError (playwright-core/coreBundle.js)
  *
  * Because that throw happens inside playwright's internals (not in our awaited
- * calls), a normal try/catch cannot intercept it — it surfaces as a Node
+ * calls), a normal try/catch cannot intercept it - it surfaces as a Node
  * `uncaughtException` and, with no global handler, terminates the whole server.
  *
  * This guard installs a single, idempotent process handler that swallows ONLY
@@ -73,7 +73,7 @@ export function installBrowserCrashGuard(): void {
 			);
 			return;
 		}
-		// Not ours — preserve Node's default crash semantics so real bugs surface.
+		// Not ours - preserve Node's default crash semantics so real bugs surface.
 		logger.error({ err, origin }, '[BrowserCrashGuard] Fatal uncaught exception; exiting');
 		process.exitCode = 1;
 		setTimeout(() => process.exit(1), 50).unref();

@@ -55,7 +55,7 @@ export const migration_v142: MigrationDefinition = {
 		sqlite.exec(`DROP TABLE IF EXISTS "${tempName}"`);
 		sqlite.exec(`CREATE TABLE "${tempName}" (\n${ALTERNATE_TITLES_COLUMNS}\n)`);
 
-		// Column sets are identical between v038 and v142 — copy everything.
+		// Column sets are identical between v038 and v142 - copy everything.
 		sqlite.exec(
 			`INSERT INTO "${tempName}" (id, media_type, media_id, title, clean_title, source, language, country, created_at)
 			 SELECT id, media_type, media_id, title, clean_title, source, language, country, created_at FROM "alternate_titles"`

@@ -654,7 +654,7 @@ export class AuthManager {
 	 * Tries a plain fetch first (with manual redirect following so session cookies
 	 * from 302 responses are captured). If the response looks like a Cloudflare
 	 * challenge and the captcha solver (Camoufox browser) is available, retries
-	 * through the browser — which both passes the challenge and returns the
+	 * through the browser - which both passes the challenge and returns the
 	 * session cookies set by the site.
 	 */
 	private async requestWithCloudflareFallback(

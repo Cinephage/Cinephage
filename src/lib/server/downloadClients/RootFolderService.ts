@@ -678,7 +678,7 @@ export class RootFolderService {
 			testDir = await fs.mkdtemp(path.join(dirPath, '.cinephage-write-test-'));
 			// mkdtemp creates the dir 0700 (owner-only). Other processes watch
 			// these folders (e.g. Jellyfin) and log permission errors when they
-			// react to a transient entry they cannot read — relax the mode.
+			// react to a transient entry they cannot read - relax the mode.
 			await fs.chmod(testDir, 0o755);
 			await fs.rmdir(testDir);
 			return true;

@@ -1,5 +1,5 @@
 /**
- * Built-in Cinephage modules — static registration.
+ * Built-in Cinephage modules - static registration.
  *
  * Mirrors the subtitles ProviderRegistry pattern (`registerBuiltinProviders`
  * in SubtitleProviderFactory.ts). Called by CinephageApiService.initialize()

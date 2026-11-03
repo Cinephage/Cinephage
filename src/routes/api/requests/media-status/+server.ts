@@ -2,7 +2,7 @@
  * GET /api/requests/media-status?mediaType=&tmdbId=
  *
  * Pre-submit state for the request modal: the scopes held by active
- * requests for this title (any requester — duplicates are cross-user, so
+ * requests for this title (any requester - duplicates are cross-user, so
  * the modal must lock those rows) and which episodes already have files.
  * Aggregate scope data only; no usernames or request ids cross the wire.
  */

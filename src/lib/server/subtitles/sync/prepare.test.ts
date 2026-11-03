@@ -81,7 +81,7 @@ describe('prepare', () => {
 				{ start: 400, end: 500 }
 			]);
 			// The zero-length span at 300 is closer to span at 400-500 (distance 100)
-			// than span at 100-200 (distance 100) — equal distance, goes to previous
+			// than span at 100-200 (distance 100) - equal distance, goes to previous
 			expect(result.indices[0]).toBe(0);
 			expect(result.indices[2]).toBe(1);
 		});
@@ -138,7 +138,7 @@ describe('prepare', () => {
 				{ start: 100, end: 200 }
 			];
 			const result = prepareTimeSpans(spans);
-			// After sort: [100-200, 300-400] — no overlap, no zero-length
+			// After sort: [100-200, 300-400] - no overlap, no zero-length
 			expect(result.spans).toEqual([
 				{ start: 100, end: 200 },
 				{ start: 300, end: 400 }

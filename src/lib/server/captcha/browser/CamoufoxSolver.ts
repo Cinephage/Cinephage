@@ -72,7 +72,7 @@ async function settlePage(page: Page): Promise<void> {
 	try {
 		await page.waitForLoadState('networkidle', { timeout: 5000 });
 	} catch {
-		// networkidle may never fire on busy pages — best effort only.
+		// networkidle may never fire on busy pages - best effort only.
 	}
 }
 
@@ -101,7 +101,7 @@ async function waitForChallengeComplete(page: Page, timeout = 30000): Promise<bo
 			const title = await page.title();
 
 			if (!isInterstitialTitle(title)) {
-				// Reached the real page — let it settle, then we're done.
+				// Reached the real page - let it settle, then we're done.
 				await settlePage(page);
 				return true;
 			}
@@ -114,7 +114,7 @@ async function waitForChallengeComplete(page: Page, timeout = 30000): Promise<bo
 				await attemptChallengeCheckboxClick(page).catch(() => false);
 			}
 		} catch {
-			// Navigation can destroy the execution context during hand-off — expected.
+			// Navigation can destroy the execution context during hand-off - expected.
 			// Wait briefly and re-loop; the title check confirms the real page.
 			await new Promise((r) => setTimeout(r, 500));
 		}
@@ -132,7 +132,7 @@ async function waitForChallengeComplete(page: Page, timeout = 30000): Promise<bo
 			return true;
 		}
 	} catch {
-		// Context unavailable — fall through to failure.
+		// Context unavailable - fall through to failure.
 	}
 
 	return false;
@@ -224,7 +224,7 @@ const PASSIVE_PHASE_BUDGET_MS = 25_000;
  * Solve a challenge for the given URL using Camoufox
  *
  * Two-phase strategy (live-verified against rutracker.org, issue #228):
- * 1. Passive attempt WITHOUT the shadow-unlock addon — its MAIN-world
+ * 1. Passive attempt WITHOUT the shadow-unlock addon - its MAIN-world
  *    attachShadow patch is detected by Cloudflare Turnstile, which then serves
  *    an unwinnable challenge loop even when a clean fingerprint would auto-clear.
  * 2. Only if still challenged with budget remaining: retry WITH the addon so the
@@ -489,7 +489,7 @@ export async function testForChallenge(
  * from accessing Cloudflare-protected sites even with valid cookies.
  *
  * Two-phase strategy (live-verified against rutracker.org, issue #228):
- * 1. Passive attempt WITHOUT the shadow-unlock addon — its MAIN-world
+ * 1. Passive attempt WITHOUT the shadow-unlock addon - its MAIN-world
  *    attachShadow patch is detected by Cloudflare Turnstile, which then serves
  *    an unwinnable challenge loop even when a clean fingerprint would auto-clear.
  * 2. Only if still challenged with budget remaining: retry WITH the addon so the
@@ -588,7 +588,7 @@ async function runBrowserFetchAttempt(
 
 		// Deep links (e.g. /search/…) get a much stricter Cloudflare challenge than
 		// the site root and frequently never clear on their own. Warming up on the
-		// origin root first — the way a real user lands on the homepage — establishes
+		// origin root first - the way a real user lands on the homepage - establishes
 		// a domain-wide cf_clearance, after which the deep link clears in ~2s in the
 		// same browser session. browserFetch is only ever called under CF protection,
 		// so this warm-up is always appropriate here.
@@ -662,7 +662,7 @@ async function runBrowserFetchAttempt(
 		// cookies and user agent, which Cloudflare accepts where a plain Node
 		// fetch with mismatched fingerprints gets challenged (verified live on
 		// rutracker.org dl.php, issue #228). Navigation to binary endpoints is
-		// avoided entirely — Firefox would not expose their bytes via page.content().
+		// avoided entirely - Firefox would not expose their bytes via page.content().
 		if (request.binary) {
 			const finalCookies = await camoufoxManager.extractCookies(managed.context, [request.url]);
 			const requestHeaders: Record<string, string> = {};
@@ -719,7 +719,7 @@ async function runBrowserFetchAttempt(
 		const finalUrl = page.url();
 
 		// Guard against a false success: if we still hold the challenge/interstitial
-		// page (e.g. clearance never actually issued — common on flagged IPs), do NOT
+		// page (e.g. clearance never actually issued - common on flagged IPs), do NOT
 		// hand the challenge HTML to the caller's parser. Fail honestly instead.
 		if (!request.returnOnlyCookies && bodyLooksLikeChallenge(body)) {
 			return {

@@ -3,7 +3,7 @@ import { mediaBrowserServers, storageItems } from '#lib/server/db/schema.js';
 import type { StorageInsightRule, RuleContext, InsightFinding } from '../types.js';
 
 /**
- * Items in storage_items with sourceSystem='local' — present in Cinephage's
+ * Items in storage_items with sourceSystem='local' - present in Cinephage's
  * library but not tracked by any media server. Suppressed when zero media
  * servers are configured (can't be "missing" from a server the user doesn't have).
  */

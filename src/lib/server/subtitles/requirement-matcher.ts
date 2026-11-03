@@ -10,7 +10,7 @@
  * - Language: a base-only requirement tag (`en`, `zh`) accepts any region or
  *   script of the same base (`en-US`, `en-GB`, `zh-Hans`). A requirement with a
  *   region/script (`pt-BR`, `zh-Hant`, `es-419`) accepts ONLY the same canonical
- *   tag — a bare `pt` does not satisfy `pt-BR`, and `zh-Hans` never satisfies
+ *   tag - a bare `pt` does not satisfy `pt-BR`, and `zh-Hans` never satisfies
  *   `zh-Hant`. Unresolvable input (including `und`) never satisfies anything.
  * - Variant: `regular` accepts non-forced only; `forced` accepts forced only;
  *   `both` accepts either.
@@ -19,7 +19,7 @@
  *   rejects HI.
  *
  * NOTE: the matcher takes no hash input by design. A hash-verified search
- * result is not exempt from the requirement tuple — callers must not bypass
+ * result is not exempt from the requirement tuple - callers must not bypass
  * this function for hash matches.
  */
 

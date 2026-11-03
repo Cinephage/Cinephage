@@ -58,7 +58,7 @@ interface TmdbSnapshot {
  * The request workflow authority. Creation/duplicate/quota/cooldown rules
  * live here; approval drives the shared library-add orchestrators
  * (addMovieToLibrary / addSeriesToLibrary) and never touches the download
- * queue or acquisition services directly — searchOnAdd and the monitoring
+ * queue or acquisition services directly - searchOnAdd and the monitoring
  * tasks own acquisition end-to-end.
  */
 export class RequestService {
@@ -308,7 +308,7 @@ export class RequestService {
 				}
 			} else {
 				// Seasons unit counts distinct seasons touched, including those
-				// only reached through episode picks — the same definition
+				// only reached through episode picks - the same definition
 				// countTvUnits uses for `used`, so enforcement and accounting
 				// cannot diverge.
 				const needed =
@@ -382,7 +382,7 @@ export class RequestService {
 				return await this.approveInternal(created.id, requester, true);
 			} catch (error) {
 				// Approval failures leave a durable failed request, never a throw
-				// out of create — the request itself was accepted.
+				// out of create - the request itself was accepted.
 				logger.warn(
 					{ requestId: created.id, error: error instanceof Error ? error.message : String(error) },
 					'[Requests] Auto-approval failed; request left failed'
@@ -1017,7 +1017,7 @@ export class RequestService {
 	/**
 	 * DELETE verb: a pending request is cancelled (the row stays as the
 	 * decision record); a decided one is removed outright. Active non-pending
-	 * statuses fall into cancel's invalid_status 409 — approve/decline/retry
+	 * statuses fall into cancel's invalid_status 409 - approve/decline/retry
 	 * are the verbs there.
 	 */
 	async cancelOrRemove(
@@ -1027,7 +1027,7 @@ export class RequestService {
 		const request = await this.getRequest(requestId);
 		// `failed` stays an ACTIVE status (it blocks duplicates and carries the
 		// Retry action), but unlike the other active statuses it is also
-		// owner-removable — e.g. requests failed by media deletion, where the
+		// owner-removable - e.g. requests failed by media deletion, where the
 		// requester prefers a fresh request over a retry.
 		const cancellable =
 			(ACTIVE_REQUEST_STATUSES as readonly string[]).includes(request.status) &&
@@ -1230,7 +1230,7 @@ export class RequestService {
 	/**
 	 * Fulfill any pending/approved request whose media is now available.
 	 * Called by the projector on library events and by the sweep. A pending
-	 * request fulfilled this way skips approval entirely — the media exists.
+	 * request fulfilled this way skips approval entirely - the media exists.
 	 */
 	async advanceFulfilledByMedia(mediaType: 'movie' | 'series', tmdbId: number): Promise<number> {
 		const active = await db
@@ -1292,7 +1292,7 @@ export class RequestService {
 
 	/**
 	 * Fail requests orphaned by media deletion. Approval always stamps the
-	 * library id, and only the requests FK (ON DELETE SET NULL) clears it —
+	 * library id, and only the requests FK (ON DELETE SET NULL) clears it -
 	 * so `approved` with both ids null is exactly the deleted-after-approval
 	 * class, whether the delete came from the admin UI, bulk actions, or
 	 * scan-driven removal. `failed` is not an active status, so re-requesting
@@ -1430,7 +1430,7 @@ export class RequestService {
 	}
 
 	/**
-	 * Distinct (mediaType, tmdbId) pairs of active requests — the sweep's
+	 * Distinct (mediaType, tmdbId) pairs of active requests - the sweep's
 	 * work list. Keyed on identity rather than the 100 newest rows so an
 	 * active request is never starved from fulfillment projection.
 	 */

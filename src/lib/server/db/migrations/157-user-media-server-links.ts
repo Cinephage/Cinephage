@@ -4,7 +4,7 @@ import type { MigrationDefinition } from '../migration-helpers.js';
  * Version 157: user_media_server_links.
  *
  * Identity mapping between a Cinephage account and its media-server
- * (Jellyfin) account. Stores the server user id plus a username snapshot —
+ * (Jellyfin) account. Stores the server user id plus a username snapshot -
  * deliberately no per-user tokens: pairing proves identity and the
  * server-side admin key handles data access internally.
  */

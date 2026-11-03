@@ -12,7 +12,7 @@ const SETTINGS_KEY = 'prowlarr_connection';
 
 export interface ProwlarrConnection {
 	url: string;
-	/** Stored server-side only — never sent to the client */
+	/** Stored server-side only - never sent to the client */
 	apiKey: string;
 	autoSync: boolean;
 	syncIntervalHours: number;
@@ -116,7 +116,7 @@ export function isAggregateIndexer(indexer: {
 }
 
 /**
- * Returns true if the given indexer was imported from this Prowlarr connection —
+ * Returns true if the given indexer was imported from this Prowlarr connection -
  * either as a numeric individual indexer or as the aggregate indexer.
  * Requires definitionId='prowlarr' so that torznab/newznab indexers that happen
  * to share the same host are not incorrectly claimed as Prowlarr-managed.
@@ -130,7 +130,7 @@ export function isIndexerFromConnection(
 	if (isAggregateIndexer(indexer)) {
 		return indexer.baseUrl === prowlarrBase || indexer.baseUrl.startsWith(prowlarrBase + '/');
 	}
-	// Individual indexer — baseUrl must end with a numeric Prowlarr ID
+	// Individual indexer - baseUrl must end with a numeric Prowlarr ID
 	if (!indexer.baseUrl.startsWith(prowlarrBase + '/')) return false;
 	const suffix = indexer.baseUrl.slice(prowlarrBase.length + 1).replace(/\/+$/, '');
 	return /^\d+$/.test(suffix);

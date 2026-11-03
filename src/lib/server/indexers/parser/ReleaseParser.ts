@@ -88,7 +88,7 @@ const STREAMING_SERVICE_PATTERNS: Array<{ service: string; pattern: RegExp }> = 
 export interface ParseOptions {
 	/**
 	 * Source indexer language (ISO 639-1 code). Recorded verbatim on the
-	 * parsed release as source metadata (where the release came from) — it is
+	 * parsed release as source metadata (where the release came from) - it is
 	 * NOT merged into `languages`, which reflects only what the title asserts.
 	 */
 	sourceLanguage?: string;
@@ -214,7 +214,7 @@ export class ReleaseParser {
 	 * the episode title, not a release group. To stay conservative, a group is
 	 * only rejected when an episode was matched AND the candidate is the last
 	 * word of the text after the SxxEyy marker, cut at the earliest quality
-	 * token that follows it (only tokens after the marker matter — earlier
+	 * token that follows it (only tokens after the marker matter - earlier
 	 * ones don't bound the span): real groups almost always follow quality
 	 * tokens or sit in brackets, which keeps them.
 	 */
@@ -256,7 +256,7 @@ export class ReleaseParser {
 
 		const span = stripped.slice(spanStart, spanEnd).trim();
 		// Tokenize ignoring bracket-wrapped quality blocks and punctuation so
-		// bracketed audio (e.g. "[AAC 2 0]" — dots were normalized to spaces)
+		// bracketed audio (e.g. "[AAC 2 0]" - dots were normalized to spaces)
 		// does not mask the title tail when no quality matcher registered.
 		const spanTokens = span
 			.replace(/\[[^\]]*\]/g, ' ')

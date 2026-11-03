@@ -5,8 +5,8 @@ const { isSensitiveObjectKey, redactString } = __testing;
 
 /**
  * Regression coverage: the redaction predicate matched exact names and
- * `_`/`-` suffixes only, so camelCase compounds — the exact shape this
- * codebase uses in log payloads — passed through unredacted. SessionProxyService
+ * `_`/`-` suffixes only, so camelCase compounds - the exact shape this
+ * codebase uses in log payloads - passed through unredacted. SessionProxyService
  * logged `sessionToken: session.token` on every proxied playback segment.
  */
 describe('log redaction', () => {

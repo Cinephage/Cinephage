@@ -2,7 +2,7 @@
  * GET /api/user/media-server/avatar/[serverId]
  *
  * Proxies the caller's own linked Jellyfin avatar. Falls back to 404 when
- * the account has no link on that server or the server has no image — the
+ * the account has no link on that server or the server has no image - the
  * UI renders the initial-letter fallback in that case. The admin key stays
  * server-side; the response is just the image bytes.
  */

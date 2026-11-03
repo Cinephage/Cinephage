@@ -177,7 +177,7 @@ export async function createAuthTestHarness(options: {
 		const request = new Request(`${BASE_URL}/api/auth${path}`, { ...init, headers });
 
 		// sveltekitCookies calls getRequestEvent(), which throws outside a
-		// request store — run the handler inside a minimal fake one.
+		// request store - run the handler inside a minimal fake one.
 		const stub = makeEvent(request.method, new URL(request.url).pathname, {});
 		return withStore(stub.event, () => auth.handler(request));
 	}

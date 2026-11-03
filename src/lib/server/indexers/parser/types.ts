@@ -197,7 +197,7 @@ export interface ParsedRelease {
 	hdrFormats: HdrFormat[];
 	/**
 	 * Best detected HDR format, or null when none was detected.
-	 * Derived from `hdrFormats` — kept for consumers that only need the
+	 * Derived from `hdrFormats` - kept for consumers that only need the
 	 * headline format (naming, display, persisted quality).
 	 */
 	hdr: HdrFormat | null;
@@ -219,7 +219,7 @@ export interface ParsedRelease {
 	/**
 	 * Languages asserted by the release title (ISO 639-1 codes, plus the
 	 * pseudo-codes 'multi' and 'orig'). Empty when the title names no
-	 * language — absence of evidence is never expanded to 'en'.
+	 * language - absence of evidence is never expanded to 'en'.
 	 */
 	languages: string[];
 

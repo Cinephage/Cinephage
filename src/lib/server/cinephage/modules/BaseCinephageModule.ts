@@ -1,7 +1,7 @@
 import type { CinephageModule, ConnectionTestResult, CinephageModuleContext } from './types.js';
 
 /**
- * BaseCinephageModule — shared defaults for Cinephage feature modules.
+ * BaseCinephageModule - shared defaults for Cinephage feature modules.
  *
  * Subclasses set the readonly identity fields (id, name, etc.) in their
  * constructor and override methods as needed. Mirrors the BaseAuthProvider /

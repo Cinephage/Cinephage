@@ -98,7 +98,7 @@ export interface SubtitleSearchOptions {
 	/**
 	 * All requirements currently being acquired. When provided (and no single
 	 * `requirement`), the priority cascade only stops once every requirement has
-	 * an acceptable candidate in the accumulated results — otherwise a tier
+	 * an acceptable candidate in the accumulated results - otherwise a tier
 	 * with a weak candidate for one language would hide better candidates for
 	 * the others in lower-priority providers.
 	 */
@@ -590,7 +590,7 @@ export class SubtitleSearchService {
 				}
 			}
 
-			// Blacklisted results must not satisfy tier acceptance — otherwise a
+			// Blacklisted results must not satisfy tier acceptance - otherwise a
 			// blacklisted-but-acceptable result stops the cascade and lower tiers
 			// (which could hold a usable candidate) are never queried.
 			const eligibleTierResults = tierResultsAll.filter(

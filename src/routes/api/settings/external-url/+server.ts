@@ -37,7 +37,7 @@ export const PUT: RequestHandler = async (event) => {
 			return Response.json(
 				{
 					error:
-						'External URL must not include a path (e.g. "/cinephage") — subpath reverse-proxy routing is not currently supported. Use a dedicated (sub)domain instead.'
+						'External URL must not include a path (e.g. "/cinephage") - subpath reverse-proxy routing is not currently supported. Use a dedicated (sub)domain instead.'
 				},
 				{ status: 400 }
 			);

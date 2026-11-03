@@ -27,7 +27,7 @@ export interface SubtitleRequirementProgress {
 	/** Requirements satisfied within the counted window. */
 	satisfiedCount: number;
 	/**
-	 * Requirements counted — cutoff-aware denominator: cutoffRank + 1 when the
+	 * Requirements counted - cutoff-aware denominator: cutoffRank + 1 when the
 	 * profile sets a cutoff, otherwise every requirement. Matches the TV
 	 * loader's `totalRequirements` semantics.
 	 */
@@ -46,7 +46,7 @@ export interface SubtitleRequirementProgress {
  * Derive the requirement progress view-model.
  *
  * Returns null when there is nothing requirement-aware to show (no status, no
- * profile, or a profile without subtitle requirements) — callers then fall
+ * profile, or a profile without subtitle requirements) - callers then fall
  * back to the language-agnostic badge behavior.
  *
  * @param status - The loader's subtitleStatus for the item
@@ -75,7 +75,7 @@ export function deriveSubtitleProgress(
 
 /**
  * Aggregate requirement progress across a series' episodes (file-bearing
- * episodes with counts only — absent counts mean no effective requirements
+ * episodes with counts only - absent counts mean no effective requirements
  * for that episode and are excluded). Returns null when NO episode has
  * counts, so the badge hides exactly like the per-episode one. A series-level
  * cutoff marker is meaningless (episodes resolve independently), so

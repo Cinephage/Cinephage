@@ -1523,7 +1523,7 @@ export class MonitoringSearchService {
 					continue;
 				}
 
-				// Found a valid, non-blocklisted season pack — grab it
+				// Found a valid, non-blocklisted season pack - grab it
 				grabResult = await this.grabRelease(release, {
 					mediaType: 'tv',
 					seriesId: seriesData.id,
@@ -2751,7 +2751,7 @@ export class MonitoringSearchService {
 
 			// Query recently aired episodes without files
 			// airDate is stored date-only ("YYYY-MM-DD") while the cutoff is a full
-			// ISO datetime — a lexicographic gte() against the datetime excludes
+			// ISO datetime - a lexicographic gte() against the datetime excludes
 			// episodes aired ON the cutoff date (e.g. everything today after 01:00
 			// UTC for an hourly interval). Compare against the cutoff's DATE so the
 			// full lookback window is covered; slight over-inclusion is safe (the

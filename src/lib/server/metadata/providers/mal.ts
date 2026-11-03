@@ -113,8 +113,8 @@ function collectGenres(anime: JikanAnime): string[] {
 /**
  * Expose every title variant Jikan/MAL reports (english, japanese, the
  * titles[] list) instead of discarding them. Jikan supplies no language or
- * country codes — its type labels ('Japanese', 'English', 'Synonym', …) are
- * kind annotations, not ISO codes — so `language`/`country` stay null and are
+ * country codes - its type labels ('Japanese', 'English', 'Synonym', …) are
+ * kind annotations, not ISO codes - so `language`/`country` stay null and are
  * never guessed.
  */
 function buildTitleVariants(anime: JikanAnime): MetadataTitleVariant[] {

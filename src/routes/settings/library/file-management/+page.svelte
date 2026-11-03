@@ -25,7 +25,7 @@
 
 	let { data }: { data: PageData } = $props();
 
-	// Form fields intentionally capture the initial load value once — untrack
+	// Form fields intentionally capture the initial load value once - untrack
 	// keeps the data reads out of the reactive graph inside $state initializers.
 	let importMode = $state<ImportMethod>(untrack(() => data.settings.importMode));
 	let preferHardlink = $state<boolean>(untrack(() => data.settings.preferHardlink));
@@ -92,7 +92,7 @@
 			if (stripped.length > 0) {
 				extraFileExtensions = extraFileExtensions.filter((e) => !BLOCKED_EXTS.has(e.toLowerCase()));
 				toasts.warning(
-					`Removed blocked extensions: ${stripped.join(', ')} — these are dangerous or executable file types that can never be imported.`
+					`Removed blocked extensions: ${stripped.join(', ')} - these are dangerous or executable file types that can never be imported.`
 				);
 			}
 			const preservePermissions = permissionsMode === 'preserve';

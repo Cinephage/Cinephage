@@ -11,7 +11,7 @@ import {
  *
  * The extra keys MUST match the `extraKeys` declared for livetv_accounts in
  * SECRET_FIELD_SPECS. If the runtime encrypts a field the registry does not
- * know about, credential rotation decrypts and re-encrypts around it — the
+ * know about, credential rotation decrypts and re-encrypts around it - the
  * value survives, but backups and migrations treat it as non-secret and copy
  * it out as plaintext.
  */

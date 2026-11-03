@@ -33,7 +33,7 @@ describe('migration 166: scoring profile allowed indexers', () => {
 		expect(() => migration.apply(sqlite)).not.toThrow();
 		expect(columnExists(sqlite, 'scoring_profiles', 'allowed_indexers')).toBe(true);
 
-		// NULL means "all indexers" — upgrading must not change search behavior.
+		// NULL means "all indexers" - upgrading must not change search behavior.
 		expect(
 			sqlite
 				.prepare(`SELECT allowed_indexers FROM scoring_profiles WHERE id = 'balanced'`)

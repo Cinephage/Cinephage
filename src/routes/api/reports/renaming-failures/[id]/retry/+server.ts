@@ -38,7 +38,7 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 		await access(failure.sourcePath);
 	} catch {
 		return Response.json(
-			{ success: false, error: 'Source file no longer exists — cannot retry' },
+			{ success: false, error: 'Source file no longer exists - cannot retry' },
 			{ status: 422 }
 		);
 	}
@@ -91,7 +91,7 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 				.where(eq(episodeFiles.id, failure.fileId));
 		}
 	} catch (err) {
-		// File was renamed on disk — log but don't fail the response; the library
+		// File was renamed on disk - log but don't fail the response; the library
 		// scanner will reconcile the path on next scan.
 		logger.warn({ err, id }, '[Reports] Renamed on disk but failed to update library record');
 	}

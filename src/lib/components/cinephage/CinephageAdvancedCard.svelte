@@ -100,7 +100,7 @@
 						{#if config.latestCommit}({config.latestCommit}){/if}
 					</span>
 				{:else}
-					<span class="text-base-content/40">—</span>
+					<span class="text-base-content/40">-</span>
 				{/if}
 			</span>
 			<button class="btn btn-ghost btn-xs" onclick={handleFetchRelease} disabled={fetchingRelease}>

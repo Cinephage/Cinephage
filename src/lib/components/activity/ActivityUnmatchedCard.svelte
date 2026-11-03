@@ -278,7 +278,7 @@
 			items = res.items;
 			total = res.total;
 			page = res.page;
-			// Drop selections for rows that are gone — imported rows leave
+			// Drop selections for rows that are gone - imported rows leave
 			// the pane by definition (they become tracked queue rows).
 			const live = new Set(items.map((item) => item.hash));
 			for (const hash of [...selected]) {

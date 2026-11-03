@@ -2,8 +2,8 @@
  * Admin-managed per-user request settings (disable, auto-approve grant,
  * quota overrides). Null values inherit the global request settings.
  *
- * GET /api/settings/users/[userId]/request-settings — current overrides
- * PUT /api/settings/users/[userId]/request-settings — partial update
+ * GET /api/settings/users/[userId]/request-settings - current overrides
+ * PUT /api/settings/users/[userId]/request-settings - partial update
  *
  * Auth: admin only. Unknown users 404.
  */

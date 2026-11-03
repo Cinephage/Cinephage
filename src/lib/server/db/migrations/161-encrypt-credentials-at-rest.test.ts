@@ -10,7 +10,7 @@ import { encryptDebridToken } from '#lib/server/crypto/debridTokenCrypto.js';
  * the same envelope, and the migration is idempotent + plaintext-tolerant.
  */
 
-describe('migration 161 — encrypt credentials at rest', () => {
+describe('migration 161 - encrypt credentials at rest', () => {
 	const testDb: TestDatabase = createTestDb();
 
 	it('encrypts indexer settings JSON secrets and settings KV rows in place', async () => {

@@ -4,8 +4,8 @@
  *
  * Unlike streaming-auth.test.ts (which mocks auth), these tests run the actual
  * auth construction against a throwaway database and drive requests through
- * `handle` inside a fake SvelteKit request store — the same store machinery
- * production uses — so `sveltekitCookies`/`sequence`/`getRequestEvent` all
+ * `handle` inside a fake SvelteKit request store - the same store machinery
+ * production uses - so `sveltekitCookies`/`sequence`/`getRequestEvent` all
  * behave as they do at runtime.
  *
  * Test order matters: fresh-install behavior first, then the sole admin is
@@ -66,7 +66,7 @@ afterAll(() => {
 	harness.cleanup();
 });
 
-describe('hooks chain — fresh install', () => {
+describe('hooks chain - fresh install', () => {
 	it('redirects anonymous page requests to /setup', async () => {
 		const { event } = harness.makeEvent('GET', '/');
 
@@ -91,7 +91,7 @@ describe('hooks chain — fresh install', () => {
 	});
 });
 
-describe('hooks chain — setup via the auth route', () => {
+describe('hooks chain - setup via the auth route', () => {
 	it('signs the first user up through the full hook chain and issues a session cookie', async () => {
 		// JSON requests skip csrfGuard by design; only form posts are checked.
 		const { event } = harness.makeEvent('POST', '/api/auth/sign-up/email', {
@@ -129,7 +129,7 @@ describe('hooks chain — setup via the auth route', () => {
 	});
 });
 
-describe('hooks chain — authenticated routing', () => {
+describe('hooks chain - authenticated routing', () => {
 	it('populates locals.user/session for cookie-authenticated API requests', async () => {
 		const { event } = harness.makeEvent('GET', '/api/activity', {
 			headers: { cookie: harness.cookieHeader(sessionCookies) }
@@ -173,7 +173,7 @@ describe('hooks chain — authenticated routing', () => {
 	});
 });
 
-describe('hooks chain — API key authentication (arr-compatible)', () => {
+describe('hooks chain - API key authentication (arr-compatible)', () => {
 	it('creates managed keys for the admin session', async () => {
 		const sessionHeaders = new Headers({ cookie: harness.cookieHeader(sessionCookies) });
 		const keys = await ensureDefaultApiKeysForUser(adminUserId, sessionHeaders);
@@ -205,7 +205,7 @@ describe('hooks chain — API key authentication (arr-compatible)', () => {
 		expect(event.locals.user?.id).toBe(adminUserId);
 	});
 
-	it('rejects ?apikey= outside the arr-compat routes — query-param credentials leak into proxy logs', async () => {
+	it('rejects ?apikey= outside the arr-compat routes - query-param credentials leak into proxy logs', async () => {
 		const { event } = harness.makeEvent(
 			'GET',
 			'/api/activity?apikey=' + encodeURIComponent(mainKey)
@@ -225,7 +225,7 @@ describe('hooks chain — API key authentication (arr-compatible)', () => {
 		expect(response.status).toBe(401);
 	});
 
-	it('never bridges a streaming-scoped key to the general API — not even for its owner', async () => {
+	it('never bridges a streaming-scoped key to the general API - not even for its owner', async () => {
 		// Streaming keys live in .m3u/.strm URLs that proxies and media
 		// servers log routinely. If one leaked, it must not grant full API
 		// access to the (admin) owner account.
@@ -239,7 +239,7 @@ describe('hooks chain — API key authentication (arr-compatible)', () => {
 	});
 });
 
-describe('hooks chain — streaming API key gate', () => {
+describe('hooks chain - streaming API key gate', () => {
 	it('accepts a streaming-scoped key', async () => {
 		const { event } = harness.makeEvent('GET', '/api/streaming/library/movie/some-file', {
 			headers: { 'x-api-key': streamingKey }
@@ -278,7 +278,7 @@ describe('hooks chain — streaming API key gate', () => {
 	});
 });
 
-describe('hooks chain — multi-user readiness', () => {
+describe('hooks chain - multi-user readiness', () => {
 	// The admin plugin's user endpoints read the request event internally,
 	// so direct auth.api calls need the store wrapper.
 	function storeStub() {
@@ -327,7 +327,7 @@ describe('hooks chain — multi-user readiness', () => {
 		expect(signInResponse.status).toBe(200);
 		viewerCookies = harness.extractCookies(signInResponse);
 
-		// With two accounts, the bootstrap repair must leave the role alone —
+		// With two accounts, the bootstrap repair must leave the role alone -
 		// checked on a viewer-allowlisted path (see the viewer gate describe).
 		const apiRequest = harness.makeEvent('GET', '/api/system/status', {
 			headers: { cookie: harness.cookieHeader(viewerCookies) }
@@ -339,7 +339,7 @@ describe('hooks chain — multi-user readiness', () => {
 	});
 });
 
-describe('hooks chain — viewer API gate', () => {
+describe('hooks chain - viewer API gate', () => {
 	it('lets a viewer session read allowlisted surfaces', async () => {
 		for (const path of ['/api/system/status', '/api/discover', '/api/library/movies']) {
 			const { event } = harness.makeEvent('GET', path, {
@@ -403,7 +403,7 @@ describe('hooks chain — viewer API gate', () => {
 
 	it('blocks viewer sessions from admin API routes regardless of local guards', async () => {
 		// Routes like /api/indexers (GET) and /api/subtitles/auto-search (POST)
-		// carry no local role check of their own — the central gate is what
+		// carry no local role check of their own - the central gate is what
 		// keeps them admin-only.
 		const cases = [
 			['GET', '/api/activity'],
@@ -439,7 +439,7 @@ describe('hooks chain — viewer API gate', () => {
 	});
 });
 
-describe('hooks chain — viewer gate: requests and notifications', () => {
+describe('hooks chain - viewer gate: requests and notifications', () => {
 	it('lets a viewer reach the request list and their notification feed', async () => {
 		for (const path of ['/api/requests', '/api/user/notifications']) {
 			const { event } = harness.makeEvent('GET', path, {
@@ -498,7 +498,7 @@ describe('hooks chain — viewer gate: requests and notifications', () => {
 		expect(approveBody.code).toBe('FORBIDDEN');
 
 		// POST on the notifications base is not part of the API (mark-read
-		// carries the POST) — viewers 403 at the gate.
+		// carries the POST) - viewers 403 at the gate.
 		const notifyPost = harness.makeEvent('POST', '/api/user/notifications', {
 			headers: {
 				cookie: harness.cookieHeader(viewerCookies),
@@ -511,7 +511,7 @@ describe('hooks chain — viewer gate: requests and notifications', () => {
 	});
 });
 
-describe('hooks chain — viewer gate hardening', () => {
+describe('hooks chain - viewer gate hardening', () => {
 	it('normalizes path tricks before matching the allowlist', async () => {
 		const cases = [
 			['GET', '//api/activity'],
@@ -559,7 +559,7 @@ describe('hooks chain — viewer gate hardening', () => {
 
 	it('confines viewer-owned API keys to the viewer allowlist', async () => {
 		// Even a viewer's full-access "main" key resolves to the viewer role,
-		// so the central gate — not the key's permissions — decides access.
+		// so the central gate - not the key's permissions - decides access.
 		const viewerId = db
 			.select()
 			.from(user)

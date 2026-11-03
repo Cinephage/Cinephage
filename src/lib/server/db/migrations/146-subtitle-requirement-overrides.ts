@@ -12,7 +12,7 @@ const logger = createChildLogger({ logDomain: 'system' as const });
  *    movies, series, and episodes. The stored shape is the profile
  *    requirement tuple { tag, variant, accessibility }; it replaces ONLY the
  *    effective profile's requirement list (audio/score/upgrades still come
- *    from the profile chain). Episodes keep no language profile — this is a
+ *    from the profile chain). Episodes keep no language profile - this is a
  *    requirement-list override, not the episode-level profile the language
  *    system spec rejected.
  *
@@ -21,7 +21,7 @@ const logger = createChildLogger({ logDomain: 'system' as const });
  *    a per-item override (skipping the owning library entirely). Those
  *    writers are gone; this migration nulls the auto-generated overrides so
  *    library/instance defaults reach items again at read time. Overrides
- *    that differ from the instance default are kept — they can only be
+ *    that differ from the instance default are kept - they can only be
  *    deliberate user choices (safe direction: wrongly nulling a deliberate
  *    override is destructive, while a surviving stale stamp is cosmetic).
  *
@@ -49,7 +49,7 @@ export const migration_v146: MigrationDefinition = {
 			);
 		}
 
-		// Null per-item overrides that equal the instance default — those were
+		// Null per-item overrides that equal the instance default - those were
 		// stamped automatically by add/import/task paths (see header). The
 		// settings row may not exist yet, or default_profile_id may be NULL.
 		const hasSettings = tableExists(sqlite, 'language_settings');

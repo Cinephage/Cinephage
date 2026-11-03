@@ -245,14 +245,14 @@
 		} catch (e) {
 			const executeError = e instanceof Error ? e.message : 'Failed to execute renames';
 			error = executeError;
-			// Chunks before the failure already renamed files on disk — refresh so
+			// Chunks before the failure already renamed files on disk - refresh so
 			// the preview reflects reality instead of the pre-batch state.
 			try {
 				await loadPreview();
 			} catch {
 				// preview refresh is best-effort; the original error stands
 			}
-			// loadPreview's catch path assigns its own `error` — restore the mid-batch error
+			// loadPreview's catch path assigns its own `error` - restore the mid-batch error
 			error = executeError;
 		} finally {
 			executing = false;

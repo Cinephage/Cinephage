@@ -58,7 +58,7 @@ class BlockedMediaService {
 		await this.removeFromLibrary(tmdbId, mediaType);
 
 		// Blocking must also kill demand: active requests for this media are
-		// declined (leaf module — deny.ts must never import this service).
+		// declined (leaf module - deny.ts must never import this service).
 		try {
 			const { declinePendingRequestsForBlockedMedia } = await import('../requests/deny.js');
 			const declined = await declinePendingRequestsForBlockedMedia(

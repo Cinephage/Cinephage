@@ -89,7 +89,7 @@ search:
         hide_unsafe: 'true'
         hide_xxx: '{{ if .Config.hide_xxx }}true{{ else }}false{{ end }}'
 
-    # XXX search — override hide_xxx so adult searches always return adult results
+    # XXX search - override hide_xxx so adult searches always return adult results
     # regardless of the user's "Hide XXX Content" preference for general browsing
     - path: /v1
       method: post

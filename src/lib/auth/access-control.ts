@@ -13,7 +13,7 @@ import { createAccessControl } from 'better-auth/plugins/access';
  * Resource permissions available in Cinephage
  */
 const statements = {
-	// User management — the verbs the Better Auth admin plugin actually
+	// User management - the verbs the Better Auth admin plugin actually
 	// checks (createUser/listUsers/setRole/ban/impersonate/...).
 	user: [
 		'create',

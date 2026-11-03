@@ -192,9 +192,9 @@ async function initializeServices(): Promise<void> {
 			const jackettSyncScheduler = getJackettSyncScheduler();
 			serviceManager.register(jackettSyncScheduler);
 
-			// CinephageAPI subsystem — owns api.cinephage.net connection and
+			// CinephageAPI subsystem - owns api.cinephage.net connection and
 			// feature modules (library-streaming, remote-streaming). Phase 1
-			// ships with zero modules registered — no behavior change yet.
+			// ships with zero modules registered - no behavior change yet.
 			const cinephageApiService = getCinephageApiService();
 			serviceManager.register(cinephageApiService);
 

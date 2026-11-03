@@ -5,7 +5,7 @@ import type { Resolution } from '#lib/server/indexers/parser/types.js';
  *
  * Replacement is computed against CURRENT library state at import time.
  * Grab-time upgrade flags (`download_queue.isUpgrade`, intent decision) are
- * advisory diagnostics only — they never decide which files die. Every
+ * advisory diagnostics only - they never decide which files die. Every
  * protocol (torrent, usenet, debrid, streaming) must go through these
  * functions.
  */
@@ -32,7 +32,7 @@ export interface MovieReplacementInput {
 	 * (none today).
 	 */
 	retire: boolean;
-	/** Never retire this file — the just-imported row (self-deletion guard). */
+	/** Never retire this file - the just-imported row (self-deletion guard). */
 	keepFileIds?: string[];
 }
 
@@ -65,7 +65,7 @@ export interface EpisodeReplacementInput {
 	existingFiles: ReplacementFile[];
 	/** Episode ids the incoming file covers. */
 	incomingEpisodeIds: string[];
-	/** Never retire this file — the just-imported row. */
+	/** Never retire this file - the just-imported row. */
 	keepFileIds?: string[];
 	/**
 	 * .strm placeholders for the covered episodes are always retired when a
@@ -78,7 +78,7 @@ export interface EpisodeReplacementInput {
 /**
  * Episode replacement with the COVERAGE RULE: a multi-episode file
  * (e.g. an E01-E02 pack) may only be retired when the incoming acquisition
- * preserves every episode it covered — otherwise the other episodes would
+ * preserves every episode it covered - otherwise the other episodes would
  * silently go missing. Single-episode files for covered episodes always
  * retire.
  */

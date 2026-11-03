@@ -6,7 +6,7 @@
  * addon (browser/addon) forces every shadow root open in the page's main world,
  * which lets a plain Playwright locator reach the checkbox. The click itself must
  * be a real, trusted input event dispatched at the checkbox's viewport
- * coordinates — Playwright's `locator.click()` (even `force`) times out on the
+ * coordinates - Playwright's `locator.click()` (even `force`) times out on the
  * cross-origin iframe, but `page.mouse.click(x, y)` at the element's bounding-box
  * centre works and produces a valid clearance token.
  *

@@ -14,7 +14,7 @@ import {
  * API shows remains each redaction helper's concern.
  *
  * `username` is encrypted at rest (it is half of a credential pair) but stays
- * visible in redacted API output — the two lists intentionally differ.
+ * visible in redacted API output - the two lists intentionally differ.
  */
 
 /** Keys the shared sensitive-name patterns miss but that are credentials at rest. */
@@ -154,7 +154,7 @@ export function findSecretFieldSpec(table: string): SecretFieldSpec | undefined 
 
 /**
  * Look a spec up by either its SQL table name (`download_clients`) or a
- * camelCase alias (`downloadClients`) — migrations walk raw snake_case rows
+ * camelCase alias (`downloadClients`) - migrations walk raw snake_case rows
  * while managers and the backup service see Drizzle camelCase properties.
  */
 export function findSecretFieldSpecByAlias(name: string): SecretFieldSpec | undefined {
@@ -198,7 +198,7 @@ function encryptJsonValue(
 		return isEncryptedCredential(value) ? value : encryptCredential(purpose, recordId, value);
 	}
 	if (typeof value === 'object') {
-		// Sensitive object (e.g. m3u headers) — encrypt as one envelope string.
+		// Sensitive object (e.g. m3u headers) - encrypt as one envelope string.
 		return encryptCredential(purpose, recordId, JSON.stringify(value));
 	}
 	return value;
@@ -238,7 +238,7 @@ function decryptJsonValue(
 				const parsed = JSON.parse(plaintext);
 				if (parseJsonObject(parsed)) return parsed;
 			} catch {
-				// A secret that merely looks like JSON — return as-is.
+				// A secret that merely looks like JSON - return as-is.
 			}
 		}
 		return plaintext;

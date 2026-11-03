@@ -89,7 +89,7 @@ describe('credentialsCrypto envelope', () => {
 		const old = encryptCredential('setting', 'tmdb_api_key', 'key');
 		setKeyEnv(MASTER_B, MASTER_A);
 		const rotated = ensureEncryptedCredential('setting', 'tmdb_api_key', old);
-		expect(rotated).toBe(old); // already enveloped — not double-encrypted
+		expect(rotated).toBe(old); // already enveloped - not double-encrypted
 		const decrypted = decryptCredential('setting', 'tmdb_api_key', rotated);
 		expect(decrypted).toBe('key');
 	});

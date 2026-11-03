@@ -949,7 +949,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 
 			// Stalled-orphan handling settings (a timeout of 0 disables it). These let the
 			// sweep also remove torrents in our categories that are stuck stalled but not
-			// actively tracked — the completed-orphan logic below only removes finished
+			// actively tracked - the completed-orphan logic below only removes finished
 			// torrents, so stalled ones would otherwise linger forever.
 			const stalledTimeoutMinutes = await this.getStalledTimeoutMinutes();
 			const stalledProgressTimeoutMinutes = await this.getStalledProgressTimeoutMinutes();
@@ -973,7 +973,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 				try {
 					const downloads = await instance.getDownloads();
 
-					// Hashes currently stalled in our categories — used to prune stale tracking
+					// Hashes currently stalled in our categories - used to prune stale tracking
 					// rows for torrents that have since recovered or disappeared.
 					const seenStalledHashes = new Set<string>();
 
@@ -1325,7 +1325,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 				try {
 					// Suppress automatic re-addition from the download client during the
 					// tombstone window. Note: explicit user-initiated relinks (relinkOrphanedDownloads)
-					// bypass the tombstone by design — they use a direct db.insert.
+					// bypass the tombstone by design - they use a direct db.insert.
 					await upsertQueueTombstoneFromQueueItem(item, 'local_remove_without_client_delete');
 
 					await db.delete(downloadQueue).where(eq(downloadQueue.id, item.id));
@@ -1981,7 +1981,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			updates.lastAttemptAt = null;
 			// A recovery means a NEW download attempt was started (the previous one
 			// was removed by the stalled-timeout). The stalled clock belongs to the
-			// old torrent instance — carrying it over would let handleStalledDownloads
+			// old torrent instance - carrying it over would let handleStalledDownloads
 			// instantly delete the freshly re-added torrent. Reset it and let the
 			// stalled transition below stamp a new one.
 			updates.stalledSince = null;
@@ -2407,7 +2407,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			}
 		}
 
-		// Both tiers failed — set to awaiting for auto-retry in poll loop
+		// Both tiers failed - set to awaiting for auto-retry in poll loop
 		logger.warn(
 			{
 				title: queueItem.title,
@@ -2723,7 +2723,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			throw new Error('Queue item not found');
 		}
 
-		// Remove from download client if requested (best-effort — always cleans up queue)
+		// Remove from download client if requested (best-effort - always cleans up queue)
 		if (options.removeFromClient) {
 			const manager = getDownloadClientManager();
 			const instance = await manager.getClientInstance(queueItem.downloadClientId);
@@ -2993,7 +2993,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 	/**
 	 * Default stalled download timeout in minutes for downloads at or below the
 	 * progress threshold (they never got off the ground). 3 days: stalling is
-	 * normal — torrents routinely resume when a seeder returns — so do not
+	 * normal - torrents routinely resume when a seeder returns - so do not
 	 * assume a stalled download is dead within an hour.
 	 */
 	private static readonly DEFAULT_STALLED_TIMEOUT_MINUTES = 3 * 24 * 60;
@@ -3147,13 +3147,13 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 	/**
 	 * Handle stalled downloads that have timed out.
 	 *
-	 * Two tiers (stalling is normal — torrents routinely resume when a seeder
+	 * Two tiers (stalling is normal - torrents routinely resume when a seeder
 	 * returns, so patience is the default):
 	 * - At/below the progress threshold (never got off the ground, e.g. magnet
 	 *   metadata never fetched, no seeders ever connected): removed after the
 	 *   short stalled timeout.
 	 * - Above the threshold (real progress, then went quiet): left alone until
-	 *   the much longer progress timeout — a seeder may still appear. Only
+	 *   the much longer progress timeout - a seeder may still appear. Only
 	 *   genuinely long-dead partial downloads get reaped.
 	 *
 	 * For each timed-out stalled item:
@@ -3250,7 +3250,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 						? 'Download stalled - no seeds or peers available'
 						: `Download stalled at ${progressPct.toFixed(1)}% - no progress for an extended period`;
 
-			// Removal must succeed before we forget about the download — otherwise the
+			// Removal must succeed before we forget about the download - otherwise the
 			// dead torrent lingers in the client while Cinephage considers it handled.
 			// If the client is unreachable we skip this item and let the next poll cycle
 			// retry: its stall timer keeps running, so it stays eligible. (The delete API
@@ -3842,7 +3842,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 					isUpgrade: false
 				});
 
-				// Remove the failed history record — it will be recreated if the
+				// Remove the failed history record - it will be recreated if the
 				// download fails again, or a success record created on import.
 				await db.delete(downloadHistory).where(eq(downloadHistory.id, historyRecord.id));
 
@@ -3879,7 +3879,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 	 * Shared prelude for the unmatched flows: fetch every enabled client's
 	 * downloads once (bounded like startup sync so a dead client can't hang
 	 * the caller) and index them by lower-cased hash. List, resolve, track
-	 * and enroll all share it — one copy.
+	 * and enroll all share it - one copy.
 	 */
 	private async fetchClientDownloadIndex(
 		context: 'listing' | 'resolve' | 'track' | 'enroll',
@@ -4078,7 +4078,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 	 * `Movie.2026.1080p` is not an extension.
 	 *
 	 * shortcut: an unreadable path, a path not yet on disk, or a scan cut
-	 * short by the bounds counts as acceptable — never hide a download on a
+	 * short by the bounds counts as acceptable - never hide a download on a
 	 * guess. Upgrade to the client's file list if a bounded tree walk proves
 	 * too slow on network mounts.
 	 */
@@ -4171,7 +4171,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 	/**
 	 * List downloads present in clients under a Cinephage-managed label with
 	 * no corresponding download_queue row ("unmatched"). Read-only: listing
-	 * never mutates anything. Monitor-only — matching and importing live in
+	 * never mutates anything. Monitor-only - matching and importing live in
 	 * the import wizard, so items carry no suggestions.
 	 */
 	async listUnmatchedDownloads(options?: {
@@ -4289,7 +4289,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 
 		// Strong-path attach lookup: exact infohash hits across library
 		// files, both cases (clients and the library disagree on hex case).
-		// No TMDB, no fuzzy — a hit means identical bytes. Computed over the
+		// No TMDB, no fuzzy - a hit means identical bytes. Computed over the
 		// whole filtered set (not just the current page) so a "suggested
 		// match" sort groups confirmed attaches correctly regardless of which
 		// page they land on.
@@ -4446,7 +4446,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 	/**
 	 * Resolve unmatched client hashes to server-local source paths for the
 	 * import wizard. Read-only: never mutates. Entries whose torrent vanished
-	 * report as missing, already-tracked ones as alreadyTracked — the wizard
+	 * report as missing, already-tracked ones as alreadyTracked - the wizard
 	 * skips both with distinct messages.
 	 */
 	async resolveUnmatchedEntries(entries: { clientId: string; hash: string }[]): Promise<{
@@ -4534,7 +4534,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 	/**
 	 * Insert a download_queue row recording what an imported client torrent
 	 * belongs to. The torrent stays in the client for seeding; the row is
-	 * always seeding-imported — the files are already in the library by the
+	 * always seeding-imported - the files are already in the library by the
 	 * time this runs.
 	 */
 	private async createLinkedQueueRow(input: {
@@ -4555,7 +4555,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 		const protocol = getClientProtocol(client.implementation);
 
 		// Same path rule as relink: a metadata-less torrent's savePath is a
-		// root, not this download's content — store null rather than a path
+		// root, not this download's content - store null rather than a path
 		// recovery could mistake for its files.
 		const clientDownloadPath = getDownloadContentPath(download, protocol);
 		const outputPath = clientDownloadPath
@@ -4612,7 +4612,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 	 * torrent stays in the client for seeding while the queue row records
 	 * what it belongs to. The wizard's match (mediaType + TMDB id) resolves
 	 * the library row server-side; pairs for media with no library file are
-	 * rejected — a seeding-imported marker without bytes on disk would be
+	 * rejected - a seeding-imported marker without bytes on disk would be
 	 * false. Idempotent.
 	 */
 	async trackUnmatchedDownloads(
@@ -4736,7 +4736,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			trackedIds.add(hashLower);
 
 			// Same rule as markImported: only torrents keep "seeding" in the
-			// client after import — usenet and debrid downloads are simply
+			// client after import - usenet and debrid downloads are simply
 			// done, there is nothing left seeding.
 			const itemProtocol = getClientProtocol(client.implementation);
 			const status = itemProtocol === 'torrent' ? 'seeding-imported' : 'imported';
@@ -4850,7 +4850,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 	 * row at the mirrored live status; the monitor's ImportService moves the
 	 * files on completion. No history marker until the import lands.
 	 * Matches new to the library are added automatically (unmonitored, no
-	 * search — the file is already in hand) when rootFolderId is provided.
+	 * search - the file is already in hand) when rootFolderId is provided.
 	 */
 	async enrollUnmatchedDownloads(
 		pairs: {
@@ -4917,7 +4917,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			let media = await this.findMediaByTmdbId(pair.mediaType, pair.tmdbId);
 			if (!media) {
 				// New to the library: add it unmonitored (the file is in
-				// hand — monitoring would only trigger a redundant grab).
+				// hand - monitoring would only trigger a redundant grab).
 				// No explicit destination was given (the Unmatched tab's
 				// one-click Accept never asks) - resolve one instead of just
 				// giving up, so "not in library yet" doesn't always force a
@@ -4931,7 +4931,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 				try {
 					// Lazy-loaded: the add modules pull a heavy graph (TMDB,
 					// naming, metadata) that must not weigh down this
-					// module's import — see the recovery suite timeout.
+					// module's import - see the recovery suite timeout.
 					if (pair.mediaType === 'movie') {
 						const { addMovieToLibrary } = await import('#lib/server/library/add/add-movie.js');
 						await addMovieToLibrary({

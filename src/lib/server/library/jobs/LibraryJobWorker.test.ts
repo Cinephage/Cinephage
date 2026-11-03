@@ -201,7 +201,7 @@ describe('match_unmatched cursor paging (issue #513)', () => {
 	it('advances by id-cursor so deleted rows cannot skip remaining files', async () => {
 		const processFn = vi
 			.fn()
-			// page 1: processes ids a1,a2 — both match and are deleted
+			// page 1: processes ids a1,a2 - both match and are deleted
 			.mockResolvedValueOnce({
 				results: [
 					{ fileId: 'a1', filePath: '/x/a1', matched: true, confidence: 1 },

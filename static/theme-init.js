@@ -1,6 +1,6 @@
 (function () {
 	// Storage access throws in browsers that block site data
-	// (e.g. Firefox ETP / blocked cookies) — fall back to system theme.
+	// (e.g. Firefox ETP / blocked cookies) - fall back to system theme.
 	// Precedence: the account-preference cookie (seeded server-side so
 	// a theme follows the account across devices) beats this device's
 	// localStorage, then the system preference.
@@ -12,13 +12,13 @@
 		var match = document.cookie.match(/(?:^|;\s*)cinephage-theme=([^;]+)/);
 		theme = match ? decodeURIComponent(match[1]) : null;
 	} catch {
-		// Cookies blocked — fall through to localStorage below.
+		// Cookies blocked - fall through to localStorage below.
 	}
 	if (!theme) {
 		try {
 			theme = localStorage.getItem('theme');
 		} catch {
-			// Storage blocked — fall through to the system preference.
+			// Storage blocked - fall through to the system preference.
 		}
 	}
 	const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';

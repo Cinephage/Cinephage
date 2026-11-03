@@ -96,7 +96,7 @@ Connect Stalker portals and automatically discover working MAC addresses. Full E
 
 ### Smart lists
 
-Dynamic content discovery with auto-add to library. Import from IMDb, Trakt, TMDb lists, or create custom queries. "Automatically add all 2024 movies rated 7.5+" — fully automated.
+Dynamic content discovery with auto-add to library. Import from IMDb, Trakt, TMDb lists, or create custom queries. "Automatically add all 2024 movies rated 7.5+" - fully automated.
 
 ### Everything else you'd expect
 
@@ -145,7 +145,7 @@ Open http://localhost:3000 and follow the setup wizard.
 
 **Image tags:** `latest` (stable) · `X.Y.Z`/`X.Y`/`X` (stable semver) · `dev` and `dev-YYYYMMDD-RUN` (preview)
 
-> **Note:** Persistent data lives in `./config` (created automatically). Logs go to container stdout/stderr. Never mount `/app` — it contains application code.
+> **Note:** Persistent data lives in `./config` (created automatically). Logs go to container stdout/stderr. Never mount `/app` - it contains application code.
 
 If you later access Cinephage through a hostname or reverse proxy, update `BETTER_AUTH_URL` in `.env` to that public URL. You can also set the External URL in the UI under **Settings > System**.
 

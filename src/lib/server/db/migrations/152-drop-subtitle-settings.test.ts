@@ -24,7 +24,7 @@ afterEach(() => {
 	}
 });
 
-describe('migration v152 — drop subtitle_settings', () => {
+describe('migration v152 - drop subtitle_settings', () => {
 	it('drops the legacy table and leaves other tables alone', () => {
 		const sqlite = createLegacyDatabase();
 

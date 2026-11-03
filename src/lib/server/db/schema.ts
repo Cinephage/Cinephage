@@ -41,7 +41,7 @@ export const user = sqliteTable(
 		updatedAt: text('updatedAt').notNull(),
 		// Mirrors the most recent session.lastActiveAt write (see touchLastActive
 		// in session-helpers.ts), but on the user row so it survives a session
-		// being revoked/deleted — the admin users list needs this to still mean
+		// being revoked/deleted - the admin users list needs this to still mean
 		// something for an account with zero current sessions.
 		lastActiveAt: text('lastActiveAt')
 	},
@@ -591,9 +591,9 @@ export const rootFolders = sqliteTable('root_folders', {
 	totalSpaceBytes: integer('total_space_bytes'),
 	// Last time free space was checked
 	lastCheckedAt: text('last_checked_at'),
-	// JSON string[] — folder names to skip during disk scan (case-insensitive exact match)
+	// JSON string[] - folder names to skip during disk scan (case-insensitive exact match)
 	skipFolderPatterns: text('skip_folder_patterns'),
-	// JSON string[] — video file extensions to exclude from scan (e.g. [".webm"])
+	// JSON string[] - video file extensions to exclude from scan (e.g. [".webm"])
 	blockedVideoExtensions: text('blocked_video_extensions'),
 	createdAt: text('created_at').$defaultFn(() => new Date().toISOString())
 });
@@ -726,7 +726,7 @@ export const movies = sqliteTable(
 		wantsSubtitles: integer('wants_subtitles', { mode: 'boolean' }).default(true),
 		// Last time this movie was searched for releases (ISO timestamp).
 		// Still actively read/written by the release-search cooldown
-		// (CooldownStage / SearchCooldownSpecification) — intentionally NOT
+		// (CooldownStage / SearchCooldownSpecification) - intentionally NOT
 		// dropped by migration 142, unlike the per-item adaptive subtitle
 		// columns that used to sit beside it.
 		lastSearchTime: text('last_search_time'),
@@ -745,7 +745,7 @@ export const movies = sqliteTable(
 		delayProfileId: text('delay_profile_id'),
 		// Metadata language override (null = inherit global, 'original' = use original_language)
 		metadataLanguage: text('metadata_language'),
-		// Canonical original language from metadata (e.g. 'en', 'ja') — basis for 'original' modes
+		// Canonical original language from metadata (e.g. 'en', 'ja') - basis for 'original' modes
 		originalLanguage: text('original_language'),
 		// Metadata language mode: 'inherit' (global setting) | 'original' | 'explicit'
 		metadataLanguageMode: text('metadata_language_mode').notNull().default('inherit'),
@@ -898,7 +898,7 @@ export const series = sqliteTable(
 		delayProfileId: text('delay_profile_id'),
 		// Metadata language override (null = inherit global, 'original' = use original_language)
 		metadataLanguage: text('metadata_language'),
-		// Canonical original language from metadata (e.g. 'en', 'ja') — basis for 'original' modes
+		// Canonical original language from metadata (e.g. 'en', 'ja') - basis for 'original' modes
 		originalLanguage: text('original_language'),
 		// Metadata language mode: 'inherit' (global setting) | 'original' | 'explicit'
 		metadataLanguageMode: text('metadata_language_mode').notNull().default('inherit'),
@@ -969,14 +969,14 @@ export const episodes = sqliteTable(
 		// Override series-level subtitle preference (null = inherit from series)
 		wantsSubtitlesOverride: integer('wants_subtitles_override', { mode: 'boolean' }),
 		// Per-episode subtitle requirement override (null = inherit via series).
-		// Episodes still have no language profile of their own — only the
+		// Episodes still have no language profile of their own - only the
 		// requirement list can vary from the series-level resolution.
 		subtitleRequirementsOverride: text('subtitle_requirements_override', {
 			mode: 'json'
 		}).$type<SubtitleRequirement[]>(),
 		// Last time this episode was searched for releases (ISO timestamp).
 		// Still actively read/written by the release-search cooldown
-		// (CooldownStage / SearchCooldownSpecification) — intentionally NOT
+		// (CooldownStage / SearchCooldownSpecification) - intentionally NOT
 		// dropped by migration 142, unlike the per-item adaptive subtitle
 		// columns that used to sit beside it.
 		lastSearchTime: text('last_search_time')
@@ -1085,7 +1085,7 @@ export const alternateTitles = sqliteTable(
 		// Normalized title for matching (lowercase, no special chars)
 		cleanTitle: text('clean_title').notNull(),
 		// Source of this title: 'tmdb' (auto-fetched), 'user' (manually added), or
-		// 'anilist'/'mal' (anime provider title variants — migration 142)
+		// 'anilist'/'mal' (anime provider title variants - migration 142)
 		source: text('source', { enum: ['tmdb', 'user', 'anilist', 'mal'] }).notNull(),
 		// ISO 639-1 language code (e.g., 'en', 'cs', 'de')
 		language: text('language'),
@@ -1513,14 +1513,14 @@ export const downloadQueueTombstones = sqliteTable(
 );
 
 /**
- * Acquisition Intents — the durable authority for what is being acquired,
+ * Acquisition Intents - the durable authority for what is being acquired,
  * for which media slots, and why it was approved (migration 148).
  *
  * The download queue is a transport projection linked to an intent; media
  * ownership and exclusivity live here. Slot exclusivity ("one active
  * acquisition per movie/quality bucket or episode") is enforced by a partial
  * unique index on acquisition_reservations (target_key WHERE released_at IS
- * NULL), which survives restarts — unlike the pre-existing process-local
+ * NULL), which survives restarts - unlike the pre-existing process-local
  * locks and status-list inference.
  *
  * Intents record the decision at APPROVAL time (including the
@@ -1592,7 +1592,7 @@ export const acquisitionIntents = sqliteTable(
 );
 
 /**
- * Acquisition Reservations — durable per-slot locks (migration 148).
+ * Acquisition Reservations - durable per-slot locks (migration 148).
  * One ACTIVE (released_at IS NULL) row per target_key, DB-enforced:
  *   movie:<movieId>:<qualitySlot>   e.g. movie:abc:2160p / movie:abc:single
  *   episode:<episodeId>             one per episode in the intent's scope
@@ -1623,14 +1623,14 @@ export const acquisitionReservations = sqliteTable(
 );
 
 /**
- * Import Operations journal (migration 149) — durable record of each
+ * Import Operations journal (migration 149) - durable record of each
  * multi-step import so startup recovery can resume or compensate
  * deterministically instead of guessing from queue statuses.
  *
  * States: staged → registered → completed | recovery_required.
  * `pendingOldFileIds` holds DB rows whose physical retirement failed (or
  * never ran); recovery and reports reconcile them. Media is never
- * auto-deleted from here — phase-5 reports surface it.
+ * auto-deleted from here - phase-5 reports surface it.
  */
 export const importOperations = sqliteTable(
 	'import_operations',
@@ -1652,7 +1652,7 @@ export const importOperations = sqliteTable(
 		newFileId: text('new_file_id'),
 		/** DB rows targeted for retirement, with the file id the new row replaced. */
 		pendingOldFileIds: text('pending_old_file_ids', { mode: 'json' }).$type<string[]>(),
-		/** Rows whose physical deletion failed — row kept on purpose, flagged here. */
+		/** Rows whose physical deletion failed - row kept on purpose, flagged here. */
 		failedOldFileIds: text('failed_old_file_ids', { mode: 'json' }).$type<string[]>(),
 		status: text('status', {
 			enum: ['staged', 'registered', 'completed', 'recovery_required']
@@ -2360,7 +2360,7 @@ export const cinephageApiConfig = sqliteTable('cinephage_api_config', {
 	// on first registration and kept forever; re-registering the same id
 	// rotates the key. api_key holds the encrypted envelope (covered by
 	// SECRET_FIELD_SPECS); api_key_prefix is the plaintext display form
-	// (e.g. "ck_abc12"). All nullable — an install is unregistered until the
+	// (e.g. "ck_abc12"). All nullable - an install is unregistered until the
 	// user clicks register.
 	installId: text('install_id'),
 	apiKey: text('api_key'),
@@ -3368,7 +3368,7 @@ export type MediaBrowserServerRecord = typeof mediaBrowserServers.$inferSelect;
 export type NewMediaBrowserServerRecord = typeof mediaBrowserServers.$inferInsert;
 /**
  * Per-account preference storage (JSON values keyed by a namespaced key,
- * e.g. 'calendar', 'theme'). Personal by definition — nothing here falls
+ * e.g. 'calendar', 'theme'). Personal by definition - nothing here falls
  * back to a global row.
  */
 export const userPreferences = sqliteTable(
@@ -3387,7 +3387,7 @@ export const userPreferences = sqliteTable(
 /**
  * A Cinephage account linked to its media-server account (Jellyfin first).
  * Identity mapping only: serverUserId + a username snapshot. No per-user
- * tokens are ever stored — pairing proves identity and the server-side
+ * tokens are ever stored - pairing proves identity and the server-side
  * admin key handles data access internally.
  */
 export const userMediaServerLinks = sqliteTable(
@@ -3862,7 +3862,7 @@ export const epgPrograms = sqliteTable(
 		category: text('category'),
 		// Localized variants preserved from XMLTV @lang attributes (migration 140):
 		// JSON arrays of { lang: string | null, text: string } with lang lower-cased.
-		// Nullable — rows written before (or without) language data keep NULL, and
+		// Nullable - rows written before (or without) language data keep NULL, and
 		// display-time selection falls back to the plain columns above.
 		titleI18n: text('title_i18n', { mode: 'json' }).$type<EpgLocalizedText[]>(),
 		descriptionI18n: text('description_i18n', { mode: 'json' }).$type<EpgLocalizedText[]>(),
@@ -4337,7 +4337,7 @@ export const rejectedReleases = sqliteTable(
 		qualityProfileName: text('quality_profile_name'),
 		releaseSize: integer('release_size'),
 		releaseGroup: text('release_group'),
-		// Grab fields — stored at rejection time to enable "Override and grab"
+		// Grab fields - stored at rejection time to enable "Override and grab"
 		downloadUrl: text('download_url'),
 		magnetUrl: text('magnet_url'),
 		infoHash: text('info_hash'),
@@ -4490,7 +4490,7 @@ export type NewArrNotificationConfig = typeof arrNotificationConfigs.$inferInser
 
 /**
  * A user-submitted media request (Seerr-style). No movies/series row exists
- * until approval — the request carries the TMDB identity plus display
+ * until approval - the request carries the TMDB identity plus display
  * snapshots; approval creates/links the library row through the add path.
  * TV scope is stored as season numbers plus optional episode entries; the
  * episode-level truth lives on episodes.hasFile, never here.
@@ -4551,7 +4551,7 @@ export const requests = sqliteTable(
 
 /**
  * Admin-managed per-user request settings. Deliberately NOT in
- * user_preferences — that table is self-writable by the account owner, and
+ * user_preferences - that table is self-writable by the account owner, and
  * these values (disable, auto-approve grant, quota overrides) must only
  * change through admin endpoints. Null quota/auto-approve values inherit
  * the global request_settings defaults.
@@ -4573,7 +4573,7 @@ export const userRequestSettings = sqliteTable('user_request_settings', {
 
 /**
  * In-app request notifications (one row per user per event). Feed rows only
- * — live delivery rides the requests SSE stream; this table is the durable
+ * - live delivery rides the requests SSE stream; this table is the durable
  * inbox behind the bell.
  */
 export const requestNotifications = sqliteTable(

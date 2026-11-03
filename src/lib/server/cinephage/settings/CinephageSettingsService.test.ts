@@ -137,7 +137,7 @@ describe('CinephageSettingsService', () => {
 			await service.updateModuleSettings('library-streaming', { useHttps: true });
 			await service.updateModuleSettings('library-streaming', { externalHost: 'foo' });
 			const mod = await service.getModuleConfig('library-streaming');
-			// Settings are replaced, not merged — modules own their full settings shape
+			// Settings are replaced, not merged - modules own their full settings shape
 			expect(mod.settings).toEqual({ externalHost: 'foo' });
 		});
 	});

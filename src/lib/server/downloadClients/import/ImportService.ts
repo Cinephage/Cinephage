@@ -381,11 +381,11 @@ export class ImportService extends EventEmitter {
 
 	/**
 	 * Deterministic recovery for interrupted imports:
-	 *  - 'registered' with pending old files: retirement never completed —
+	 *  - 'registered' with pending old files: retirement never completed -
 	 *    retry each once; rows whose physical deletion fails stay (kept on
 	 *    purpose) and the operation is flagged recovery_required.
 	 *  - 'staged' (file transferred, never registered): nothing to
-	 *    compensate deterministically — flagged for reports; the unregistered
+	 *    compensate deterministically - flagged for reports; the unregistered
 	 *    destination file is left for DiskScan to reconcile.
 	 */
 	private reconcileImportOperations(): void {
@@ -400,7 +400,7 @@ export class ImportService extends EventEmitter {
 				if (op.status === 'registered' && (op.pendingOldFileIds ?? []).length > 0) {
 					// Stale-plan guard: only retire when the replacement row this
 					// journal recorded still exists. A later import/scanner may
-					// have replaced it — retiring against a stale plan could
+					// have replaced it - retiring against a stale plan could
 					// delete the last remaining copy.
 					if (op.newFileId && !this.importOperationReplacementExists(op)) {
 						db.update(importOperations)
@@ -412,7 +412,7 @@ export class ImportService extends EventEmitter {
 							.where(eq(importOperations.id, op.id));
 						logger.warn(
 							{ operationId: op.id, newFileId: op.newFileId },
-							'[ImportService] Import journal replacement missing — retirement skipped'
+							'[ImportService] Import journal replacement missing - retirement skipped'
 						);
 						continue;
 					}
@@ -1502,7 +1502,7 @@ export class ImportService extends EventEmitter {
 		);
 
 		// NOW delete old files (after successful import - so media is never missing).
-		// Replacement is recomputed from CURRENT library state — the grab-time
+		// Replacement is recomputed from CURRENT library state - the grab-time
 		// isUpgrade flag is advisory only (it may be weeks stale). Reload the
 		// movie's files: the pre-transfer snapshot can be outdated (scanner
 		// activity during the transfer window).
@@ -1596,7 +1596,7 @@ export class ImportService extends EventEmitter {
 			.where(eq(importOperations.id, journalId));
 
 		// State-based upgrade report: an import "was an upgrade" when it
-		// actually retired existing files — not when a grab-time flag said so.
+		// actually retired existing files - not when a grab-time flag said so.
 		const wasUpgrade = deletedFileIds.length > 0;
 
 		result.importedFiles.push({
@@ -2315,7 +2315,7 @@ export class ImportService extends EventEmitter {
 		// Check for existing files covering these episodes (upgrade scenario).
 		// Coverage rule (acquisition redesign): a multi-episode file is only
 		// retired when the incoming acquisition covers every episode it holds
-		// — a single-episode upgrade must never orphan the rest of a pack.
+		// - a single-episode upgrade must never orphan the rest of a pack.
 		// .strm placeholders hold no exclusive content and always yield.
 		const filesToReplace: string[] = computeEpisodeReplacement({
 			existingFiles: existingFiles.map((file) => ({
@@ -2378,8 +2378,8 @@ export class ImportService extends EventEmitter {
 			);
 		} else {
 			// Create new file record. On a unique (seriesId, relativePath)
-			// conflict — a concurrent import registered the same path after
-			// our snapshot — re-select the winning row; continuing with the
+			// conflict - a concurrent import registered the same path after
+			// our snapshot - re-select the winning row; continuing with the
 			// dangling UUID would attach history/events to a nonexistent row.
 			fileId = randomUUID();
 			await db
@@ -2574,7 +2574,7 @@ export class ImportService extends EventEmitter {
 		if (!deferRetirement && filesToReplace.length > 0) {
 			// Journal the pending retirement BEFORE deleting: a crash here leaves
 			// a 'registered' operation that startup recovery completes. Mirrors
-			// the movie path — episode imports are recoverable too.
+			// the movie path - episode imports are recoverable too.
 			const journalId = randomUUID();
 			await db.insert(importOperations).values({
 				id: journalId,

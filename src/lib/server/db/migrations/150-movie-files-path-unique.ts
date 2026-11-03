@@ -17,8 +17,8 @@ function indexExists(sqlite: Database.Database, table: string, indexName: string
  *
  * Nothing enforced one row per movie+path, so duplicate rows accumulated
  * (re-grabs, streaming re-imports, scanner races). Writers now upsert; this
- * migration dedupes existing rows — keeping the OLDEST row per (movie,
- * path) — then adds the unique index.
+ * migration dedupes existing rows - keeping the OLDEST row per (movie,
+ * path) - then adds the unique index.
  *
  * Idempotent: dedupe is a no-op when no duplicates exist; index creation is
  * guarded by indexExists.

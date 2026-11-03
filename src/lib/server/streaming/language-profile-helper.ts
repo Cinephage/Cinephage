@@ -63,7 +63,7 @@ export async function getAudioPreferenceFor(
 					)[0];
 
 		if (!mediaRow) {
-			// Media not in the library — no language preference known.
+			// Media not in the library - no language preference known.
 			return { ...DEFAULT_EFFECTIVE_AUDIO_PREFERENCE };
 		}
 

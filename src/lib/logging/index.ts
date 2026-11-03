@@ -543,7 +543,7 @@ function captureLogEvent(level: LogLevel, event: PreparedLogEvent): void {
 			: (rawErr as Record<string, unknown>)
 		: undefined;
 
-	// Keys that are promoted to top-level CapturedLogEntry fields — exclude from `data`
+	// Keys that are promoted to top-level CapturedLogEntry fields - exclude from `data`
 	const METADATA_KEYS = new Set([
 		'err',
 		'msg',

@@ -125,13 +125,13 @@ const TEST_MEDIA = {
 			title: 'Toy Story 5',
 			year: 2026,
 			imdbId: 'tt29355505',
-			description: 'Theatrical Jun 2026 — CAM/TS window'
+			description: 'Theatrical Jun 2026 - CAM/TS window'
 		},
 		{
 			title: 'The Odyssey',
 			year: 2026,
 			imdbId: 'tt33764258',
-			description: 'Theatrical Jul 2026 — CAM/TS window, hardest case'
+			description: 'Theatrical Jul 2026 - CAM/TS window, hardest case'
 		},
 		{
 			title: 'Mercy',
@@ -184,7 +184,7 @@ const TEST_MEDIA = {
 			malId: 16498,
 			season: 1,
 			episode: 1,
-			description: 'Anime — dual-audio conventions differ'
+			description: 'Anime - dual-audio conventions differ'
 		}
 	]
 };
@@ -353,7 +353,7 @@ async function main(): Promise<void> {
 		await import('../src/lib/server/indexers/parser/patterns/language.js');
 
 	// Start the Camoufox-backed captcha solver the way the app's service
-	// initializer does — without it, Cloudflare-protected indexers (RuTracker)
+	// initializer does - without it, Cloudflare-protected indexers (RuTracker)
 	// fail with "Unable to reach indexer server" and the recon under-reports.
 	const solver = getCaptchaSolver();
 	solver.start();
@@ -931,13 +931,13 @@ async function runReconTests(
 	const targets: Array<{ label: string; criteria: any }> = [];
 	for (const m of TEST_MEDIA.reconMovies) {
 		targets.push({
-			label: `${m.title} (${m.year}) — ${m.description}`,
+			label: `${m.title} (${m.year}) - ${m.description}`,
 			criteria: { searchType: 'movie', query: m.title, year: m.year, imdbId: m.imdbId }
 		});
 	}
 	for (const s of TEST_MEDIA.reconTvShows) {
 		targets.push({
-			label: `${s.title} S${s.season}E${s.episode} — ${s.description}`,
+			label: `${s.title} S${s.season}E${s.episode} - ${s.description}`,
 			criteria: {
 				searchType: 'tv',
 				query: s.title,
@@ -980,7 +980,7 @@ async function runReconTests(
 		for (const ir of result.indexerResults ?? []) {
 			const line =
 				`    ${ir.indexerName}: ${ir.results?.length ?? 0} results` +
-				`${ir.error ? ` — ERROR: ${ir.error}` : ''}`;
+				`${ir.error ? ` - ERROR: ${ir.error}` : ''}`;
 			out.push(line);
 			if (options.verbose || ir.error)
 				console.log(`  ${ir.error ? c.red : c.dim}${line.trim()}${c.reset}`);

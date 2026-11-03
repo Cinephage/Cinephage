@@ -450,7 +450,7 @@ function isKeyValueSecretEntry(tableName: TableName, row: Record<string, unknown
  * Portable-secrets transform: the backup payload carries PLAINTEXT so it can
  * be re-encrypted under the destination instance's master key on restore.
  * Walks a secrets tree and decrypts every credential envelope it contains.
- * Field names are irrelevant here — the AAD binds `purpose:recordId`, both of
+ * Field names are irrelevant here - the AAD binds `purpose:recordId`, both of
  * which the walker knows. A failed decrypt aborts the backup (fail-closed).
  */
 function decryptBackupSecretTree(purpose: string, recordKey: string, node: unknown): unknown {
@@ -756,7 +756,7 @@ export class ConfigurationBackupService {
 				}
 
 				// Media-browser key portable transform: same contract as the debrid
-				// token — the backup secrets payload carries plaintext (fail-closed
+				// token - the backup secrets payload carries plaintext (fail-closed
 				// on decrypt error) and restore re-encrypts with the destination
 				// master key.
 				if (config.name === 'mediaBrowserServers' && row.apiKey) {
@@ -992,7 +992,7 @@ export class ConfigurationBackupService {
 				}
 
 				// Registry-covered tables: re-encrypt the restored plaintext
-				// secrets with the destination master key (idempotent — values
+				// secrets with the destination master key (idempotent - values
 				// that are already envelopes pass through).
 				const spec = findSecretFieldSpecByAlias(config.name);
 				if (spec) {

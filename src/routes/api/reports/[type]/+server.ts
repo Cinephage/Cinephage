@@ -387,7 +387,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		let updated = 0;
 
 		if (body.resolveAll) {
-			// Resolve every unresolved record for this type — no IDs needed
+			// Resolve every unresolved record for this type - no IDs needed
 			switch (type) {
 				case 'rejected-releases': {
 					const result = await db

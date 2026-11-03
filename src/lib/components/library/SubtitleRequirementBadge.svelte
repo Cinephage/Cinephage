@@ -22,7 +22,7 @@
 
 <!-- role="status": the count updates in place when subtitles are downloaded,
      deleted or upgraded, so announce the change politely. Visible "X of Y"
-     text (plus sr-only context) keeps the badge screen-reader readable —
+     text (plus sr-only context) keeps the badge screen-reader readable -
      never icon-only. -->
 <span
 	class="inline-flex items-center gap-1 whitespace-nowrap {textSize} {stateColor} {className}"

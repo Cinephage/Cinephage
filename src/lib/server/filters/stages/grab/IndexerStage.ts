@@ -5,7 +5,7 @@ import type { GrabDecisionContext } from './types.js';
  * Enforces the scoring profile's indexer allowlist at grab time.
  *
  * Search already skips excluded indexers, so this only fires for releases that
- * arrived some other way — an interactive result from a previous profile state,
+ * arrived some other way - an interactive result from a previous profile state,
  * a stale search cache, or an arr-pushed release. It mirrors ProtocolStage:
  * policy-level, and bypassed by a plain force grab.
  */

@@ -287,7 +287,7 @@ export class EpgService {
 
 			if (epgPrograms.length === 0) {
 				// Newly added lineup items can still be matched against programs
-				// that are already cached — don't skip auto-attach just because
+				// that are already cached - don't skip auto-attach just because
 				// this sync fetched nothing new.
 				const autoAttachedCount = await this.autoAttachMissingLineupEpgSources(accountId);
 				if (autoAttachedCount > 0) {
@@ -902,12 +902,12 @@ export class EpgService {
 	 * (`[{ lang: string | null, text: string }, ...]`) and an optional requested
 	 * display language:
 	 *
-	 *   1. exact tag match        — entry.lang equals the requested tag
+	 *   1. exact tag match        - entry.lang equals the requested tag
 	 *                               (case-insensitive)
-	 *   2. base-language match    — entry.lang's base tag equals the requested
+	 *   2. base-language match    - entry.lang's base tag equals the requested
 	 *                               base tag (stored "en-US" matches "en")
-	 *   3. first stored entry     — source order fallback when nothing matched
-	 *   4. plain column fallback  — the pre-i18n title/description/category text,
+	 *   3. first stored entry     - source order fallback when nothing matched
+	 *   4. plain column fallback  - the pre-i18n title/description/category text,
 	 *                               also used when no language was requested or
 	 *                               no i18n list is stored
 	 *

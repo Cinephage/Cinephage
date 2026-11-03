@@ -238,7 +238,7 @@ describe('SearchOrchestrator language boost semantics', () => {
 
 		const result = await orchestrator.search([indexer], criteria, { useCache: false });
 
-		// 'multi' is a marker, not Russian audio — no boost.
+		// 'multi' is a marker, not Russian audio - no boost.
 		expect(result.releases[0].seeders).toBe(10);
 	});
 

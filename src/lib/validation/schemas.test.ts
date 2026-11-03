@@ -69,7 +69,7 @@ describe('grabRequestSchema', () => {
 
 	it('ignores a legacy client "quality" object with null fields (e.g. SDR hdr: null)', () => {
 		// Regression: SDR releases parse hdr as null. The unused quality field must never
-		// break a grab again — it is stripped rather than validated.
+		// break a grab again - it is stripped rather than validated.
 		const result = grabRequestSchema.safeParse({
 			...validMovieGrab,
 			quality: { resolution: '1080p', source: 'bluray', codec: 'h264', hdr: null }

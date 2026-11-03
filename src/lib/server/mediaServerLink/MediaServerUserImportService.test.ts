@@ -3,7 +3,7 @@
  *
  * Server HTTP is mocked at the fetch boundary (the /Users roster); the
  * database is real so uniqueness and link writes are exercised for truth.
- * Account creation is exercised through an injected fake creator — the
+ * Account creation is exercised through an injected fake creator - the
  * endpoint binds it to auth.api.createUser, whose policy hooks are covered
  * by the auth instance tests.
  */
@@ -139,7 +139,7 @@ beforeEach(() => {
 		.run();
 });
 
-describe('mediaServerUserImportService — previewImport', () => {
+describe('mediaServerUserImportService - previewImport', () => {
 	it('classifies every roster entry against local links and accounts', async () => {
 		testDb.db
 			.insert(user)
@@ -215,7 +215,7 @@ describe('mediaServerUserImportService — previewImport', () => {
 	});
 });
 
-describe('mediaServerUserImportService — importUsers', () => {
+describe('mediaServerUserImportService - importUsers', () => {
 	it('creates, links, and reports a one-time temp password per user', async () => {
 		mockRoster([
 			{ Id: 'jf-a', Name: 'Alice' },

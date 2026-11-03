@@ -57,7 +57,7 @@ async function findProfileByNameCaseInsensitive(name: string, excludeId?: string
  * Normalize and validate an indexer allowlist.
  *
  * `null`/undefined means "all indexers". Otherwise every referenced indexer must
- * exist — a stale ID would silently exclude everything and look like a broken
+ * exist - a stale ID would silently exclude everything and look like a broken
  * profile rather than a deliberate restriction.
  */
 async function resolveAllowedIndexerIds(

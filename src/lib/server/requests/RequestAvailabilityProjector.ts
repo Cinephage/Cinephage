@@ -11,7 +11,7 @@ const logger = createChildLogger({ module: 'RequestProjector', logDomain: 'syste
 /**
  * Projects library changes onto active requests: when media matching a
  * request's TMDB identity appears or gains files, the request advances to
- * fulfilled (pending requests skip approval entirely — the media exists).
+ * fulfilled (pending requests skip approval entirely - the media exists).
  *
  * Events rarely carry tmdbId yet, so movie/series ids are resolved through
  * a DB lookup; the periodic sweep covers event-less paths (manual import,

@@ -22,7 +22,7 @@ import type { TimeDelta, TimeSpan } from './types.js';
 import { computeRatingDeltaDelta } from './scoring.js';
 
 // =============================================================================
-// Rating Info — stores piecewise-linear function value at segment start
+// Rating Info - stores piecewise-linear function value at segment start
 // =============================================================================
 
 /**
@@ -72,7 +72,7 @@ export function addRatings(a: RatingInfo, b: RatingInfo): RatingInfo {
 }
 
 // =============================================================================
-// Offset Info — tracks which offset produced the best rating
+// Offset Info - tracks which offset produced the best rating
 // =============================================================================
 
 /**
@@ -113,7 +113,7 @@ export function getOffsetAt(info: OffsetInfo, len: TimeDelta): number {
 }
 
 // =============================================================================
-// Dual Info — combines rating and offset tracking
+// Dual Info - combines rating and offset tracking
 // =============================================================================
 
 /**
@@ -481,7 +481,7 @@ export function leftToRightMaximum(
 		const endRating = seg.data.ratingInfo.rating + seg.data.ratingInfo.delta * (len - 1);
 
 		if (startRating <= bestRating && endRating <= bestRating) {
-			// Current max is better throughout — emit constant segment
+			// Current max is better throughout - emit constant segment
 			result.push({
 				start: seg.start,
 				end: seg.end,
@@ -513,7 +513,7 @@ export function leftToRightMaximum(
 			}
 		} else {
 			// startRating < bestRating && endRating > bestRating
-			// Crossover within segment — find the switch point
+			// Crossover within segment - find the switch point
 			const switchDelta = bestRating - startRating;
 			const slope = seg.data.ratingInfo.delta;
 			const switchPoint = Math.floor(switchDelta / slope) + 1;
@@ -662,7 +662,7 @@ function generateMaximumSegments(
 	const deltaDiff = delta1 - delta2;
 
 	if (deltaDiff === 0) {
-		// Parallel lines — shouldn't happen given the conditions above, but handle gracefully
+		// Parallel lines - shouldn't happen given the conditions above, but handle gracefully
 		return [
 			{
 				start: segStart,
@@ -797,7 +797,7 @@ export function separateDualSegments(
 			prevRatingDelta !== null &&
 			Math.abs(seg.data.ratingInfo.delta - prevRatingDelta) < 1e-6
 		) {
-			// Nearly same slope — extend previous segment
+			// Nearly same slope - extend previous segment
 			ratingSegments[ratingSegments.length - 1].endPoint = seg.end;
 		} else {
 			ratingSegments.push({
@@ -816,7 +816,7 @@ export function separateDualSegments(
 			!seg.data.offsetInfo.drag &&
 			offsetSegments[offsetSegments.length - 1].data.offset === seg.data.offsetInfo.offset
 		) {
-			// Same constant offset — extend
+			// Same constant offset - extend
 			offsetSegments[offsetSegments.length - 1].endPoint = seg.end;
 		} else {
 			offsetSegments.push({

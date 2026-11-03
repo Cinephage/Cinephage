@@ -316,7 +316,7 @@ export function parseEpisodeMarker(name: string): string | null {
 
 class SubtitleScannerService {
 	private static instance: SubtitleScannerService | null = null;
-	// Undetermined language — never assume a specific language (spec §2.2)
+	// Undetermined language - never assume a specific language (spec §2.2)
 	private fallbackLanguage: LanguageCode = 'und';
 
 	private constructor() {}
@@ -945,7 +945,7 @@ class SubtitleScannerService {
 			// removed if its file is gone, or if the same file now belongs to a
 			// different owner/episode (stale association from the old scanner).
 			// An unresolvable path means the owning episode/movie has no media
-			// file row anymore — the subtitle cannot exist on disk, so it is
+			// file row anymore - the subtitle cannot exist on disk, so it is
 			// gone too. Rows whose file still exists without a desired entry
 			// (e.g. an ambiguous sidecar) are kept.
 			for (const row of storedRows) {

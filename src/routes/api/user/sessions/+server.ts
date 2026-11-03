@@ -1,6 +1,6 @@
 /**
- * GET  /api/user/sessions — list the signed-in user's own sessions
- * DELETE /api/user/sessions — revoke own sessions; body { sessionId? } revokes
+ * GET  /api/user/sessions - list the signed-in user's own sessions
+ * DELETE /api/user/sessions - revoke own sessions; body { sessionId? } revokes
  * one session, an empty body revokes every OTHER session. The current
  * session can never be revoked through this endpoint (use sign-out).
  *

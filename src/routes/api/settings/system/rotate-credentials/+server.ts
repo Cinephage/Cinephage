@@ -23,7 +23,7 @@ export const POST: RequestHandler = async (event) => {
 			success: true,
 			message:
 				result.failed > 0
-					? `Rotated ${result.rotated} credential(s); ${result.failed} could not be decrypted with any available key — re-enter those in settings`
+					? `Rotated ${result.rotated} credential(s); ${result.failed} could not be decrypted with any available key - re-enter those in settings`
 					: `Rotated ${result.rotated} credential(s) under the current master key`,
 			result
 		});

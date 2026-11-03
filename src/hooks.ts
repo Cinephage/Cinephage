@@ -7,7 +7,7 @@ import type { Reroute } from '@sveltejs/kit/hooks';
  * ignored since routing happens before `handle` ever runs.
  */
 
-// Arr-compat path casing only — unsupported, non-priority.
+// Arr-compat path casing only - unsupported, non-priority.
 // Cinephage's own behavior takes precedence over arr expectations
 // when the two conflict. Policy: src/lib/server/arr/arrCompatSettings.ts.
 //

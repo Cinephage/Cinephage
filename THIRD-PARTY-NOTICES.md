@@ -2,7 +2,7 @@
 
 Cinephage is licensed under the [GNU General Public License v3.0](LICENSE).
 
-This document acknowledges the open-source projects that inspired Cinephage's design and architecture. **Cinephage is an original implementation** — no code was copied from these projects. However, we credit them for their influence on our approach.
+This document acknowledges the open-source projects that inspired Cinephage's design and architecture. **Cinephage is an original implementation** - no code was copied from these projects. However, we credit them for their influence on our approach.
 
 ## Inspiration Projects
 
@@ -54,8 +54,8 @@ Cinephage uses the following npm packages. All are MIT licensed and compatible w
 
 Cinephage integrates with these external services:
 
-- **[TMDB](https://www.themoviedb.org/)** — Movie and TV metadata (requires API key, subject to TMDB terms)
-- **[qBittorrent](https://www.qbittorrent.org/)** — Download client (GPL-2.0+)
+- **[TMDB](https://www.themoviedb.org/)** - Movie and TV metadata (requires API key, subject to TMDB terms)
+- **[qBittorrent](https://www.qbittorrent.org/)** - Download client (GPL-2.0+)
 
 ## License Compatibility Note
 

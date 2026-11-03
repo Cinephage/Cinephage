@@ -12,7 +12,7 @@ import {
  * Surfaces movie files that no longer fit the movie's desired-quality tiers.
  *
  * When `desiredQualities` shrinks or is removed, files outside the (now
- * smaller) set of effective tiers become silent orphans — e.g. a 720p file
+ * smaller) set of effective tiers become silent orphans - e.g. a 720p file
  * next to a multi-quality [2160p, 1080p] config, or any non-best file when the
  * movie is single-quality. This rule ONLY surfaces them (severity: info, with a
  * deep-link via the insight type); Cinephage never auto-deletes files.

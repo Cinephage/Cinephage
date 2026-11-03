@@ -265,7 +265,7 @@ export class ReleaseEnricher {
 			);
 		}
 
-		// Add indexer-allowlist rejection (soft — release stays visible as rejected)
+		// Add indexer-allowlist rejection (soft - release stays visible as rejected)
 		const allowedIndexerIds = profile?.allowedIndexerIds;
 		if (
 			allowedIndexerIds &&
@@ -283,7 +283,7 @@ export class ReleaseEnricher {
 			rejections.push(protocolRejectionReason);
 		}
 
-		// Add required formats rejection (soft — release is still grabbable manually)
+		// Add required formats rejection (soft - release is still grabbable manually)
 		const requiredFormats = profile?.requiredFormats ?? [];
 		if (requiredFormats.length > 0) {
 			const matchedIds = new Set(
@@ -460,7 +460,7 @@ export class ReleaseEnricher {
 		const hardcodedSubsPenalty = parsed.hasHardcodedSubs ? -50 : 0;
 
 		// Calculate total score. No clamping: under the additive scoring model a
-		// negative total is meaningful ("less preferred than neutral") — the grab
+		// negative total is meaningful ("less preferred than neutral") - the grab
 		// decision compares these raw totals, so the UI must display the same
 		// number it uses. Banned releases stay at -Infinity downstream.
 		const totalScore = Math.round(baseScore + enhancementBonus + packBonus + hardcodedSubsPenalty);

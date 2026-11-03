@@ -1,7 +1,7 @@
 /**
  * Bulk approve/decline (decline requires a reason). Admin only. Individual
  * failures do not abort the batch; per-id outcomes are returned. Approvals
- * run through a small worker pool — a 50-series batch must not hold one
+ * run through a small worker pool - a 50-series batch must not hold one
  * HTTP connection for the sum of all orchestrator latencies.
  */
 

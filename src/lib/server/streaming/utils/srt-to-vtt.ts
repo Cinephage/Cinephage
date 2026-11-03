@@ -84,7 +84,7 @@ export function isAssFormat(content: string): boolean {
  * Ensure subtitle content is in VTT format.
  *
  * Returns null when the content is neither VTT nor SRT (ASS/SSA and unknown
- * binary formats are not silently relabeled as VTT — callers must reject the
+ * binary formats are not silently relabeled as VTT - callers must reject the
  * track instead of serving garbage to players).
  */
 export function ensureVttFormat(content: string): string | null {

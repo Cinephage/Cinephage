@@ -1,5 +1,5 @@
 ---
-# Nebulance (NBL) — ratioless private TV Shows tracker, custom JSON API
+# Nebulance (NBL) - ratioless private TV Shows tracker, custom JSON API
 # No Prowlarr/Jackett bridge needed. Auth via personal API key.
 # API port of Prowlarr's Nebulance.cs (v2 API, PR #2615):
 # GET {base}api.php?action=search&age=>0&api_key={key}&per_page=100
@@ -51,7 +51,7 @@ settings:
 
 search:
   paths:
-    # TV search — keywords plus season/episode/IDs when available.
+    # TV search - keywords plus season/episode/IDs when available.
     # Mirrors Prowlarr: release=keywords, season/episode, full-tt imdb, tvmaze.
     - path: 'api.php?action=search{{ if .Keywords }}&release={{ .Keywords }}{{ end }}'
       method: get

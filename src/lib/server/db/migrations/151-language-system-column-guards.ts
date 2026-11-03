@@ -12,7 +12,7 @@ const logger = createChildLogger({ logDomain: 'system' as const });
  * `schema.ts` / the fresh-install DDL but never backfilled by an idempotent
  * ALTER for databases created before them. The most important is
  * `episodes.wants_subtitles_override` (the episode tri-state gate), which had
- * no owning migration at all — any pre-existing `episodes` table would fail
+ * no owning migration at all - any pre-existing `episodes` table would fail
  * every Drizzle select.
  *
  * This migration re-asserts every language-system column that later features

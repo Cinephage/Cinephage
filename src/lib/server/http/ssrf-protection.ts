@@ -5,8 +5,8 @@
  * Server-Side Request Forgery attacks in proxy endpoints.
  *
  * Two layers of protection:
- *  1. isUrlSafe() — sync, validates the hostname string (fast-path / pre-check)
- *  2. resolveAndValidateUrl() — async, resolves DNS then validates the resolved IP
+ *  1. isUrlSafe() - sync, validates the hostname string (fast-path / pre-check)
+ *  2. resolveAndValidateUrl() - async, resolves DNS then validates the resolved IP
  *     This prevents DNS rebinding attacks where a hostname resolves to a private IP.
  */
 
@@ -133,16 +133,16 @@ function isBlockedIpv6(ip: string): boolean {
 	const ipv4FromLowGroups = (): string =>
 		`${groups[6] >> 8}.${groups[6] & 0xff}.${groups[7] >> 8}.${groups[7] & 0xff}`;
 
-	// IPv4-mapped ::ffff:a.b.c.d — groups 0-4 zero, group 5 is ffff.
+	// IPv4-mapped ::ffff:a.b.c.d - groups 0-4 zero, group 5 is ffff.
 	if (allZeroPrefix && groups[5] === 0xffff) {
 		return isBlockedIpv4(ipv4FromLowGroups());
 	}
-	// IPv4-translated ::ffff:0:a.b.c.d — groups 0-3 zero, group 4 ffff,
+	// IPv4-translated ::ffff:0:a.b.c.d - groups 0-3 zero, group 4 ffff,
 	// group 5 zero. (RFC 2765 / SIIT.)
 	if (groups.slice(0, 4).every((group) => group === 0) && groups[4] === 0xffff && groups[5] === 0) {
 		return isBlockedIpv4(ipv4FromLowGroups());
 	}
-	// Deprecated IPv4-compatible ::a.b.c.d — groups 0-5 zero.
+	// Deprecated IPv4-compatible ::a.b.c.d - groups 0-5 zero.
 	if (allZeroPrefix && groups[5] === 0) {
 		return isBlockedIpv4(ipv4FromLowGroups());
 	}
@@ -190,7 +190,7 @@ export function isPrivateIp(ip: string): boolean {
 	if (/^\d{1,3}(\.\d{1,3}){3}$/.test(normalized)) {
 		return isBlockedIpv4(normalized);
 	}
-	// Not an IP literal — treat as blocked so no caller mistakes it for an address.
+	// Not an IP literal - treat as blocked so no caller mistakes it for an address.
 	return true;
 }
 
@@ -278,7 +278,7 @@ export async function resolveAndValidateUrl(urlString: string): Promise<UrlSafet
 
 		return { safe: true };
 	} catch (error) {
-		// DNS resolution failure — treat as unsafe (fail-closed)
+		// DNS resolution failure - treat as unsafe (fail-closed)
 		const message = error instanceof Error ? error.message : String(error);
 		return { safe: false, reason: `DNS resolution failed: ${message}` };
 	}
@@ -356,7 +356,7 @@ export async function fetchWithTimeout(
 
 		// Hostname: resolve, then pin the connection to the address that passed.
 		// The Agent MUST come from the same undici copy as the fetch that uses
-		// it — Node's global fetch is the *bundled* undici, whose Dispatcher
+		// it - Node's global fetch is the *bundled* undici, whose Dispatcher
 		// interface differs from the npm package's, and mixing them fails at
 		// connect time with `invalid onRequestStart method`.
 		const { Agent, fetch: undiciFetch } = await import('undici');

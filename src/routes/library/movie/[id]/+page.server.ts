@@ -204,7 +204,7 @@ export const load: PageServerLoad = async ({ params }): Promise<LibraryMoviePage
 			);
 			return null;
 		}),
-		// Same computation as GET /api/library/movies/[id] — reuse the service
+		// Same computation as GET /api/library/movies/[id] - reuse the service
 		// directly instead of self-fetching the API.
 		profileService.getMovieSubtitleStatus(id),
 		profileService.getEffectiveProfileForMovie(id),

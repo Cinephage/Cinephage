@@ -1,5 +1,5 @@
 ---
-# SuperBits (SBS) — Private SWEDISH Movies / TV / General tracker
+# SuperBits (SBS) - Private SWEDISH Movies / TV / General tracker
 # Source port of Prowlarr's superbits.yml to the Cinephage Cardigann schema.
 # Auth uses a session cookie (form login was removed upstream due to bot
 # detection); search hits the site's internal rartracker JSON API.

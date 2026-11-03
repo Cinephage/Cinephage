@@ -11,10 +11,10 @@ import { resolveAppVersion as resolveAppVersionBase } from '#lib/server/version.
  * Resolution chain (per field):
  *   1. Manual override from cinephage_api_config (escape hatch for custom builds)
  *   2. Auto-synced latest release (cinephage_api_config.latest_version/commit),
- *      kept fresh by the identity sync — the api.cinephage.net gateway only
+ *      kept fresh by the identity sync - the api.cinephage.net gateway only
  *      accepts the newest published release pair.
  *   3. APP_VERSION / APP_COMMIT env vars (baked into Dockerfile at build)
- *   4. null — subsystem reports "not configured" and test() fails clearly
+ *   4. null - subsystem reports "not configured" and test() fails clearly
  *
  * `resolveAppVersion` reuses the existing helper at src/lib/server/version.ts
  * to stay consistent with the rest of the app.

@@ -24,7 +24,7 @@ const handler: RequestHandler = async ({ params, url, locals }) => {
 
 	// Rate limiting: the central /api gate in hooks.server.ts already caps
 	// unauthenticated clients far below anything this per-route limiter would
-	// have caught, and authenticated sessions are deliberately unthrottled —
+	// have caught, and authenticated sessions are deliberately unthrottled -
 	// the old 1000/min in-memory limit here was unreachable dead weight.
 
 	const path = params.path;
@@ -71,5 +71,5 @@ const handler: RequestHandler = async ({ params, url, locals }) => {
 	}
 };
 
-// Only expose GET — write methods (POST/PUT/DELETE) are not used
+// Only expose GET - write methods (POST/PUT/DELETE) are not used
 export const GET = handler;

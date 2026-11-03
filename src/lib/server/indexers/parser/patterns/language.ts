@@ -6,7 +6,7 @@
  * (multi-language release) and 'orig' (original-audio marker).
  *
  * Honesty contract: absence of evidence is NOT English. Untagged releases
- * yield `languages: []` and 'multi' is never expanded to 'en' — consumers
+ * yield `languages: []` and 'multi' is never expanded to 'en' - consumers
  * must handle empty lists and pseudo-codes explicitly.
  */
 
@@ -22,7 +22,7 @@ const LANGUAGE_PATTERNS: Array<{ pattern: RegExp; code: string }> = [
 	// Multi-language indicators
 	{ pattern: /\bmulti(?:[\s._-]?(?:lang|language|audio|sub)?)?\b/i, code: 'multi' },
 	// "Dual" counts as multi only with language context ("Dual Audio", "DUAL ESP-ENG",
-	// "dual-lat") — a bare "Dual" stays untagged so the movie title "Dual (2022)"
+	// "dual-lat") - a bare "Dual" stays untagged so the movie title "Dual (2022)"
 	// does not false-positive.
 	{
 		pattern: /\bdual(?=[\s._-]*(?:audio|lang|lat|latino|esp|spa|eng|castellano|subs?\b))/i,
@@ -325,7 +325,7 @@ export function extractLanguages(title: string): LanguageMatch {
 	}
 
 	// No English assertion: an untagged release stays empty ([]), and a
-	// "multi"/"dual audio" release yields only the 'multi' marker — neither is
+	// "multi"/"dual audio" release yields only the 'multi' marker - neither is
 	// evidence of English audio. The marker/empty contract is handled explicitly
 	// by consumers (language boost ignores 'multi'; naming renders `und`).
 	return { languages, matchedTexts };
@@ -339,11 +339,11 @@ export function hasExplicitLanguage(title: string): boolean {
 }
 
 /**
- * Extract language tokens from a torrent FILE name (tier-3 evidence — the
+ * Extract language tokens from a torrent FILE name (tier-3 evidence - the
  * names inside a pack, not the release title). Strips the extension, then
  * applies the same token table. File names are stronger evidence than titles
  * for multi-audio packs but still not proof: a ".es.srt" sidecar names its
- * subtitle, not an audio track — only ffprobe at import is definitive.
+ * subtitle, not an audio track - only ffprobe at import is definitive.
  */
 export function extractLanguagesFromFileName(fileName: string): LanguageMatch {
 	const base = fileName.replace(/\.[a-z0-9]{1,4}$/i, '').replace(/[._]+/g, ' ');

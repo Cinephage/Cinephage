@@ -1,8 +1,8 @@
 /**
  * Global request-system settings.
  *
- * GET /api/settings/request-settings — current settings (defaults if unset)
- * PUT /api/settings/request-settings — replace settings (full object)
+ * GET /api/settings/request-settings - current settings (defaults if unset)
+ * PUT /api/settings/request-settings - replace settings (full object)
  *
  * Auth: admin only.
  */

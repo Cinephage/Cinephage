@@ -98,7 +98,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	const filters = buildFiltersForTab(tab);
 
-	// Fetch filter options and activity data in parallel — call the service directly
+	// Fetch filter options and activity data in parallel - call the service directly
 	// instead of routing through an internal HTTP fetch
 	// The unmatched tab fetches live client state on demand client-side;
 	// server-render it empty so page loads never block on client timeouts.

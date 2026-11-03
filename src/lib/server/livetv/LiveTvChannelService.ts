@@ -323,7 +323,7 @@ export class LiveTvChannelService implements BackgroundService {
 
 	/**
 	 * Distinct country codes present in Cinephage Live channel metadata, with
-	 * channel counts — powers the channel browser's country filter.
+	 * channel counts - powers the channel browser's country filter.
 	 */
 	async getChannelCountries(
 		accountIds?: string[]

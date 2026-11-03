@@ -109,7 +109,7 @@ beforeEach(() => {
 		.run();
 });
 
-describe('mediaServerLinkService — Quick Connect pairing', () => {
+describe('mediaServerLinkService - Quick Connect pairing', () => {
 	it('initiates pairing, returns only the code, and stores the secret internally', async () => {
 		fetchMock.mockImplementation(async (_url, init) => {
 			if (String(_url).endsWith('/QuickConnect/Enabled')) {
@@ -229,7 +229,7 @@ describe('mediaServerLinkService — Quick Connect pairing', () => {
 	});
 });
 
-describe('mediaServerLinkService — admin-mediated linking', () => {
+describe('mediaServerLinkService - admin-mediated linking', () => {
 	it('links an existing server user to the account', async () => {
 		fetchMock.mockImplementation(async (url) => {
 			if (String(url).endsWith('/Users')) {
@@ -259,7 +259,7 @@ describe('mediaServerLinkService — admin-mediated linking', () => {
 	});
 });
 
-describe('mediaServerLinkService — unlink', () => {
+describe('mediaServerLinkService - unlink', () => {
 	it('removes only the caller own link', async () => {
 		fetchMock.mockImplementation(async (url) => {
 			if (String(url).endsWith('/Users')) return jellyfinJson(200, [{ Id: 'jf-a', Name: 'Alpha' }]);

@@ -6,7 +6,7 @@ const GROUP_BY_COLLECTION_KEY = 'library-group-by-collection';
 export type ViewMode = 'grid' | 'list';
 
 // Storage access throws in browsers that block site data (e.g. Firefox ETP /
-// blocked cookies) — the store is instantiated at module scope, so every read
+// blocked cookies) - the store is instantiated at module scope, so every read
 // and write must fail soft to defaults instead of crashing import time.
 function readSession(key: string): string | null {
 	try {
@@ -20,7 +20,7 @@ function writeSession(key: string, value: string): void {
 	try {
 		sessionStorage.setItem(key, value);
 	} catch {
-		// storage unavailable — preference applies for this session only
+		// storage unavailable - preference applies for this session only
 	}
 }
 

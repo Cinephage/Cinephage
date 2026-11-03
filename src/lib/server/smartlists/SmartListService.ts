@@ -850,7 +850,7 @@ export class SmartListService {
 					localizedTitles
 				} as MediaNamingInfo);
 
-				// Honor the list's language profile; otherwise inherit (NULL) — the
+				// Honor the list's language profile; otherwise inherit (NULL) - the
 				// instance default is resolved at read time, never stamped here.
 				const languageProfileId = wantsSubtitles ? (list.languageProfileId ?? null) : null;
 				const owningLibrary = await getLibraryEntityService().resolveOwningLibraryForRootFolder(
@@ -960,7 +960,7 @@ export class SmartListService {
 					localizedTitles
 				} as MediaNamingInfo);
 
-				// Honor the list's language profile; otherwise inherit (NULL) — the
+				// Honor the list's language profile; otherwise inherit (NULL) - the
 				// instance default is resolved at read time, never stamped here.
 				const languageProfileId = wantsSubtitles ? (list.languageProfileId ?? null) : null;
 				const owningLibrary = await getLibraryEntityService().resolveOwningLibraryForRootFolder(
@@ -1496,7 +1496,7 @@ export class SmartListService {
 				} as MediaNamingInfo);
 
 				// Get the language profile if subtitles wanted
-				// Honor the list's language profile; otherwise inherit (NULL) — the
+				// Honor the list's language profile; otherwise inherit (NULL) - the
 				// instance default is resolved at read time, never stamped here.
 				const languageProfileId = wantsSubtitles ? (list.languageProfileId ?? null) : null;
 				const owningLibrary = await getLibraryEntityService().resolveOwningLibraryForRootFolder(
@@ -1662,7 +1662,7 @@ export class SmartListService {
 				} as MediaNamingInfo);
 
 				// Get the language profile if subtitles wanted
-				// Honor the list's language profile; otherwise inherit (NULL) — the
+				// Honor the list's language profile; otherwise inherit (NULL) - the
 				// instance default is resolved at read time, never stamped here.
 				const languageProfileId = wantsSubtitles ? (list.languageProfileId ?? null) : null;
 				const owningLibrary = await getLibraryEntityService().resolveOwningLibraryForRootFolder(
