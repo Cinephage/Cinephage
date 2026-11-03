@@ -4,8 +4,9 @@
 # - Pull requests to dev: Build only (validates Docker image)
 # - Push to dev: Build and push preview tags (dev, dev-YYYYMMDD-RUN)
 # - Push to main: Build only validation with no image publication
-# - Stable publication happens only when called from the stable release workflow with release_tag
-# - Runs on pushes to main/dev, pull requests to dev, and stable release workflow calls
+# - Stable publication happens when called from the stable release workflow with release_tag,
+#   or via manual dispatch (e.g. rebuilding a tag that was renamed/retagged after the fact)
+# - Runs on pushes to main/dev, pull requests to dev, stable release workflow calls, and manual dispatch
 #
 # Images are pushed to ghcr.io/<owner>/cinephage
 #
@@ -23,6 +24,17 @@ on:
         default: ''
       checkout_ref:
         description: 'Git ref to checkout (defaults to workflow ref)'
+        required: false
+        type: string
+        default: ''
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Semver release tag to build and publish as stable (e.g. v1.0.0)'
+        required: true
+        type: string
+      checkout_ref:
+        description: 'Git ref to checkout (defaults to release_tag)'
         required: false
         type: string
         default: ''
@@ -52,6 +64,17 @@ jobs:
       should_publish: ${{ steps.meta.outputs.should_publish }}
 
     steps:
+      - name: Validate manually dispatched release tag
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+
+          TAG="${{ inputs.release_tag }}"
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::release_tag must be a semver tag like v1.0.0 (got: ${TAG})"
+            exit 1
+          fi
+
       - name: Compute version and arch tags
         id: meta
         run: |
@@ -91,7 +114,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ inputs.checkout_ref || github.ref }}
+          ref: ${{ inputs.checkout_ref || inputs.release_tag || github.ref }}
 
       - name: Set lowercase image name
         run: echo "IMAGE_NAME_LC=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
@@ -170,7 +193,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ inputs.checkout_ref || github.ref }}
+          ref: ${{ inputs.checkout_ref || inputs.release_tag || github.ref }}
 
       - name: Set lowercase image name
         run: echo "IMAGE_NAME_LC=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
