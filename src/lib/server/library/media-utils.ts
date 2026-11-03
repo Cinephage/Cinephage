@@ -19,7 +19,7 @@ const TRANSPORT_AND_MEDIA_EXTENSIONS = new Set([
 
 /**
  * Strip all known media/transport extensions from a file path and return the
- * bare stem — e.g. "Movie.Title.1080p.mkv" → "Movie.Title.1080p".
+ * bare stem - e.g. "Movie.Title.1080p.mkv" → "Movie.Title.1080p".
  *
  * Uses the original-case extension from path.extname() when calling
  * path.basename() so the strip is case-insensitive on Linux (where

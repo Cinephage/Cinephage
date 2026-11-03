@@ -25,7 +25,7 @@ export class RequiredFormatsStage implements DecisionStage<GrabDecisionContext> 
 
 		const missing = [...missingAnd];
 		if (!orSatisfied) {
-			// None of the OR formats matched — report all of them as missing
+			// None of the OR formats matched - report all of them as missing
 			missing.push(...orEntries);
 		}
 

@@ -2,7 +2,7 @@ import type { RequestHandler } from './$types';
 import { auth } from '#lib/server/auth/auth.js';
 
 /**
- * Better Auth's catch-all endpoint — its documented SvelteKit mounting point.
+ * Better Auth's catch-all endpoint - its documented SvelteKit mounting point.
  * The rest segment is optional in SvelteKit, so bare /api/auth matches too.
  *
  * Serving /api/auth through a real route (instead of intercepting the path

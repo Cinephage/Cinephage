@@ -5,7 +5,7 @@
 
 	interface Props {
 		module: CinephageModuleView;
-		/** Master switch is off — all controls disabled */
+		/** Master switch is off - all controls disabled */
 		disabled?: boolean;
 		onToggle: (moduleId: string, current: boolean) => void;
 		onSaveSettings: (moduleId: string, settings: Record<string, unknown>) => void;

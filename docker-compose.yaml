@@ -19,7 +19,7 @@ services:
     init: true
     # Headless Firefox (captcha solving) uses /dev/shm; the container default of
     # 64MB causes crashes/instability. Proxmox LXC users may also need to raise the
-    # host's shm — see .env.example. Increase if you raise CAPTCHA_MAX_BROWSERS.
+    # host's shm - see .env.example. Increase if you raise CAPTCHA_MAX_BROWSERS.
     shm_size: 256m
     security_opt:
       - no-new-privileges:true

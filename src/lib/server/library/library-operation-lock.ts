@@ -19,7 +19,7 @@
  * the acquired lock deadlocks every subsequent library operation.
  *
  * Note: `holder` may briefly report the next queued operation before its
- * wrapped function starts running — this is intentional and part of the
+ * wrapped function starts running - this is intentional and part of the
  * direct ownership handoff.
  */
 export class LibraryOperationLock {

@@ -35,7 +35,7 @@ function serializeClientError(error: unknown): ClientErrorReportPayload['error']
 	}
 
 	// Non-Error throws (DOMException, plain strings, NS_ERROR_FAILURE...) must
-	// still serialize — dropping them turned every such crash into `err: {}`.
+	// still serialize - dropping them turned every such crash into `err: {}`.
 	if (typeof error === 'string') {
 		return { name: 'string', message: error };
 	}

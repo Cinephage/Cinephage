@@ -785,7 +785,7 @@ class ReconciliationService extends EventEmitter implements BackgroundService {
 				.where(rootFolderId ? eq(series.rootFolderId, rootFolderId) : undefined)
 		]);
 
-		// Collect only the episode IDs referenced by episode files — avoids
+		// Collect only the episode IDs referenced by episode files - avoids
 		// loading the entire episodes table for large libraries.
 		const referencedEpisodeIds = new Set<string>();
 		for (const r of episodeFileRows) {

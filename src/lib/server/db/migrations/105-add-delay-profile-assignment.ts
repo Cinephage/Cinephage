@@ -6,7 +6,7 @@ export const migration_v105: MigrationDefinition = {
 	name: 'add_delay_profile_assignment',
 	apply: (sqlite) => {
 		// Ensure delay_profiles and pending_releases tables exist (in case they were not created
-		// by a previous migration — they were added directly to the base schema).
+		// by a previous migration - they were added directly to the base schema).
 		if (!tableExists(sqlite, 'delay_profiles')) {
 			sqlite
 				.prepare(

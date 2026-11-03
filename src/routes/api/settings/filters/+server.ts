@@ -70,7 +70,7 @@ export const PUT: RequestHandler = async (event) => {
 			set: { value: JSON.stringify(result) }
 		});
 
-	// Mirror the response locale/region into the language_settings singleton —
+	// Mirror the response locale/region into the language_settings singleton -
 	// language_settings is the TMDB authority (migration 140 seeded it from
 	// global_filters) and this keeps the two in sync until the language hub
 	// replaces this UI. Unparseable values are skipped so the last good
@@ -84,7 +84,7 @@ export const PUT: RequestHandler = async (event) => {
 		try {
 			await LanguageSettingsService.getInstance().update(patch);
 		} catch (e) {
-			// The global_filters write already succeeded — never fail the request
+			// The global_filters write already succeeded - never fail the request
 			// because the mirror could not be applied.
 			logger.warn({ err: e }, 'Failed to mirror filters language/region into language_settings');
 		}

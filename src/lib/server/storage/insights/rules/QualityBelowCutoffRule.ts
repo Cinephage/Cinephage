@@ -28,7 +28,7 @@ const RESOLUTION_ORDER: Record<string, number> = {
  *
  * NOTE: The monitoring system's CutoffUnmetSpecification was softened to always
  * accept (hard cutoffs removed). This rule is the NEW logic that surfaces
- * below-cutoff items for display purposes — it does NOT trigger automatic
+ * below-cutoff items for display purposes - it does NOT trigger automatic
  * upgrades.
  */
 export class QualityBelowCutoffRule implements StorageInsightRule {
@@ -65,7 +65,7 @@ export class QualityBelowCutoffRule implements StorageInsightRule {
 
 		// Multi-quality mode: a movie may have several movie_files at DIFFERENT
 		// resolutions. Only the BEST file per movie should be evaluated against the
-		// cutoff — an intentional lower-resolution tier is not a below-cutoff
+		// cutoff - an intentional lower-resolution tier is not a below-cutoff
 		// candidate when a higher tier already satisfies the profile.
 		const bestPerMovie = new Map<string, MovieRow>();
 		for (const row of movieRows) {

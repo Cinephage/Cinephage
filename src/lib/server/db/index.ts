@@ -8,7 +8,7 @@ import { tableExists, getAppliedMigrations, getSchemaVersion } from './migration
 import { MIGRATIONS } from './migrations/index';
 import { getSharedSqliteConnection } from './connection';
 
-// Single shared connection (see connection.ts) — Better Auth and Drizzle
+// Single shared connection (see connection.ts) - Better Auth and Drizzle
 // both use this handle.
 const sqlite = getSharedSqliteConnection();
 
@@ -52,7 +52,7 @@ function runVacuumMaintenance(): void {
 	// One-time: switch from auto_vacuum=NONE to INCREMENTAL so deleted pages are
 	// reclaimed incrementally instead of building up as freelist bloat.
 	// PRAGMA auto_vacuum can only change outside a transaction and requires VACUUM
-	// to take effect — the pragma value itself (2 = INCREMENTAL) is the done-marker.
+	// to take effect - the pragma value itself (2 = INCREMENTAL) is the done-marker.
 	const autoVacuumMode = sqlite.pragma('auto_vacuum', { simple: true }) as number;
 
 	if (autoVacuumMode !== 2) {

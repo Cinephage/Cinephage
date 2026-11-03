@@ -4,9 +4,9 @@ import type { StorageInsightRule, RuleContext, InsightFinding } from '../types.j
 import { untrackedGroupKey } from '../untracked-grouping.js';
 
 /**
- * Items in storage_items with sourceSystem='server' — present on a media
+ * Items in storage_items with sourceSystem='server' - present on a media
  * server but Cinephage has no local file for them. Excludes series/season
- * item types because those are organizational containers in Jellyfin/Emby —
+ * item types because those are organizational containers in Jellyfin/Emby -
  * if Cinephage tracks the episodes, the series IS tracked, just at a
  * different granularity.
  */

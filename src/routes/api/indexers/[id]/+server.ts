@@ -107,7 +107,7 @@ export const PUT: RequestHandler = async (event) => {
 		});
 
 		// If streaming indexer's baseUrl changed, trigger bulk .strm file update.
-		// In practice this path is dead after Phase 2 — cinephage-stream's baseUrl
+		// In practice this path is dead after Phase 2 - cinephage-stream's baseUrl
 		// is owned by the subsystem and rejected by updateIndexer's guard. The
 		// subsystem's own settings endpoint triggers the strm update instead.
 		// Kept defensively in case of legacy callers.

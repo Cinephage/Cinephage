@@ -254,7 +254,7 @@ describe('Reports [type] API', () => {
 			expect((data as any).data.records[0].mediaType).toBe('movie');
 		});
 
-		it('filters by since=24h — excludes records older than 24h', async () => {
+		it('filters by since=24h - excludes records older than 24h', async () => {
 			const oldDate = new Date(Date.now() - 2 * 86_400_000).toISOString();
 			const newDate = new Date().toISOString();
 			testDb.db
@@ -692,7 +692,7 @@ describe('Reports [type] API', () => {
 	// PATCH unmatched-imports
 	// -------------------------------------------------------------------------
 	describe('PATCH unmatched-imports', () => {
-		it('returns 400 — managed via library page', async () => {
+		it('returns 400 - managed via library page', async () => {
 			const { status, data } = await callHandler(
 				PATCH,
 				'PATCH',

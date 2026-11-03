@@ -6,7 +6,7 @@ import type { PlaybackSession, SessionResourceKind } from '../types';
  * Mirrors playlist-rewriter.ts for MPEG-DASH. Every segment/media URL in the
  * MPD is rewritten through the playback session so that:
  *   - same-origin URLs under the MPD's directory become
- *     /api/streaming/session/{token}/dash/{relative-path} — a template-safe
+ *     /api/streaming/session/{token}/dash/{relative-path} - a template-safe
  *     catch-all that preserves $Number$/$Time$ placeholders (which a
  *     registered-resource route cannot, since concrete numbers arrive only at
  *     request time)

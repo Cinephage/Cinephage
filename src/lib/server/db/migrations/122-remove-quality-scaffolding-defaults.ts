@@ -42,7 +42,7 @@ export const migration_v122: MigrationDefinition = {
 		let defaultProfileId: string | null = survivingDefault?.id ?? null;
 
 		if (!defaultProfileId) {
-			// No surviving default — fall back to 'balanced' if it exists.
+			// No surviving default - fall back to 'balanced' if it exists.
 			const balanced = sqlite
 				.prepare(`SELECT id FROM scoring_profiles WHERE id = 'balanced' LIMIT 1`)
 				.get() as { id: string } | undefined;
@@ -112,7 +112,7 @@ export const migration_v122: MigrationDefinition = {
 			} catch (e) {
 				logger.warn(
 					{ err: e instanceof Error ? e.message : String(e) },
-					`[migration v122] Could not drop scoring_profiles.${column} — column left as dead data`
+					`[migration v122] Could not drop scoring_profiles.${column} - column left as dead data`
 				);
 			}
 		}

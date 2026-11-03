@@ -118,7 +118,7 @@ async function seedLibraryWithMovies(): Promise<void> {
 describe('bulk-assign library-wide mode', () => {
 	beforeEach(() => {
 		clearTestDb(testDb);
-		// clearTestDb's table list does not include these — clear explicitly
+		// clearTestDb's table list does not include these - clear explicitly
 		// so the fixed fixture ids can be reused across tests.
 		testDb.sqlite.prepare('DELETE FROM movies').run();
 		testDb.sqlite.prepare('DELETE FROM series').run();

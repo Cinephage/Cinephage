@@ -25,7 +25,7 @@ const logger = createChildLogger({ logDomain: 'system' as const });
  *   untouched and logged.
  *
  * STRUCTURE NOTE (Phase 5 Task 3, applied): this migration also adds the
- * epg_programs i18n columns — title_i18n / description_i18n / category_i18n
+ * epg_programs i18n columns - title_i18n / description_i18n / category_i18n
  * (nullable text JSON arrays of { lang: string | null, text: string }). They
  * preserve every XMLTV text element variant with its lower-cased `@_lang`
  * attribute so text selection can happen at display time. Existing rows keep
@@ -48,7 +48,7 @@ const SYNCED_ITEM_LANGUAGE_COLUMNS = [
  */
 const EPG_PROGRAM_I18N_COLUMNS = ['title_i18n', 'description_i18n', 'category_i18n'] as const;
 
-/** Step 1 — add the raw provenance columns (no-op when they already exist). */
+/** Step 1 - add the raw provenance columns (no-op when they already exist). */
 function addSyncedItemRawLanguageColumns(sqlite: Database.Database): void {
 	if (!tableExists(sqlite, 'media_server_synced_items')) return;
 	for (const { raw } of SYNCED_ITEM_LANGUAGE_COLUMNS) {
@@ -98,7 +98,7 @@ export function splitRawAndCanonical(value: unknown): SplitLanguageArray | null 
 	return { raw, canonical };
 }
 
-/** Step 2 — canonicalize stored language arrays, preserving originals in the raw columns. */
+/** Step 2 - canonicalize stored language arrays, preserving originals in the raw columns. */
 function canonicalizeSyncedItemLanguages(sqlite: Database.Database): void {
 	if (!tableExists(sqlite, 'media_server_synced_items')) return;
 
@@ -171,7 +171,7 @@ function canonicalizeSyncedItemLanguages(sqlite: Database.Database): void {
 }
 
 /**
- * Step 3 (Task 3) — add the epg_programs i18n columns (no-op when they already
+ * Step 3 (Task 3) - add the epg_programs i18n columns (no-op when they already
  * exist). Nullable with no backfill: rows written before this migration keep
  * NULL and readers fall back to the plain text columns.
  */
@@ -184,7 +184,7 @@ function addEpgProgramI18nColumns(sqlite: Database.Database): void {
 	}
 }
 
-/** Final step — integrity gates (report, never fail the migration). */
+/** Final step - integrity gates (report, never fail the migration). */
 function runIntegrityChecks(sqlite: Database.Database): void {
 	const fkViolations = sqlite.prepare('PRAGMA foreign_key_check').all();
 	if (fkViolations.length > 0) {

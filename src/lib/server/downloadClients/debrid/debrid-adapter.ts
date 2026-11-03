@@ -63,7 +63,7 @@ export interface DebridAdapter {
 	 * Pre-download file listing for a CACHED torrent (best-effort evidence
 	 * probe for audio-language acquisition; audio-language design 2026-09-15
 	 * tier 3). Returns null when the torrent is not cached or the provider
-	 * cannot answer — absence of evidence, never an error the caller must
+	 * cannot answer - absence of evidence, never an error the caller must
 	 * handle beyond catching transport failures.
 	 */
 	checkInstantFiles?(infoHash: string): Promise<ProviderFile[] | null>;
@@ -416,7 +416,7 @@ class RealDebrid extends BaseAdapter implements RealDebridAdapter {
 	/**
 	 * Real-Debrid instant availability: per-host variants of file id →
 	 * {filename, filesize} for cached torrents. The endpoint has a history of
-	 * deprecation churn (rdt-client #545/#617) — 404 and empty bodies are
+	 * deprecation churn (rdt-client #545/#617) - 404 and empty bodies are
 	 * treated as "no evidence" (null), never an error.
 	 */
 	async checkInstantFiles(hash: string): Promise<ProviderFile[] | null> {

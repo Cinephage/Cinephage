@@ -72,7 +72,7 @@ export class DebridHandler {
 		return withSubmissionLock(prepared.value.infoHash.toLowerCase(), async () => {
 			// Post-resolution identity recheck: the canonical info hash is only
 			// known now. Re-verify it against active intents, the live queue, and
-			// import history before submitting to the debrid provider — mirrors
+			// import history before submitting to the debrid provider - mirrors
 			// TorrentHandler. Without this, re-grabbing an already-imported or
 			// in-flight torrent via debrid slipped through.
 			if (request.options.intentId) {
@@ -306,7 +306,7 @@ export class DebridHandler {
 		if (isImportedQueueStatus(queueItem.status)) {
 			return {
 				success: false,
-				error: `Release ${infoHash} was already imported — remove it first or grab a different release`
+				error: `Release ${infoHash} was already imported - remove it first or grab a different release`
 			};
 		}
 

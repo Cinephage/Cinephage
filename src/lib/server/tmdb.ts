@@ -48,7 +48,7 @@ let _settingsCacheTimestamp = 0;
 let _settingsCachePromise: Promise<void> | null = null;
 
 // Row id of the language_settings singleton. Kept as a literal (instead of
-// importing LanguageSettingsService) to avoid import cycles — tmdb.ts sits
+// importing LanguageSettingsService) to avoid import cycles - tmdb.ts sits
 // below most services in the dependency graph.
 const LANGUAGE_SETTINGS_SINGLETON_ID = 'singleton';
 
@@ -139,7 +139,7 @@ async function fetchWithRetry(url: string, options?: RequestInit, retries = 3): 
 		await new Promise((resolve) => setTimeout(resolve, delayMs));
 	}
 
-	// Unreachable — satisfies TypeScript return type
+	// Unreachable - satisfies TypeScript return type
 	return fetch(url, options);
 }
 
@@ -203,7 +203,7 @@ export const tmdb = {
 				url.searchParams.set('api_key', apiKey);
 
 				// Apply Global Filters (Pre-request)
-				// Only apply as defaults — caller's explicit params take precedence.
+				// Only apply as defaults - caller's explicit params take precedence.
 				if (filters && !skipFilters) {
 					if (filters.include_adult !== undefined && !url.searchParams.has('include_adult')) {
 						url.searchParams.set('include_adult', String(filters.include_adult));
@@ -227,7 +227,7 @@ export const tmdb = {
 						}
 					}
 
-					// Apply Discover-specific filters — only when caller hasn't set them
+					// Apply Discover-specific filters - only when caller hasn't set them
 					if (path.includes('/discover/')) {
 						const minVoteAverage = filters.min_vote_average ?? 0;
 						const minVoteCount = filters.min_vote_count ?? 0;

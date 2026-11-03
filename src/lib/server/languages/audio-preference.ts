@@ -96,7 +96,7 @@ export const AUDIO_PREFERENCE_BUCKETS = {
 	original: 0,
 	/** Matches one of the profile's ordered fallback languages */
 	preferred: 1,
-	/** No language tag at all — treated as neutral */
+	/** No language tag at all - treated as neutral */
 	untagged: 2,
 	/** Tagged, but matches neither the original nor any preferred language */
 	other: 3
@@ -160,7 +160,7 @@ export function resolveAudioPreferenceBucket<T extends { language?: string }>(
  * Same bucket semantics as the single-candidate ranking, extended for the
  * pseudo-codes: 'orig' counts as an original-language match, and 'multi'
  * ranks as a preferred candidate at the position just after the last
- * explicitly-matching language — a multi-audio pack probably contains a
+ * explicitly-matching language - a multi-audio pack probably contains a
  * preferred language, but titles are claims, not proof.
  */
 export function rankLanguageEvidenceSet(

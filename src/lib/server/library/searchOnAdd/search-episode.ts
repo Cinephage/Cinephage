@@ -1,5 +1,5 @@
 /**
- * Search On Add — episode search
+ * Search On Add - episode search
  */
 
 import { eq } from 'drizzle-orm';

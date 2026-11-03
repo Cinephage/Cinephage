@@ -87,7 +87,7 @@ class GrabServiceImpl {
 
 		const resolved = await this.resolveTarget(request);
 
-		// When force-overriding, skip policy scoring — but identity is never
+		// When force-overriding, skip policy scoring - but identity is never
 		// skippable and the acquisition still reserves its slot.
 		if (forceOverride) {
 			// Explicit admin override: the hard stages are intentionally skipped
@@ -254,7 +254,7 @@ class GrabServiceImpl {
 		const intentId = reservation.intentId;
 		options.intentId = intentId;
 
-		// Handlers persist what they are given — hand them the COMPUTED
+		// Handlers persist what they are given - hand them the COMPUTED
 		// upgrade decision, never the caller's possibly-missing flag.
 		options.isUpgrade = decision.upgradeStatus === 'upgrade';
 
@@ -374,9 +374,9 @@ class GrabServiceImpl {
 	}
 
 	/**
-	 * Attach the transport queue row to the intent, or — for protocols that
+	 * Attach the transport queue row to the intent, or - for protocols that
 	 * finalize synchronously inside the handler (streaming, NZB streaming,
-	 * which never enter the download queue) — complete the intent now.
+	 * which never enter the download queue) - complete the intent now.
 	 */
 	private linkIntentToResult(
 		request: GrabRequest,
@@ -402,7 +402,7 @@ class GrabServiceImpl {
 		const reason =
 			kind === 'identity_conflict'
 				? `Duplicate release: "${conflict.releaseTitle}" is already being acquired${inQueue}`
-				: `Already acquiring "${conflict.releaseTitle}" for this slot${inQueue} — remove it first or wait for it to finish`;
+				: `Already acquiring "${conflict.releaseTitle}" for this slot${inQueue} - remove it first or wait for it to finish`;
 		const rejectionType = kind === 'identity_conflict' ? 'duplicate_hash' : 'media_occupied';
 		return {
 			success: false,
@@ -463,7 +463,7 @@ class GrabServiceImpl {
 				episodeIds = target.episodeIds;
 				// Season packs must carry a concrete episode scope. An empty
 				// episodeIds list bypassed occupancy entirely and left queue
-				// rows invisible to per-episode blocking checks — expand to
+				// rows invisible to per-episode blocking checks - expand to
 				// every episode of the season (the pack delivers them all).
 				if (episodeIds.length === 0) {
 					const seasonEpisodes = await db.query.episodes.findMany({

@@ -50,7 +50,7 @@ export class HostConcurrencyLimiter {
 			return true;
 		}
 
-		// No slot available — queue and wait
+		// No slot available - queue and wait
 		return new Promise<boolean>((resolve) => {
 			let settled = false;
 

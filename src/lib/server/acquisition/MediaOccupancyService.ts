@@ -81,7 +81,7 @@ class MediaOccupancyServiceImpl {
 		options: MediaOccupancyOptions
 	): Promise<MediaOccupancyResult> {
 		// Durable acquisition intents first: an ACTIVE reservation blocks any
-		// new grab for the slot — including upgrades (one active acquisition
+		// new grab for the slot - including upgrades (one active acquisition
 		// per slot; an upgrade waits for the active one to import or fail).
 		// Bucket-aware: a different quality bucket's reservation does not
 		// block when the candidate targets a known desired bucket.

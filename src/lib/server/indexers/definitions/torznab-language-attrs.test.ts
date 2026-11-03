@@ -62,7 +62,7 @@ describe('Torznab language/subs attributes', () => {
 		expect(result.releases[0].languages).toEqual(['en', 'es']);
 		expect(result.releases[0].subtitleLanguages).toEqual(['es']);
 		// Regression: the `prefix|attr` pipe DSL threw in css-select before the
-		// normalizeXmlAttrSelector rewrite — seeders/infohash never extracted.
+		// normalizeXmlAttrSelector rewrite - seeders/infohash never extracted.
 		expect(result.releases[0].seeders).toBe(42);
 	});
 

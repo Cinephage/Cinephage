@@ -35,7 +35,7 @@ const context = {
 	baseUrl: 'https://example.test'
 };
 
-describe('ResponseParser — empty JSON body', () => {
+describe('ResponseParser - empty JSON body', () => {
 	it('reports a clear "empty response body" error instead of the raw JSON.parse message', () => {
 		const parser = createParser();
 
@@ -92,7 +92,7 @@ function createCommentsParser(): ResponseParser {
 	return new ResponseParser(definition, templateEngine, filterEngine, selectorEngine);
 }
 
-describe('ResponseParser — scraped URL scheme safety', () => {
+describe('ResponseParser - scraped URL scheme safety', () => {
 	it('resolves relative comments URLs against the indexer base', () => {
 		const parser = createCommentsParser();
 
@@ -114,7 +114,7 @@ describe('ResponseParser — scraped URL scheme safety', () => {
 			context
 		);
 
-		// The search UI renders commentsUrl as a clickable href — a scraped
+		// The search UI renders commentsUrl as a clickable href - a scraped
 		// javascript: value must never survive parsing.
 		expect(result.releases[0].commentsUrl ?? '').not.toMatch(/^javascript:/i);
 	});

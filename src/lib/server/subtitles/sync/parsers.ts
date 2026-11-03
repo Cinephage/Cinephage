@@ -229,7 +229,7 @@ export function applyAssDeltas(content: string, deltas: TimeDelta[]): string {
 			continue;
 		}
 
-		// This is a Dialogue line — apply delta
+		// This is a Dialogue line - apply delta
 		const parts = line.substring('Dialogue:'.length).split(',');
 		if (parts.length < 10 || dialogueIndex >= deltas.length) {
 			result.push(line);

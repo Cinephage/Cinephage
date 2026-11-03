@@ -1,5 +1,5 @@
 /**
- * Mark own notifications read. Body: { ids?: string[] } — omit ids to mark
+ * Mark own notifications read. Body: { ids?: string[] } - omit ids to mark
  * everything read; an explicit empty array is a no-op.
  */
 

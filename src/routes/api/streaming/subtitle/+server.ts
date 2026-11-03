@@ -151,7 +151,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		const rawContent = await response.text();
 
 		// Convert to VTT when possible. ASS/SSA and unknown binaries are not
-		// silently relabeled as text/vtt — reject them instead of serving garbage.
+		// silently relabeled as text/vtt - reject them instead of serving garbage.
 		const content = ensureVttFormat(rawContent);
 		if (content === null) {
 			return new Response(

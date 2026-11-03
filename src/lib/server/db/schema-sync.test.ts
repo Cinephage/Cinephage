@@ -781,7 +781,7 @@ describe('apikey v1.5 baseline shape and pre-migration converge', () => {
 		expect(columns).toContain('referenceId');
 		expect(columns).toContain('configId');
 		// better-auth >= 1.7 validates required columns on first access and
-		// latches a mismatch — the table must be born correct, not converged
+		// latches a mismatch - the table must be born correct, not converged
 		// later by migrations 065/066.
 		expect(columns).not.toContain('userId');
 		expect(getApikeyColumn(sqlite, 'referenceId')?.notnull).toBe(1);
@@ -824,7 +824,7 @@ describe('apikey v1.5 baseline shape and pre-migration converge', () => {
 			referenceId: string;
 		};
 		expect(row.referenceId).toBe('user-1');
-		// RENAME COLUMN preserves constraints — the renamed column stays NOT NULL.
+		// RENAME COLUMN preserves constraints - the renamed column stays NOT NULL.
 		expect(getApikeyColumn(sqlite, 'referenceId')?.notnull).toBe(1);
 
 		expect(() => convergeApikeySchemaToV15(sqlite)).not.toThrow();

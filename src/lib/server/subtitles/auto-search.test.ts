@@ -131,7 +131,7 @@ const baseSeries: SeriesLike = { id: 'series-1', monitored: true, wantsSubtitles
 beforeAll(async () => {
 	// autoSearchMovie/autoSearchEpisode always record outcomes via
 	// subtitle-search-state.js, which hits the real singleton db (unmocked).
-	// Ensure its schema is synced before any test in this file runs — CI runs
+	// Ensure its schema is synced before any test in this file runs - CI runs
 	// from a fresh, unmigrated database.
 	const { initializeDatabase } = await import('#lib/server/db/index.js');
 	await initializeDatabase();
@@ -364,7 +364,7 @@ describe('requirement-targeted search (Search now)', () => {
 	const REQ_DE = { tag: 'de', variant: 'regular' as const, accessibility: 'any' as const };
 
 	beforeEach(async () => {
-		// State persists across tests in the shared backing DB — start clean.
+		// State persists across tests in the shared backing DB - start clean.
 		const { subtitleSearchState } = await import('#lib/server/db/schema.js');
 		const { db } = await import('#lib/server/db/index.js');
 		db.delete(subtitleSearchState).run();

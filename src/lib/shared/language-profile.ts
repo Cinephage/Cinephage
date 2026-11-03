@@ -16,7 +16,7 @@ export type SubtitleAccessibility = 'any' | 'prefer-hi' | 'require-hi' | 'exclud
  * How strictly the audio preference is enforced during acquisition.
  * 'prefer' ranks matching releases higher but never blocks a grab (soft);
  * 'require' additionally rejects releases whose evidence affirmatively
- * contradicts the preference — absence of evidence never rejects.
+ * contradicts the preference - absence of evidence never rejects.
  */
 export type AudioAcquisitionMode = 'prefer' | 'require';
 
@@ -65,7 +65,7 @@ export interface EffectiveLanguageProfile {
  * came from and the policy profile that still governs audio/score/upgrades.
  *
  * Resolution: item override ('movie'/'series'/'episode') replaces ONLY the
- * requirement list — cutoff never applies to an override — otherwise the
+ * requirement list - cutoff never applies to an override - otherwise the
  * profile chain's subtitles with cutoff semantics.
  */
 export interface EffectiveSubtitleRequirements {

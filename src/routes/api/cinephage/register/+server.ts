@@ -1,7 +1,7 @@
 /**
  * Install key registration
  *
- * POST /api/cinephage/register — register (or rotate) this install's
+ * POST /api/cinephage/register - register (or rotate) this install's
  * per-install gateway API key. Admin-gated. The plaintext key is returned
  * exactly once, in this response, and then only exists encrypted at rest.
  */

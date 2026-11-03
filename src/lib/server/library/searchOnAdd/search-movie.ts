@@ -214,7 +214,7 @@ export async function searchForMovie(
 				const grabError = grabResult.error ?? grabResult.decision?.reason ?? 'Unknown error';
 				logger.info(
 					{ movieId, title: release.title, error: grabError },
-					'[SearchOnAdd] Release not grabbed — trying next'
+					'[SearchOnAdd] Release not grabbed - trying next'
 				);
 			}
 

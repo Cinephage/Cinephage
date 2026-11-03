@@ -10,12 +10,12 @@ const logger = createChildLogger({ module: 'CinephageModuleRegistry', logDomain:
 type CapabilityKey = keyof CinephageModuleCapabilities;
 
 /**
- * CinephageModuleRegistry — holds registered feature modules, indexed by id.
+ * CinephageModuleRegistry - holds registered feature modules, indexed by id.
  *
  * Mechanics mirror the subtitles ProviderRegistry pattern in this codebase:
  * in-memory Map keyed by module id, multi-index bookkeeping optional, single
  * instance per process via getCinephageModuleRegistry(). Modules register
- * themselves statically (no auto-discovery — we control all modules).
+ * themselves statically (no auto-discovery - we control all modules).
  *
  * Unlike the subtitle registry (which holds interchangeable backends of the
  * same function), this registry holds distinct features that share the

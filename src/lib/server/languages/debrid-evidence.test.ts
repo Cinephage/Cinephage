@@ -60,7 +60,7 @@ describe('getInstantFileEvidence', () => {
 		expect(evidence?.provider).toBe('realdebrid');
 	});
 
-	it('caches per infohash — one probe for repeated calls', async () => {
+	it('caches per infohash - one probe for repeated calls', async () => {
 		const adapter = adapterWith(files([{ name: 'Movie.2026.GERMAN.mkv' }]));
 		getClientMock.mockResolvedValue({ adapter });
 
@@ -87,7 +87,7 @@ describe('getInstantFileEvidence', () => {
 		expect(await getInstantFileEvidence('b'.repeat(40))).toBeNull();
 	});
 
-	it('never throws — transport failures become null evidence', async () => {
+	it('never throws - transport failures become null evidence', async () => {
 		getClientMock.mockResolvedValue({ adapter: adapterWith(new Error('provider down')) });
 		expect(await getInstantFileEvidence(HASH)).toBeNull();
 	});

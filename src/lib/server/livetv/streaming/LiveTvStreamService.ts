@@ -127,7 +127,7 @@ export class LiveTvStreamService implements BackgroundService {
 	): Promise<StreamUrlResolution> {
 		this.totalResolutions++;
 
-		// Get lineup item with backups (single DB query — includes channel data)
+		// Get lineup item with backups (single DB query - includes channel data)
 		const item = await channelLineupService.getChannelWithBackups(lineupItemId);
 		if (!item) {
 			throw this.createError('LINEUP_ITEM_NOT_FOUND', `Lineup item not found: ${lineupItemId}`);

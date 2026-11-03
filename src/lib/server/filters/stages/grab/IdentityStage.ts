@@ -6,7 +6,7 @@ import { matchReleaseToTarget } from '#lib/server/releases/release-identity.js';
 /**
  * HARD stage: verifies the release actually refers to the target media.
  *
- * Runs for EVERY grab — manual, forced, and arr-interactive included. `force`
+ * Runs for EVERY grab - manual, forced, and arr-interactive included. `force`
  * may skip policy (scoring, size, language, delay), never identity. This is
  * the grab-time counterpart of the search-time target filter; it closes the
  * gap where server-side callers (auto-search, cascading strategies, arr
@@ -46,7 +46,7 @@ export class IdentityStage implements DecisionStage<GrabDecisionContext> {
 		});
 
 		// ID-asserted releases (the indexer/search resolved an external id) are
-		// accepted even when the title match is inconclusive — localized or
+		// accepted even when the title match is inconclusive - localized or
 		// alternate naming can defeat title matching while the ID is exact.
 		// The ID also counts as year evidence for automatic movie grabs.
 		const idMethod = this.matchExternalId(ctx.release, info);
@@ -75,7 +75,7 @@ export class IdentityStage implements DecisionStage<GrabDecisionContext> {
 
 		// Automatic movie grabs need year evidence when the target carries a
 		// year: a year-less title like "Halloween" cannot distinguish 1978
-		// from 2018. Interactive grabs are allowed — the user judged it.
+		// from 2018. Interactive grabs are allowed - the user judged it.
 		if (
 			info.mediaType === 'movie' &&
 			ctx.options.isAutomatic &&

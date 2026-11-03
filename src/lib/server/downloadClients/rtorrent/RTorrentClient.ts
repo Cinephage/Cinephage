@@ -575,7 +575,7 @@ export class RTorrentClient implements IDownloadClient {
 			seedingTimeLimit: this.config.seedTimeLimit,
 			canMoveFiles: status !== 'downloading' && status !== 'seeding' && status !== 'queued',
 			// 'completed' means the torrent finished downloading and has no active
-			// transfer or upload — an actively seeding torrent is never removable.
+			// transfer or upload - an actively seeding torrent is never removable.
 			// On top of that, the client-level seed goals must be met (evaluated
 			// app-side; rTorrent has no per-torrent stop-at-ratio command).
 			canBeRemoved:

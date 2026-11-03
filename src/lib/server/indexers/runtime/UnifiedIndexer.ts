@@ -1146,7 +1146,7 @@ export class UnifiedIndexer implements IIndexer {
 					}
 
 					// If resolution already has cached torrent data (from testTorrentLink validation),
-					// use it directly — avoids a redundant second fetch that would fail with
+					// use it directly - avoids a redundant second fetch that would fail with
 					// one-time download tokens (e.g., nCore's &key= parameter)
 					if (resolution.torrentData) {
 						this.log.debug(
@@ -1296,7 +1296,7 @@ export class UnifiedIndexer implements IIndexer {
 				const _errorText = await response.text().catch(() => '');
 
 				// Cloudflare-protected download endpoints (e.g. rutracker dl.php) reject
-				// plain Node fetches regardless of valid session cookies — the challenge
+				// plain Node fetches regardless of valid session cookies - the challenge
 				// must be solved by a real browser and the payload pulled through the
 				// browser context (issue #228).
 				const isCloudflare = isCloudflareProtected(response.status, response.headers, _errorText);

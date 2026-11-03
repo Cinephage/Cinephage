@@ -313,7 +313,7 @@ export const load: PageServerLoad = async ({ params }): Promise<LibrarySeriesPag
 
 	// Cutoff-aware per-episode requirement progress, computed server-side in
 	// ONE batched pass over the already-fetched rows + the series' effective
-	// profile (constant query count — safe for very large libraries).
+	// profile (constant query count - safe for very large libraries).
 	const profileService = getLanguageProfileService();
 	const [effectiveLanguageProfile, effectiveSubtitleRequirements, episodeSubtitleCounts] =
 		await Promise.all([

@@ -77,7 +77,7 @@ export class SubtitleSyncService {
 
 	/**
 	 * Check if the sync engine is available.
-	 * The native engine is always available — no external binary needed.
+	 * The native engine is always available - no external binary needed.
 	 */
 	async isAvailable(): Promise<boolean> {
 		return true;

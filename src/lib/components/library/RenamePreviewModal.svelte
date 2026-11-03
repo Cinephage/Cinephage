@@ -154,7 +154,7 @@
 		} catch (e) {
 			const chunkError = e instanceof Error ? e.message : m.library_renamePreview_failedToExecute();
 			if (totalSucceeded > 0) {
-				// Chunks before the failure already renamed files on disk — surface
+				// Chunks before the failure already renamed files on disk - surface
 				// the partial success alongside the chunk error.
 				onRenamed();
 				success = m.library_renamePreview_renamedCount({ count: totalSucceeded });

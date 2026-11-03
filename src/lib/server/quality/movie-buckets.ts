@@ -38,7 +38,7 @@ export async function resolveMovieMultiQuality(
 		minResolution = profile?.minResolution ?? null;
 		maxResolution = profile?.maxResolution ?? null;
 	} else {
-		// No explicit profile means "use the default scoring profile" — apply
+		// No explicit profile means "use the default scoring profile" - apply
 		// its resolution bounds so null-profile movies get the same bucket
 		// clamping as movies with an explicitly assigned profile. A missing
 		// default row degrades gracefully to unconstrained buckets.

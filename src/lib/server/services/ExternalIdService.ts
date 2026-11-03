@@ -345,7 +345,7 @@ export class ExternalIdService implements BackgroundService {
 				await db.update(movies).set({ imdbId: '' }).where(eq(movies.id, movie.id));
 				logger.info(
 					{ id: movie.id, title: movie.title, tmdbId: movie.tmdbId },
-					`[${this.name}] TMDB entry not found for movie — marked as no IMDB ID`
+					`[${this.name}] TMDB entry not found for movie - marked as no IMDB ID`
 				);
 			} else {
 				logger.warn(
@@ -464,7 +464,7 @@ export class ExternalIdService implements BackgroundService {
 					.where(eq(series.id, show.id));
 				logger.info(
 					{ id: show.id, title: show.title, tmdbId: show.tmdbId },
-					`[${this.name}] TMDB entry not found for series — marked as no external IDs`
+					`[${this.name}] TMDB entry not found for series - marked as no external IDs`
 				);
 			} else {
 				logger.warn(

@@ -4,7 +4,7 @@
  * Manages user-editable resolution buckets (4K, 1080p, 720p, SD).
  * Classification normalizes orientation: max(w,h) for width, min(w,h) for
  * height. One fallback category (0x0 thresholds) is required.
- * IDs are immutable — quality profiles reference them.
+ * IDs are immutable - quality profiles reference them.
  */
 
 import { db } from '#lib/server/db/index.js';

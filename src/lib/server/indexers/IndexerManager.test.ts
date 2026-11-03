@@ -104,7 +104,7 @@ function routeMapping(validated: IndexerUpdateParsed): IndexerUpdates {
 	};
 }
 
-describe('IndexerManager.updateIndexer — partial updates preserve existing config', () => {
+describe('IndexerManager.updateIndexer - partial updates preserve existing config', () => {
 	let manager: InstanceType<typeof IndexerManager>;
 
 	beforeAll(() => {

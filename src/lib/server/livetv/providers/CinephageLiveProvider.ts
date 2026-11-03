@@ -6,7 +6,7 @@
  * sports/PPV events exposed through the DaddyLive upstream.
  *
  * Auth uses the standard Cinephage build identity headers injected by
- * CinephageCore — no per-account credentials. Playback returns an HMAC-signed,
+ * CinephageCore - no per-account credentials. Playback returns an HMAC-signed,
  * channel-bound HLS playlist URL (1h TTL); its segments are camouflaged
  * containers that are unwrapped server-side by the Live TV streaming pipeline
  * (see src/lib/server/livetv/streaming/camo-unwrap.ts).
@@ -587,7 +587,7 @@ export class CinephageLiveProvider implements LiveTvProvider {
 			cursor.setUTCDate(cursor.getUTCDate() + 1);
 		}
 
-		// Every day failing is an upstream outage, not an empty schedule — throw
+		// Every day failing is an upstream outage, not an empty schedule - throw
 		// so the sync is recorded as failed instead of silently keeping stale
 		// data until retention expires it.
 		if (dayAttempts > 0 && dayFailures === dayAttempts && events.length === 0) {

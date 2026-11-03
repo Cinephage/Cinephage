@@ -49,7 +49,7 @@ const csrfGuard: Handle = ({ event, resolve }) => {
 	const requestOrigin = request.headers.get('origin');
 	const serverOrigin = event.url.origin;
 
-	// Same-origin — always allowed.
+	// Same-origin - always allowed.
 	if (!requestOrigin || requestOrigin === serverOrigin) {
 		return resolve(event);
 	}
@@ -156,7 +156,7 @@ const customHandler: Handle = async ({ event, resolve }) => {
 			 * check, so this central gate is the enforcement layer: a viewer
 			 * session may read the shared library/discover/calendar surfaces and
 			 * manage its own language and sessions; everything else under /api/
-			 * is admin territory. GET-only by design — the write paths those
+			 * is admin territory. GET-only by design - the write paths those
 			 * pages offer (auto-search, subtitles, edits) are admin operations.
 			 */
 			function isViewerAllowedApiPath(path: string, method: string): boolean {
@@ -236,8 +236,8 @@ const customHandler: Handle = async ({ event, resolve }) => {
 			}
 
 			// /api/auth is served by the catch-all route (api/auth/[[...all]]).
-			// Auth requests flow through to the shared response tail — security
-			// headers, correlation IDs, logging — but skip session resolution,
+			// Auth requests flow through to the shared response tail - security
+			// headers, correlation IDs, logging - but skip session resolution,
 			// setup/login redirects, and rate limiting here: Better Auth owns its
 			// own origin checks and database-backed rate limiter for those paths.
 			const isAuthRoute =
@@ -247,7 +247,7 @@ const customHandler: Handle = async ({ event, resolve }) => {
 			 * Streaming-scoped keys must never authenticate the Better Auth
 			 * surface. The api-key plugin is configured with
 			 * enableSessionForAPIKeys, and its before-hook bridges ANY valid key
-			 * into the owner's session without inspecting permissions — so a
+			 * into the owner's session without inspecting permissions - so a
 			 * playback key (routinely embedded in .strm files, .m3u playlists and
 			 * proxy logs) could reach list-sessions, update-user and
 			 * api-key/create. The main gate below already refuses to bridge such
@@ -317,7 +317,7 @@ const customHandler: Handle = async ({ event, resolve }) => {
 						// Only full-access (main) keys may bridge to an owner session
 						// here. Streaming-scoped keys are playback-only credentials
 						// designed to live in .m3u/.strm URLs where proxies and media
-						// servers routinely log them — they must never authenticate the
+						// servers routinely log them - they must never authenticate the
 						// general API surface, not even for their owner.
 						const fullAccessKey = await auth.api
 							.verifyApiKey({
@@ -347,7 +347,7 @@ const customHandler: Handle = async ({ event, resolve }) => {
 							// Cookie-session resolution only. The raw request
 							// headers still carry x-api-key, and the api-key
 							// plugin's enableSessionForAPIKeys before-hook would
-							// bridge ANY valid key — streaming-scoped included —
+							// bridge ANY valid key - streaming-scoped included -
 							// into a full owner session here, bypassing the
 							// full-access gate above.
 							const cookieOnlyHeaders = rewriteCookieHeaderForLocalHttp(
@@ -360,7 +360,7 @@ const customHandler: Handle = async ({ event, resolve }) => {
 							});
 						} catch {
 							// getSession throws (instead of returning null) when the request
-							// carries an invalid x-api-key header — treat it as anonymous so the
+							// carries an invalid x-api-key header - treat it as anonymous so the
 							// request 401s instead of erroring.
 						}
 					}
@@ -394,7 +394,7 @@ const customHandler: Handle = async ({ event, resolve }) => {
 					if (isHealthRoute(path)) {
 						return true;
 					}
-					// Client error reports must be receivable pre-auth — crashes on
+					// Client error reports must be receivable pre-auth - crashes on
 					// /login happen before a session exists. The endpoint itself
 					// enforces same-origin + payload validation.
 					if (path === '/api/settings/logs/client-report') {
@@ -579,7 +579,7 @@ const customHandler: Handle = async ({ event, resolve }) => {
 				// confined to the read-only surfaces. Streaming routes never
 				// resolve a session here (locals.user stays null), so they are
 				// unaffected; admins and admin-owned API keys pass through.
-				// A banned flag also fails closed for every role — banning
+				// A banned flag also fails closed for every role - banning
 				// deletes sessions, so this only catches races and replays.
 				// Percent-encoded slashes fail closed: no allowlisted prefix
 				// legitimately contains %2f, and a router that decoded one into

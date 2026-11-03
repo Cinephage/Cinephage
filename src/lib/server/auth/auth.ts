@@ -77,7 +77,7 @@ function generateDisplayUsername(username: string): string {
 // Better Auth 1.7 validates the database schema on first access and caches a
 // mismatch permanently (only its own migrate clears the cache). The tables
 // normally come from schema-sync at startup, but a request can reach auth
-// before that runs on a fresh install — so create them here, idempotently,
+// before that runs on a fresh install - so create them here, idempotently,
 // before betterAuth() is ever constructed. Databases created before apikey
 // v1.5 additionally need their legacy userId column converged here, or the
 // same first-access validation would latch a mismatch before migrations run.
@@ -141,7 +141,7 @@ export const auth = betterAuth({
 			addOrigin(o);
 		}
 
-		// Request-specific origins — only available on per-request calls, not at init time
+		// Request-specific origins - only available on per-request calls, not at init time
 		if (request) {
 			addOrigin(request.url);
 			// X-Forwarded-Host is a browser-settable header, so a directly
@@ -276,12 +276,12 @@ export const auth = betterAuth({
 		user: {
 			create: {
 				before: async (user, ctx) => {
-					// Username policy on every creation path — the setup
+					// Username policy on every creation path - the setup
 					// wizard validates client-side, but the raw endpoints
 					// (sign-up, admin createUser) don't run the plugin's
 					// validator, so the invariant lives here. Cinephage signs
 					// in by username, so an account without one could never
-					// log in — require it outright (e.g. a createUser call
+					// log in - require it outright (e.g. a createUser call
 					// that forgot the `data: { username }` wrapper).
 					if (typeof user.username !== 'string' || !validateUsername(user.username)) {
 						throw new APIError('UNPROCESSABLE_ENTITY', {
@@ -290,10 +290,10 @@ export const auth = betterAuth({
 					}
 
 					// Bootstrap: the very first account is always the admin.
-					// The claim row is the mutex — a cached "no users yet" read
+					// The claim row is the mutex - a cached "no users yet" read
 					// alone would let two parallel sign-ups both become admin.
 					if (!(await isSetupComplete())) {
-						// The insert hasn't happened yet — invalidate rather than
+						// The insert hasn't happened yet - invalidate rather than
 						// assume, so a failed insert can still be retried.
 						resetSetupCompleteCache();
 
@@ -307,14 +307,14 @@ export const auth = betterAuth({
 						}
 
 						// Another request claimed the bootstrap moments ago and
-						// its user row is not visible yet — fall through to the
+						// its user row is not visible yet - fall through to the
 						// admin-creator requirement below instead of minting a
 						// second admin.
 					}
 
 					// After bootstrap, public self-registration stays closed.
 					// An admin session may still create accounts through the
-					// admin plugin (auth.api.createUser) — that is the path the
+					// admin plugin (auth.api.createUser) - that is the path the
 					// user management surface uses.
 					const creatorIsAdmin = ctx?.context?.session?.user?.role === 'admin';
 					if (!creatorIsAdmin) {
@@ -371,7 +371,7 @@ export const auth = betterAuth({
 					// admin plugin revokes sessions, but keys would otherwise
 					// keep authenticating (and streaming) for the banned
 					// account. Unbanning re-enables them. Runs post-commit, so
-					// a failed update never strands keys in the wrong state —
+					// a failed update never strands keys in the wrong state -
 					// and the check is idempotent for unrelated user updates.
 					const userId = typeof updated?.id === 'string' ? updated.id : null;
 					if (userId) {
@@ -406,7 +406,7 @@ export const auth = betterAuth({
 			update: {
 				after: async (account, ctx) => {
 					// A credential-provider password change performed by someone
-					// OTHER than the account owner (admin reset via setUserPassword —
+					// OTHER than the account owner (admin reset via setUserPassword -
 					// the plugin itself does not revoke sessions) kills every
 					// session of the target, server-side, so the raw admin API
 					// cannot leave stale authenticated sessions behind. Self-service
@@ -416,7 +416,7 @@ export const auth = betterAuth({
 					// adapter resolves the affected rows to a COUNT rather than a
 					// row object. `internalAdapter.updatePassword` uses
 					// updateManyWithHooks, so `account` is a number there and
-					// `account.userId` is undefined — the old guard silently skipped
+					// `account.userId` is undefined - the old guard silently skipped
 					// revocation for exactly the admin-reset case it was written for.
 					// Recover the target from the endpoint body instead.
 					const bodyUserId =
@@ -464,7 +464,7 @@ export const auth = betterAuth({
 		// Restricting the walk to private ranges makes a proxy-appended socket
 		// address the authoritative "last untrusted hop" behind a reverse
 		// proxy, while direct spoofs resolve to the spoofed value only when
-		// the request genuinely bypassed a proxy — the best available without
+		// the request genuinely bypassed a proxy - the best available without
 		// socket access inside better-auth.
 		ipAddress: {
 			trustedProxies: [
@@ -503,7 +503,7 @@ export async function repairCurrentUserAdminRole(userId: string): Promise<boolea
 // Export helper functions
 export { validateUsername, generateDisplayUsername };
 
-// Inferred session shapes — the single source of truth for what
+// Inferred session shapes - the single source of truth for what
 // App.Locals.user / App.Locals.session carry (see session-helpers.ts).
 export type AuthSessionUser = typeof auth.$Infer.Session.user;
 export type AuthSessionRecord = typeof auth.$Infer.Session.session;

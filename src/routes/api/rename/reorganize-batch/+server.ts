@@ -6,7 +6,7 @@
  * request. Eliminates the N+1 sequential HTTP calls the rename page
  * previously made (one per media item).
  *
- * Each item is processed independently — a failure on one item does not
+ * Each item is processed independently - a failure on one item does not
  * abort the others. Returns per-item results so the client can report
  * partial success.
  */

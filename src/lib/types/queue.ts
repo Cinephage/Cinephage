@@ -63,7 +63,7 @@ export interface QueueQualityInfo {
 	 * pseudo-codes). Grab-history persistence for the audio-language policy. */
 	languages?: string[];
 	/** Language evidence parsed from the torrent's FILE names (debrid instant
-	 * availability or .torrent metadata) — tier 3, stronger than the title. */
+	 * availability or .torrent metadata) - tier 3, stronger than the title. */
 	fileLanguages?: string[];
 }
 

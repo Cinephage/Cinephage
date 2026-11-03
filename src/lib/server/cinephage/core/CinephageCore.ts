@@ -6,7 +6,7 @@ import { getCinephageSettingsService } from '../settings/CinephageSettingsServic
 import { getServerIdentity, type CinephageServerIdentity } from './version.js';
 
 /**
- * CinephageCore — the single owner of the api.cinephage.net connection.
+ * CinephageCore - the single owner of the api.cinephage.net connection.
  *
  * Responsibilities:
  *   - Hold the shared IndexerHttp instance (rate-limited, retrying)
@@ -55,7 +55,7 @@ export class CinephageCore {
 	) {
 		this.settings = settings;
 		this.githubApiBase = options.githubApiBase ?? 'https://api.github.com';
-		// Synthetic indexerId for rate-limit keying — this client is shared
+		// Synthetic indexerId for rate-limit keying - this client is shared
 		// across all modules and doesn't correspond to a real indexer row.
 		this.http = createIndexerHttp({
 			indexerId: 'cinephage-api',
@@ -117,7 +117,7 @@ export class CinephageCore {
 		} else {
 			logger.debug(
 				{ version: identity.version, commit: identity.commit },
-				'CinephageCore identity not fully configured — omitting identity headers'
+				'CinephageCore identity not fully configured - omitting identity headers'
 			);
 		}
 		if (apiKey) {
@@ -157,7 +157,7 @@ export class CinephageCore {
 		if (response.status === 429) {
 			throw new CinephageRegistrationError(
 				'rate_limited',
-				'Registration rate limit reached — try again later'
+				'Registration rate limit reached - try again later'
 			);
 		}
 		if (response.status === 400) {
@@ -228,7 +228,7 @@ export class CinephageCore {
 		if (response.status === 429) {
 			throw new CinephageRegistrationError(
 				'rate_limited',
-				'Revoke rate limit reached — try again later'
+				'Revoke rate limit reached - try again later'
 			);
 		}
 		if (!response.ok && response.status !== 404) {
@@ -360,7 +360,7 @@ export class CinephageCore {
 
 	/**
 	 * Fetch the latest release from GitHub and persist it as the auto-synced
-	 * identity (version without the 'v' prefix + 7-char commit short-SHA —
+	 * identity (version without the 'v' prefix + 7-char commit short-SHA -
 	 * exactly the format the api.cinephage.net gateway validates).
 	 */
 	private async fetchAndPersistLatestIdentity(): Promise<void> {
@@ -414,7 +414,7 @@ export class CinephageCore {
 					err: error instanceof Error ? error.message : String(error),
 					lastSyncAttempt: this.lastSyncAttempt
 				},
-				'Cinephage identity sync failed — keeping last known identity'
+				'Cinephage identity sync failed - keeping last known identity'
 			);
 		}
 	}

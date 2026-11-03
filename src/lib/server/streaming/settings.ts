@@ -1,5 +1,5 @@
 /**
- * Streaming settings — thin compatibility shim.
+ * Streaming settings - thin compatibility shim.
  *
  * Historically this module read the cinephage-stream indexer row's `settings`
  * JSON to derive useHttps/externalHost/version/commit. After the CinephageAPI

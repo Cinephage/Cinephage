@@ -271,7 +271,7 @@ describe('refreshSeriesMetadata placeholder protection', () => {
 	it('refreshes a stale air date and runtime unconditionally, not just on first backfill', async () => {
 		// Simulate a date TMDB later confirmed/shifted after the episode row
 		// already had a title (so the title-fallback path above wouldn't touch
-		// it) — this must still get corrected on every refresh, not just once.
+		// it) - this must still get corrected on every refresh, not just once.
 		await testDb.db
 			.update(episodes)
 			.set({ airDate: '2025-01-01', runtime: 30 })

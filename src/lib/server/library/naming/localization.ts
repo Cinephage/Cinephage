@@ -46,7 +46,7 @@ const EXPLICIT_REQUEST_LOCALES: Record<string, string> = {
 
 /**
  * Derived request locales keyed by lower-case code. `null` marks codes for
- * which no valid TMDB request locale can be derived — the fetch is skipped
+ * which no valid TMDB request locale can be derived - the fetch is skipped
  * (logged once per code) and the base title renders.
  */
 const localeCache = new Map<string, string | null>();
@@ -68,7 +68,7 @@ export function resolveRequestLocale(lang: string): string | null {
 	let locale: string | null = EXPLICIT_REQUEST_LOCALES[key] ?? null;
 	if (!locale && key.includes('-')) {
 		// A full tag with an explicit region/script is authoritative
-		// (`pt-BR` → pt-BR, `es-419` → es-419) — maximizing would pick the
+		// (`pt-BR` → pt-BR, `es-419` → es-419) - maximizing would pick the
 		// wrong region for these.
 		try {
 			const [canonical] = Intl.getCanonicalLocales(key);
@@ -89,7 +89,7 @@ export function resolveRequestLocale(lang: string): string | null {
 					locale = canonical ?? null;
 				}
 			} catch {
-				// Invalid or unmaximizable tag (some 3-letter codes) — skip below.
+				// Invalid or unmaximizable tag (some 3-letter codes) - skip below.
 			}
 		}
 	}

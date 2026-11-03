@@ -116,7 +116,7 @@ export class DebridImportFinalizer {
 				: await db.select().from(episodeFiles).where(eq(episodeFiles.seriesId, input.seriesId!));
 
 		// Replacement policy is computed from CURRENT rows (acquisition
-		// redesign) — the grab-time isUpgrade flag never retires files.
+		// redesign) - the grab-time isUpgrade flag never retires files.
 		let movieMultiQuality = false;
 		let movieResolution: Resolution | undefined;
 		if (input.mediaType === 'movie') {

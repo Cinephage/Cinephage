@@ -596,7 +596,7 @@ describe('ReleaseParser', () => {
 		});
 
 		it('DUAL with language context parses to multi plus the tagged languages', () => {
-			// Real recon title 2026-09-15 — previously parsed as ['en'] only
+			// Real recon title 2026-09-15 - previously parsed as ['en'] only
 			expect(
 				extractLanguages('Toy.Story.5.(2026)[DUAL ESP-ENG][HDR10 HEVC][WEB-DL 1080p]-Mang0z4')
 					.languages

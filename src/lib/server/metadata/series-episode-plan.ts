@@ -12,7 +12,7 @@
  * Contract, enforced here in one place:
  *  1. Group data is untrusted. A fetched group whose plan is empty or
  *     contains duplicate (season, episode) keys is rejected in favour of
- *     default TMDB ordering — the plan is never written as-is.
+ *     default TMDB ordering - the plan is never written as-is.
  *  2. Scheme stability. Refreshes pass `selection: 'stored-only'`: the
  *     stored scheme is never silently swapped. A stored group that cannot
  *     be fetched resolves to 'group-unavailable' so the caller can skip the
@@ -88,7 +88,7 @@ function evaluateGroupPlan(seriesId: string, group: EpisodeGroup): EvaluatedGrou
 }
 
 /**
- * Fetch one specific group and validate its plan — no fallbacks, no
+ * Fetch one specific group and validate its plan - no fallbacks, no
  * auto-selection. Used for explicit user choices (the edit modal) and as
  * the building block of {@link resolveEpisodeGroupPlan}.
  */
@@ -117,7 +117,7 @@ export async function fetchValidatedGroupPlan(
 
 /**
  * Decide the ordering scheme for a series and produce its plan. Network
- * only — nothing is written; hand the plan to {@link persistEpisodePlan}.
+ * only - nothing is written; hand the plan to {@link persistEpisodePlan}.
  */
 export async function resolveEpisodeGroupPlan(
 	options: ResolveEpisodePlanOptions
@@ -150,7 +150,7 @@ export async function resolveEpisodeGroupPlan(
 			'[SeriesEpisodePlan] Stored episode group no longer available, re-selecting'
 		);
 	} else if (options.selection === 'stored-only') {
-		// Refreshing a default-ordering series stays default ordering — never
+		// Refreshing a default-ordering series stays default ordering - never
 		// let a refresh introduce a scheme the user did not choose.
 		return { kind: 'default-ordering' };
 	}
@@ -217,7 +217,7 @@ export interface DefaultOrderingPlanResult {
 }
 
 /**
- * Build a default TMDB-ordering plan. Network only — per-season fetches
+ * Build a default TMDB-ordering plan. Network only - per-season fetches
  * happen here, before any destructive write, so a TMDB outage can never
  * leave the series wiped.
  */

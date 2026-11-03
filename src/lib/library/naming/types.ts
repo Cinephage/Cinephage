@@ -50,7 +50,7 @@ export interface RenamePreviewResult {
 	totalErrors: number;
 
 	// Set when the movie folder template uses {Collection} but this movie
-	// has no collection data — paths will be wrong until metadata is refreshed.
+	// has no collection data - paths will be wrong until metadata is refreshed.
 	missingCollectionData?: boolean;
 }
 

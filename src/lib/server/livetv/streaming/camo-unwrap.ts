@@ -9,17 +9,17 @@
  *
  * Container formats, in sniff order:
  *
- *  1. webp-exif    `RIFF....WEBP` — walk RIFF chunks; the `EXIF` chunk holds
+ *  1. webp-exif    `RIFF....WEBP` - walk RIFF chunks; the `EXIF` chunk holds
  *                  raw TS (0x47 at offset 0 and +188).
- *  2. png-iend     PNG file — walk chunks; the bytes after `IEND` are raw TS.
+ *  2. png-iend     PNG file - walk chunks; the bytes after `IEND` are raw TS.
  *  3. png-tiktipx  PNG image whose decoded 8-bit RGB/RGBA pixels (full
  *                  unfiltering incl. Paeth) start with the ASCII magic
  *                  `TIKTIKPX` (the live upstream spelling; older experiments
  *                  used the 7-byte `TIKTIPX`), followed by a u32be length and
  *                  gzip(TS). The gzip stream is located by its own magic, so
  *                  both spellings decode identically.
- *  4. tikti-raw    ASCII marker `TIKTIRAW` — raw TS after the marker.
- *  5. tikti-tsgz   ASCII marker `TIKTITSGZ` — gzip(TS) after the marker.
+ *  4. tikti-raw    ASCII marker `TIKTIRAW` - raw TS after the marker.
+ *  5. tikti-tsgz   ASCII marker `TIKTITSGZ` - gzip(TS) after the marker.
  *  6. ts-scan      fallback: first offset i where 0x47 sits at i and i+188.
  *
  * Plain TS (sync byte at offset 0) passes through untouched, so the sniff
@@ -145,7 +145,7 @@ function findPngPayloadAfterIend(data: Uint8Array): Uint8Array | null {
 		if (type === 'IEND') {
 			return chunkEnd < data.length ? data.subarray(chunkEnd) : null;
 		}
-		if (chunkEnd <= offset) return null; // corrupt length — stop walking
+		if (chunkEnd <= offset) return null; // corrupt length - stop walking
 		offset = chunkEnd;
 	}
 	return null;
@@ -158,7 +158,7 @@ interface DecodedPngRaster {
 /**
  * Decode a PNG's pixel raster in pure JS (no canvas): collect IDATs, inflate,
  * and reverse the per-row filters (None/Sub/Up/Average/Paeth). Only 8-bit
- * RGB/RGBA non-interlaced images are supported — that is all the upstream
+ * RGB/RGBA non-interlaced images are supported - that is all the upstream
  * experiments use.
  */
 function decodePngRaster(data: Uint8Array): DecodedPngRaster | null {

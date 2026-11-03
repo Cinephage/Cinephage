@@ -31,7 +31,7 @@ const NEVER_MATCHES = /(?!)/;
  * scraped release title, so they go through createSafeRegex: a pathological
  * pattern (nested quantifiers, overlapping alternation) or an over-long one
  * is rejected instead of hanging each release evaluation. Rejected and
- * invalid patterns compile to a never-matching regex, not an error — a bad
+ * invalid patterns compile to a never-matching regex, not an error - a bad
  * format must degrade scoring for itself only.
  */
 function getPattern(pattern: string): RegExp {

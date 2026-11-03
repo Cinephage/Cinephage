@@ -135,7 +135,7 @@ describe('moveFile safety guards', () => {
 
 		it('creates deep missing destination parents (letter-bucket targets) and succeeds', async () => {
 			const source = await createFile('movie.mkv', 'nested content');
-			// Letter-bucket naming: T/Title (2026) [tmdbid-x]/movie.mkv —
+			// Letter-bucket naming: T/Title (2026) [tmdbid-x]/movie.mkv -
 			// neither T nor the title folder exists yet.
 			const dest = join(tmpDir, 'T', 'Title (2026) [tmdbid-1]', 'movie.mkv');
 

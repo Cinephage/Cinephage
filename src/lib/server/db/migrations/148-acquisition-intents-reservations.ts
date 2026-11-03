@@ -6,7 +6,7 @@ import { createChildLogger } from '#lib/logging/index.js';
 const logger = createChildLogger({ logDomain: 'system' as const });
 
 /**
- * Version 148: Acquisition intents + reservations — the durable acquisition
+ * Version 148: Acquisition intents + reservations - the durable acquisition
  * authority (acquisition-system redesign 2026-09-18).
  *
  * `acquisition_intents` records what is being acquired, for which target,
@@ -73,7 +73,7 @@ export const migration_v148: MigrationDefinition = {
 			sqlite.exec(statement);
 		}
 		if (!tableExists(sqlite, 'acquisition_intents')) {
-			logger.error('acquisition_intents table missing after DDL — schema sync failed');
+			logger.error('acquisition_intents table missing after DDL - schema sync failed');
 		}
 		logger.info('Applied acquisition intents + reservations (v148)');
 	}

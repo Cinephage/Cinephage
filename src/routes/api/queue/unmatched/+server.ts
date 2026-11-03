@@ -8,7 +8,7 @@
  * search? (case-insensitive contains on the release name, applied before
  * total/pagination so results outside the current page are still found),
  * mediaType? ('movie' | 'tv', resolved from the client's configured
- * category mapping — see DownloadMonitorService.resolveUnmatchedMediaType),
+ * category mapping - see DownloadMonitorService.resolveUnmatchedMediaType),
  * status? (DownloadInfo['status'], the client's live status), protocol?
  * ('torrent' | 'usenet' | 'debrid'), resolution? (matched against the
  * parsed release name), startDate?/endDate? (YYYY-MM-DD, filtered against

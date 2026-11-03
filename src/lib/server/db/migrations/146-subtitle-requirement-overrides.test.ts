@@ -93,7 +93,7 @@ afterEach(() => {
 	}
 });
 
-describe('migration v143 — subtitle requirement overrides + inheritance repair', () => {
+describe('migration v143 - subtitle requirement overrides + inheritance repair', () => {
 	it('adds the override column and nulls auto-stamped defaults, keeping deliberate overrides', () => {
 		const sqlite = createPreMigrationDatabase();
 

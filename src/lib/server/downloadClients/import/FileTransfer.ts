@@ -374,7 +374,7 @@ export async function moveFile(source: string, dest: string): Promise<TransferRe
 
 		await ensureDirectory(dirname(dest));
 
-		// Remove pre-existing destination (safe — we already confirmed source !== dest).
+		// Remove pre-existing destination (safe - we already confirmed source !== dest).
 		if (await fileExists(dest)) {
 			await unlink(dest);
 		}
@@ -390,7 +390,7 @@ export async function moveFile(source: string, dest: string): Promise<TransferRe
 				sizeBytes
 			};
 		} catch {
-			// Cross-device move — copy then delete source.
+			// Cross-device move - copy then delete source.
 			await copyFileNoChmod(source, dest);
 			await unlink(source);
 
@@ -430,7 +430,7 @@ export async function createSymlinkImport(source: string, dest: string): Promise
 			await lstat(dest);
 			await unlink(dest);
 		} catch {
-			// dest doesn't exist — nothing to remove
+			// dest doesn't exist - nothing to remove
 		}
 
 		// Resolve any symlink chain so the library link is as stable as possible
@@ -959,7 +959,7 @@ export async function moveToRecycleBin(filePath: string, rootFolderPath: string)
  * Delete (or recycle, when enabled) a physical file. Centralizes the
  * recycle-vs-unlink decision so every movie-file delete path honors the
  * global recycleEnabled setting consistently. No-op when the file is missing.
- * Filesystem errors PROPAGATE — callers are expected to catch (each delete
+ * Filesystem errors PROPAGATE - callers are expected to catch (each delete
  * path wraps this in its own try/catch and continues with DB cleanup).
  */
 export async function deletePhysicalFile(

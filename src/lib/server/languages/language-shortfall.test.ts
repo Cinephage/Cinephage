@@ -182,7 +182,7 @@ describe('recalculateMovieShortfall (persistence)', () => {
 			.run();
 
 		// movie-1's instance-default profile (es+en) may still be set from a
-		// prior test in this file's shared db — re-seed to be explicit.
+		// prior test in this file's shared db - re-seed to be explicit.
 		testDb.db
 			.insert(schema.languageProfiles)
 			.values({

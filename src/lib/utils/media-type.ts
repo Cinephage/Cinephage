@@ -1,7 +1,7 @@
 /**
  * Media Type Utilities
  *
- * Canonical media type is 'movie' | 'tv' — used in routes, DB, TMDB, and all server code.
+ * Canonical media type is 'movie' | 'tv' - used in routes, DB, TMDB, and all server code.
  * This module centralizes the derived mappings so components don't duplicate conversion logic.
  */
 

@@ -128,7 +128,7 @@ export function calculateMatchConfidence(
 
 	// Previously this ran unconditionally, so an exact title match (e.g. two
 	// shows both literally titled "Maigret") always floored the score at
-	// 0.95 regardless of the year penalty just applied above — silently
+	// 0.95 regardless of the year penalty just applied above - silently
 	// undoing it and auto-matching the wrong year's entry (GitHub #595).
 	if (exactTitleMatch && !yearsConflict) {
 		titleScore = Math.max(titleScore, 0.95);

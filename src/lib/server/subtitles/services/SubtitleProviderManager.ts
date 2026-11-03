@@ -82,7 +82,7 @@ const TRANSIENT_ERROR_NAMES = new Set([
  * IPAddressBlocked, ConfigurationError) are NOT in the transient set and therefore
  * throttle immediately on first occurrence.
  *
- * A success call must never clear one of these still-active throttles — they
+ * A success call must never clear one of these still-active throttles - they
  * only clear at their reset time (quota) or after reconfiguration (auth/config).
  */
 const HARD_THROTTLE_ERROR_NAMES = new Set([

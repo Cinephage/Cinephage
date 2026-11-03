@@ -58,7 +58,7 @@ export function materializeAudioPreference(
  * Resolve the effective audio preference for a movie or series by DB id:
  * profile chain (item → library → instance default) via
  * `LanguageProfileService`, plus the persisted `original_language` column.
- * Never throws — failures log and fall back to the neutral default.
+ * Never throws - failures log and fall back to the neutral default.
  */
 export async function resolveAudioPreferenceForItem(
 	mediaType: 'movie' | 'series',

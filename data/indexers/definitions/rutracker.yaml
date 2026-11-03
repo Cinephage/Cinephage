@@ -489,7 +489,7 @@ search:
 
         # PHASE 6: Clean up remaining formatting artifacts
         - name: re_replace
-          args: ['^\s*[-–—]+\s*/\s*', '']
+          args: ['^\s*[-–-]+\s*/\s*', '']
         - name: re_replace
           args: ['^\s*/\s*', '']
         - name: re_replace

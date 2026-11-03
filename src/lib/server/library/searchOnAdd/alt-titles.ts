@@ -1,5 +1,5 @@
 /**
- * Alternate title refresh helpers — shared caching logic for searchOnAdd
+ * Alternate title refresh helpers - shared caching logic for searchOnAdd
  */
 
 import {

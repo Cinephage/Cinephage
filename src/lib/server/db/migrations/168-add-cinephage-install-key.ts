@@ -7,7 +7,7 @@ import { columnExists } from '../migration-helpers.js';
  * The api.cinephage.net gateway moved from shared build headers to
  * per-install API keys (2026-10-30 brief): each install registers once with
  * a persistent installId and receives a `ck_...` key that is encrypted at
- * rest (see SECRET_FIELD_SPECS). New columns are all nullable — an install
+ * rest (see SECRET_FIELD_SPECS). New columns are all nullable - an install
  * is simply unregistered until the user clicks register.
  */
 export const migration_v168: MigrationDefinition = {

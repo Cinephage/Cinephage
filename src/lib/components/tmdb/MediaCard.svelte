@@ -68,7 +68,7 @@
 	// Library status
 	const inLibrary = $derived(item.inLibrary ?? false);
 	const hasFile = $derived(item.hasFile ?? false);
-	// Open request (pending or approved) — server-annotated badge state.
+	// Open request (pending or approved) - server-annotated badge state.
 	const requestedOpen = $derived(item.requested === 'pending' || item.requested === 'approved');
 
 	// Only addable, not-yet-in-library movies/series take part in multi-select;
@@ -184,7 +184,7 @@
 		</div>
 	{/if}
 
-	<!-- Top-right row: quick add (hover) + media type badge — siblings, so they never overlap -->
+	<!-- Top-right row: quick add (hover) + media type badge - siblings, so they never overlap -->
 	<div class="absolute top-2 right-2 z-10 flex items-center gap-1">
 		{#if showQuickAdd}
 			<button

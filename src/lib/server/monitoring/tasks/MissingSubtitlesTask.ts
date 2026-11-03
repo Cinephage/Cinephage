@@ -297,7 +297,7 @@ async function searchMissingMovieSubtitles(
 					}
 
 					// Effective profile (item override → library → instance default),
-					// resolved read-only — never persisted back onto the item.
+					// resolved read-only - never persisted back onto the item.
 					const effective = await profileService.getEffectiveProfileForMovie(movie.id);
 					if (!effective) return;
 					const profile = effective.profile;
@@ -495,7 +495,7 @@ async function searchMissingEpisodeSubtitles(
 
 		try {
 			// Effective profile (item override → library → instance default),
-			// resolved read-only — never persisted back onto the series. May be
+			// resolved read-only - never persisted back onto the series. May be
 			// null for override-only episodes: requirements still resolve per
 			// episode, policy falls back to the default score.
 			const effective = await profileService.getEffectiveProfileForSeries(show.id);

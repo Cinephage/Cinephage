@@ -146,7 +146,7 @@ export class PlaybackSessionStore {
 		}
 
 		// The underlying source URL/signature expired (e.g. CDN token), so a
-		// reused session would serve a dead stream — force a re-resolve.
+		// reused session would serve a dead stream - force a re-resolve.
 		if (session.sourceExpiresAt !== undefined && Date.now() / 1000 > session.sourceExpiresAt) {
 			this.deleteSession(token);
 			return null;

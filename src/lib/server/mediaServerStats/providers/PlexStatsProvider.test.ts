@@ -335,7 +335,7 @@ describe('PlexStatsProvider', () => {
 		expect(item.subtitleLanguages).toEqual(['en', 'es']);
 		expect(item.subtitleLanguagesRaw).toEqual(['eng', 'spa']);
 		// Primary audio = first default-flagged stream (the fre aac track), so
-		// codec/channels come from it — not from the first eng track.
+		// codec/channels come from it - not from the first eng track.
 		expect(item.audioCodec).toBe('aac');
 		expect(item.audioChannels).toBe(2);
 		// Media-level fields still come from the first Media version.

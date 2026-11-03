@@ -47,7 +47,7 @@ export async function searchTmdb(params: Record<string, string>): Promise<Discov
 }
 
 /**
- * Generic TMDB proxy — the shape depends entirely on the proxied path
+ * Generic TMDB proxy - the shape depends entirely on the proxied path
  * (movie details, collections, ...). Consumers narrow to what they requested.
  */
 export async function getTmdb(path: string, params?: Record<string, string>) {

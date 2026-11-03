@@ -113,7 +113,7 @@ vi.mock('../specifications/index.js', () => ({
 	MovieReadOnlyFolderSpecification: makeSpecClass()
 }));
 
-// Mock IndexerManager — return no search results to keep things simple
+// Mock IndexerManager - return no search results to keep things simple
 vi.mock('#lib/server/indexers/IndexerManager.js', () => ({
 	getIndexerManager: vi.fn(async () => ({
 		searchAll: searchAllMock,

@@ -2,8 +2,8 @@
  * Resolve the indexer scope a scoring profile imposes on a search.
  *
  * A profile carries two independent restrictions:
- *   - `allowedProtocols` — torrent / usenet / streaming
- *   - `allowedIndexerIds` — an explicit indexer allowlist (null = all)
+ *   - `allowedProtocols` - torrent / usenet / streaming
+ *   - `allowedIndexerIds` - an explicit indexer allowlist (null = all)
  *
  * Search entry points need both, plus the profile ID they resolved to, so that
  * enrichment and the orchestrator agree on the same profile. Resolving it in one
@@ -58,7 +58,7 @@ export async function resolveProfileSearchScope(
  * Falls back to the default profile when no ID is given, mirroring how
  * ReleaseEnricher picks the profile it scores with. Without this fallback an
  * item with no explicit profile would be scored against the default profile
- * while searching every indexer — the search scope and the scoring profile
+ * while searching every indexer - the search scope and the scoring profile
  * would disagree.
  *
  * Resolution is best-effort: a missing profile table or an unseeded database

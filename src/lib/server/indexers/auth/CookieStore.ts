@@ -145,7 +145,7 @@ export class CookieStore {
 			updatedAt: new Date()
 		});
 
-		// Skip DB persist for ephemeral test indexers — they have no row in `indexers`
+		// Skip DB persist for ephemeral test indexers - they have no row in `indexers`
 		// so inserting into `indexerStatus` would violate the FK constraint.
 		if (indexerId.startsWith('test-')) return;
 
@@ -224,7 +224,7 @@ export class CookieStore {
 
 				if (record?.cookies && record.cookiesExpirationDate) {
 					// Parse stored cookies (envelope at rest since schema 161).
-					// A failed decrypt (rotated-away key) means no usable session —
+					// A failed decrypt (rotated-away key) means no usable session -
 					// the indexer re-authenticates.
 					const cookies = decryptCookieBlob(indexerId, record.cookies);
 					if (cookies) {

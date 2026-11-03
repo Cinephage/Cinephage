@@ -5,7 +5,7 @@ import { toUIDefinition } from '#lib/server/indexers/loader/index.js';
  * GET /api/indexers/definitions
  * Returns all available indexer definitions from the unified YAML-based system.
  * Internal/auto-managed definitions (flagged `internal: true` in their YAML,
- * e.g. cinephage-stream) are excluded from this list — they are seeded by
+ * e.g. cinephage-stream) are excluded from this list - they are seeded by
  * their owning subsystem and surfaced on the indexers page as read-only.
  */
 export async function GET() {

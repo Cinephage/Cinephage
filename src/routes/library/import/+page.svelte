@@ -1007,7 +1007,7 @@
 	/**
 	 * Shell groups (unmatched in-root sources) arrive with no candidates:
 	 * run the prefilled clean-title search so the user reviews, not types.
-	 * Normal groups are untouched — their review UX stays as-is.
+	 * Normal groups are untouched - their review UX stays as-is.
 	 */
 	function maybeAutoSearchUnmatchedShell(groupId: string) {
 		const origin = unmatchedOrigins[groupId];
@@ -1218,7 +1218,7 @@
 	 * Single source of truth for what an unmatched in-root group will do:
 	 * 'link' when the library already holds the complete file, 'enroll'
 	 * when it will enroll for monitor import, null otherwise. The enroll
-	 * view, the bulk dispatcher and the row badges all read this — the
+	 * view, the bulk dispatcher and the row badges all read this - the
 	 * label never promises what the button won't do.
 	 */
 	function resolveUnmatchedGroupAction(groupId: string): 'link' | 'enroll' | null {
@@ -2104,7 +2104,7 @@
 			}
 			if (resolved.alreadyTracked.length > 0) {
 				toasts.warning(
-					`${resolved.alreadyTracked.length} download(s) are already tracked — see the Queue tab`
+					`${resolved.alreadyTracked.length} download(s) are already tracked - see the Queue tab`
 				);
 			}
 			const usable = resolved.resolved.filter((r) => r.localPath);
@@ -2124,7 +2124,7 @@
 					const origin = findUnmatchedOrigin(group, byPath);
 					if (!origin) {
 						toasts.warning(
-							`"${group.displayName}" lost its download link — it will import untracked`
+							`"${group.displayName}" lost its download link - it will import untracked`
 						);
 						continue;
 					}
@@ -2472,7 +2472,7 @@
 				);
 			}
 		} catch {
-			toasts.warning('Imported but not tracked — the download is still unmatched');
+			toasts.warning('Imported but not tracked - the download is still unmatched');
 		}
 	}
 
@@ -2688,7 +2688,7 @@
 						toasts.error(m.library_import_importFailed());
 					}
 				} catch {
-					// Transient poll errors (server restart) — keep polling; the job
+					// Transient poll errors (server restart) - keep polling; the job
 					// is durable in the library_jobs table.
 				}
 			})();
@@ -2828,7 +2828,7 @@
 					if (foreground) executingImport = false;
 					finalizeBulkOutcome(completed, failed, errors);
 				} catch {
-					// Transient poll errors (server restart) — keep polling; jobs
+					// Transient poll errors (server restart) - keep polling; jobs
 					// are durable rows, not lost like the old in-memory queue.
 				}
 			})();
@@ -3332,7 +3332,7 @@
 						>
 							{#each destinationLibrariesForType as lib (lib.id)}
 								<option value={lib.id}>
-									{lib.name}{lib.defaultRootFolderPath ? ` — ${lib.defaultRootFolderPath}` : ''}
+									{lib.name}{lib.defaultRootFolderPath ? ` - ${lib.defaultRootFolderPath}` : ''}
 								</option>
 							{/each}
 						</select>

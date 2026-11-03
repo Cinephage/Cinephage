@@ -275,7 +275,7 @@ export const GET: RequestHandler = async (event) => {
 					(mediaTypeKey) => renamePreviewCache.getStoredFingerprint(mediaTypeKey) === fingerprint
 				);
 
-				// Path 1: both caches fully fresh and structurally valid — emit from cache
+				// Path 1: both caches fully fresh and structurally valid - emit from cache
 				if (movieFresh && tvFresh && fingerprintMatches) {
 					const merged = buildMergedResult(mediaType);
 					if (filter) {
@@ -287,7 +287,7 @@ export const GET: RequestHandler = async (event) => {
 					return;
 				}
 
-				// Path 2: one or both partially stale (structurally unchanged) — patch
+				// Path 2: one or both partially stale (structurally unchanged) - patch
 				// only the stale mediaIds, then serve the merged cached result.
 				if (fingerprintMatches && (moviePartial || tvPartial)) {
 					const service = new RenamePreviewService();
@@ -303,7 +303,7 @@ export const GET: RequestHandler = async (event) => {
 						renamePreviewCache.applyPatch('tv', staleIds, freshResult);
 					}
 
-					// Both relevant caches are now fresh — stream from cache.
+					// Both relevant caches are now fresh - stream from cache.
 					const merged = buildMergedResult(mediaType);
 					if (filter) {
 						await streamFilteredFromMemory(merged, filter, controller);
@@ -314,7 +314,7 @@ export const GET: RequestHandler = async (event) => {
 					return;
 				}
 
-				// Path 3: cold, fully stale, or structurally changed — full compute
+				// Path 3: cold, fully stale, or structurally changed - full compute
 				await streamFullCompute(mediaType, fingerprint, filter, controller);
 				controller.close();
 			} catch (error) {

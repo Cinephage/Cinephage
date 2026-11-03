@@ -47,7 +47,7 @@ async function resolveEpisodeFile(
 	if (!(await isPathInsideManagedRoot(absolutePath))) {
 		logger.warn(
 			{ fileId, absolutePath },
-			'[LocalEpisodeStream] Path outside managed root — rejecting'
+			'[LocalEpisodeStream] Path outside managed root - rejecting'
 		);
 		return null;
 	}

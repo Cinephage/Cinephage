@@ -1,12 +1,12 @@
 /**
  * Special-episode (season 0) title matching for TV files with no episode
- * numbers in the name — e.g. "Razor (2007)/Razor (2007).mp4" inside a
+ * numbers in the name - e.g. "Razor (2007)/Razor (2007).mp4" inside a
  * Battlestar Galactica series folder.
  *
  * Mirrors Sonarr's ParseSpecialEpisodeTitle → FindEpisodeByTitle semantics:
  * only season 0 episodes are considered, and an episode matches when its
  * normalized title is CONTAINED IN the normalized file/folder title
- * (ranked by earliest position, then longest title) — deliberately
+ * (ranked by earliest position, then longest title) - deliberately
  * conservative, no fuzzy similarity.
  *
  * Two extensions beyond Sonarr, both forced by TMDB (Sonarr's TVDB titles

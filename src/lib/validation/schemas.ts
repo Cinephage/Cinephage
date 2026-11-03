@@ -336,7 +336,7 @@ export const globalTmdbFiltersSchema = z.object({
 /**
  * Schema for the global blocked video extensions list.
  * Applies to disk scans when a root folder has no per-folder override set.
- * Empty by default — no video formats blocked unless the user explicitly adds them.
+ * Empty by default - no video formats blocked unless the user explicitly adds them.
  */
 export const globalBlockedVideoExtensionsSchema = z.object({
 	extensions: z.array(z.string().min(2).max(10)).default([])
@@ -922,7 +922,7 @@ export type LanguageProfileV2Update = z.infer<typeof languageProfileV2UpdateSche
 /**
  * Per-item subtitle requirement override (movies, series, episodes).
  *
- * Replaces ONLY the requirement list of the effective profile — audio,
+ * Replaces ONLY the requirement list of the effective profile - audio,
  * scoring, and upgrade policy still come from the profile chain. An explicit
  * list means "acquire exactly these": empty arrays are rejected (turn the
  * wants-subtitles gate off instead) and duplicates are rejected (identity is
@@ -1224,7 +1224,7 @@ export type NntpServerTest = z.infer<typeof nntpServerTestSchema>;
 // ============================================================
 
 /**
- * Subsystem-level config update. All fields optional — the API accepts
+ * Subsystem-level config update. All fields optional - the API accepts
  * partial updates and the settings panel sends only what changed.
  */
 export const cinephageSubsystemUpdateSchema = z.object({
@@ -1709,7 +1709,7 @@ interface MetadataLanguageOverride {
 
 /**
  * Validate the metadata-language pair: 'explicit' requires a valid canonical
- * locale; legacy and explicit cannot be combined. Validation only — forcing
+ * locale; legacy and explicit cannot be combined. Validation only - forcing
  * value null for inherit/original and canonicalizing happen in the normalizer.
  */
 function validateMetadataLanguageOverride(
@@ -2000,7 +2000,7 @@ export const addSeriesSchema = z.object({
 	/**
 	 * Explicit episode selection: when present, exactly these episodes are
 	 * monitored (seasons containing them become monitored). Takes precedence
-	 * over monitorType/monitoredSeasons for episode-level control — used by
+	 * over monitorType/monitoredSeasons for episode-level control - used by
 	 * the request system's episode-granular approvals.
 	 */
 	monitoredEpisodes: z

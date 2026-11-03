@@ -401,7 +401,7 @@ export class SubtitleDownloadService {
 		const oldFileExists = oldPath ? existsSync(oldPath) : false;
 
 		// An untracked sidecar already occupying the deterministic final path is
-		// the only copy we know of — preserve it via backup instead of blindly
+		// the only copy we know of - preserve it via backup instead of blindly
 		// overwriting (and never unlink it on a DB failure).
 		const untrackedFileAtFinalPath = !existingSubtitle && existsSync(finalPath);
 

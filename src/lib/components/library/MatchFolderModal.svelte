@@ -330,7 +330,7 @@
 	{:else}
 		<!-- Search Mode -->
 
-		<!-- Type toggle — only shown when folder mediaType is not determined -->
+		<!-- Type toggle - only shown when folder mediaType is not determined -->
 		{#if !typeLocked}
 			<div class="mb-4 flex gap-2">
 				<button

@@ -214,7 +214,7 @@
 		try {
 			await apiPut('/api/user/preferences/calendar', { value: { ...prefs } });
 		} catch {
-			// non-critical — view still works locally
+			// non-critical - view still works locally
 		}
 	}
 
@@ -577,7 +577,7 @@
 									onclick={() => openDay(cell)}
 									disabled={!hasItems}
 								>
-									<!-- Day number — separate elements avoids class conflicts -->
+									<!-- Day number - separate elements avoids class conflicts -->
 									{#if cell.isToday}
 										<div
 											class="mb-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-content"
@@ -593,7 +593,7 @@
 										</div>
 									{/if}
 
-									<!-- Mobile: colored dots — solid = in library, faded = not in library -->
+									<!-- Mobile: colored dots - solid = in library, faded = not in library -->
 									<div class="flex flex-wrap gap-0.5 sm:hidden">
 										{#each (cell.items?.movies ?? []).slice(0, 3) as movie (movie.tmdbId)}
 											<span
@@ -610,7 +610,7 @@
 										{/if}
 									</div>
 
-									<!-- Desktop: text chips — filled = in library, outline = not in library -->
+									<!-- Desktop: text chips - filled = in library, outline = not in library -->
 									<div class="hidden space-y-0.5 sm:block">
 										{#each (cell.items?.movies ?? []).slice(0, 2) as movie (movie.tmdbId)}
 											<div
@@ -731,7 +731,7 @@
 												<span class="text-xs text-secondary/60">
 													S{String(ep.seasonNumber).padStart(2, '0')}E{String(
 														ep.episodeNumber
-													).padStart(2, '0')}{ep.title ? ` — ${ep.title}` : ''}
+													).padStart(2, '0')}{ep.title ? ` - ${ep.title}` : ''}
 												</span>
 											</div>
 										</div>

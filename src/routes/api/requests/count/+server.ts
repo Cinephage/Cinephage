@@ -1,7 +1,7 @@
 /**
  * Counts + quota for badges and quota displays.
  *
- * GET /api/requests/count — viewers: own per-status counts + own quota;
+ * GET /api/requests/count - viewers: own per-status counts + own quota;
  *                           admins: global counts + pending for the badge.
  */
 

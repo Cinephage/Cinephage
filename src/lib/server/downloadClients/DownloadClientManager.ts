@@ -400,7 +400,7 @@ export class DownloadClientManager {
 		}
 		// Only update apiToken if explicitly provided with a non-empty value.
 		// If apiToken is not provided (undefined/null/empty), preserve the existing
-		// encrypted token — same pattern as password.
+		// encrypted token - same pattern as password.
 		if (updates.apiToken !== undefined && updates.apiToken !== null && updates.apiToken !== '') {
 			updateData.apiToken = encryptStoredDebridToken(id, updates.apiToken);
 		}

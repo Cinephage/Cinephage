@@ -559,7 +559,7 @@ async function searchEpisodeSubtitleUpgrades(
 				const seriesRow = seriesMap.get(episode.seriesId);
 				if (!seriesRow) return;
 
-				// Tri-state gate (defense in depth — the SQL prefilter enforces it too).
+				// Tri-state gate (defense in depth - the SQL prefilter enforces it too).
 				if ((episode.wantsSubtitlesOverride ?? seriesRow.wantsSubtitles) === false) return;
 
 				let episodeUpgraded = 0;

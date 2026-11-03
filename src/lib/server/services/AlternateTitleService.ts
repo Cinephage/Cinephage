@@ -419,9 +419,9 @@ export async function getSeriesSearchTitles(
  * Fetch and store alternate titles from TMDB for a movie.
  *
  * Two complementary TMDB sources are stored:
- * 1. `/alternative_titles` — country-tagged rows (`language` stays NULL because
+ * 1. `/alternative_titles` - country-tagged rows (`language` stays NULL because
  *    TMDB supplies only an ISO 3166-1 country on that endpoint, never a language).
- * 2. `/translations` — language-tagged rows (`country` NULL, `language` set from
+ * 2. `/translations` - language-tagged rows (`country` NULL, `language` set from
  *    the translation's ISO 639-1 code).
  *
  * Each source fails independently soft: a translations outage never discards
@@ -573,11 +573,11 @@ export async function fetchAndStoreSeriesAlternateTitles(
  *
  * Dedupe rules:
  * - skip when a row with the same mediaType+mediaId+cleanTitle+language already
- *   exists (any source) — makes refetches idempotent;
+ *   exists (any source) - makes refetches idempotent;
  * - skip translations whose cleanTitle equals the media's own display or
  *   original title (the localized variants of those are already covered).
  *
- * Rows are stored with source 'tmdb' and country NULL — the country rows from
+ * Rows are stored with source 'tmdb' and country NULL - the country rows from
  * /alternative_titles remain the only country-tagged rows.
  */
 async function storeTranslationTitleRows(
@@ -660,7 +660,7 @@ async function storeTranslationTitleRows(
  * titles normalize identically.
  *
  * Language policy: variants keep `language` NULL unless the provider itself
- * supplies a language code — neither AniList nor Jikan/MAL does. Their kind
+ * supplies a language code - neither AniList nor Jikan/MAL does. Their kind
  * labels ('romaji', 'native', 'Japanese', …) are script/kind annotations, not
  * language codes, and are never mapped onto one.
  */

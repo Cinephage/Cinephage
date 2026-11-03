@@ -780,7 +780,7 @@ describe('deleted-media reconciliation', () => {
 		const svc = getRequestService();
 		const created = await svc.create(viewer(), { mediaType: 'movie', tmdbId: 42 });
 		// Real FK path: approve stamps the movie id, then deleting the movie
-		// row nulls it (ON DELETE SET NULL) — exactly the orphan class.
+		// row nulls it (ON DELETE SET NULL) - exactly the orphan class.
 		insertMovie('m-deleted', 42, { hasFile: false });
 		testDb.db
 			.update(requests)

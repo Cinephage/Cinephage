@@ -2,7 +2,7 @@
  * Integration tests for handleBlockedExtensionDownloads file-level exclusion.
  *
  * Context (2026-08-27 live audit): a RARBG release bundles RARBG_DO_NOT_MIRROR.exe.
- * The old behavior removed the ENTIRE torrent + blocklisted the release — so public
+ * The old behavior removed the ENTIRE torrent + blocklisted the release - so public
  * releases with bundled junk executables (extremely common) always died seconds
  * after grab. Security goal is that the dangerous file never reaches disk; that is
  * equally achieved by excluding the FILE via client-side file priority, keeping the
@@ -119,7 +119,7 @@ beforeEach(async () => {
 	});
 });
 
-describe('blocked extension handling — file exclusion instead of torrent removal', () => {
+describe('blocked extension handling - file exclusion instead of torrent removal', () => {
 	it('excludes the dangerous file and keeps the download when media files exist', async () => {
 		filesForTest = [
 			{ index: 0, name: 'Dawn.of.the.Planet.of.the.Apes.2014/RARBG_DO_NOT_MIRROR.exe', size: 100 },

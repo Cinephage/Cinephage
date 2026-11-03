@@ -336,7 +336,7 @@ describe('admin mutations', () => {
 	});
 });
 
-describe('DELETE /api/requests/[id] — decided requests', () => {
+describe('DELETE /api/requests/[id] - decided requests', () => {
 	it('lets the owner remove their own declined request outright', async () => {
 		const created = await callJson(
 			POST,
@@ -396,7 +396,7 @@ describe('DELETE /api/requests/[id] — decided requests', () => {
 		expect(removed.status).toBe(200);
 		expect(removed.data.deleted).toBe(true);
 
-		// An approved (active, non-pending) request cannot be removed —
+		// An approved (active, non-pending) request cannot be removed -
 		// decline is the verb there. (Failed requests ARE owner-removable;
 		// that's covered in the service suite.) Seed the movie row AFTER the
 		// request exists (create rejects in-library titles) so approval takes

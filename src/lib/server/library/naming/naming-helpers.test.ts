@@ -120,7 +120,7 @@ describe('buildMovieFolderName', () => {
 				'Star Wars: Episode IV - A New Hope'
 			);
 
-			// Default format uses {CleanTitle} — should render the first param (English title)
+			// Default format uses {CleanTitle} - should render the first param (English title)
 			expect(result).toContain('Star Wars');
 			expect(result).toContain('1977');
 		});

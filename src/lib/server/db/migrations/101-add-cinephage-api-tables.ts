@@ -2,7 +2,7 @@ import type { MigrationDefinition } from '../migration-helpers.js';
 import { tableExists } from '../migration-helpers.js';
 
 // Module IDs that ship enabled by default. IPTV is intentionally omitted
-// (out of scope for this phase — see docs/specs). Future modules add themselves
+// (out of scope for this phase - see docs/specs). Future modules add themselves
 // here when they're ready to be seeded.
 const DEFAULT_MODULE_IDS = ['library-streaming'] as const;
 
@@ -15,7 +15,7 @@ const DEFAULT_MODULE_IDS = ['library-streaming'] as const;
  *   - cinephage_api_modules: one row per feature module (moduleId, enabled,
  *     settings JSON, lastError)
  *
- * Seeds the singleton config and one row per default module. Idempotent —
+ * Seeds the singleton config and one row per default module. Idempotent -
  * re-running on an already-migrated database is a no-op.
  */
 export const migration_v101: MigrationDefinition = {

@@ -44,7 +44,7 @@ async function resolveMovieFile(
 	if (!(await isPathInsideManagedRoot(absolutePath))) {
 		logger.warn(
 			{ fileId, absolutePath },
-			'[LocalMovieStream] Path outside managed root — rejecting'
+			'[LocalMovieStream] Path outside managed root - rejecting'
 		);
 		return null;
 	}

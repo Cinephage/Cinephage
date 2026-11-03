@@ -31,7 +31,7 @@ export const migration_v116: MigrationDefinition = {
 					)
 					.run();
 			} catch {
-				/* index/table may already exist — safe to ignore */
+				/* index/table may already exist - safe to ignore */
 			}
 			logger.info('[migration v116] Duplicate detection columns added');
 		} catch (e) {

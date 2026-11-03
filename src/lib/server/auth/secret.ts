@@ -9,7 +9,7 @@ function normalizeUrl(url: string): string {
 
 function getConfiguredExternalUrl(): string | null {
 	// Runs during auth module init, before schema-sync may have created the
-	// settings table — guard with sqlite_master and tolerate a missing table.
+	// settings table - guard with sqlite_master and tolerate a missing table.
 	try {
 		const sqlite = getSharedSqliteConnection();
 		const settingsTable = sqlite
@@ -57,7 +57,7 @@ export function getAuthSecret(): string {
 	// During vite builds and vitest runs there is no runtime auth flow.
 	// SvelteKit 3's post-build route analysis imports server modules (e.g. the
 	// better-auth instance below reads this at module scope), so the placeholder
-	// must also apply to build workers running under NODE_ENV=production —
+	// must also apply to build workers running under NODE_ENV=production -
 	// VITE_SSR_BUILD is only ever set by `npm run build`, never by the built
 	// server's runtime (server.js / systemd), which still fails closed here.
 	const isBuildOrTestContext =

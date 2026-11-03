@@ -108,7 +108,7 @@ class MediaBrowserManager {
 			if (plaintext === null) {
 				logger.error(
 					{ logDomain: 'notifications', serverId },
-					'[MediaBrowser] Stored API key failed to decrypt — the credential is being dropped. ' +
+					'[MediaBrowser] Stored API key failed to decrypt - the credential is being dropped. ' +
 						'If the encryption master key was rotated, re-enter the server API key in settings.'
 				);
 			}
@@ -450,14 +450,14 @@ class MediaBrowserManager {
 	 * Delete a media item (series or movie) from all enabled Jellyfin/Emby servers
 	 * by its TMDB ID. DESTRUCTIVE on Jellyfin/Emby: their item-delete API also
 	 * deletes the item's file location, so callers MUST only invoke this after
-	 * the file/folder has already been moved locally (post-rename) — the stale
+	 * the file/folder has already been moved locally (post-rename) - the stale
 	 * stored path then makes the file deletion a no-op and the call only clears
 	 * the old library entry (jellyfin#16883). Plex is skipped entirely.
 	 *
 	 * Best-effort: failures from unreachable servers or stale item IDs are logged
 	 * but do not block the caller. A failed delete is retried once after a short
 	 * delay (live-observed: Jellyfin can return a transient HTTP 500 while its own
-	 * scanner races the delete); a second failure is warn-logged and skipped —
+	 * scanner races the delete); a second failure is warn-logged and skipped -
 	 * never thrown. Returns the count of servers the item was successfully
 	 * deleted from.
 	 *
@@ -498,7 +498,7 @@ class MediaBrowserManager {
 								tmdbId,
 								itemType
 							},
-							'[MediaBrowserManager] Skipping pre-delete — server event toggle disabled'
+							'[MediaBrowserManager] Skipping pre-delete - server event toggle disabled'
 						);
 						continue;
 					}

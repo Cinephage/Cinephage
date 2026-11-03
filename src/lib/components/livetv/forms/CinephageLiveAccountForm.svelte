@@ -38,7 +38,7 @@
 		<Info class="mt-0.5 h-4 w-4 shrink-0 text-base-content/60" />
 		<span class="text-base-content/70">
 			Channels and the schedule are pulled from the Cinephage network with the instance's own
-			identity — no credentials to configure. Add the channels you want to the lineup to make them
+			identity - no credentials to configure. Add the channels you want to the lineup to make them
 			playable.
 		</span>
 	</div>

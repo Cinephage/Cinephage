@@ -30,7 +30,7 @@ import { LanguageSettingsService } from './LanguageSettingsService.js';
 /**
  * Unique language tags for an effective requirement list (search criteria
  * input). Derived from the EFFECTIVE requirements so per-item overrides are
- * actually queried — never from the profile chain alone.
+ * actually queried - never from the profile chain alone.
  */
 function requirementLanguages(requirements: SubtitleRequirement[]): string[] {
 	return [...new Set(requirements.map((requirement) => requirement.tag))];
@@ -159,7 +159,7 @@ async function searchForMovie(
 	}
 
 	// Effective requirements (per-item override → profile chain), resolved
-	// read-only — never persisted back onto the item. Override-only items
+	// read-only - never persisted back onto the item. Override-only items
 	// (no profile in the chain) are still searched: requirements are explicit.
 	const effective = await profileService.getEffectiveSubtitleRequirements({ movieId });
 	if (!effective || effective.requirements.length === 0) {
@@ -361,7 +361,7 @@ async function searchForEpisode(
 	}
 
 	// Effective requirements (episode override → series override → library →
-	// instance default), resolved read-only — never persisted back onto the
+	// instance default), resolved read-only - never persisted back onto the
 	// series. Override-only episodes are still searched.
 	const effective = await profileService.getEffectiveSubtitleRequirements({ episodeId });
 	if (!effective || effective.requirements.length === 0) {

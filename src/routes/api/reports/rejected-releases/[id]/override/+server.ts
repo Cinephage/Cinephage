@@ -64,7 +64,7 @@ export const POST: RequestHandler = async (event) => {
 		target = { type: 'series', seriesId: show.id, episodeIds: [] };
 	} else {
 		return Response.json(
-			{ success: false, error: 'Cannot resolve grab target — no linked media' },
+			{ success: false, error: 'Cannot resolve grab target - no linked media' },
 			{ status: 422 }
 		);
 	}

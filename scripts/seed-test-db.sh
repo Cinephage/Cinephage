@@ -22,7 +22,7 @@ DEST_DIR="${DATA_DIR:-data/test}"
 TEST_PASSWORD="testpass123"
 
 if [ ! -f "$SRC" ]; then
-	echo "No database at $SRC — set DATA_SRC or run from the repo root."
+	echo "No database at $SRC - set DATA_SRC or run from the repo root."
 	exit 1
 fi
 

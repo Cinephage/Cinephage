@@ -32,7 +32,7 @@ export default defineConfig(
 		]
 	},
 	{
-		// Disable the built-in unused-disable reporting globally — it's too coarse
+		// Disable the built-in unused-disable reporting globally - it's too coarse
 		// (can't suppress per-file). We re-enable specific checks for source files below.
 		linterOptions: {
 			reportUnusedDisableDirectives: 0
@@ -48,7 +48,7 @@ export default defineConfig(
 		plugins: { local },
 		rules: {
 			// Disallow pictographic emoji in code/comments (see eslint-rules/no-emoji.js).
-			// Svelte template markup is naturally exempt — only JS/TS nodes are checked.
+			// Svelte template markup is naturally exempt - only JS/TS nodes are checked.
 			'local/no-emoji': 'error'
 		}
 	},

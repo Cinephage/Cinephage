@@ -19,7 +19,7 @@ const { PUT } = await import('./+server.js');
 describe('PUT /api/settings/external-url', () => {
 	it('rejects a URL with a path component', async () => {
 		// GitHub issue #596: a subpath silently 404s on every request once
-		// saved — there's no base-path support anywhere in the app — so this
+		// saved - there's no base-path support anywhere in the app - so this
 		// must be rejected up front with a clear reason, not accepted.
 		const { status, data } = await callHandler<{ error?: string }>(PUT, 'PUT', {
 			url: 'https://proxy.example.com/cinephage'

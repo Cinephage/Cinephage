@@ -66,7 +66,7 @@ describe('LibraryStreamingModule', () => {
 		});
 	});
 
-	describe('init — seeds the cinephage-stream indexer row', () => {
+	describe('init - seeds the cinephage-stream indexer row', () => {
 		it('creates a new row when none exists', async () => {
 			await module.init(stubCtx);
 			const rows = testDb.db

@@ -42,7 +42,7 @@ const INTERACTIVE_SEARCH_TIMEOUT_MS = (() => {
  * This prevents API keys from being exposed to clients.
  *
  * `guid` is included because ResponseParser falls back to the download URL
- * when a definition has no guid mapping — for a key-bearing download URL that
+ * when a definition has no guid mapping - for a key-bearing download URL that
  * made the credential part of an unredacted field. `magnetUrl` can carry
  * tracker passkeys inside its `tr=` parameters.
  */
@@ -125,7 +125,7 @@ export const GET: RequestHandler = async ({ url }) => {
 	// Resolve language preference and global adult toggle from settings.
 	// Explicit ?language= param takes precedence over the stored language preference.
 	// An empty or "any" language means no preference (all alternate titles used,
-	// no language boost) — the reporter's "any" option.
+	// no language boost) - the reporter's "any" option.
 	let effectiveLanguage: string | undefined = language;
 	let globalIncludeAdult = false;
 	try {

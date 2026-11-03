@@ -211,7 +211,7 @@ export class MediaMatcherService {
 	/**
 	 * Derive candidate series names from the file's path segments relative to
 	 * its root folder. For TV layouts (<root>/<Series>/Season NN/<file>), the
-	 * first segment is the series directory — the most reliable title signal
+	 * first segment is the series directory - the most reliable title signal
 	 * available when the filename itself is polluted with episode identifiers.
 	 */
 	private async getPathSeriesCandidates(
@@ -315,7 +315,7 @@ export class MediaMatcherService {
 
 			// Priority 4 (TV): series-directory context. For files organized as
 			// <root>/<Series>/Season NN/<file>, the folder name is the series
-			// title — far more reliable than the filename, which is often
+			// title - far more reliable than the filename, which is often
 			// dominated by episode identifiers TMDB cannot match (#513).
 			if (mediaType === 'tv' && seriesCandidates.length > 0) {
 				for (const candidate of seriesCandidates) {

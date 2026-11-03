@@ -44,7 +44,7 @@ export interface CinephageTestResult {
 	error?: string;
 }
 
-/** Registration result — `key` is present exactly once, right after registering. */
+/** Registration result - `key` is present exactly once, right after registering. */
 export interface CinephageRegisterResult {
 	success: boolean;
 	key?: string;

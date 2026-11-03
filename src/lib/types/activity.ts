@@ -26,7 +26,7 @@ export type ActivityStatus =
  * Where an activity row originated from.
  *
  * 'client' is reserved for live download-client state with no queue row
- * (the Unmatched tab's rows). The feed does not produce it yet — the member
+ * (the Unmatched tab's rows). The feed does not produce it yet - the member
  * exists so the future unified table has an origin slot to branch on, and
  * every existing `===` check keeps compiling unchanged.
  *
@@ -89,7 +89,7 @@ export function isActiveActivity(
  * Error message patterns that positively identify import-phase failures.
  *
  * These come from ImportService.ts and DownloadMonitorService.markImporting()
- * — we control all of them so the list is exhaustive. Download-client errors
+ * - we control all of them so the list is exhaustive. Download-client errors
  * (e.g. "Download limit exceeded", "Unpacking failed") will never match,
  * which prevents misclassifying download failures that happen to have a
  * `completedAt` timestamp.

@@ -30,7 +30,7 @@ export function todayDateString(): string {
 
 /**
  * Format a date string or Date for display using the current Paraglide locale.
- * This is the primary display-date function — use it instead of raw toLocaleDateString().
+ * This is the primary display-date function - use it instead of raw toLocaleDateString().
  */
 export function formatDisplayDate(
 	dateStr: string | Date | null | undefined,

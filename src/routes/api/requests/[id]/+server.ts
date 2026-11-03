@@ -1,11 +1,11 @@
 /**
  * Delete a request.
  *
- * DELETE /api/requests/[id] — a PENDING request is cancelled by its owner
+ * DELETE /api/requests/[id] - a PENDING request is cancelled by its owner
  * (or an admin): no reason, no cooldown, the row stays as the decision
  * record. A decided request (declined/expired/cancelled/fulfilled) is
  * removed outright by its owner or an admin. Active non-pending statuses
- * 409 — decline/retry are the verbs there.
+ * 409 - decline/retry are the verbs there.
  */
 
 import type { RequestHandler } from './$types.js';

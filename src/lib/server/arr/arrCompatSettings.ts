@@ -1,5 +1,5 @@
 /**
- * ARR COMPATIBILITY — UNSUPPORTED, BEST-EFFORT, NON-PRIORITY.
+ * ARR COMPATIBILITY - UNSUPPORTED, BEST-EFFORT, NON-PRIORITY.
  *
  * Cinephage is its own thing, not a Radarr/Sonarr clone. The Radarr/Sonarr-
  * compatible surface exists only as a convenience for external tools; it is
@@ -8,7 +8,7 @@
  * always. Never reshape, gate, or slow down core behavior to satisfy arr
  * compatibility, and arr-only failures are not release blockers.
  *
- * The arr projects are good at what they are — we're just not interested in
+ * The arr projects are good at what they are - we're just not interested in
  * being one of them.
  *
  * Toggle for the Radarr/Sonarr-compatible API layer. Off by default.

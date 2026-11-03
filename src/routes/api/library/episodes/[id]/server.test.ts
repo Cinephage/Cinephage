@@ -1,5 +1,5 @@
 /**
- * PATCH /api/library/episodes/[id] — validation tests.
+ * PATCH /api/library/episodes/[id] - validation tests.
  *
  * The route must validate `subtitleRequirementsOverride` /
  * `wantsSubtitlesOverride` with the shared schema: an unvalidated override
