@@ -137,6 +137,8 @@ body:
       value: |
         ### How to get logs
 
+        **Easiest way:** use the built-in bug reporter — the bug icon in the sidebar, "Report this problem" on an error page, or Settings > Monitoring > Report a Bug. It assembles your description, version info, the Error ID, and relevant redacted logs into one block you can paste below.
+
         **Log sources:**
         - Docker: `docker logs cinephage --tail 200 2>&1`
         - Docker Compose: `docker compose logs cinephage --tail 200`
@@ -156,13 +158,13 @@ body:
         sudo journalctl -u cinephage -n 200 > cinephage-logs.txt
         ```
 
-        Paste the relevant log excerpts below or attach the captured text file.
+        Paste the report or the relevant log excerpts below.
 
   - type: textarea
     id: logs
     attributes:
       label: Relevant Logs
-      description: Paste relevant stdout/service log excerpts here, or attach a text file with the captured logs.
+      description: Paste the block from the in-app bug reporter (sidebar bug icon or Settings > Monitoring > Report a Bug), or relevant stdout/service log excerpts. Attaching the log file downloaded from the bug reporter is welcome too.
       render: shell
 
   - type: textarea

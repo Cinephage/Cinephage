@@ -116,6 +116,9 @@ jobs:
         with:
           ref: ${{ inputs.checkout_ref || inputs.release_tag || github.ref }}
 
+      - name: Resolve VCS ref
+        run: echo "VCS_REF=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
       - name: Set lowercase image name
         run: echo "IMAGE_NAME_LC=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
 
@@ -175,6 +178,7 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}:${{ needs.prepare.outputs.arch_tag_amd64 }}
           build-args: |
             APP_VERSION=${{ needs.prepare.outputs.app_version }}
+            VCS_REF=${{ env.VCS_REF }}
           cache-from: type=gha,scope=amd64
           cache-to: type=gha,mode=max,scope=amd64
 
@@ -194,6 +198,9 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ inputs.checkout_ref || inputs.release_tag || github.ref }}
+
+      - name: Resolve VCS ref
+        run: echo "VCS_REF=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: Set lowercase image name
         run: echo "IMAGE_NAME_LC=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
@@ -221,6 +228,7 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}:${{ needs.prepare.outputs.arch_tag_arm64 }}
           build-args: |
             APP_VERSION=${{ needs.prepare.outputs.app_version }}
+            VCS_REF=${{ env.VCS_REF }}
           cache-from: type=gha,scope=arm64
           cache-to: type=gha,mode=max,scope=arm64
 

@@ -14,3 +14,11 @@ export function resolveAppVersion(): string {
 		'dev-local'
 	);
 }
+
+/**
+ * Short git commit the image was built from (VCS_REF build arg -> APP_COMMIT
+ * env in the Docker runtime stage). Unknown for non-container dev runs.
+ */
+export function resolveAppCommit(): string {
+	return readVersion(process.env.APP_COMMIT) ?? 'unknown';
+}

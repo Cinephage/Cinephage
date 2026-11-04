@@ -16,6 +16,8 @@
 	import { authClient } from '#lib/auth/client.js';
 	import { getSystemStatus } from '#lib/api/settings.js';
 	import { PLACEHOLDER_PACKAGE_VERSION } from '#lib/version.js';
+	import { BugReportModal } from '#lib/components/bugreport/index.js';
+	import { bugReport } from '#lib/stores/bug-report.svelte.js';
 	import {
 		Menu,
 		Home,
@@ -46,7 +48,8 @@
 		Globe,
 		Palette,
 		Pin,
-		Inbox
+		Inbox,
+		Bug
 	} from '@lucide/svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 
@@ -780,6 +783,16 @@
 								<span class="text-xs tracking-wide text-base-content/50">{appVersion ?? ''}</span>
 								<div class="flex items-center gap-1.5">
 									<div class="flex items-center gap-0.5 lg:hidden">
+										{#if isAdminUser}
+											<button
+												type="button"
+												class="btn btn-ghost px-1 text-base-content/40 btn-xs hover:text-base-content/70"
+												title={m.bugreport_title()}
+												onclick={() => bugReport.openReport()}
+											>
+												<Bug class="h-3.5 w-3.5" />
+											</button>
+										{/if}
 										<a
 											href={DISCORD_URL}
 											target="_blank"
@@ -905,6 +918,16 @@
 										<span class="ml-2">{m.action_logout()}</span>
 									</button>
 									<div class="hidden items-center gap-0.5 lg:flex">
+										{#if isAdminUser}
+											<button
+												type="button"
+												class="btn btn-ghost px-2 text-base-content/40 btn-xs hover:text-base-content/70"
+												title={m.bugreport_title()}
+												onclick={() => bugReport.openReport()}
+											>
+												<Bug class="h-3.5 w-3.5" />
+											</button>
+										{/if}
 										<a
 											href={DISCORD_URL}
 											target="_blank"
@@ -1016,3 +1039,8 @@
 
 <!-- Global Toast Notifications -->
 <Toasts />
+
+<!-- Global bug-report modal (admin entry points: sidebar bug icon, error page) -->
+{#if isAdminUser}
+	<BugReportModal />
+{/if}

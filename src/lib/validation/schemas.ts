@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { TMDB } from '#lib/config/constants.js';
+import { BUG_REPORT_AREAS, BUG_REPORT_LOG_SCOPES } from '#lib/shared/bug-report.js';
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -1624,6 +1625,19 @@ export const logDownloadQuerySchema = baseLogFilterQuerySchema.extend({
 });
 
 export type LogFilterQuery = z.infer<typeof logFilterQuerySchema>;
+
+/**
+ * Schema for the admin bug-report diagnostics request. Mirrors what the
+ * report form tracks; area/scope ids come from #lib/shared/bug-report.ts.
+ */
+export const bugReportDiagnosticsSchema = z.object({
+	supportId: z.string().trim().min(1).max(64).optional(),
+	area: z.enum(BUG_REPORT_AREAS).optional(),
+	logScope: z.enum(BUG_REPORT_LOG_SCOPES).default('relevant'),
+	keyword: z.string().trim().min(1).max(200).optional()
+});
+
+export type BugReportDiagnosticsQuery = z.infer<typeof bugReportDiagnosticsSchema>;
 
 // ============================================================================
 // Library Schemas

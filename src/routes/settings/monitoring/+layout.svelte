@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Activity, BarChart2, ListTodo, ScrollText } from '@lucide/svelte';
+	import { Activity, BarChart2, Bug, ListTodo, ScrollText } from '@lucide/svelte';
 	import { SettingsTabNav } from '#lib/components/settings/index.js';
 	import * as m from '#lib/paraglide/messages.js';
 
@@ -25,6 +25,11 @@
 			href: '/settings/monitoring/reports',
 			label: m.settings_monitoring_tabReports(),
 			icon: BarChart2
+		},
+		{
+			href: '/settings/monitoring/bug-report',
+			label: m.settings_monitoring_tabBugReport(),
+			icon: Bug
 		}
 	];
 </script>

@@ -25,3 +25,4 @@ export * from './discover.js';
 export * from './filesystem.js';
 export * from './usenet.js';
 export * from './logos.js';
+export * from './diagnostics.js';

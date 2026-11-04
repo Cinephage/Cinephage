@@ -6,11 +6,25 @@
 
 <script lang="ts">
 	import { page } from '$app/state';
+	import { ClipboardCopy } from '@lucide/svelte';
+	import { bugReport } from '#lib/stores/bug-report.svelte.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { copyToClipboard } from '#lib/utils/clipboard.js';
 
 	let { error }: { error: App.Error | undefined } = $props();
 	const status = $derived(page.status);
 	const message = $derived(error?.message || fallbackMessage);
-	const errorId = $derived(error?.supportId ?? m.error_supportIdUnavailable());
+	const supportId = $derived(error?.supportId ?? null);
+	const errorId = $derived(supportId ?? m.error_supportIdUnavailable());
+	const isAdmin = $derived(page.data.user?.role === 'admin');
+
+	async function copyErrorId(): Promise<void> {
+		if (!supportId) return;
+		const copied = await copyToClipboard(supportId);
+		if (copied) {
+			toasts.success(m.error_errorIdCopied());
+		}
+	}
 </script>
 
 <svelte:head>
@@ -56,6 +70,21 @@
 			<button type="button" class="btn btn-outline" onclick={() => history.back()}>
 				{m.error_goBack()}
 			</button>
+			{#if supportId}
+				<button type="button" class="btn btn-outline" onclick={() => void copyErrorId()}>
+					<ClipboardCopy class="h-4 w-4" />
+					{m.error_copyId()}
+				</button>
+			{/if}
+			{#if isAdmin}
+				<button
+					type="button"
+					class="btn btn-outline"
+					onclick={() => bugReport.openReport({ supportId })}
+				>
+					{m.error_reportBug()}
+				</button>
+			{/if}
 		</div>
 	</div>
 </div>

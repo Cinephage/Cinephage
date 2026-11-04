@@ -716,6 +716,13 @@ class PinoAppLogger implements AppLogger {
 
 export const logger: AppLogger = new PinoAppLogger();
 
+/**
+ * Redact sensitive substrings (credentials in URLs, key=value pairs, auth
+ * headers) from an arbitrary string. Exported so diagnostics surfaces can run
+ * a defense-in-depth pass over text assembled from already-redacted entries.
+ */
+export { redactString };
+
 /** Test-only access to the redaction predicates (see logging-redaction.test.ts). */
 export const __testing = { isSensitiveObjectKey, redactString };
 
