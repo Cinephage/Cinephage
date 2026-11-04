@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { createTestDb, clearTestDb, type TestDatabase } from '../../../../test/db-helper';
 import {
+	blocklist,
 	downloadClients,
 	downloadQueue,
 	movies,
@@ -634,5 +635,186 @@ describe('ImportService content-identity guard end-to-end (#598)', () => {
 		expect(files).toHaveLength(1);
 		expect(files[0].infoHash).toBe('new-release-hash-adweb');
 		expect(files[0].relativePath).toContain('ADWeb');
+	});
+
+	describe('undelivered acquisition scope (issue #653)', () => {
+		/**
+		 * Reproduces the exact #653 loop: the library's season 1 metadata runs
+		 * to E04, E01-E02 are already owned (infoHash-identical rows from the
+		 * same cour pack), and the daily missing-content search grabs that
+		 * same "S01" pack for the missing E03-E04 tail. Every file in the
+		 * download dedup-skips against E01-E02, the queue item used to close
+		 * as cleanly imported, and the search re-grabbed the pack forever.
+		 */
+		async function seedCourPackScenario(targetedEpisodeNumbers: number[]) {
+			const seriesId = randomUUID();
+			await testDb.db.insert(series).values({
+				id: seriesId,
+				tmdbId: 9100,
+				title: 'Solo Leveling',
+				year: 2024,
+				path: 'Solo Leveling (2024)',
+				rootFolderId: TV_ROOT_FOLDER_ID,
+				seasonFolder: true
+			});
+			await testDb.db.insert(seasons).values({ seriesId, seasonNumber: 1 });
+
+			const insertedEpisodes: Array<typeof episodes.$inferSelect> = [];
+			for (let episodeNumber = 1; episodeNumber <= 4; episodeNumber++) {
+				const [ep] = await testDb.db
+					.insert(episodes)
+					.values({
+						seriesId,
+						seasonNumber: 1,
+						episodeNumber,
+						title: `Episode ${episodeNumber}`,
+						monitored: true,
+						hasFile: false
+					})
+					.returning();
+				insertedEpisodes.push(ep);
+			}
+
+			// Library already holds E01 and E02 from this exact pack.
+			for (const episodeNumber of [1, 2]) {
+				const ep = insertedEpisodes[episodeNumber - 1]!;
+				await testDb.db.insert(episodeFiles).values({
+					id: randomUUID(),
+					seriesId,
+					seasonNumber: 1,
+					episodeIds: [ep.id],
+					relativePath: `Season 01/Solo Leveling (2024) - S01E${String(episodeNumber).padStart(2, '0')} - Episode ${episodeNumber}.mkv`,
+					size: 60 * 1024 * 1024,
+					infoHash: 'cour-pack-hash'
+				});
+				await testDb.db.update(episodes).set({ hasFile: true }).where(eq(episodes.id, ep.id));
+			}
+
+			// The download itself only ever contained E01 and E02.
+			for (const episodeNumber of [1, 2]) {
+				const path = join(
+					downloadDir,
+					`Solo.Leveling.S01E${String(episodeNumber).padStart(2, '0')}.1080p.BluRay.x265.DarQ-HONE.mkv`
+				);
+				await writeFile(path, Buffer.alloc(1, 1));
+				await truncate(path, 60 * 1024 * 1024);
+			}
+
+			const targetedEpisodeIds = targetedEpisodeNumbers.map((n) => insertedEpisodes[n - 1]!.id);
+			const queueItem = makeQueueItem({
+				title: 'Solo.Leveling.2024.S01.1080p.BluRay.x265.DDP.5.1.MULTI.DarQ-HONE',
+				seriesId,
+				seasonNumber: 1,
+				episodeIds: targetedEpisodeIds,
+				infoHash: 'cour-pack-hash',
+				isAutomatic: true,
+				protocol: 'usenet',
+				outputPath: downloadDir
+			});
+			await testDb.db.insert(downloadQueue).values(queueItem);
+			const [insertedQueueItem] = await testDb.db
+				.select()
+				.from(downloadQueue)
+				.where(eq(downloadQueue.id, queueItem.id!));
+
+			return { seriesId, insertedEpisodes, insertedQueueItem, targetedEpisodeIds };
+		}
+
+		async function runImportSeries(insertedQueueItem: typeof downloadQueue.$inferSelect) {
+			const worker = new ImportWorker({
+				queueItemId: insertedQueueItem.id,
+				mediaType: 'episode',
+				title: 'Solo Leveling'
+			});
+			return (
+				service as unknown as {
+					importSeries: (
+						queueItem: typeof downloadQueue.$inferSelect,
+						worker: InstanceType<typeof ImportWorker>,
+						importOptions: Record<string, unknown>,
+						canMoveFiles: boolean
+					) => Promise<{
+						success: boolean;
+						importedFiles: Array<{ transferMode: string }>;
+						failedFiles: unknown[];
+					}>;
+				}
+			).importSeries(insertedQueueItem, worker, {}, false);
+		}
+
+		it('blocklists an automatic season-pack grab that delivers none of its targeted episodes', async () => {
+			const { seriesId, insertedEpisodes, insertedQueueItem, targetedEpisodeIds } =
+				await seedCourPackScenario([3, 4]);
+
+			const result = await runImportSeries(insertedQueueItem);
+
+			// The pack's files dedup-skip against the owned E01/E02 rows, so
+			// the import itself still completes cleanly.
+			expect(result.success).toBe(true);
+			expect(result.failedFiles).toHaveLength(0);
+			expect(result.importedFiles.every((f) => f.transferMode === 'skip-duplicate')).toBe(true);
+			expect(markImported).toHaveBeenCalledWith(
+				insertedQueueItem.id,
+				join(tvRootDir, 'Solo Leveling (2024)'),
+				'usenet'
+			);
+
+			// ...but the release is remembered as unable to satisfy this scope.
+			const entries = await testDb.db
+				.select()
+				.from(blocklist)
+				.where(eq(blocklist.seriesId, seriesId));
+			expect(entries).toHaveLength(1);
+			expect(entries[0].reason).toBe('bad_release');
+			expect(entries[0].infoHash).toBe('cour-pack-hash');
+			expect(entries[0].episodeIds).toContain(targetedEpisodeIds[0]);
+			expect(entries[0].episodeIds).toContain(targetedEpisodeIds[1]);
+			expect(entries[0].expiresAt).not.toBeNull();
+			expect(entries[0].message).toContain('did not contain any of the 2 requested episodes');
+
+			// The targeted episodes remain missing - untouched, not mislinked.
+			for (const episodeNumber of [3, 4]) {
+				const [row] = await testDb.db
+					.select()
+					.from(episodes)
+					.where(eq(episodes.id, insertedEpisodes[episodeNumber - 1]!.id));
+				expect(row.hasFile).toBe(false);
+			}
+		});
+
+		it('does not blocklist when the pack delivers at least one targeted episode', async () => {
+			const { seriesId, insertedQueueItem } = await seedCourPackScenario([1, 3]);
+
+			const result = await runImportSeries(insertedQueueItem);
+
+			expect(result.success).toBe(true);
+			const entries = await testDb.db
+				.select()
+				.from(blocklist)
+				.where(eq(blocklist.seriesId, seriesId));
+			expect(entries).toHaveLength(0);
+		});
+
+		it('does not auto-blocklist a manual grab, even on zero delivery', async () => {
+			const { seriesId, insertedQueueItem } = await seedCourPackScenario([3, 4]);
+			await testDb.db
+				.update(downloadQueue)
+				.set({ isAutomatic: false })
+				.where(eq(downloadQueue.id, insertedQueueItem.id));
+			// Re-select: importSeries reads isAutomatic off the passed row.
+			const [manualQueueItem] = await testDb.db
+				.select()
+				.from(downloadQueue)
+				.where(eq(downloadQueue.id, insertedQueueItem.id));
+
+			const result = await runImportSeries(manualQueueItem);
+
+			expect(result.success).toBe(true);
+			const entries = await testDb.db
+				.select()
+				.from(blocklist)
+				.where(eq(blocklist.seriesId, seriesId));
+			expect(entries).toHaveLength(0);
+		});
 	});
 });

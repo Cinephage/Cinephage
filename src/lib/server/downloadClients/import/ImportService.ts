@@ -34,6 +34,7 @@ import { resolveMovieMultiQuality } from '#lib/server/quality/movie-buckets.js';
 import { computeMovieReplacement, computeEpisodeReplacement } from './replacement.js';
 import { normalizeFilename } from '#lib/server/library/duplicates/DuplicateDetectionService.js';
 import { contentAlreadyPresent } from '#lib/server/library/content-identity.js';
+import { blocklistService } from '#lib/server/blocklist/BlocklistService.js';
 import type { HdrFormat, Resolution } from '#lib/server/indexers/parser/types.js';
 import {
 	hdrFormatsFromLabel,
@@ -315,6 +316,23 @@ export type ImportRequestResult =
  */
 export class ImportService extends EventEmitter {
 	private static instance: ImportService | null = null;
+
+	/**
+	 * Auto-blocklist duration (hours) for an automatic acquisition whose files
+	 * delivered none of the episodes it was grabbed for (#653). The release
+	 * can never satisfy that scope, but a bounded TTL self-heals if episode
+	 * metadata was subsequently renumbered or corrected.
+	 */
+	private static readonly UNDELIVERED_SCOPE_BLOCKLIST_HOURS = 24 * 30;
+
+	/**
+	 * Auto-blocklist duration (hours) for an automatic acquisition whose import
+	 * exhausted all retry attempts. Import failures are often environmental
+	 * (path mapping, permissions, disk space) rather than release-specific, so
+	 * this self-heals faster than the undelivered-scope blocklist above: the
+	 * goal is to break the re-grab loop, not to ban the release long-term.
+	 */
+	private static readonly IMPORT_FAILURE_BLOCKLIST_HOURS = 24 * 7;
 	private parser: ReleaseParser;
 	private isProcessing = false;
 	private processingQueue: string[] = [];
@@ -998,6 +1016,50 @@ export class ImportService extends EventEmitter {
 				downloadClientId: queueItem.downloadClientId,
 				correlationId
 			});
+			// Loop guard: the download was delivered but could not be imported
+			// after MAX_IMPORT_ATTEMPTS tries. Without this the missing-content
+			// search re-grabs the identical release forever - each re-grab
+			// duplicate-links to the still-present client torrent and fails the
+			// same way. Automatic acquisitions only: interactive grabs stay
+			// under the user's control.
+			if (queueItem.isAutomatic) {
+				const attempts = (queueItem.importAttempts ?? 0) + 1;
+				try {
+					blocklistService.addToBlocklist(
+						{
+							title: queueItem.title,
+							infoHash: queueItem.infoHash ?? undefined,
+							indexerId: queueItem.indexerId ?? undefined,
+							size: queueItem.size ?? undefined,
+							protocol: queueItem.protocol
+						},
+						{
+							movieId: queueItem.movieId ?? undefined,
+							seriesId: queueItem.seriesId ?? undefined,
+							episodeIds: queueItem.episodeIds ?? undefined,
+							reason: 'import_failed',
+							message:
+								`Import failed after ${attempts} attempts` +
+								(queueItem.errorMessage ? `: ${queueItem.errorMessage}` : '') +
+								' - automatic searches will skip this release',
+							expiresInHours: ImportService.IMPORT_FAILURE_BLOCKLIST_HOURS
+						}
+					);
+					logger.info(
+						{ queueId: queueItemId, title: queueItem.title, attempts },
+						'Blocklisted release after terminal import failure'
+					);
+				} catch (blocklistError) {
+					logger.warn(
+						{
+							queueId: queueItemId,
+							title: queueItem.title,
+							err: blocklistError
+						},
+						'Failed to blocklist release after terminal import failure'
+					);
+				}
+			}
 			return {
 				success: false,
 				queueItemId,
@@ -1986,11 +2048,75 @@ export class ImportService extends EventEmitter {
 			);
 		}
 
+		// Delivery-vs-scope guard (#653): a grab scoped to specific episodes can
+		// complete "successfully" while every file it contained mapped to
+		// episodes already in the library - e.g. an S01-named cour pack grabbed
+		// for the missing E13+ tail of a season. Without this check the queue
+		// item closes as imported, the targeted episodes stay missing, and the
+		// next missing-content search re-grabs the identical release forever.
+		const targetedEpisodeIds = queueItem.episodeIds ?? [];
+		const deliveredAnyTargetEpisode = targetedEpisodeIds.some((id) => deferredEpisodeIds.has(id));
+		let undeliveredScopeMessage: string | undefined;
+		if (
+			result.success &&
+			result.failedFiles.length === 0 &&
+			targetedEpisodeIds.length > 0 &&
+			!deliveredAnyTargetEpisode
+		) {
+			undeliveredScopeMessage =
+				`Release did not contain any of the ${targetedEpisodeIds.length} requested episodes` +
+				` (${result.importedFiles.length} file(s) mapped to episodes already in the library)` +
+				' - automatic searches will skip this release';
+			worker.log('warn', undeliveredScopeMessage);
+			logger.warn(
+				{
+					queueId: queueItem.id,
+					seriesId: seriesData.id,
+					title: queueItem.title,
+					targetedEpisodes: targetedEpisodeIds.length,
+					importedFiles: result.importedFiles.length
+				},
+				'Acquisition delivered none of the targeted episodes - blocklisting release (#653)'
+			);
+			// Only automatic acquisitions are auto-blocklisted: the release
+			// demonstrably cannot satisfy this scope, and interactive grabs
+			// stay under the user's control.
+			if (queueItem.isAutomatic) {
+				try {
+					blocklistService.addToBlocklist(
+						{
+							title: queueItem.title,
+							infoHash: queueItem.infoHash ?? undefined,
+							indexerId: queueItem.indexerId ?? undefined,
+							size: queueItem.size ?? undefined,
+							protocol: queueItem.protocol
+						},
+						{
+							seriesId: seriesData.id,
+							episodeIds: targetedEpisodeIds,
+							reason: 'bad_release',
+							message: undeliveredScopeMessage,
+							expiresInHours: ImportService.UNDELIVERED_SCOPE_BLOCKLIST_HOURS
+						}
+					);
+				} catch (blocklistError) {
+					logger.warn(
+						{
+							queueId: queueItem.id,
+							title: queueItem.title,
+							err: blocklistError
+						},
+						'Failed to blocklist release that delivered none of the targeted episodes'
+					);
+				}
+			}
+		}
+
 		if (result.success) {
 			// Mark as imported (protocol determines if it shows as 'seeding-imported' or 'imported').
 			// A single imported file is referenced directly; a multi-file batch
-			// (season pack) reports the series folder instead of an arbitrary
-			// one of its files, which would otherwise read as "imported to
+			// (season pack) reports the series folder instead of an arbitrary one
+			// of its files, which would otherwise read as "imported to
 			// episode 1" even when every episode imported successfully.
 			const importedPath =
 				result.importedFiles.length === 1
@@ -2010,7 +2136,8 @@ export class ImportService extends EventEmitter {
 				title: representativeImport?.sceneName,
 				releaseGroup: representativeImport?.releaseGroup,
 				quality: representativeImport?.quality,
-				transferMode: representativeImport?.transferMode
+				transferMode: representativeImport?.transferMode,
+				statusReason: undeliveredScopeMessage
 			});
 
 			logger.info(
