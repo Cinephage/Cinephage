@@ -633,7 +633,27 @@ ${fileUrl.toString()}
 			});
 		}
 
-		const response = await fetchUpstream(subtitle.url, buildUpstreamHeaders(session));
+		// Subtitle tracks are best-effort: an unresolvable or unreachable host is
+		// a broken track, not a playback failure. Skip it with a clean 502.
+		let response: Response;
+		try {
+			response = await fetchUpstream(subtitle.url, buildUpstreamHeaders(session));
+		} catch (error) {
+			logger.warn(
+				{
+					sessionToken: session.token,
+					subtitleId,
+					provider: session.provider,
+					error: error instanceof Error ? error.message : String(error),
+					...streamLog
+				},
+				'Subtitle track fetch failed'
+			);
+			return new Response(JSON.stringify({ error: 'Subtitle fetch failed' }), {
+				status: 502,
+				headers: { 'Content-Type': 'application/json' }
+			});
+		}
 		if (!response.ok) {
 			return new Response(JSON.stringify({ error: `Upstream error: ${response.status}` }), {
 				status: response.status,

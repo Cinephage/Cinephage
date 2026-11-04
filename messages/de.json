@@ -3058,7 +3058,6 @@
 	"settings_cinephage_installKey_shownOnce": "Kopiere diesen Schlüssel jetzt - er wird nur einmal angezeigt und kann nicht wiederhergestellt werden. Bei Verlust rotieren, um einen neuen zu erhalten.",
 	"settings_cinephage_installKey_manual": "Manueller Schlüssel (Wiederherstellung)",
 	"settings_cinephage_installKey_manualHint": "Füge einen Schlüssel einer anderen Installation nur ein, wenn die Registrierung gedrosselt ist. Eine Installation sollte einen Schlüssel verwenden.",
-	"settings_cinephage_installKey_rateLimited": "Registrierungslimit erreicht - später erneut versuchen",
 	"settings_cinephage_installKey_registered": "Installation registriert",
 	"settings_cinephage_installKey_registrationFailed": "Registrierung fehlgeschlagen",
 	"settings_cinephage_installKey_revoked": "Installationsschlüssel widerrufen",

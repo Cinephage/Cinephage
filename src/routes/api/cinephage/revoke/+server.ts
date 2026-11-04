@@ -9,7 +9,10 @@
 import type { RequestHandler } from './$types';
 import { requireAdmin } from '#lib/server/auth/authorization.js';
 import { getCinephageCore } from '#lib/server/cinephage/core/CinephageCore.js';
-import { CinephageRegistrationError } from '#lib/server/cinephage/core/CinephageCore.js';
+import {
+	CinephageRegistrationError,
+	registrationErrorStatus
+} from '#lib/server/cinephage/core/CinephageCore.js';
 import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'CinephageRevoke', logDomain: 'system' });
@@ -23,7 +26,7 @@ export const POST: RequestHandler = async (event) => {
 		return Response.json({ success: true, ...result });
 	} catch (error) {
 		if (error instanceof CinephageRegistrationError) {
-			const status = error.code === 'rate_limited' ? 429 : 502;
+			const status = registrationErrorStatus(error.code);
 			logger.warn({ code: error.code }, 'Cinephage install key revoke rejected');
 			return Response.json({ success: false, error: error.message, code: error.code }, { status });
 		}

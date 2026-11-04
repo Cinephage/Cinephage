@@ -382,6 +382,54 @@ describe('CinephageCore', () => {
 			}).toThrow();
 		});
 
+		it.each(['install_blocked', 'email_blocked', 'install_limit'])(
+			'maps a 403 denial code (%s) to a typed error with a generic message',
+			async (denialCode) => {
+				vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+					new Response(
+						JSON.stringify({
+							error: {
+								message: 'GATEWAY_PRIVATE_DENIAL_DETAIL',
+								details: { code: denialCode }
+							}
+						}),
+						{ status: 403 }
+					)
+				);
+				const { CinephageCore } = await import('./CinephageCore.js');
+				const core = new CinephageCore(createMockSettings());
+
+				const rejection = await core.registerInstallKey('user@example.com').catch((e) => e);
+				expect(rejection.code).toBe(denialCode);
+				expect(rejection.message).not.toContain('GATEWAY_PRIVATE_DENIAL_DETAIL');
+				expect(rejection.message).toBe('Registration is not available for this install');
+			}
+		);
+
+		it('falls back to gateway_error for a 403 without a known denial code', async () => {
+			vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+				new Response(JSON.stringify({ error: { message: 'nope', details: { code: 'mystery' } } }), {
+					status: 403
+				})
+			);
+			const { CinephageCore } = await import('./CinephageCore.js');
+			const core = new CinephageCore(createMockSettings());
+
+			await expect(core.registerInstallKey('user@example.com')).rejects.toMatchObject({
+				code: 'gateway_error'
+			});
+		});
+
+		it('falls back to gateway_error for a 403 with an unparseable body', async () => {
+			vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('not json', { status: 403 }));
+			const { CinephageCore } = await import('./CinephageCore.js');
+			const core = new CinephageCore(createMockSettings());
+
+			await expect(core.registerInstallKey('user@example.com')).rejects.toMatchObject({
+				code: 'gateway_error'
+			});
+		});
+
 		it('rejects a 201 response that carries no key', async () => {
 			vi.spyOn(globalThis, 'fetch').mockResolvedValue(
 				new Response(JSON.stringify({ ok: true }), { status: 201 })

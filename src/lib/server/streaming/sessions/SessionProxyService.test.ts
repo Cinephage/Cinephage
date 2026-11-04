@@ -866,3 +866,64 @@ describe('SessionProxyService.renderSubtitlePlaylist', () => {
 		);
 	});
 });
+
+describe('SessionProxyService.renderSubtitleFile', () => {
+	beforeEach(async () => {
+		vi.clearAllMocks();
+		resolveAndValidateUrlMock.mockResolvedValue({ safe: true });
+		const { getPlaybackSessionStore } = await import('./session-store');
+		getPlaybackSessionStore().clear();
+	});
+
+	async function createSessionWithSubtitle() {
+		const { getPlaybackSessionStore } = await import('./session-store');
+		return getPlaybackSessionStore().createSession({
+			mediaType: 'movie',
+			tmdbId: 541134,
+			entryUrl: 'https://cdn.example.com/master.m3u8',
+			sourceType: 'hls',
+			requestHeaders: {},
+			attempts: [],
+			subtitles: [
+				{
+					id: 'sub-1',
+					url: 'https://subtitles.invalid/en.vtt',
+					label: 'English',
+					language: 'en'
+				}
+			]
+		});
+	}
+
+	it('returns 404 for an unknown subtitle id', async () => {
+		const { getSessionProxyService } = await import('./SessionProxyService');
+		const session = await createSessionWithSubtitle();
+
+		const response = await getSessionProxyService().renderSubtitleFile(session, 'sub-missing');
+
+		expect(response.status).toBe(404);
+	});
+
+	it('returns a clean 502 when the subtitle host does not resolve', async () => {
+		fetchWithTimeoutMock.mockRejectedValue(new TypeError('fetch failed'));
+		const { getSessionProxyService } = await import('./SessionProxyService');
+		const session = await createSessionWithSubtitle();
+
+		// Must resolve to a response, never throw: a broken subtitle track is
+		// skipped by the player, not a playback failure.
+		const response = await getSessionProxyService().renderSubtitleFile(session, 'sub-1');
+
+		expect(response.status).toBe(502);
+		expect(fetchWithTimeoutMock).toHaveBeenCalledTimes(1);
+	});
+
+	it('passes an upstream HTTP error through unchanged', async () => {
+		fetchWithTimeoutMock.mockResolvedValue(new Response('missing', { status: 404 }));
+		const { getSessionProxyService } = await import('./SessionProxyService');
+		const session = await createSessionWithSubtitle();
+
+		const response = await getSessionProxyService().renderSubtitleFile(session, 'sub-1');
+
+		expect(response.status).toBe(404);
+	});
+});

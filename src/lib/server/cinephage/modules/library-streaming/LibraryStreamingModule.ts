@@ -508,20 +508,24 @@ export class LibraryStreamingModule extends BaseCinephageModule {
 						error: 'Cinephage API returned forbidden: insufficient permissions'
 					};
 				case 429: {
-					let msg = 'Cinephage API rate limited this request';
+					// Body details are diagnostic: log them, keep the error fixed.
 					try {
 						const body = JSON.parse(response.body) as CinephageApiResponse;
 						const details = body.error?.details;
 						if (details) {
-							const parts = [msg];
-							if (typeof details.limit === 'number') parts.push(`limit: ${details.limit}/window`);
-							if (typeof details.resetAt === 'string') parts.push(`resets at ${details.resetAt}`);
-							msg = parts.join(', ');
+							logger.warn(
+								{ ...streamLog, tmdbId: params.tmdbId, ...details },
+								'Cinephage API rate limited this request'
+							);
 						}
 					} catch {
-						/* default msg */
+						/* body details are diagnostic only */
 					}
-					return { success: false, sources: [], error: msg };
+					return {
+						success: false,
+						sources: [],
+						error: 'Cinephage streams are temporarily unavailable - try again later'
+					};
 				}
 				case 502:
 					return {

@@ -9,7 +9,10 @@
 import type { RequestHandler } from './$types';
 import { requireAdmin } from '#lib/server/auth/authorization.js';
 import { getCinephageCore } from '#lib/server/cinephage/core/CinephageCore.js';
-import { CinephageRegistrationError } from '#lib/server/cinephage/core/CinephageCore.js';
+import {
+	CinephageRegistrationError,
+	registrationErrorStatus
+} from '#lib/server/cinephage/core/CinephageCore.js';
 import { cinephageRegisterSchema } from '#lib/validation/schemas.js';
 import { createChildLogger } from '#lib/logging/index.js';
 
@@ -42,7 +45,7 @@ export const POST: RequestHandler = async (event) => {
 		});
 	} catch (error) {
 		if (error instanceof CinephageRegistrationError) {
-			const status = error.code === 'rate_limited' ? 429 : 502;
+			const status = registrationErrorStatus(error.code);
 			logger.warn({ code: error.code }, 'Cinephage install key registration rejected');
 			return Response.json({ success: false, error: error.message, code: error.code }, { status });
 		}

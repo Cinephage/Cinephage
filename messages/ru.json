@@ -3058,7 +3058,6 @@
 	"settings_cinephage_installKey_shownOnce": "Скопируйте ключ сейчас - он показывается только один раз и не может быть восстановлен. При потере выполните ротацию, чтобы получить новый.",
 	"settings_cinephage_installKey_manual": "Ручной ключ (восстановление)",
 	"settings_cinephage_installKey_manualHint": "Вставляйте ключ другой установки только при ограничении регистрации. Одна установка - один ключ.",
-	"settings_cinephage_installKey_rateLimited": "Достигнут лимит регистраций - попробуйте позже",
 	"settings_cinephage_installKey_registered": "Установка зарегистрирована",
 	"settings_cinephage_installKey_registrationFailed": "Не удалось зарегистрировать",
 	"settings_cinephage_installKey_revoked": "Ключ установки отозван",

@@ -24,7 +24,13 @@ import { getServerIdentity, type CinephageServerIdentity } from './version.js';
 const logger = createChildLogger({ module: 'CinephageCore', logDomain: 'system' });
 
 /** Registration/revoke failures the UI can branch on via `code`. */
-export type CinephageRegistrationErrorCode = 'rate_limited' | 'invalid_input' | 'gateway_error';
+export type CinephageRegistrationErrorCode =
+	| 'rate_limited'
+	| 'invalid_input'
+	| 'install_blocked'
+	| 'email_blocked'
+	| 'install_limit'
+	| 'gateway_error';
 
 export class CinephageRegistrationError extends Error {
 	constructor(
@@ -34,6 +40,44 @@ export class CinephageRegistrationError extends Error {
 		super(message);
 		this.name = 'CinephageRegistrationError';
 	}
+}
+
+/** 403 denial codes the gateway may send as error.details.code on register. */
+function isRegistrationDenialCode(value: unknown): value is CinephageRegistrationErrorCode {
+	return value === 'install_blocked' || value === 'email_blocked' || value === 'install_limit';
+}
+
+/** HTTP status a registration failure code maps to in the local API routes. */
+export function registrationErrorStatus(code: CinephageRegistrationErrorCode): number {
+	switch (code) {
+		case 'rate_limited':
+			return 429;
+		case 'invalid_input':
+			return 400;
+		case 'gateway_error':
+			return 502;
+		default:
+			return 403;
+	}
+}
+
+/**
+ * Map a 403 register response to its typed denial code, falling back to
+ * 'gateway_error' when the body carries no known code.
+ */
+async function parseRegistrationDenialCode(
+	response: Response
+): Promise<CinephageRegistrationErrorCode> {
+	try {
+		const body = (await response.json()) as { error?: { details?: { code?: unknown } } };
+		const code = body.error?.details?.code;
+		if (isRegistrationDenialCode(code)) {
+			return code;
+		}
+	} catch {
+		/* unparseable body - fall through to the generic error */
+	}
+	return 'gateway_error';
 }
 
 export class CinephageCore {
@@ -164,6 +208,12 @@ export class CinephageCore {
 			throw new CinephageRegistrationError(
 				'invalid_input',
 				'The gateway rejected the registration payload'
+			);
+		}
+		if (response.status === 403) {
+			throw new CinephageRegistrationError(
+				await parseRegistrationDenialCode(response),
+				'Registration is not available for this install'
 			);
 		}
 		if (!response.ok) {

@@ -3079,7 +3079,6 @@
 	"settings_cinephage_installKey_shownOnce": "Copy this key now - it is shown only once and cannot be recovered. If lost, rotate to get a new one.",
 	"settings_cinephage_installKey_manual": "Manual key (recovery)",
 	"settings_cinephage_installKey_manualHint": "Paste a key from another install only when registration is rate-limited. One install should use one key.",
-	"settings_cinephage_installKey_rateLimited": "Registration rate limit reached - try again later",
 	"settings_cinephage_installKey_registered": "Install registered",
 	"settings_cinephage_installKey_registrationFailed": "Registration failed",
 	"settings_cinephage_installKey_revoked": "Install key revoked",

@@ -3058,7 +3058,6 @@
 	"settings_cinephage_installKey_shownOnce": "Copia esta clave ahora - se muestra solo una vez y no puede recuperarse. Si la pierdes, rota para obtener una nueva.",
 	"settings_cinephage_installKey_manual": "Clave manual (recuperación)",
 	"settings_cinephage_installKey_manualHint": "Pega una clave de otra instalación solo si el registro está limitado. Cada instalación debe usar su propia clave.",
-	"settings_cinephage_installKey_rateLimited": "Límite de registro alcanzado - inténtalo más tarde",
 	"settings_cinephage_installKey_registered": "Instalación registrada",
 	"settings_cinephage_installKey_registrationFailed": "Falló el registro",
 	"settings_cinephage_installKey_revoked": "Clave de instalación revocada",

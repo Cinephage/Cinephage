@@ -62,8 +62,9 @@
 				});
 				await onChanged();
 			} else {
+				// One generic message for every failure mode.
 				toasts.add({
-					message: res.error || m.settings_cinephage_installKey_rateLimited(),
+					message: m.settings_cinephage_installKey_registrationFailed(),
 					type: 'error'
 				});
 			}

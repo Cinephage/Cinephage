@@ -312,6 +312,25 @@ export class RetryPolicy {
 					throw lastError;
 				}
 
+				// A Retry-After longer than we are willing to wait means retrying
+				// would send before the upstream's wait expires - fail instead.
+				if (
+					decision.suggestedDelayMs !== undefined &&
+					decision.suggestedDelayMs > this.config.maxDelayMs
+				) {
+					log.debug(
+						{
+							attempt,
+							suggestedDelayMs: decision.suggestedDelayMs,
+							maxDelayMs: this.config.maxDelayMs,
+							reason: decision.reason,
+							error: lastError.message
+						},
+						'Retry-After exceeds max delay - not retrying'
+					);
+					throw lastError;
+				}
+
 				// Calculate delay
 				const delay = calculateRetryDelay(attempt, this.config, decision.suggestedDelayMs);
 

@@ -379,6 +379,23 @@ describe('LibraryStreamingModule', () => {
 			expect(core.refreshLatestIdentity).not.toHaveBeenCalled();
 		});
 
+		it('returns a generic error on 429 without leaking rate-limit details', async () => {
+			const httpGet = vi.fn().mockResolvedValue({
+				status: 429,
+				body: JSON.stringify({
+					error: { details: { limit: 5, resetAt: '2026-11-04T12:00:00Z' } }
+				})
+			});
+
+			const mod = new LibraryStreamingModule(settings, createFakeCore(httpGet) as never);
+			const result = await mod.getStreams({ tmdbId: 603, type: 'movie' });
+
+			expect(result.success).toBe(false);
+			expect(result.error).toBe('Cinephage streams are temporarily unavailable - try again later');
+			expect(result.error).not.toContain('limit');
+			expect(result.error).not.toContain('resets');
+		});
+
 		it('sends refresh=1 to the gateway only when a refresh is requested', async () => {
 			const httpGet = vi.fn().mockResolvedValue({
 				status: 200,
