@@ -1387,11 +1387,6 @@ export class SearchOrchestrator {
 
 		for (const title of titlesToSearch.slice(0, titleBudget)) {
 			if (episodeFormats.length > 0) {
-				const shouldTryInteractiveTvTitleOnlyFallback =
-					isTvSearch(criteria) &&
-					criteria.searchSource === 'interactive' &&
-					(criteria.season !== undefined || criteria.episode !== undefined);
-
 				for (const format of episodeFormats) {
 					variantCriteria.push(
 						createTextOnlyCriteria({
@@ -1402,17 +1397,21 @@ export class SearchOrchestrator {
 					);
 				}
 
-				if (shouldTryInteractiveTvTitleOnlyFallback) {
-					variantCriteria.push(
-						createTextOnlyCriteria({
-							...criteria,
-							query: title,
-							season: undefined,
-							episode: undefined,
-							preferredEpisodeFormat: undefined
-						})
-					);
-				}
+				// Token queries assume topic titles use Sxx/Eyy notation. Trackers whose
+				// titles don't (e.g. RuTracker's "Show / Сезон: 4 / Серии: 1-14 из 14")
+				// return 0 rows for them, and automatic searches have no user to retry,
+				// so always include the bare-title variant and let filterBySeasonEpisode
+				// prune the broader result set. The batch early-exit below skips this
+				// variant whenever a token variant already produced a relevant release.
+				variantCriteria.push(
+					createTextOnlyCriteria({
+						...criteria,
+						query: title,
+						season: undefined,
+						episode: undefined,
+						preferredEpisodeFormat: undefined
+					})
+				);
 			} else if (isMovieSearch(criteria)) {
 				const movieFormats = indexer.capabilities.searchFormats?.movie ?? ['standard', 'noYear'];
 				const seenMovieVariants = new Set<string>();
@@ -1617,15 +1616,19 @@ export class SearchOrchestrator {
 			let anyTitleSucceeded = false;
 
 			for (const title of limitedTitles) {
-				const seasonOnlyCriteria = createTextOnlyCriteria({
+				// RuTracker topic titles never contain Sxx/Eyy tokens ("Show / Сезон: 4 /
+				// Серии: 1-14 из 14"), so the query must be the bare title — any season
+				// token in the keywords yields 0 rows. Season/episode selection happens
+				// downstream in filterBySeasonEpisode.
+				const titleOnlyCriteria = createTextOnlyCriteria({
 					...criteria,
 					query: title,
-					episode: undefined,
-					preferredEpisodeFormat: 'standard'
+					season: undefined,
+					episode: undefined
 				});
 
 				try {
-					const releases = await indexer.search(seasonOnlyCriteria);
+					const releases = await indexer.search(titleOnlyCriteria);
 					anyTitleSucceeded = true;
 					for (const release of releases) {
 						if (!seenGuids.has(release.guid)) {
@@ -1685,7 +1688,6 @@ export class SearchOrchestrator {
 		const tmdbId = 'tmdbId' in criteria ? criteria.tmdbId : undefined;
 		const tvdbId = 'tvdbId' in criteria ? criteria.tvdbId : undefined;
 		const imdbId = 'imdbId' in criteria ? criteria.imdbId : undefined;
-		const season = 'season' in criteria ? criteria.season : undefined;
 		const primaryId =
 			tmdbId?.toString() ?? tvdbId?.toString() ?? imdbId ?? criteria.query ?? 'unknown';
 		const normalizedTitles = titlesToSearch
@@ -1693,7 +1695,11 @@ export class SearchOrchestrator {
 			.map((title) => this.normalizeForComparison(title))
 			.filter(Boolean)
 			.join('|');
-		return `${indexer.id}::${primaryId}::s${season ?? 'x'}::${normalizedTitles}`;
+		// No season component: the cached query is the bare title (season tokens are
+		// stripped before the request), so one cached result serves every episode
+		// scan of a series within the TTL. Releases stay unfiltered here; per-search
+		// season/episode selection happens downstream in filterBySeasonEpisode.
+		return `${indexer.id}::${primaryId}::${normalizedTitles}`;
 	}
 
 	/** Check if the indexer supports the specific IDs in the search criteria */
@@ -2240,9 +2246,12 @@ export class SearchOrchestrator {
 	}
 
 	private extractExplicitSeasonEpisodeTotal(title: string): number | undefined {
+		// RuTracker season titles end "SxxE1-N из M" when Cyrillic is retained
+		// (the "of M" shape only appears after the stripcyrillic rewrite), so the
+		// Russian "из" must be recognized alongside the English "of".
 		const patterns = [
-			/\bepisodes?\s*:\s*\d{1,3}\s*[-–]\s*\d{1,3}\s*of\s*(\d{1,3})\b/iu,
-			/\bS\d{1,2}E\d{1,3}\s*[-–]\s*\d{1,3}\s*of\s*(\d{1,3})\b/iu,
+			/\bepisodes?\s*:\s*\d{1,3}\s*[-–]\s*\d{1,3}\s*(?:of|из)\s*(\d{1,3})\b/iu,
+			/\bS\d{1,2}E\d{1,3}\s*[-–]\s*\d{1,3}\s*(?:of|из)\s*(\d{1,3})\b/iu,
 			/\bS\d{1,2}E\d{1,3}\s*[-–]\s*\d{1,3}\s+(\d{1,3})\b/iu
 		];
 		for (const pattern of patterns) {

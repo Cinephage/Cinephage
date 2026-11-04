@@ -369,7 +369,7 @@ describe('SearchOrchestrator.executeMultiTitleTextSearch', () => {
 		await searchPromise;
 	});
 
-	it('adds title-only fallback variant for interactive TV episode searches', async () => {
+	it('adds title-only fallback variant for TV episode searches', async () => {
 		const orchestrator = new SearchOrchestrator();
 		const captured: SearchCriteria[] = [];
 
@@ -403,6 +403,55 @@ describe('SearchOrchestrator.executeMultiTitleTextSearch', () => {
 						c.preferredEpisodeFormat === undefined
 				)
 		).toBe(true);
+	});
+
+	it('falls back to a title-only query for automatic season searches when token queries return nothing', async () => {
+		const orchestrator = new SearchOrchestrator();
+		const captured: SearchCriteria[] = [];
+
+		const fakeIndexer = buildIndexer({
+			search: async (criteria) => {
+				captured.push(criteria);
+				// RuTracker-style tracker: token-bearing queries find nothing, the bare
+				// title returns the season packs.
+				if (isTvSearch(criteria) && criteria.season === undefined) {
+					return [
+						createRelease({
+							guid: 'ozark-s4-pack',
+							title: 'Озарк / Ozark: S4E1-14 из 14 [2022, WEB-DL 1080p]'
+						})
+					];
+				}
+				return [];
+			}
+		});
+
+		const criteria = createTvCriteria({
+			searchSource: 'automatic',
+			query: 'Озарк',
+			season: 4
+		});
+
+		const releases = await privateApi(orchestrator).executeMultiTitleTextSearch(
+			fakeIndexer,
+			criteria
+		);
+
+		expect(captured.filter(isTvSearch).some((c) => c.preferredEpisodeFormat === 'standard')).toBe(
+			true
+		);
+		expect(
+			captured
+				.filter(isTvSearch)
+				.some(
+					(c) =>
+						c.query === 'Озарк' &&
+						c.season === undefined &&
+						c.episode === undefined &&
+						c.preferredEpisodeFormat === undefined
+				)
+		).toBe(true);
+		expect(releases.map((release) => release.guid)).toContain('ozark-s4-pack');
 	});
 
 	it('uses only Cyrillic title variants for RuTracker when native titles are available', async () => {
@@ -470,9 +519,46 @@ describe('SearchOrchestrator.executeMultiTitleTextSearch', () => {
 
 		expect(captured).toHaveLength(1);
 		const tvCaptured = captured.filter(isTvSearch);
-		expect(tvCaptured.every((c) => c.preferredEpisodeFormat === 'standard')).toBe(true);
+		expect(tvCaptured.every((c) => c.preferredEpisodeFormat === undefined)).toBe(true);
 		expect(tvCaptured.every((c) => c.episode === undefined)).toBe(true);
-		expect(tvCaptured.every((c) => c.season === 1)).toBe(true);
+		expect(tvCaptured.every((c) => c.season === undefined)).toBe(true);
+	});
+
+	it('shares the cached RuTracker title-only result across seasons and episodes', async () => {
+		const orchestrator = new SearchOrchestrator();
+		const captured: SearchCriteria[] = [];
+
+		const fakeIndexer = buildIndexer({
+			name: 'RuTracker.org',
+			baseUrl: 'https://rutracker.org/forum',
+			search: async (criteria) => {
+				captured.push(criteria);
+				return [];
+			}
+		});
+
+		const baseCriteria = createTvCriteria({
+			searchSource: 'automatic',
+			query: 'Stranger Things',
+			searchTitles: ['Stranger Things', '怪奇物语', 'Очень странные дела']
+		});
+
+		await privateApi(orchestrator).executeMultiTitleTextSearch(fakeIndexer, {
+			...baseCriteria,
+			season: 1,
+			episode: 1
+		});
+		await privateApi(orchestrator).executeMultiTitleTextSearch(fakeIndexer, {
+			...baseCriteria,
+			season: 2,
+			episode: 5
+		});
+
+		// One upstream request serves both scans: the query is the bare title and
+		// the cache key is season-independent.
+		expect(captured).toHaveLength(1);
+		const tvCaptured = captured.filter(isTvSearch);
+		expect(tvCaptured.every((c) => c.season === undefined && c.episode === undefined)).toBe(true);
 	});
 
 	it('dedupes concurrent RuTracker automatic season searches into a single in-flight request', async () => {
@@ -509,8 +595,9 @@ describe('SearchOrchestrator.executeMultiTitleTextSearch', () => {
 
 		expect(captured).toHaveLength(1);
 		const tvCaptured = captured.filter(isTvSearch);
-		expect(tvCaptured.every((c) => c.preferredEpisodeFormat === 'standard')).toBe(true);
+		expect(tvCaptured.every((c) => c.preferredEpisodeFormat === undefined)).toBe(true);
 		expect(tvCaptured.every((c) => c.episode === undefined)).toBe(true);
+		expect(tvCaptured.every((c) => c.season === undefined)).toBe(true);
 	});
 });
 
@@ -560,7 +647,8 @@ describe('SearchOrchestrator.executeWithTiering', () => {
 
 		expect(result.searchMethod).toBe('text');
 		expect(result.releases).toHaveLength(1);
-		expect(captured).toHaveLength(2);
+		// ID query, token format variant, plus the title-only fallback variant.
+		expect(captured).toHaveLength(3);
 		const cap0 = captured[0] as TvSearchCriteria;
 		expect(cap0.imdbId).toBe('tt1234567');
 		expect(cap0.tvdbId).toBe(123456);
@@ -569,6 +657,11 @@ describe('SearchOrchestrator.executeWithTiering', () => {
 		expect(cap1.tvdbId).toBeUndefined();
 		expect(captured[1].query).toBe('My Show');
 		expect(cap1.preferredEpisodeFormat).toBe('standard');
+		const cap2 = captured[2] as TvSearchCriteria;
+		expect(cap2.query).toBe('My Show');
+		expect(cap2.season).toBeUndefined();
+		expect(cap2.episode).toBeUndefined();
+		expect(cap2.preferredEpisodeFormat).toBeUndefined();
 	});
 
 	it('keeps ID search when ID results are found', async () => {
@@ -670,7 +763,8 @@ describe('SearchOrchestrator.executeWithTiering', () => {
 			'unrelated-id-result',
 			'fallback-result'
 		]);
-		expect(captured).toHaveLength(2);
+		// ID query, token format variant, plus the title-only fallback variant.
+		expect(captured).toHaveLength(3);
 	});
 
 	it('retries movie ID search without q/year before falling back to text', async () => {
@@ -931,6 +1025,42 @@ describe('SearchOrchestrator.filterBySeasonEpisode', () => {
 		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria, {
 			seasonEpisodeCount: 22
 		});
+
+		expect(filtered).toHaveLength(0);
+	});
+
+	it('verifies RuTracker pack completeness from "из N" titles without TMDB counts', () => {
+		const releases = [
+			createRelease({
+				title: 'Озарк / Ozark: S4E1-14 из 14 [2022, WEB-DL 1080p]',
+				indexerName: 'RuTracker.org'
+			})
+		];
+
+		const criteria = createTvCriteria({
+			searchSource: 'automatic',
+			season: 4
+		});
+
+		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria);
+
+		expect(filtered).toHaveLength(1);
+	});
+
+	it('rejects RuTracker packs whose covered episodes fall short of the "из N" total', () => {
+		const releases = [
+			createRelease({
+				title: 'Озарк / Ozark: S4E1-10 из 14 [2022, WEB-DL 1080p]',
+				indexerName: 'RuTracker.org'
+			})
+		];
+
+		const criteria = createTvCriteria({
+			searchSource: 'automatic',
+			season: 4
+		});
+
+		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria);
 
 		expect(filtered).toHaveLength(0);
 	});
