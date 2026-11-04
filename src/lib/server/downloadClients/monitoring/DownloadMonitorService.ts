@@ -28,7 +28,7 @@ import { eq, and, or, inArray, not, notInArray, isNull, isNotNull, desc, sql } f
 import { getDownloadClientManager } from '../DownloadClientManager';
 import type { DownloadClientProtocol } from '../DownloadClientManager';
 import { joinCategoryPath, sanitizeCategorySegment } from '../core/client-utils.js';
-import { mapClientPathToLocal } from './PathMapping';
+import { mapClientPathToLocal, mapClientPathToLocalWithResult } from './PathMapping';
 import { resolveInfoHash } from '../utils/hashUtils';
 import { ReleaseParser } from '#lib/server/indexers/parser/ReleaseParser.js';
 import {
@@ -1889,15 +1889,15 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 		// torrents without a contentPath keep a null outputPath instead.
 		// Use user-configured path mappings for both completed and temp folders
 		const newClientDownloadPath = getDownloadContentPath(download, queueItem.protocol);
-		const outputPath = newClientDownloadPath
-			? mapClientPathToLocal(
-					newClientDownloadPath,
-					client.downloadPathLocal,
-					client.downloadPathRemote ?? null,
-					client.tempPathLocal,
-					client.tempPathRemote
-				)
+		const pathMapping = newClientDownloadPath
+			? mapClientPathToLocalWithResult(newClientDownloadPath, {
+					completeLocalPath: client.downloadPathLocal,
+					completeRemotePath: client.downloadPathRemote ?? null,
+					tempLocalPath: client.tempPathLocal,
+					tempRemotePath: client.tempPathRemote
+				})
 			: null;
+		const outputPath = pathMapping?.path ?? null;
 
 		// Determine new status
 		const newStatus = mapDownloadStatusToQueueStatus(download.status, download.progress);
@@ -1908,6 +1908,30 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 		const statusChanged = queueItem.status !== newStatus;
 		const pathChanged =
 			queueItem.clientDownloadPath !== newClientDownloadPath || queueItem.outputPath !== outputPath;
+
+		// Surface heuristic path resolution: an outputPath the mapping had to
+		// guess (rather than resolve from the configured remote base or an
+		// already-local path) is the classic cause of "No video files found in
+		// download" loops when the client's real directory differs from the
+		// configured mapping (e.g. Transmission's 'completed' dir vs a
+		// configured 'complete' base). Warned once per path change, not per poll.
+		if (
+			pathMapping &&
+			!pathMapping.exact &&
+			pathChanged &&
+			pathMapping.path !== newClientDownloadPath
+		) {
+			logger.warn(
+				{
+					queueId: queueItem.id,
+					title: queueItem.title,
+					clientPath: newClientDownloadPath,
+					mappedPath: pathMapping.path,
+					mappingWarning: pathMapping.warning
+				},
+				'Download path resolved via heuristic path mapping - verify the download client path configuration'
+			);
+		}
 
 		// Detect torrent metadata resolution (magnet → metadata loaded)
 		// qBittorrent: stalled (metaDL) → downloading; Transmission: size becomes known
