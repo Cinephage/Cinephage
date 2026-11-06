@@ -245,6 +245,14 @@ const MAINTENANCE_TASKS: UnifiedTaskDefinition[] = [
 		runEndpoint: '/api/monitoring/search/original-language-backfill'
 	},
 	{
+		id: 'release-event-backfill',
+		name: 'Release Events Backfill',
+		description:
+			'Populate per-region release events (theatrical, digital, physical, TV) for movies that have none, from TMDB. Resumable: each run picks up where the last one stopped, so it is safe to re-run and to cancel mid-way.',
+		category: 'maintenance',
+		runEndpoint: '/api/monitoring/search/release-event-backfill'
+	},
+	{
 		id: 'rotate-credentials',
 		name: 'Rotate Credential Encryption',
 		description:

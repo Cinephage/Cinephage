@@ -880,6 +880,11 @@ export class MonitoringScheduler extends EventEmitter implements BackgroundServi
 					await import('./tasks/OriginalLanguageBackfillTask.js');
 				return await executeOriginalLanguageBackfillTask(ctx);
 			}
+			case 'release-event-backfill': {
+				const { executeReleaseEventBackfillTask } =
+					await import('./tasks/ReleaseEventBackfillTask.js');
+				return await executeReleaseEventBackfillTask(ctx);
+			}
 			default:
 				throw new Error(`Unknown task type: ${taskType}`);
 		}
@@ -942,6 +947,10 @@ export class MonitoringScheduler extends EventEmitter implements BackgroundServi
 
 	async runOriginalLanguageBackfill(): Promise<TaskResult> {
 		return await this.executeTaskManually('original-language-backfill');
+	}
+
+	async runReleaseEventBackfill(): Promise<TaskResult> {
+		return await this.executeTaskManually('release-event-backfill');
 	}
 
 	private async executeTaskManually(taskType: string): Promise<TaskResult> {

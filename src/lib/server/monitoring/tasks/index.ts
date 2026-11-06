@@ -12,3 +12,4 @@ export * from './PendingReleaseTask.js';
 export * from './MissingSubtitlesTask.js';
 export * from './SubtitleUpgradeTask.js';
 export * from './OriginalLanguageBackfillTask.js';
+export * from './ReleaseEventBackfillTask.js';
