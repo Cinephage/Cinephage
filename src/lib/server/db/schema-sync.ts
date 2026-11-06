@@ -190,8 +190,10 @@ import {
  *   (raw `cphg1.` envelope) from here on.
  * Version 170: release_events - per-region, per-type release moments; the
  *   source of truth behind availability and the calendar.
+ * Version 171: series.air_time / airs_days / air_tz - broadcast schedule from
+ *   TVDB, which is the only provider that reports an air time.
  */
-export const CURRENT_SCHEMA_VERSION = 170;
+export const CURRENT_SCHEMA_VERSION = 171;
 
 export const SYSTEM_LIBRARY_SEEDS = [
 	{
@@ -696,6 +698,9 @@ const TABLE_DEFINITIONS: string[] = [
 		"episode_file_count" integer DEFAULT 0,
 		"wants_subtitles" integer DEFAULT true,
 		"first_air_date" text,
+		"air_time" text,
+		"airs_days" text,
+		"air_tz" text,
 		"episode_group_id" text,
 		"metadata_language" text,
 		"original_language" text,

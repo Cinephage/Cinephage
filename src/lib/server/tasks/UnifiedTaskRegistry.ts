@@ -253,6 +253,14 @@ const MAINTENANCE_TASKS: UnifiedTaskDefinition[] = [
 		runEndpoint: '/api/monitoring/search/release-event-backfill'
 	},
 	{
+		id: 'series-airtime-backfill',
+		name: 'Broadcast Times Backfill',
+		description:
+			'Fetch broadcast air times and days from TVDB for series that do not have them yet (TMDB does not provide an air time). Resumable and safe to re-run.',
+		category: 'maintenance',
+		runEndpoint: '/api/monitoring/search/series-airtime-backfill'
+	},
+	{
 		id: 'rotate-credentials',
 		name: 'Rotate Credential Encryption',
 		description:

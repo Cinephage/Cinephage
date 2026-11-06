@@ -21,6 +21,9 @@ export interface CalendarEpisodeItem {
 	seasonNumber: number;
 	episodeNumber: number;
 	airDate: string | null;
+	/** Broadcast time `HH:MM` in `airTz`, when TVDB knows it. */
+	airTime?: string | null;
+	airTz?: string | null;
 	seriesId: string;
 	seriesTitle: string;
 	seriesPosterPath: string | null;
@@ -238,7 +241,9 @@ export async function getCalendarData(
 				airDate: episodes.airDate,
 				seriesId: episodes.seriesId,
 				seriesTitle: series.title,
-				seriesPosterPath: series.posterPath
+				seriesPosterPath: series.posterPath,
+				airTime: series.airTime,
+				airTz: series.airTz
 			})
 			.from(episodes)
 			.innerJoin(series, eq(episodes.seriesId, series.id))
@@ -263,7 +268,9 @@ export async function getCalendarData(
 				airDate: ep.airDate,
 				seriesId: ep.seriesId,
 				seriesTitle: ep.seriesTitle,
-				seriesPosterPath: ep.seriesPosterPath
+				seriesPosterPath: ep.seriesPosterPath,
+				airTime: ep.airTime,
+				airTz: ep.airTz
 			});
 		}
 	}
@@ -289,7 +296,9 @@ export async function getUpcomingItems(
 				airDate: episodes.airDate,
 				seriesId: episodes.seriesId,
 				seriesTitle: series.title,
-				seriesPosterPath: series.posterPath
+				seriesPosterPath: series.posterPath,
+				airTime: series.airTime,
+				airTz: series.airTz
 			})
 			.from(episodes)
 			.innerJoin(series, eq(episodes.seriesId, series.id))

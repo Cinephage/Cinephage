@@ -17,6 +17,12 @@ export interface AvailabilityInput {
 	minimumAvailability: AvailabilityLevel;
 	/** Injectable clock for tests; ISO `YYYY-MM-DD`. */
 	today?: string;
+	/**
+	 * Grace period after a theatrical premiere during which a title with no
+	 * home-release events is still considered obtainable. Mirrors the 90-day
+	 * rule the old `movieAvailability` helper applied; 0 disables it.
+	 */
+	theatricalGraceDays?: number;
 }
 
 export interface Availability {
@@ -55,6 +61,14 @@ function earliestDownloadable(events: readonly ReleaseEvent[]): ReleaseEvent | n
 	return winner;
 }
 
+/** Whole days from `from` to `to`; negative when `from` is in the future. */
+function daysBetween(from: string, to: string): number {
+	const a = Date.parse(`${from}T00:00:00Z`);
+	const b = Date.parse(`${to}T00:00:00Z`);
+	if (Number.isNaN(a) || Number.isNaN(b)) return 0;
+	return Math.floor((b - a) / 86_400_000);
+}
+
 export function deriveAvailability(input: AvailabilityInput): Availability {
 	const today = input.today ?? todayIso();
 	const { events, hasFile } = input;
@@ -65,8 +79,16 @@ export function deriveAvailability(input: AvailabilityInput): Availability {
 	const theatricalPassed = Boolean(theatrical && theatrical.releaseDate <= today);
 	const downloadablePassed = Boolean(downloadable && downloadable.releaseDate <= today);
 
+	const graceDays = input.theatricalGraceDays ?? 0;
+	const theatricalGraceElapsed = Boolean(
+		graceDays > 0 &&
+			theatrical &&
+			!downloadable &&
+			daysBetween(theatrical.releaseDate, today) >= graceDays
+	);
+
 	let level: AvailabilityLevel;
-	if (hasFile || downloadablePassed) level = 'released';
+	if (hasFile || downloadablePassed || theatricalGraceElapsed) level = 'released';
 	else if (theatricalPassed) level = 'inCinemas';
 	else level = 'announced';
 

@@ -890,6 +890,10 @@ export const series = sqliteTable(
 		// Whether to search for subtitles for this series (inherited by episodes by default)
 		wantsSubtitles: integer('wants_subtitles', { mode: 'boolean' }).default(true),
 		firstAirDate: text('first_air_date'),
+		/** Broadcast schedule from TVDB: HH:MM wall clock, JSON day list, IANA zone. */
+		airTime: text('air_time'),
+		airsDays: text('airs_days'),
+		airTz: text('air_tz'),
 		adult: integer('adult', { mode: 'boolean' }).default(false),
 		adultSource: text('adult_source'),
 		adultConfidence: text('adult_confidence'),

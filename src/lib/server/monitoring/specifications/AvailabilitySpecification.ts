@@ -26,6 +26,12 @@ import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'monitoring' as const });
 import { getMovieAvailabilityLevel } from '#lib/utils/movieAvailability.js';
+import { isSearchable as isSearchableFromEvents } from '#lib/server/availability/derive.js';
+import { listEvents } from '#lib/server/availability/event-store.js';
+import type { ReleaseEvent } from '#lib/server/availability/types.js';
+
+/** Grace period mirroring the legacy 90-day theatrical rule. */
+const THEATRICAL_GRACE_DAYS = 90;
 
 /**
  * Availability levels in order of "availability"
@@ -47,6 +53,15 @@ export const AvailabilityRejectionReason = {
  */
 export class MovieAvailabilitySpecification implements IMonitoringSpecification<MovieContext> {
 	private releaseInfoCache = new Map<number, MovieReleaseInfo | null>();
+	private eventCache = new Map<string, ReleaseEvent[]>();
+
+	private async getEventsForMovie(movieId: string): Promise<ReleaseEvent[]> {
+		const cached = this.eventCache.get(movieId);
+		if (cached) return cached;
+		const events = await listEvents('movie', movieId);
+		this.eventCache.set(movieId, events);
+		return events;
+	}
 
 	async isSatisfied(
 		context: MovieContext,
@@ -58,6 +73,25 @@ export class MovieAvailabilitySpecification implements IMonitoringSpecification<
 
 		if (minimumAvailability === 'announced') {
 			return accept();
+		}
+
+		// Release events are the source of truth. The legacy column/TMDB path
+		// below only runs for titles that have no events at all (never
+		// backfilled, or TMDB has no release dates for them).
+		const events = await this.getEventsForMovie(movie.id);
+		if (events.length > 0) {
+			const available = isSearchableFromEvents({
+				events,
+				hasFile: Boolean(movie.hasFile),
+				minimumAvailability,
+				theatricalGraceDays: THEATRICAL_GRACE_DAYS
+			});
+
+			if (available) return accept();
+
+			return reject(
+				`${AvailabilityRejectionReason.NOT_YET_AVAILABLE}: requires ${minimumAvailability}`
+			);
 		}
 
 		const hasStoredDates =

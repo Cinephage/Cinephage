@@ -885,6 +885,11 @@ export class MonitoringScheduler extends EventEmitter implements BackgroundServi
 					await import('./tasks/ReleaseEventBackfillTask.js');
 				return await executeReleaseEventBackfillTask(ctx);
 			}
+			case 'series-airtime-backfill': {
+				const { executeSeriesAirtimeBackfillTask } =
+					await import('./tasks/SeriesAirtimeBackfillTask.js');
+				return await executeSeriesAirtimeBackfillTask(ctx);
+			}
 			default:
 				throw new Error(`Unknown task type: ${taskType}`);
 		}
@@ -951,6 +956,10 @@ export class MonitoringScheduler extends EventEmitter implements BackgroundServi
 
 	async runReleaseEventBackfill(): Promise<TaskResult> {
 		return await this.executeTaskManually('release-event-backfill');
+	}
+
+	async runSeriesAirtimeBackfill(): Promise<TaskResult> {
+		return await this.executeTaskManually('series-airtime-backfill');
 	}
 
 	private async executeTaskManually(taskType: string): Promise<TaskResult> {
