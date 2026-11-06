@@ -46,6 +46,12 @@
 
 	const localAirTimeCache = new Map<string, string | null>();
 
+	/** Leading label so the time survives any truncation of the title. */
+	function airPrefix(ep: CalendarDay['episodes'][number]): string {
+		const label = localAirTime(ep) ?? ep.airTime;
+		return label ? `${label} · ` : '';
+	}
+
 	function localAirTime(ep: CalendarDay['episodes'][number]): string | null {
 		if (!airTimesReady) return null;
 		const cached = localAirTimeCache.get(ep.episodeId);
@@ -647,10 +653,10 @@
 											<div
 												class="truncate rounded-full bg-secondary/15 px-1.5 py-0.5 text-[10px] font-semibold text-secondary"
 											>
-												S{String(ep.seasonNumber).padStart(2, '0')}E{String(
+												{airPrefix(ep)}S{String(ep.seasonNumber).padStart(2, '0')}E{String(
 													ep.episodeNumber
 												).padStart(2, '0')}
-												{ep.seriesTitle}{localAirTime(ep) ? ` · ${localAirTime(ep)}` : ''}
+												{airPrefix(ep)}{ep.seriesTitle}
 											</div>
 										{/each}
 										{#if totalItems > Math.min(movieCount, 2) + Math.min(episodeCount, 2 - Math.min(movieCount, 2))}
@@ -750,7 +756,7 @@
 											<div class="mt-0.5 flex items-center gap-1.5">
 												<Tv class="h-3 w-3 text-secondary/60" />
 												<span class="text-xs text-secondary/60">
-													S{String(ep.seasonNumber).padStart(2, '0')}E{String(
+													{airPrefix(ep)}S{String(ep.seasonNumber).padStart(2, '0')}E{String(
 														ep.episodeNumber
 													).padStart(2, '0')}{ep.title ? ` - ${ep.title}` : ''}{localAirTime(ep) ? ` · ${localAirTime(ep)}` : ''}
 												</span>
@@ -870,7 +876,7 @@
 								<div class="min-w-0 flex-1">
 									<div class="truncate text-sm font-medium">{ep.seriesTitle}</div>
 									<div class="text-xs text-base-content/60">
-										S{String(ep.seasonNumber).padStart(2, '0')}E{String(ep.episodeNumber).padStart(
+										{airPrefix(ep)}S{String(ep.seasonNumber).padStart(2, '0')}E{String(ep.episodeNumber).padStart(
 											2,
 											'0'
 										)}
