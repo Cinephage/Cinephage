@@ -188,8 +188,10 @@ import {
  * Version 169: indexer_status.cookies - unwrap the JSON-encoded credential
  *   envelopes the old JSON-mode app path stored; the column is plain text
  *   (raw `cphg1.` envelope) from here on.
+ * Version 170: release_events - per-region, per-type release moments; the
+ *   source of truth behind availability and the calendar.
  */
-export const CURRENT_SCHEMA_VERSION = 169;
+export const CURRENT_SCHEMA_VERSION = 170;
 
 export const SYSTEM_LIBRARY_SEEDS = [
 	{
@@ -227,6 +229,23 @@ export const SYSTEM_LIBRARY_SEEDS = [
 ] as const;
 
 const TABLE_DEFINITIONS: string[] = [
+	`CREATE TABLE IF NOT EXISTS "release_events" (
+		"id" text PRIMARY KEY NOT NULL,
+		"media_type" text NOT NULL,
+		"media_id" text NOT NULL,
+		"kind" text NOT NULL,
+		"region" text NOT NULL DEFAULT 'US',
+		"platform" text,
+		"release_date" text NOT NULL,
+		"release_time" text,
+		"timezone" text,
+		"source" text NOT NULL,
+		"source_id" text,
+		"confidence" text NOT NULL DEFAULT 'confirmed',
+		"created_at" text NOT NULL,
+		"updated_at" text NOT NULL
+	)`,
+
 	// Core tables (no foreign keys)
 
 	// Better Auth tables - we manage these to have full control over schema
@@ -1697,6 +1716,12 @@ const TABLE_DEFINITIONS: string[] = [
  * Index definitions for performance
  */
 const INDEX_DEFINITIONS: string[] = [
+	`CREATE UNIQUE INDEX IF NOT EXISTS "idx_release_events_natural_key"
+		ON "release_events" ("media_type", "media_id", "kind", "region", "release_date", "source_id")`,
+	`CREATE INDEX IF NOT EXISTS "idx_release_events_media" ON "release_events" ("media_type", "media_id")`,
+	`CREATE INDEX IF NOT EXISTS "idx_release_events_date" ON "release_events" ("release_date")`,
+	`CREATE INDEX IF NOT EXISTS "idx_release_events_kind_date" ON "release_events" ("kind", "release_date")`,
+
 	`CREATE INDEX IF NOT EXISTS "idx_indexers_definition" ON "indexers" ("definition_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_indexers_enabled" ON "indexers" ("enabled")`,
 	`CREATE INDEX IF NOT EXISTS "idx_indexer_status_health" ON "indexer_status" ("health", "is_disabled")`,

@@ -31,6 +31,7 @@ const STORAGE_TABLES = [
 ] as const;
 
 const CORE_TABLES = [
+	'releaseEvents',
 	'scoringProfiles',
 	'customFormats',
 	'blockedMedia',

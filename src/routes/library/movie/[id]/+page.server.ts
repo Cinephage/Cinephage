@@ -217,7 +217,7 @@ export const load: PageServerLoad = async ({ params }): Promise<LibraryMoviePage
 		...movie,
 		metadataLanguageMode: movie.metadataLanguageMode as 'inherit' | 'original' | 'explicit',
 		tmdbStatus: releaseInfo?.status ?? null,
-		releaseDate: releaseInfo?.release_date ?? null,
+		releaseDate: releaseInfo?.release_date ?? movie.releaseDate,
 		// Ensure added is always a string
 		added: movie.added ?? new Date().toISOString(),
 		files: files.map((f) => ({

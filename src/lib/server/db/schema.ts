@@ -4602,3 +4602,47 @@ export type UserRequestSettingsRecord = typeof userRequestSettings.$inferSelect;
 export type NewUserRequestSettingsRecord = typeof userRequestSettings.$inferInsert;
 export type RequestNotificationRecord = typeof requestNotifications.$inferSelect;
 export type NewRequestNotificationRecord = typeof requestNotifications.$inferInsert;
+
+
+/**
+ * Release events - the source of truth for when media becomes watchable or
+ * grabbable. See `src/lib/server/availability/`.
+ *
+ * `movies.*release*` columns remain as a materialised summary written by
+ * AvailabilityService; never write them from feature code.
+ */
+export const releaseEvents = sqliteTable(
+	'release_events',
+	{
+		id: text('id').primaryKey().$defaultFn(() => randomUUID()),
+		mediaType: text('media_type').notNull(),
+		mediaId: text('media_id').notNull(),
+		kind: text('kind').notNull(),
+		region: text('region').notNull().default('US'),
+		platform: text('platform'),
+		releaseDate: text('release_date').notNull(),
+		releaseTime: text('release_time'),
+		timezone: text('timezone'),
+		source: text('source').notNull(),
+		sourceId: text('source_id'),
+		confidence: text('confidence').notNull().default('confirmed'),
+		createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
+		updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString())
+	},
+	(table) => [
+		uniqueIndex('idx_release_events_natural_key').on(
+			table.mediaType,
+			table.mediaId,
+			table.kind,
+			table.region,
+			table.releaseDate,
+			table.sourceId
+		),
+		index('idx_release_events_media').on(table.mediaType, table.mediaId),
+		index('idx_release_events_date').on(table.releaseDate),
+		index('idx_release_events_kind_date').on(table.kind, table.releaseDate)
+	]
+);
+
+export type ReleaseEventRecord = typeof releaseEvents.$inferSelect;
+export type NewReleaseEventRecord = typeof releaseEvents.$inferInsert;

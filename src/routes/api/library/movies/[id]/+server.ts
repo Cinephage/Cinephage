@@ -163,7 +163,7 @@ export const GET: RequestHandler = async ({ params }) => {
 				),
 				providerRefs: enrichedProviderRefs,
 				tmdbStatus: releaseInfo?.status ?? null,
-				releaseDate: releaseInfo?.release_date ?? null,
+				releaseDate: releaseInfo?.release_date ?? movie.releaseDate,
 				files: files.map((f) => ({
 					id: f.id,
 					relativePath: f.relativePath,

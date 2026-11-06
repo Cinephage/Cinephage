@@ -1,5 +1,4 @@
 export { MonitoredStage } from './MonitoredStage.js';
-export { AvailabilityStage } from './AvailabilityStage.js';
 export { DelayStage } from './DelayStage.js';
 export { WritableStage } from './WritableStage.js';
 export { UpgradeEligibleStage } from './UpgradeEligibleStage.js';

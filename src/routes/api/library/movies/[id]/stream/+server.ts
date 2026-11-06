@@ -76,6 +76,7 @@ async function getMovieData(movieId: string): Promise<LibraryMovie | null> {
 			minimumAvailability: movies.minimumAvailability,
 			wantsSubtitles: movies.wantsSubtitles,
 			added: movies.added,
+			releaseDate: movies.releaseDate,
 			hasFile: movies.hasFile
 		})
 		.from(movies)
@@ -117,7 +118,7 @@ async function getMovieData(movieId: string): Promise<LibraryMovie | null> {
 	return {
 		...movie,
 		tmdbStatus: releaseInfo?.status ?? null,
-		releaseDate: releaseInfo?.release_date ?? null,
+		releaseDate: releaseInfo?.release_date ?? movie.releaseDate,
 		added: movie.added ?? new Date().toISOString(),
 		files: files.map((f) => ({
 			id: f.id,

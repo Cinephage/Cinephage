@@ -8,6 +8,8 @@ import type { TaskResult } from '../MonitoringScheduler.js';
 import type { TaskExecutionContext } from '#lib/server/tasks/TaskExecutionContext.js';
 import { TaskCancelledException } from '#lib/server/tasks/TaskCancelledException.js';
 import { extractReleaseDates, type ExtractedReleaseDates } from '#lib/utils/extractReleaseDates.js';
+import { getAvailabilityService } from '#lib/server/availability/AvailabilityService.js';
+import { toEventsFromReleaseDates } from '#lib/server/availability/providers/tmdb.js';
 
 const logger = createChildLogger({ module: 'MetadataRefreshTask', logDomain: 'monitoring' });
 
@@ -107,6 +109,13 @@ export async function executeMetadataRefreshTask(
 						collectionName: tmdbMovie.belongs_to_collection?.name ?? null
 					})
 					.where(eq(movies.id, movie.id));
+
+				if (tmdbMovie.release_dates) {
+					await getAvailabilityService().recordEvents(
+						movie.id,
+						toEventsFromReleaseDates(movie.id, tmdbMovie.release_dates, region)
+					);
+				}
 
 				itemsUpdated++;
 			} catch (err) {
