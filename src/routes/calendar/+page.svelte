@@ -23,6 +23,8 @@
 	import { getCalendar } from '#lib/api/index.js';
 	import { apiPut } from '#lib/api/client.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { onMount } from 'svelte';
+	import { localAirTimeLabel } from '#lib/utils/airTime.js';
 
 	let { data } = $props();
 
@@ -33,6 +35,25 @@
 	let loading = $state(false);
 	let showPreferences = $state(false);
 	let savingPrefs = $state(false);
+
+	// Broadcast times are stored as wall clock at the network plus its zone.
+	// Converting to the viewer needs the browser zone, so render after mount
+	// rather than emitting a value the server had to guess.
+	let airTimesReady = $state(false);
+	onMount(() => {
+		airTimesReady = true;
+	});
+
+	const localAirTimeCache = new Map<string, string | null>();
+
+	function localAirTime(ep: CalendarDay['episodes'][number]): string | null {
+		if (!airTimesReady) return null;
+		const cached = localAirTimeCache.get(ep.episodeId);
+		if (cached !== undefined) return cached;
+		const value = localAirTimeLabel(ep.airDate, ep.airTime, ep.airTz, getLocale());
+		localAirTimeCache.set(ep.episodeId, value);
+		return value;
+	}
 
 	const ALL_CERTIFICATIONS = ['G', 'PG', 'PG-13', 'R', 'NC-17', 'NR'];
 
@@ -629,7 +650,7 @@
 												S{String(ep.seasonNumber).padStart(2, '0')}E{String(
 													ep.episodeNumber
 												).padStart(2, '0')}
-												{ep.seriesTitle}{ep.airTime ? ` · ${ep.airTime}` : ''}
+												{ep.seriesTitle}{localAirTime(ep) ? ` · ${localAirTime(ep)}` : ''}
 											</div>
 										{/each}
 										{#if totalItems > Math.min(movieCount, 2) + Math.min(episodeCount, 2 - Math.min(movieCount, 2))}
@@ -731,7 +752,7 @@
 												<span class="text-xs text-secondary/60">
 													S{String(ep.seasonNumber).padStart(2, '0')}E{String(
 														ep.episodeNumber
-													).padStart(2, '0')}{ep.title ? ` - ${ep.title}` : ''}{ep.airTime ? ` · ${ep.airTime}` : ''}
+													).padStart(2, '0')}{ep.title ? ` - ${ep.title}` : ''}{localAirTime(ep) ? ` · ${localAirTime(ep)}` : ''}
 												</span>
 											</div>
 										</div>
