@@ -629,7 +629,7 @@
 												S{String(ep.seasonNumber).padStart(2, '0')}E{String(
 													ep.episodeNumber
 												).padStart(2, '0')}
-												{ep.seriesTitle}
+												{ep.seriesTitle}{ep.airTime ? ` · ${ep.airTime}` : ''}
 											</div>
 										{/each}
 										{#if totalItems > Math.min(movieCount, 2) + Math.min(episodeCount, 2 - Math.min(movieCount, 2))}
@@ -731,7 +731,7 @@
 												<span class="text-xs text-secondary/60">
 													S{String(ep.seasonNumber).padStart(2, '0')}E{String(
 														ep.episodeNumber
-													).padStart(2, '0')}{ep.title ? ` - ${ep.title}` : ''}
+													).padStart(2, '0')}{ep.title ? ` - ${ep.title}` : ''}{ep.airTime ? ` · ${ep.airTime}` : ''}
 												</span>
 											</div>
 										</div>
