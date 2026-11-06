@@ -442,7 +442,7 @@
 								{/if}
 								<th class="w-12 text-center">{m.library_seasonAccordion_episodeNumberColumn()}</th>
 								<th>{m.library_seasonAccordion_titleColumn()}</th>
-								<th class="hidden w-24 sm:table-cell"
+								<th class="hidden w-36 sm:table-cell"
 									>{m.library_seasonAccordion_airDateColumn()}</th
 								>
 								<th class="hidden w-32 sm:table-cell">{m.library_seasonAccordion_statusColumn()}</th

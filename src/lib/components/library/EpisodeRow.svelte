@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { SvelteSet } from 'svelte/reactivity';
+	import { getContext } from 'svelte';
+	import { localAirTimeLabel } from '#lib/utils/airTime.js';
 	import {
 		CheckCircle,
 		XCircle,
@@ -219,6 +221,23 @@
 		}
 		return wantsSubtitles && allSubtitles.length === 0;
 	});
+
+	const airSchedule =
+		getContext<{ time: string | null; tz: string | null } | null>('series-air-schedule') ??
+		null;
+
+	/** Broadcast time in the viewer's zone, or null when the series has no schedule. */
+	function airTimeLabel(dateString: string | null): string | null {
+		if (!airSchedule) return null;
+		return localAirTimeLabel(dateString, airSchedule.time, airSchedule.tz);
+	}
+
+	/** Air date, plus the broadcast time in the viewer's zone when known. */
+	function airDateWithTime(dateString: string | null): string {
+		const date = formatAirDate(dateString);
+		const time = airTimeLabel(dateString);
+		return time ? `${date} \u00b7 ${time}` : date;
+	}
 
 	function formatAirDate(dateString: string | null): string {
 		if (!dateString) return m.library_episodeRow_tba();
@@ -447,7 +466,7 @@
 				</span>
 			{/if}
 			<div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-base-content/60 sm:hidden">
-				<span>{formatAirDate(episode.airDate)}</span>
+				<span>{airDateWithTime(episode.airDate)}</span>
 				<span class="text-base-content/40">•</span>
 				{#if hasEpisodeFile}
 					<span class="text-success">{m.library_episodeRow_downloaded()}</span>
@@ -530,7 +549,12 @@
 
 	<!-- Air date -->
 	<td class="hidden text-sm text-base-content/70 sm:table-cell">
-		{formatAirDate(episode.airDate)}
+		<div class="whitespace-nowrap">{formatAirDate(episode.airDate)}</div>
+		{#if airTimeLabel(episode.airDate)}
+			<div class="whitespace-nowrap text-xs text-base-content/50 tabular-nums">
+				{airTimeLabel(episode.airDate)}
+			</div>
+		{/if}
 	</td>
 
 	<!-- Status -->

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { PageData } from './$types';
+	import { setContext } from 'svelte';
 	import type { EpisodeFileInfo } from './+page.server';
 	import {
 		LibrarySeriesHeader,
@@ -48,6 +49,18 @@
 	import { ACTIVE_DOWNLOAD_STATUSES } from '#lib/types/queue.js';
 
 	let { data }: { data: PageData } = $props();
+
+	// Episodes carry no time of their own — the schedule lives on the series.
+	// Publish it once here so the accordion rows can read it without
+	// threading two more props through every layer.
+	setContext('series-air-schedule', {
+		get time() {
+			return (data.series as { airTime?: string | null }).airTime ?? null;
+		},
+		get tz() {
+			return (data.series as { airTz?: string | null }).airTz ?? null;
+		}
+	});
 
 	// Viewer accounts browse a read-only library; admin controls stay hidden.
 	const isAdminUser = $derived(data.user?.role === 'admin');

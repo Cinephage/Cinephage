@@ -651,12 +651,14 @@
 										{/each}
 										{#each (cell.items?.episodes ?? []).slice(0, 2 - Math.min(movieCount, 2)) as ep (ep.episodeId)}
 											<div
-												class="truncate rounded-full bg-secondary/15 px-1.5 py-0.5 text-[10px] font-semibold text-secondary"
+												class="rounded-md bg-secondary/15 px-1.5 py-0.5 text-[10px] leading-tight font-semibold text-secondary"
 											>
-												{airPrefix(ep)}S{String(ep.seasonNumber).padStart(2, '0')}E{String(
-													ep.episodeNumber
-												).padStart(2, '0')}
-												{airPrefix(ep)}{ep.seriesTitle}
+												<div class="truncate tabular-nums">
+													{airPrefix(ep)}S{String(ep.seasonNumber).padStart(2, '0')}E{String(
+														ep.episodeNumber
+													).padStart(2, '0')}
+												</div>
+												<div class="truncate opacity-75">{ep.seriesTitle}</div>
 											</div>
 										{/each}
 										{#if totalItems > Math.min(movieCount, 2) + Math.min(episodeCount, 2 - Math.min(movieCount, 2))}

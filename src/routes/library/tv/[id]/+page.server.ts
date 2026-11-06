@@ -211,6 +211,8 @@ export const load: PageServerLoad = async ({ params }): Promise<LibrarySeriesPag
 			backdropPath: series.backdropPath,
 			status: series.status,
 			network: series.network,
+			airTime: series.airTime,
+			airTz: series.airTz,
 			genres: series.genres,
 			path: series.path,
 			rootFolderId: series.rootFolderId,
