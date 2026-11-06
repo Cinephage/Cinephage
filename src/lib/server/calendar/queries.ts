@@ -1,6 +1,6 @@
 import { db } from '#lib/server/db/index.js';
-import { movies, series, episodes } from '#lib/server/db/schema.js';
-import { eq, and, gte, lte, inArray } from 'drizzle-orm';
+import { movies, series, episodes, releaseEvents } from '#lib/server/db/schema.js';
+import { eq, and, gte, lte, inArray, isNotNull } from 'drizzle-orm';
 import { tmdb } from '#lib/server/tmdb.js';
 import type { DiscoverItem } from '#lib/server/tmdb.js';
 import { toDateString, todayDateString } from '#lib/utils/format.js';
@@ -160,9 +160,34 @@ export async function getCalendarData(
 		const libraryMovieMap = new Map(libraryMovies.map((m) => [m.tmdbId, m.id]));
 		const libraryTmdbIds = new Set(libraryMovieMap.keys());
 
+		// Library titles are dated by what actually makes them available
+		// (digital / physical / TV), never by the theatrical date TMDB reports.
+		const eventRows = await db
+			.select({
+				movieId: movies.id,
+				tmdbId: movies.tmdbId,
+				title: movies.title,
+				posterPath: movies.posterPath,
+				releaseDate: releaseEvents.releaseDate
+			})
+			.from(releaseEvents)
+			.innerJoin(movies, eq(releaseEvents.mediaId, movies.id))
+			.where(
+				and(
+					eq(releaseEvents.mediaType, 'movie'),
+					isNotNull(movies.tmdbId),
+					inArray(releaseEvents.kind, ['digital', 'physical', 'tv']),
+					gte(releaseEvents.releaseDate, start),
+					lte(releaseEvents.releaseDate, end)
+				)
+			);
+
+		const eventServed = new Set(eventRows.map((row) => row.tmdbId));
+
 		for (const item of tmdbItems) {
 			const releaseDate = item.release_date;
 			if (!releaseDate || releaseDate < start || releaseDate > end) continue;
+			if (eventServed.has(item.id)) continue;
 			const inLibrary = libraryTmdbIds.has(item.id);
 			if (libraryOnly && !inLibrary) continue;
 			if (!inLibrary) {
@@ -179,6 +204,26 @@ export async function getCalendarData(
 				releaseDate,
 				inLibrary,
 				movieId: inLibrary ? libraryMovieMap.get(item.id) : undefined
+			});
+		}
+
+		const emittedEvent = new Set<string>();
+		for (const row of eventRows) {
+			if (!row.tmdbId) continue;
+			// A title can have digital + TV (or digital + physical) on one day;
+			// the calendar shows one card per movie per day.
+			const eventKey = `${row.movieId}:${row.releaseDate}`;
+			if (emittedEvent.has(eventKey)) continue;
+			emittedEvent.add(eventKey);
+			const day = dayMap.get(row.releaseDate);
+			if (!day) continue;
+			day.movies.push({
+				tmdbId: row.tmdbId,
+				title: row.title,
+				releaseDate: row.releaseDate,
+				posterPath: row.posterPath,
+				inLibrary: true,
+				movieId: row.movieId
 			});
 		}
 	}
