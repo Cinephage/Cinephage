@@ -23,6 +23,35 @@ export async function listEvents(
 	return rows as ReleaseEvent[];
 }
 
+/**
+ * Bulk variant for list surfaces (dashboard, grids). One query for N titles —
+ * the alternative is a query per row, which is what made the old dashboard fan
+ * out to TMDB per movie.
+ */
+export async function listEventsForMany(
+	mediaType: ReleaseMediaType,
+	mediaIds: readonly string[]
+): Promise<Map<string, ReleaseEvent[]>> {
+	const grouped = new Map<string, ReleaseEvent[]>();
+	if (mediaIds.length === 0) return grouped;
+
+	const rows = (await db
+		.select()
+		.from(releaseEvents)
+		.where(
+			and(eq(releaseEvents.mediaType, mediaType), inArray(releaseEvents.mediaId, [...mediaIds]))
+		)
+		.orderBy(asc(releaseEvents.releaseDate))) as ReleaseEvent[];
+
+	for (const event of rows) {
+		const existing = grouped.get(event.mediaId);
+		if (existing) existing.push(event);
+		else grouped.set(event.mediaId, [event]);
+	}
+
+	return grouped;
+}
+
 export interface EventRangeQuery {
 	from: string;
 	to: string;

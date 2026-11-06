@@ -5,7 +5,7 @@ import { tmdb } from '#lib/server/tmdb.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { deriveAvailability, firstDownloadableDate, isSearchable, windowsFrom } from './derive.js';
 import type { Availability, AvailabilityInput } from './derive.js';
-import { listEvents, pruneEvents, upsertEvents } from './event-store.js';
+import { listEvents, listEventsForMany, pruneEvents, upsertEvents } from './event-store.js';
 import type { AvailabilityLevel, NewReleaseEvent, ReleaseEvent, ReleaseKind } from './types.js';
 import { isDownloadable } from './types.js';
 import { buildReleaseProviderRegistry } from './providers/types.js';
@@ -15,7 +15,7 @@ const logger = createChildLogger({ module: 'AvailabilityService', logDomain: 'sy
 /** The subset of a `movies` row this service needs. */
 export interface MovieAvailabilityRef {
 	id: string;
-	tmdbId: number | null;
+	tmdbId?: number | null;
 	hasFile?: boolean | null;
 	minimumAvailability?: string | null;
 }
@@ -49,6 +49,25 @@ export class AvailabilityService {
 	async isSearchable(movie: MovieAvailabilityRef): Promise<boolean> {
 		const events = await listEvents('movie', movie.id);
 		return isSearchable(this.toInput(movie, events));
+	}
+
+	/**
+	 * Bulk availability for list surfaces (dashboard, grids): one event query for
+	 * the whole page instead of a query — or a TMDB call — per row.
+	 */
+	async getAvailabilityMap(
+		rows: readonly MovieAvailabilityRef[]
+	): Promise<Map<string, Availability>> {
+		const byId = await listEventsForMany(
+			'movie',
+			rows.map((row) => row.id)
+		);
+
+		const result = new Map<string, Availability>();
+		for (const row of rows) {
+			result.set(row.id, deriveAvailability(this.toInput(row, byId.get(row.id) ?? [])));
+		}
+		return result;
 	}
 
 	/**

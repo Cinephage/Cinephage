@@ -121,10 +121,12 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 		// Missing movies for TMDB availability lookup (1 query)
 		db
 			.select({
+				id: movies.id,
 				tmdbId: movies.tmdbId,
 				year: movies.year,
 				added: movies.added,
-				monitored: movies.monitored
+				monitored: movies.monitored,
+				minimumAvailability: movies.minimumAvailability
 			})
 			.from(movies)
 			.where(eq(movies.hasFile, false)),
