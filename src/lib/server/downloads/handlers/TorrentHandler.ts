@@ -5,12 +5,9 @@ import { extractLanguagesFromFileName } from '#lib/server/indexers/parser/patter
 import type { QueueQualityInfo } from '#lib/types/queue.js';
 import { ReleaseParser } from '#lib/server/indexers/parser/ReleaseParser.js';
 import { getDownloadResolutionService } from '../DownloadResolutionService.js';
-import {
-	buildEpisodePointerFileSelection,
-	parseEpisodePointerFromGuid,
-	parseEpisodePointerFromTitle
-} from '../episode-pointer.js';
-import { resolveEpisodePackScope } from '../episode-pack-scope.js';
+import { parseEpisodePointerFromGuid, parseEpisodePointerFromTitle } from '../episode-pointer.js';
+import type { EpisodePointerFileSelection } from '../episode-pointer.js';
+import { resolveEpisodePackSelection } from '../episode-pack-selection.js';
 import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
 import { blocklistService } from '#lib/server/monitoring/specifications/BlocklistSpecification.js';
 import { acquisitionService } from '#lib/server/acquisition/AcquisitionService.js';
@@ -20,13 +17,6 @@ import type { DownloadInfo } from '#lib/server/downloadClients/core/interfaces.j
 
 const logger = createChildLogger({ module: 'TorrentHandler' });
 const parser = new ReleaseParser();
-
-function formatEpisodeToken(season: number | undefined, episode: number): string {
-	if (season === undefined || season < 0) {
-		return `E${String(episode).padStart(2, '0')}`;
-	}
-	return `S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`;
-}
 
 export class TorrentHandler {
 	async handle(request: GrabRequest, resolved: ResolvedContext): Promise<HandlerResult> {
@@ -92,15 +82,7 @@ export class TorrentHandler {
 
 		const episodePointerTarget =
 			parseEpisodePointerFromGuid(release.guid) ?? parseEpisodePointerFromTitle(release.title);
-		let pointerFileSelection:
-			| {
-					fileIndices: number[];
-					allFileIndices?: number[];
-					filePaths?: string[];
-					matchedEpisodes?: number[];
-					selectedSize?: number;
-			  }
-			| undefined;
+		let pointerFileSelection: EpisodePointerFileSelection | undefined;
 		let pointerEpisodeIds: string[] | undefined;
 		let pointerSize: number | undefined;
 
@@ -127,53 +109,22 @@ export class TorrentHandler {
 			// snapshot, and every wanted episode already inside it should come
 			// down with the grab. Monitoring grabs fill the missing monitored
 			// episodes of the season; interactive grabs stay single-episode.
-			const pointerSeason = episodePointerTarget.season ?? seasonNumber;
-			let pointerTargets = [episodePointerTarget];
-			let packScope: Awaited<ReturnType<typeof resolveEpisodePackScope>> = [];
-
-			if (options.isAutomatic && seriesId && pointerSeason !== undefined) {
-				packScope = await resolveEpisodePackScope({
-					seriesId,
-					seasonNumber: pointerSeason,
-					targetEpisode: episodePointerTarget.episode,
-					targetEpisodeId: episodeIds?.[0],
-					monitoredOnly: true
-				});
-				if (packScope.length > 1) {
-					pointerTargets = packScope.map((episode) => ({
-						season: pointerSeason,
-						episode: episode.episodeNumber,
-						token: formatEpisodeToken(pointerSeason, episode.episodeNumber)
-					}));
-				}
+			const packSelection = await resolveEpisodePackSelection({
+				torrentFile: resolvedDownload.torrentFile,
+				target: episodePointerTarget,
+				seriesId,
+				seasonNumber,
+				targetEpisodeId: episodeIds?.[0],
+				isAutomatic: options.isAutomatic ?? false
+			});
+			if (!packSelection.ok) {
+				return { success: false, error: packSelection.error };
 			}
 
-			const selection = await buildEpisodePointerFileSelection(
-				resolvedDownload.torrentFile,
-				pointerTargets
-			);
-			if (selection.fileIndices.length === 0) {
-				return {
-					success: false,
-					error: `Could not map ${episodePointerTarget.token} to files inside this season pack`
-				};
-			}
-
-			pointerFileSelection = {
-				fileIndices: selection.fileIndices,
-				allFileIndices: selection.allFileIndices,
-				filePaths: selection.filePaths,
-				matchedEpisodes: selection.matchedEpisodes,
-				selectedSize: selection.selectedSize
-			};
-			pointerSize = selection.selectedSize;
-
-			const selectedEpisodes = new Set(selection.matchedEpisodes);
-			const scopedEpisodeIds = packScope
-				.filter((episode) => episode.episodeId && selectedEpisodes.has(episode.episodeNumber))
-				.map((episode) => episode.episodeId);
-			if (scopedEpisodeIds.length > 0) {
-				pointerEpisodeIds = scopedEpisodeIds;
+			pointerFileSelection = packSelection.selection;
+			pointerSize = packSelection.selection.selectedSize;
+			if (packSelection.selection.episodeIds.length > 0) {
+				pointerEpisodeIds = packSelection.selection.episodeIds;
 			}
 		}
 
