@@ -72,8 +72,9 @@ import { createChildLogger } from '#lib/logging/index.js';
 const logger = createChildLogger({ logDomain: 'indexers' as const });
 import { tmdb } from '#lib/server/tmdb.js';
 import { db } from '#lib/server/db/index.js';
-import { movies, series } from '#lib/server/db/schema.js';
-import { eq } from 'drizzle-orm';
+import { episodes, movies, series } from '#lib/server/db/schema.js';
+import { and, eq, lte } from 'drizzle-orm';
+import { todayDateString } from '#lib/utils/format.js';
 import { blocklistService } from '#lib/server/blocklist/BlocklistService.js';
 import { DANGEROUS_EXTENSIONS, EXECUTABLE_EXTENSIONS } from '#lib/config/constants.js';
 import { matchTitleContainment } from '#lib/server/releases/release-identity.js';
@@ -235,6 +236,12 @@ interface TvEpisodeCounts {
 interface SeasonEpisodeFilterContext {
 	seasonEpisodeCount?: number;
 	seasonEpisodeCounts?: Map<number, number>;
+	/**
+	 * Episodes of the target season that have already aired. RuTracker packs
+	 * are living snapshots ("S1E1-7 из 8"), so an in-progress pack is complete
+	 * for this season when it covers every aired episode.
+	 */
+	airedEpisodeCount?: number;
 }
 
 function getPositiveIntEnv(name: string, fallback: number): number {
@@ -588,11 +595,28 @@ export class SearchOrchestrator {
 				(await this.getSeasonEpisodeCount(enrichedCriteria));
 		}
 
+		// Season-only RuTracker searches need the aired episode count: a living
+		// pack that covers every aired episode is complete for an ongoing
+		// season, even when TMDB announces more episodes than have aired.
+		let airedEpisodeCount: number | undefined;
+		if (
+			isTvSearch(enrichedCriteria) &&
+			enrichedCriteria.season !== undefined &&
+			enrichedCriteria.episode === undefined &&
+			enrichedCriteria.tmdbId
+		) {
+			airedEpisodeCount = await this.getAiredSeasonEpisodeCount(
+				enrichedCriteria.tmdbId,
+				enrichedCriteria.season
+			);
+		}
+
 		// Filter by season/episode if specified
 		let filtered = await this.filterByBlocklist(deduped, enrichedCriteria);
 		filtered = this.filterBySeasonEpisode(filtered, enrichedCriteria, {
 			seasonEpisodeCount,
-			seasonEpisodeCounts
+			seasonEpisodeCounts,
+			airedEpisodeCount
 		});
 		const afterSeasonEpisodeCount = filtered.length;
 		logger.debug(
@@ -2001,7 +2025,8 @@ export class SearchOrchestrator {
 						this.isAllowedSeasonPackForSeasonOnlySearch(
 							release,
 							episodeInfo,
-							expectedSeasonEpisodeCount
+							expectedSeasonEpisodeCount,
+							context?.airedEpisodeCount
 						)
 				)
 				.map(({ release }) => this.withFormattedSeasonPackTitle(release));
@@ -2160,7 +2185,8 @@ export class SearchOrchestrator {
 	private isAllowedSeasonPackForSeasonOnlySearch(
 		release: ReleaseResult,
 		episodeInfo: NonNullable<ReturnType<typeof parseRelease>['episode']>,
-		expectedSeasonEpisodeCount?: number
+		expectedSeasonEpisodeCount?: number,
+		airedEpisodeCount?: number
 	): boolean {
 		if (!isRuTrackerIndexerName(release.indexerName)) {
 			return true;
@@ -2169,7 +2195,8 @@ export class SearchOrchestrator {
 		const isCompleted = this.isCompletedRuTrackerSeasonPack(
 			release.title,
 			episodeInfo,
-			expectedSeasonEpisodeCount
+			expectedSeasonEpisodeCount,
+			airedEpisodeCount
 		);
 
 		if (!isCompleted) {
@@ -2177,7 +2204,8 @@ export class SearchOrchestrator {
 				{
 					title: release.title,
 					indexer: release.indexerName,
-					expectedSeasonEpisodeCount
+					expectedSeasonEpisodeCount,
+					airedEpisodeCount
 				},
 				'[SearchOrchestrator] Rejecting incomplete pointer-indexer season pack for season-only search'
 			);
@@ -2189,7 +2217,8 @@ export class SearchOrchestrator {
 	private isCompletedRuTrackerSeasonPack(
 		title: string,
 		episodeInfo: NonNullable<ReturnType<typeof parseRelease>['episode']>,
-		expectedSeasonEpisodeCount?: number
+		expectedSeasonEpisodeCount?: number,
+		airedEpisodeCount?: number
 	): boolean {
 		if (!episodeInfo.isSeasonPack) {
 			return false;
@@ -2212,7 +2241,8 @@ export class SearchOrchestrator {
 				? expectedSeasonEpisodeCount
 				: explicitTotal;
 
-		// For pointer-indexer season-pack grabs we require a verifiable complete-season signal.
+		// For pointer-indexer season-pack grabs we require a verifiable
+		// complete-season signal.
 		if (expectedTotal === undefined || expectedTotal <= 0) {
 			return false;
 		}
@@ -2221,18 +2251,33 @@ export class SearchOrchestrator {
 			return false;
 		}
 
-		const maxCoveredEpisode = coveredEpisodes[coveredEpisodes.length - 1];
-		if (maxCoveredEpisode !== expectedTotal || coveredEpisodes.length !== expectedTotal) {
-			return false;
-		}
-
-		for (let episodeNumber = 1; episodeNumber <= expectedTotal; episodeNumber++) {
-			if (coveredEpisodes[episodeNumber - 1] !== episodeNumber) {
+		// The covered range must be a contiguous 1..N prefix; holes are never
+		// a valid season pack.
+		for (let index = 0; index < coveredEpisodes.length; index++) {
+			if (coveredEpisodes[index] !== index + 1) {
 				return false;
 			}
 		}
 
-		return true;
+		const coveredCount = coveredEpisodes.length;
+		if (coveredCount > expectedTotal) {
+			return false;
+		}
+
+		if (coveredCount === expectedTotal) {
+			return true;
+		}
+
+		// RuTracker topics are updated in place while a season airs: "S1E1-7
+		// из 8" is the complete pack for an ongoing season until E8 airs. Accept
+		// it when it covers every episode that has already aired, and only when
+		// that aired count is known (TMDB alone only knows the announced total,
+		// which would keep rejecting living packs forever).
+		return (
+			typeof airedEpisodeCount === 'number' &&
+			airedEpisodeCount > 0 &&
+			airedEpisodeCount <= coveredCount
+		);
 	}
 
 	private titleLooksLikeMultiSeasonPack(title: string): boolean {
@@ -3418,6 +3463,57 @@ export class SearchOrchestrator {
 		}
 
 		return undefined;
+	}
+
+	/**
+	 * Aired episode count for a season, from the local library.
+	 *
+	 * TMDB only exposes the announced season length, which is what makes
+	 * RuTracker's living packs ("S1E1-7 из 8") look incomplete while a season is
+	 * still airing. The library already stores per-episode air dates, so count
+	 * the episodes that have actually aired. Returns undefined when the series
+	 * is not in the library (interactive search for an unadded show), which
+	 * keeps the strict completeness rule in that case.
+	 */
+	private async getAiredSeasonEpisodeCount(
+		tmdbId: number,
+		seasonNumber: number
+	): Promise<number | undefined> {
+		try {
+			const shows = await db
+				.select({ id: series.id })
+				.from(series)
+				.where(eq(series.tmdbId, tmdbId))
+				.limit(1);
+
+			const show = shows[0];
+			if (!show) {
+				return undefined;
+			}
+
+			const aired = await db
+				.select({ id: episodes.id })
+				.from(episodes)
+				.where(
+					and(
+						eq(episodes.seriesId, show.id),
+						eq(episodes.seasonNumber, seasonNumber),
+						lte(episodes.airDate, todayDateString())
+					)
+				);
+
+			return aired.length > 0 ? aired.length : undefined;
+		} catch (error) {
+			logger.debug(
+				{
+					tmdbId,
+					seasonNumber,
+					error: error instanceof Error ? error.message : String(error)
+				},
+				'Failed to count aired season episodes from the library'
+			);
+			return undefined;
+		}
 	}
 
 	/**

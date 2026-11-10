@@ -89,7 +89,7 @@ type OrchestratorPrivateApi = {
 	filterBySeasonEpisode(
 		releases: ReleaseResult[],
 		criteria: SearchCriteria,
-		context?: { seasonEpisodeCount?: number }
+		context?: { seasonEpisodeCount?: number; airedEpisodeCount?: number }
 	): ReleaseResult[];
 	filterByCategoryMatch(
 		releases: ReleaseResult[],
@@ -1007,6 +1007,49 @@ describe('SearchOrchestrator.filterBySeasonEpisode', () => {
 
 		expect(filtered).toHaveLength(1);
 		expect(filtered[0].title).toBe('Stranger Things: S1E1-8 of 8 [2016, WEB-DL 2160p]');
+	});
+
+	it('accepts an in-progress RuTracker pack that covers every aired episode', () => {
+		const releases = [
+			createRelease({
+				title: 'Квест Вижн / VisionQuest: S1E1-7 из 8 [2025, WEB-DL 1080p]',
+				indexerName: 'RuTracker.org'
+			})
+		];
+
+		const criteria = createTvCriteria({
+			searchSource: 'interactive',
+			season: 1
+		});
+
+		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria, {
+			seasonEpisodeCount: 8,
+			airedEpisodeCount: 7
+		});
+
+		expect(filtered).toHaveLength(1);
+		expect(filtered[0].title).toContain('S1E1-7');
+	});
+
+	it('rejects an in-progress RuTracker pack that misses an aired episode', () => {
+		const releases = [
+			createRelease({
+				title: 'Квест Вижн / VisionQuest: S1E1-6 из 8 [2025, WEB-DL 1080p]',
+				indexerName: 'RuTracker.org'
+			})
+		];
+
+		const criteria = createTvCriteria({
+			searchSource: 'interactive',
+			season: 1
+		});
+
+		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria, {
+			seasonEpisodeCount: 8,
+			airedEpisodeCount: 7
+		});
+
+		expect(filtered).toHaveLength(0);
 	});
 
 	it('rejects RuTracker packs that exceed target season episode count', () => {
