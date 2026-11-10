@@ -536,7 +536,8 @@ export class QBittorrentClient implements IDownloadClient {
 		}
 
 		const allIds = files.map((file) => file.index);
-		const unwantedIds = allIds.filter((id) => !includedIds.includes(id));
+		const wanted = new Set(includedIds);
+		const unwantedIds = allIds.filter((id) => !wanted.has(id));
 
 		await this.setFilePriority(hash, unwantedIds, 0);
 		await this.setFilePriority(hash, includedIds, 1);

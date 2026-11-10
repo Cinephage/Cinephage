@@ -56,15 +56,22 @@ function getExtension(value: string): string {
 	return value.slice(dotIndex + 1).toLowerCase();
 }
 
+/**
+ * Canonical token form: `S01E07`, or `E07` when the season is unknown.
+ * Inverse of parsePointerToken; the only place the format is spelled.
+ */
+export function formatEpisodePointerToken(season: number | undefined, episode: number): string {
+	const padded = String(episode).padStart(2, '0');
+	return season === undefined ? `E${padded}` : `S${String(season).padStart(2, '0')}E${padded}`;
+}
+
 function parsePointerToken(rawToken: string): EpisodePointerTarget | null {
 	const normalized = rawToken.trim().toUpperCase();
 	const seasonEpisode = normalized.match(/^S(\d{2})E(\d{2})$/);
 	if (seasonEpisode) {
-		return {
-			season: parseInt(seasonEpisode[1], 10),
-			episode: parseInt(seasonEpisode[2], 10),
-			token: `S${seasonEpisode[1]}E${seasonEpisode[2]}`
-		};
+		const season = parseInt(seasonEpisode[1], 10);
+		const episode = parseInt(seasonEpisode[2], 10);
+		return { season, episode, token: formatEpisodePointerToken(season, episode) };
 	}
 
 	const episodeOnly = normalized.match(/^E(\d{2})$/);
@@ -72,10 +79,8 @@ function parsePointerToken(rawToken: string): EpisodePointerTarget | null {
 		return null;
 	}
 
-	return {
-		episode: parseInt(episodeOnly[1], 10),
-		token: `E${episodeOnly[1]}`
-	};
+	const episode = parseInt(episodeOnly[1], 10);
+	return { episode, token: formatEpisodePointerToken(undefined, episode) };
 }
 
 function detectSeasonFromPath(path: string): number | undefined {
@@ -236,20 +241,13 @@ export function parseEpisodePointerFromTitle(
 	if (humanMatch?.[1] && humanMatch?.[2]) {
 		const season = parseInt(humanMatch[1], 10);
 		const episode = parseInt(humanMatch[2], 10);
-		return {
-			season,
-			episode,
-			token: `S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`
-		};
+		return { season, episode, token: formatEpisodePointerToken(season, episode) };
 	}
 
 	const episodeOnlyMatch = title.match(HUMAN_EPISODE_ONLY_POINTER_REGEX);
 	if (episodeOnlyMatch?.[1]) {
 		const episode = parseInt(episodeOnlyMatch[1], 10);
-		return {
-			episode,
-			token: `E${String(episode).padStart(2, '0')}`
-		};
+		return { episode, token: formatEpisodePointerToken(undefined, episode) };
 	}
 
 	const match = title.match(EPISODE_POINTER_TITLE_REGEX);
