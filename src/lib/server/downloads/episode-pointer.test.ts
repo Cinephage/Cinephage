@@ -73,4 +73,74 @@ describe('episode-pointer', () => {
 		expect(selection.allFileIndices).toEqual([0, 1, 2]);
 		expect(selection.filePaths).toEqual(['Season 2/03 - Chapter Three.mkv']);
 	});
+
+	it('matches every wanted episode of a season pack in one selection', () => {
+		const targets = [1, 2, 3, 4, 5, 6, 7].map((episode) => ({
+			season: 1,
+			episode,
+			token: `S01E${String(episode).padStart(2, '0')}`
+		}));
+
+		const selection = buildEpisodePointerFileSelectionFromPaths(
+			[
+				'VisionQuest.S01E01.1080p.WEB-DL.mkv',
+				'VisionQuest.S01E02.1080p.WEB-DL.mkv',
+				'VisionQuest.S01E03.1080p.WEB-DL.mkv',
+				'VisionQuest.S01E04.1080p.WEB-DL.mkv',
+				'VisionQuest.S01E05.1080p.WEB-DL.mkv',
+				'VisionQuest.S01E06.1080p.WEB-DL.mkv',
+				'VisionQuest.S01E07.1080p.WEB-DL.mkv',
+				'VisionQuest.S01E08.1080p.WEB-DL.mkv'
+			],
+			targets
+		);
+
+		expect(selection.fileIndices).toEqual([0, 1, 2, 3, 4, 5, 6]);
+		expect(selection.filePaths).toHaveLength(7);
+		expect(selection.matchedEpisodes).toEqual([1, 2, 3, 4, 5, 6, 7]);
+	});
+
+	it('only selects episodes that exist in the pack version', () => {
+		const targets = [1, 2, 3, 4, 5, 6, 7, 8].map((episode) => ({
+			season: 1,
+			episode,
+			token: `S01E${String(episode).padStart(2, '0')}`
+		}));
+
+		const selection = buildEpisodePointerFileSelectionFromPaths(
+			[
+				'Show/Season 1/S01E01.mkv',
+				'Show/Season 1/S01E02.mkv',
+				'Show/Season 1/S01E03.mkv',
+				'Show/Season 1/S01E04.mkv',
+				'Show/Season 1/S01E05.mkv',
+				'Show/Season 1/S01E06.mkv',
+				'Show/Season 1/S01E07.mkv'
+			],
+			targets
+		);
+
+		expect(selection.fileIndices).toEqual([0, 1, 2, 3, 4, 5, 6]);
+		expect(selection.matchedEpisodes).toEqual([1, 2, 3, 4, 5, 6, 7]);
+	});
+
+	it('handles numeric filenames for every wanted episode', () => {
+		const targets = [1, 2, 3].map((episode) => ({
+			season: 2,
+			episode,
+			token: `S02E0${episode}`
+		}));
+
+		const selection = buildEpisodePointerFileSelectionFromPaths(
+			[
+				'Season 2/01 - Chapter One.mkv',
+				'Season 2/02 - Chapter Two.mkv',
+				'Season 2/03 - Chapter Three.mkv'
+			],
+			targets
+		);
+
+		expect(selection.fileIndices).toEqual([0, 1, 2]);
+		expect(selection.matchedEpisodes).toEqual([1, 2, 3]);
+	});
 });

@@ -494,15 +494,10 @@ export class QBittorrentClient implements IDownloadClient {
 		});
 	}
 
-	private async applyFileSelection(
-		hash: string,
-		selection: NonNullable<AddDownloadOptions['fileSelection']>
-	): Promise<void> {
-		const files = await this.getTorrentFiles(hash);
-		if (files.length === 0) {
-			throw new Error('Torrent metadata has no file list yet');
-		}
-
+	private resolveFileSelectionIds(
+		files: QBittorrentTorrentFile[],
+		selection: { fileIndices: number[]; filePaths?: string[] }
+	): number[] {
 		const includeById = new Set<number>();
 		const fileIdsInTorrent = new Set(files.map((file) => file.index));
 		for (const index of selection.fileIndices) {
@@ -523,13 +518,25 @@ export class QBittorrentClient implements IDownloadClient {
 			}
 		}
 
-		const includedIds = Array.from(includeById).sort((a, b) => a - b);
+		return Array.from(includeById).sort((a, b) => a - b);
+	}
+
+	private async applyFileSelection(
+		hash: string,
+		selection: NonNullable<AddDownloadOptions['fileSelection']>
+	): Promise<void> {
+		const files = await this.getTorrentFiles(hash);
+		if (files.length === 0) {
+			throw new Error('Torrent metadata has no file list yet');
+		}
+
+		const includedIds = this.resolveFileSelectionIds(files, selection);
 		if (includedIds.length === 0) {
 			throw new Error('No matched files found in torrent for episode pointer');
 		}
 
 		const allIds = files.map((file) => file.index);
-		const unwantedIds = allIds.filter((id) => !includeById.has(id));
+		const unwantedIds = allIds.filter((id) => !includedIds.includes(id));
 
 		await this.setFilePriority(hash, unwantedIds, 0);
 		await this.setFilePriority(hash, includedIds, 1);
@@ -541,6 +548,37 @@ export class QBittorrentClient implements IDownloadClient {
 				totalFiles: files.length
 			},
 			'[QBittorrent] Applied file selection'
+		);
+	}
+
+	/**
+	 * Mark additional files as wanted on a torrent that is already in the
+	 * client. Never touches the priority of files outside the selection, so a
+	 * pack version that is already downloading keeps its current files.
+	 */
+	async extendFileSelection(
+		hash: string,
+		selection: { fileIndices: number[]; filePaths?: string[] }
+	): Promise<void> {
+		const files = await this.getTorrentFiles(hash);
+		if (files.length === 0) {
+			throw new Error('Torrent metadata has no file list yet');
+		}
+
+		const includedIds = this.resolveFileSelectionIds(files, selection);
+		if (includedIds.length === 0) {
+			throw new Error('No matched files found in torrent for episode pointer');
+		}
+
+		await this.setFilePriority(hash, includedIds, 1);
+
+		logger.info(
+			{
+				hash,
+				addedFiles: includedIds.length,
+				totalFiles: files.length
+			},
+			'[QBittorrent] Extended file selection'
 		);
 	}
 

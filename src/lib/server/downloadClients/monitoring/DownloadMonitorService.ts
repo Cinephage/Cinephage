@@ -2676,6 +2676,69 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 	}
 
 	/**
+	 * Merge additional episode ids into an existing queue item.
+	 *
+	 * A season-pack pointer can be extended after it was queued (another wanted
+	 * episode turned up in the same pack version). The queue row keeps its
+	 * identity; only its episode scope grows, so per-episode occupancy checks
+	 * and import mapping see the files that are now selected.
+	 */
+	async extendQueueItemEpisodes(
+		downloadId: string,
+		episodeIds: string[],
+		size?: number
+	): Promise<QueueItem | null> {
+		if (episodeIds.length === 0) {
+			return null;
+		}
+
+		const [row] = await db
+			.select()
+			.from(downloadQueue)
+			.where(
+				and(
+					or(eq(downloadQueue.downloadId, downloadId), eq(downloadQueue.infoHash, downloadId)),
+					notInArray(downloadQueue.status, ['removed', 'failed'])
+				)
+			)
+			.limit(1);
+
+		if (!row) {
+			return null;
+		}
+
+		const existing = row.episodeIds ?? [];
+		const merged = Array.from(new Set([...existing, ...episodeIds]));
+		const nextSize = size && size > (row.size ?? 0) ? size : row.size;
+
+		if (merged.length === existing.length && nextSize === row.size) {
+			return rowToQueueItem(row);
+		}
+
+		await db
+			.update(downloadQueue)
+			.set({ episodeIds: merged, size: nextSize })
+			.where(eq(downloadQueue.id, row.id));
+
+		const item = await this.getQueueItem(row.id);
+		if (item) {
+			this.emit('queue:updated', item);
+			this.emitSSE('queue:updated', item);
+		}
+
+		logger.info(
+			{
+				queueItemId: row.id,
+				addedEpisodes: merged.length - existing.length,
+				totalEpisodes: merged.length
+			},
+			'Extended queue item episode scope'
+		);
+
+		return item;
+	}
+
+	/**
 	 * Complete a previously persisted debrid submission intent.
 	 *
 	 * Submission owns queue identity; the dedicated debrid poller owns provider

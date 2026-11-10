@@ -189,6 +189,17 @@ export interface IDownloadClient {
 	removeDownload(id: string, deleteFiles?: boolean): Promise<void>;
 
 	/**
+	 * Extend the file selection of an existing torrent without clearing files
+	 * that are already wanted. Used when a later episode is grabbed from the
+	 * same season pack that is already in the client.
+	 * Optional - only torrent clients with per-file priorities implement it.
+	 */
+	extendFileSelection?(
+		id: string,
+		selection: { fileIndices: number[]; filePaths?: string[] }
+	): Promise<void>;
+
+	/**
 	 * Pause a download.
 	 */
 	pauseDownload(id: string): Promise<void>;

@@ -518,6 +518,33 @@ export class TransmissionClient implements IDownloadClient {
 		return torrentId;
 	}
 
+	/**
+	 * Mark additional files as wanted on a torrent that is already in the
+	 * client. Transmission keeps existing wanted flags untouched when only
+	 * `files-wanted` is sent.
+	 */
+	async extendFileSelection(
+		id: string,
+		selection: { fileIndices: number[]; filePaths?: string[] }
+	): Promise<void> {
+		const selectedFileIndices = selection.fileIndices.filter(
+			(index) => Number.isInteger(index) && index >= 0
+		);
+		if (selectedFileIndices.length === 0) {
+			throw new Error('Transmission file selection requires valid file indices');
+		}
+
+		await this.rpcRequest<Record<string, unknown>>('torrent-set', {
+			ids: [this.toTransmissionId(id)],
+			'files-wanted': selectedFileIndices
+		});
+
+		logger.info(
+			{ hash: id, addedFiles: selectedFileIndices.length },
+			'[Transmission] Extended file selection'
+		);
+	}
+
 	async getDownloads(category?: string): Promise<DownloadInfo[]> {
 		const [response, session] = await Promise.all([
 			this.rpcRequest<TransmissionTorrentGetResponse>('torrent-get', {

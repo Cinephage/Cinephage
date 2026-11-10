@@ -10,6 +10,7 @@ import {
 	parseEpisodePointerFromGuid,
 	parseEpisodePointerFromTitle
 } from '../episode-pointer.js';
+import { resolveEpisodePackScope } from '../episode-pack-scope.js';
 import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
 import { blocklistService } from '#lib/server/monitoring/specifications/BlocklistSpecification.js';
 import { acquisitionService } from '#lib/server/acquisition/AcquisitionService.js';
@@ -19,6 +20,13 @@ import type { DownloadInfo } from '#lib/server/downloadClients/core/interfaces.j
 
 const logger = createChildLogger({ module: 'TorrentHandler' });
 const parser = new ReleaseParser();
+
+function formatEpisodeToken(season: number | undefined, episode: number): string {
+	if (season === undefined || season < 0) {
+		return `E${String(episode).padStart(2, '0')}`;
+	}
+	return `S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`;
+}
 
 export class TorrentHandler {
 	async handle(request: GrabRequest, resolved: ResolvedContext): Promise<HandlerResult> {
@@ -89,8 +97,12 @@ export class TorrentHandler {
 					fileIndices: number[];
 					allFileIndices?: number[];
 					filePaths?: string[];
+					matchedEpisodes?: number[];
+					selectedSize?: number;
 			  }
 			| undefined;
+		let pointerEpisodeIds: string[] | undefined;
+		let pointerSize: number | undefined;
 
 		if (episodePointerTarget) {
 			const supportsFileSelection =
@@ -111,9 +123,34 @@ export class TorrentHandler {
 				};
 			}
 
+			// A RuTracker/Kinozal season is a living topic: the pack is a
+			// snapshot, and every wanted episode already inside it should come
+			// down with the grab. Monitoring grabs fill the missing monitored
+			// episodes of the season; interactive grabs stay single-episode.
+			const pointerSeason = episodePointerTarget.season ?? seasonNumber;
+			let pointerTargets = [episodePointerTarget];
+			let packScope: Awaited<ReturnType<typeof resolveEpisodePackScope>> = [];
+
+			if (options.isAutomatic && seriesId && pointerSeason !== undefined) {
+				packScope = await resolveEpisodePackScope({
+					seriesId,
+					seasonNumber: pointerSeason,
+					targetEpisode: episodePointerTarget.episode,
+					targetEpisodeId: episodeIds?.[0],
+					monitoredOnly: true
+				});
+				if (packScope.length > 1) {
+					pointerTargets = packScope.map((episode) => ({
+						season: pointerSeason,
+						episode: episode.episodeNumber,
+						token: formatEpisodeToken(pointerSeason, episode.episodeNumber)
+					}));
+				}
+			}
+
 			const selection = await buildEpisodePointerFileSelection(
 				resolvedDownload.torrentFile,
-				episodePointerTarget
+				pointerTargets
 			);
 			if (selection.fileIndices.length === 0) {
 				return {
@@ -125,8 +162,19 @@ export class TorrentHandler {
 			pointerFileSelection = {
 				fileIndices: selection.fileIndices,
 				allFileIndices: selection.allFileIndices,
-				filePaths: selection.filePaths
+				filePaths: selection.filePaths,
+				matchedEpisodes: selection.matchedEpisodes,
+				selectedSize: selection.selectedSize
 			};
+			pointerSize = selection.selectedSize;
+
+			const selectedEpisodes = new Set(selection.matchedEpisodes);
+			const scopedEpisodeIds = packScope
+				.filter((episode) => episode.episodeId && selectedEpisodes.has(episode.episodeNumber))
+				.map((episode) => episode.episodeId);
+			if (scopedEpisodeIds.length > 0) {
+				pointerEpisodeIds = scopedEpisodeIds;
+			}
 		}
 
 		if (resolvedDownload.torrentFile) {
@@ -272,10 +320,59 @@ export class TorrentHandler {
 				(addError as Error & { existingTorrent?: DownloadInfo }).existingTorrent || null;
 
 			if (isDuplicate && existingTorrent && episodePointerTarget) {
+				if (typeof clientInstance.extendFileSelection === 'function') {
+					try {
+						await clientInstance.extendFileSelection(existingTorrent.hash, {
+							fileIndices: pointerFileSelection?.fileIndices ?? [],
+							filePaths: pointerFileSelection?.filePaths
+						});
+						const updatedQueueItem = await downloadMonitor.extendQueueItemEpisodes(
+							existingTorrent.hash,
+							pointerEpisodeIds ?? episodeIds ?? [],
+							pointerSize
+						);
+						if (!updatedQueueItem) {
+							logger.warn(
+								{ title: release.title, hash: existingTorrent.hash },
+								'Existing torrent is not linked to an active queue item, cannot extend it'
+							);
+						} else {
+							logger.info(
+								{
+									title: release.title,
+									hash: existingTorrent.hash,
+									queueItemId: updatedQueueItem.id,
+									episodes: updatedQueueItem.episodeIds?.length ?? 0
+								},
+								'Extended episode pointer file selection on existing torrent'
+							);
+
+							return {
+								success: true,
+								queueId: updatedQueueItem.id,
+								hash: existingTorrent.hash,
+								clientId: clientConfig.id,
+								clientName: clientConfig.name,
+								category,
+								wasDuplicate: true
+							};
+						}
+					} catch (extendError) {
+						logger.warn(
+							{
+								title: release.title,
+								hash: existingTorrent.hash,
+								err: extendError
+							},
+							'Failed to extend episode pointer file selection on existing torrent'
+						);
+					}
+				}
+
 				return {
 					success: false,
 					error:
-						'Episode pointer already exists in the client. Remove the existing torrent and retry to apply episode-only file selection.'
+						'Episode pointer already exists in the client and its file selection could not be extended. Remove the existing torrent and retry.'
 				};
 			}
 
@@ -309,10 +406,10 @@ export class TorrentHandler {
 			protocol: 'torrent',
 			movieId,
 			seriesId,
-			episodeIds,
+			episodeIds: pointerEpisodeIds ?? episodeIds,
 			seasonNumber,
 			quality,
-			size: release.size,
+			size: pointerSize ?? release.size,
 			releaseGroup: parsed.releaseGroup ?? undefined,
 			isAutomatic: options.isAutomatic ?? false,
 			isUpgrade: options.isUpgrade ?? false

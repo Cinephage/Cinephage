@@ -10,11 +10,16 @@ export interface EpisodePointerFileSelection {
 	fileIndices: number[];
 	allFileIndices: number[];
 	filePaths: string[];
+	/** Episode numbers whose files were selected (sorted, unique). */
+	matchedEpisodes: number[];
+	/** Total size in bytes of the selected files, when the torrent carries lengths. */
+	selectedSize?: number;
 }
 
 interface TorrentFileEntry {
 	index: number;
 	path: string;
+	length?: number;
 }
 
 const EPISODE_POINTER_TITLE_REGEX = /\[Episode Pointer\s+((?:S\d{2})?E\d{2})\]/i;
@@ -115,36 +120,66 @@ function includesEpisodeToken(path: string, season: number | undefined, episode:
 	return episodePatterns.some((pattern) => pattern.test(normalized));
 }
 
+function normalizeTargets(
+	target: EpisodePointerTarget | EpisodePointerTarget[]
+): EpisodePointerTarget[] {
+	const list = Array.isArray(target) ? target : [target];
+	const seen = new Set<string>();
+	const targets: EpisodePointerTarget[] = [];
+
+	for (const entry of list) {
+		const key = `${entry.season ?? ''}:${entry.episode}`;
+		if (seen.has(key)) {
+			continue;
+		}
+		seen.add(key);
+		targets.push(entry);
+	}
+
+	return targets;
+}
+
 function matchEpisodeFiles(
 	files: TorrentFileEntry[],
-	target: EpisodePointerTarget
+	target: EpisodePointerTarget | EpisodePointerTarget[]
 ): EpisodePointerFileSelection {
+	const targets = normalizeTargets(target);
 	const mediaFiles = files.filter((file) => MEDIA_EXTENSIONS.has(getExtension(file.path)));
-	const include = new Map<number, string>();
+	const include = new Map<number, TorrentFileEntry>();
+	const matchedEpisodes = new Set<number>();
 
-	for (const file of mediaFiles) {
-		const normalizedPath = normalizePath(file.path);
-		const hasToken = includesEpisodeToken(normalizedPath, target.season, target.episode);
-		if (!hasToken) {
+	for (const entry of targets) {
+		let matchedTarget = false;
+
+		for (const file of mediaFiles) {
+			const normalizedPath = normalizePath(file.path);
+			if (!includesEpisodeToken(normalizedPath, entry.season, entry.episode)) {
+				continue;
+			}
+
+			if (entry.season !== undefined) {
+				const detectedSeason = detectSeasonFromPath(normalizedPath);
+				if (detectedSeason !== undefined && detectedSeason !== entry.season) {
+					continue;
+				}
+			}
+
+			include.set(file.index, { ...file, path: normalizedPath });
+			matchedEpisodes.add(entry.episode);
+			matchedTarget = true;
+		}
+
+		// Fallback: episode number in filename with matching season folder.
+		// Runs per target so a pack that names files numerically still selects
+		// every wanted episode, not just the first one.
+		if (matchedTarget || entry.season === undefined) {
 			continue;
 		}
 
-		if (target.season !== undefined) {
-			const detectedSeason = detectSeasonFromPath(normalizedPath);
-			if (detectedSeason !== undefined && detectedSeason !== target.season) {
-				continue;
-			}
-		}
-
-		include.set(file.index, normalizedPath);
-	}
-
-	// Fallback: episode number in filename with matching season folder.
-	if (include.size === 0 && target.season !== undefined) {
 		for (const file of mediaFiles) {
 			const normalizedPath = normalizePath(file.path);
 			const detectedSeason = detectSeasonFromPath(normalizedPath);
-			if (detectedSeason !== target.season) {
+			if (detectedSeason !== entry.season) {
 				continue;
 			}
 
@@ -154,24 +189,34 @@ function matchEpisodeFiles(
 			if (!firstNumber) {
 				continue;
 			}
-			if (parseInt(firstNumber[1], 10) !== target.episode) {
+			if (parseInt(firstNumber[1], 10) !== entry.episode) {
 				continue;
 			}
 
-			include.set(file.index, normalizedPath);
+			include.set(file.index, { ...file, path: normalizedPath });
+			matchedEpisodes.add(entry.episode);
 		}
 	}
 
+	const selected = Array.from(include.values()).sort((a, b) => a.index - b.index);
+	const totalSize = selected.reduce(
+		(sum, file) => sum + (typeof file.length === 'number' ? file.length : 0),
+		0
+	);
+	const hasKnownSize = selected.some((file) => typeof file.length === 'number');
+
 	return {
-		fileIndices: Array.from(include.keys()).sort((a, b) => a - b),
+		fileIndices: selected.map((file) => file.index),
 		allFileIndices: files.map((file) => file.index),
-		filePaths: Array.from(include.values())
+		filePaths: selected.map((file) => file.path),
+		matchedEpisodes: Array.from(matchedEpisodes).sort((a, b) => a - b),
+		selectedSize: hasKnownSize ? totalSize : undefined
 	};
 }
 
 export function buildEpisodePointerFileSelectionFromPaths(
 	paths: string[],
-	target: EpisodePointerTarget
+	target: EpisodePointerTarget | EpisodePointerTarget[]
 ): EpisodePointerFileSelection {
 	const files: TorrentFileEntry[] = paths
 		.map((path, index) => ({ index, path: normalizePath(path) }))
@@ -230,7 +275,7 @@ export function parseEpisodePointerFromGuid(guid: string | undefined): EpisodePo
 
 export async function buildEpisodePointerFileSelection(
 	torrentFile: Buffer,
-	target: EpisodePointerTarget
+	target: EpisodePointerTarget | EpisodePointerTarget[]
 ): Promise<EpisodePointerFileSelection> {
 	const parsed = await parseTorrent(Buffer.from(torrentFile));
 	if (
@@ -239,14 +284,20 @@ export async function buildEpisodePointerFileSelection(
 		!Array.isArray(parsed.files) ||
 		parsed.files.length === 0
 	) {
-		return { fileIndices: [], allFileIndices: [], filePaths: [] };
+		return {
+			fileIndices: [],
+			allFileIndices: [],
+			filePaths: [],
+			matchedEpisodes: []
+		};
 	}
 
-	const parsedFiles = parsed.files as Array<{ path?: string; name?: string }>;
+	const parsedFiles = parsed.files as Array<{ path?: string; name?: string; length?: number }>;
 	const files: TorrentFileEntry[] = parsedFiles
 		.map((file, index) => ({
 			index,
-			path: normalizePath(String(file.path || file.name || ''))
+			path: normalizePath(String(file.path || file.name || '')),
+			length: typeof file.length === 'number' ? file.length : undefined
 		}))
 		.filter((file) => file.path.length > 0);
 

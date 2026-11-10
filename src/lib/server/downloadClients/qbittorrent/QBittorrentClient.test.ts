@@ -254,3 +254,50 @@ describe('QBittorrentClient add response parsing', () => {
 		expect(setForceStartCalled.length).toBe(1);
 	});
 });
+
+describe('QBittorrentClient extendFileSelection', () => {
+	it('marks only the additional files as wanted', async () => {
+		const priorityCalls: string[] = [];
+
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+				const u = String(url);
+				if (u.endsWith('/api/v2/auth/login')) {
+					return new Response('Ok.', {
+						status: 200,
+						headers: { 'set-cookie': 'SID=test-session; path=/' }
+					});
+				}
+				if (u.includes('/api/v2/torrents/files?')) {
+					return new Response(
+						JSON.stringify([
+							{ index: 0, name: 'Show/S01E01.mkv', size: 10, priority: 0 },
+							{ index: 1, name: 'Show/S01E02.mkv', size: 10, priority: 0 },
+							{ index: 2, name: 'Show/S01E03.mkv', size: 10, priority: 0 }
+						]),
+						{ status: 200 }
+					);
+				}
+				if (u.endsWith('/api/v2/torrents/filePrio')) {
+					priorityCalls.push(String(init?.body));
+					return new Response('Ok.', { status: 200 });
+				}
+				throw new Error(`Unexpected qBittorrent request: ${u}`);
+			})
+		);
+
+		const client = new QBittorrentClient({
+			host: 'localhost',
+			port: 8080,
+			useSsl: false
+		});
+
+		await client.extendFileSelection('abc123', { fileIndices: [1, 2] });
+
+		expect(priorityCalls).toHaveLength(1);
+		const body = new URLSearchParams(priorityCalls[0]);
+		expect(body.get('priority')).toBe('1');
+		expect(body.get('id')).toBe('1|2');
+	});
+});
