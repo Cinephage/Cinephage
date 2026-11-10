@@ -82,9 +82,9 @@ export function deriveAvailability(input: AvailabilityInput): Availability {
 	const graceDays = input.theatricalGraceDays ?? 0;
 	const theatricalGraceElapsed = Boolean(
 		graceDays > 0 &&
-			theatrical &&
-			!downloadable &&
-			daysBetween(theatrical.releaseDate, today) >= graceDays
+		theatrical &&
+		!downloadable &&
+		daysBetween(theatrical.releaseDate, today) >= graceDays
 	);
 
 	let level: AvailabilityLevel;
@@ -127,7 +127,10 @@ export function isSearchable(input: AvailabilityInput): boolean {
 /** Flat projection for callers that still speak in columns (arr API, cache). */
 export function windowsFrom(events: readonly ReleaseEvent[]): ReleaseWindows {
 	return {
-		theatrical: earliestOf(events, ['theatrical'])?.releaseDate ?? earliestOf(events, ['premiere'])?.releaseDate ?? null,
+		theatrical:
+			earliestOf(events, ['theatrical'])?.releaseDate ??
+			earliestOf(events, ['premiere'])?.releaseDate ??
+			null,
 		digital: earliestOf(events, ['digital'])?.releaseDate ?? null,
 		physical: earliestOf(events, ['physical'])?.releaseDate ?? null,
 		tv: earliestOf(events, ['tv'])?.releaseDate ?? null

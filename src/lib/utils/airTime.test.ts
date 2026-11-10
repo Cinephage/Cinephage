@@ -60,13 +60,7 @@ describe('localAirTimeLabel', () => {
 
 	it('omits the day marker when the viewer is on the same day', () => {
 		expect(
-			localAirTimeLabel(
-				'2026-11-11',
-				'22:00',
-				'America/New_York',
-				'en-US',
-				'America/Los_Angeles'
-			)
+			localAirTimeLabel('2026-11-11', '22:00', 'America/New_York', 'en-US', 'America/Los_Angeles')
 		).toBe('07:00 PM');
 	});
 
@@ -78,9 +72,7 @@ describe('localAirTimeLabel', () => {
 
 describe('describeNetworkAirtime', () => {
 	it('describes the original broadcast slot', () => {
-		expect(describeNetworkAirtime('22:00', 'America/New_York')).toBe(
-			'22:00 (America/New_York)'
-		);
+		expect(describeNetworkAirtime('22:00', 'America/New_York')).toBe('22:00 (America/New_York)');
 	});
 
 	it('returns undefined without a schedule', () => {

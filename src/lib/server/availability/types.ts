@@ -10,13 +10,7 @@
 
 export type ReleaseMediaType = 'movie' | 'series' | 'episode';
 
-export type ReleaseKind =
-	| 'premiere'
-	| 'theatrical'
-	| 'digital'
-	| 'physical'
-	| 'tv'
-	| 'broadcast';
+export type ReleaseKind = 'premiere' | 'theatrical' | 'digital' | 'physical' | 'tv' | 'broadcast';
 
 export type ReleaseSource = 'tmdb' | 'tvdb' | 'manual';
 

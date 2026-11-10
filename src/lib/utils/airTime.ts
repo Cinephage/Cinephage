@@ -9,8 +9,6 @@
  * No new dependency: `Intl` already knows every offset and DST rule.
  */
 
-const MS_PER_MINUTE = 60_000;
-
 /** Parts of an instant as observed in `timeZone`. */
 function zonedParts(instant: Date, timeZone: string): Record<string, number> {
 	const formatter = new Intl.DateTimeFormat('en-US', {
@@ -56,13 +54,7 @@ export function zonedWallClockToInstant(
 		let instant = guess;
 		for (let attempt = 0; attempt < 2; attempt++) {
 			const parts = zonedParts(new Date(instant), timeZone);
-			const asIfUtc = Date.UTC(
-				parts.year,
-				parts.month - 1,
-				parts.day,
-				parts.hour,
-				parts.minute
-			);
+			const asIfUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute);
 			const offset = asIfUtc - instant;
 			if (offset === 0) break;
 			instant = guess - offset;

@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-	deriveAvailability,
-	firstDownloadableDate,
-	isSearchable,
-	windowsFrom
-} from './derive.js';
+import { deriveAvailability, firstDownloadableDate, isSearchable, windowsFrom } from './derive.js';
 import type { ReleaseEvent, ReleaseKind } from './types.js';
 
 function event(kind: ReleaseKind, releaseDate: string): ReleaseEvent {
@@ -112,7 +107,12 @@ describe('isSearchable', () => {
 
 	it('never searches an unreleased title at minimumAvailability=released', () => {
 		expect(
-			isSearchable({ events: future, hasFile: false, minimumAvailability: 'released', today: TODAY })
+			isSearchable({
+				events: future,
+				hasFile: false,
+				minimumAvailability: 'released',
+				today: TODAY
+			})
 		).toBe(false);
 	});
 
@@ -129,7 +129,12 @@ describe('isSearchable', () => {
 
 	it('does not search before theatrical when the minimum is inCinemas', () => {
 		expect(
-			isSearchable({ events: future, hasFile: false, minimumAvailability: 'inCinemas', today: TODAY })
+			isSearchable({
+				events: future,
+				hasFile: false,
+				minimumAvailability: 'inCinemas',
+				today: TODAY
+			})
 		).toBe(false);
 	});
 

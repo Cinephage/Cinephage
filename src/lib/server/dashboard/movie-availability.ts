@@ -36,7 +36,10 @@ function fallbackLevel(year: number | null): AvailabilityLevel {
 	return 'announced';
 }
 
-function resolveLevel(level: AvailabilityLevel | undefined, year: number | null): AvailabilityLevel {
+function resolveLevel(
+	level: AvailabilityLevel | undefined,
+	year: number | null
+): AvailabilityLevel {
 	return level ?? fallbackLevel(year);
 }
 

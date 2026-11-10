@@ -223,8 +223,7 @@
 	});
 
 	const airSchedule =
-		getContext<{ time: string | null; tz: string | null } | null>('series-air-schedule') ??
-		null;
+		getContext<{ time: string | null; tz: string | null } | null>('series-air-schedule') ?? null;
 
 	/** Broadcast time in the viewer's zone, or null when the series has no schedule. */
 	function airTimeLabel(dateString: string | null): string | null {
@@ -551,7 +550,7 @@
 	<td class="hidden text-sm text-base-content/70 sm:table-cell">
 		<div class="whitespace-nowrap">{formatAirDate(episode.airDate)}</div>
 		{#if airTimeLabel(episode.airDate)}
-			<div class="whitespace-nowrap text-xs text-base-content/50 tabular-nums">
+			<div class="text-xs whitespace-nowrap text-base-content/50 tabular-nums">
 				{airTimeLabel(episode.airDate)}
 			</div>
 		{/if}

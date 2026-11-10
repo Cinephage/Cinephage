@@ -4607,7 +4607,6 @@ export type NewUserRequestSettingsRecord = typeof userRequestSettings.$inferInse
 export type RequestNotificationRecord = typeof requestNotifications.$inferSelect;
 export type NewRequestNotificationRecord = typeof requestNotifications.$inferInsert;
 
-
 /**
  * Release events - the source of truth for when media becomes watchable or
  * grabbable. See `src/lib/server/availability/`.
@@ -4618,7 +4617,9 @@ export type NewRequestNotificationRecord = typeof requestNotifications.$inferIns
 export const releaseEvents = sqliteTable(
 	'release_events',
 	{
-		id: text('id').primaryKey().$defaultFn(() => randomUUID()),
+		id: text('id')
+			.primaryKey()
+			.$defaultFn(() => randomUUID()),
 		mediaType: text('media_type').notNull(),
 		mediaId: text('media_id').notNull(),
 		kind: text('kind').notNull(),
@@ -4630,8 +4631,12 @@ export const releaseEvents = sqliteTable(
 		source: text('source').notNull(),
 		sourceId: text('source_id'),
 		confidence: text('confidence').notNull().default('confirmed'),
-		createdAt: text('created_at').notNull().$defaultFn(() => new Date().toISOString()),
-		updatedAt: text('updated_at').notNull().$defaultFn(() => new Date().toISOString())
+		createdAt: text('created_at')
+			.notNull()
+			.$defaultFn(() => new Date().toISOString()),
+		updatedAt: text('updated_at')
+			.notNull()
+			.$defaultFn(() => new Date().toISOString())
 	},
 	(table) => [
 		uniqueIndex('idx_release_events_natural_key').on(

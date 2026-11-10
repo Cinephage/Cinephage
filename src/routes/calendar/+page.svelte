@@ -44,7 +44,7 @@
 		airTimesReady = true;
 	});
 
-	const localAirTimeCache = new Map<string, string | null>();
+	const localAirTimeCache = new SvelteMap<string, string | null>();
 
 	/** Leading label so the time survives any truncation of the title. */
 	function airPrefix(ep: CalendarDay['episodes'][number]): string {
@@ -760,7 +760,9 @@
 												<span class="text-xs text-secondary/60">
 													{airPrefix(ep)}S{String(ep.seasonNumber).padStart(2, '0')}E{String(
 														ep.episodeNumber
-													).padStart(2, '0')}{ep.title ? ` - ${ep.title}` : ''}{localAirTime(ep) ? ` · ${localAirTime(ep)}` : ''}
+													).padStart(2, '0')}{ep.title ? ` - ${ep.title}` : ''}{localAirTime(ep)
+														? ` · ${localAirTime(ep)}`
+														: ''}
 												</span>
 											</div>
 										</div>
@@ -878,10 +880,9 @@
 								<div class="min-w-0 flex-1">
 									<div class="truncate text-sm font-medium">{ep.seriesTitle}</div>
 									<div class="text-xs text-base-content/60">
-										{airPrefix(ep)}S{String(ep.seasonNumber).padStart(2, '0')}E{String(ep.episodeNumber).padStart(
-											2,
-											'0'
-										)}
+										{airPrefix(ep)}S{String(ep.seasonNumber).padStart(2, '0')}E{String(
+											ep.episodeNumber
+										).padStart(2, '0')}
 										{#if ep.title}
 											- {ep.title}
 										{/if}

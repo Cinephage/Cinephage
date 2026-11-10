@@ -56,7 +56,11 @@ export class TvdbClient {
 		if (!apiKey) return null;
 
 		const fingerprint = `${apiKey.length}:${apiKey.slice(-4)}`;
-		if (cache && cache.apiKeyFingerprint === fingerprint && Date.now() - cache.obtainedAt < TOKEN_TTL_MS) {
+		if (
+			cache &&
+			cache.apiKeyFingerprint === fingerprint &&
+			Date.now() - cache.obtainedAt < TOKEN_TTL_MS
+		) {
 			return cache.token;
 		}
 

@@ -55,10 +55,7 @@ export async function executeReleaseEventBackfillTask(
 							.select({ id: releaseEvents.id })
 							.from(releaseEvents)
 							.where(
-								and(
-									eq(releaseEvents.mediaType, 'movie'),
-									eq(releaseEvents.mediaId, movies.id)
-								)
+								and(eq(releaseEvents.mediaType, 'movie'), eq(releaseEvents.mediaId, movies.id))
 							)
 					)
 				)

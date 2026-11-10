@@ -65,7 +65,9 @@ describe('migration 170 - release_events', () => {
 
 		const tables = (
 			sqlite
-				.prepare(`SELECT count(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'release_events'`)
+				.prepare(
+					`SELECT count(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'release_events'`
+				)
 				.get() as { n: number }
 		).n;
 		expect(tables).toBe(1);
