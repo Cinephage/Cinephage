@@ -2682,6 +2682,10 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 	 * episode turned up in the same pack version). The queue row keeps its
 	 * identity; only its episode scope grows, so per-episode occupancy checks
 	 * and import mapping see the files that are now selected.
+	 *
+	 * Only a row that has not imported yet can absorb more episodes: extending
+	 * an imported row would report success for files the importer will never
+	 * look at again.
 	 */
 	async extendQueueItemEpisodes(
 		downloadId: string,
@@ -2698,7 +2702,11 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			.where(
 				and(
 					or(eq(downloadQueue.downloadId, downloadId), eq(downloadQueue.infoHash, downloadId)),
-					notInArray(downloadQueue.status, ['removed', 'failed'])
+					notInArray(downloadQueue.status, [
+						...POST_IMPORT_QUEUE_STATUSES,
+						...TERMINAL_QUEUE_STATUSES,
+						'failed'
+					])
 				)
 			)
 			.limit(1);
