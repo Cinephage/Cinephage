@@ -570,7 +570,7 @@ download:
   downloadVariablesFrom: details
   downloadVariables:
     - name: downloadUrl
-      selector: a.dl-stub[href*="dl.php?t="], a.dl-link[href*="dl.php?t="]
+      selector: a.tr-dl[href*="dl.php?t="], a.dl-stub[href*="dl.php?t="], a.dl-link[href*="dl.php?t="]
       attribute: href
       filters:
         - name: re_replace
