@@ -494,13 +494,14 @@ export class IndexerHttp {
 		suggestedDelayMs?: number;
 		reason: string;
 	} {
-		// Retry Cloudflare errors with a delay - sometimes the challenge clears on retry
-		// (especially for API endpoints that return JSON)
+		// A managed challenge does not clear in three seconds. Retrying it two
+		// more times only multiplies the requests that triggered the block, and
+		// when the captcha solver is enabled each retry can launch another
+		// browser. Let the caller decide when to come back.
 		if (error instanceof CloudflareProtectedError) {
 			return {
-				shouldRetry: true,
-				suggestedDelayMs: 3000,
-				reason: 'Cloudflare protection (will retry)'
+				shouldRetry: false,
+				reason: 'Cloudflare challenge (retrying would deepen the block)'
 			};
 		}
 
