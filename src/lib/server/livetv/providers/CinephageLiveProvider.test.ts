@@ -80,30 +80,62 @@ async function insertAccountRow(): Promise<void> {
 	});
 }
 
-async function insertChannelRow(externalId: string, name: string): Promise<void> {
+interface ChannelRowOptions {
+	cinephageData?: {
+		category?: string;
+		countryCode?: string;
+		feeds?: Array<{ source: string; channelId: string; name?: string }>;
+	};
+}
+
+async function insertChannelRow(
+	externalId: string,
+	name: string,
+	options: ChannelRowOptions = {}
+): Promise<string> {
 	const now = new Date().toISOString();
+	const id = crypto.randomUUID();
 	await testDb.db.insert(livetvChannels).values({
+		id,
 		accountId: ACCOUNT_ID,
 		providerType: 'cinephage-live',
 		externalId,
 		name,
+		cinephageData: options.cinephageData,
 		createdAt: now,
 		updatedAt: now
 	});
+	return id;
 }
 
-function playPayload(channelId: string): Record<string, unknown> {
+function canonicalChannel(overrides: Record<string, unknown> = {}): Record<string, unknown> {
 	return {
-		channel: { source: 'daddylive', id: channelId, name: 'ESPN USA', logo_url: null },
+		id: 'ESPNUSA.cph',
+		tvg_id: 'ESPNUSA.cph',
+		name: 'ESPN USA',
+		logo_url: 'https://cdn.example/espn.png',
+		category: 'Sports',
+		country_code: 'US',
+		feeds: [{ source: 'daddylive', channel_id: '44', name: 'ESPN USA HD' }],
+		...overrides
+	};
+}
+
+function detailPayload(
+	tvgId: string,
+	options: { unwrap?: string | null } = {}
+): Record<string, unknown> {
+	return {
+		channel: canonicalChannel({ id: tvgId, tvg_id: tvgId }),
 		now: null,
 		next: null,
 		play: {
-			channel_id: channelId,
+			channel_id: tvgId,
 			source: 'daddylive',
 			protocol: 'hls',
-			playlist_url: `https://api.cinephage.net/api/v1/live/channel/${channelId}/playlist.m3u8?t=sig`,
+			playlist_url: `https://api.cinephage.net/api/v1/live/channel/x/${tvgId}/playlist.m3u8?t=sig`,
 			expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-			unwrap: 'daddylive-camo-1'
+			unwrap: options.unwrap ?? null
 		}
 	};
 }
@@ -121,13 +153,13 @@ afterAll(() => {
 });
 
 describe('CinephageLiveProvider.testConnection', () => {
-	it('reports catalog counts on success', async () => {
+	it('reports canonical catalog counts on success', async () => {
 		coreMocks.get.mockImplementation(async (path: string) => {
-			if (path === '/api/v1/live/categories') {
-				return httpResponse({ categories: ['LIVE NOW', 'NBA Basketball'] });
+			if (path === '/api/v1/live/categories?view=canonical') {
+				return httpResponse({ categories: ['Sports', 'News'] });
 			}
-			if (path === '/api/v1/live/channels?limit=1') {
-				return httpResponse({ channels: [], total: 42 });
+			if (path === '/api/v1/live/channels?view=canonical&limit=1') {
+				return httpResponse({ view: 'canonical', channels: [], total: 926 });
 			}
 			throw new Error(`unexpected path: ${path}`);
 		});
@@ -135,7 +167,7 @@ describe('CinephageLiveProvider.testConnection', () => {
 		const result = await new CinephageLiveProvider().testConnection(makeAccount());
 
 		expect(result.success).toBe(true);
-		expect(result.profile?.channelCount).toBe(42);
+		expect(result.profile?.channelCount).toBe(926);
 		expect(result.profile?.categoryCount).toBe(2);
 	});
 
@@ -170,50 +202,95 @@ describe('CinephageLiveProvider.testConnection', () => {
 });
 
 describe('CinephageLiveProvider.resolveStreamUrl', () => {
-	it('returns the signed playlist URL as HLS and caches the play payload', async () => {
+	it('plays canonical channels through /channel/x/:tvgId and caches the payload', async () => {
 		coreMocks.get.mockImplementation(async (path: string) => {
-			if (path === '/api/v1/live/channel/44') return httpResponse(playPayload('44'));
+			if (path === '/api/v1/live/channel/x/ESPNUSA.cph')
+				return httpResponse(detailPayload('ESPNUSA.cph'));
 			throw new Error(`unexpected path: ${path}`);
 		});
 
 		const provider = new CinephageLiveProvider();
 		const account = makeAccount();
 
-		const first = await provider.resolveStreamUrl(account, { externalId: '44' });
+		const first = await provider.resolveStreamUrl(account, { externalId: 'ESPNUSA.cph' });
 		expect(first).toMatchObject({
 			success: true,
 			type: 'hls',
-			url: 'https://api.cinephage.net/api/v1/live/channel/44/playlist.m3u8?t=sig'
+			url: 'https://api.cinephage.net/api/v1/live/channel/x/ESPNUSA.cph/playlist.m3u8?t=sig'
 		});
+		expect(first.headers).toBeUndefined();
 
 		// Second resolution within the cache TTL must not re-hit the API.
-		const second = await provider.resolveStreamUrl(account, { externalId: '44' });
+		const second = await provider.resolveStreamUrl(account, { externalId: 'ESPNUSA.cph' });
 		expect(second.success).toBe(true);
 		expect(coreMocks.get).toHaveBeenCalledTimes(1);
+	});
+
+	it('attaches the zlive Referer to playlist and segment requests', async () => {
+		coreMocks.get.mockImplementation(async (path: string) => {
+			if (path === '/api/v1/live/channel/x/TRT1.tr') {
+				return httpResponse(detailPayload('TRT1.tr', { unwrap: 'zlive-referer-1' }));
+			}
+			throw new Error(`unexpected path: ${path}`);
+		});
+
+		const result = await new CinephageLiveProvider().resolveStreamUrl(makeAccount(), {
+			externalId: 'TRT1.tr'
+		});
+
+		expect(result.success).toBe(true);
+		expect(result.headers).toEqual({ Referer: 'https://zlive.st/' });
+	});
+
+	it('keeps pre-migration numeric rows on the legacy route', async () => {
+		coreMocks.get.mockImplementation(async (path: string) => {
+			if (path === '/api/v1/live/channel/44') {
+				return httpResponse({
+					...detailPayload('44'),
+					play: {
+						...(detailPayload('44').play as Record<string, unknown>),
+						playlist_url: 'https://api.cinephage.net/api/v1/live/channel/44/playlist.m3u8?t=sig'
+					}
+				});
+			}
+			throw new Error(`unexpected path: ${path}`);
+		});
+
+		const result = await new CinephageLiveProvider().resolveStreamUrl(makeAccount(), {
+			externalId: '44'
+		});
+
+		expect(result).toMatchObject({
+			success: true,
+			url: 'https://api.cinephage.net/api/v1/live/channel/44/playlist.m3u8?t=sig'
+		});
+	});
+
+	it('reports a gated source as a friendly 503 message', async () => {
+		coreMocks.get.mockRejectedValue(new HttpError(503, 'Service Unavailable', new Headers()));
+
+		const result = await new CinephageLiveProvider().resolveStreamUrl(makeAccount(), {
+			externalId: 'ESPNUSA.cph'
+		});
+
+		expect(result.success).toBe(false);
+		expect(result.error).toContain('No playable source');
 	});
 });
 
 describe('CinephageLiveProvider.syncChannels', () => {
-	it('upserts categories and channels and removes stale rows', async () => {
+	it('syncs the canonical view: categories, feeds, and stale removal', async () => {
 		await insertAccountRow();
 		await insertChannelRow('999', 'Stale Channel');
 
 		coreMocks.get.mockImplementation(async (path: string) => {
-			if (path === '/api/v1/live/categories') {
-				return httpResponse({ categories: ['Soccer'] });
+			if (path === '/api/v1/live/categories?view=canonical') {
+				return httpResponse({ categories: ['Sports'] });
 			}
-			if (path === '/api/v1/live/channels?limit=200&offset=0') {
+			if (path === '/api/v1/live/channels?view=canonical&limit=200&offset=0') {
 				return httpResponse({
-					channels: [
-						{
-							source: 'daddylive',
-							id: '44',
-							name: 'ESPN USA',
-							logo_url: null,
-							category: 'Soccer',
-							country_code: 'US'
-						}
-					],
+					view: 'canonical',
+					channels: [canonicalChannel()],
 					total: 1
 				});
 			}
@@ -234,12 +311,16 @@ describe('CinephageLiveProvider.syncChannels', () => {
 		expect(channels).toHaveLength(1);
 		const channel = channels[0];
 		expect(channel).toMatchObject({
-			externalId: '44',
+			externalId: 'ESPNUSA.cph',
 			name: 'ESPN USA',
 			providerType: 'cinephage-live',
-			logo: null,
-			providerCategoryId: 'Soccer',
-			cinephageData: { category: 'Soccer', countryCode: 'US' }
+			logo: 'https://cdn.example/espn.png',
+			providerCategoryId: 'Sports',
+			cinephageData: {
+				category: 'Sports',
+				countryCode: 'US',
+				feeds: [{ source: 'daddylive', channelId: '44', name: 'ESPN USA HD' }]
+			}
 		});
 		// The channel's taxonomy category links to the synced category row.
 		const categories = await testDb.db
@@ -255,12 +336,101 @@ describe('CinephageLiveProvider.syncChannels', () => {
 			.where(eq(livetvAccounts.id, ACCOUNT_ID));
 		expect(accounts[0]).toMatchObject({ syncStatus: 'success', channelCount: 1, categoryCount: 1 });
 	});
+
+	it('re-keys a pre-canonical row in place so lineup references survive', async () => {
+		await insertAccountRow();
+		const legacyId = await insertChannelRow('52', 'CBS USA');
+
+		coreMocks.get.mockImplementation(async (path: string) => {
+			if (path === '/api/v1/live/categories?view=canonical') {
+				return httpResponse({ categories: [] });
+			}
+			if (path === '/api/v1/live/channels?view=canonical&limit=200&offset=0') {
+				return httpResponse({
+					view: 'canonical',
+					channels: [
+						canonicalChannel({
+							id: 'CBSUSA.cph',
+							tvg_id: 'CBSUSA.cph',
+							name: 'CBS USA',
+							category: null,
+							country_code: 'US',
+							feeds: [{ source: 'daddylive', channel_id: '52', name: 'CBS USA' }]
+						})
+					],
+					total: 1
+				});
+			}
+			throw new Error(`unexpected path: ${path}`);
+		});
+
+		const result = await new CinephageLiveProvider().syncChannels(ACCOUNT_ID);
+
+		expect(result.success).toBe(true);
+		expect(result.channelsAdded).toBe(0);
+		expect(result.channelsUpdated).toBe(1);
+		expect(result.channelsRemoved).toBe(0);
+
+		const channels = await testDb.db
+			.select()
+			.from(livetvChannels)
+			.where(eq(livetvChannels.accountId, ACCOUNT_ID));
+		expect(channels).toHaveLength(1);
+		// Same primary key: the lineup item still points at this row.
+		expect(channels[0].id).toBe(legacyId);
+		expect(channels[0].externalId).toBe('CBSUSA.cph');
+	});
+
+	it('does not steal a row that is already another canonical channel', async () => {
+		await insertAccountRow();
+		const existingId = await insertChannelRow('TRT1.tr', 'TRT 1');
+
+		coreMocks.get.mockImplementation(async (path: string) => {
+			if (path === '/api/v1/live/categories?view=canonical') {
+				return httpResponse({ categories: [] });
+			}
+			if (path === '/api/v1/live/channels?view=canonical&limit=200&offset=0') {
+				return httpResponse({
+					view: 'canonical',
+					channels: [
+						canonicalChannel({
+							id: 'TRT1.tr',
+							tvg_id: 'TRT1.tr',
+							name: 'TRT 1',
+							feeds: [{ source: 'daddylive', channel_id: '10' }]
+						}),
+						canonicalChannel({
+							id: 'TRT2.tr',
+							tvg_id: 'TRT2.tr',
+							name: 'TRT 2',
+							feeds: [{ source: 'daddylive', channel_id: 'TRT1.tr' }]
+						})
+					],
+					total: 2
+				});
+			}
+			throw new Error(`unexpected path: ${path}`);
+		});
+
+		const result = await new CinephageLiveProvider().syncChannels(ACCOUNT_ID);
+
+		expect(result.success).toBe(true);
+		expect(result.channelsAdded).toBe(1);
+		expect(result.channelsUpdated).toBe(1);
+
+		const channels = await testDb.db
+			.select()
+			.from(livetvChannels)
+			.where(eq(livetvChannels.accountId, ACCOUNT_ID));
+		expect(channels.map((c) => c.externalId).sort()).toEqual(['TRT1.tr', 'TRT2.tr']);
+		expect(channels.find((c) => c.externalId === 'TRT1.tr')?.id).toBe(existingId);
+	});
 });
 
 describe('CinephageLiveProvider.fetchEpg failures', () => {
 	it('throws when every schedule day fetch fails instead of reporting clean data', async () => {
 		await insertAccountRow();
-		await insertChannelRow('44', 'ESPN USA');
+		await insertChannelRow('ESPNUSA.cph', 'ESPN USA');
 
 		coreMocks.get.mockRejectedValue(new HttpError(503, 'Service Unavailable', new Headers()));
 
@@ -275,9 +445,16 @@ describe('CinephageLiveProvider.fetchEpg failures', () => {
 });
 
 describe('CinephageLiveProvider.fetchEpg', () => {
-	it('maps schedule events to programs chained per channel', async () => {
+	it('maps feed ids to canonical channels and collapses duplicate feed references', async () => {
 		await insertAccountRow();
-		await insertChannelRow('44', 'ESPN USA');
+		await insertChannelRow('ESPNUSA.cph', 'ESPN USA', {
+			cinephageData: {
+				feeds: [
+					{ source: 'daddylive', channelId: '44' },
+					{ source: 'zlive', channelId: '45' }
+				]
+			}
+		});
 
 		coreMocks.get.mockImplementation(async (path: string) => {
 			if (path === '/api/v1/live/schedule?day=2026-10-29') {
@@ -291,7 +468,11 @@ describe('CinephageLiveProvider.fetchEpg', () => {
 							category: 'LIVE NOW',
 							day_key: '2026-10-29',
 							starts_at: '2026-10-29T10:00:00Z',
-							channels: [{ id: '44', name: 'ESPN USA' }]
+							// Both feeds of the same channel in one event.
+							channels: [
+								{ id: '44', name: 'ESPN USA' },
+								{ id: '45', name: 'ESPN USA (zlive)' }
+							]
 						},
 						{
 							id: 'event-2',
@@ -333,10 +514,11 @@ describe('CinephageLiveProvider.fetchEpg', () => {
 		);
 
 		expect(programs).toHaveLength(2);
-		const [first, second] = programs.sort((a, b) => a.startTime.localeCompare(b.startTime));
+		expect(programs.every((program) => program.externalChannelId === 'ESPNUSA.cph')).toBe(true);
 
+		const [first, second] = programs.sort((a, b) => a.startTime.localeCompare(b.startTime));
 		expect(first).toMatchObject({
-			externalChannelId: '44',
+			externalChannelId: 'ESPNUSA.cph',
 			providerType: 'cinephage-live',
 			title: 'PERU Liga 1 : Final',
 			category: 'LIVE NOW',

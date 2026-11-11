@@ -2,14 +2,20 @@
  * Cinephage Live Provider
  *
  * Implements the LiveTvProvider interface for the Cinephage network's live TV
- * API (https://api.cinephage.net/api/v1/live/*): a 24/7 channel catalog plus
- * sports/PPV events exposed through the DaddyLive upstream.
+ * API (https://api.cinephage.net/api/v1/live/*): a canonical, provider-independent
+ * channel catalog ("the spine") plus sports/PPV events exposed through the
+ * DaddyLive upstream.
+ *
+ * Channels are read from the canonical view: one entry per real channel, with
+ * every feed that can play it (daddylive, zlive, ...). Playback is channel-scoped
+ * (/channel/x/:tvgId), so adding a provider upstream does not change this client.
+ * The signed HLS playlist is fetched without auth headers; its segments are
+ * either camouflaged containers (daddylive-camo-1) unwrapped server-side by the
+ * Live TV pipeline (see src/lib/server/livetv/streaming/camo-unwrap.ts) or need
+ * a zlive Referer on playlist and segments (zlive-referer-1).
  *
  * Auth uses the standard Cinephage build identity headers injected by
- * CinephageCore - no per-account credentials. Playback returns an HMAC-signed,
- * channel-bound HLS playlist URL (1h TTL); its segments are camouflaged
- * containers that are unwrapped server-side by the Live TV streaming pipeline
- * (see src/lib/server/livetv/streaming/camo-unwrap.ts).
+ * CinephageCore - no per-account credentials.
  */
 
 import { db } from '#lib/server/db/index.js';
@@ -35,6 +41,15 @@ import type {
 const logger = createChildLogger({ module: 'CinephageLiveProvider', logDomain: 'livetv' as const });
 
 const LIVE_API_BASE = '/api/v1/live';
+/** Canonical ("spine") view: deduped channels, feeds grouped, overflow slots hidden. */
+const CANONICAL_VIEW = 'canonical';
+
+/** zlive streams reject requests without this Referer, on playlist and segments. */
+const ZLIVE_REFERER = 'https://zlive.st/';
+const ZLIVE_UNWRAP = 'zlive-referer-1';
+const DADDYLIVE_UNWRAP = 'daddylive-camo-1';
+/** Unwrap schemes this client knows how to serve. */
+const KNOWN_UNWRAPS = new Set([DADDYLIVE_UNWRAP, ZLIVE_UNWRAP]);
 
 /** How long a resolved play payload is reused before re-minting. The signed
  * playlist URL is valid for ~1h, but the converter re-resolves every playlist
@@ -54,18 +69,29 @@ const DEFAULT_EVENT_DURATION_MS = 3 * 60 * 60 * 1000;
 const MAX_SCHEDULE_DAYS = 8;
 
 // ============================================================================
-// Wire contract (api.cinephage.net /api/v1/live)
+// Wire contract (api.cinephage.net /api/v1/live, ?view=canonical)
 // ============================================================================
 
-interface LiveChannelDto {
+interface LiveChannelFeedDto {
 	source: string;
+	/** Provider-scoped id, still playable through the legacy numeric route. */
+	channel_id: string;
+	name?: string | null;
+}
+
+interface LiveChannelDto {
+	/** Canonical id. Opaque: iptv-org ids ("SkySportsF1.uk") or ".cph". */
 	id: string;
+	/** Same value as id for canonical entries; kept explicit by the API. */
+	tvg_id?: string | null;
 	name: string;
 	logo_url: string | null;
 	/** Cinephage-owned taxonomy bucket (e.g. "Soccer", "Sports"). */
 	category?: string | null;
 	/** ISO 3166-1 alpha-2 code derived server-side by the Cinephage API. */
 	country_code?: string | null;
+	/** Every feed that can play this channel, ordered by provider priority. */
+	feeds?: LiveChannelFeedDto[];
 }
 
 interface LiveChannelsResponse {
@@ -94,6 +120,7 @@ interface LivePlayPayload {
 	protocol: string;
 	playlist_url: string;
 	expires_at: string;
+	/** "daddylive-camo-1", "zlive-referer-1", or null. */
 	unwrap: string | null;
 }
 
@@ -107,6 +134,8 @@ interface LiveChannelDetailResponse {
 interface CachedPlayPayload {
 	url: string;
 	unwrap: string | null;
+	/** Headers the player pipeline must attach to playlist + segment fetches. */
+	headers?: Record<string, string>;
 	expiresAtMs: number;
 }
 
@@ -143,8 +172,8 @@ export class CinephageLiveProvider implements LiveTvProvider {
 		try {
 			const core = getCinephageCore();
 			const [categoriesRes, channelsRes] = await Promise.all([
-				core.get(`${LIVE_API_BASE}/categories`),
-				core.get(`${LIVE_API_BASE}/channels?limit=1`)
+				core.get(`${LIVE_API_BASE}/categories?view=${CANONICAL_VIEW}`),
+				core.get(`${LIVE_API_BASE}/channels?view=${CANONICAL_VIEW}&limit=1`)
 			]);
 
 			const categories = JSON.parse(categoriesRes.body) as { categories?: string[] };
@@ -191,7 +220,10 @@ export class CinephageLiveProvider implements LiveTvProvider {
 
 			const core = getCinephageCore();
 
-			logger.info({ accountId }, '[CinephageLive] Fetching live catalog from Cinephage API');
+			logger.info(
+				{ accountId },
+				'[CinephageLive] Fetching canonical live catalog from Cinephage API'
+			);
 
 			const categoryTitles = await this.fetchCategoryTitles(core);
 			const channels = await this.fetchAllChannels(core);
@@ -234,31 +266,83 @@ export class CinephageLiveProvider implements LiveTvProvider {
 				}
 			}
 
-			// Upsert channels. The catalog carries the Cinephage-owned taxonomy
-			// category and a derived ISO country code per channel; category
-			// links to the synced taxonomy rows so the UI can browse by bucket.
+			// Upsert canonical channels. The canonical id (tvg_id) becomes the
+			// channel's externalId; feeds are kept so the legacy numeric routes and
+			// the schedule-based EPG can still be mapped back to the channel.
 			const existingChannels = await db
 				.select()
 				.from(livetvChannels)
 				.where(eq(livetvChannels.accountId, accountId));
 
-			const channelMap = new Map(existingChannels.map((c) => [c.externalId, c.id]));
+			const canonicalIds = new Set(
+				channels.map((channel) => canonicalChannelId(channel)).filter(Boolean)
+			);
+			const byExternalId = new Map(existingChannels.map((row) => [row.externalId, row]));
+			// Feed id -> existing row. Legacy rows (synced before the canonical
+			// view) carry the provider channel id as their externalId; canonical
+			// rows carry it in feeds[]. This is what lets a pre-migration row keep
+			// its database id - and therefore its lineup item - when it is re-keyed.
+			const byFeedChannelId = new Map<string, (typeof existingChannels)[number]>();
+			for (const row of existingChannels) {
+				for (const feed of row.cinephageData?.feeds ?? []) {
+					if (!byFeedChannelId.has(feed.channelId)) byFeedChannelId.set(feed.channelId, row);
+				}
+				if (!byFeedChannelId.has(row.externalId)) byFeedChannelId.set(row.externalId, row);
+			}
+
+			const claimedRowIds = new Set<string>();
 			let channelsAdded = 0;
 			let channelsUpdated = 0;
+			let channelsRekeyed = 0;
 
 			for (const channel of channels) {
+				const canonicalId = canonicalChannelId(channel);
+				if (!canonicalId) continue;
+
 				const now = new Date().toISOString();
-				const existingId = channelMap.get(channel.id);
+				const feeds = (channel.feeds ?? [])
+					.filter(
+						(feed) => feed && typeof feed.channel_id === 'string' && feed.channel_id.length > 0
+					)
+					.map((feed) => ({
+						source: feed.source,
+						channelId: feed.channel_id,
+						name: feed.name ?? undefined
+					}));
 				const cinephageData = {
 					category: channel.category ?? undefined,
-					countryCode: channel.country_code ?? undefined
+					countryCode: channel.country_code ?? undefined,
+					feeds: feeds.length > 0 ? feeds : undefined
 				};
 				const categoryId = channel.category ? (categoryMap.get(channel.category) ?? null) : null;
 
-				if (existingId) {
+				let existing = byExternalId.get(canonicalId);
+
+				if (!existing) {
+					// No row with this canonical id yet. Claim a pre-canonical row by
+					// feed id so its primary key (and every lineup/EPG reference)
+					// survives the migration. Never steal a row that is already the
+					// canonical row of a different channel.
+					for (const feed of feeds) {
+						const candidate = byFeedChannelId.get(feed.channelId);
+						if (
+							candidate &&
+							!claimedRowIds.has(candidate.id) &&
+							!canonicalIds.has(candidate.externalId)
+						) {
+							existing = candidate;
+							break;
+						}
+					}
+				}
+
+				if (existing) {
+					claimedRowIds.add(existing.id);
+					const rekeyed = existing.externalId !== canonicalId;
 					await db
 						.update(livetvChannels)
 						.set({
+							externalId: canonicalId,
 							name: channel.name,
 							logo: channel.logo_url ?? null,
 							categoryId,
@@ -266,13 +350,14 @@ export class CinephageLiveProvider implements LiveTvProvider {
 							cinephageData,
 							updatedAt: now
 						})
-						.where(eq(livetvChannels.id, existingId));
+						.where(eq(livetvChannels.id, existing.id));
+					if (rekeyed) channelsRekeyed++;
 					channelsUpdated++;
 				} else {
 					await db.insert(livetvChannels).values({
 						accountId,
 						providerType: 'cinephage-live' as const,
-						externalId: channel.id,
+						externalId: canonicalId,
 						name: channel.name,
 						logo: channel.logo_url ?? null,
 						categoryId,
@@ -281,14 +366,15 @@ export class CinephageLiveProvider implements LiveTvProvider {
 						createdAt: now,
 						updatedAt: now
 					});
-					channelMap.set(channel.id, randomUUID());
 					channelsAdded++;
 				}
 			}
 
-			// Remove stale channels/categories
+			// Remove stale channels/categories. Rows that were re-keyed above now
+			// carry a canonical id and are kept; leftover provider-only overflow
+			// slots and retired channels are removed.
 			let channelsRemoved = 0;
-			const providerChannelIds = channels.map((c) => c.id);
+			const providerChannelIds = [...canonicalIds];
 			if (providerChannelIds.length > 0) {
 				const deletedChannels = await db
 					.delete(livetvChannels)
@@ -328,10 +414,11 @@ export class CinephageLiveProvider implements LiveTvProvider {
 					categoriesUpdated,
 					channelsAdded,
 					channelsUpdated,
+					channelsRekeyed,
 					channelsRemoved,
 					duration
 				},
-				'[CinephageLive] Channel sync completed'
+				'[CinephageLive] Canonical channel sync completed'
 			);
 
 			return {
@@ -391,7 +478,7 @@ export class CinephageLiveProvider implements LiveTvProvider {
 		try {
 			const play = await this.getPlayPayload(account.id, channel.externalId);
 
-			if (play.unwrap && play.unwrap !== 'daddylive-camo-1') {
+			if (play.unwrap && !KNOWN_UNWRAPS.has(play.unwrap)) {
 				logger.info(
 					{ channelId: channel.externalId, unwrap: play.unwrap },
 					'[CinephageLive] Upstream reports an unknown unwrap scheme; the sniff chain will still apply'
@@ -400,7 +487,12 @@ export class CinephageLiveProvider implements LiveTvProvider {
 
 			// Streams are always HLS. There is no native TS variant upstream; the
 			// TS format is produced server-side by the HLS-to-TS converter.
-			return { success: true, url: play.url, type: 'hls' };
+			return {
+				success: true,
+				url: play.url,
+				type: 'hls',
+				...(play.headers ? { headers: play.headers } : {})
+			};
 		} catch (error) {
 			return {
 				success: false,
@@ -425,16 +517,27 @@ export class CinephageLiveProvider implements LiveTvProvider {
 		const events = await this.fetchScheduleEvents(startTime, endTime);
 		if (events.length === 0) return [];
 
-		// Map upstream channel ids to internal channel rows
+		// Map upstream channel ids to internal channel rows. Schedule events still
+		// carry provider-scoped feed ids, so resolve those through the canonical
+		// channel's feeds[] before falling back to a direct externalId match.
 		const channels = await db
 			.select()
 			.from(livetvChannels)
 			.where(eq(livetvChannels.accountId, account.id));
 
 		const channelMap = new Map(channels.map((c) => [c.externalId, c]));
+		const feedToCanonicalId = new Map<string, string>();
+		for (const channel of channels) {
+			for (const feed of channel.cinephageData?.feeds ?? []) {
+				if (!feedToCanonicalId.has(feed.channelId)) {
+					feedToCanonicalId.set(feed.channelId, channel.externalId);
+				}
+			}
+		}
 
 		// Expand events to (channelId, event) pairs; EPG-only events (no
-		// channels yet) cannot be linked and are skipped.
+		// channels yet) cannot be linked and are skipped. Several feeds of one
+		// channel can appear in the same event - collapse them to one programme.
 		interface ChannelEvent {
 			channelExternalId: string;
 			start: Date;
@@ -442,12 +545,18 @@ export class CinephageLiveProvider implements LiveTvProvider {
 			category: string | null;
 		}
 		const channelEvents: ChannelEvent[] = [];
+		const seen = new Set<string>();
 		for (const event of events) {
 			const start = new Date(event.starts_at);
 			if (Number.isNaN(start.getTime()) || event.channels.length === 0) continue;
 			for (const channelRef of event.channels) {
+				const channelExternalId = feedToCanonicalId.get(channelRef.id) ?? channelRef.id;
+				if (!channelMap.has(channelExternalId)) continue;
+				const key = `${channelExternalId}::${start.toISOString()}`;
+				if (seen.has(key)) continue;
+				seen.add(key);
 				channelEvents.push({
-					channelExternalId: channelRef.id,
+					channelExternalId,
 					start,
 					title: event.title,
 					category: event.category
@@ -521,7 +630,7 @@ export class CinephageLiveProvider implements LiveTvProvider {
 	// ============================================================================
 
 	private async fetchCategoryTitles(core: ReturnType<typeof getCinephageCore>): Promise<string[]> {
-		const response = await core.get(`${LIVE_API_BASE}/categories`);
+		const response = await core.get(`${LIVE_API_BASE}/categories?view=${CANONICAL_VIEW}`);
 		const data = JSON.parse(response.body) as { categories?: unknown };
 		if (!Array.isArray(data.categories)) {
 			throw new Error('Cinephage Live API returned an unexpected categories payload');
@@ -533,10 +642,12 @@ export class CinephageLiveProvider implements LiveTvProvider {
 		core: ReturnType<typeof getCinephageCore>
 	): Promise<LiveChannelDto[]> {
 		const all: LiveChannelDto[] = [];
+		const seen = new Set<string>();
 		let total = Number.POSITIVE_INFINITY;
 
 		for (let page = 0; page < CHANNELS_MAX_PAGES && all.length < total; page++) {
 			const params = new URLSearchParams({
+				view: CANONICAL_VIEW,
 				limit: String(CHANNELS_PAGE_LIMIT),
 				offset: String(page * CHANNELS_PAGE_LIMIT)
 			});
@@ -547,7 +658,14 @@ export class CinephageLiveProvider implements LiveTvProvider {
 				throw new Error('Cinephage Live API returned an unexpected channels payload');
 			}
 
-			all.push(...data.channels);
+			for (const channel of data.channels) {
+				// Re-fetching offset pages while the spine re-syncs can repeat an
+				// entry; the canonical view is deduped, so keep the first copy.
+				const id = canonicalChannelId(channel);
+				if (!id || seen.has(id)) continue;
+				seen.add(id);
+				all.push(channel);
+			}
 			if (typeof data.total === 'number') total = data.total;
 			if (data.channels.length === 0) break;
 		}
@@ -608,9 +726,13 @@ export class CinephageLiveProvider implements LiveTvProvider {
 		}
 
 		const core = getCinephageCore();
-		const response = await core.get(
-			`${LIVE_API_BASE}/channel/${encodeURIComponent(channelExternalId)}`
-		);
+		// Canonical channels play through /channel/x/:tvgId. Numeric ids are
+		// pre-migration rows (or overflow slots before the next sync) and keep
+		// using the legacy provider-scoped route.
+		const path = isLegacyNumericChannelId(channelExternalId)
+			? `${LIVE_API_BASE}/channel/${encodeURIComponent(channelExternalId)}`
+			: `${LIVE_API_BASE}/channel/x/${encodeURIComponent(channelExternalId)}`;
+		const response = await core.get(path);
 		const data = JSON.parse(response.body) as LiveChannelDetailResponse;
 
 		if (!data.play?.playlist_url) {
@@ -628,6 +750,7 @@ export class CinephageLiveProvider implements LiveTvProvider {
 		const payload: CachedPlayPayload = {
 			url: data.play.playlist_url,
 			unwrap: data.play.unwrap ?? null,
+			headers: headersForUnwrap(data.play.unwrap ?? null),
 			expiresAtMs
 		};
 		this.playCache.set(cacheKey, payload);
@@ -647,6 +770,14 @@ export class CinephageLiveProvider implements LiveTvProvider {
 			if (error.status === 404) {
 				return 'Channel not found or currently offline on Cinephage Live.';
 			}
+			if (error.status === 429) {
+				return 'Cinephage Live is rate-limiting this install. Try again in a moment.';
+			}
+			if (error.status === 503) {
+				// The API reports details.code "live_source_gated" with a fallback
+				// player URL; there is no playable source through this route now.
+				return 'No playable source is available for this channel right now. Try again shortly.';
+			}
 			return `Cinephage API returned HTTP ${error.status}`;
 		}
 		return error instanceof Error ? error.message : String(error);
@@ -656,6 +787,21 @@ export class CinephageLiveProvider implements LiveTvProvider {
 /** Structural subset of CachedChannel/LiveTvChannel the provider needs. */
 interface CachedChannelLike {
 	externalId: string;
+}
+
+/** Canonical id for a catalog entry: tvg_id is authoritative, id is the same. */
+function canonicalChannelId(channel: LiveChannelDto): string {
+	return channel.tvg_id || channel.id;
+}
+
+/** Pre-canonical rows and hidden overflow slots use the numeric provider ids. */
+function isLegacyNumericChannelId(id: string): boolean {
+	return /^\d+$/.test(id);
+}
+
+/** zlive needs a Referer on every playlist and segment request; daddylive does not. */
+function headersForUnwrap(unwrap: string | null): Record<string, string> | undefined {
+	return unwrap === ZLIVE_UNWRAP ? { Referer: ZLIVE_REFERER } : undefined;
 }
 
 function parseExpiry(iso: string | undefined): number | null {

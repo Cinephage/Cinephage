@@ -313,6 +313,8 @@ export interface M3uChannelData {
 export interface CinephageLiveChannelData {
 	category?: string;
 	countryCode?: string;
+	/** Canonical catalog feeds; provider channel id -> this channel. */
+	feeds?: Array<{ source: string; channelId: string; name?: string }>;
 }
 
 // ============================================================================

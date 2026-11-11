@@ -4074,6 +4074,8 @@ export const livetvChannels = sqliteTable(
 		cinephageData: text('cinephage_data', { mode: 'json' }).$type<{
 			category?: string;
 			countryCode?: string;
+			/** Canonical catalog feeds; provider channel id -> this channel. */
+			feeds?: Array<{ source: string; channelId: string; name?: string }>;
 		}>(),
 
 		// EPG mapping
