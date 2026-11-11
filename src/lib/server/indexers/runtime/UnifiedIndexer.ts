@@ -41,6 +41,7 @@ import { getPersistentStatusTracker } from '../status';
 import { getRateLimitRegistry } from '../ratelimit';
 import { getHostRateLimiter, type HostRateLimiter } from '../ratelimit/HostRateLimiter';
 import { DEFAULT_RATE_LIMIT, type RateLimitConfig } from '../ratelimit/types';
+import { INDEXER_USER_AGENT } from '../http/userAgent.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { IndexerHttp, createIndexerHttp } from '../http/IndexerHttp';
 import { DatabaseQueryExecutor, createDatabaseQueryExecutor } from './DatabaseQueryExecutor';
@@ -238,7 +239,7 @@ export class UnifiedIndexer implements IIndexer {
 			alternateUrls: record.alternateUrls?.length
 				? record.alternateUrls
 				: definition.links.slice(1),
-			userAgent: 'Cinephage/1.0',
+			userAgent: INDEXER_USER_AGENT,
 			rateLimit: rateLimit ?? DEFAULT_RATE_LIMIT,
 			encoding: definition.encoding,
 			defaultTimeout: definition.requesttimeout
@@ -700,8 +701,13 @@ export class UnifiedIndexer implements IIndexer {
 		};
 
 		if (forceFreshLogin) {
-			await this.authManager.clearCookies(context);
-			this.cookies = {};
+			// Keep the existing session until a new login actually succeeds.
+			// Clearing first meant a transient Cloudflare block on the login page
+			// destroyed a working session and left the indexer logged out.
+			this.log.info(
+				{ indexer: this.name },
+				'Refreshing login; existing cookies kept until the new login succeeds'
+			);
 		}
 
 		const hasStoredCookies = !forceFreshLogin && (await this.authManager.loadCookies(context));
@@ -914,7 +920,7 @@ export class UnifiedIndexer implements IIndexer {
 				signal: controller.signal,
 				headers: {
 					Accept: 'application/json, text/plain, */*',
-					'User-Agent': 'Cinephage/1.0'
+					'User-Agent': INDEXER_USER_AGENT
 				}
 			});
 		} catch (error) {

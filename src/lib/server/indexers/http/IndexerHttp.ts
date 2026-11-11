@@ -12,6 +12,7 @@
  * throughout the codebase with a single, reliable HTTP layer.
  */
 
+import { INDEXER_USER_AGENT } from './userAgent.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { isCloudflareProtected, CloudflareProtectedError } from './CloudflareDetection';
 import {
@@ -115,7 +116,7 @@ export class IndexerHttp {
 			indexerName: config.indexerName,
 			baseUrl: config.baseUrl.replace(/\/$/, ''),
 			alternateUrls: config.alternateUrls?.map((u) => u.replace(/\/$/, '')) ?? [],
-			userAgent: config.userAgent ?? 'Cinephage/1.0',
+			userAgent: config.userAgent ?? INDEXER_USER_AGENT,
 			rateLimit: config.rateLimit ?? DEFAULT_RATE_LIMIT,
 			retry: config.retry ?? { maxRetries: 2, initialDelayMs: 1000 },
 			defaultTimeout: config.defaultTimeout ?? 30000,

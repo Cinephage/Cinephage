@@ -127,6 +127,18 @@ export class AuthManager {
 		const login = this.definition.login;
 		if (!login) return false;
 
+		// A Cloudflare challenge is not an expired session. Treating the 403 as
+		// "logged out" made the caller wipe working cookies and attempt a login
+		// that the challenge blocks anyway — one transient block turned into a
+		// permanently logged-out indexer.
+		if (isCloudflareProtected(response.status, response.headers, content)) {
+			authLogger.info(
+				{ status: response.status, indexer: this.definition.id },
+				'[AuthManager] Cloudflare challenge on session check; keeping existing cookies'
+			);
+			return false;
+		}
+
 		// Check for HTTP error
 		if (!response.ok) {
 			return true;
