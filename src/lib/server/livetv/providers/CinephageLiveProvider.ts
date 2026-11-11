@@ -24,6 +24,10 @@ import { and, eq, inArray, notInArray } from 'drizzle-orm';
 import { createChildLogger } from '#lib/logging/index.js';
 import { HttpError } from '#lib/server/indexers/http/index.js';
 import { getCinephageCore } from '#lib/server/cinephage/core/CinephageCore.js';
+import {
+	unwrapHeadersForScheme,
+	ZLIVE_UNWRAP_SCHEME
+} from '#lib/server/livetv/streaming/playlist-unwrap.js';
 import { randomUUID } from 'node:crypto';
 import type {
 	LiveTvProvider,
@@ -45,11 +49,10 @@ const LIVE_API_BASE = '/api/v1/live';
 const CANONICAL_VIEW = 'canonical';
 
 /** zlive streams reject requests without this Referer, on playlist and segments. */
-const ZLIVE_REFERER = 'https://zlive.st/';
-const ZLIVE_UNWRAP = 'zlive-referer-1';
+/** daddylive feeds need no request headers (segments are camo containers). */
 const DADDYLIVE_UNWRAP = 'daddylive-camo-1';
 /** Unwrap schemes this client knows how to serve. */
-const KNOWN_UNWRAPS = new Set([DADDYLIVE_UNWRAP, ZLIVE_UNWRAP]);
+const KNOWN_UNWRAPS = new Set([DADDYLIVE_UNWRAP, ZLIVE_UNWRAP_SCHEME]);
 
 /** How long a resolved play payload is reused before re-minting. The signed
  * playlist URL is valid for ~1h, but the converter re-resolves every playlist
@@ -799,9 +802,8 @@ function isLegacyNumericChannelId(id: string): boolean {
 	return /^\d+$/.test(id);
 }
 
-/** zlive needs a Referer on every playlist and segment request; daddylive does not. */
 function headersForUnwrap(unwrap: string | null): Record<string, string> | undefined {
-	return unwrap === ZLIVE_UNWRAP ? { Referer: ZLIVE_REFERER } : undefined;
+	return unwrap ? unwrapHeadersForScheme(unwrap) : undefined;
 }
 
 function parseExpiry(iso: string | undefined): number | null {

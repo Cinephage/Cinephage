@@ -34,6 +34,7 @@ import { getLiveTvStreamService } from './LiveTvStreamService.js';
 import { createHlsToTsStream } from './HlsToTsConverter.js';
 import { getBaseUrlAsync } from '#lib/server/streaming/url.js';
 import { rewriteHlsPlaylistUrls } from '#lib/server/streaming/utils/hls-rewrite.js';
+import { mergePlaylistUnwrapHeaders } from './playlist-unwrap.js';
 import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'livetv' as const });
@@ -266,7 +267,9 @@ export async function handleStreamGet(
 						throw new Error('Invalid HLS playlist received');
 					}
 
-					const encodedHeaders = encodeProviderHeaders(refreshed.providerHeaders);
+					const encodedHeaders = encodeProviderHeaders(
+						mergePlaylistUnwrapHeaders(refreshed.providerHeaders, playlist)
+					);
 					const rewritten = rewriteHlsPlaylistUrls(
 						playlist,
 						retryFinalUrl,
@@ -311,7 +314,7 @@ export async function handleStreamGet(
 					makeLiveTvProxyUrlBuilder(
 						baseUrl,
 						lineupId,
-						encodeProviderHeaders(resolved.providerHeaders)
+						encodeProviderHeaders(mergePlaylistUnwrapHeaders(resolved.providerHeaders, playlist))
 					)
 				);
 

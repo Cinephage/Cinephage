@@ -404,4 +404,39 @@ describe('HlsToTsConverter URL safety', () => {
 		await expect(segmentPromise).rejects.toThrow();
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
+	it('fetches segments with the playlist unwrap headers', async () => {
+		const controller = new AbortController();
+		const playlistBody = new ReadableStream<Uint8Array>({
+			start(streamController) {
+				streamController.enqueue(
+					new TextEncoder().encode(
+						'#EXTM3U\n#EXT-X-CINEPHAGE-UNWRAP:zlive-referer-1\n#EXTINF:6,Channel\nhttps://cdn.test/segment.ts\n'
+					)
+				);
+				streamController.close();
+			}
+		});
+		const fetchMock = vi.fn().mockResolvedValue(new Response(tsSegment(), { status: 200 }));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const { createHlsToTsStream } = await import('./HlsToTsConverter');
+		const stream = createHlsToTsStream({
+			lineupItemId: 'lineup-1',
+			signal: controller.signal,
+			initialPlaylist: {
+				body: playlistBody,
+				finalUrl: 'https://provider.test/live/channel/index',
+				providerHeaders: {}
+			}
+		});
+
+		const reader = stream.getReader();
+		await reader.read();
+		controller.abort();
+
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(fetchMock.mock.calls[0][1].headers).toMatchObject({
+			Referer: 'https://zlive.st/'
+		});
+	});
 });

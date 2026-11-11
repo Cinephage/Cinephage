@@ -385,6 +385,35 @@ describe('Live TV stream request handler', () => {
 		const response = await pending;
 		expect(response.status).toBe(502);
 	});
+	it('applies the playlist unwrap hint to segment proxy URLs', async () => {
+		const playlist =
+			'#EXTM3U\n#EXT-X-CINEPHAGE-UNWRAP:zlive-referer-1\n#EXTINF:6,Channel\nsegment.ts\n';
+		fetchFromUrlMock.mockResolvedValue({
+			response: new Response(playlist, {
+				status: 200,
+				headers: { 'Content-Type': 'application/vnd.apple.mpegurl' }
+			}),
+			finalUrl: 'https://provider.test/live/channel/index.m3u8'
+		});
+
+		const { handleStreamGet } = await import('./StreamRequestHandler');
+		const response = await handleStreamGet(
+			'lineup-1',
+			new Request('http://cinephage.test/stream?format=hls'),
+			new URL('http://cinephage.test/stream?format=hls')
+		);
+
+		const body = await response.text();
+		const segmentUrl = body
+			.split('\n')
+			.map((line) => line.trim())
+			.find((line) => line.includes('segment.ts'));
+		expect(segmentUrl).toBeTruthy();
+
+		const encodedHeaders = new URL(segmentUrl!).searchParams.get('h');
+		expect(encodedHeaders).toBeTruthy();
+		expect(JSON.parse(atob(encodedHeaders!))).toEqual({ Referer: 'https://zlive.st/' });
+	});
 });
 
 async function handleStreamGetForTest(signal: AbortSignal, requestUrl: string): Promise<Response> {

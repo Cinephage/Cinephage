@@ -51,6 +51,7 @@ import { createChildLogger } from '#lib/logging/index.js';
 import { getStreamUrlCache } from './StreamUrlCache.js';
 import { getLiveTvStreamService } from './LiveTvStreamService.js';
 import { unwrapCamoSegment, CamoUnwrapError } from './camo-unwrap.js';
+import { mergePlaylistUnwrapHeaders } from './playlist-unwrap.js';
 import { resolveHlsUrl } from '#lib/server/streaming/utils/hls-rewrite.js';
 import { resolveAndValidateUrl } from '#lib/server/http/ssrf-protection.js';
 
@@ -470,6 +471,10 @@ export function createHlsToTsStream(options: HlsToTsConverterOptions): ReadableS
 					throw new Error('Invalid HLS playlist (no #EXTM3U header)');
 				}
 
+				// The playlist states which unwrap scheme it was actually served
+				// with (a detail-time value can be stale after a feed fallback).
+				providerHeaders = mergePlaylistUnwrapHeaders(providerHeaders, playlistText);
+
 				// 4. Check if this is a master playlist and fetch the best variant
 				let playlistUrl = finalUrl;
 				if (isMasterPlaylist(playlistText)) {
@@ -504,6 +509,7 @@ export function createHlsToTsStream(options: HlsToTsConverterOptions): ReadableS
 					}
 
 					playlistText = await readBoundedText(variantResponse, conversionSignal);
+					providerHeaders = mergePlaylistUnwrapHeaders(providerHeaders, playlistText);
 					playlistUrl = bestVariantUrl;
 					logger.debug(
 						{
