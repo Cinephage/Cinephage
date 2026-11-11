@@ -378,6 +378,11 @@ login:
     login_username: '{{ .Config.username }}'
     login_password: '{{ .Config.password }}'
     login: 'Login'
+    # phpBB2 only issues the long-lived bb_data cookie (1 year) when the
+    # "remember me" checkbox is set. Without it the session is a short-lived
+    # bb_session and every expiry means another trip through login.php — which
+    # is exactly the page Cloudflare challenges.
+    autologin: 'on'
     redirect: 'index.php'
   test:
     path: /forum/index.php
