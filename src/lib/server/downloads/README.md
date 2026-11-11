@@ -28,7 +28,8 @@ monitored, aired episode the pack actually contains, and nothing else.**
 | `downloadClients/core/interfaces.ts` | `IDownloadClient.extendFileSelection?()` — optional because only per-file clients can implement it. | — |
 | `downloadClients/qbittorrent/*`, `transmission/*` | Translate indices/paths into client-specific file priorities. | core interfaces |
 | `downloadClients/monitoring/DownloadMonitorService.ts` | Persists the episode scope on the queue row; `extendQueueItemEpisodes()` merges a later extension. | queue schema |
-| `indexers/search/SearchOrchestrator.ts` | Decides whether a pack is *complete enough* to grab for a season-only search. | indexer parser, library DB |
+| `library/aired-episodes.ts` | The one definition of "aired" (`airDate` non-empty and `<= today`) plus the season id/count queries. | `db` |
+| `indexers/search/SearchOrchestrator.ts` | Decides whether a pack is *complete enough* to grab for a season-only search. | indexer parser, `library/aired-episodes` |
 
 ## Flow
 
@@ -36,7 +37,7 @@ monitored, aired episode the pack actually contains, and nothing else.**
 monitoring search (season-only)
   └─ SearchOrchestrator.filterBySeasonEpisode
        ├─ seasonEpisodeCount      TMDB announced total
-       ├─ airedEpisodeCount       library rows with air_date <= today   (new)
+       ├─ airedEpisodeCount       library/aired-episodes.ts (airDate <= today)   (new)
        └─ isCompletedRuTrackerSeasonPack
             accept iff covered range is a contiguous 1..N and
             N == announced total  OR  N >= aired total

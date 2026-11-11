@@ -27,6 +27,11 @@ import {
 	isRuTrackerIndexerName
 } from '#lib/server/indexers/search/russian-trackers.js';
 import { AUTO_GRAB_MIN_SCORE } from '#lib/server/library/searchOnAdd/search-utils.js';
+import {
+	countAiredSeasonEpisodes,
+	getAiredSeasonEpisodeIds,
+	isAiredEpisode
+} from '#lib/server/library/aired-episodes.js';
 
 import {
 	parseEpisodePointerFromGuid,
@@ -452,8 +457,6 @@ export class MonitoringSearchService {
 		}
 
 		const today = todayDateString();
-		const isAired = (ep: { airDate: string | null }) =>
-			Boolean(ep.airDate && ep.airDate !== '' && ep.airDate <= today);
 
 		// Single query to get all aired episode counts grouped by series and season
 		const allCounts = await db
@@ -468,7 +471,7 @@ export class MonitoringSearchService {
 		// Count aired episodes per series/season combination
 		const countMap = new Map<string, number>();
 		for (const row of allCounts) {
-			if (!isAired(row)) continue;
+			if (!isAiredEpisode(row.airDate, today)) continue;
 			const key = `${row.seriesId}-${row.seasonNumber}`;
 			countMap.set(key, (countMap.get(key) || 0) + 1);
 		}
@@ -510,38 +513,12 @@ export class MonitoringSearchService {
 			return cached;
 		}
 
-		const today = todayDateString();
-		const isAired = (ep: { airDate: string | null }) =>
-			Boolean(ep.airDate && ep.airDate !== '' && ep.airDate <= today);
-
-		// Fallback to database query (for cases where cache wasn't preloaded)
-		const seasonEpisodes = await db.query.episodes.findMany({
-			where: and(eq(episodes.seriesId, seriesId), eq(episodes.seasonNumber, seasonNumber)),
-			columns: { id: true, airDate: true }
-		});
-
-		const count = seasonEpisodes.filter(isAired).length;
+		const count = await countAiredSeasonEpisodes(seriesId, seasonNumber);
 
 		// Cache for future calls in this operation
 		this.seasonEpisodeCountCache.set(cacheKey, count);
 
 		return count;
-	}
-
-	private async getAiredSeasonEpisodeIds(
-		seriesId: string,
-		seasonNumber: number
-	): Promise<string[]> {
-		const today = todayDateString();
-		const isAired = (ep: { airDate: string | null }) =>
-			Boolean(ep.airDate && ep.airDate !== '' && ep.airDate <= today);
-
-		const seasonEpisodes = await db.query.episodes.findMany({
-			where: and(eq(episodes.seriesId, seriesId), eq(episodes.seasonNumber, seasonNumber)),
-			columns: { id: true, airDate: true }
-		});
-
-		return seasonEpisodes.filter(isAired).map((ep) => ep.id);
 	}
 
 	/**
@@ -3187,7 +3164,7 @@ export class MonitoringSearchService {
 
 				const targetEpisodeIds =
 					isSeasonPack && !isEpisodePointer
-						? await this.getAiredSeasonEpisodeIds(seriesData.id, episode.seasonNumber)
+						? await getAiredSeasonEpisodeIds(seriesData.id, episode.seasonNumber)
 						: [episode.id];
 
 				// Found a valid release, try to grab it

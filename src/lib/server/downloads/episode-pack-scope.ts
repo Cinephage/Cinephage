@@ -14,12 +14,12 @@
  * the only part that reads the database.
  */
 
-import { and, eq, inArray, lte } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
 import { downloadQueue, episodes } from '#lib/server/db/schema.js';
+import { airedSeasonCondition } from '#lib/server/library/aired-episodes.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { ACTIVE_DOWNLOAD_STATUSES } from '#lib/types/queue.js';
-import { todayDateString } from '#lib/utils/format.js';
 
 const logger = createChildLogger({ module: 'EpisodePackScope' });
 
@@ -47,11 +47,9 @@ export async function resolveEpisodePackScope(params: {
 			.from(episodes)
 			.where(
 				and(
-					eq(episodes.seriesId, params.seriesId),
-					eq(episodes.seasonNumber, params.seasonNumber),
+					airedSeasonCondition(params.seriesId, params.seasonNumber),
 					eq(episodes.hasFile, false),
-					eq(episodes.monitored, true),
-					lte(episodes.airDate, todayDateString())
+					eq(episodes.monitored, true)
 				)
 			);
 

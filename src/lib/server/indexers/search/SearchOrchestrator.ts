@@ -72,9 +72,9 @@ import { createChildLogger } from '#lib/logging/index.js';
 const logger = createChildLogger({ logDomain: 'indexers' as const });
 import { tmdb } from '#lib/server/tmdb.js';
 import { db } from '#lib/server/db/index.js';
-import { episodes, movies, series } from '#lib/server/db/schema.js';
-import { and, eq, lte } from 'drizzle-orm';
-import { todayDateString } from '#lib/utils/format.js';
+import { movies, series } from '#lib/server/db/schema.js';
+import { eq } from 'drizzle-orm';
+import { countAiredSeasonEpisodes } from '#lib/server/library/aired-episodes.js';
 import { blocklistService } from '#lib/server/blocklist/BlocklistService.js';
 import { DANGEROUS_EXTENSIONS, EXECUTABLE_EXTENSIONS } from '#lib/config/constants.js';
 import { matchTitleContainment } from '#lib/server/releases/release-identity.js';
@@ -3491,18 +3491,8 @@ export class SearchOrchestrator {
 				return undefined;
 			}
 
-			const aired = await db
-				.select({ id: episodes.id })
-				.from(episodes)
-				.where(
-					and(
-						eq(episodes.seriesId, show.id),
-						eq(episodes.seasonNumber, seasonNumber),
-						lte(episodes.airDate, todayDateString())
-					)
-				);
-
-			return aired.length > 0 ? aired.length : undefined;
+			const aired = await countAiredSeasonEpisodes(show.id, seasonNumber);
+			return aired > 0 ? aired : undefined;
 		} catch (error) {
 			logger.debug(
 				{
