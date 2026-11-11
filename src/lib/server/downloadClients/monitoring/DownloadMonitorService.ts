@@ -2676,16 +2676,41 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 	}
 
 	/**
+	 * Queue rows that may still absorb more episodes for this download.
+	 *
+	 * Only a row that has not imported yet qualifies: extending an imported row
+	 * would report success for files the importer will never look at again.
+	 * Shared by the read-only precheck and the merge itself so the two can
+	 * never disagree.
+	 */
+	private extendableQueueItemWhere(downloadId: string) {
+		return and(
+			or(eq(downloadQueue.downloadId, downloadId), eq(downloadQueue.infoHash, downloadId)),
+			notInArray(downloadQueue.status, [
+				...POST_IMPORT_QUEUE_STATUSES,
+				...TERMINAL_QUEUE_STATUSES,
+				'failed'
+			])
+		);
+	}
+
+	/** Whether extendQueueItemEpisodes would find a row to extend. */
+	async canExtendQueueItem(downloadId: string): Promise<boolean> {
+		const [row] = await db
+			.select({ id: downloadQueue.id })
+			.from(downloadQueue)
+			.where(this.extendableQueueItemWhere(downloadId))
+			.limit(1);
+		return Boolean(row);
+	}
+
+	/**
 	 * Merge additional episode ids into an existing queue item.
 	 *
 	 * A season-pack pointer can be extended after it was queued (another wanted
 	 * episode turned up in the same pack version). The queue row keeps its
 	 * identity; only its episode scope grows, so per-episode occupancy checks
 	 * and import mapping see the files that are now selected.
-	 *
-	 * Only a row that has not imported yet can absorb more episodes: extending
-	 * an imported row would report success for files the importer will never
-	 * look at again.
 	 */
 	async extendQueueItemEpisodes(
 		downloadId: string,
@@ -2699,16 +2724,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 		const [row] = await db
 			.select()
 			.from(downloadQueue)
-			.where(
-				and(
-					or(eq(downloadQueue.downloadId, downloadId), eq(downloadQueue.infoHash, downloadId)),
-					notInArray(downloadQueue.status, [
-						...POST_IMPORT_QUEUE_STATUSES,
-						...TERMINAL_QUEUE_STATUSES,
-						'failed'
-					])
-				)
-			)
+			.where(this.extendableQueueItemWhere(downloadId))
 			.limit(1);
 
 		if (!row) {

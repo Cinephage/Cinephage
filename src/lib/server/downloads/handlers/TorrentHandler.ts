@@ -271,9 +271,21 @@ export class TorrentHandler {
 				(addError as Error & { existingTorrent?: DownloadInfo }).existingTorrent || null;
 
 			if (isDuplicate && existingTorrent && episodePointerTarget) {
-				if (typeof clientInstance.extendFileSelection === 'function') {
+				// Check the queue row before touching the client: selecting files on a
+				// torrent whose row already imported starts a download nothing will
+				// ever import. The merge below repeats the same predicate, so a row
+				// that flips to imported in between still refuses.
+				const extendSelection =
+					typeof clientInstance.extendFileSelection === 'function'
+						? clientInstance.extendFileSelection.bind(clientInstance)
+						: undefined;
+				const canExtend = extendSelection
+					? await downloadMonitor.canExtendQueueItem(existingTorrent.hash)
+					: false;
+
+				if (extendSelection && canExtend) {
 					try {
-						await clientInstance.extendFileSelection(existingTorrent.hash, {
+						await extendSelection(existingTorrent.hash, {
 							fileIndices: pointerFileSelection?.fileIndices ?? [],
 							filePaths: pointerFileSelection?.filePaths
 						});
@@ -285,7 +297,7 @@ export class TorrentHandler {
 						if (!updatedQueueItem) {
 							logger.warn(
 								{ title: release.title, hash: existingTorrent.hash },
-								'Existing torrent is not linked to an active queue item, cannot extend it'
+								'Queue item changed state during extension; files were selected but not recorded'
 							);
 						} else {
 							logger.info(

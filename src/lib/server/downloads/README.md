@@ -86,9 +86,11 @@ overwritten by the client's whole-torrent size).
 ## Known gaps (not fixed here)
 
 - **Post-import extension is refused by design.** If the queue row already
-  imported (`imported` / `seeding-imported`), `extendQueueItemEpisodes` returns
-  null and the handler surfaces the retry error. Re-selecting files on an
-  imported row would download them and never import them.
+  imported (`imported` / `seeding-imported`), `canExtendQueueItem` is false and the
+  handler surfaces the retry error without touching the client. Re-selecting files on
+  an imported row would download them and never import them. A row that flips to
+  imported between the precheck and the merge leaves the new files selected but
+  unrecorded — logged as a warning, not silently swallowed.
 - **Transmission ignores `filePaths`.** It trusts the indices from the parsed
   `.torrent`; qBittorrent validates both. An index mismatch on Transmission
   would select the wrong file silently.
