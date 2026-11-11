@@ -22,10 +22,10 @@ interface TorrentFileEntry {
 	length?: number;
 }
 
-const EPISODE_POINTER_TITLE_REGEX = /\[Episode Pointer\s+((?:S\d{2})?E\d{2})\]/i;
-const EPISODE_POINTER_GUID_REGEX = /::episode-pointer::((?:s\d{2})?e\d{2})$/i;
-const HUMAN_EPISODE_POINTER_REGEX = /^Season\s+(\d{1,2})\s+Episode\s+(\d{1,2})\s*-\s*/i;
-const HUMAN_EPISODE_ONLY_POINTER_REGEX = /^Episode\s+(\d{1,2})\s*-\s*/i;
+const EPISODE_POINTER_TITLE_REGEX = /\[Episode Pointer\s+((?:S\d{2,3})?E\d{2,3})\]/i;
+const EPISODE_POINTER_GUID_REGEX = /::episode-pointer::((?:s\d{2,3})?e\d{2,3})$/i;
+const HUMAN_EPISODE_POINTER_REGEX = /^Season\s+(\d{1,3})\s+Episode\s+(\d{1,3})\s*-\s*/i;
+const HUMAN_EPISODE_ONLY_POINTER_REGEX = /^Episode\s+(\d{1,3})\s*-\s*/i;
 const MEDIA_EXTENSIONS = new Set([
 	'mkv',
 	'mp4',
@@ -59,6 +59,8 @@ function getExtension(value: string): string {
 /**
  * Canonical token form: `S01E07`, or `E07` when the season is unknown.
  * Inverse of parsePointerToken; the only place the format is spelled.
+ * Episodes are padded to two digits but not truncated, so long-running
+ * seasons round-trip as `S01E100` rather than failing to parse.
  */
 export function formatEpisodePointerToken(season: number | undefined, episode: number): string {
 	const padded = String(episode).padStart(2, '0');
@@ -67,14 +69,14 @@ export function formatEpisodePointerToken(season: number | undefined, episode: n
 
 function parsePointerToken(rawToken: string): EpisodePointerTarget | null {
 	const normalized = rawToken.trim().toUpperCase();
-	const seasonEpisode = normalized.match(/^S(\d{2})E(\d{2})$/);
+	const seasonEpisode = normalized.match(/^S(\d{2,3})E(\d{2,3})$/);
 	if (seasonEpisode) {
 		const season = parseInt(seasonEpisode[1], 10);
 		const episode = parseInt(seasonEpisode[2], 10);
 		return { season, episode, token: formatEpisodePointerToken(season, episode) };
 	}
 
-	const episodeOnly = normalized.match(/^E(\d{2})$/);
+	const episodeOnly = normalized.match(/^E(\d{2,3})$/);
 	if (!episodeOnly) {
 		return null;
 	}

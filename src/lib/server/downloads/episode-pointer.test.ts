@@ -143,4 +143,30 @@ describe('episode-pointer', () => {
 		expect(selection.fileIndices).toEqual([0, 1, 2]);
 		expect(selection.matchedEpisodes).toEqual([1, 2, 3]);
 	});
+
+	it('round-trips a three-digit episode number from the guid', () => {
+		const parsed = parseEpisodePointerFromGuid(
+			'https://rutracker.org/forum/viewtopic.php?t=123::episode-pointer::s01e100'
+		);
+
+		expect(parsed).toEqual({ season: 1, episode: 100, token: 'S01E100' });
+	});
+
+	it('parses a three-digit episode from the human pointer title', () => {
+		const parsed = parseEpisodePointerFromTitle(
+			'Season 1 Episode 100 - One Piece: S01E100 [2025, WEB-DL 1080p]'
+		);
+
+		expect(parsed).toEqual({ season: 1, episode: 100, token: 'S01E100' });
+	});
+
+	it('selects episode 100 from a long-running season', () => {
+		const selection = buildEpisodePointerFileSelectionFromPaths(
+			['One Piece/S01E099.mkv', 'One Piece/S01E100.mkv', 'One Piece/S01E101.mkv'],
+			[{ season: 1, episode: 100, token: 'S01E100' }]
+		);
+
+		expect(selection.fileIndices).toEqual([1]);
+		expect(selection.matchedEpisodes).toEqual([100]);
+	});
 });

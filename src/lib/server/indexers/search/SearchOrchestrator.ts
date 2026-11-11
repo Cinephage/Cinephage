@@ -74,7 +74,8 @@ import { tmdb } from '#lib/server/tmdb.js';
 import { db } from '#lib/server/db/index.js';
 import { movies, series } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { countAiredSeasonEpisodes } from '#lib/server/library/aired-episodes.js';
+import { isAiredEpisode } from '#lib/server/library/aired-episodes.js';
+import { formatEpisodePointerToken } from '#lib/server/downloads/episode-pointer.js';
 import { blocklistService } from '#lib/server/blocklist/BlocklistService.js';
 import { DANGEROUS_EXTENSIONS, EXECUTABLE_EXTENSIONS } from '#lib/config/constants.js';
 import { matchTitleContainment } from '#lib/server/releases/release-identity.js';
@@ -261,6 +262,8 @@ export class SearchOrchestrator {
 	private statusTracker: PersistentStatusTracker;
 	/** Cache for season episode counts (tmdbId:season -> count) */
 	private seasonEpisodeCountCache: Map<string, number> = new Map();
+	/** Cache for aired episode counts (tmdbId:season -> aired count or undefined) */
+	private airedEpisodeCountCache: Map<string, number | undefined> = new Map();
 	/** Cache for TV show episode counts (tmdbId -> aggregate + per-season counts) */
 	private tvEpisodeCountsCache: Map<number, TvEpisodeCounts> = new Map();
 	/** Short-lived cache for RuTracker automatic TV season searches (reduces per-episode query fan-out). */
@@ -2323,7 +2326,7 @@ export class SearchOrchestrator {
 		episodeInfo: NonNullable<ReturnType<typeof parseRelease>['episode']>
 	): ReleaseResult {
 		const season = targetSeason ?? episodeInfo.season;
-		const episodeToken = this.formatEpisodeToken(season, targetEpisode);
+		const episodeToken = formatEpisodePointerToken(season, targetEpisode);
 		const readablePointer =
 			season === undefined
 				? `Episode ${targetEpisode}`
@@ -2369,13 +2372,6 @@ export class SearchOrchestrator {
 			...release,
 			title: formatted
 		};
-	}
-
-	private formatEpisodeToken(season: number | undefined, episode: number): string {
-		if (season === undefined || season < 0) {
-			return `E${String(episode).padStart(2, '0')}`;
-		}
-		return `S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`;
 	}
 
 	/**
@@ -3466,33 +3462,42 @@ export class SearchOrchestrator {
 	}
 
 	/**
-	 * Aired episode count for a season, from the local library.
+	 * Aired episode count for a season, from TMDB's own episode list.
 	 *
-	 * TMDB only exposes the announced season length, which is what makes
-	 * RuTracker's living packs ("S1E1-7 из 8") look incomplete while a season is
-	 * still airing. The library already stores per-episode air dates, so count
-	 * the episodes that have actually aired. Returns undefined when the series
-	 * is not in the library (interactive search for an unadded show), which
-	 * keeps the strict completeness rule in that case.
+	 * The season endpoint returns every episode with its `air_date`
+	 * (developer.themoviedb.org/reference/tv-season-details), so the count of
+	 * episodes on or before today is the authoritative "how many have aired"
+	 * signal — the announced `episode_count` is what makes RuTracker's living
+	 * packs ("S1E1-7 из 8") look incomplete while the season is still airing.
+	 *
+	 * The local library is deliberately not used: a stale or partially
+	 * refreshed show undercounts and would accept a pack one episode early.
+	 * Returns undefined when TMDB has no episode list, which keeps the strict
+	 * completeness rule rather than guessing.
 	 */
 	private async getAiredSeasonEpisodeCount(
 		tmdbId: number,
 		seasonNumber: number
 	): Promise<number | undefined> {
-		try {
-			const shows = await db
-				.select({ id: series.id })
-				.from(series)
-				.where(eq(series.tmdbId, tmdbId))
-				.limit(1);
+		const cacheKey = `${tmdbId}:${seasonNumber}`;
+		if (this.airedEpisodeCountCache.has(cacheKey)) {
+			return this.airedEpisodeCountCache.get(cacheKey);
+		}
 
-			const show = shows[0];
-			if (!show) {
+		try {
+			const season = await tmdb.getSeason(tmdbId, seasonNumber);
+			const episodes = season.episodes ?? [];
+			if (episodes.length === 0) {
+				this.airedEpisodeCountCache.set(cacheKey, undefined);
 				return undefined;
 			}
 
-			const aired = await countAiredSeasonEpisodes(show.id, seasonNumber);
-			return aired > 0 ? aired : undefined;
+			const aired = episodes.filter(
+				(episode) => episode.episode_number > 0 && isAiredEpisode(episode.air_date)
+			).length;
+			const result = aired > 0 ? aired : undefined;
+			this.airedEpisodeCountCache.set(cacheKey, result);
+			return result;
 		} catch (error) {
 			logger.debug(
 				{
@@ -3500,7 +3505,7 @@ export class SearchOrchestrator {
 					seasonNumber,
 					error: error instanceof Error ? error.message : String(error)
 				},
-				'Failed to count aired season episodes from the library'
+				'Failed to count aired season episodes from TMDB'
 			);
 			return undefined;
 		}
