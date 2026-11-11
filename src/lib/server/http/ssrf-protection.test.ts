@@ -248,3 +248,70 @@ describe('resolveAndValidateUrl IPv6 literals', () => {
 		expect(dnsLookupMock).not.toHaveBeenCalled();
 	});
 });
+
+/**
+ * A `.strm` target is a URL the instance itself wrote into the file, and on a
+ * self-hosted deployment that host is private by design. Callers may declare
+ * that exact host as trusted; nothing else may pass, and trust must never
+ * excuse a blocked scheme or a different private host.
+ */
+describe('resolveAndValidateUrl trustedHosts', () => {
+	beforeEach(() => dnsLookupMock.mockReset());
+
+	it('rejects a Docker service host that resolves privately when nothing is trusted', async () => {
+		dnsLookupMock.mockResolvedValue([{ address: '172.19.0.5', family: 4 }]);
+
+		await expect(
+			resolveAndValidateUrl('http://cinephage:3000/api/streaming/session/movie/1')
+		).resolves.toMatchObject({
+			safe: false,
+			reason: "Hostname 'cinephage' resolves to private IP: 172.19.0.5"
+		});
+	});
+
+	it('allows that host once the caller declares it trusted', async () => {
+		dnsLookupMock.mockResolvedValue([{ address: '172.19.0.5', family: 4 }]);
+
+		await expect(
+			resolveAndValidateUrl('http://cinephage:3000/api/streaming/session/movie/1', {
+				trustedHosts: ['cinephage']
+			})
+		).resolves.toEqual({ safe: true });
+	});
+
+	it('matches a trusted entry that carries a port', async () => {
+		dnsLookupMock.mockResolvedValue([{ address: '172.19.0.5', family: 4 }]);
+
+		await expect(
+			resolveAndValidateUrl('http://Cinephage:3000/api/streaming/session/movie/1', {
+				trustedHosts: ['cinephage:3000']
+			})
+		).resolves.toEqual({ safe: true });
+	});
+
+	it('trusts a private literal address only when it is listed', async () => {
+		await expect(resolveAndValidateUrl('http://192.168.1.10:8096/x.m3u8')).resolves.toMatchObject({
+			safe: false
+		});
+		await expect(
+			resolveAndValidateUrl('http://192.168.1.10:8096/x.m3u8', { trustedHosts: ['192.168.1.10'] })
+		).resolves.toEqual({ safe: true });
+		expect(dnsLookupMock).not.toHaveBeenCalled();
+	});
+
+	it('does not let trust leak to another private host', async () => {
+		dnsLookupMock.mockResolvedValue([{ address: '169.254.169.254', family: 4 }]);
+
+		await expect(
+			resolveAndValidateUrl('http://metadata.example/latest/meta-data', {
+				trustedHosts: ['cinephage']
+			})
+		).resolves.toMatchObject({ safe: false });
+	});
+
+	it('does not let trust excuse an unsupported scheme', async () => {
+		await expect(
+			resolveAndValidateUrl('file:///etc/passwd', { trustedHosts: ['localhost'] })
+		).resolves.toMatchObject({ safe: false });
+	});
+});

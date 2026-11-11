@@ -26,6 +26,22 @@ export interface UrlSafetyResult {
 	reason?: string;
 }
 
+/**
+ * Hosts an operator has declared reachable on purpose, even though they
+ * resolve to a private address.
+ *
+ * The policy below is written for a URL supplied by an anonymous caller (a
+ * playlist segment, a redirect, a download link). Some callers instead handle
+ * a URL the instance itself authored - a `.strm` file holds the streaming
+ * origin we wrote into it - and on a self-hosted deployment that origin is a
+ * LAN or Docker-private address. Trust is therefore explicit per call and
+ * never global: an empty list keeps the strict public-only rule.
+ */
+export interface UrlValidationOptions {
+	/** Hostnames (or literal IPs) allowed to resolve to a private address. */
+	trustedHosts?: readonly string[];
+}
+
 /** Parse a dotted-quad IPv4 into a 32-bit integer, or null when invalid. */
 function ipv4ToInt(ip: string): number | null {
 	const parts = ip.split('.');
@@ -208,7 +224,10 @@ function isIpLiteral(hostname: string): boolean {
  * It catches obvious cases (literal IPs, blocked hostnames) but cannot
  * prevent DNS rebinding. For full protection, use resolveAndValidateUrl().
  */
-export function isUrlSafe(urlString: string): UrlSafetyResult {
+export function isUrlSafe(
+	urlString: string,
+	trustedHosts: readonly string[] = []
+): UrlSafetyResult {
 	try {
 		const url = new URL(urlString);
 
@@ -227,7 +246,7 @@ export function isUrlSafe(urlString: string): UrlSafetyResult {
 
 		// A DNS name is not an IP: only literal addresses are checked here.
 		// Hostnames are resolved and checked in resolveAndValidateUrl().
-		if (isIpLiteral(hostname) && isPrivateIp(hostname)) {
+		if (isIpLiteral(hostname) && isPrivateIp(hostname) && !isTrustedHost(hostname, trustedHosts)) {
 			return { safe: false, reason: 'Private/internal IP address' };
 		}
 
@@ -247,10 +266,18 @@ export function isUrlSafe(urlString: string): UrlSafetyResult {
  *  3. Validates the resolved IP against private/reserved ranges
  *
  * Use this for all proxy/fetch operations where the URL comes from user input.
+ * Callers handling a URL the instance itself authored (a `.strm` target) may
+ * pass `trustedHosts` so that exact host may resolve privately; every other
+ * caller keeps the strict public-only rule.
  */
-export async function resolveAndValidateUrl(urlString: string): Promise<UrlSafetyResult> {
+export async function resolveAndValidateUrl(
+	urlString: string,
+	options: UrlValidationOptions = {}
+): Promise<UrlSafetyResult> {
+	const trustedHosts = options.trustedHosts ?? [];
+
 	// Step 1: sync pre-check
-	const syncResult = isUrlSafe(urlString);
+	const syncResult = isUrlSafe(urlString, trustedHosts);
 	if (!syncResult.safe) {
 		return syncResult;
 	}
@@ -265,14 +292,17 @@ export async function resolveAndValidateUrl(urlString: string): Promise<UrlSafet
 			return { safe: true };
 		}
 
-		// Resolve hostname to IPs and reject if any result is private/reserved.
+		// Resolve hostname to IPs and reject if any result is private/reserved,
+		// unless the caller declared this exact host as trusted.
 		const addresses = await dns.lookup(hostname, { all: true, verbatim: true });
-		for (const { address } of addresses) {
-			if (isPrivateIp(address)) {
-				return {
-					safe: false,
-					reason: `Hostname '${hostname}' resolves to private IP: ${address}`
-				};
+		if (!isTrustedHost(hostname, trustedHosts)) {
+			for (const { address } of addresses) {
+				if (isPrivateIp(address)) {
+					return {
+						safe: false,
+						reason: `Hostname '${hostname}' resolves to private IP: ${address}`
+					};
+				}
 			}
 		}
 
@@ -304,6 +334,28 @@ function normalizeHostname(hostname: string): string {
 	return lowerHostname.startsWith('[') && lowerHostname.endsWith(']')
 		? lowerHostname.slice(1, -1)
 		: lowerHostname;
+}
+
+/**
+ * Normalise a trusted-host entry: lowercase, brackets stripped, a single
+ * trailing `:port` dropped. `::` survives, so IPv6 literals keep their form.
+ */
+function normalizeTrustedEntry(entry: string): string {
+	const trimmed = entry.trim();
+	const withoutPort =
+		trimmed.includes(':') && !trimmed.includes('::') ? trimmed.replace(/:\d+$/, '') : trimmed;
+	return normalizeHostname(withoutPort);
+}
+
+/**
+ * True when the hostname appears in a caller-supplied trusted list. Entries
+ * may be bare hostnames, `host:port` pairs, or literal addresses. Nothing
+ * here widens the policy on its own - an empty list trusts nothing.
+ */
+function isTrustedHost(hostname: string, trustedHosts: readonly string[]): boolean {
+	if (trustedHosts.length === 0) return false;
+	const target = normalizeHostname(hostname);
+	return trustedHosts.some((entry) => normalizeTrustedEntry(entry) === target);
 }
 
 /**

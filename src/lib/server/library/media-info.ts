@@ -27,6 +27,7 @@ import { readFile } from 'node:fs/promises';
 import type { movieFiles } from '#lib/server/db/schema.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { resolveAndValidateUrl } from '#lib/server/http/ssrf-protection.js';
+import { describeStrmTargetRejection, getStrmProbeTrustedHosts } from './strm-probe-trust.js';
 import { isVideoFile as isBaseVideoFile } from '#lib/config/constants.js';
 
 const logger = createChildLogger({ logDomain: 'scans' as const });
@@ -322,13 +323,18 @@ export class MediaInfoService {
 				// access to the download directory, and ffprobe will happily
 				// connect to whatever it contains. Screen it against the same SSRF
 				// policy as the proxy endpoints so an import cannot probe loopback,
-				// RFC1918, or the cloud metadata endpoint.
-				const safety = await resolveAndValidateUrl(strmUrl);
+				// RFC1918, or the cloud metadata endpoint - but trust the streaming
+				// host this instance writes into .strm files itself, which is a LAN
+				// or Docker address on every self-hosted deployment.
+				const safety = await resolveAndValidateUrl(strmUrl, {
+					trustedHosts: await getStrmProbeTrustedHosts()
+				});
 				if (!safety.safe) {
+					const rejection = describeStrmTargetRejection(safety.reason);
 					if (failOnInvalidStrmUrl) {
-						throw new Error(`Unsafe STRM URL: ${safety.reason}`);
+						throw new Error(`Unsafe STRM URL: ${rejection}`);
 					}
-					onStrmProbeFallback?.(`Unsafe STRM URL: ${safety.reason}`);
+					onStrmProbeFallback?.(`Unsafe STRM URL: ${rejection}`);
 					return this.getStrmMediaInfo();
 				}
 
