@@ -494,6 +494,16 @@ export class QBittorrentClient implements IDownloadClient {
 		});
 	}
 
+	/**
+	 * Map requested indices/paths onto qBittorrent's file ids.
+	 *
+	 * WebUI API, "Get torrent contents": each file carries an `index`, and
+	 * "Set file priority" takes those ids with 0 = do not download, 1 = normal.
+	 * The API notes that ids are positions in the response array and that the
+	 * `index` field should be used since 2.8.2; this fetch is unfiltered, so the
+	 * two coincide. Paths are added as a second key because a stale torrent
+	 * file list should not silently map to the wrong file.
+	 */
 	private resolveFileSelectionIds(
 		files: QBittorrentTorrentFile[],
 		selection: { fileIndices: number[]; filePaths?: string[] }

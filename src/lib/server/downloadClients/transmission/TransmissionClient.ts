@@ -520,8 +520,11 @@ export class TransmissionClient implements IDownloadClient {
 
 	/**
 	 * Mark additional files as wanted on a torrent that is already in the
-	 * client. Transmission keeps existing wanted flags untouched when only
-	 * `files-wanted` is sent.
+	 * client. Transmission's RPC spec (§3.2) treats `files-wanted` as a list of
+	 * indices to want and leaves every other file's flag alone; `files-unwanted`
+	 * is the opposite list. Indices are positions in the torrent's own file
+	 * order (§3.3), which is the order parse-torrent returns, so paths are not
+	 * needed. An empty array would mean "all files", hence the guard below.
 	 */
 	async extendFileSelection(
 		id: string,

@@ -14,6 +14,9 @@ season is one topic that is re-created as episodes air, so a pack can already
 contain the six earlier episodes that are also missing and monitored. The grab
 downloaded 1 of 7 for that reason — not because the pack was wrong.
 
+Observed behaviour and the pack/topic semantics come from Cinephage#663; the
+client-side contracts are listed under _External contracts_ below.
+
 The rule the code now enforces: **a pointer grab selects every missing,
 monitored, aired episode the pack actually contains, and nothing else.**
 
@@ -88,16 +91,16 @@ overwritten by the client's whole-torrent size).
 Checked against the vendors' documentation, because a wrong assumption here fails
 inside a download client rather than in a test.
 
-| Assumption in the code                                                                                                                                                         | Where it comes from                                                     |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
-| `torrents/files` returns one object per file with an `index`; `filePrio` takes those ids, and priority `0` = do not download, `1` = normal                                     | qBittorrent WebUI API — _Get torrent contents_, _Set file priority_     |
-| `filePrio` ids are file **positions** in the contents array, and the API recommends the `index` field since 2.8.2; the code fetches unfiltered so position and index coincide  | same, _Set file priority_ note                                          |
-| qBittorrent has no duplicate signal on `torrents/add` (HTTP 200 with `Fails.`), so duplicates are detected by info-hash lookup before adding and re-checked after a failed add | qBittorrent WebUI API — _Add new torrent_                               |
-| TMDB `tv/{id}/season/{n}` returns `episodes[]` with `episode_number` and `air_date`; the aired count is derived from that list, not from the library                           | TMDB API — _TV Season Details_                                          |
-| Transmission file indices are positions in the torrent's own file order, first file 0                                                                                          | Transmission RPC spec §3.3 (`files`)                                    |
-| `files-wanted` marks files wanted without unwanting the rest — `files-unwanted` is the opposite list; an **empty** array means "all files"                                     | Transmission RPC spec §3.2 (`torrent_set`)                              |
-| A duplicate add is reported as `torrent-duplicate` with `result: success`, not as an error                                                                                     | Transmission RPC spec §3.4 (`torrent_add`)                              |
-| Transmission 4.1 still accepts the kebab-case legacy protocol this client speaks                                                                                               | Transmission RPC spec, header note (deprecated, still supported in 4.x) |
+| Assumption in the code                                                                                                                                                                                 | Where it comes from                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| `torrents/files` returns one object per file with an `index`; `filePrio` takes those ids, and priority `0` = do not download, `1` = normal                                                             | qBittorrent WebUI API — _Get torrent contents_, _Set file priority_     |
+| `filePrio` ids are file **positions** in the contents array, and the API recommends the `index` field since 2.8.2; the code fetches unfiltered so position and index coincide                          | same, _Set file priority_ note                                          |
+| qBittorrent's `torrents/add` documents no duplicate signal (HTTP 200 for anything but an invalid file), so duplicates are detected by info-hash lookup before adding and re-checked after a failed add | qBittorrent WebUI API — _Add new torrent_                               |
+| TMDB `tv/{id}/season/{n}` returns `episodes[]` with `episode_number` and `air_date`; the aired count is derived from that list, not from the library                                                   | TMDB API — _TV Season Details_                                          |
+| Transmission file indices are positions in the torrent's own file order, first file 0                                                                                                                  | Transmission RPC spec §3.3 (`files`)                                    |
+| `files-wanted` marks files wanted without unwanting the rest — `files-unwanted` is the opposite list; an **empty** array means "all files"                                                             | Transmission RPC spec §3.2 (`torrent_set`)                              |
+| A duplicate add is reported as `torrent-duplicate` with `result: success`, not as an error                                                                                                             | Transmission RPC spec §3.4 (`torrent_add`)                              |
+| Transmission 4.1 still accepts the kebab-case legacy protocol this client speaks                                                                                                                       | Transmission RPC spec, header note (deprecated, still supported in 4.x) |
 
 - qBittorrent: <https://github.com/qbittorrent/qBittorrent/wiki/WebUI-API-(qBittorrent-4.1)>
 - Transmission: <https://github.com/transmission/transmission/blob/main/docs/rpc-spec.md>
