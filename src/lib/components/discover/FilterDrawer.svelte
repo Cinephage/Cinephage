@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { fade, fly } from 'svelte/transition';
 	import FilterPanel from './FilterPanel.svelte';
-	import type { SeasonalPreset } from '#lib/config/seasonal.js';
 	import type { TmdbNetwork, WatchProvider } from '#lib/types/tmdb.js';
 	import * as m from '#lib/paraglide/messages.js';
 
@@ -35,7 +34,7 @@
 		onRatingChange,
 		onCertificationChange,
 		activeSeasonalId,
-		onSeasonalToggle,
+		onSeasonalChange,
 		onReset,
 		onApply
 	} = $props<{
@@ -68,7 +67,7 @@
 		onRatingChange: (rating: number) => void;
 		onCertificationChange: (cert: string) => void;
 		activeSeasonalId: string | null;
-		onSeasonalToggle: (preset: SeasonalPreset) => void;
+		onSeasonalChange: (id: string | null) => void;
 		onReset: () => void;
 		onApply: () => void;
 	}>();
@@ -155,7 +154,7 @@
 				{onRatingChange}
 				{onCertificationChange}
 				{activeSeasonalId}
-				{onSeasonalToggle}
+				{onSeasonalChange}
 			/>
 		</div>
 

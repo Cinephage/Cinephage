@@ -16,6 +16,7 @@
 	import TmdbConfigRequired from '#lib/components/ui/TmdbConfigRequired.svelte';
 	import { UI } from '#lib/config/constants.js';
 	import {
+		SEASONAL_PRESETS,
 		findActiveSeasonalPreset,
 		seasonalUrlChanges,
 		type SeasonalPreset
@@ -34,7 +35,7 @@
 	import { Search, Eye, EyeOff, X, Loader2, Bug, CheckSquare, XSquare } from '@lucide/svelte';
 	import { getMediaTypeLabel } from '#lib/types/tmdb-guards.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
-	import { searchTmdb, getDiscover, getDiscoverUnfiltered } from '#lib/api/index.js';
+	import { searchTmdb, getDiscover, getDiscoverUnfiltered, getKeyword } from '#lib/api/index.js';
 
 	let { data } = $props();
 
@@ -232,7 +233,27 @@
 	let selectedExcludedKeywords = $derived(
 		parseKeywordIds(page.url.searchParams.get('without_keywords'))
 	);
-	let keywordNames = $state<Map<number, string>>(new Map());
+	// SvelteMap, not $state(new Map()): $state does not proxy Map, so a plain
+	// map's set() would not re-render the chips (names only showed up when
+	// something else, like a URL change, forced a re-read).
+	let keywordNames = new SvelteMap<number, string>();
+
+	// A keyword that arrives by URL — a seasonal preset, a shared link — has no
+	// label until something names it, so the chip would read as a bare id.
+	$effect(() => {
+		const missing = [...selectedKeywords, ...selectedExcludedKeywords].filter(
+			(id) => !keywordNames.has(id)
+		);
+		for (const id of missing) {
+			void getKeyword(id)
+				.then((keyword) => {
+					if (keyword) keywordNames.set(keyword.id, keyword.name);
+				})
+				// The chip already falls back to the raw id: a failed lookup
+				// costs a label, not the filter.
+				.catch(() => {});
+		}
+	});
 
 	let displayKeywords = $derived(
 		selectedKeywords.map((id) => ({
@@ -381,6 +402,16 @@
 	let activeSeasonal = $derived(
 		findActiveSeasonalPreset(page.url.searchParams.get('with_keywords'))
 	);
+
+	/** The select is explicit: a choice applies that preset, None unwinds it. */
+	function handleSeasonalChange(id: string | null) {
+		const next = id ? (SEASONAL_PRESETS.find((preset) => preset.id === id) ?? null) : null;
+		if (!next) {
+			if (activeSeasonal) toggleSeasonal(activeSeasonal);
+			return;
+		}
+		if (next.id !== activeSeasonal?.id) toggleSeasonal(next);
+	}
 
 	function toggleSeasonal(seasonal: SeasonalPreset) {
 		const url = new URL(page.url.href);
@@ -1171,7 +1202,7 @@
 		onRatingChange={(r) => updateFilter('vote_average.gte', String(r))}
 		onCertificationChange={toggleCertification}
 		activeSeasonalId={activeSeasonal?.id ?? null}
-		onSeasonalToggle={toggleSeasonal}
+		onSeasonalChange={handleSeasonalChange}
 		selectedKeywords={displayKeywords}
 		selectedExcludedKeywords={displayExcludedKeywords}
 		onKeywordAdd={handleKeywordAdd}

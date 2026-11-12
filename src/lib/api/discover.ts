@@ -34,6 +34,12 @@ export async function getDiscover(params: Record<string, string>): Promise<Disco
 	return response as unknown as DiscoverResponse;
 }
 
+/** TMDB keyword detail, so a keyword that arrived by URL can show its name. */
+export async function getKeyword(id: number): Promise<{ id: number; name: string } | null> {
+	const response = (await apiGet(`/api/tmdb/keyword/${id}`)) as { id?: number; name?: string };
+	return response?.name ? { id: response.id ?? id, name: response.name } : null;
+}
+
 export async function getDiscoverUnfiltered(
 	params: Record<string, string>
 ): Promise<DiscoverResponse> {

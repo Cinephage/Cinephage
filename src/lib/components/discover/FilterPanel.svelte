@@ -35,7 +35,7 @@
 		onRatingChange: (rating: number) => void;
 		onCertificationChange: (cert: string) => void;
 		activeSeasonalId: string | null;
-		onSeasonalToggle: (preset: SeasonalPreset) => void;
+		onSeasonalChange: (id: string | null) => void;
 	}
 
 	let {
@@ -67,7 +67,7 @@
 		onRatingChange,
 		onCertificationChange,
 		activeSeasonalId = null,
-		onSeasonalToggle
+		onSeasonalChange
 	}: Props = $props();
 
 	// Labels live in the message catalogue, so the config module stays i18n-free.
@@ -90,9 +90,13 @@
 	let networksOpen = $state(selectedNetworks.length > 0);
 	// svelte-ignore state_referenced_locally
 	let providersOpen = $state(selectedProviders.length > 0);
+	// Twenty-five genre chips push everything below them off-screen, so genres
+	// open on demand like networks and providers do.
+	// svelte-ignore state_referenced_locally
+	let genresOpen = $state(selectedGenres.length > 0);
 </script>
 
-<div class="space-y-8">
+<div class="space-y-6">
 	<!-- Sort -->
 	<div class="form-control">
 		<label
@@ -118,23 +122,22 @@
 
 	<!-- Seasonal -->
 	<div class="form-control">
-		<span class="label text-sm font-bold tracking-wide text-base-content/70 uppercase"
-			>{m.discover_seasonal_title()}</span
+		<label
+			for="seasonal"
+			class="label text-sm font-bold tracking-wide text-base-content/70 uppercase"
+			>{m.discover_seasonal_title()}</label
 		>
-		<div class="flex flex-wrap gap-2">
+		<select
+			id="seasonal"
+			class="select-bordered select w-full bg-base-200 transition-colors focus:bg-base-100"
+			value={activeSeasonalId ?? ''}
+			onchange={(e) => onSeasonalChange(e.currentTarget.value || null)}
+		>
+			<option value="">{m.common_none()}</option>
 			{#each SEASONAL_PRESETS as seasonal (seasonal.id)}
-				<button
-					type="button"
-					class="btn btn-sm {activeSeasonalId === seasonal.id
-						? 'btn-primary'
-						: 'border-base-300 btn-outline hover:btn-primary'}"
-					aria-pressed={activeSeasonalId === seasonal.id}
-					onclick={() => onSeasonalToggle(seasonal)}
-				>
-					{seasonalLabel(seasonal)}
-				</button>
+				<option value={seasonal.id}>{seasonalLabel(seasonal)}</option>
 			{/each}
-		</div>
+		</select>
 	</div>
 
 	<!-- Original Language -->
@@ -241,24 +244,40 @@
 
 	<!-- Genres -->
 	<div class="form-control">
-		<span class="label text-sm font-bold tracking-wide text-base-content/70 uppercase">
-			<span>{m.common_genres()}</span>
-			{#if selectedGenres.length > 0}
-				<span class="badge badge-sm badge-primary">{selectedGenres.length}</span>
-			{/if}
-		</span>
-		<div class="flex flex-wrap gap-2">
-			{#each genres as genre (genre.id)}
-				<button
-					class="btn btn-sm {selectedGenres.includes(genre.id)
-						? 'btn-primary'
-						: 'border-base-300 btn-outline hover:btn-primary'}"
-					onclick={() => onGenreToggle(genre.id)}
-				>
-					{genre.name}
-				</button>
-			{/each}
-		</div>
+		<button
+			type="button"
+			class="-mx-2 flex w-[calc(100%+1rem)] cursor-pointer items-center justify-between gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-base-200/60"
+			aria-expanded={genresOpen}
+			onclick={() => (genresOpen = !genresOpen)}
+		>
+			<span
+				class="flex items-center gap-2 text-sm font-bold tracking-wide text-base-content/70 uppercase"
+			>
+				{m.common_genres()}
+				{#if selectedGenres.length > 0}
+					<span class="badge badge-sm badge-primary">{selectedGenres.length}</span>
+				{/if}
+			</span>
+			<ChevronDown
+				class="h-4 w-4 shrink-0 text-base-content/50 transition-transform duration-200 {genresOpen
+					? 'rotate-180'
+					: ''}"
+			/>
+		</button>
+		{#if genresOpen}
+			<div class="mt-2 flex flex-wrap gap-2">
+				{#each genres as genre (genre.id)}
+					<button
+						class="btn btn-sm {selectedGenres.includes(genre.id)
+							? 'btn-primary'
+							: 'border-base-300 btn-outline hover:btn-primary'}"
+						onclick={() => onGenreToggle(genre.id)}
+					>
+						{genre.name}
+					</button>
+				{/each}
+			</div>
+		{/if}
 	</div>
 
 	<!-- Keywords -->
@@ -283,7 +302,7 @@
 		<div class="form-control">
 			<button
 				type="button"
-				class="flex w-full cursor-pointer items-center justify-between gap-2"
+				class="-mx-2 flex w-[calc(100%+1rem)] cursor-pointer items-center justify-between gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-base-200/60"
 				aria-expanded={networksOpen}
 				onclick={() => (networksOpen = !networksOpen)}
 			>
@@ -323,7 +342,7 @@
 	<div class="form-control">
 		<button
 			type="button"
-			class="flex w-full cursor-pointer items-center justify-between gap-2"
+			class="-mx-2 flex w-[calc(100%+1rem)] cursor-pointer items-center justify-between gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-base-200/60"
 			aria-expanded={providersOpen}
 			onclick={() => (providersOpen = !providersOpen)}
 		>
