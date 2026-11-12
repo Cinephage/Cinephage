@@ -6,6 +6,8 @@
 		id: string;
 		label: string;
 		title?: string;
+		/** Renders a heading above the first option carrying it. */
+		group?: string;
 	}
 
 	interface Props {
@@ -101,7 +103,7 @@
 	{#if open}
 		<div
 			id="{id}-options"
-			class="absolute top-full right-0 left-0 z-20 mt-1 max-h-64 overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-1 shadow-xl"
+			class="absolute top-full right-0 left-0 z-20 mt-1 max-h-96 overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-1 shadow-xl"
 		>
 			{#if searchable}
 				<div class="relative mb-1">
@@ -116,7 +118,12 @@
 				</div>
 			{/if}
 
-			{#each filtered as option (option.id)}
+			{#each filtered as option, index (option.id)}
+				{#if option.group && filtered[index - 1]?.group !== option.group}
+					<p class="mt-2 mb-1 px-2 text-xs font-bold tracking-wide text-base-content/40 uppercase">
+						{option.group}
+					</p>
+				{/if}
 				<label
 					class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-base-200"
 				>

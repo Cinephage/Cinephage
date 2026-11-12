@@ -642,6 +642,7 @@
 	"discover_filter_anyGenre": "Cualquier género",
 	"discover_filter_anyRating": "Cualquier clasificación",
 	"discover_filter_contentRating": "Clasificación",
+	"discover_filter_genresSeason": "Géneros y temporada",
 	"discover_filter_mediaType": "Tipo de medio",
 	"discover_filter_minRating": "Puntuación mín.",
 	"discover_filter_networks": "Cadenas",

@@ -93,11 +93,38 @@
 	let networksOpen = $state(selectedNetworks.length > 0);
 	// svelte-ignore state_referenced_locally
 	let providersOpen = $state(selectedProviders.length > 0);
-	let genreOptions = $derived(genres.map((genre) => ({ id: String(genre.id), label: genre.name })));
-	let genreSelection = $derived(selectedGenres.map(String));
-	let seasonalOptions = $derived(
-		SEASONAL_PRESETS.map((preset) => ({ id: preset.id, label: seasonalLabel(preset) }))
-	);
+	// One category list: genres and seasons. The `genre:` / `season:` prefixes
+	// keep the two filter params apart inside a single control.
+	const GENRE_PREFIX = 'genre:';
+	const SEASON_PREFIX = 'season:';
+	// Seasons first: seven entries that fit without scrolling, where the genre
+	// list behind them is long enough to need the search box.
+	let genreSeasonOptions = $derived([
+		...SEASONAL_PRESETS.map((preset) => ({
+			id: `${SEASON_PREFIX}${preset.id}`,
+			label: seasonalLabel(preset),
+			group: m.discover_seasonal_title()
+		})),
+		...genres.map((genre) => ({
+			id: `${GENRE_PREFIX}${genre.id}`,
+			label: genre.name,
+			group: m.common_genres()
+		}))
+	]);
+	let genreSeasonSelection = $derived([
+		...selectedGenres.map((id) => `${GENRE_PREFIX}${id}`),
+		...(activeSeasonalId ? [`${SEASON_PREFIX}${activeSeasonalId}`] : [])
+	]);
+
+	/** Genres stack; a season replaces the season before it. */
+	function toggleGenreSeason(id: string) {
+		if (id.startsWith(SEASON_PREFIX)) {
+			const seasonId = id.slice(SEASON_PREFIX.length);
+			onSeasonalChange(seasonId === activeSeasonalId ? null : seasonId);
+			return;
+		}
+		onGenreToggle(Number(id.slice(GENRE_PREFIX.length)));
+	}
 	let certificationOptions = $derived(
 		certifications.map((cert) => ({
 			id: cert.certification,
@@ -130,18 +157,6 @@
 			{/if}
 		</select>
 	</div>
-
-	<!-- Seasonal -->
-	<MultiSelectDropdown
-		id="seasonal"
-		label={m.discover_seasonal_title()}
-		options={seasonalOptions}
-		selected={activeSeasonalId ? [activeSeasonalId] : []}
-		placeholder={m.common_none()}
-		mode="single"
-		onToggle={(id) => onSeasonalChange(id === activeSeasonalId ? null : id)}
-		onClear={() => onSeasonalChange(null)}
-	/>
 
 	<!-- Original Language -->
 	<div class="form-control">
@@ -227,16 +242,19 @@
 		/>
 	{/if}
 
-	<!-- Genres -->
+	<!-- Genres + Seasonal -->
 	<MultiSelectDropdown
 		id="genres"
-		label={m.common_genres()}
-		options={genreOptions}
-		selected={genreSelection}
+		label={m.discover_filter_genresSeason()}
+		options={genreSeasonOptions}
+		selected={genreSeasonSelection}
 		placeholder={m.discover_filter_anyGenre()}
 		searchable
-		onToggle={(id) => onGenreToggle(Number(id))}
-		onClear={onGenreClear}
+		onToggle={toggleGenreSeason}
+		onClear={() => {
+			onGenreClear();
+			onSeasonalChange(null);
+		}}
 	/>
 
 	<!-- Keywords -->

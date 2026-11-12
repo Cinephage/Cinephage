@@ -642,6 +642,7 @@
 	"discover_filter_anyGenre": "Alle Genres",
 	"discover_filter_anyRating": "Jede Freigabe",
 	"discover_filter_contentRating": "Altersfreigabe",
+	"discover_filter_genresSeason": "Genres & Saisonales",
 	"discover_filter_mediaType": "Medientyp",
 	"discover_filter_minRating": "Min. Bewertung",
 	"discover_filter_networks": "Sender",
