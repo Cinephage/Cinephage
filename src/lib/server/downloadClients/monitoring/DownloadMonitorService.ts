@@ -30,6 +30,7 @@ import type { DownloadClientProtocol } from '../DownloadClientManager';
 import { joinCategoryPath, sanitizeCategorySegment } from '../core/client-utils.js';
 import { mapClientPathToLocal, mapClientPathToLocalWithResult } from './PathMapping';
 import { resolveInfoHash } from '../utils/hashUtils';
+import { identityUpdateFor, matchQueueItem, type DownloadMatch } from './match-download';
 import { ReleaseParser } from '#lib/server/indexers/parser/ReleaseParser.js';
 import {
 	findSuggestedMatches,
@@ -1753,62 +1754,57 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 
 		let activeCount = 0;
 
+		// An item that a row holds by id belongs to that row. A title match must
+		// never take it from a row that can prove ownership, so ownership is
+		// resolved before any fallback is considered.
+		const ownerOfHash = new Map<string, string>();
+		for (const queueItem of queueItems) {
+			const exact = matchQueueItem(queueItem, downloadMap, downloads, {
+				allowTitleFallback: false
+			});
+			if (exact) ownerOfHash.set(exact.download.hash.toLowerCase(), queueItem.id);
+		}
+
 		// Update each queue item
 		for (const queueItem of queueItems) {
-			// Try multiple strategies to find the download:
-			// 1. By downloadId (primary)
-			// 2. By stored infoHash
-			// 3. By extracting hash from magnetUrl
-			// 4. By title (SABnzbd only - nzo_id changes on re-grab)
-			let download = downloadMap.get(queueItem.downloadId.toLowerCase());
-			let matchedBy: 'downloadId' | 'infoHash' | 'magnetUrl' | 'title' | null = download
-				? 'downloadId'
-				: null;
+			const claimedByOthers = new Set(
+				[...ownerOfHash].filter(([, rowId]) => rowId !== queueItem.id).map(([hash]) => hash)
+			);
+			// Strategies, in order: stored id, stored infoHash, the hash inside the
+			// magnet, a title match for clients that re-mint ids (SABnzbd), and
+			// finally one id-addressed lookup. A row is only missing once the
+			// client has been asked for its own id and does not have it.
+			const match =
+				matchQueueItem(queueItem, downloadMap, downloads, {
+					allowTitleFallback: client.implementation === 'sabnzbd',
+					claimed: claimedByOthers
+				}) ?? (await this.lookupDownloadById(instance, queueItem));
+			const download = match?.download ?? null;
 
-			// Fallback: try infoHash if stored
-			if (!download && queueItem.infoHash) {
-				download = downloadMap.get(queueItem.infoHash.toLowerCase());
-				if (download) matchedBy = 'infoHash';
-			}
+			if (download && match) {
+				// Whichever strategy bound it, the item is now this row's: a later
+				// row must not title-match it out from under this one.
+				ownerOfHash.set(download.hash.toLowerCase(), queueItem.id);
 
-			// Fallback: try extracting hash from magnetUrl
-			if (!download && queueItem.magnetUrl) {
-				const extractedHash = resolveInfoHash(queueItem.magnetUrl);
-				if (extractedHash) {
-					download = downloadMap.get(extractedHash.toLowerCase());
-					if (download) matchedBy = 'magnetUrl';
-				}
-			}
-
-			// Fallback for SABnzbd-compatible clients: try matching by title
-			// SABnzbd generates new nzo_id when downloads are re-added,
-			// unlike torrent hashes which are persistent
-			if (!download && client.implementation === 'sabnzbd') {
-				download = downloads.find((d) => d.name.toLowerCase() === queueItem.title.toLowerCase());
-				if (download) matchedBy = 'title';
-			}
-
-			if (download) {
-				// If we matched by a fallback method, update downloadId for future lookups
-				if (matchedBy && matchedBy !== 'downloadId') {
+				const identityUpdate = identityUpdateFor(match, clientProtocol);
+				if (identityUpdate) {
 					logger.info(
 						{
 							title: queueItem.title,
 							oldDownloadId: queueItem.downloadId,
-							newDownloadId: download.hash,
-							matchedBy
+							newDownloadId: identityUpdate.downloadId,
+							previousInfoHash: queueItem.infoHash,
+							matchedBy: match.matchedBy,
+							protocol: clientProtocol
 						},
 						'Updating downloadId from fallback match'
 					);
 					await db
 						.update(downloadQueue)
-						.set({
-							downloadId: download.hash,
-							infoHash: queueItem.infoHash || download.hash
-						})
+						.set(identityUpdate)
 						.where(eq(downloadQueue.id, queueItem.id));
-					// Update local reference for the rest of this iteration
-					queueItem.downloadId = download.hash;
+					queueItem.downloadId = identityUpdate.downloadId;
+					queueItem.infoHash = identityUpdate.infoHash;
 				}
 
 				// Count active downloads for adaptive polling
@@ -1869,6 +1865,38 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 		}
 
 		return activeCount;
+	}
+
+	/**
+	 * Ask the client for the row's own id, directly.
+	 *
+	 * The poll works from a list, and a list is not the client: history is paged
+	 * (100 rows), the queue is capped at 1000, category filtering happens on the
+	 * server for history and locally for the queue, and SABnzbd splits history
+	 * into two disjoint sets. Treating "not in the page I fetched" as "the client
+	 * lost it" is what turns a query gap into a failed, blocklisted download
+	 * (#664). One id-addressed request answers the only question that matters, and
+	 * costs nothing for rows that matched from the list.
+	 */
+	private async lookupDownloadById(
+		instance: IDownloadClient,
+		queueItem: typeof downloadQueue.$inferSelect
+	): Promise<DownloadMatch | null> {
+		if (!queueItem.downloadId) return null;
+		try {
+			const download = await instance.getDownload(queueItem.downloadId);
+			return download ? { download, matchedBy: 'downloadId' } : null;
+		} catch (error) {
+			logger.debug(
+				{
+					queueId: queueItem.id,
+					downloadId: queueItem.downloadId,
+					error: error instanceof Error ? error.message : String(error)
+				},
+				'Id-addressed lookup failed; treating the download as missing'
+			);
+			return null;
+		}
 	}
 
 	/**
