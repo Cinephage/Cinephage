@@ -16,7 +16,6 @@
 	import TmdbConfigRequired from '#lib/components/ui/TmdbConfigRequired.svelte';
 	import { UI } from '#lib/config/constants.js';
 	import {
-		SEASONAL_PRESETS,
 		findActiveSeasonalPreset,
 		seasonalUrlChanges,
 		type SeasonalPreset
@@ -382,13 +381,6 @@
 	let activeSeasonal = $derived(
 		findActiveSeasonalPreset(page.url.searchParams.get('with_keywords'))
 	);
-
-	// Labels live in the message catalogue; a preset carries only its key, so
-	// this stays one registry instead of a switch that mirrors the config.
-	function seasonalLabel(seasonal: SeasonalPreset): string {
-		const catalogue = m as unknown as Record<string, (() => string) | undefined>;
-		return catalogue[seasonal.labelKey]?.() ?? seasonal.id;
-	}
 
 	function toggleSeasonal(seasonal: SeasonalPreset) {
 		const url = new URL(page.url.href);
@@ -872,28 +864,6 @@
 			</div>
 		</div>
 
-		<!-- Seasonal presets: curated keyword shelves, not a separate query path -->
-		{#if !isSearchMode}
-			<div
-				class="flex items-center gap-2 overflow-x-auto border-t border-base-200/50 px-4 py-2 lg:px-8"
-			>
-				<span class="shrink-0 text-xs font-bold tracking-wide text-base-content/50 uppercase">
-					{m.discover_seasonal_title()}
-				</span>
-				{#each SEASONAL_PRESETS as seasonal (seasonal.id)}
-					<button
-						class="btn shrink-0 btn-xs {activeSeasonal?.id === seasonal.id
-							? 'btn-primary'
-							: 'border-base-300 btn-outline hover:btn-primary'}"
-						aria-pressed={activeSeasonal?.id === seasonal.id}
-						onclick={() => toggleSeasonal(seasonal)}
-					>
-						{seasonalLabel(seasonal)}
-					</button>
-				{/each}
-			</div>
-		{/if}
-
 		<!-- Search (mobile) -->
 		<div class="flex items-center gap-2 border-t border-base-200/50 px-4 py-2 md:hidden">
 			<div class="group relative w-full">
@@ -1200,6 +1170,8 @@
 		onYearChange={updateYear}
 		onRatingChange={(r) => updateFilter('vote_average.gte', String(r))}
 		onCertificationChange={toggleCertification}
+		activeSeasonalId={activeSeasonal?.id ?? null}
+		onSeasonalToggle={toggleSeasonal}
 		selectedKeywords={displayKeywords}
 		selectedExcludedKeywords={displayExcludedKeywords}
 		onKeywordAdd={handleKeywordAdd}

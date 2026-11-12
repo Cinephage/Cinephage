@@ -1,5 +1,6 @@
 <script lang="ts">
 	import KeywordSelector from '#lib/components/smartlists/KeywordSelector.svelte';
+	import { SEASONAL_PRESETS, type SeasonalPreset } from '#lib/config/seasonal.js';
 	import LogoListSelect from './LogoListSelect.svelte';
 	import { ChevronDown } from '@lucide/svelte';
 	import type { TmdbNetwork, WatchProvider } from '#lib/types/tmdb.js';
@@ -33,6 +34,8 @@
 		onYearChange: (min: string, max: string) => void;
 		onRatingChange: (rating: number) => void;
 		onCertificationChange: (cert: string) => void;
+		activeSeasonalId: string | null;
+		onSeasonalToggle: (preset: SeasonalPreset) => void;
 	}
 
 	let {
@@ -62,8 +65,16 @@
 		onLanguageChange,
 		onYearChange,
 		onRatingChange,
-		onCertificationChange
+		onCertificationChange,
+		activeSeasonalId = null,
+		onSeasonalToggle
 	}: Props = $props();
+
+	// Labels live in the message catalogue, so the config module stays i18n-free.
+	function seasonalLabel(seasonal: SeasonalPreset): string {
+		const catalogue = m as unknown as Record<string, (() => string) | undefined>;
+		return catalogue[seasonal.labelKey]?.() ?? seasonal.id;
+	}
 
 	let languageOptions = $derived([{ code: '', name: 'All Languages' }, ...languages]);
 	let providerItems = $derived(
@@ -103,6 +114,27 @@
 				<option value="revenue.desc">{m.discover_sort_highestRevenue()}</option>
 			{/if}
 		</select>
+	</div>
+
+	<!-- Seasonal -->
+	<div class="form-control">
+		<span class="label text-sm font-bold tracking-wide text-base-content/70 uppercase"
+			>{m.discover_seasonal_title()}</span
+		>
+		<div class="flex flex-wrap gap-2">
+			{#each SEASONAL_PRESETS as seasonal (seasonal.id)}
+				<button
+					type="button"
+					class="btn btn-sm {activeSeasonalId === seasonal.id
+						? 'btn-primary'
+						: 'border-base-300 btn-outline hover:btn-primary'}"
+					aria-pressed={activeSeasonalId === seasonal.id}
+					onclick={() => onSeasonalToggle(seasonal)}
+				>
+					{seasonalLabel(seasonal)}
+				</button>
+			{/each}
+		</div>
 	</div>
 
 	<!-- Original Language -->
