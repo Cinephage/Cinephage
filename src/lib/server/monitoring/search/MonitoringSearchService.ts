@@ -95,6 +95,7 @@ export interface ItemSearchResult {
 	rejectionType?: string;
 	skipped?: boolean;
 	skipReason?: string;
+	seasonNumber?: number;
 }
 
 /**
@@ -1415,7 +1416,8 @@ export class MonitoringSearchService {
 					title,
 					searched: true,
 					releasesFound: 0,
-					grabbed: false
+					grabbed: false,
+					seasonNumber
 				};
 			}
 
@@ -1437,7 +1439,8 @@ export class MonitoringSearchService {
 					title,
 					searched: true,
 					releasesFound: searchResult.releases.length,
-					grabbed: false
+					grabbed: false,
+					seasonNumber
 				};
 			}
 
@@ -1524,7 +1527,8 @@ export class MonitoringSearchService {
 				grabbedRelease: grabResult?.releaseName,
 				queueItemId: grabResult?.queueItemId,
 				error: grabResult?.error,
-				rejectionType: grabResult?.rejectionType
+				rejectionType: grabResult?.rejectionType,
+				seasonNumber
 			};
 		} catch (error) {
 			const message = error instanceof Error ? error.message : 'Unknown error';

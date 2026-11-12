@@ -180,14 +180,17 @@ export async function executeMissingContentTask(
 			for await (const item of ctx.iterate(episodeResults.items)) {
 				if (!item.searched && item.skipped) continue;
 
+				const isSeasonPackAttempt = item.itemType === 'episode' && item.seasonNumber !== undefined;
+
 				await db.insert(monitoringHistory).values({
 					taskHistoryId,
 					taskType: 'missing',
-					episodeId: item.itemType === 'episode' ? item.itemId : undefined,
+					episodeId: item.itemType === 'episode' && !isSeasonPackAttempt ? item.itemId : undefined,
 					seriesId:
 						item.itemType === 'episode'
 							? (episodeSeriesMap.get(item.itemId) ?? undefined)
 							: undefined,
+					seasonNumber: item.seasonNumber,		
 					status: item.grabbed
 						? 'grabbed'
 						: item.error
@@ -207,14 +210,16 @@ export async function executeMissingContentTask(
 			for (const item of episodeResults.items) {
 				if (!item.searched && item.skipped) continue;
 
+				const isSeasonPackAttempt = item.itemType === 'episode' && item.seasonNumber !== undefined;
 				await db.insert(monitoringHistory).values({
 					taskHistoryId,
 					taskType: 'missing',
-					episodeId: item.itemType === 'episode' ? item.itemId : undefined,
+					episodeId: item.itemType === 'episode' && !isSeasonPackAttempt ? item.itemId : undefined,
 					seriesId:
 						item.itemType === 'episode'
 							? (episodeSeriesMap.get(item.itemId) ?? undefined)
 							: undefined,
+					seasonNumber: item.seasonNumber,
 					status: item.grabbed
 						? 'grabbed'
 						: item.error
