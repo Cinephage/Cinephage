@@ -10,32 +10,103 @@ describe('SABnzbdProxy.getHistory', () => {
 		vi.unstubAllGlobals();
 	});
 
-	it('requests archived history items, not just the non-archived default', async () => {
-		// SABnzbd's mode=history silently excludes items it has auto-archived
-		// unless archive=1 is passed - confirmed live against a real instance
-		// where a completed, untracked download had slots: [] without this
-		// param and only appeared with it (SABnzbd web UI's own "Show
-		// Archive" toggle sends the same param).
-		const fetchMock = vi.fn().mockResolvedValue({
+	function historyResponse(items: Array<{ nzo_id: string; completed: number }>) {
+		return {
 			ok: true,
 			text: async () =>
 				JSON.stringify({
-					history: { slots: [], noofslots: 0, version: '5.1.3' }
+					history: {
+						slots: items.map((item) => ({
+							...item,
+							name: item.nzo_id,
+							nzb_name: item.nzo_id,
+							category: 'tv',
+							storage: `/media/complete/${item.nzo_id}`,
+							bytes: 1,
+							status: 'Completed',
+							fail_message: '',
+							download_time: 1
+						})),
+						noofslots: items.length
+					}
 				})
-		});
-		vi.stubGlobal('fetch', fetchMock);
+		};
+	}
 
-		const proxy = new SABnzbdProxy({
+	function makeProxy() {
+		return new SABnzbdProxy({
 			host: '10.0.0.149',
 			port: 8124,
 			useSsl: false,
-			apiKey: 'test-key'
+			apiKey: 'test-api-key'
 		});
-		await proxy.getHistory(0, 100);
+	}
 
-		expect(fetchMock).toHaveBeenCalledTimes(1);
-		const requestedUrl = new URL(fetchMock.mock.calls[0][0] as string);
-		expect(requestedUrl.searchParams.get('archive')).toBe('1');
+	function archiveParamOf(url: string): string | null {
+		return new URL(url).searchParams.get('archive');
+	}
+
+	it('asks for both the live and the archived sides of history', async () => {
+		// SABnzbd's mode=history returns the non-archived jobs (post-processing
+		// and freshly completed) without `archive` and only the archived ones
+		// with `archive=1`. Asking for one side hides the other: with the
+		// default "Keep all jobs" retention nothing is archived, so a completed
+		// download vanished from the monitor and was failed as lost.
+		const fetchMock = vi.fn().mockImplementation(async () => historyResponse([]));
+		vi.stubGlobal('fetch', fetchMock);
+
+		await makeProxy().getHistory(0, 100);
+
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+		const archiveParams = fetchMock.mock.calls.map((call) => archiveParamOf(call[0] as string));
+		expect(archiveParams).toContain(null);
+		expect(archiveParams).toContain('1');
+	});
+
+	it('returns the union of both sides, newest first', async () => {
+		const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+			if (archiveParamOf(url) === '1') {
+				return historyResponse([{ nzo_id: 'old-archived', completed: 100 }]);
+			}
+			return historyResponse([{ nzo_id: 'fresh-live', completed: 300 }]);
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		const history = await makeProxy().getHistory(0, 100);
+
+		expect(history?.slots.map((slot) => slot.nzo_id)).toEqual(['fresh-live', 'old-archived']);
+		expect(history?.noofslots).toBe(2);
+	});
+
+	it('does not return a row that both sides report', async () => {
+		const fetchMock = vi
+			.fn()
+			.mockImplementation(async () => historyResponse([{ nzo_id: 'same-job', completed: 200 }]));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const history = await makeProxy().getHistory(0, 100);
+
+		expect(history?.slots.map((slot) => slot.nzo_id)).toEqual(['same-job']);
+	});
+
+	it('keeps the newest rows when the limit truncates the merged set', async () => {
+		const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+			if (archiveParamOf(url) === '1') {
+				return historyResponse([
+					{ nzo_id: 'a-50', completed: 50 },
+					{ nzo_id: 'a-10', completed: 10 }
+				]);
+			}
+			return historyResponse([
+				{ nzo_id: 'l-90', completed: 90 },
+				{ nzo_id: 'l-70', completed: 70 }
+			]);
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		const history = await makeProxy().getHistory(0, 2);
+
+		expect(history?.slots.map((slot) => slot.nzo_id)).toEqual(['l-90', 'l-70']);
 	});
 });
 

@@ -32,6 +32,7 @@ import type {
 	SabnzbdConfigResponse,
 	SabnzbdQueue,
 	SabnzbdHistory,
+	SabnzbdHistoryItem,
 	SabnzbdVersionResponse,
 	SabnzbdFullStatus,
 	SabnzbdFullStatusResponse,
@@ -218,36 +219,32 @@ export class SABnzbdProxy {
 	}
 
 	/**
-	 * Get download history with support for incremental polling.
+	 * Fetch one side of SABnzbd's history.
 	 *
-	 * When useIncremental is true:
-	 * - Uses last_history_update parameter to only fetch if something changed
-	 * - Returns null if nothing has changed since last call
-	 * - Much more efficient for polling scenarios
-	 *
-	 * @param start - Starting index for pagination
-	 * @param limit - Maximum items to return
-	 * @param category - Optional category filter
-	 * @param nzoIds - Optional: Only return items with these IDs
-	 * @param useIncremental - If true, use incremental polling (returns null if unchanged)
+	 * SABnzbd splits history in two: without `archive` it returns only the jobs
+	 * it has not archived yet, which is where everything currently
+	 * post-processing and every freshly completed job lives; `archive=1`
+	 * returns only the archived ones. A job moves from one side to the other
+	 * without ever appearing in both, so neither query is the whole history.
+	 * SABnzbd's default retention ("Keep all jobs") archives nothing, so the
+	 * archived side alone is permanently empty - that is how a completed
+	 * download vanished from the monitor and was eventually failed as lost.
 	 */
-	async getHistory(
-		start: number = 0,
-		limit: number = 100,
-		category?: string,
-		nzoIds?: string | string[],
-		useIncremental: boolean = false
-	): Promise<SabnzbdHistory | null> {
+	private async requestHistory(
+		start: number,
+		limit: number,
+		category: string | undefined,
+		nzoIds: string | string[] | undefined,
+		useIncremental: boolean,
+		archived: boolean
+	): Promise<SabnzbdHistory & { last_history_update?: number }> {
 		const params = new URLSearchParams();
 		params.set('start', start.toString());
 		params.set('limit', limit.toString());
-		// Without this, SABnzbd's history API only returns items it hasn't
-		// auto-archived yet - completed downloads older than its archive
-		// threshold vanish from mode=history entirely (slots: [] with no
-		// error) even though they're still real, present history entries
-		// (confirmed via the SABnzbd web UI's own "Show Archive" toggle,
-		// which sends this same param).
-		params.set('archive', '1');
+
+		if (archived) {
+			params.set('archive', '1');
+		}
 
 		if (category) {
 			params.set('category', category);
@@ -268,18 +265,72 @@ export class SABnzbdProxy {
 			history: SabnzbdHistory & { last_history_update?: number };
 		}>('history', params);
 
+		return response.history;
+	}
+
+	/**
+	 * Get download history with support for incremental polling.
+	 *
+	 * Returns the union of both history sides (see requestHistory). A job that
+	 * is still post-processing, or completed and not yet archived, exists only
+	 * on the live side; an old one exists only on the archived side. Items are
+	 * deduplicated by nzo_id and ordered newest first, so a `limit` keeps the
+	 * most recent entries instead of whichever side happened to be asked.
+	 *
+	 * When useIncremental is true:
+	 * - Uses last_history_update parameter to only fetch if something changed
+	 * - Returns null if nothing has changed since last call
+	 * - Much more efficient for polling scenarios
+	 *
+	 * @param start - Starting index for pagination
+	 * @param limit - Maximum items to return
+	 * @param category - Optional category filter
+	 * @param nzoIds - Optional: Only return items with these IDs
+	 * @param useIncremental - If true, use incremental polling (returns null if unchanged)
+	 */
+	async getHistory(
+		start: number = 0,
+		limit: number = 100,
+		category?: string,
+		nzoIds?: string | string[],
+		useIncremental: boolean = false
+	): Promise<SabnzbdHistory | null> {
+		// Both sides are asked for the window the caller wants out of the merged
+		// set, because any row the caller wants may sit on either side.
+		const fetchLimit = start + limit;
+		const [live, archived] = await Promise.all([
+			this.requestHistory(start, fetchLimit, category, nzoIds, useIncremental, false),
+			this.requestHistory(start, fetchLimit, category, nzoIds, useIncremental, true)
+		]);
+
 		// Update our tracking timestamp if provided
-		if (response.history.last_history_update) {
-			this.lastHistoryUpdate = response.history.last_history_update;
+		const lastHistoryUpdate = live.last_history_update ?? archived.last_history_update;
+		if (lastHistoryUpdate) {
+			this.lastHistoryUpdate = lastHistoryUpdate;
 		}
+
+		const merged = new Map<string, SabnzbdHistoryItem>();
+		for (const item of [...live.slots, ...archived.slots]) {
+			if (!merged.has(item.nzo_id)) {
+				merged.set(item.nzo_id, item);
+			}
+		}
+
+		const slots = [...merged.values()]
+			.sort((a, b) => b.completed - a.completed)
+			.slice(start, start + limit);
 
 		// If using incremental and nothing changed, SABnzbd returns empty slots
 		// We detect this by checking if we got an update timestamp but no slots
-		if (useIncremental && response.history.slots.length === 0 && this.lastHistoryUpdate > 0) {
-			return null; // Nothing changed
+		if (useIncremental && merged.size === 0 && this.lastHistoryUpdate > 0) {
+			return null;
 		}
 
-		return response.history;
+		return {
+			slots,
+			// The two sides are disjoint by construction, so the totals add up.
+			noofslots: live.noofslots + archived.noofslots
+		};
 	}
 
 	/**
