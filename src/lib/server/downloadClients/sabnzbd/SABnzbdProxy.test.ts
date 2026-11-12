@@ -89,6 +89,21 @@ describe('SABnzbdProxy.getHistory', () => {
 		expect(history?.slots.map((slot) => slot.nzo_id)).toEqual(['same-job']);
 	});
 
+	it('treats {"history": false} as an unchanged poll, not an empty history', async () => {
+		// With last_history_update equal to SABnzbd's counter the API answers a
+		// bare false instead of an empty slots array, so there is no .slots to read.
+		const fetchMock = vi.fn().mockImplementation(async () => ({
+			ok: true,
+			text: async () => JSON.stringify({ history: false })
+		}));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const history = await makeProxy().getHistory(0, 100, undefined, undefined, true);
+
+		expect(history).toBeNull();
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
 	it('keeps the newest rows when the limit truncates the merged set', async () => {
 		const fetchMock = vi.fn().mockImplementation(async (url: string) => {
 			if (archiveParamOf(url) === '1') {

@@ -229,6 +229,9 @@ export class SABnzbdProxy {
 	 * SABnzbd's default retention ("Keep all jobs") archives nothing, so the
 	 * archived side alone is permanently empty - that is how a completed
 	 * download vanished from the monitor and was eventually failed as lost.
+	 *
+	 * Returns false when an unchanged incremental poll answers {"history":
+	 * false}, which is SABnzbd's "nothing new" signal.
 	 */
 	private async requestHistory(
 		start: number,
@@ -237,7 +240,7 @@ export class SABnzbdProxy {
 		nzoIds: string | string[] | undefined,
 		useIncremental: boolean,
 		archived: boolean
-	): Promise<SabnzbdHistory & { last_history_update?: number }> {
+	): Promise<(SabnzbdHistory & { last_history_update?: number }) | false> {
 		const params = new URLSearchParams();
 		params.set('start', start.toString());
 		params.set('limit', limit.toString());
@@ -303,16 +306,30 @@ export class SABnzbdProxy {
 			this.requestHistory(start, fetchLimit, category, nzoIds, useIncremental, true)
 		]);
 
+		// An unchanged incremental poll answers {"history": false} - a different
+		// shape, not an empty list. Reading .slots off it is how a poll that had
+		// nothing to report would look like a crash or an empty history.
+		if (live === false && archived === false) {
+			return null;
+		}
+
+		// One side can legitimately answer false while the other carries data:
+		// SABnzbd answers before it applies the archive filter, so the two
+		// requests share a counter, and only a race between them can split them.
+		const pages = [live, archived].filter((page) => page !== false);
+
 		// Update our tracking timestamp if provided
-		const lastHistoryUpdate = live.last_history_update ?? archived.last_history_update;
+		const lastHistoryUpdate = pages.find((page) => page.last_history_update)?.last_history_update;
 		if (lastHistoryUpdate) {
 			this.lastHistoryUpdate = lastHistoryUpdate;
 		}
 
 		const merged = new Map<string, SabnzbdHistoryItem>();
-		for (const item of [...live.slots, ...archived.slots]) {
-			if (!merged.has(item.nzo_id)) {
-				merged.set(item.nzo_id, item);
+		for (const page of pages) {
+			for (const item of page.slots) {
+				if (!merged.has(item.nzo_id)) {
+					merged.set(item.nzo_id, item);
+				}
 			}
 		}
 
@@ -320,16 +337,10 @@ export class SABnzbdProxy {
 			.sort((a, b) => b.completed - a.completed)
 			.slice(start, start + limit);
 
-		// If using incremental and nothing changed, SABnzbd returns empty slots
-		// We detect this by checking if we got an update timestamp but no slots
-		if (useIncremental && merged.size === 0 && this.lastHistoryUpdate > 0) {
-			return null;
-		}
-
 		return {
 			slots,
 			// The two sides are disjoint by construction, so the totals add up.
-			noofslots: live.noofslots + archived.noofslots
+			noofslots: pages.reduce((total, page) => total + page.noofslots, 0)
 		};
 	}
 
