@@ -16,6 +16,12 @@
 	import TmdbConfigRequired from '#lib/components/ui/TmdbConfigRequired.svelte';
 	import { UI } from '#lib/config/constants.js';
 	import {
+		SEASONAL_PRESETS,
+		findActiveSeasonalPreset,
+		seasonalUrlChanges,
+		type SeasonalPreset
+	} from '#lib/config/seasonal.js';
+	import {
 		parseProviderIds,
 		parseGenreIds,
 		parseKeywordIds,
@@ -359,14 +365,42 @@
 		const paramKey = exclude ? 'without_keywords' : 'with_keywords';
 		const current = new SvelteSet(parseKeywordIds(page.url.searchParams.get(paramKey)));
 		current.add(keyword.id);
-		updateFilter(paramKey, Array.from(current).join(','));
+		// Pipe = OR on TMDB. A comma would require every tag at once, so adding
+		// one keyword to a preset shelf would empty it.
+		updateFilter(paramKey, Array.from(current).join('|'));
 	}
 
 	function handleKeywordRemove(keywordId: number, exclude: boolean) {
 		const paramKey = exclude ? 'without_keywords' : 'with_keywords';
 		const current = new SvelteSet(parseKeywordIds(page.url.searchParams.get(paramKey)));
 		current.delete(keywordId);
-		updateFilter(paramKey, current.size > 0 ? Array.from(current).join(',') : null);
+		updateFilter(paramKey, current.size > 0 ? Array.from(current).join('|') : null);
+	}
+
+	// Seasonal presets are keyword sets, so their active state is derived from
+	// the URL like every other filter — nothing stored, nothing to sync.
+	let activeSeasonal = $derived(
+		findActiveSeasonalPreset(page.url.searchParams.get('with_keywords'))
+	);
+
+	// Labels live in the message catalogue; a preset carries only its key, so
+	// this stays one registry instead of a switch that mirrors the config.
+	function seasonalLabel(seasonal: SeasonalPreset): string {
+		const catalogue = m as unknown as Record<string, (() => string) | undefined>;
+		return catalogue[seasonal.labelKey]?.() ?? seasonal.id;
+	}
+
+	function toggleSeasonal(seasonal: SeasonalPreset) {
+		const url = new URL(page.url.href);
+		const { set, remove } = seasonalUrlChanges(seasonal, {
+			type,
+			withKeywords: page.url.searchParams.get('with_keywords'),
+			minRating: page.url.searchParams.get('vote_average.gte')
+		});
+		for (const key of remove) url.searchParams.delete(key);
+		for (const [key, value] of Object.entries(set)) url.searchParams.set(key, value);
+		url.searchParams.set('page', '1');
+		goto(resolvePath(url.pathname + url.search), { reset: false });
 	}
 
 	function toggleExcludeInLibrary() {
@@ -837,6 +871,28 @@
 				{/if}
 			</div>
 		</div>
+
+		<!-- Seasonal presets: curated keyword shelves, not a separate query path -->
+		{#if !isSearchMode}
+			<div
+				class="flex items-center gap-2 overflow-x-auto border-t border-base-200/50 px-4 py-2 lg:px-8"
+			>
+				<span class="shrink-0 text-xs font-bold tracking-wide text-base-content/50 uppercase">
+					{m.discover_seasonal_title()}
+				</span>
+				{#each SEASONAL_PRESETS as seasonal (seasonal.id)}
+					<button
+						class="btn shrink-0 btn-xs {activeSeasonal?.id === seasonal.id
+							? 'btn-primary'
+							: 'border-base-300 btn-outline hover:btn-primary'}"
+						aria-pressed={activeSeasonal?.id === seasonal.id}
+						onclick={() => toggleSeasonal(seasonal)}
+					>
+						{seasonalLabel(seasonal)}
+					</button>
+				{/each}
+			</div>
+		{/if}
 
 		<!-- Search (mobile) -->
 		<div class="flex items-center gap-2 border-t border-base-200/50 px-4 py-2 md:hidden">

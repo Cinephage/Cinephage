@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { hasActiveDiscoverFilters, isDefaultView, parseDiscoverParams } from './discoverParams.js';
+import {
+	hasActiveDiscoverFilters,
+	isDefaultView,
+	parseDiscoverParams,
+	parseKeywordIds
+} from './discoverParams.js';
 
 function paramsFrom(query: string) {
 	return parseDiscoverParams(new URLSearchParams(query));
@@ -14,6 +19,18 @@ describe('parseDiscoverParams', () => {
 
 	it('defaults with_networks to empty', () => {
 		expect(paramsFrom('').withNetworks).toBe('');
+	});
+});
+
+describe('parseKeywordIds', () => {
+	it('splits comma- and pipe-separated id lists', () => {
+		expect(parseKeywordIds('207317,260365')).toEqual([207317, 260365]);
+		expect(parseKeywordIds('207317|260365|255088')).toEqual([207317, 260365, 255088]);
+	});
+
+	it('drops junk instead of returning NaN', () => {
+		expect(parseKeywordIds('207317,,abc|')).toEqual([207317]);
+		expect(parseKeywordIds(null)).toEqual([]);
 	});
 });
 

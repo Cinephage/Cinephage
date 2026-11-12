@@ -126,8 +126,19 @@ export function parseGenreIds(value: string | null): number[] {
 	return parseProviderIds(value); // Same logic
 }
 
+/**
+ * Parse keyword IDs from a TMDB-style list.
+ *
+ * TMDB reads a comma-separated keyword list as AND and a pipe-separated one as
+ * OR. Discover emits both — presets OR their curated tags, the manual picker
+ * ORs the picks — so split on either separator.
+ */
 export function parseKeywordIds(value: string | null): number[] {
-	return parseProviderIds(value);
+	return (value ?? '')
+		.split(/[|,]/)
+		.filter(Boolean)
+		.map(Number)
+		.filter((n) => !isNaN(n));
 }
 
 /**
