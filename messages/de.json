@@ -639,6 +639,8 @@
 	"discover_filterBadgeNetworks": "{count} Sender",
 	"discover_filterBadgeProviders": "{count} Anbieter",
 	"discover_filterBadgeTvShows": "Serien",
+	"discover_filter_anyGenre": "Alle Genres",
+	"discover_filter_anyRating": "Jede Freigabe",
 	"discover_filter_contentRating": "Altersfreigabe",
 	"discover_filter_mediaType": "Medientyp",
 	"discover_filter_minRating": "Min. Bewertung",

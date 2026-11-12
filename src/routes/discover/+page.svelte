@@ -1197,6 +1197,7 @@
 		onProviderToggle={toggleProvider}
 		onNetworkToggle={toggleNetwork}
 		onGenreToggle={toggleGenre}
+		onGenreClear={() => updateFilter('with_genres', null)}
 		onLanguageChange={(lang) => updateFilter('with_original_language', lang || null)}
 		onYearChange={updateYear}
 		onRatingChange={(r) => updateFilter('vote_average.gte', String(r))}

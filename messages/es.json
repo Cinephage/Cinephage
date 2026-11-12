@@ -639,6 +639,8 @@
 	"discover_filterBadgeNetworks": "{count} cadenas",
 	"discover_filterBadgeProviders": "{count} proveedores",
 	"discover_filterBadgeTvShows": "Series de TV",
+	"discover_filter_anyGenre": "Cualquier género",
+	"discover_filter_anyRating": "Cualquier clasificación",
 	"discover_filter_contentRating": "Clasificación",
 	"discover_filter_mediaType": "Tipo de medio",
 	"discover_filter_minRating": "Puntuación mín.",

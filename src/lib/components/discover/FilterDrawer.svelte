@@ -29,6 +29,7 @@
 		onProviderToggle,
 		onNetworkToggle,
 		onGenreToggle,
+		onGenreClear,
 		onLanguageChange,
 		onYearChange,
 		onRatingChange,
@@ -62,6 +63,7 @@
 		onProviderToggle: (id: number) => void;
 		onNetworkToggle: (id: number) => void;
 		onGenreToggle: (id: number) => void;
+		onGenreClear: () => void;
 		onLanguageChange: (language: string) => void;
 		onYearChange: (min: string, max: string) => void;
 		onRatingChange: (rating: number) => void;
@@ -149,6 +151,7 @@
 				{onProviderToggle}
 				{onNetworkToggle}
 				{onGenreToggle}
+				{onGenreClear}
 				{onLanguageChange}
 				{onYearChange}
 				{onRatingChange}

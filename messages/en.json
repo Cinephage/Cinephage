@@ -692,6 +692,8 @@
 	"discover_filterBadgeNetworks": "{count} Networks",
 	"discover_filterBadgeProviders": "{count} Providers",
 	"discover_filterBadgeTvShows": "TV Shows",
+	"discover_filter_anyGenre": "Any genre",
+	"discover_filter_anyRating": "Any rating",
 	"discover_filter_contentRating": "Content Rating",
 	"discover_filter_mediaType": "Media Type",
 	"discover_filter_minRating": "Min Rating",

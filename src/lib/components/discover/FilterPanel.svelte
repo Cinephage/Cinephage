@@ -1,6 +1,7 @@
 <script lang="ts">
 	import KeywordSelector from '#lib/components/smartlists/KeywordSelector.svelte';
 	import { SEASONAL_PRESETS, type SeasonalPreset } from '#lib/config/seasonal.js';
+	import MultiSelectDropdown from './MultiSelectDropdown.svelte';
 	import LogoListSelect from './LogoListSelect.svelte';
 	import { ChevronDown } from '@lucide/svelte';
 	import type { TmdbNetwork, WatchProvider } from '#lib/types/tmdb.js';
@@ -30,6 +31,7 @@
 		onProviderToggle: (id: number) => void;
 		onNetworkToggle: (id: number) => void;
 		onGenreToggle: (id: number) => void;
+		onGenreClear: () => void;
 		onLanguageChange: (language: string) => void;
 		onYearChange: (min: string, max: string) => void;
 		onRatingChange: (rating: number) => void;
@@ -62,6 +64,7 @@
 		onProviderToggle,
 		onNetworkToggle,
 		onGenreToggle,
+		onGenreClear,
 		onLanguageChange,
 		onYearChange,
 		onRatingChange,
@@ -90,10 +93,18 @@
 	let networksOpen = $state(selectedNetworks.length > 0);
 	// svelte-ignore state_referenced_locally
 	let providersOpen = $state(selectedProviders.length > 0);
-	// Twenty-five genre chips push everything below them off-screen, so genres
-	// open on demand like networks and providers do.
-	// svelte-ignore state_referenced_locally
-	let genresOpen = $state(selectedGenres.length > 0);
+	let genreOptions = $derived(genres.map((genre) => ({ id: String(genre.id), label: genre.name })));
+	let genreSelection = $derived(selectedGenres.map(String));
+	let seasonalOptions = $derived(
+		SEASONAL_PRESETS.map((preset) => ({ id: preset.id, label: seasonalLabel(preset) }))
+	);
+	let certificationOptions = $derived(
+		certifications.map((cert) => ({
+			id: cert.certification,
+			label: cert.certification,
+			title: cert.meaning
+		}))
+	);
 </script>
 
 <div class="space-y-6">
@@ -121,24 +132,16 @@
 	</div>
 
 	<!-- Seasonal -->
-	<div class="form-control">
-		<label
-			for="seasonal"
-			class="label text-sm font-bold tracking-wide text-base-content/70 uppercase"
-			>{m.discover_seasonal_title()}</label
-		>
-		<select
-			id="seasonal"
-			class="select-bordered select w-full bg-base-200 transition-colors focus:bg-base-100"
-			value={activeSeasonalId ?? ''}
-			onchange={(e) => onSeasonalChange(e.currentTarget.value || null)}
-		>
-			<option value="">{m.common_none()}</option>
-			{#each SEASONAL_PRESETS as seasonal (seasonal.id)}
-				<option value={seasonal.id}>{seasonalLabel(seasonal)}</option>
-			{/each}
-		</select>
-	</div>
+	<MultiSelectDropdown
+		id="seasonal"
+		label={m.discover_seasonal_title()}
+		options={seasonalOptions}
+		selected={activeSeasonalId ? [activeSeasonalId] : []}
+		placeholder={m.common_none()}
+		mode="single"
+		onToggle={(id) => onSeasonalChange(id === activeSeasonalId ? null : id)}
+		onClear={() => onSeasonalChange(null)}
+	/>
 
 	<!-- Original Language -->
 	<div class="form-control">
@@ -211,74 +214,30 @@
 
 	<!-- Content Rating -->
 	{#if certifications.length > 0 && type !== 'tv'}
-		<div class="form-control">
-			<span class="label text-sm font-bold tracking-wide text-base-content/70 uppercase">
-				<span>{m.discover_filter_contentRating()}</span>
-				{#if selectedCertification}
-					<button
-						class="badge cursor-pointer badge-ghost badge-sm"
-						onclick={() => onCertificationChange('')}
-					>
-						&times;
-					</button>
-				{/if}
-			</span>
-			<div class="flex flex-wrap gap-2">
-				{#each certifications as cert (cert.certification)}
-					<button
-						class="btn btn-sm {selectedCertification === cert.certification
-							? 'btn-primary'
-							: 'border-base-300 btn-outline hover:btn-primary'}"
-						onclick={() =>
-							onCertificationChange(
-								selectedCertification === cert.certification ? '' : cert.certification
-							)}
-						title={cert.meaning}
-					>
-						{cert.certification}
-					</button>
-				{/each}
-			</div>
-		</div>
+		<MultiSelectDropdown
+			id="content-rating"
+			label={m.discover_filter_contentRating()}
+			options={certificationOptions}
+			selected={selectedCertification ? [selectedCertification] : []}
+			placeholder={m.discover_filter_anyRating()}
+			mode="single"
+			onToggle={(certification) =>
+				onCertificationChange(selectedCertification === certification ? '' : certification)}
+			onClear={() => onCertificationChange('')}
+		/>
 	{/if}
 
 	<!-- Genres -->
-	<div class="form-control">
-		<button
-			type="button"
-			class="-mx-2 flex w-[calc(100%+1rem)] cursor-pointer items-center justify-between gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-base-200/60"
-			aria-expanded={genresOpen}
-			onclick={() => (genresOpen = !genresOpen)}
-		>
-			<span
-				class="flex items-center gap-2 text-sm font-bold tracking-wide text-base-content/70 uppercase"
-			>
-				{m.common_genres()}
-				{#if selectedGenres.length > 0}
-					<span class="badge badge-sm badge-primary">{selectedGenres.length}</span>
-				{/if}
-			</span>
-			<ChevronDown
-				class="h-4 w-4 shrink-0 text-base-content/50 transition-transform duration-200 {genresOpen
-					? 'rotate-180'
-					: ''}"
-			/>
-		</button>
-		{#if genresOpen}
-			<div class="mt-2 flex flex-wrap gap-2">
-				{#each genres as genre (genre.id)}
-					<button
-						class="btn btn-sm {selectedGenres.includes(genre.id)
-							? 'btn-primary'
-							: 'border-base-300 btn-outline hover:btn-primary'}"
-						onclick={() => onGenreToggle(genre.id)}
-					>
-						{genre.name}
-					</button>
-				{/each}
-			</div>
-		{/if}
-	</div>
+	<MultiSelectDropdown
+		id="genres"
+		label={m.common_genres()}
+		options={genreOptions}
+		selected={genreSelection}
+		placeholder={m.discover_filter_anyGenre()}
+		searchable
+		onToggle={(id) => onGenreToggle(Number(id))}
+		onClear={onGenreClear}
+	/>
 
 	<!-- Keywords -->
 	<div class="form-control">
