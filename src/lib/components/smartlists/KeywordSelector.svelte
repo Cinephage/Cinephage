@@ -15,12 +15,14 @@
 	}
 
 	interface Props {
+		/** The parent section may already carry the label. */
+		showLabel?: boolean;
 		selectedKeywords: SelectedKeyword[];
 		onAddKeyword: (keyword: KeywordResult, exclude: boolean) => void;
 		onRemoveKeyword: (keywordId: number, exclude: boolean) => void;
 	}
 
-	let { selectedKeywords, onAddKeyword, onRemoveKeyword }: Props = $props();
+	let { showLabel = true, selectedKeywords, onAddKeyword, onRemoveKeyword }: Props = $props();
 
 	let query = $state('');
 	let results = $state<KeywordResult[]>([]);
@@ -54,11 +56,13 @@
 </script>
 
 <div class="form-control">
-	<div class="label py-1">
-		<span class="label-text text-xs font-medium tracking-wide text-base-content/60 uppercase">
-			{m.smartlists_filter_keywords()}
-		</span>
-	</div>
+	{#if showLabel}
+		<div class="label py-1">
+			<span class="label-text text-xs font-medium tracking-wide text-base-content/60 uppercase">
+				{m.smartlists_filter_keywords()}
+			</span>
+		</div>
+	{/if}
 	<div class="relative">
 		<input
 			type="text"

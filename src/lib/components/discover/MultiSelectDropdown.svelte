@@ -80,7 +80,7 @@
 <div class="form-control relative" bind:this={root}>
 	<span class="label text-sm font-bold tracking-wide text-base-content/70 uppercase">
 		{label}
-		{#if selected.length > 0}
+		{#if selected.length > 1}
 			<span class="badge badge-sm badge-primary">{selected.length}</span>
 		{/if}
 	</span>
