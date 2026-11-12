@@ -190,7 +190,7 @@ export async function executeMissingContentTask(
 						item.itemType === 'episode'
 							? (episodeSeriesMap.get(item.itemId) ?? undefined)
 							: undefined,
-					seasonNumber: item.seasonNumber,		
+					seasonNumber: item.seasonNumber,
 					status: item.grabbed
 						? 'grabbed'
 						: item.error
@@ -211,6 +211,7 @@ export async function executeMissingContentTask(
 				if (!item.searched && item.skipped) continue;
 
 				const isSeasonPackAttempt = item.itemType === 'episode' && item.seasonNumber !== undefined;
+
 				await db.insert(monitoringHistory).values({
 					taskHistoryId,
 					taskType: 'missing',
