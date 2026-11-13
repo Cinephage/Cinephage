@@ -74,6 +74,28 @@ export async function parseTorrentFile(data: Buffer | Uint8Array): Promise<Torre
 			};
 		}
 
+		// A tracker that answers a torrent request with a page - login, Cloudflare
+		// challenge, or a bot-detection stub - reaches the bencode parser as HTML.
+		// Name it: the generic parse error makes callers treat the candidate as
+		// missing and silently fall through to a magnet, which carries no file
+		// list, so an episode-pointer grab then fails much later with an unrelated
+		// "requires torrent metadata" error.
+		if (!looksLikeTorrentFile(data)) {
+			const buffer = Buffer.from(data);
+			const head = buffer
+				.subarray(0, 40)
+				.toString('utf-8')
+				.replace(/[^\x20-\x7e]/g, '?');
+			logger.warn(
+				{ dataLength: data.length, head },
+				'Torrent payload is not bencoded - the tracker returned a page, not a torrent'
+			);
+			return {
+				success: false,
+				error: `Tracker returned a non-torrent payload (${data.length} bytes, starts with "${head.replace(/"/g, "'")}")`
+			};
+		}
+
 		// Parse as torrent file (parse-torrent v11+ is async)
 		const torrent = await parseTorrent(Buffer.from(data));
 
