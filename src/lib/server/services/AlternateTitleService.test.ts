@@ -693,3 +693,96 @@ describe('search titles following the language profile', () => {
 		expect(titles.slice(0, 2)).toEqual(['Game of Thrones', 'Il trono di spade']);
 	});
 });
+
+
+describe('search titles restricted to the requested languages', () => {
+	const RU_PROFILE = 'profile-russian-titles';
+
+	testDb.db
+		.insert(languageProfiles)
+		.values({
+			id: RU_PROFILE,
+			name: 'Russian',
+			audio: { preferOriginal: false, languages: ['ru'], mode: 'prefer' },
+			subtitles: [{ tag: 'ru', variant: 'regular', accessibility: 'any' }]
+		})
+		.run();
+
+	it('drops alternates in languages the item never asked for', async () => {
+		testDb.db
+			.insert(series)
+			.values({
+				id: 'series-10th-kingdom',
+				tmdbId: 40546,
+				title: 'Десятое королевство',
+				originalTitle: 'The 10th Kingdom',
+				originalLanguage: 'en',
+				path: 'series-10th-kingdom',
+				metadataLanguageMode: 'explicit',
+				metadataLanguageValue: 'ru',
+				languageProfileId: RU_PROFILE
+			})
+			.run();
+
+		testDb.db.insert(alternateTitles).values(
+			[
+				{ title: 'Десетото кралство', country: 'BG' },
+				{ title: 'Десяте королівство', country: 'UA' },
+				{ title: 'Dixième Royaume', country: 'FR' },
+				{ title: 'The 10th Kingdom', country: 'US' }
+			].map((alt) => ({
+				mediaType: 'series' as const,
+				mediaId: 'series-10th-kingdom',
+				title: alt.title,
+				cleanTitle: cleanTitle(alt.title),
+				source: 'tmdb',
+				country: alt.country
+			}))
+		).run();
+
+		const titles = await getSeriesSearchTitles('series-10th-kingdom', 'ru');
+
+		// Russian display title first, English original kept as the second query.
+		expect(titles[0]).toBe('Десятое королевство');
+		expect(titles).toContain('The 10th Kingdom');
+		// Bulgarian and Ukrainian are Cyrillic too, which is why the old
+		// script-only filter let them through; French never belonged here.
+		expect(titles).not.toContain('Десетото кралство');
+		expect(titles).not.toContain('Десяте королівство');
+		expect(titles).not.toContain('Dixième Royaume');
+	});
+
+	it('keeps a title whose language a provider told us explicitly', async () => {
+		testDb.db
+			.insert(series)
+			.values({
+				id: 'series-explicit-language',
+				tmdbId: 40547,
+				title: 'Десятое королевство',
+				originalTitle: 'The 10th Kingdom',
+				originalLanguage: 'en',
+				path: 'series-explicit-language',
+				metadataLanguageMode: 'explicit',
+				metadataLanguageValue: 'ru',
+				languageProfileId: RU_PROFILE
+			})
+			.run();
+
+		testDb.db
+			.insert(alternateTitles)
+			.values({
+				mediaType: 'series',
+				mediaId: 'series-explicit-language',
+				title: 'Десятое королевство (озвучка)',
+				cleanTitle: cleanTitle('Десятое королевство (озвучка)'),
+				source: 'tmdb',
+				country: null,
+				language: 'ru'
+			})
+			.run();
+
+		const titles = await getSeriesSearchTitles('series-explicit-language', 'ru');
+
+		expect(titles).toContain('Десятое королевство (озвучка)');
+	});
+});

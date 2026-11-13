@@ -61,6 +61,32 @@ const LANGUAGE_COUNTRIES: Record<string, Set<string>> = {
 	pt: new Set(['PT', 'BR', 'AO', 'MZ']),
 	it: new Set(['IT', 'SM', 'VA', 'CH']),
 	ru: new Set(['RU', 'BY', 'KZ', 'KG']),
+	uk: new Set(['UA']),
+	be: new Set(['BY']),
+	bg: new Set(['BG']),
+	sr: new Set(['RS']),
+	hr: new Set(['HR']),
+	mk: new Set(['MK']),
+	ro: new Set(['RO']),
+	el: new Set(['GR', 'CY']),
+	hu: new Set(['HU']),
+	cs: new Set(['CZ']),
+	sk: new Set(['SK']),
+	sl: new Set(['SI']),
+	lt: new Set(['LT']),
+	lv: new Set(['LV']),
+	et: new Set(['EE']),
+	ka: new Set(['GE']),
+	hy: new Set(['AM']),
+	az: new Set(['AZ']),
+	kk: new Set(['KZ']),
+	uz: new Set(['UZ']),
+	he: new Set(['IL']),
+	fa: new Set(['IR']),
+	vi: new Set(['VN']),
+	id: new Set(['ID']),
+	ms: new Set(['MY']),
+	fil: new Set(['PH']),
 	ja: new Set(['JP']),
 	ko: new Set(['KR']),
 	zh: new Set(['CN', 'TW', 'HK', 'MO', 'SG']),
@@ -92,6 +118,51 @@ const LANGUAGE_COUNTRIES: Record<string, Set<string>> = {
 	hi: new Set(['IN']),
 	th: new Set(['TH'])
 };
+
+/**
+ * Reverse of LANGUAGE_COUNTRIES: the languages a country's titles may be in.
+ * A country can appear under several languages (BE under fr and nl, CH under
+ * de/fr/it), which is why this maps to a list instead of one guess.
+ */
+const COUNTRY_LANGUAGES: Map<string, string[]> = (() => {
+	const map = new Map<string, string[]>();
+	for (const [language, countries] of Object.entries(LANGUAGE_COUNTRIES)) {
+		for (const country of countries) {
+			const list = map.get(country) ?? [];
+			list.push(language);
+			map.set(country, list);
+		}
+	}
+	return map;
+})();
+
+/**
+ * Languages an alternate title could be written in. Prefers the language a
+ * provider gave us; falls back to the languages spoken in the alternate's
+ * country, which is all TMDB's alternative-titles endpoint carries.
+ */
+function alternateLanguages(alt: SearchTitleAlternate): string[] {
+	if (alt.language) return [normalizeLanguageTag(alt.language)];
+	if (!alt.country) return [];
+	return COUNTRY_LANGUAGES.get(alt.country.toUpperCase()) ?? [];
+}
+
+/**
+ * Whether an alternate title may be searched, given the languages this item
+ * actually asks for.
+ *
+ * An empty allowlist means "no signal" and keeps every alternate, which is the
+ * old behaviour for items with no language profile and no metadata locale.
+ * With an allowlist, an alternate whose language cannot be identified is
+ * dropped: searching a title in an unknown language is exactly the noise this
+ * exists to remove.
+ */
+function isAlternateAllowed(alt: SearchTitleAlternate, allowedLanguages: string[]): boolean {
+	if (allowedLanguages.length === 0) return true;
+	return alternateLanguages(alt).some((language) =>
+		allowedLanguages.some((allowed) => languageMatches(language, allowed))
+	);
+}
 
 /**
  * Normalize a title for matching (like Radarr's CleanTitle)
@@ -209,7 +280,12 @@ interface SearchTitleMedia {
 	metadataLanguageValue: string | null;
 }
 
-type SearchTitleAlternate = { title: string; country: string | null; language: string | null };
+type SearchTitleAlternate = {
+	title: string;
+	country: string | null;
+	language: string | null;
+	source: string;
+};
 
 /**
  * Language the display title is written in: the item's explicit metadata
@@ -271,12 +347,19 @@ function findTitleInLanguage(
  * SearchOrchestrator. Empty when the item has no language profile, which
  * keeps the display title first.
  */
-async function resolveProfileLeadingTitles(
+interface ProfileSearchTitles {
+	/** Titles to try first, in profile order. Non-Latin titles are excluded. */
+	titles: string[];
+	/** Languages the profile actually asks for. */
+	languages: string[];
+}
+
+async function resolveProfileSearchTitles(
 	mediaType: 'movie' | 'series',
 	mediaId: string,
 	media: SearchTitleMedia,
 	alternates: SearchTitleAlternate[]
-): Promise<string[]> {
+): Promise<ProfileSearchTitles> {
 	let audio;
 	try {
 		const profileService = getLanguageProfileService();
@@ -291,13 +374,13 @@ async function resolveProfileLeadingTitles(
 			'Failed to resolve language profile for search titles, using display title first'
 		);
 	}
-	if (!audio) return [];
+	if (!audio) return { titles: [], languages: [] };
 
 	const languages = [
 		...(audio.preferOriginal && media.originalLanguage ? [media.originalLanguage] : []),
 		...audio.languages
 	];
-	if (languages.length === 0) return [];
+	if (languages.length === 0) return { titles: [], languages: [] };
 
 	const displayLanguage = await resolveDisplayTitleLanguage(media);
 	const titles: string[] = [];
@@ -305,7 +388,7 @@ async function resolveProfileLeadingTitles(
 		const title = findTitleInLanguage(language, media, displayLanguage, alternates);
 		if (title && !containsNonLatinScript(title)) titles.push(title);
 	}
-	return titles;
+	return { titles, languages };
 }
 
 /**
@@ -313,11 +396,14 @@ async function resolveProfileLeadingTitles(
  *
  * Order of precedence:
  * 1. Titles in the languages the item's language profile prefers
- *    (see resolveProfileLeadingTitles)
+ *    (see resolveProfileSearchTitles)
  * 2. Display title (metadata language)
  * 3. Original title (if different - covers non-English originals)
- * 4. TMDB alternates from countries matching the preferred language
- * 5. Remaining TMDB alternates (last-resort fallback for regional trackers)
+ * 4. TMDB alternates in a language this item asks for, preferred countries first
+ * 5. Remaining TMDB alternates in those languages (regional tracker fallback)
+ *
+ * Alternates in other languages are dropped before the cap: they are TMDB
+ * side effects, and each one costs a request on the indexers that get them.
  *
  * The early exit in SearchOrchestrator means later entries are only tried
  * when earlier titles find no matching release, so the ordering matters more
@@ -331,12 +417,50 @@ async function buildSearchTitles(
 ): Promise<string[]> {
 	const alternates = await db.query.alternateTitles.findMany({
 		where: and(eq(alternateTitles.mediaType, mediaType), eq(alternateTitles.mediaId, mediaId)),
-		columns: { title: true, country: true, language: true }
+		columns: { title: true, country: true, language: true, source: true }
 	});
 
-	const leading = await resolveProfileLeadingTitles(mediaType, mediaId, media, alternates);
+	const profile = await resolveProfileSearchTitles(mediaType, mediaId, media, alternates);
+	const leading = profile.titles;
 	const primary = leading[0] ?? media.title;
 	const candidatesSeen = new Set<string>([cleanTitle(primary)]);
+
+	const displayLanguage = await resolveDisplayTitleLanguage(media);
+
+	// Languages this item actually asks for: the caller's metadata locale, the
+	// language its display title is written in, its original language, and the
+	// profile's audio languages.
+	// Anything else in alternate_titles is a TMDB side effect for this viewer - a
+	// Bulgarian or Ukrainian release title for a Russian library - and searching
+	// it spends a request (a browser-launched one, on a Cloudflare tracker) on a
+	// title nobody asked for.
+	const allowedLanguages = [
+		...new Set(
+			[preferredLanguage, displayLanguage, media.originalLanguage, ...profile.languages].filter(
+				(value): value is string => Boolean(value)
+			)
+		)
+	];
+
+	// Only TMDB's own alternate-title list is filtered: it is a dump of every
+	// country's release title. Provider variants (anilist romaji, mal native
+	// titles) and user additions are deliberate and carry no country to judge, so
+	// they are always kept.
+	const searchable = alternates.filter(
+		(alt) => alt.source !== 'tmdb' || isAlternateAllowed(alt, allowedLanguages)
+	);
+	if (searchable.length !== alternates.length) {
+		logger.debug(
+			{
+				mediaType,
+				mediaId,
+				kept: searchable.length,
+				dropped: alternates.length - searchable.length,
+				allowedLanguages
+			},
+			'Alternate titles filtered to the requested search languages'
+		);
+	}
 
 	// Split alternates: preferred-language countries first, others as fallback.
 	const preferredCountries = preferredLanguage
@@ -344,10 +468,10 @@ async function buildSearchTitles(
 		: null;
 	const [langAlts, otherAlts] = preferredCountries
 		? [
-				alternates.filter((a) => a.country && preferredCountries.has(a.country)),
-				alternates.filter((a) => !a.country || !preferredCountries.has(a.country))
+				searchable.filter((a) => a.country && preferredCountries.has(a.country)),
+				searchable.filter((a) => !a.country || !preferredCountries.has(a.country))
 			]
-		: [alternates, []];
+		: [searchable, []];
 
 	// Collect remaining candidates, then sort so romanized (Latin-script) titles
 	// appear before CJK-script titles. This puts romaji before kanji/kana.
