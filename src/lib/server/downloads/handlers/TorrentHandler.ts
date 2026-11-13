@@ -8,6 +8,7 @@ import { getDownloadResolutionService } from '../DownloadResolutionService.js';
 import { parseEpisodePointerFromGuid, parseEpisodePointerFromTitle } from '../episode-pointer.js';
 import type { EpisodePointerFileSelection } from '../episode-pointer.js';
 import { resolveEpisodePackSelection } from '../episode-pack-selection.js';
+import { resolveImportedScope } from '../imported-scope.js';
 import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
 import { declaredSeedLimits, maxSeedLimit } from '#lib/server/indexers/seedDefaults.js';
 import { blocklistService } from '#lib/server/monitoring/specifications/BlocklistSpecification.js';
@@ -368,6 +369,93 @@ export class TorrentHandler {
 								err: extendError
 							},
 							'Failed to extend episode pointer file selection on existing torrent'
+						);
+					}
+				}
+
+				// The row that carried this hash may already be post-import: the pack
+				// delivered some episodes and this grab wants ones it did not (#663).
+				// Extending the client's selection is still the right move, but the old
+				// row is finished and import refuses a row it has already completed, so
+				// the new scope needs a live row of its own to be picked up.
+				const retryEpisodeIds = pointerEpisodeIds ?? episodeIds ?? [];
+				const importedScope = await resolveImportedScope({
+					infoHash: existingTorrent.hash,
+					movieId,
+					seriesId,
+					episodeIds: retryEpisodeIds
+				});
+
+				if (
+					extendSelection &&
+					pointerFileSelection &&
+					retryEpisodeIds.length > 0 &&
+					!importedScope.satisfied
+				) {
+					try {
+						await extendSelection(existingTorrent.hash, {
+							fileIndices: pointerFileSelection.fileIndices,
+							filePaths: pointerFileSelection.filePaths
+						});
+
+						const created = await downloadMonitor.addToQueue({
+							downloadClientId: clientConfig.id,
+							downloadId: existingTorrent.hash,
+							infoHash: existingTorrent.hash,
+							title: release.title,
+							indexerId: release.indexerId,
+							indexerName: release.indexerName,
+							downloadUrl: release.downloadUrl,
+							magnetUrl: resolvedDownload.magnetUrl || release.magnetUrl,
+							protocol: 'torrent',
+							movieId,
+							seriesId,
+							episodeIds: retryEpisodeIds,
+							seasonNumber,
+							quality,
+							size: pointerSize ?? release.size,
+							releaseGroup: parsed.releaseGroup ?? undefined,
+							isAutomatic: options.isAutomatic ?? false,
+							isUpgrade: options.isUpgrade ?? false
+						});
+
+						// addToQueue returns a concurrent row instead of creating one; merging
+						// the scope keeps both shapes correct with one call.
+						const retryRow =
+							(await downloadMonitor.extendQueueItemEpisodes(
+								existingTorrent.hash,
+								retryEpisodeIds,
+								pointerSize
+							)) ?? created;
+
+						logger.info(
+							{
+								title: release.title,
+								hash: existingTorrent.hash,
+								queueItemId: retryRow.id,
+								episodes: retryEpisodeIds.length,
+								alreadyImported: importedScope.coveredEpisodeIds.length
+							},
+							'Reused an imported season pack for episodes it had not delivered yet'
+						);
+
+						return {
+							success: true,
+							queueId: retryRow.id,
+							hash: existingTorrent.hash,
+							clientId: clientConfig.id,
+							clientName: clientConfig.name,
+							category,
+							wasDuplicate: true
+						};
+					} catch (retryError) {
+						logger.warn(
+							{
+								title: release.title,
+								hash: existingTorrent.hash,
+								err: retryError
+							},
+							'Failed to re-grab an imported season pack for its missing episodes'
 						);
 					}
 				}

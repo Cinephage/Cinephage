@@ -1651,6 +1651,36 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 					continue;
 				}
 
+				// Another live row can share this hash: a season pack re-grabbed for
+				// episodes the first import did not deliver (#663). Removing the
+				// torrent because the older row met its seed goal would delete the
+				// files the newer row is still downloading.
+				const liveRowsForHash = await db
+					.select({ id: downloadQueue.id })
+					.from(downloadQueue)
+					.where(
+						and(
+							or(
+								eq(downloadQueue.infoHash, downloadHash),
+								eq(downloadQueue.downloadId, downloadHash)
+							),
+							notInArray(downloadQueue.status, ['removed', 'failed', ...POST_IMPORT_STATUSES])
+						)
+					)
+					.limit(1);
+
+				if (liveRowsForHash.length > 0) {
+					logger.debug(
+						{
+							title: item.title,
+							hash: downloadHash,
+							liveRowId: liveRowsForHash[0].id
+						},
+						'Imported download still has a live queue row for the same hash - keeping it'
+					);
+					continue;
+				}
+
 				if (download.canBeRemoved && (clientConfig?.removeAfterImport ?? true)) {
 					// Download has met requirements (seeding limits for torrents, completed for usenet)
 					// and the client's remove-after-import policy allows removal.

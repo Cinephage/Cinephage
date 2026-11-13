@@ -1,9 +1,10 @@
 import type { DecisionStage, StageResult } from '../../types.js';
-import type { GrabDecisionContext } from './types.js';
+import type { GrabDecisionContext, GrabTarget } from './types.js';
 import { db } from '#lib/server/db/index.js';
-import { downloadHistory, downloadQueue } from '#lib/server/db/schema.js';
-import { and, eq, notInArray, or } from 'drizzle-orm';
+import { downloadQueue } from '#lib/server/db/schema.js';
+import { and, eq, notInArray } from 'drizzle-orm';
 import { resolveInfoHash } from '#lib/server/downloadClients/utils/hashUtils.js';
+import { resolveImportedScope } from '#lib/server/downloads/imported-scope.js';
 import { POST_IMPORT_QUEUE_STATUSES, TERMINAL_QUEUE_STATUSES } from '#lib/types/queue.js';
 
 /**
@@ -22,6 +23,23 @@ function getReleaseInfoHash(ctx: GrabDecisionContext): string | undefined {
 	return resolveInfoHash(ctx.release.infoHash, ctx.release.magnetUrl, ctx.release.downloadUrl);
 }
 
+/** The episode scope this grab asks for, in the terms imported history records. */
+function requestedScope(target: GrabTarget): {
+	movieId?: string;
+	seriesId?: string;
+	episodeIds?: string[];
+} {
+	switch (target.type) {
+		case 'movie':
+			return { movieId: target.movieId };
+		case 'episode':
+			return { seriesId: target.seriesId, episodeIds: [target.episodeId] };
+		case 'season':
+		case 'series':
+			return { seriesId: target.seriesId, episodeIds: target.episodeIds };
+	}
+}
+
 export class DuplicateHashStage implements DecisionStage<GrabDecisionContext> {
 	name = 'duplicateHash';
 
@@ -35,18 +53,12 @@ export class DuplicateHashStage implements DecisionStage<GrabDecisionContext> {
 
 		// Queue rows are routinely removed after import, so imported history must
 		// also participate in hash deduplication regardless of the current target.
-		const imported = await db
-			.select({ id: downloadHistory.id })
-			.from(downloadHistory)
-			.where(
-				and(
-					or(eq(downloadHistory.infoHash, infoHash), eq(downloadHistory.downloadId, infoHash)),
-					eq(downloadHistory.status, 'imported')
-				)
-			)
-			.limit(1);
+		// It only blocks for the episodes it actually delivered, though: a pack
+		// imported for episodes 1-6 is not a duplicate of a grab for episode 7,
+		// and treating it as one leaves the rest of the season unreachable (#663).
+		const importedScope = await resolveImportedScope({ infoHash, ...requestedScope(ctx.target) });
 
-		if (imported.length > 0) {
+		if (importedScope.satisfied) {
 			return {
 				accepted: false,
 				reason: `Duplicate hash was already imported: ${infoHash}`,
