@@ -98,3 +98,59 @@ describe('AuthManager.checkLoginNeeded', () => {
 		).toBe(true);
 	});
 });
+
+
+describe('AuthManager.login', () => {
+	const stubs = {
+		templateEngine: {
+			setSiteLink() {},
+			setConfig() {}
+		},
+		filterEngine: {},
+		selectorEngine: {},
+		cookieStore: { load: async () => null, save: async () => {}, clear: async () => {} }
+	};
+
+	function authManager(login: unknown) {
+		return new AuthManager(
+			{ id: 'rutracker', links: ['https://rutracker.org/'], login } as never,
+			stubs.templateEngine as never,
+			stubs.filterEngine as never,
+			stubs.selectorEngine as never,
+			stubs.cookieStore as never
+		);
+	}
+
+	it('uses a supplied session cookie instead of the declared login method', async () => {
+		// RuTracker's login POST is the page Cloudflare challenges hardest; a cookie
+		// from a real browser on this connection is the way around it. No fetch may
+		// happen here.
+		const manager = authManager({
+			path: '/forum/login.php',
+			method: 'post',
+			inputs: { login_username: '{{ .Config.username }}' }
+		});
+
+		const result = await manager.login({
+			indexerId: 'rutracker',
+			baseUrl: 'https://rutracker.org/',
+			settings: { cookie: 'bb_data=abc123; bb_guid=def456' }
+		});
+
+		expect(result.success).toBe(true);
+		expect(result.cookies).toEqual({ bb_data: 'abc123', bb_guid: 'def456' });
+	});
+
+	it('falls through to the declared method when the cookie is blank', async () => {
+		const manager = authManager({ path: '/forum/login.php', method: 'none' });
+
+		const result = await manager.login({
+			indexerId: 'rutracker',
+			baseUrl: 'https://rutracker.org/',
+			settings: { cookie: '   ' }
+		});
+
+		expect(result.success).toBe(true);
+		expect(result.cookies).toEqual({});
+	});
+});

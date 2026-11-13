@@ -197,6 +197,19 @@ export class AuthManager {
 
 		const method = login.method?.toLowerCase() ?? 'post';
 
+		// A session cookie the user supplied wins over the declared method. On a
+		// tracker whose login page sits behind a challenge, logging in is the part
+		// that never succeeds; a cookie minted by a real browser on this same
+		// connection does not have to pass it again.
+		const suppliedCookie = context.settings['cookie'];
+		if (typeof suppliedCookie === 'string' && suppliedCookie.trim().length > 0) {
+			authLogger.info(
+				{ indexer: this.definition.id },
+				'[AuthManager] Using the supplied session cookie instead of logging in'
+			);
+			return this.loginCookie(login, context);
+		}
+
 		try {
 			switch (method) {
 				case 'post':

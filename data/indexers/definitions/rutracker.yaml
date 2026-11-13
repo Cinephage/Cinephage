@@ -18,6 +18,14 @@ settings:
   - name: password
     type: password
     label: Password
+  # Optional escape hatch. RuTracker's login POST is the page Cloudflare
+  # challenges hardest, so on some connections no login succeeds no matter what
+  # we do - while a session cookie minted by a real browser on the same
+  # connection works. Paste it here ("bb_data=...; bb_guid=...") and the login
+  # form is skipped entirely. Leave empty to log in normally.
+  - name: cookie
+    type: password
+    label: Session cookie (optional)
   - name: stripcyrillic
     type: checkbox
     label: Strip Cyrillic Letters
