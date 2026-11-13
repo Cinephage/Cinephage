@@ -21,6 +21,7 @@ import { languageMatches } from '#lib/server/languages/audio-preference.js';
 import { getLanguageSettingsService } from '#lib/server/subtitles/services/LanguageSettingsService.js';
 import { getLanguageProfileService } from '#lib/server/subtitles/services/LanguageProfileService.js';
 import { createChildLogger } from '#lib/logging/index.js';
+import { getSearchTitleLanguages } from '#lib/server/settings/searchTitleLanguages.js';
 
 const logger = createChildLogger({ module: 'AlternateTitleService', logDomain: 'system' });
 
@@ -439,13 +440,27 @@ async function buildSearchTitles(
 	// Bulgarian or Ukrainian release title for a Russian library - and searching
 	// it spends a request (a browser-launched one, on a Cloudflare tracker) on a
 	// title nobody asked for.
-	const allowedLanguages = [
-		...new Set(
-			[preferredLanguage, displayLanguage, media.originalLanguage, ...profile.languages].filter(
-				(value): value is string => Boolean(value)
-			)
-		)
-	];
+	// An explicit allowlist wins over the inferred set. The display title and the
+	// original title are always searchable - dropping those would make the item
+	// itself unreachable - and the configured languages govern the rest of the
+	// TMDB alternates. Empty keeps the inferred behaviour every install already has.
+	const configuredSearchLanguages = await getSearchTitleLanguages();
+	const allowedLanguages =
+		configuredSearchLanguages.length > 0
+			? [
+					...new Set(
+						[displayLanguage, media.originalLanguage, ...configuredSearchLanguages].filter(
+							(value): value is string => Boolean(value)
+						)
+					)
+				]
+			: [
+					...new Set(
+						[preferredLanguage, displayLanguage, media.originalLanguage, ...profile.languages].filter(
+							(value): value is string => Boolean(value)
+						)
+					)
+				];
 
 	// Only TMDB's own alternate-title list is filtered: it is a dump of every
 	// country's release title. Provider variants (anilist romaji, mal native

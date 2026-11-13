@@ -39,7 +39,8 @@ import {
 	languageProfiles,
 	languageSettings,
 	movies,
-	series
+	series,
+	settings
 } from '#lib/server/db/schema.js';
 
 const mockedAlternateTitles = tmdb as unknown as {
@@ -855,5 +856,83 @@ describe('preferred-language country ordering', () => {
 
 		expect(titles.indexOf('O Filme (Brasil)')).toBeGreaterThan(-1);
 		expect(titles.indexOf('O Filme (Brasil)')).toBeLessThan(titles.indexOf('O Filme (EUA)'));
+	});
+});
+
+describe('explicit search-language allowlist', () => {
+	const ALLOWLIST_PROFILE = 'profile-allowlist';
+
+	testDb.db
+		.insert(languageProfiles)
+		.values({
+			id: ALLOWLIST_PROFILE,
+			name: 'Russian',
+			audio: { preferOriginal: false, languages: ['ru'], mode: 'prefer' },
+			subtitles: [{ tag: 'ru', variant: 'regular', accessibility: 'any' }]
+		})
+		.run();
+
+	it('searches only the configured languages, ignoring the profile', async () => {
+		// Russian profile, English original. Without the allowlist the profile's
+		// Russian is searched; with it, only French is, and Russian must be dropped.
+		testDb.db
+			.insert(series)
+			.values({
+				id: 'series-allowlist',
+				tmdbId: 992001,
+				title: 'The Allowlist Show',
+				originalTitle: 'The Allowlist Show',
+				originalLanguage: 'en',
+				path: 'series-allowlist',
+				metadataLanguageMode: 'explicit',
+				metadataLanguageValue: 'en',
+				languageProfileId: ALLOWLIST_PROFILE
+			})
+			.run();
+
+		testDb.db
+			.insert(alternateTitles)
+			.values([
+				{
+					mediaType: 'series',
+					mediaId: 'series-allowlist',
+					title: 'Le Spectacle',
+					country: 'FR',
+					language: 'fr',
+					cleanTitle: cleanTitle('Le Spectacle'),
+					source: 'tmdb'
+				},
+				{
+					mediaType: 'series',
+					mediaId: 'series-allowlist',
+					title: 'Шоу',
+					country: 'RU',
+					language: 'ru',
+					cleanTitle: cleanTitle('Шоу'),
+					source: 'tmdb'
+				}
+			])
+			.run();
+
+		testDb.db
+			.insert(settings)
+			.values({
+				key: 'global_filters',
+				value: JSON.stringify({ search_title_languages: ['fr'] })
+			})
+			.onConflictDoUpdate({ target: settings.key, set: { value: JSON.stringify({ search_title_languages: ['fr'] }) } })
+			.run();
+
+		const titles = await getSeriesSearchTitles('series-allowlist');
+
+		expect(titles).toContain('Le Spectacle');
+		expect(titles).not.toContain('Шоу');
+
+		// Back to the inferred behaviour for every later test in this file.
+		testDb.db
+			.insert(settings)
+			.values({ key: 'global_filters', value: JSON.stringify({ search_title_languages: [] }) })
+			.onConflictDoUpdate({ target: settings.key, set: { value: JSON.stringify({ search_title_languages: [] }) } })
+			.run();
 	});
 });

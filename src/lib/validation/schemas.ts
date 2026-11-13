@@ -331,7 +331,9 @@ export const globalTmdbFiltersSchema = z.object({
 	min_vote_count: z.number().int().min(0).default(0),
 	language: z.string().default('en-US'),
 	region: z.string().default(TMDB.DEFAULT_REGION),
-	excluded_genre_ids: z.array(z.number().int()).default([])
+	excluded_genre_ids: z.array(z.number().int()).default([]),
+	/** Base language codes; empty means infer from the item and the profile. */
+	search_title_languages: z.array(z.string()).default([])
 });
 
 /**

@@ -5480,5 +5480,8 @@
 	"searchRetries_actions": "Actions",
 	"searchRetries_pause": "Pause",
 	"searchRetries_resume": "Resume",
-	"searchRetries_empty": "No automatic searches tracked yet."
+	"searchRetries_empty": "No automatic searches tracked yet.",
+	"settings_filters_searchTitlesHeading": "Search titles",
+	"settings_filters_searchTitleLanguages": "Languages to search",
+	"settings_filters_searchTitleLanguagesHint": "Comma-separated language codes (e.g. ru, en). Only titles in these languages are sent to indexers; the display and original titles are always included. Leave empty to infer them from the item and your language profile."
 }
