@@ -2220,6 +2220,48 @@ export const subtitleSearchState = sqliteTable(
 );
 
 /**
+ * Search State - bounded retry state for automatic release search.
+ *
+ * One row per (item, search kind). `attempts` and `next_attempt_at` are what
+ * stop an item being retried forever; `last_outcome` and `last_indexer_*` are
+ * what the Activity "Searches" view reads instead of collapsing every attempt
+ * for an item into one anonymous row per day.
+ */
+export const searchState = sqliteTable(
+	'search_state',
+	{
+		ownerType: text('owner_type', { enum: ['movie', 'episode'] }).notNull(),
+		ownerId: text('owner_id').notNull(),
+		searchKind: text('search_kind', {
+			enum: ['missing', 'upgrade', 'cutoff', 'new_episode']
+		}).notNull(),
+		status: text('status', {
+			enum: ['idle', 'searching', 'paused', 'exhausted']
+		})
+			.notNull()
+			.default('idle'),
+		attempts: integer('attempts').notNull().default(0),
+		firstAttemptAt: text('first_attempt_at'),
+		lastAttemptAt: text('last_attempt_at'),
+		nextAttemptAt: text('next_attempt_at'),
+		lastOutcome: text('last_outcome', {
+			enum: ['no_results', 'rejected', 'grabbed', 'error', 'skipped']
+		}),
+		lastIndexerId: text('last_indexer_id'),
+		lastIndexerName: text('last_indexer_name'),
+		indexersQueried: integer('indexers_queried').notNull().default(0),
+		pausedUntil: text('paused_until'),
+		pauseReason: text('pause_reason'),
+		updatedAt: text('updated_at').notNull()
+	},
+	(table) => [
+		primaryKey({ columns: [table.ownerType, table.ownerId, table.searchKind] }),
+		index('idx_search_state_next').on(table.status, table.nextAttemptAt),
+		index('idx_search_state_owner').on(table.ownerType, table.ownerId)
+	]
+);
+
+/**
  * Subtitle History - Audit trail of all subtitle actions
  */
 export const subtitleHistory = sqliteTable('subtitle_history', {

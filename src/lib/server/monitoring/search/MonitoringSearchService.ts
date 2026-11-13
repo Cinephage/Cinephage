@@ -65,8 +65,8 @@ import {
 	NewEpisodeSpecification,
 	NEW_EPISODE_LOOKBACK_HOURS,
 	MovieAvailabilitySpecification,
-	MovieSearchCooldownSpecification,
-	EpisodeSearchCooldownSpecification,
+	MovieSearchGateSpecification,
+	EpisodeSearchGateSpecification,
 	ReleaseBlocklistSpecification,
 	MovieReadOnlyFolderSpecification,
 	EpisodeReadOnlyFolderSpecification,
@@ -74,6 +74,7 @@ import {
 	type EpisodeContext,
 	type ReleaseCandidate
 } from '../specifications/index.js';
+import { recordAttempt, recordOutcome, type SearchOutcome } from './search-state.js';
 
 const logger = createChildLogger({ module: 'MonitoringSearchService', logDomain: 'monitoring' });
 
@@ -96,6 +97,20 @@ export interface ItemSearchResult {
 	skipped?: boolean;
 	skipReason?: string;
 	seasonNumber?: number;
+	/** Indexer that produced the grabbed release, when one was grabbed. */
+	indexerId?: string;
+	indexerName?: string;
+	/** How many indexers answered the search. */
+	indexersQueried?: number;
+}
+
+/** Map a completed item search to the outcome recorded against its retry budget. */
+function outcomeFor(result: ItemSearchResult): SearchOutcome {
+	if (result.grabbed) return 'grabbed';
+	if (result.error) return 'error';
+	if (result.releasesFound > 0) return 'rejected';
+	if (result.searched) return 'no_results';
+	return 'skipped';
 }
 
 /**
@@ -561,7 +576,7 @@ export class MonitoringSearchService {
 			const monitoredSpec = new MovieMonitoredSpecification();
 			const readOnlySpec = new MovieReadOnlyFolderSpecification();
 			const availabilitySpec = new MovieAvailabilitySpecification();
-			const cooldownSpec = new MovieSearchCooldownSpecification(cooldownHours);
+			const cooldownSpec = new MovieSearchGateSpecification('missing', cooldownHours);
 
 			for (const movie of missingMovies) {
 				// Check for cancellation before processing each movie
@@ -659,15 +674,15 @@ export class MonitoringSearchService {
 					continue;
 				}
 
-				// Update lastSearchTime before searching
-				await db
-					.update(movies)
-					.set({ lastSearchTime: new Date().toISOString() })
-					.where(eq(movies.id, movie.id));
+				// Single writer: attempt record + last_search_time together.
+				await recordAttempt('movie', movie.id, 'missing');
 
 				// Search and grab
 				const searchResult = await this.searchAndGrabMovie(movie);
 				results.push(searchResult);
+				await recordOutcome('movie', movie.id, 'missing', {
+					outcome: outcomeFor(searchResult)
+				});
 
 				// Rate limiting - small delay between searches
 				await new Promise((resolve) => setTimeout(resolve, 500));
@@ -710,7 +725,7 @@ export class MonitoringSearchService {
 
 		if (candidates.length === 0) return results;
 
-		const cooldownSpec = new MovieSearchCooldownSpecification(cooldownHours);
+		const cooldownSpec = new MovieSearchGateSpecification('upgrade', cooldownHours);
 
 		for (const movie of candidates) {
 			if (signal?.aborted) {
@@ -742,11 +757,7 @@ export class MonitoringSearchService {
 			const unfilled = effective.filter((r) => !filled.includes(r));
 			if (unfilled.length === 0) continue;
 
-			// Update lastSearchTime
-			await db
-				.update(movies)
-				.set({ lastSearchTime: new Date().toISOString() })
-				.where(eq(movies.id, movie.id));
+			await recordAttempt('movie', movie.id, 'upgrade');
 
 			// One title-based search, then grab per unfilled bucket
 			const [indexerManager, globalIncludeAdult] = await Promise.all([
@@ -975,7 +986,7 @@ export class MonitoringSearchService {
 			const missingSpec = new EpisodeMissingContentSpecification();
 			const monitoredSpec = new EpisodeMonitoredSpecification();
 			const readOnlySpec = new EpisodeReadOnlyFolderSpecification();
-			const cooldownSpec = new EpisodeSearchCooldownSpecification(cooldownHours);
+			const cooldownSpec = new EpisodeSearchGateSpecification('missing', cooldownHours);
 
 			// Filter and group episodes by series and season
 			const episodesBySeriesAndSeason = new Map<string, Map<number, typeof missingEpisodes>>();
@@ -1315,11 +1326,8 @@ export class MonitoringSearchService {
 			}
 			individualSearchCount++;
 
-			// Update lastSearchTime before searching
-			await db
-				.update(episodes)
-				.set({ lastSearchTime: new Date().toISOString() })
-				.where(eq(episodes.id, episode.id));
+			// Single writer: attempt record + last_search_time together.
+			await recordAttempt('episode', episode.id, 'missing');
 
 			// Search and grab individual episode
 			// Note: searchAndGrabEpisode now includes packs in results due to filterBySeasonEpisode change
@@ -1351,6 +1359,9 @@ export class MonitoringSearchService {
 			}
 
 			results.push(searchResult);
+			await recordOutcome('episode', episode.id, 'missing', {
+				outcome: outcomeFor(searchResult)
+			});
 
 			// Rate limiting
 			await new Promise((resolve) => setTimeout(resolve, 500));
@@ -1704,7 +1715,7 @@ export class MonitoringSearchService {
 			const cutoffSpec = new MovieCutoffUnmetSpecification();
 			const monitoredSpec = new MovieMonitoredSpecification();
 			const readOnlySpec = new MovieReadOnlyFolderSpecification();
-			const cooldownSpec = new MovieSearchCooldownSpecification(cooldownHours);
+			const cooldownSpec = new MovieSearchGateSpecification('upgrade', cooldownHours);
 
 			for (const movie of moviesWithFiles) {
 				// Check for cancellation before each movie
@@ -1821,12 +1832,8 @@ export class MonitoringSearchService {
 					}
 				}
 
-				// Update lastSearchTime before searching (skip in dry-run mode)
 				if (!dryRun) {
-					await db
-						.update(movies)
-						.set({ lastSearchTime: new Date().toISOString() })
-						.where(eq(movies.id, movie.id));
+					await recordAttempt('movie', movie.id, 'upgrade');
 				}
 
 				// Search for better releases
@@ -1836,6 +1843,11 @@ export class MonitoringSearchService {
 					dryRun
 				);
 				results.push(searchResult);
+				if (!dryRun) {
+					await recordOutcome('movie', movie.id, 'upgrade', {
+						outcome: outcomeFor(searchResult)
+					});
+				}
 				if (detail) {
 					details.push(detail);
 				}
@@ -1915,7 +1927,7 @@ export class MonitoringSearchService {
 			const cutoffSpec = new EpisodeCutoffUnmetSpecification();
 			const monitoredSpec = new EpisodeMonitoredSpecification();
 			const readOnlySpec = new EpisodeReadOnlyFolderSpecification();
-			const cooldownSpec = new EpisodeSearchCooldownSpecification(cooldownHours);
+			const cooldownSpec = new EpisodeSearchGateSpecification('upgrade', cooldownHours);
 
 			for (const episode of episodesWithFiles) {
 				// Check for cancellation before each episode
@@ -1973,12 +1985,8 @@ export class MonitoringSearchService {
 					}
 				}
 
-				// Update lastSearchTime before searching (skip in dry-run mode)
 				if (!dryRun) {
-					await db
-						.update(episodes)
-						.set({ lastSearchTime: new Date().toISOString() })
-						.where(eq(episodes.id, episode.id));
+					await recordAttempt('episode', episode.id, 'upgrade');
 				}
 
 				// Search for better releases
@@ -1989,6 +1997,11 @@ export class MonitoringSearchService {
 					dryRun
 				);
 				results.push(searchResult);
+				if (!dryRun) {
+					await recordOutcome('episode', episode.id, 'upgrade', {
+						outcome: outcomeFor(searchResult)
+					});
+				}
 				if (detail) {
 					details.push(detail);
 				}
@@ -2774,7 +2787,7 @@ export class MonitoringSearchService {
 			// task runs), not the fixed air-date lookback window - without it, a
 			// frequently-scheduled task would re-query the indexer for the same
 			// not-yet-found episode on every single run for up to 48h.
-			const cooldownSpec = new EpisodeSearchCooldownSpecification(intervalHours);
+			const cooldownSpec = new EpisodeSearchGateSpecification('new_episode', intervalHours);
 
 			for (const episode of recentEpisodes) {
 				// Check for cancellation before each episode
@@ -2835,15 +2848,15 @@ export class MonitoringSearchService {
 					continue; // Skip silently - will be retried once cooldown passes
 				}
 
-				// Update lastSearchTime before searching
-				await db
-					.update(episodes)
-					.set({ lastSearchTime: new Date().toISOString() })
-					.where(eq(episodes.id, episode.id));
+				// Single writer: attempt record + last_search_time together.
+				await recordAttempt('episode', episode.id, 'new_episode');
 
 				// Search and grab
 				const searchResult = await this.searchAndGrabEpisode(episode.series, episode);
 				results.push(searchResult);
+				await recordOutcome('episode', episode.id, 'new_episode', {
+					outcome: outcomeFor(searchResult)
+				});
 
 				// Rate limiting
 				await new Promise((resolve) => setTimeout(resolve, 500));

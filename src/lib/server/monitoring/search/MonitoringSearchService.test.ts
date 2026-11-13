@@ -19,6 +19,7 @@ import { createSearchRelease } from '../../../../test/fixtures/releases.js';
 // --- Hoisted mocks (must be before any imports that use them) ---
 
 const {
+	insertMock,
 	findManyEpisodesMock,
 	findManyEpisodeFilesMock,
 	updateEpisodeMock,
@@ -35,6 +36,12 @@ const {
 	const searchAllMock = vi.fn().mockResolvedValue([]);
 	const searchEnhancedMock = vi.fn().mockResolvedValue({ releases: [], rejections: [] });
 	return {
+		// search-state writes go through db.insert(...).values(...).onConflictDoUpdate(...)
+		insertMock: vi.fn().mockReturnValue({
+			values: vi.fn().mockReturnValue({
+				onConflictDoUpdate: vi.fn().mockResolvedValue(undefined)
+			})
+		}),
 		findManyEpisodesMock: vi.fn(),
 		findManyEpisodeFilesMock: vi.fn(),
 		updateEpisodeMock: vi.fn().mockReturnValue({
@@ -64,6 +71,7 @@ vi.mock('#lib/server/db/index.js', () => ({
 			downloadQueue: { findMany: findManyDownloadQueueMock }
 		},
 		update: updateEpisodeMock,
+		insert: insertMock,
 		select: vi.fn().mockReturnValue({
 			from: vi.fn().mockReturnValue({
 				where: vi.fn().mockResolvedValue([])
@@ -110,6 +118,8 @@ vi.mock('../specifications/index.js', () => ({
 	MovieUpgradeableSpecification: makeSpecClass(),
 	MovieAvailabilitySpecification: makeSpecClass(),
 	MovieSearchCooldownSpecification: makeSpecClass(),
+	MovieSearchGateSpecification: makeSpecClass(),
+	EpisodeSearchGateSpecification: makeSpecClass(),
 	MovieReadOnlyFolderSpecification: makeSpecClass()
 }));
 

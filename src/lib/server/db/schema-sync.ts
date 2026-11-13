@@ -192,8 +192,10 @@ import {
  *   source of truth behind availability and the calendar.
  * Version 171: series.air_time / airs_days / air_tz - broadcast schedule from
  *   TVDB, which is the only provider that reports an air time.
+ * Version 172: search_state - bounded retry state (attempts, next attempt,
+ *   last outcome/indexer) for automatic release search.
  */
-export const CURRENT_SCHEMA_VERSION = 171;
+export const CURRENT_SCHEMA_VERSION = 172;
 
 export const SYSTEM_LIBRARY_SEEDS = [
 	{
@@ -1085,6 +1087,25 @@ const TABLE_DEFINITIONS: string[] = [
 		PRIMARY KEY ("owner_type", "owner_id", "requirement_key")
 	)`,
 
+	`CREATE TABLE IF NOT EXISTS "search_state" (
+		"owner_type" text NOT NULL,
+		"owner_id" text NOT NULL,
+		"search_kind" text NOT NULL,
+		"status" text NOT NULL DEFAULT 'idle',
+		"attempts" integer NOT NULL DEFAULT 0,
+		"first_attempt_at" text,
+		"last_attempt_at" text,
+		"next_attempt_at" text,
+		"last_outcome" text,
+		"last_indexer_id" text,
+		"last_indexer_name" text,
+		"indexers_queried" integer NOT NULL DEFAULT 0,
+		"paused_until" text,
+		"pause_reason" text,
+		"updated_at" text NOT NULL,
+		PRIMARY KEY ("owner_type", "owner_id", "search_kind")
+	)`,
+
 	`CREATE TABLE IF NOT EXISTS "subtitle_history" (
 		"id" text PRIMARY KEY NOT NULL,
 		"movie_id" text REFERENCES "movies"("id") ON DELETE SET NULL,
@@ -1793,6 +1814,8 @@ const INDEX_DEFINITIONS: string[] = [
 	`CREATE INDEX IF NOT EXISTS "idx_subtitles_movie_file" ON "subtitles" ("movie_file_id")`,
 	`CREATE UNIQUE INDEX IF NOT EXISTS "idx_subtitles_unique_identity" ON "subtitles" (ifnull("movie_id", ''), ifnull("episode_id", ''), "language", "is_forced", "is_hearing_impaired", "relative_path")`,
 	`CREATE INDEX IF NOT EXISTS "idx_subtitle_search_state_owner" ON "subtitle_search_state" ("owner_type", "owner_id")`,
+	`CREATE INDEX IF NOT EXISTS "idx_search_state_next" ON "search_state" ("status", "next_attempt_at")`,
+	`CREATE INDEX IF NOT EXISTS "idx_search_state_owner" ON "search_state" ("owner_type", "owner_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_smart_lists_enabled" ON "smart_lists" ("enabled")`,
 	`CREATE INDEX IF NOT EXISTS "idx_smart_lists_next_refresh" ON "smart_lists" ("next_refresh_time")`,
 	`CREATE INDEX IF NOT EXISTS "idx_smart_lists_media_type" ON "smart_lists" ("media_type")`,

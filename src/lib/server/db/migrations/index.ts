@@ -168,6 +168,7 @@ import { migration_v168 } from './168-add-cinephage-install-key.js';
 import { migration_v169 } from './169-unwrap-json-indexer-cookies.js';
 import { migration_v170 } from './170-release-events.js';
 import { migration_v171 } from './171-series-air-schedule.js';
+import { migration_v172 } from './172-search-state.js';
 
 export const MIGRATIONS: MigrationDefinition[] = [
 	migration_v002,
@@ -338,5 +339,6 @@ export const MIGRATIONS: MigrationDefinition[] = [
 	migration_v168,
 	migration_v169,
 	migration_v170,
-	migration_v171
+	migration_v171,
+	migration_v172
 ];
