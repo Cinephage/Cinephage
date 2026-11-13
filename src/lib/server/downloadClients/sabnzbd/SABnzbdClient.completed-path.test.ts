@@ -9,8 +9,7 @@ import { mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { SABnzbdClient } from './SABnzbdClient.js';
-import type { SabnzbdConfig } from './types.js';
+import { SABnzbdClient, type SABnzbdConfig } from './SABnzbdClient.js';
 
 let root = '';
 
@@ -22,7 +21,7 @@ function makeClient(localRoot?: string): SABnzbdClient {
 		apiKey: 'test-api-key',
 		downloadPathLocal: localRoot,
 		misc: {}
-	} as unknown as SabnzbdConfig);
+	} as unknown as SABnzbdConfig);
 }
 
 function stubSabnzbd(opts: { completeDir: string; storage: string }) {
