@@ -725,9 +725,10 @@ export const movies = sqliteTable(
 		// Whether to search for subtitles for this movie
 		wantsSubtitles: integer('wants_subtitles', { mode: 'boolean' }).default(true),
 		// Last time this movie was searched for releases (ISO timestamp).
-		// Still actively read/written by the release-search cooldown
-		// (CooldownStage / SearchCooldownSpecification) - intentionally NOT
-		// dropped by migration 142, unlike the per-item adaptive subtitle
+		// Still actively read/written by the release-search gates
+		// (CooldownStage / SearchGateSpecification, and written together with
+		// search_state by monitoring/search/search-state.ts) - intentionally
+		// NOT dropped by migration 142, unlike the per-item adaptive subtitle
 		// columns that used to sit beside it.
 		lastSearchTime: text('last_search_time'),
 		tmdbCollectionId: integer('tmdb_collection_id'),
@@ -979,9 +980,10 @@ export const episodes = sqliteTable(
 			mode: 'json'
 		}).$type<SubtitleRequirement[]>(),
 		// Last time this episode was searched for releases (ISO timestamp).
-		// Still actively read/written by the release-search cooldown
-		// (CooldownStage / SearchCooldownSpecification) - intentionally NOT
-		// dropped by migration 142, unlike the per-item adaptive subtitle
+		// Still actively read/written by the release-search gates
+		// (CooldownStage / SearchGateSpecification, and written together with
+		// search_state by monitoring/search/search-state.ts) - intentionally
+		// NOT dropped by migration 142, unlike the per-item adaptive subtitle
 		// columns that used to sit beside it.
 		lastSearchTime: text('last_search_time')
 	},

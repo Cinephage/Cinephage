@@ -681,7 +681,10 @@ export class MonitoringSearchService {
 				const searchResult = await this.searchAndGrabMovie(movie);
 				results.push(searchResult);
 				await recordOutcome('movie', movie.id, 'missing', {
-					outcome: outcomeFor(searchResult)
+					outcome: outcomeFor(searchResult),
+					indexerId: searchResult.indexerId ?? null,
+					indexerName: searchResult.indexerName ?? null,
+					indexersQueried: searchResult.indexersQueried ?? 0
 				});
 
 				// Rate limiting - small delay between searches
@@ -1360,7 +1363,10 @@ export class MonitoringSearchService {
 
 			results.push(searchResult);
 			await recordOutcome('episode', episode.id, 'missing', {
-				outcome: outcomeFor(searchResult)
+				outcome: outcomeFor(searchResult),
+				indexerId: searchResult.indexerId ?? null,
+				indexerName: searchResult.indexerName ?? null,
+				indexersQueried: searchResult.indexersQueried ?? 0
 			});
 
 			// Rate limiting
@@ -1464,6 +1470,8 @@ export class MonitoringSearchService {
 				addedToQueue?: boolean;
 				error?: string;
 				rejectionType?: string;
+				indexerId?: string;
+				indexerName?: string;
 			} | null = null;
 
 			// Load scoring profile for explicit validation
@@ -1845,7 +1853,10 @@ export class MonitoringSearchService {
 				results.push(searchResult);
 				if (!dryRun) {
 					await recordOutcome('movie', movie.id, 'upgrade', {
-						outcome: outcomeFor(searchResult)
+						outcome: outcomeFor(searchResult),
+						indexerId: searchResult.indexerId ?? null,
+						indexerName: searchResult.indexerName ?? null,
+						indexersQueried: searchResult.indexersQueried ?? 0
 					});
 				}
 				if (detail) {
@@ -1999,7 +2010,10 @@ export class MonitoringSearchService {
 				results.push(searchResult);
 				if (!dryRun) {
 					await recordOutcome('episode', episode.id, 'upgrade', {
-						outcome: outcomeFor(searchResult)
+						outcome: outcomeFor(searchResult),
+						indexerId: searchResult.indexerId ?? null,
+						indexerName: searchResult.indexerName ?? null,
+						indexersQueried: searchResult.indexersQueried ?? 0
 					});
 				}
 				if (detail) {
@@ -2855,7 +2869,10 @@ export class MonitoringSearchService {
 				const searchResult = await this.searchAndGrabEpisode(episode.series, episode);
 				results.push(searchResult);
 				await recordOutcome('episode', episode.id, 'new_episode', {
-					outcome: outcomeFor(searchResult)
+					outcome: outcomeFor(searchResult),
+					indexerId: searchResult.indexerId ?? null,
+					indexerName: searchResult.indexerName ?? null,
+					indexersQueried: searchResult.indexersQueried ?? 0
 				});
 
 				// Rate limiting
@@ -2938,7 +2955,8 @@ export class MonitoringSearchService {
 					title: movie.title,
 					searched: true,
 					releasesFound: 0,
-					grabbed: false
+					grabbed: false,
+					indexersQueried: searchResult.indexerResults?.length ?? 0
 				};
 			}
 
@@ -2951,6 +2969,8 @@ export class MonitoringSearchService {
 				addedToQueue?: boolean;
 				error?: string;
 				rejectionType?: string;
+				indexerId?: string;
+				indexerName?: string;
 			} | null = null;
 
 			// Load scoring profile for explicit validation
@@ -3018,6 +3038,11 @@ export class MonitoringSearchService {
 				grabbed: (grabResult?.success ?? false) && grabResult?.addedToQueue !== false,
 				grabbedRelease: grabResult?.releaseName,
 				queueItemId: grabResult?.queueItemId,
+				indexerId: grabResult?.indexerId,
+				indexerName: grabResult?.indexerName,
+				// Distinct indexers that answered, not releases: five results from one
+				// indexer is one indexer queried.
+				indexersQueried: new Set(searchResult.releases.map((r) => r.indexerId)).size,
 				error: grabResult?.error,
 				rejectionType: grabResult?.rejectionType
 			};
@@ -3114,7 +3139,8 @@ export class MonitoringSearchService {
 					title,
 					searched: true,
 					releasesFound: 0,
-					grabbed: false
+					grabbed: false,
+					indexersQueried: searchResult.indexerResults?.length ?? 0
 				};
 			}
 
@@ -3127,6 +3153,8 @@ export class MonitoringSearchService {
 				addedToQueue?: boolean;
 				error?: string;
 				rejectionType?: string;
+				indexerId?: string;
+				indexerName?: string;
 			} | null = null;
 
 			// Load scoring profile for explicit validation
@@ -3207,6 +3235,11 @@ export class MonitoringSearchService {
 				grabbed: (grabResult?.success ?? false) && grabResult?.addedToQueue !== false,
 				grabbedRelease: grabResult?.releaseName,
 				queueItemId: grabResult?.queueItemId,
+				indexerId: grabResult?.indexerId,
+				indexerName: grabResult?.indexerName,
+				// Distinct indexers that answered, not releases: five results from one
+				// indexer is one indexer queried.
+				indexersQueried: new Set(searchResult.releases.map((r) => r.indexerId)).size,
 				error: grabResult?.error,
 				rejectionType: grabResult?.rejectionType
 			};
@@ -3294,6 +3327,9 @@ export class MonitoringSearchService {
 		rejectionType?: string;
 		queueItemId?: string;
 		addedToQueue?: boolean;
+		/** Indexer that supplied the grabbed release (for the retry record). */
+		indexerId?: string;
+		indexerName?: string;
 	}> {
 		const { grabService } = await import('#lib/server/downloads/GrabService.js');
 
@@ -3348,7 +3384,9 @@ export class MonitoringSearchService {
 			error: result.error ?? (result.success ? undefined : result.decision?.reason),
 			rejectionType: result.success ? undefined : result.decision?.rejectionType,
 			queueItemId: result.download?.queueId,
-			addedToQueue: result.download?.addedToQueue
+			addedToQueue: result.download?.addedToQueue,
+			indexerId: release.indexerId,
+			indexerName: release.indexerName
 		};
 	}
 

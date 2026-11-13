@@ -8,7 +8,7 @@ import { libraryJobService } from '#lib/server/library/jobs/LibraryJobService.js
 import { requireAdminPage } from '#lib/server/auth/authorization.js';
 import { z } from 'zod';
 
-type ActivityTab = 'active' | 'history' | 'unmatched';
+type ActivityTab = 'active' | 'history' | 'unmatched' | 'searches';
 const ACTIVE_TAB_STATUSES: NonNullable<ActivityFilters['status']>[] = [
 	'all',
 	'downloading',
@@ -39,7 +39,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	requireAdminPage(locals);
 	const tabParam = url.searchParams.get('tab');
 	const explicitTab: ActivityTab | null =
-		tabParam === 'active' || tabParam === 'history' || tabParam === 'unmatched' ? tabParam : null;
+		tabParam === 'active' ||
+		tabParam === 'history' ||
+		tabParam === 'unmatched' ||
+		tabParam === 'searches'
+			? tabParam
+			: null;
 
 	// Parse all filter parameters
 	const rawStatus = url.searchParams.get('status') || 'all';
@@ -113,7 +118,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			.from(downloadClients)
 			.where(eq(downloadClients.enabled, true))
 			.orderBy(downloadClients.name),
-		tab === 'unmatched'
+		// Neither of these tabs reads the download feed: unmatched fetches live
+		// client state, searches reads search_state.
+		tab === 'unmatched' || tab === 'searches'
 			? Promise.resolve(null)
 			: activityService
 					.getActivities(

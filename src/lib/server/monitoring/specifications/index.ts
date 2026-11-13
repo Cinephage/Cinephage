@@ -11,7 +11,6 @@ export * from './CutoffUnmetSpecification.js';
 export * from './MissingContentSpecification.js';
 export * from './NewEpisodeSpecification.js';
 export * from './AvailabilitySpecification.js';
-export * from './SearchCooldownSpecification.js';
 export * from './SearchGateSpecification.js';
 export * from './BlocklistSpecification.js';
 export * from './DelaySpecification.js';

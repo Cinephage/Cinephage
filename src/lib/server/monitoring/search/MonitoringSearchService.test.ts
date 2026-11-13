@@ -109,7 +109,6 @@ vi.mock('../specifications/index.js', () => ({
 	EpisodeCutoffUnmetSpecification: makeSpecClass(),
 	EpisodeUpgradeableSpecification: makeSpecClass(),
 	NewEpisodeSpecification: makeSpecClass(),
-	EpisodeSearchCooldownSpecification: makeSpecClass(),
 	EpisodeReadOnlyFolderSpecification: makeSpecClass(),
 	ReleaseBlocklistSpecification: makeSpecClass(),
 	MovieMonitoredSpecification: makeSpecClass(),
@@ -117,7 +116,6 @@ vi.mock('../specifications/index.js', () => ({
 	MovieCutoffUnmetSpecification: makeSpecClass(),
 	MovieUpgradeableSpecification: makeSpecClass(),
 	MovieAvailabilitySpecification: makeSpecClass(),
-	MovieSearchCooldownSpecification: makeSpecClass(),
 	MovieSearchGateSpecification: makeSpecClass(),
 	EpisodeSearchGateSpecification: makeSpecClass(),
 	MovieReadOnlyFolderSpecification: makeSpecClass()

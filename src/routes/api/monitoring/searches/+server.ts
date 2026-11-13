@@ -91,23 +91,36 @@ export const GET: RequestHandler = async (event) => {
 		const [policy, rows] = await Promise.all([getSearchPolicy(), listSearchStates()]);
 		const { movieTitles, episodeTitles } = await resolveTitles(rows);
 
-		const items = rows.map((row) => ({
+		const items = rows.map((row) => {
+			const maxAttempts = attemptBudget(row.searchKind, policy);
+			// Derive the terminal state from the budget in force rather than
+			// trusting the stored column: raising the budget must immediately
+			// un-stick a row that was exhausted under the old one.
+			const status =
+				row.status === 'paused'
+					? 'paused'
+					: row.attempts >= maxAttempts
+						? 'exhausted'
+						: 'idle';
+			return {
 			ownerType: row.ownerType,
 			ownerId: row.ownerId,
 			kind: row.searchKind,
-			status: row.status,
+			status,
 			attempts: row.attempts,
-			maxAttempts: attemptBudget(row.searchKind, policy),
+			maxAttempts,
 			lastOutcome: row.lastOutcome,
 			lastAttemptAt: row.lastAttemptAt,
 			nextAttemptAt: row.nextAttemptAt,
 			lastIndexerName: row.lastIndexerName,
+			indexersQueried: row.indexersQueried,
 			pauseReason: row.pauseReason,
 			title:
 				row.ownerType === 'movie'
 					? (movieTitles.get(row.ownerId) ?? row.ownerId)
 					: (episodeTitles.get(row.ownerId) ?? row.ownerId)
-		}));
+			};
+		});
 
 		return Response.json({ success: true, policy, items });
 	} catch (error) {

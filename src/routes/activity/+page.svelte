@@ -24,6 +24,7 @@
 	} from '#lib/api/downloads.js';
 	import { layoutState, deriveMobileSseStatus } from '#lib/layout.svelte.js';
 	import ActivityTable from '#lib/components/activity/ActivityTable.svelte';
+	import SearchRetriesCard from '#lib/components/activity/SearchRetriesCard.svelte';
 	import ActivityUnmatchedCard from '#lib/components/activity/ActivityUnmatchedCard.svelte';
 	import ActivityFilters from '#lib/components/activity/ActivityFilters.svelte';
 	import ActiveFilters from '#lib/components/activity/ActiveFilters.svelte';
@@ -53,7 +54,8 @@
 		RotateCcw,
 		Save,
 		CalendarX,
-		AlertTriangle
+		AlertTriangle,
+		Search
 	} from '@lucide/svelte';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { supportsQueuePauseResume } from '#lib/components/activity/activity-display-utils.js';
@@ -86,7 +88,10 @@
 	// Initialize directly from server data so the first render already has correct content.
 	// The $effect below re-syncs on subsequent data changes (navigation / tab switch).
 	function getInitialTab(): ActivityTab {
-		return data.tab === 'active' ? 'active' : data.tab === 'unmatched' ? 'unmatched' : 'history';
+		if (data.tab === 'active') return 'active';
+		if (data.tab === 'unmatched') return 'unmatched';
+		if (data.tab === 'searches') return 'searches';
+		return 'history';
 	}
 
 	function getInitialFilters(): FiltersType {
@@ -1312,6 +1317,16 @@
 			return;
 		}
 
+		// Retry state is its own table, not part of the download feed, so it
+		// carries no activity filters - only the tab in the URL.
+		if (tab === 'searches') {
+			activityTab = 'searches';
+			if (typeof window !== 'undefined') {
+				window.history.replaceState(window.history.state, '', resolvePath('/activity?tab=searches'));
+			}
+			return;
+		}
+
 		// Returning to the active tab re-syncs the unmatched card count.
 		if (tab === 'active') {
 			void refreshUnmatchedCount();
@@ -1541,6 +1556,16 @@
 		</button>
 		<button
 			class="flex shrink-0 cursor-pointer items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors
+				{activityTab === 'searches'
+				? 'border-primary text-primary'
+				: 'border-transparent text-base-content/60 hover:text-base-content'}"
+			onclick={() => switchTab('searches')}
+		>
+			<Search class="h-4 w-4" />
+			{m.activity_tabSearches()}
+		</button>
+		<button
+			class="flex shrink-0 cursor-pointer items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors
 				{activityTab === 'unmatched'
 				? 'border-primary text-primary'
 				: 'border-transparent text-base-content/60 hover:text-base-content'}"
@@ -1558,7 +1583,9 @@
 		</button>
 	</div>
 
-	{#if activityTab === 'unmatched'}
+	{#if activityTab === 'searches'}
+		<SearchRetriesCard />
+	{:else if activityTab === 'unmatched'}
 		<ActivityUnmatchedCard
 			downloadClients={data.filterOptions.downloadClients}
 			filters={unmatchedTabFilters}
