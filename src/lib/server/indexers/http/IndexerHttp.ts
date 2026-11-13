@@ -15,6 +15,7 @@
 import { INDEXER_USER_AGENT } from './userAgent.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { isCloudflareProtected, CloudflareProtectedError } from './CloudflareDetection';
+import { getSolvedUserAgent, hostOf, rememberSolvedUserAgent } from './browser-session.js';
 import {
 	RetryPolicy,
 	isRetryableStatusCode,
@@ -332,6 +333,22 @@ export class IndexerHttp {
 								'Browser fetch succeeded'
 							);
 
+							// Keep what the solve actually earned: its cookies (a fresh
+							// clearance is minted for this path) and the UA it used.
+							// Without this the next request starts from the challenge
+							// again and pays for another browser launch.
+							rememberSolvedUserAgent(host, fetchResult.userAgent);
+							const solvedCookies = fetchResult.cookies ?? [];
+							for (const cookie of solvedCookies) {
+								if (cookie?.name) this.setCookie(cookie.name, cookie.value ?? '');
+							}
+							if (solvedCookies.length > 0) {
+								this.log.debug(
+									{ host, cookieNames: solvedCookies.map((cookie) => cookie.name) },
+									'Stored cookies from browser solve'
+								);
+							}
+
 							const responseHeaders = new Headers();
 							if (fetchResult.headers) {
 								for (const [key, value] of Object.entries(fetchResult.headers)) {
@@ -409,7 +426,13 @@ export class IndexerHttp {
 	): Record<string, string> {
 		const headers: Record<string, string> = {};
 
-		headers['User-Agent'] = this.config.userAgent;
+		// A solve leaves behind both cookies and the User-Agent that passed the
+		// challenge. Presenting the cookies under a different UA is how the solve
+		// gets spent and then thrown away, so the memo wins over the shared
+		// constant for any host we have solved.
+		const solvedHost = hostOf(url);
+		const solvedUserAgent = solvedHost ? getSolvedUserAgent(solvedHost) : undefined;
+		headers['User-Agent'] = solvedUserAgent ?? this.config.userAgent;
 
 		// Build cookie header from indexer cookies
 		const cookies: string[] = [];
