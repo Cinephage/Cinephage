@@ -182,6 +182,27 @@ describe('pollClient - a row is only missing when the client says so', () => {
 	});
 });
 
+describe('pollClient - reasons the client gives', () => {
+	it('keeps a blocked reason on the row instead of dropping it', async () => {
+		// A job the client calls finished that this host cannot read is a
+		// configuration gap, not a download in progress: the row has to say so.
+		const row = await insertQueueRow();
+		const blocked = makeDownload({
+			hash: row.downloadId,
+			status: 'postprocessing',
+			progress: 1,
+			errorMessage:
+				'SABnzbd finished this download at /config/Downloads/complete/x, which this host cannot read'
+		});
+		const { raw } = makeInstance([], { [row.downloadId]: blocked });
+
+		await poll(makeClient(), raw, [row]);
+
+		const after = await getRow(row.id);
+		expect(after.errorMessage).toContain('which this host cannot read');
+	});
+});
+
 describe('pollClient - one client item, two rows', () => {
 	it('binds the item to one row and never writes a client id into infoHash', async () => {
 		const first = await insertQueueRow({ title: 'Twin.Release', downloadId: 'nzo-dead-1' });

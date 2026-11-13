@@ -2026,6 +2026,15 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			updates.lastAttemptAt = now;
 		}
 
+		// The client's own explanation travels with the item. A job it calls finished
+		// that this host cannot see - storage outside the completed folder, or a
+		// mapping that points nowhere - keeps that reason on the row instead of being
+		// logged once per poll, and clears it when the client stops giving one so a
+		// recovered row is not left with a stale complaint (#664 case 2).
+		if (newStatus !== 'failed') {
+			updates.errorMessage = download.errorMessage ?? null;
+		}
+
 		// Clear error state when a previously-failed download recovers
 		// (e.g. tracker HTTP 5xx resolved and qBittorrent resumes the torrent)
 		if (queueItem.status === 'failed' && newStatus !== 'failed') {
