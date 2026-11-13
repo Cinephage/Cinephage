@@ -585,7 +585,7 @@ export class UnifiedIndexer implements IIndexer {
 			throw new Error(apiError);
 		}
 
-		if (this.authManager.checkLoginNeeded(mockResponse, response.body)) {
+		if (this.authManager.checkLoginNeeded(mockResponse, response.body, this.baseUrl)) {
 			this.log.info('Login needed, re-authenticating');
 			this.isLoggedIn = false;
 			await this.ensureLoggedIn(true);

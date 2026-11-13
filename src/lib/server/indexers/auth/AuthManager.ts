@@ -11,6 +11,8 @@ import { SelectorEngine } from '../engine/SelectorEngine';
 import { CookieStore } from './CookieStore';
 import { decodeBuffer } from '../http/EncodingUtils';
 import { isCloudflareProtected, CloudflareProtectedError } from '../http/CloudflareDetection';
+import { getSolvedUserAgent, hostOf, rememberSolvedUserAgent } from '../http/browser-session.js';
+import { INDEXER_USER_AGENT } from '../http/userAgent.js';
 import { captchaSolverSettingsService, getCaptchaSolver } from '#lib/server/captcha/index.js';
 import { createChildLogger } from '#lib/logging/index.js';
 
@@ -122,8 +124,14 @@ export class AuthManager {
 
 	/**
 	 * Check if login is needed based on response.
+	 *
+	 * `baseUrl` is what this indexer was actually configured with. The redirect
+	 * test used to compare against `definition.links[0]` alone, so running on a
+	 * listed mirror (rutracker.nl) read every redirect as "different domain, log
+	 * in again", and the resulting challenge error named the .org host the user
+	 * never configured.
 	 */
-	checkLoginNeeded(response: Response, content: string): boolean {
+	checkLoginNeeded(response: Response, content: string, baseUrl?: string): boolean {
 		const login = this.definition.login;
 		if (!login) return false;
 
@@ -144,11 +152,17 @@ export class AuthManager {
 			return true;
 		}
 
-		// Check for redirect to different domain
+		// A redirect to a host this indexer is allowed to live on is a mirror
+		// hop, not a logout. Only a hop to an unknown host means we were bounced
+		// somewhere the session does not apply.
 		if (response.redirected) {
-			const originalHost = new URL(this.definition.links[0]).host;
-			const redirectHost = new URL(response.url).host;
-			if (originalHost !== redirectHost) {
+			const redirectHost = hostOf(response.url);
+			const knownHosts = new Set<string>();
+			for (const candidate of [baseUrl, ...(this.definition.links ?? [])]) {
+				const host = hostOf(candidate);
+				if (host) knownHosts.add(host);
+			}
+			if (redirectHost && knownHosts.size > 0 && !knownHosts.has(redirectHost)) {
 				return true;
 			}
 		}
@@ -690,6 +704,13 @@ export class AuthManager {
 
 		for (let redirects = 0; redirects <= maxRedirects; redirects++) {
 			const headers = { ...(options.headers ?? {}) };
+			const host = hostOf(currentUrl) ?? '';
+			// These requests used to go out with no User-Agent at all, which lets
+			// undici announce itself as a bot. Present what a solve for this host
+			// used, else the shared browser UA.
+			if (!Object.keys(headers).some((key) => key.toLowerCase() === 'user-agent')) {
+				headers['User-Agent'] = (host && getSolvedUserAgent(host)) || INDEXER_USER_AGENT;
+			}
 			if (Object.keys(currentCookies).length > 0) {
 				headers['Cookie'] = CookieStore.buildCookieHeader(currentCookies);
 			}
@@ -710,7 +731,6 @@ export class AuthManager {
 
 			// Cloudflare challenge → browser fallback
 			if (isCloudflareProtected(status, response.headers, content)) {
-				const host = new URL(currentUrl).hostname;
 				const solver = getCaptchaSolver();
 				const captchaEnabled = captchaSolverSettingsService.isEnabled();
 
@@ -739,6 +759,9 @@ export class AuthManager {
 					if (browserResult.success) {
 						const browserCookies = CookieStore.toCookieRecord(browserResult.cookies ?? []);
 						currentCookies = CookieStore.mergeCookies(currentCookies, browserCookies);
+						// Hold on to the UA the solve used, so later plain requests to
+						// this host look like the client that earned the clearance.
+						rememberSolvedUserAgent(host, browserResult.userAgent);
 						authLogger.info(
 							{
 								host,
