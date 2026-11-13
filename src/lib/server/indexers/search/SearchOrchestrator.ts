@@ -1560,12 +1560,15 @@ export class SearchOrchestrator {
 		indexer: IIndexer,
 		criteria: SearchCriteria
 	): boolean {
+		// The name is the reliable signal: behind Prowlarr or Jackett the base URL
+		// is the proxy's (`.../prowlarr/<id>`), so a host test silently disables
+		// this path for exactly the users who need it - they then issue up to five
+		// titles x four TV formats inside one search budget instead of two titles.
 		return (
 			isTvSearch(criteria) &&
 			criteria.season !== undefined &&
 			criteria.episode !== undefined &&
-			isRuTrackerHost(indexer.baseUrl) &&
-			isRuTrackerIndexerName(indexer.name)
+			(isRuTrackerIndexerName(indexer.name) || isRuTrackerHost(indexer.baseUrl))
 		);
 	}
 
