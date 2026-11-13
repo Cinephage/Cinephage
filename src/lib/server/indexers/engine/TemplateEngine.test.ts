@@ -1,12 +1,35 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { TemplateEngine, createTemplateEngine } from './TemplateEngine';
 import type { SettingsField } from '../schema/yamlDefinition';
+import type { TvSearchCriteria } from '../types';
 
 describe('TemplateEngine', () => {
 	let engine: TemplateEngine;
 
 	beforeEach(() => {
 		engine = createTemplateEngine();
+	});
+
+	describe('setQuery episode tokens', () => {
+		const tvCriteria = {
+			searchType: 'tv',
+			query: 'Fargo',
+			season: 1
+		} as TvSearchCriteria;
+
+		it('appends the season token to the keywords by default', () => {
+			engine.setQuery(tvCriteria);
+
+			expect(engine.getVariable('.Keywords')).toBe('Fargo S01');
+		});
+
+		it('leaves the token out when the definition cannot match one', () => {
+			engine.setQuery(tvCriteria, { includeEpisodeTokens: false });
+
+			expect(engine.getVariable('.Keywords')).toBe('Fargo');
+			// Still set for definitions that format the token themselves.
+			expect(engine.getVariable('.Query.Episode')).toBe('S01');
+		});
 	});
 
 	describe('setConfigWithDefaults', () => {

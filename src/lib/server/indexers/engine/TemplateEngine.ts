@@ -225,8 +225,16 @@ export class TemplateEngine {
 
 	/**
 	 * Set search query variables from search criteria.
+	 *
+	 * `includeEpisodeTokens` controls whether an episode/season token is appended
+	 * to `.Keywords` (the free-text query). It defaults to true. Definitions that
+	 * declare no episode formats pass false: their topic titles carry
+	 * "Серии: 1-7 из 8" rather than Sxx/Eyy, so a token in the query matches
+	 * nothing and costs a request. The `.Query.Episode` variables are still set,
+	 * so a definition that formats the token itself is unaffected.
 	 */
-	setQuery(criteria: SearchCriteria): void {
+	setQuery(criteria: SearchCriteria, options: { includeEpisodeTokens?: boolean } = {}): void {
+		const includeEpisodeTokens = options.includeEpisodeTokens ?? true;
 		// Reset all query variables to null first
 		this.resetQueryVariables();
 
@@ -247,7 +255,7 @@ export class TemplateEngine {
 				this.setMovieQueryVariables(criteria as MovieSearchCriteria, keywordParts);
 				break;
 			case 'tv':
-				this.setTvQueryVariables(criteria as TvSearchCriteria, keywordParts);
+				this.setTvQueryVariables(criteria as TvSearchCriteria, keywordParts, includeEpisodeTokens);
 				break;
 			case 'music':
 				this.setMusicQueryVariables(criteria as MusicSearchCriteria);
@@ -333,7 +341,11 @@ export class TemplateEngine {
 		}
 	}
 
-	private setTvQueryVariables(criteria: TvSearchCriteria, keywords: string[]): void {
+	private setTvQueryVariables(
+		criteria: TvSearchCriteria,
+		keywords: string[],
+		includeEpisodeTokens = true
+	): void {
 		const season = criteria.season ?? 1;
 		// Use preferred format if specified, otherwise default to 'standard'
 		const preferredFormat = criteria.preferredEpisodeFormat ?? 'standard';
@@ -376,7 +388,7 @@ export class TemplateEngine {
 			// Add episode token to keywords using preferred format
 			// No duplicate checking needed - SearchOrchestrator now passes clean queries
 			const keywordFormat = preferredFormatValue ?? standardFormat;
-			if (keywordFormat) {
+			if (keywordFormat && includeEpisodeTokens) {
 				keywords.push(keywordFormat);
 			}
 		} else if (criteria.season !== undefined && criteria.season > 0) {
@@ -384,7 +396,7 @@ export class TemplateEngine {
 			const seasonOnlyFormat = generateEpisodeFormat(season, undefined, 'standard');
 			this.variables.set('.Query.Episode', seasonOnlyFormat);
 			this.variables.set('.Query.Episode.Standard', seasonOnlyFormat);
-			if (seasonOnlyFormat) {
+			if (seasonOnlyFormat && includeEpisodeTokens) {
 				keywords.push(seasonOnlyFormat);
 			}
 		}

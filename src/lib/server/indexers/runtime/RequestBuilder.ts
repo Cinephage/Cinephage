@@ -297,7 +297,9 @@ export class RequestBuilder {
 					: this.categoryMapper.mapToTracker(criteria.categories);
 
 		// Set query and category template variables
-		this.templateEngine.setQuery(pathCriteria);
+		this.templateEngine.setQuery(pathCriteria, {
+			includeEpisodeTokens: this.includesEpisodeTokens()
+		});
 		this.templateEngine.setCategories(catTrackerIds);
 
 		// Use keywords produced by TemplateEngine.setQuery() as the source of truth.
@@ -463,6 +465,19 @@ export class RequestBuilder {
 			addToken('ep', 'Episode', criteria.episode);
 		}
 		return tokens.join(' ');
+	}
+
+	/**
+	 * Whether the free-text query may carry an episode/season token.
+	 *
+	 * A definition that declares no episode formats cannot match one: its topic
+	 * titles are free text ("Show / Сезон: 1 / Серии: 1-7 из 8"), so an "S01"
+	 * in the query returns zero rows, and on a Cloudflare-gated tracker that is
+	 * a wasted browser launch rather than a cheap request.
+	 */
+	private includesEpisodeTokens(): boolean {
+		const formats = this.definition.caps?.searchFormats?.episode;
+		return formats === undefined || formats.length > 0;
 	}
 
 	/**

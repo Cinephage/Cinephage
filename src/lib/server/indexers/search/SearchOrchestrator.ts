@@ -1413,7 +1413,7 @@ export class SearchOrchestrator {
 		const variantCriteria: SearchCriteria[] = [];
 
 		for (const title of titlesToSearch.slice(0, titleBudget)) {
-			if (episodeFormats.length > 0) {
+			if (isTvSearch(criteria)) {
 				for (const format of episodeFormats) {
 					variantCriteria.push(
 						createTextOnlyCriteria({
@@ -1430,6 +1430,10 @@ export class SearchOrchestrator {
 				// so always include the bare-title variant and let filterBySeasonEpisode
 				// prune the broader result set. The batch early-exit below skips this
 				// variant whenever a token variant already produced a relevant release.
+				//
+				// It is also the *only* variant when the definition declares no episode
+				// formats: there is nothing to tokenise, and a token in the query would
+				// be a guaranteed zero-row request.
 				variantCriteria.push(
 					createTextOnlyCriteria({
 						...criteria,

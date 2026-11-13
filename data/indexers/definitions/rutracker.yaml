@@ -34,6 +34,15 @@ caps:
     tv-search: [q, season, ep]
     music-search: [q]
     book-search: [q]
+
+  # Search is free text only ("nm"), and topic titles read
+  # "Show / Сезон: 1 / Серии: 1-7 из 8" - an Sxx/Eyy token in the query matches
+  # nothing. Declaring no episode formats stops the orchestrator from paying for
+  # a variant that always returns zero rows; season filtering happens on the
+  # returned releases instead.
+  searchFormats:
+    episode: []
+
   categorymappings:
     # === MOVIES ===
     # Russian Cinema (Movies)

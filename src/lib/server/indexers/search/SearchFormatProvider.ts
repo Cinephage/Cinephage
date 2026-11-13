@@ -371,7 +371,13 @@ export function normalizeSearchFormats(formats?: Partial<SearchFormats>): Requir
 
 /**
  * Get the effective episode formats to use for an indexer.
- * Uses indexer-specific formats if available, otherwise falls back to trying all formats.
+ *
+ * An explicit empty list means "this tracker takes no episode token in its
+ * query" and is honoured as such: a definition whose topic titles read
+ * "Show / Сезон: 1 / Серии: 1-7 из 8" returns zero rows for a `S01` query, and
+ * every one of those variants costs a request (a browser launch on a
+ * Cloudflare-protected tracker). Only an undefined list falls back, which is
+ * what keeps the old behaviour for definitions that never declared anything.
  *
  * @param indexerFormats - Formats from indexer capabilities (optional)
  * @param useAllFormats - Whether to use all formats as fallback (default: true for backwards compat)
@@ -381,7 +387,7 @@ export function getEffectiveEpisodeFormats(
 	indexerFormats?: EpisodeFormatType[],
 	useAllFormats: boolean = true
 ): EpisodeFormatType[] {
-	if (indexerFormats && indexerFormats.length > 0) {
+	if (indexerFormats !== undefined) {
 		return indexerFormats;
 	}
 	// Fallback to all common formats for backwards compatibility
