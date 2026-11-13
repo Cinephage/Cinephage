@@ -155,4 +155,21 @@ describe('buildCapabilitiesFromYaml', () => {
 
 		expect(caps.search.supportedParams).toEqual(['q', 'imdbId', 'tvdbId']);
 	});
+
+	it('should carry searchFormats from the definition', () => {
+		// Without this the YAML key is a no-op and the orchestrator keeps trying
+		// an Sxx/Eyy variant the tracker can never match.
+		const caps = buildCapabilitiesFromYaml({
+			modes: { 'tv-search': ['q', 'season', 'ep'] },
+			searchFormats: { episode: [] }
+		});
+
+		expect(caps.searchFormats).toEqual({ episode: [], movie: undefined });
+	});
+
+	it('should leave searchFormats undefined when the definition declares none', () => {
+		const caps = buildCapabilitiesFromYaml({ modes: {} });
+
+		expect(caps.searchFormats).toBeUndefined();
+	});
 });

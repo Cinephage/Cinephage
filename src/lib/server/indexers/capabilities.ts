@@ -1,4 +1,4 @@
-import type { SearchParam, SearchMode, IndexerCapabilities } from './types';
+import type { SearchParam, SearchMode, IndexerCapabilities, SearchFormats } from './types';
 import { resolveCategoryId } from './schema/yamlDefinition';
 
 const PARAM_MAPPING: Record<string, SearchParam> = {
@@ -35,10 +35,24 @@ export interface BuildCapabilitiesInput {
 	categories?: Record<string, string>;
 	categorymappings?: Array<{ cat?: string; desc?: string }>;
 	supportsInfoHash?: boolean;
+	/**
+	 * Per-indexer query formats from the definition's `caps.searchFormats`.
+	 * Dropping this here is what made a YAML declaration a no-op: the search
+	 * orchestrator reads capabilities.searchFormats to decide which episode
+	 * token variants to try, so a definition that declares none kept getting
+	 * `S01` jammed into its free-text query.
+	 */
+	searchFormats?: { episode?: string[]; movie?: string[] };
 }
 
 export function buildCapabilitiesFromYaml(input: BuildCapabilitiesInput): IndexerCapabilities {
-	const { modes = {}, categories: cats, categorymappings, supportsInfoHash = true } = input;
+	const {
+		modes = {},
+		categories: cats,
+		categorymappings,
+		supportsInfoHash = true,
+		searchFormats
+	} = input;
 
 	const categoryMap = new Map<number, string>();
 	if (cats) {
@@ -70,6 +84,12 @@ export function buildCapabilitiesFromYaml(input: BuildCapabilitiesInput): Indexe
 		supportsPagination: false,
 		supportsInfoHash,
 		limitMax: 100,
-		limitDefault: 100
+		limitDefault: 100,
+		searchFormats: searchFormats
+			? {
+					episode: searchFormats.episode as SearchFormats['episode'],
+					movie: searchFormats.movie as SearchFormats['movie']
+				}
+			: undefined
 	};
 }

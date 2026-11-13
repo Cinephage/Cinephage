@@ -795,7 +795,8 @@ export class IndexerManager {
 			modes: definition.caps.modes ?? {},
 			categories: definition.caps.categories,
 			categorymappings: definition.caps.categorymappings,
-			supportsInfoHash: true
+			supportsInfoHash: true,
+			searchFormats: definition.caps.searchFormats
 		});
 	}
 }

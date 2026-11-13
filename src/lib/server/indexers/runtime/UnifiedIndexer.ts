@@ -302,7 +302,8 @@ export class UnifiedIndexer implements IIndexer {
 			modes: caps.modes ?? {},
 			categories: caps.categories,
 			categorymappings: caps.categorymappings,
-			supportsInfoHash: this.protocol === 'torrent'
+			supportsInfoHash: this.protocol === 'torrent',
+			searchFormats: caps.searchFormats
 		});
 	}
 
