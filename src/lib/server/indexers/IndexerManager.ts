@@ -50,6 +50,7 @@ import type {
 } from './types';
 import { YamlDefinitionLoader, YamlIndexerFactory } from './loader';
 import type { YamlDefinition } from './schema/yamlDefinition';
+import { declaredSeedLimits } from './seedDefaults';
 import { buildCapabilitiesFromYaml } from './capabilities';
 import {
 	getSearchOrchestrator,
@@ -276,8 +277,19 @@ export class IndexerManager {
 		const effectiveProtocol =
 			(config.settings?.protocol as string | undefined) ?? yamlDef.protocol ?? 'torrent';
 
-		// Build protocol settings from config
-		const protocolSettings = this.buildProtocolSettings(config, effectiveProtocol);
+		// A private tracker's declared seeding requirement is a better starting point
+		// than a blank field that silently falls back to the download client's global
+		// default (often below what the tracker requires). An explicit value the user
+		// supplied still wins, and nothing re-applies this to an existing indexer.
+		const declared = effectiveProtocol === 'torrent' ? declaredSeedLimits(yamlDef) : undefined;
+		const protocolSettings = this.buildProtocolSettings(
+			{
+				...config,
+				seedRatio: config.seedRatio ?? declared?.ratio ?? null,
+				seedTime: config.seedTime ?? declared?.seedTimeMinutes ?? null
+			},
+			effectiveProtocol
+		);
 
 		// Insert and return the generated ID. The id is generated client-side so
 		// the settings' credential envelope can bind to it (AAD) before insert.
