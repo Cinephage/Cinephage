@@ -3,6 +3,7 @@ import {
 	isRuTrackerIndexerName,
 	isRuTrackerHost,
 	isRuTrackerRelease,
+	orderTitlesForCyrillicTracker,
 	prefersNativeCyrillicTitles,
 	RUSSIAN_TRACKER_NAMES,
 	RUTRACKER_AUTOMATIC_MAX_TITLES,
@@ -192,5 +193,22 @@ describe('ReleaseDeduplicator title-key year handling (audit)', () => {
 			}) as never;
 		const { releases } = dedup.deduplicate([mk('1994'), mk('2019')]);
 		expect(releases).toHaveLength(2);
+	});
+
+	describe('orderTitlesForCyrillicTracker', () => {
+		it('puts Cyrillic titles first and keeps the Latin ones', () => {
+			// RuTracker topics are named "Русское название / English Title", so the
+			// original title must survive as a second query, not be discarded.
+			expect(orderTitlesForCyrillicTracker(['The 10th Kingdom', 'Десятое королевство'])).toEqual([
+				'Десятое королевство',
+				'The 10th Kingdom'
+			]);
+		});
+
+		it('keeps exactly one fallback when nothing is Cyrillic', () => {
+			// Each extra title is another request (and another browser solve) on this
+			// tracker, so an all-Latin list collapses to one query.
+			expect(orderTitlesForCyrillicTracker(['Dune', 'Dune: Part Two'])).toEqual(['Dune']);
+		});
 	});
 });

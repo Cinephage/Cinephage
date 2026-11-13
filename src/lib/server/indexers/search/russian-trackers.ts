@@ -36,6 +36,31 @@ export function prefersNativeCyrillicTitles(indexer: IIndexer): boolean {
 	}
 }
 
+const CYRILLIC_REGEX = /\p{Script=Cyrillic}/u;
+
+function isCyrillic(value: string): boolean {
+	return CYRILLIC_REGEX.test(value);
+}
+
+/**
+ * Order titles for a tracker that indexes Cyrillic releases.
+ *
+ * Cyrillic titles first, then exactly one non-Cyrillic fallback. RuTracker names
+ * a topic "Русское название / English Title", so the original title is a
+ * legitimate second query there - dropping every non-Cyrillic title, which is
+ * what this used to do, made the English title unreachable even though the
+ * releases carry it.
+ *
+ * The single-slot fallback is deliberate: on this tracker every title is a
+ * request that can cost a browser-launched Cloudflare solve, so the list must
+ * not turn into "Cyrillic titles plus everything else TMDB ever returned".
+ */
+export function orderTitlesForCyrillicTracker(titles: string[]): string[] {
+	const cyrillic = titles.filter(isCyrillic);
+	const others = titles.filter((title) => !isCyrillic(title));
+	return [...cyrillic, ...others.slice(0, 1)];
+}
+
 export function isRuTrackerIndexerName(indexerName: string | undefined): boolean {
 	if (!indexerName) return false;
 	const normalized = indexerName.toLowerCase();

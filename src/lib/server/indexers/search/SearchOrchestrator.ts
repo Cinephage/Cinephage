@@ -49,6 +49,7 @@ import { ReleaseCache } from './ReleaseCache';
 import {
 	RUTRACKER_AUTOMATIC_MAX_TITLES,
 	RUTRACKER_AUTOMATIC_SEASON_CACHE_TTL_MS,
+	orderTitlesForCyrillicTracker,
 	prefersNativeCyrillicTitles,
 	isRuTrackerIndexerName,
 	isRuTrackerHost
@@ -168,12 +169,6 @@ const DEFAULT_OPTIONS: Required<
 	timeout: getPositiveIntEnv('INDEXER_SEARCH_TIMEOUT_MS', 30_000),
 	useCache: true
 };
-
-const CYRILLIC_REGEX = /\p{Script=Cyrillic}/u;
-
-function containsCyrillic(value: string): boolean {
-	return CYRILLIC_REGEX.test(value);
-}
 
 const NON_VIDEO_ARTIFACT_TITLE_PATTERNS: RegExp[] = [
 	/\boriginal\s+soundtrack\b/i,
@@ -1368,16 +1363,12 @@ export class SearchOrchestrator {
 		let titlesToSearch = [...new Set(rawTitles.map((title) => title.trim()).filter(Boolean))];
 
 		if (prefersNativeCyrillicTitles(indexer)) {
-			const nativeCyrillicTitles = titlesToSearch.filter((title) => containsCyrillic(title));
-			if (nativeCyrillicTitles.length > 0) {
-				titlesToSearch = nativeCyrillicTitles;
-			}
-
-			titlesToSearch = [...titlesToSearch].sort((a, b) => {
-				const aCyrillic = containsCyrillic(a) ? 1 : 0;
-				const bCyrillic = containsCyrillic(b) ? 1 : 0;
-				return bCyrillic - aCyrillic;
-			});
+			// Cyrillic first, then the rest. This used to discard every non-Cyrillic
+			// title, which threw away the original title even though RuTracker topics
+			// are named "Русское название / English Title" and the English query is a
+			// legitimate second try. Which languages reach this point at all is
+			// decided upstream, in the search-title builder.
+			titlesToSearch = orderTitlesForCyrillicTracker(titlesToSearch);
 		}
 
 		if (titlesToSearch.length === 0) {
@@ -1667,6 +1658,11 @@ export class SearchOrchestrator {
 							allReleases.push(release);
 						}
 					}
+
+					// The remaining titles are fallbacks: Cyrillic first, then the
+					// original. Once a title answers, the rest are requests this tracker
+					// does not need - each one can cost a Cloudflare solve.
+					if (releases.length > 0) break;
 				} catch (error) {
 					const message = error instanceof Error ? error.message : String(error);
 					logger.debug(

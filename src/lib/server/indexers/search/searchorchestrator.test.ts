@@ -454,7 +454,7 @@ describe('SearchOrchestrator.executeMultiTitleTextSearch', () => {
 		expect(releases.map((release) => release.guid)).toContain('ozark-s4-pack');
 	});
 
-	it('uses only Cyrillic title variants for RuTracker when native titles are available', async () => {
+	it('searches the Cyrillic title first for RuTracker and keeps one Latin fallback', async () => {
 		const orchestrator = new SearchOrchestrator();
 		const captured: SearchCriteria[] = [];
 
@@ -484,7 +484,9 @@ describe('SearchOrchestrator.executeMultiTitleTextSearch', () => {
 		expect(captured.length).toBeGreaterThan(0);
 		expect(captured[0].query).toBe('Как Деревянко Чехова играл');
 		expect(captured.some((c) => c.query === 'Как Деревянко играл')).toBe(true);
-		expect(captured.some((c) => c.query === 'How Derevyanko Chekhov Played')).toBe(false);
+		// The original title is a real second query on RuTracker, but only one
+		// non-Cyrillic fallback is allowed, so the romanized variant stays out.
+		expect(captured.some((c) => c.query === 'How Derevyanko Chekhov Played')).toBe(true);
 		expect(captured.some((c) => c.query === 'Kak Derevyanko Chekhova igral')).toBe(false);
 	});
 
@@ -517,7 +519,10 @@ describe('SearchOrchestrator.executeMultiTitleTextSearch', () => {
 			episode: 2
 		});
 
-		expect(captured).toHaveLength(1);
+		// Two title queries (Cyrillic, then the single Latin fallback), not four:
+		// the second automatic episode reuses the in-flight/cached result.
+		expect(captured).toHaveLength(2);
+		expect(captured.map((c) => c.query)).toEqual(['Очень странные дела', 'Stranger Things']);
 		const tvCaptured = captured.filter(isTvSearch);
 		expect(tvCaptured.every((c) => c.preferredEpisodeFormat === undefined)).toBe(true);
 		expect(tvCaptured.every((c) => c.episode === undefined)).toBe(true);
@@ -554,9 +559,9 @@ describe('SearchOrchestrator.executeMultiTitleTextSearch', () => {
 			episode: 5
 		});
 
-		// One upstream request serves both scans: the query is the bare title and
+		// The same two queries serve both scans: the query is the bare title and
 		// the cache key is season-independent.
-		expect(captured).toHaveLength(1);
+		expect(captured).toHaveLength(2);
 		const tvCaptured = captured.filter(isTvSearch);
 		expect(tvCaptured.every((c) => c.season === undefined && c.episode === undefined)).toBe(true);
 	});
@@ -593,7 +598,10 @@ describe('SearchOrchestrator.executeMultiTitleTextSearch', () => {
 			})
 		]);
 
-		expect(captured).toHaveLength(1);
+		// Two title queries (Cyrillic, then the single Latin fallback), not four:
+		// the second automatic episode reuses the in-flight/cached result.
+		expect(captured).toHaveLength(2);
+		expect(captured.map((c) => c.query)).toEqual(['Очень странные дела', 'Stranger Things']);
 		const tvCaptured = captured.filter(isTvSearch);
 		expect(tvCaptured.every((c) => c.preferredEpisodeFormat === undefined)).toBe(true);
 		expect(tvCaptured.every((c) => c.episode === undefined)).toBe(true);
