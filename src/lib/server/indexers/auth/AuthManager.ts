@@ -742,7 +742,8 @@ export class AuthManager {
 					throw new CloudflareProtectedError(host, status);
 				}
 
-				if (solver.isAvailable()) {
+				const solverReady = solver.isAvailable() || (await solver.waitUntilReady());
+				if (solverReady) {
 					authLogger.info(
 						{ host, url: currentUrl },
 						'[AuthManager] Cloudflare detected, fetching through browser'

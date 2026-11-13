@@ -275,6 +275,8 @@ export class IndexerHttp {
 		const abortListener = () => controller.abort();
 		options.signal?.addEventListener('abort', abortListener, { once: true });
 
+		let captchaSolverAvailable = false;
+
 		try {
 			const response = await fetch(url, {
 				method: options.method,
@@ -303,7 +305,12 @@ export class IndexerHttp {
 						throw new CloudflareProtectedError(host, response.status);
 					}
 
-					if (captchaSolver.isAvailable()) {
+					// A restart leaves the availability probe running for a couple of
+					// seconds; wait for it rather than reporting "no solver" to a
+					// challenge that arrived first.
+					captchaSolverAvailable =
+						captchaSolver.isAvailable() || (await captchaSolver.waitUntilReady());
+					if (captchaSolverAvailable) {
 						this.log.info({ url, host }, 'Cloudflare detected, fetching through browser');
 
 						// Fetch directly through the browser - this bypasses JA3/TLS fingerprinting
@@ -393,7 +400,13 @@ export class IndexerHttp {
 					}
 				}
 
-				// Captcha solver not available or already tried, throw original error
+				// Captcha solver not available or already tried, throw original error.
+				// Log why: an unsolved challenge used to surface as a bare
+				// "Cloudflare protection detected" with nothing to diagnose.
+				this.log.warn(
+					{ host, skipCaptchaSolver, solverAvailable: captchaSolverAvailable },
+					'Cloudflare challenge left unsolved'
+				);
 				throw new CloudflareProtectedError(host, response.status);
 			}
 

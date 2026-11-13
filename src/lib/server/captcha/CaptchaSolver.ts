@@ -57,6 +57,10 @@ export class CaptchaSolver implements BackgroundService {
 	// Cache cleanup interval
 	private cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
+	// In-flight initialization, so a caller that meets a challenge mid-start can
+	// wait for it instead of being told "no solver" and giving up.
+	private startPromise: Promise<void> | null = null;
+
 	get status() {
 		return this._status;
 	}
@@ -71,9 +75,40 @@ export class CaptchaSolver implements BackgroundService {
 
 		this._status = 'starting';
 
-		setImmediate(() => {
-			this.initialize();
+		this.startPromise = new Promise<void>((resolve) => {
+			setImmediate(async () => {
+				try {
+					await this.initialize();
+				} finally {
+					resolve();
+				}
+			});
 		});
+	}
+
+	/**
+	 * Wait for a start that is still in progress, then report whether the solver
+	 * can actually solve.
+	 *
+	 * The availability check launches a browser and takes a couple of seconds. A
+	 * challenge that arrives inside that window used to be answered with "no
+	 * solver available", which turned a perfectly good indexer into a silent
+	 * Cloudflare failure right after every restart.
+	 */
+	async waitUntilReady(timeoutMs = 15_000): Promise<boolean> {
+		if (this._status === 'ready') {
+			return this.isAvailable();
+		}
+		if (this._status === 'error') {
+			return false;
+		}
+		if (this.startPromise) {
+			await Promise.race([
+				this.startPromise,
+				new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))
+			]);
+		}
+		return this.isAvailable();
 	}
 
 	/**
