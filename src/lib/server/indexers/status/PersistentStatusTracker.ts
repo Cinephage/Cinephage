@@ -273,7 +273,10 @@ export class PersistentStatusTracker {
 		// Check if should auto-disable. A manual connection test reports the same
 		// evidence but must not be able to disable a working indexer: the user is
 		// probing it precisely because something looks wrong.
-		if ((options.countsTowardsDisable ?? true) && status.consecutiveFailures >= this.config.failuresBeforeDisable) {
+		if (
+			(options.countsTowardsDisable ?? true) &&
+			status.consecutiveFailures >= this.config.failuresBeforeDisable
+		) {
 			this.disableIndexer(status);
 		}
 

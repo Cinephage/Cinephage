@@ -30,7 +30,10 @@ interface SolvedSession {
 const sessions = new Map<string, SolvedSession>();
 
 function normaliseHost(host: string): string {
-	return host.trim().toLowerCase().replace(/^www\./, '');
+	return host
+		.trim()
+		.toLowerCase()
+		.replace(/^www\./, '');
 }
 
 /** Host of a URL, or undefined when the URL cannot be parsed. */

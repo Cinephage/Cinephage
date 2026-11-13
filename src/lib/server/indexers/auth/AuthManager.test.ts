@@ -85,7 +85,11 @@ describe('AuthManager.checkLoginNeeded', () => {
 		// Configured on .nl, answered from .org: a mirror hop, not a logout. The old
 		// check compared against links[0] and forced a re-login here.
 		expect(
-			manager.checkLoginNeeded(redirectedTo('https://rutracker.org/forum/index.php'), body, 'https://rutracker.nl/')
+			manager.checkLoginNeeded(
+				redirectedTo('https://rutracker.org/forum/index.php'),
+				body,
+				'https://rutracker.nl/'
+			)
 		).toBe(false);
 	});
 
@@ -94,11 +98,14 @@ describe('AuthManager.checkLoginNeeded', () => {
 		const body = '<html><body><a href="/forum/login.php?logout=1">Выход</a></body></html>';
 
 		expect(
-			manager.checkLoginNeeded(redirectedTo('https://portal.example.net/login'), body, 'https://rutracker.org/')
+			manager.checkLoginNeeded(
+				redirectedTo('https://portal.example.net/login'),
+				body,
+				'https://rutracker.org/'
+			)
 		).toBe(true);
 	});
 });
-
 
 describe('AuthManager.login', () => {
 	const stubs = {

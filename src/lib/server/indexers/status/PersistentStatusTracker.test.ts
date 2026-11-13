@@ -188,9 +188,14 @@ describe('PersistentStatusTracker.recordFailure', () => {
 		await tracker.initialize(id, true, 25);
 
 		for (let attempt = 0; attempt < 3; attempt++) {
-			await tracker.recordFailure(id, 'Cloudflare protection detected on rutracker.org', undefined, {
-				countsTowardsDisable: false
-			});
+			await tracker.recordFailure(
+				id,
+				'Cloudflare protection detected on rutracker.org',
+				undefined,
+				{
+					countsTowardsDisable: false
+				}
+			);
 		}
 
 		const status = await tracker.getStatus(id);

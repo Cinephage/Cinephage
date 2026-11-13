@@ -694,7 +694,6 @@ describe('search titles following the language profile', () => {
 	});
 });
 
-
 describe('search titles restricted to the requested languages', () => {
 	const RU_PROFILE = 'profile-russian-titles';
 
@@ -724,21 +723,24 @@ describe('search titles restricted to the requested languages', () => {
 			})
 			.run();
 
-		testDb.db.insert(alternateTitles).values(
-			[
-				{ title: 'Десетото кралство', country: 'BG' },
-				{ title: 'Десяте королівство', country: 'UA' },
-				{ title: 'Dixième Royaume', country: 'FR' },
-				{ title: 'The 10th Kingdom', country: 'US' }
-			].map((alt) => ({
-				mediaType: 'series' as const,
-				mediaId: 'series-10th-kingdom',
-				title: alt.title,
-				cleanTitle: cleanTitle(alt.title),
-				source: 'tmdb',
-				country: alt.country
-			}))
-		).run();
+		testDb.db
+			.insert(alternateTitles)
+			.values(
+				[
+					{ title: 'Десетото кралство', country: 'BG' },
+					{ title: 'Десяте королівство', country: 'UA' },
+					{ title: 'Dixième Royaume', country: 'FR' },
+					{ title: 'The 10th Kingdom', country: 'US' }
+				].map((alt) => ({
+					mediaType: 'series' as const,
+					mediaId: 'series-10th-kingdom',
+					title: alt.title,
+					cleanTitle: cleanTitle(alt.title),
+					source: 'tmdb',
+					country: alt.country
+				}))
+			)
+			.run();
 
 		const titles = await getSeriesSearchTitles('series-10th-kingdom', 'ru');
 
