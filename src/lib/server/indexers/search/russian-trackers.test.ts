@@ -4,6 +4,7 @@ import {
 	isRuTrackerHost,
 	isRuTrackerRelease,
 	orderTitlesForCyrillicTracker,
+	limitedRuTrackerSeasonTitles,
 	prefersNativeCyrillicTitles,
 	RUSSIAN_TRACKER_NAMES,
 	RUTRACKER_AUTOMATIC_MAX_TITLES,
@@ -205,10 +206,46 @@ describe('ReleaseDeduplicator title-key year handling (audit)', () => {
 			]);
 		});
 
-		it('keeps exactly one fallback when nothing is Cyrillic', () => {
-			// Each extra title is another request (and another browser solve) on this
-			// tracker, so an all-Latin list collapses to one query.
-			expect(orderTitlesForCyrillicTracker(['Dune', 'Dune: Part Two'])).toEqual(['Dune']);
+		it('keeps every Latin title when nothing is Cyrillic', () => {
+			// There is no Cyrillic title to fall back from, so the single-slot rule
+			// would only discard alternates that are legitimate queries.
+			expect(orderTitlesForCyrillicTracker(['Dune', 'Dune: Part Two'])).toEqual([
+				'Dune',
+				'Dune: Part Two'
+			]);
+		});
+
+		it('keeps exactly one Latin fallback alongside Cyrillic titles', () => {
+			expect(
+				orderTitlesForCyrillicTracker(['Десятое королевство', 'The 10th Kingdom', 'Dune'])
+			).toEqual(['Десятое королевство', 'The 10th Kingdom']);
+		});
+	});
+
+	describe('limitedRuTrackerSeasonTitles', () => {
+		it('reserves the last slot for the Latin fallback', () => {
+			expect(limitedRuTrackerSeasonTitles(['Квест Вижн', 'Квест', 'VisionQuest'])).toEqual([
+				'Квест Вижн',
+				'VisionQuest'
+			]);
+		});
+
+		it('returns a list that already fits untouched', () => {
+			expect(limitedRuTrackerSeasonTitles(['Квест Вижн', 'VisionQuest'])).toEqual([
+				'Квест Вижн',
+				'VisionQuest'
+			]);
+		});
+
+		it('slices a Cyrillic-only list to the budget', () => {
+			expect(limitedRuTrackerSeasonTitles(['Квест Вижн', 'Квест', 'Вижн'])).toEqual([
+				'Квест Вижн',
+				'Квест'
+			]);
+		});
+
+		it('never exceeds a budget of one', () => {
+			expect(limitedRuTrackerSeasonTitles(['Квест', 'VisionQuest'], 1)).toEqual(['Квест']);
 		});
 	});
 });

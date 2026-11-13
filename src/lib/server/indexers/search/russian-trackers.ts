@@ -54,11 +54,37 @@ function isCyrillic(value: string): boolean {
  * The single-slot fallback is deliberate: on this tracker every title is a
  * request that can cost a browser-launched Cloudflare solve, so the list must
  * not turn into "Cyrillic titles plus everything else TMDB ever returned".
+ * With no Cyrillic title at all there is nothing to fall back from, so the
+ * single-slot rule would only throw away alternates that are all legitimate
+ * queries for the item.
  */
 export function orderTitlesForCyrillicTracker(titles: string[]): string[] {
 	const cyrillic = titles.filter(isCyrillic);
 	const others = titles.filter((title) => !isCyrillic(title));
+	if (cyrillic.length === 0) return others;
 	return [...cyrillic, ...others.slice(0, 1)];
+}
+
+/**
+ * The titles a pointer-indexer automatic season search may actually issue.
+ *
+ * `RUTRACKER_AUTOMATIC_MAX_TITLES` bounds requests that can each cost a
+ * Cloudflare solve. A plain slice, though, drops the Latin fallback whenever
+ * two Cyrillic titles come first - and that fallback is the only query that
+ * finds a topic filed under its English name. Reserve the last slot for it.
+ */
+export function limitedRuTrackerSeasonTitles(
+	titles: string[],
+	max = RUTRACKER_AUTOMATIC_MAX_TITLES
+): string[] {
+	if (titles.length <= max) return titles;
+
+	const fallback = titles.find((title) => !isCyrillic(title));
+	const cyrillic = titles.filter(isCyrillic);
+
+	// A budget of one cannot hold both, so it holds the primary title only.
+	if (max <= 1 || fallback === undefined) return cyrillic.slice(0, max);
+	return [...cyrillic.slice(0, max - 1), fallback];
 }
 
 export function isRuTrackerIndexerName(indexerName: string | undefined): boolean {
