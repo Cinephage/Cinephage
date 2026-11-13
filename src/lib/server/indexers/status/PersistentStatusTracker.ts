@@ -240,7 +240,12 @@ export class PersistentStatusTracker {
 	/**
 	 * Record a failed request.
 	 */
-	async recordFailure(indexerId: string, message: string, requestUrl?: string): Promise<void> {
+	async recordFailure(
+		indexerId: string,
+		message: string,
+		requestUrl?: string,
+		options: { countsTowardsDisable?: boolean } = {}
+	): Promise<void> {
 		const status = await this.getOrCreateStatus(indexerId);
 		const now = new Date();
 
@@ -265,8 +270,10 @@ export class PersistentStatusTracker {
 			status.recentFailures.pop();
 		}
 
-		// Check if should auto-disable
-		if (status.consecutiveFailures >= this.config.failuresBeforeDisable) {
+		// Check if should auto-disable. A manual connection test reports the same
+		// evidence but must not be able to disable a working indexer: the user is
+		// probing it precisely because something looks wrong.
+		if ((options.countsTowardsDisable ?? true) && status.consecutiveFailures >= this.config.failuresBeforeDisable) {
 			this.disableIndexer(status);
 		}
 

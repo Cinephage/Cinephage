@@ -664,7 +664,23 @@ export class IndexerManager {
 		}
 
 		const startedAt = Date.now();
-		await instance.test();
+		try {
+			await instance.test();
+		} catch (error) {
+			// A failed manual test is evidence about the indexer too. Recording only
+			// the success path left a broken indexer showing as healthy until a real
+			// search happened to fail, which is exactly the state the user was trying
+			// to diagnose.
+			if (statusIndexerId) {
+				await getPersistentStatusTracker().recordFailure(
+					statusIndexerId,
+					error instanceof Error ? error.message : String(error),
+					undefined,
+					{ countsTowardsDisable: false }
+				);
+			}
+			throw error;
+		}
 
 		// If this test is for an existing saved indexer, update health status on success.
 		if (statusIndexerId) {

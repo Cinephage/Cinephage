@@ -6,7 +6,7 @@ import {
 	indexers as indexersTable,
 	indexerStatus as indexerStatusTable
 } from '#lib/server/db/schema.js';
-import { isQuotaExceededMessage, nextUtcMidnight } from './types.js';
+import { isQuotaExceededMessage, nextUtcMidnight, DEFAULT_STATUS_CONFIG } from './types.js';
 
 const testDb: TestDatabase = createTestDb();
 
@@ -38,6 +38,12 @@ vi.mock('#lib/logging/index.js', () => ({
 }));
 
 const { PersistentStatusTracker } = await import('./PersistentStatusTracker.js');
+
+// One teardown for the whole file: closing the DB inside a describe kills it for
+// every describe that follows, which only shows up as "connection is not open".
+afterAll(() => {
+	destroyTestDb(testDb);
+});
 
 function seedIndexer(): string {
 	const id = randomUUID();
@@ -92,10 +98,6 @@ describe('PersistentStatusTracker.recordQuotaExceeded', () => {
 		tracker = new PersistentStatusTracker();
 	});
 
-	afterAll(() => {
-		destroyTestDb(testDb);
-	});
-
 	beforeEach(() => {
 		testDb.db.delete(indexerStatusTable).run();
 		testDb.db.delete(indexersTable).run();
@@ -144,5 +146,56 @@ describe('PersistentStatusTracker.recordQuotaExceeded', () => {
 		expect(afterReset.disabledReason).toBeUndefined();
 		expect(afterReset.consecutiveFailures).toBe(0);
 		expect(afterReset.health).toBe('healthy');
+	});
+});
+
+describe('PersistentStatusTracker.recordFailure', () => {
+	// Tighter than production on purpose: the default only increments once per
+	// 30s, which makes the disable threshold unreachable inside one test.
+	const config = {
+		...DEFAULT_STATUS_CONFIG,
+		failuresBeforeDisable: 2,
+		minFailureIncrementIntervalMs: 0
+	};
+	let tracker: InstanceType<typeof PersistentStatusTracker>;
+
+	beforeAll(() => {
+		tracker = new PersistentStatusTracker(config);
+	});
+
+	beforeEach(() => {
+		testDb.db.delete(indexerStatusTable).run();
+		testDb.db.delete(indexersTable).run();
+	});
+
+	it('disables the indexer once failures reach the configured threshold', async () => {
+		const id = seedIndexer();
+		await tracker.initialize(id, true, 25);
+
+		await tracker.recordFailure(id, 'Connection refused');
+		const afterOne = await tracker.getStatus(id);
+		expect(afterOne.consecutiveFailures).toBe(1);
+		expect(afterOne.isDisabled).toBe(false);
+
+		await tracker.recordFailure(id, 'Connection refused');
+		const afterTwo = await tracker.getStatus(id);
+		expect(afterTwo.isDisabled).toBe(true);
+		expect(afterTwo.disabledReason).toBe('consecutive_failures');
+	});
+
+	it('records a manual test failure without letting it disable the indexer', async () => {
+		const id = seedIndexer();
+		await tracker.initialize(id, true, 25);
+
+		for (let attempt = 0; attempt < 3; attempt++) {
+			await tracker.recordFailure(id, 'Cloudflare protection detected on rutracker.org', undefined, {
+				countsTowardsDisable: false
+			});
+		}
+
+		const status = await tracker.getStatus(id);
+		expect(status.consecutiveFailures).toBeGreaterThan(0);
+		expect(status.isDisabled).toBe(false);
+		expect(status.recentFailures[0]?.message).toContain('Cloudflare protection');
 	});
 });
