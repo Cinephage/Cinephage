@@ -707,6 +707,31 @@ export class ResponseParser {
 			}
 		}
 
+		// Seeding requirement declared per release. These were parsed into the
+		// generic values map and then dropped by this whitelist, so a tracker's
+		// stated requirement never reached the grab.
+		const minimumRatioRaw = values['minimumratio'];
+		const minimumSeedTimeRaw = values['minimumseedtime'];
+		if (minimumRatioRaw !== null || minimumSeedTimeRaw !== null) {
+			if (!result.torrent) {
+				result.torrent = {
+					seeders: result.seeders ?? 0,
+					leechers: result.leechers ?? 0
+				};
+			}
+			if (minimumRatioRaw !== null) {
+				const ratio = parseFloat(minimumRatioRaw);
+				// 0 is how a ratioless tracker says "no requirement".
+				if (!isNaN(ratio) && ratio > 0) result.torrent.minimumRatio = ratio;
+			}
+			if (minimumSeedTimeRaw !== null) {
+				const seconds = parseInt(minimumSeedTimeRaw, 10);
+				if (!isNaN(seconds) && seconds > 0) {
+					result.torrent.minimumSeedTime = Math.max(1, Math.round(seconds / 60));
+				}
+			}
+		}
+
 		// External IDs
 		const imdbId = values['imdb'] || values['imdbid'];
 		if (imdbId) {

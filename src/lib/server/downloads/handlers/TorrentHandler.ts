@@ -9,6 +9,7 @@ import { parseEpisodePointerFromGuid, parseEpisodePointerFromTitle } from '../ep
 import type { EpisodePointerFileSelection } from '../episode-pointer.js';
 import { resolveEpisodePackSelection } from '../episode-pack-selection.js';
 import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
+import { declaredSeedLimits, maxSeedLimit } from '#lib/server/indexers/seedDefaults.js';
 import { blocklistService } from '#lib/server/monitoring/specifications/BlocklistSpecification.js';
 import { acquisitionService } from '#lib/server/acquisition/AcquisitionService.js';
 import { createChildLogger } from '#lib/logging/index.js';
@@ -47,6 +48,8 @@ export class TorrentHandler {
 
 		let indexerSeedRatio: number | undefined;
 		let indexerSeedTime: number | undefined;
+		let declaredSeedRatio: number | undefined;
+		let declaredSeedTime: number | undefined;
 
 		if (release.indexerId) {
 			const indexerManager = await getIndexerManager();
@@ -54,13 +57,35 @@ export class TorrentHandler {
 			if (indexer) {
 				indexerSeedRatio = indexer.seedRatio ? parseFloat(indexer.seedRatio) : undefined;
 				indexerSeedTime = indexer.seedTime ?? undefined;
+
+				// A tracker's declared requirement is a floor, not a default. A user
+				// value or an inherited client default below it risks a hit-and-run on
+				// a private tracker, and nothing surfaced the requirement before.
+				const definition = indexerManager.getDefinition(indexer.definitionId);
+				if (definition) {
+					const declared = declaredSeedLimits(definition);
+					if (declared.ratio) declaredSeedRatio = Number(declared.ratio);
+					if (declared.seedTimeMinutes) declaredSeedTime = declared.seedTimeMinutes;
+				}
 			}
 		}
 
-		const seedRatioLimit =
-			indexerSeedRatio ??
-			(clientConfig.seedRatioLimit ? parseFloat(clientConfig.seedRatioLimit) : undefined);
-		const seedTimeLimit = indexerSeedTime ?? clientConfig.seedTimeLimit ?? undefined;
+		// Three sources, highest wins: what the user configured for this indexer,
+		// the client's global default, the definition's static declaration, and -
+		// when the tracker varies it per release (freeleech, promos) - the value
+		// parsed off this release.
+		const seedRatioLimit = maxSeedLimit(
+			indexerSeedRatio,
+			clientConfig.seedRatioLimit ? parseFloat(clientConfig.seedRatioLimit) : undefined,
+			declaredSeedRatio,
+			release.minimumRatio
+		);
+		const seedTimeLimit = maxSeedLimit(
+			indexerSeedTime,
+			clientConfig.seedTimeLimit ?? undefined,
+			declaredSeedTime,
+			release.minimumSeedTime
+		);
 
 		const resolutionService = getDownloadResolutionService();
 		const resolvedDownload = await resolutionService.resolve({

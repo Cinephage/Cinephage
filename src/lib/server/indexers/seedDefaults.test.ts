@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { yamlDefinitionSchema } from './schema/yamlDefinition.js';
-import { declaredSeedLimits } from './seedDefaults';
+import { declaredSeedLimits, maxSeedLimit } from './seedDefaults';
 
 /** Build a real definition object so the test also pins the YAML shape. */
 function definition(fields: Record<string, unknown>) {
@@ -97,5 +97,22 @@ describe('declaredSeedLimits', () => {
 		const limits = declaredSeedLimits(definition({ minimumseedtime: { text: '30' } }));
 
 		expect(limits.seedTimeMinutes).toBe(1);
+	});
+});
+
+describe('maxSeedLimit', () => {
+	it('takes the highest usable value', () => {
+		expect(maxSeedLimit(0.5, 1, 2.5)).toBe(2.5);
+	});
+
+	it('ignores unset and non-positive values so a limit is never invented', () => {
+		expect(maxSeedLimit(undefined, 0, 1.1)).toBe(1.1);
+		expect(maxSeedLimit(undefined, 0)).toBeUndefined();
+		expect(maxSeedLimit()).toBeUndefined();
+	});
+
+	it('leaves a declared floor in charge when the client default is lower', () => {
+		// The reporter's case: client default 0.5, tracker requires 1.0.
+		expect(maxSeedLimit(undefined, 0.5, 1)).toBe(1);
 	});
 });

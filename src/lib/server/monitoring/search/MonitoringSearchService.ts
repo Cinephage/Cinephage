@@ -3366,7 +3366,9 @@ export class MonitoringSearchService {
 				indexerId: release.indexerId,
 				indexerName: release.indexerName,
 				size: release.size,
-				protocol: release.protocol as 'torrent' | 'usenet' | 'streaming' | undefined
+				protocol: release.protocol as 'torrent' | 'usenet' | 'streaming' | undefined,
+				minimumRatio: release.torrent?.minimumRatio,
+				minimumSeedTime: release.torrent?.minimumSeedTime
 			},
 			target,
 			options: {

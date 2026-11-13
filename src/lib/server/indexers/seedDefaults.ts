@@ -76,3 +76,17 @@ export function declaredSeedLimits(def: YamlDefinition): DeclaredSeedLimits {
 
 	return limits;
 }
+
+/**
+ * Highest of the supplied limits, ignoring unset and non-positive values.
+ *
+ * Used to enforce a tracker's declared requirement as a floor: a user value or
+ * an inherited client default below it would under-seed. `undefined` means
+ * "send no limit", which leaves the client's own default in place.
+ */
+export function maxSeedLimit(...values: (number | undefined)[]): number | undefined {
+	const usable = values.filter(
+		(value): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0
+	);
+	return usable.length > 0 ? Math.max(...usable) : undefined;
+}
