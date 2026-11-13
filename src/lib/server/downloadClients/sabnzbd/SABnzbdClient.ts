@@ -3,9 +3,27 @@
  * Handles adding NZBs, monitoring downloads, and managing the download queue.
  */
 
+import { access } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'imports' as const });
+
+/** Readable check with a ceiling: a hung network mount must not stall a poll. */
+async function pathIsReadable(target: string): Promise<boolean> {
+	try {
+		await Promise.race([
+			access(target, constants.R_OK),
+			new Promise((_, reject) =>
+				setTimeout(() => reject(new Error('timeout')), PATH_PROBE_TIMEOUT_MS)
+			)
+		]);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 import type {
 	IDownloadClient,
 	DownloadClientConfig,
@@ -28,6 +46,9 @@ import { mapPriorityToSabnzbd } from './types';
 
 /** Config cache TTL in milliseconds (1 minute) */
 const CONFIG_CACHE_TTL = 60_000;
+
+/** Ceiling for the "can this host read the finished download" probe */
+const PATH_PROBE_TIMEOUT_MS = 2_000;
 
 /** User-Agent for NZB fetches - looks more legitimate than generic string */
 const NZB_FETCH_USER_AGENT =
@@ -203,17 +224,55 @@ export class SABnzbdClient implements IDownloadClient {
 	 * When the client's local download path is configured, a relative
 	 * complete_dir is resolved against it (issue #489).
 	 */
-	private resolveCompleteDir(completeDir: string): string {
-		if (
-			completeDir.startsWith('/') ||
-			/^[A-Za-z]:[\\/]/.test(completeDir) ||
-			completeDir.startsWith('\\\\')
-		) {
+	private resolveCompleteDir(completeDir: string, storage?: string): string {
+		if (this.isAbsolutePath(completeDir)) {
 			return completeDir;
 		}
+		// SABnzbd still reports complete_dir relative (its Docker default) while an
+		// item's storage is absolute. The two are in different roots, so they cannot
+		// be prefix-compared until the base is expressed in the storage's own root.
+		const anchored = this.storageSubpath(storage, completeDir);
 		const localBase = this.config.downloadPathLocal;
-		if (!localBase) return completeDir;
-		return `${localBase.replace(/\/+$/, '')}/${completeDir.replace(/^\/+/, '')}`;
+		if (localBase) {
+			return `${localBase.replace(/\/+$/, '')}/${completeDir.replace(/^\/+/, '')}`;
+		}
+		return anchored ? `${anchored.base}/${this.normaliseRelativeDir(completeDir)}` : completeDir;
+	}
+
+	private isAbsolutePath(value: string): boolean {
+		return value.startsWith('/') || /^[A-Za-z]:[\\/]/.test(value) || value.startsWith('\\\\');
+	}
+
+	private normaliseRelativeDir(dir: string): string {
+		return dir
+			.replace(/\\/g, '/')
+			.replace(/^\.?\/+/, '')
+			.replace(/\/+$/, '');
+	}
+
+	/**
+	 * Locate `completeDir` inside a storage path and return the root it was found
+	 * under plus everything below the folder.
+	 *
+	 * `/config/Downloads/complete/Show/file.mkv` with a complete_dir of
+	 * `Downloads/complete` gives `{ base: '/config', subpath: 'Show/file.mkv' }`.
+	 * Returns null when the storage path is outside the folder, or is the folder
+	 * itself - which is the one case that must never be imported.
+	 */
+	private storageSubpath(
+		storage: string | undefined,
+		completeDir: string
+	): { base: string; subpath: string } | null {
+		if (!storage) return null;
+		const normalizedStorage = storage.replace(/\\/g, '/').replace(/\/+$/, '');
+		const normalizedDir = this.normaliseRelativeDir(completeDir);
+		if (!normalizedDir) return null;
+		const marker = `/${normalizedDir}/`;
+		const at = normalizedStorage.indexOf(marker);
+		if (at === -1) return null;
+		const subpath = normalizedStorage.slice(at + marker.length);
+		if (!subpath) return null;
+		return { base: normalizedStorage.slice(0, at), subpath };
 	}
 
 	/**
@@ -245,7 +304,7 @@ export class SABnzbdClient implements IDownloadClient {
 		item: SabnzbdHistoryItem,
 		sabConfig: SabnzbdConfigResponse
 	): Promise<string> {
-		const baseDir = this.resolveCompleteDir(sabConfig.misc.complete_dir);
+		const baseDir = this.resolveCompleteDir(sabConfig.misc.complete_dir, item.storage);
 
 		// Use storage if it's valid (not just the base directory)
 		if (this.isValidStoragePath(item.storage, baseDir)) {
@@ -1020,9 +1079,20 @@ export class SABnzbdClient implements IDownloadClient {
 		item: SabnzbdHistoryItem,
 		sabConfig: SabnzbdConfigResponse
 	): Promise<DownloadInfo> {
-		const baseDir = this.resolveCompleteDir(sabConfig.misc.complete_dir);
+		const baseDir = this.resolveCompleteDir(sabConfig.misc.complete_dir, item.storage);
 		const hasValidStorage = this.isValidStoragePath(item.storage, baseDir);
 		const outputPath = await this.resolveOutputPath(item, sabConfig);
+		// The client saying "Completed" is a claim about its own filesystem, not
+		// about this host's. When the completed folder had to be *derived* from the
+		// storage path (SABnzbd's Docker default reports it relative, with no local
+		// mapping configured), check that this host can actually read it - importing
+		// a path we invented fails later and less legibly. When the operator has
+		// declared the mapping or the client reported an absolute path, the path is
+		// their statement of where things are; do not second-guess it with a stat.
+		const derivedFromStorage =
+			!this.isAbsolutePath(sabConfig.misc.complete_dir) && !this.config.downloadPathLocal;
+		const storageIsReadable =
+			hasValidStorage && (!derivedFromStorage || (await pathIsReadable(item.storage)));
 
 		if (this.shouldNormalizeCategoryDir()) {
 			logger.debug(
@@ -1038,20 +1108,27 @@ export class SABnzbdClient implements IDownloadClient {
 			);
 		}
 
-		// Only truly completed if status is 'Completed' AND storage path is valid
-		// This prevents premature imports when storage is just the base directory
-		const isCompleted = item.status === 'Completed' && hasValidStorage;
+		// Only truly completed if status is 'Completed', the storage path is a
+		// subfolder of the completed folder, and this host can read it. The last
+		// part is what separates "not finished yet" from "finished somewhere I
+		// cannot see", which used to be indistinguishable from the queue's side.
+		const isCompleted = item.status === 'Completed' && hasValidStorage && storageIsReadable;
 
-		if (item.status === 'Completed' && !hasValidStorage) {
+		let blockedReason: string | undefined;
+		if (item.status === 'Completed' && !isCompleted) {
+			blockedReason = hasValidStorage
+				? `SABnzbd finished this download at ${item.storage}, which this host cannot read - check the client's local download path mapping`
+				: `SABnzbd finished this download outside its completed folder (${item.storage}) - the category's folder is not under ${baseDir}`;
 			logger.warn(
 				{
 					nzo_id: item.nzo_id,
 					name: item.name,
 					storage: item.storage,
 					baseDir,
-					resolvedPath: outputPath
+					resolvedPath: outputPath,
+					reason: blockedReason
 				},
-				'[SABnzbd] Item marked Completed but storage path is invalid'
+				'[SABnzbd] Item marked Completed but cannot be imported'
 			);
 		}
 
@@ -1079,7 +1156,7 @@ export class SABnzbdClient implements IDownloadClient {
 			// Usenet can be removed once completed
 			canBeRemoved: isCompleted,
 			removed: false,
-			errorMessage: item.fail_message || undefined
+			errorMessage: blockedReason ?? (item.fail_message || undefined)
 		};
 	}
 
