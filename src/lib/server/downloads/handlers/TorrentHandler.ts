@@ -122,34 +122,43 @@ export class TorrentHandler {
 				};
 			}
 
-			if (!resolvedDownload.torrentFile) {
-				return {
-					success: false,
-					error:
-						'Episode pointer download requires torrent metadata, but only a magnet/download URL was available'
-				};
-			}
+			if (resolvedDownload.torrentFile) {
+				// A RuTracker/Kinozal season is a living topic: the pack is a
+				// snapshot, and every wanted episode already inside it should come
+				// down with the grab. Monitoring grabs fill the missing monitored
+				// episodes of the season; interactive grabs stay single-episode.
+				const packSelection = await resolveEpisodePackSelection({
+					torrentFile: resolvedDownload.torrentFile,
+					target: episodePointerTarget,
+					seriesId,
+					seasonNumber,
+					targetEpisodeId: episodeIds?.[0],
+					isAutomatic: options.isAutomatic ?? false
+				});
+				if (!packSelection.ok) {
+					return { success: false, error: packSelection.error };
+				}
 
-			// A RuTracker/Kinozal season is a living topic: the pack is a
-			// snapshot, and every wanted episode already inside it should come
-			// down with the grab. Monitoring grabs fill the missing monitored
-			// episodes of the season; interactive grabs stay single-episode.
-			const packSelection = await resolveEpisodePackSelection({
-				torrentFile: resolvedDownload.torrentFile,
-				target: episodePointerTarget,
-				seriesId,
-				seasonNumber,
-				targetEpisodeId: episodeIds?.[0],
-				isAutomatic: options.isAutomatic ?? false
-			});
-			if (!packSelection.ok) {
-				return { success: false, error: packSelection.error };
-			}
-
-			pointerFileSelection = packSelection.selection;
-			pointerSize = packSelection.selection.selectedSize;
-			if (packSelection.selection.episodeIds.length > 0) {
-				pointerEpisodeIds = packSelection.selection.episodeIds;
+				pointerFileSelection = packSelection.selection;
+				pointerSize = packSelection.selection.selectedSize;
+				if (packSelection.selection.episodeIds.length > 0) {
+					pointerEpisodeIds = packSelection.selection.episodeIds;
+				}
+			} else {
+				// No .torrent, so no file list to select against: the metadata that
+				// carries it arrives separately over BEP 9 and may never arrive from
+				// an idle swarm. Radarr and Sonarr never hit this because they do not
+				// select files at grab time at all - they download the pack and let
+				// the import step match filenames. Do the same rather than refusing a
+				// grab the client can complete: add the magnet unselected and record
+				// the whole requested episode scope so import knows what is coming.
+				logger.warn(
+					{ title: release.title, episodeIds, seasonNumber },
+					'[TorrentHandler] No torrent metadata at grab time; downloading the full pack and letting import select'
+				);
+				if (episodeIds && episodeIds.length > 0) {
+					pointerEpisodeIds = episodeIds;
+				}
 			}
 		}
 
@@ -310,10 +319,16 @@ export class TorrentHandler {
 
 				if (extendSelection && canExtend) {
 					try {
-						await extendSelection(existingTorrent.hash, {
-							fileIndices: pointerFileSelection?.fileIndices ?? [],
-							filePaths: pointerFileSelection?.filePaths
-						});
+						// Only touch file priorities when there is a selection to apply.
+						// A whole-pack fallback grab has none, and an empty index list
+						// would read as "deselect everything"; the torrent is already
+						// downloading in full, so extending the queue scope is enough.
+						if (pointerFileSelection) {
+							await extendSelection(existingTorrent.hash, {
+								fileIndices: pointerFileSelection.fileIndices,
+								filePaths: pointerFileSelection.filePaths
+							});
+						}
 						const updatedQueueItem = await downloadMonitor.extendQueueItemEpisodes(
 							existingTorrent.hash,
 							pointerEpisodeIds ?? episodeIds ?? [],
