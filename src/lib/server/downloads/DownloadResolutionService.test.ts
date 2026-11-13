@@ -27,6 +27,50 @@ describe('DownloadResolutionService', () => {
 		vi.clearAllMocks();
 	});
 
+	it('resolves the same tracker URL once and reuses it for a second grab in the same pass', async () => {
+		// A season pack resolved for five missing episodes used to hit dl.php five
+		// times in a row, which is the burst that gets a tracker rate limiting.
+		const downloadTorrent = vi.fn().mockResolvedValue({
+			success: true,
+			data: Buffer.from('d4:infod4:name4:testee'),
+			infoHash: INFO_HASH
+		});
+		getIndexerInstance.mockResolvedValue(fakeIndexer('private', downloadTorrent));
+		const service = getDownloadResolutionService();
+		const input = {
+			downloadUrl: 'https://tracker.test/forum/dl.php?t=123',
+			indexerId: 'rutracker',
+			title: 'Show S01E07'
+		};
+
+		const first = await service.resolve({ ...input });
+		const second = await service.resolve({ ...input, title: 'Show S01E08' });
+
+		expect(first.success).toBe(true);
+		expect(second.success).toBe(true);
+		expect(downloadTorrent).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not cache a URL carrying a one-time token', async () => {
+		const downloadTorrent = vi.fn().mockResolvedValue({
+			success: true,
+			data: Buffer.from('d4:infod4:name4:testee'),
+			infoHash: INFO_HASH
+		});
+		getIndexerInstance.mockResolvedValue(fakeIndexer('private', downloadTorrent));
+		const service = getDownloadResolutionService();
+		const input = {
+			downloadUrl: 'https://tracker.test/download?key=single-use',
+			indexerId: 'ncore',
+			title: 'Show S01E07'
+		};
+
+		await service.resolve({ ...input });
+		await service.resolve({ ...input });
+
+		expect(downloadTorrent).toHaveBeenCalledTimes(2);
+	});
+
 	it('public tracker: builds a magnet from the infohash and never fetches the torrent-file URL', async () => {
 		const downloadTorrent = vi.fn();
 		getIndexerInstance.mockResolvedValue(fakeIndexer('public', downloadTorrent));
