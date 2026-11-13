@@ -141,6 +141,11 @@ const COUNTRY_LANGUAGES: Map<string, string[]> = (() => {
  * provider gave us; falls back to the languages spoken in the alternate's
  * country, which is all TMDB's alternative-titles endpoint carries.
  */
+/** Base ISO-639 code of a language tag: `en-US` -> `en`, `zh_Hant` -> `zh`. */
+function baseLanguageCode(tag: string): string {
+	return tag.trim().replace(/_/g, '-').split('-')[0]!.toLowerCase();
+}
+
 function alternateLanguages(alt: SearchTitleAlternate): string[] {
 	if (alt.language) return [normalizeLanguageTag(alt.language)];
 	if (!alt.country) return [];
@@ -463,8 +468,11 @@ async function buildSearchTitles(
 	}
 
 	// Split alternates: preferred-language countries first, others as fallback.
+	// The map is keyed by base code, so a locale-qualified value (`en-US`, which
+	// the interactive route passes straight through) must be reduced first or the
+	// lookup silently misses and the ordering never applies.
 	const preferredCountries = preferredLanguage
-		? (LANGUAGE_COUNTRIES[preferredLanguage.toLowerCase()] ?? null)
+		? (LANGUAGE_COUNTRIES[baseLanguageCode(preferredLanguage)] ?? null)
 		: null;
 	const [langAlts, otherAlts] = preferredCountries
 		? [

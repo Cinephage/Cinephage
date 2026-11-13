@@ -807,3 +807,53 @@ describe('search titles restricted to the requested languages', () => {
 		expect(titles).toContain('Десятое королевство (озвучка)');
 	});
 });
+
+describe('preferred-language country ordering', () => {
+	it('applies the ordering for a locale-qualified language tag', async () => {
+		// The country map is keyed by base code. Passing `pt-BR` straight through
+		// used to miss, leaving the list in insertion order - so the alternate from
+		// a non-preferred country came first.
+		testDb.db
+			.insert(movies)
+			.values({
+				id: 'movie-locale-order',
+				tmdbId: 991001,
+				title: 'O Filme',
+				originalTitle: 'The Film',
+				originalLanguage: 'en',
+				path: 'movie-locale-order',
+				languageProfileId: null
+			})
+			.run();
+
+		testDb.db
+			.insert(alternateTitles)
+			.values([
+				// Inserted first so insertion order cannot produce the expectation.
+				{
+					mediaType: 'movie',
+					mediaId: 'movie-locale-order',
+					title: 'O Filme (EUA)',
+					cleanTitle: cleanTitle('O Filme (EUA)'),
+					country: 'US',
+					language: 'pt',
+					source: 'tmdb'
+				},
+				{
+					mediaType: 'movie',
+					mediaId: 'movie-locale-order',
+					title: 'O Filme (Brasil)',
+					cleanTitle: cleanTitle('O Filme (Brasil)'),
+					country: 'BR',
+					language: 'pt',
+					source: 'tmdb'
+				}
+			])
+			.run();
+
+		const titles = await getMovieSearchTitles('movie-locale-order', 'pt-BR');
+
+		expect(titles.indexOf('O Filme (Brasil)')).toBeGreaterThan(-1);
+		expect(titles.indexOf('O Filme (Brasil)')).toBeLessThan(titles.indexOf('O Filme (EUA)'));
+	});
+});
