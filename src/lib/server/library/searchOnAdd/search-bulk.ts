@@ -158,7 +158,10 @@ export async function searchBulkEpisodes(
 					grabbed: r.grabbed,
 					releaseName: r.releaseName,
 					error: r.error,
-					wasPackGrab: r.wasPackGrab
+					wasPackGrab: r.wasPackGrab,
+					indexerId: r.indexerId,
+					indexerName: r.indexerName,
+					indexersQueried: r.indexersQueried
 				});
 			}
 

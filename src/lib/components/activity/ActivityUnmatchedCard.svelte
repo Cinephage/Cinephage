@@ -746,7 +746,7 @@
 				onFilterRemove={removeUnmatchedFilter}
 				onClearAll={clearAllUnmatchedFilters}
 			/>
-			<div class="mt-3 flex flex-wrap items-center gap-2">
+			<div class="flex flex-wrap items-center gap-2">
 				<span class="text-sm font-bold tracking-wide text-base-content/70"
 					>{m.activity_queue_bulkActionsHeading()}</span
 				>
@@ -819,11 +819,14 @@
 			<Loader2 class="h-8 w-8 animate-spin" />
 		</div>
 	{:else if items.length === 0}
-		<div class="py-12 text-center text-base-content/60">
-			<Unlink class="mx-auto mb-4 h-12 w-12 opacity-40" />
-			<p class="text-lg font-medium">
+		<div class="py-20 text-center">
+			<Unlink class="mx-auto mb-4 h-12 w-12 text-base-content/15" />
+			<p class="font-medium text-base-content/60">
 				{search ? m.activity_unmatched_noFilterResults() : m.activity_unmatched_empty()}
 			</p>
+			{#if !search}
+				<p class="mt-1 text-sm text-base-content/40">{m.activity_table_noActivityHint()}</p>
+			{/if}
 		</div>
 	{:else}
 		<div class="text-sm text-base-content/70">
@@ -866,7 +869,7 @@
 								aria-label={m.activity_unmatched_selectAll()}
 							/>
 						</th>
-						<th class="w-8 px-1"><span class="sr-only">Expand</span></th>
+
 						<th
 							class="cursor-pointer px-2 select-none hover:bg-base-300/40"
 							onclick={() => handleSort('status')}
@@ -936,16 +939,16 @@
 									aria-label={item.name}
 								/>
 							</td>
-							<td class="px-1">
-								<ChevronRight
-									class="h-3.5 w-3.5 shrink-0 text-base-content/30 transition-transform {expandedHash ===
-									item.hash
-										? 'rotate-90'
-										: ''}"
-								/>
-							</td>
 							<td class="px-2">
-								{@render statusCell(item)}
+								<div class="flex items-center gap-1">
+									<ChevronRight
+										class="h-3.5 w-3.5 shrink-0 text-base-content/30 transition-transform {expandedHash ===
+										item.hash
+											? 'rotate-90'
+											: ''}"
+									/>
+									{@render statusCell(item)}
+								</div>
 							</td>
 							<td>
 								<div class="max-w-28 truncate font-medium sm:max-w-48" title={item.name}>

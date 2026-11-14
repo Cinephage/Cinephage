@@ -44,7 +44,6 @@ const CORE_TABLES = [
 	'episodes',
 	'episodeFiles',
 	'downloadQueue',
-	'searchState',
 	'rootFolders',
 	'unmatchedFiles'
 ] as const;

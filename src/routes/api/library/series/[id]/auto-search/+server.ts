@@ -14,6 +14,10 @@ import { eq } from 'drizzle-orm';
 import type { SearchProgressUpdate } from '#lib/server/downloads/MultiSeasonSearchStrategy.js';
 import { collectAutoSearchIssues } from '#lib/server/library/autoSearchIssues.js';
 import { getAutoSearchPreflightIssue } from '#lib/server/library/autoSearchPreflight.js';
+import {
+	recordManualSearchAttempt,
+	recordManualMultiItemResults
+} from '#lib/server/library/searchOnAdd/manual-search-history.js';
 import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LibrarySeriesAutoSearchApi', logDomain: 'scans' });
@@ -171,6 +175,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 								episodeId,
 								bypassMonitoring: true
 							});
+							await recordManualSearchAttempt({ seriesId, episodeId }, result);
 							const issues = collectAutoSearchIssues([result.error]);
 
 							sendEvent('search:completed', {
@@ -209,6 +214,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 								seasonNumber,
 								bypassMonitoring: true
 							});
+							await recordManualSearchAttempt({ seriesId, seasonNumber }, result);
 							const issues = collectAutoSearchIssues([result.error]);
 
 							sendEvent('search:completed', {
@@ -241,6 +247,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 								searchStrategy: 'auto',
 								searchSource: 'interactive'
 							});
+							await recordManualMultiItemResults(seriesId, result.results);
 							const itemErrors = result.results.map((item) => item.error);
 							const issues = collectAutoSearchIssues([
 								result.error,
@@ -270,6 +277,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 							}
 
 							const result = await searchOnAdd.searchBulkEpisodes(episodeIds, onProgress);
+							await recordManualMultiItemResults(seriesId, result.results);
 							const itemErrors = result.results.map((item) => item.error);
 							const issues = collectAutoSearchIssues([
 								result.error,

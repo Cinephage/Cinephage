@@ -93,18 +93,15 @@ export async function executeMissingContentTask(
 					taskType: 'missing',
 					movieId: item.itemType === 'movie' ? item.itemId : undefined,
 					status:
-						item.grabbed || item.grabbedRelease
-							? 'grabbed'
-							: item.error
-								? 'error'
-								: item.releasesFound > 0
-									? 'found'
-									: 'no_results',
+						item.grabbed || item.grabbedRelease ? 'grabbed' : item.error ? 'error' : 'no_results',
 					releasesFound: item.releasesFound,
 					releaseGrabbed: item.grabbedRelease,
 					queueItemId: item.queueItemId,
 					isUpgrade: false,
 					errorMessage: item.error,
+					indexerId: item.indexerId,
+					indexerName: item.indexerName,
+					indexersQueried: item.indexersQueried,
 					executedAt: executedAt.toISOString()
 				});
 			}
@@ -117,18 +114,15 @@ export async function executeMissingContentTask(
 					taskHistoryId,
 					taskType: 'missing',
 					movieId: item.itemType === 'movie' ? item.itemId : undefined,
-					status: item.grabbed
-						? 'grabbed'
-						: item.error
-							? 'error'
-							: item.releasesFound > 0
-								? 'found'
-								: 'no_results',
+					status: item.grabbed ? 'grabbed' : item.error ? 'error' : 'no_results',
 					releasesFound: item.releasesFound,
 					releaseGrabbed: item.grabbedRelease,
 					queueItemId: item.queueItemId,
 					isUpgrade: false,
 					errorMessage: item.error,
+					indexerId: item.indexerId,
+					indexerName: item.indexerName,
+					indexersQueried: item.indexersQueried,
 					executedAt: executedAt.toISOString()
 				});
 			}
@@ -191,18 +185,15 @@ export async function executeMissingContentTask(
 							? (episodeSeriesMap.get(item.itemId) ?? undefined)
 							: undefined,
 					seasonNumber: item.seasonNumber,
-					status: item.grabbed
-						? 'grabbed'
-						: item.error
-							? 'error'
-							: item.releasesFound > 0
-								? 'found'
-								: 'no_results',
+					status: item.grabbed ? 'grabbed' : item.error ? 'error' : 'no_results',
 					releasesFound: item.releasesFound,
 					releaseGrabbed: item.grabbedRelease,
 					queueItemId: item.queueItemId,
 					isUpgrade: false,
 					errorMessage: item.error,
+					indexerId: item.indexerId,
+					indexerName: item.indexerName,
+					indexersQueried: item.indexersQueried,
 					executedAt: executedAt.toISOString()
 				});
 			}
@@ -221,18 +212,15 @@ export async function executeMissingContentTask(
 							? (episodeSeriesMap.get(item.itemId) ?? undefined)
 							: undefined,
 					seasonNumber: item.seasonNumber,
-					status: item.grabbed
-						? 'grabbed'
-						: item.error
-							? 'error'
-							: item.releasesFound > 0
-								? 'found'
-								: 'no_results',
+					status: item.grabbed ? 'grabbed' : item.error ? 'error' : 'no_results',
 					releasesFound: item.releasesFound,
 					releaseGrabbed: item.grabbedRelease,
 					queueItemId: item.queueItemId,
 					isUpgrade: false,
 					errorMessage: item.error,
+					indexerId: item.indexerId,
+					indexerName: item.indexerName,
+					indexersQueried: item.indexersQueried,
 					executedAt: executedAt.toISOString()
 				});
 			}

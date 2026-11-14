@@ -97,18 +97,15 @@ export async function executeUpgradeMonitorTask(
 						item.itemType === 'episode'
 							? (episodeSeriesMap.get(item.itemId) ?? undefined)
 							: undefined,
-					status: item.grabbed
-						? 'grabbed'
-						: item.error
-							? 'error'
-							: item.releasesFound > 0
-								? 'found'
-								: 'no_results',
+					status: item.grabbed ? 'grabbed' : item.error ? 'error' : 'no_results',
 					releasesFound: item.releasesFound,
 					releaseGrabbed: item.grabbedRelease,
 					queueItemId: item.queueItemId,
 					isUpgrade: true,
-					errorMessage: item.error,
+					errorMessage: item.error ?? item.notGrabbedReason,
+					indexerId: item.indexerId,
+					indexerName: item.indexerName,
+					indexersQueried: item.indexersQueried,
 					executedAt: executedAt.toISOString()
 				});
 			}
@@ -125,18 +122,15 @@ export async function executeUpgradeMonitorTask(
 						item.itemType === 'episode'
 							? (episodeSeriesMap.get(item.itemId) ?? undefined)
 							: undefined,
-					status: item.grabbed
-						? 'grabbed'
-						: item.error
-							? 'error'
-							: item.releasesFound > 0
-								? 'found'
-								: 'no_results',
+					status: item.grabbed ? 'grabbed' : item.error ? 'error' : 'no_results',
 					releasesFound: item.releasesFound,
 					releaseGrabbed: item.grabbedRelease,
 					queueItemId: item.queueItemId,
 					isUpgrade: true,
-					errorMessage: item.error,
+					errorMessage: item.error ?? item.notGrabbedReason,
+					indexerId: item.indexerId,
+					indexerName: item.indexerName,
+					indexersQueried: item.indexersQueried,
 					executedAt: executedAt.toISOString()
 				});
 			}

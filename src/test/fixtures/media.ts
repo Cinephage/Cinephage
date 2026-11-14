@@ -28,6 +28,8 @@ export interface MovieFixture {
 	hasFile: boolean;
 	wantsSubtitles: boolean;
 	lastSearchTime: string | null;
+	consecutiveFailureCount: number;
+	autoSearchPaused: boolean;
 	tmdbCollectionId: number | null;
 	collectionName: string | null;
 	releaseDate: string | null;
@@ -65,6 +67,8 @@ export function createMovie(overrides?: Partial<MovieFixture>): MovieFixture {
 		hasFile: false,
 		wantsSubtitles: true,
 		lastSearchTime: null,
+		consecutiveFailureCount: 0,
+		autoSearchPaused: false,
 		tmdbCollectionId: null,
 		collectionName: null,
 		releaseDate: null,
@@ -165,6 +169,8 @@ export interface EpisodeFixture {
 	hasFile: boolean;
 	wantsSubtitlesOverride: boolean | null;
 	lastSearchTime: string | null;
+	consecutiveFailureCount: number;
+	autoSearchPaused: boolean;
 }
 
 export function createEpisode(overrides?: Partial<EpisodeFixture>): EpisodeFixture {
@@ -185,6 +191,8 @@ export function createEpisode(overrides?: Partial<EpisodeFixture>): EpisodeFixtu
 		hasFile: false,
 		wantsSubtitlesOverride: null,
 		lastSearchTime: null,
+		consecutiveFailureCount: 0,
+		autoSearchPaused: false,
 		...overrides
 	};
 }

@@ -173,8 +173,10 @@ export async function searchForMovie(
 		if (searchResult.releases.length === 0) {
 			logger.info({ movieId, title }, '[SearchOnAdd] No suitable releases found for movie');
 			onProgress?.('complete', 'No suitable releases found', { current: 100, total: 100 });
-			return { success: false, error: 'No suitable releases found' };
+			return { success: false, error: 'No suitable releases found', indexersQueried: 0 };
 		}
+
+		const indexersQueried = new Set(searchResult.releases.map((r) => r.indexerId)).size;
 
 		onProgress?.('evaluating', `Found ${searchResult.releases.length} releases, evaluating...`, {
 			current: 50,
@@ -207,7 +209,10 @@ export async function searchForMovie(
 					return {
 						success: true,
 						releaseName: release.title,
-						queueItemId: grabResult.download?.queueId
+						queueItemId: grabResult.download?.queueId,
+						indexerId: release.indexerId,
+						indexerName: release.indexerName,
+						indexersQueried
 					};
 				}
 
@@ -223,7 +228,11 @@ export async function searchForMovie(
 				current: 100,
 				total: 100
 			});
-			return { success: false, error: 'No upgrades found - existing file quality is sufficient' };
+			return {
+				success: false,
+				error: 'No upgrades found - existing file quality is sufficient',
+				indexersQueried
+			};
 		}
 
 		// Fill empty buckets (multi-quality) or grab the single best release
@@ -259,7 +268,10 @@ export async function searchForMovie(
 				lastGrab = {
 					success: true,
 					releaseName: release.title,
-					queueItemId: grabResult.download?.queueId
+					queueItemId: grabResult.download?.queueId,
+					indexerId: release.indexerId,
+					indexerName: release.indexerName,
+					indexersQueried
 				};
 				// In single-quality mode, one grab is enough.
 				if (!multiQuality) break;
@@ -270,7 +282,8 @@ export async function searchForMovie(
 
 			lastGrab = {
 				success: false,
-				error: grabResult.error ?? grabResult.decision?.reason ?? 'Unknown error'
+				error: grabResult.error ?? grabResult.decision?.reason ?? 'Unknown error',
+				indexersQueried
 			};
 			if (!multiQuality) break;
 		}
@@ -287,7 +300,7 @@ export async function searchForMovie(
 			});
 		}
 
-		return lastGrab ?? { success: false, error: 'No releases found' };
+		return lastGrab ?? { success: false, error: 'No releases found', indexersQueried };
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Unknown error';
 		logger.error({ movieId, err: error }, '[SearchOnAdd] Movie search failed');

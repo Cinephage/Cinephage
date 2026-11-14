@@ -13,6 +13,7 @@ import { movies } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { collectAutoSearchIssues } from '#lib/server/library/autoSearchIssues.js';
 import { getAutoSearchPreflightIssue } from '#lib/server/library/autoSearchPreflight.js';
+import { recordManualSearchAttempt } from '#lib/server/library/searchOnAdd/manual-search-history.js';
 import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LibraryMovieAutoSearchApi', logDomain: 'scans' });
@@ -138,6 +139,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 						},
 						'[API] Auto-search completed for movie'
 					);
+					await recordManualSearchAttempt({ movieId }, result);
 					const issues = collectAutoSearchIssues([result.error]);
 
 					// Send completion event

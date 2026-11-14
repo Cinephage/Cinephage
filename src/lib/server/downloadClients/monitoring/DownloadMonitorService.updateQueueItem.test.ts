@@ -18,7 +18,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vites
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { createTestDb, destroyTestDb, clearTestDb } from '../../../../test/db-helper';
-import { downloadClients, downloadQueue, blocklist } from '#lib/server/db/schema.js';
+import { downloadClients, downloadQueue, blocklist, movies } from '#lib/server/db/schema.js';
 import type { DownloadClient } from '#lib/types/downloadClient.js';
 import type { DownloadInfo } from '../core/interfaces';
 
@@ -281,6 +281,31 @@ describe('updateQueueItem auto-blocklists on the generic failed transition (issu
 			.where(eq(blocklist.title, 'Some.Torrent.Release.2024'));
 		expect(entries).toHaveLength(1);
 		expect(entries[0].infoHash).toBe('abc123');
+	});
+
+	it('increments the movie consecutive-failure count (not just markFailed - #658 regression)', async () => {
+		const movieId = randomUUID();
+		await testDb.db
+			.insert(movies)
+			.values({ id: movieId, tmdbId: 99, title: 'Avatar: Seven Havens', path: '/movies/test' });
+
+		const row = await insertQueueRow({
+			protocol: 'usenet',
+			status: 'downloading',
+			title: 'Avatar.Seven.Havens.S01E13.2024',
+			movieId
+		});
+
+		await callUpdateQueueItem(
+			row,
+			makeDownload({
+				status: 'error',
+				errorMessage: "Missing articles: NZB is likely DMCA'd or expired"
+			})
+		);
+
+		const [movie] = await testDb.db.select().from(movies).where(eq(movies.id, movieId));
+		expect(movie.consecutiveFailureCount).toBe(1);
 	});
 
 	it('does not blocklist a transition that stays non-failed', async () => {

@@ -54,6 +54,11 @@ export interface GrabResult {
 	releaseName?: string;
 	error?: string;
 	queueItemId?: string;
+	/** Indexer that supplied the grabbed release, when one was grabbed. */
+	indexerId?: string;
+	indexerName?: string;
+	/** How many distinct indexers answered this search attempt. */
+	indexersQueried?: number;
 }
 
 /** Parameters for searching a specific episode */
@@ -96,6 +101,11 @@ export interface AutoSearchItemResult {
 	error?: string;
 	/** Whether this was grabbed via a season pack */
 	wasPackGrab?: boolean;
+	/** Indexer that supplied the grabbed release, when one was grabbed. */
+	indexerId?: string;
+	indexerName?: string;
+	/** How many distinct indexers answered this search attempt. */
+	indexersQueried?: number;
 }
 
 /** Result for multi-search operations (missing, bulk) */

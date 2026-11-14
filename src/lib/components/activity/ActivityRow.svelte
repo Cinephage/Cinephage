@@ -133,7 +133,7 @@
 				{:else}
 					<Tv class="h-4 w-4 shrink-0" />
 				{/if}
-				<span class="max-w-28 truncate sm:max-w-48" title={activity.mediaTitle}>
+				<span class="max-w-20 truncate sm:max-w-48" title={activity.mediaTitle}>
 					{activity.mediaTitle}
 					{#if activity.mediaYear}
 						<span class="text-base-content/60">({activity.mediaYear})</span>
@@ -147,7 +147,7 @@
 				{:else}
 					<Tv class="h-4 w-4 shrink-0" />
 				{/if}
-				<span class="max-w-28 truncate sm:max-w-48" title={activity.mediaTitle}>
+				<span class="max-w-20 truncate sm:max-w-48" title={activity.mediaTitle}>
 					{activity.mediaTitle}
 					{#if activity.mediaYear}
 						<span class="text-base-content/60">({activity.mediaYear})</span>

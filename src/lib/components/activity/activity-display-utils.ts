@@ -10,7 +10,10 @@ import {
 	Upload,
 	Pause,
 	Minus,
-	SearchX
+	SearchX,
+	Download,
+	Search,
+	SkipForward
 } from '@lucide/svelte';
 
 /**
@@ -61,6 +64,22 @@ export const statusConfig: Record<
 	},
 	get searching() {
 		return { label: m.status_searching(), variant: 'badge-info', icon: Loader2 };
+	},
+	get grabbed() {
+		return { label: m.activity_searches_statusGrabbed(), variant: 'badge-success', icon: Download };
+	},
+	get skipped() {
+		return {
+			label: m.activity_searches_statusSkipped(),
+			variant: 'badge-warning',
+			icon: SkipForward
+		};
+	},
+	get error() {
+		return { label: m.status_failed(), variant: 'badge-error', icon: XCircle };
+	},
+	get searched() {
+		return { label: m.activity_searches_statusSearched(), variant: 'badge-ghost', icon: Search };
 	}
 } as Record<string, { label: string; variant: string; icon: typeof CheckCircle2 }>;
 

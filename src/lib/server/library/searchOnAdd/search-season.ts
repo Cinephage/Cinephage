@@ -116,8 +116,10 @@ export async function searchForSeason(
 				},
 				'[SearchOnAdd] No suitable releases found for season'
 			);
-			return { success: false, error: 'No suitable releases found' };
+			return { success: false, error: 'No suitable releases found', indexersQueried: 0 };
 		}
+
+		const indexersQueried = new Set(searchResult.releases.map((r) => r.indexerId)).size;
 
 		for (const release of searchResult.releases) {
 			const grabResult = await grabService.grab({
@@ -154,7 +156,10 @@ export async function searchForSeason(
 					success: grabResult.success,
 					releaseName: grabResult.success ? release.title : undefined,
 					queueItemId: grabResult.download?.queueId,
-					error: grabResult.error ?? (grabResult.success ? undefined : grabResult.decision?.reason)
+					error: grabResult.error ?? (grabResult.success ? undefined : grabResult.decision?.reason),
+					indexerId: release.indexerId,
+					indexerName: release.indexerName,
+					indexersQueried
 				};
 			}
 		}
@@ -167,7 +172,11 @@ export async function searchForSeason(
 			},
 			'[SearchOnAdd] No acceptable releases found for season'
 		);
-		return { success: false, error: 'No releases found that would benefit majority of episodes' };
+		return {
+			success: false,
+			error: 'No releases found that would benefit majority of episodes',
+			indexersQueried
+		};
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Unknown error';
 		logger.error(

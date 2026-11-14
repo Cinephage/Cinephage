@@ -1,7 +1,16 @@
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
 	import type { ActivityFilters } from '#lib/types/activity.js';
-	import { X, Calendar, HardDrive, Globe, Users, Monitor, ArrowUpCircle } from '@lucide/svelte';
+	import {
+		X,
+		Calendar,
+		HardDrive,
+		Globe,
+		Users,
+		Monitor,
+		ArrowUpCircle,
+		Pause
+	} from '@lucide/svelte';
 
 	interface Props {
 		filters: ActivityFilters;
@@ -27,9 +36,12 @@
 				return value === 'tv' ? m.common_tvShows() : m.common_movies();
 			case 'protocol':
 			case 'unmatchedStatus':
+			case 'searchStatus':
 				return String(value).charAt(0).toUpperCase() + String(value).slice(1);
 			case 'isUpgrade':
 				return m.activity_activeFilters_upgradesOnly();
+			case 'pausedOnly':
+				return m.activity_searches_pausedOnly();
 			case 'startDate':
 				return m.activity_activeFilters_from({ date: String(value) });
 			case 'endDate':
@@ -52,6 +64,7 @@
 		switch (key) {
 			case 'status':
 			case 'unmatchedStatus':
+			case 'searchStatus':
 				return Monitor;
 			case 'mediaType':
 				return HardDrive;
@@ -67,6 +80,8 @@
 				return Monitor;
 			case 'isUpgrade':
 				return ArrowUpCircle;
+			case 'pausedOnly':
+				return Pause;
 			case 'startDate':
 			case 'endDate':
 				return Calendar;

@@ -248,6 +248,61 @@ describe('ImportService content-identity guard end-to-end (#598)', () => {
 		expect(files).toHaveLength(1);
 	});
 
+	it('resets the consecutive failure count on a successful import (FailureCapSpecification)', async () => {
+		const movieId = randomUUID();
+		await testDb.db.insert(movies).values({
+			id: movieId,
+			tmdbId: 44,
+			title: 'Previously Failing Movie',
+			year: 2025,
+			path: 'Previously Failing Movie (2025)',
+			rootFolderId: ROOT_FOLDER_ID,
+			hasFile: false,
+			// Simulates several prior failed grab attempts against other releases,
+			// below the failure cap but non-zero - a successful import should
+			// clear this back to 0 so the item isn't left partway to the cap.
+			consecutiveFailureCount: 4
+		});
+
+		const sourcePath = join(downloadDir, 'Previously.Failing.Movie.2025.1080p.WEB-DL-GROUP.mkv');
+		await writeFile(sourcePath, Buffer.alloc(1, 2));
+		await truncate(sourcePath, 70 * 1024 * 1024);
+
+		const queueItem = makeQueueItem({
+			title: 'Previously.Failing.Movie.2025.1080p.WEB-DL-GROUP',
+			movieId,
+			infoHash: 'unique-hash-reset',
+			outputPath: downloadDir
+		});
+		await testDb.db.insert(downloadQueue).values(queueItem);
+		const [insertedQueueItem] = await testDb.db
+			.select()
+			.from(downloadQueue)
+			.where(eq(downloadQueue.id, queueItem.id!));
+
+		const worker = new ImportWorker({
+			queueItemId: queueItem.id!,
+			mediaType: 'movie',
+			title: 'Previously Failing Movie'
+		});
+
+		const result = await (
+			service as unknown as {
+				importMovie: (
+					queueItem: typeof downloadQueue.$inferSelect,
+					worker: InstanceType<typeof ImportWorker>,
+					importOptions: Record<string, unknown>,
+					canMoveFiles: boolean
+				) => Promise<{ success: boolean }>;
+			}
+		).importMovie(insertedQueueItem, worker, {}, false);
+
+		expect(result.success).toBe(true);
+		const [movie] = await testDb.db.select().from(movies).where(eq(movies.id, movieId));
+		expect(movie.hasFile).toBe(true);
+		expect(movie.consecutiveFailureCount).toBe(0);
+	});
+
 	it('does not clobber another episode in the same batch just because the release infoHash matches (issue #637)', async () => {
 		const seriesId = randomUUID();
 		await testDb.db.insert(series).values({

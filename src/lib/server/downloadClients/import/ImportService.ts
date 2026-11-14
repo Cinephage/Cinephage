@@ -1619,8 +1619,12 @@ export class ImportService extends EventEmitter {
 			await db.insert(movieFiles).values({ id: fileId, ...fileData });
 		}
 
-		// Update movie hasFile flag
-		await db.update(movies).set({ hasFile: true }).where(eq(movies.id, movie.id));
+		// Update movie hasFile flag, and clear the consecutive-failure counter
+		// (FailureCapSpecification) now that a search has actually succeeded.
+		await db
+			.update(movies)
+			.set({ hasFile: true, consecutiveFailureCount: 0 })
+			.where(eq(movies.id, movie.id));
 
 		// Audio-language verification (phase D): compare probed audio against
 		// the effective preference and maintain the shortfall flag.
@@ -2621,9 +2625,13 @@ export class ImportService extends EventEmitter {
 			fileId = inserted[0].id;
 		}
 
-		// Update episode hasFile flags
+		// Update episode hasFile flags, and clear the consecutive-failure counter
+		// (FailureCapSpecification) now that a search has actually succeeded.
 		for (const episodeId of episodeIds) {
-			await db.update(episodes).set({ hasFile: true }).where(eq(episodes.id, episodeId));
+			await db
+				.update(episodes)
+				.set({ hasFile: true, consecutiveFailureCount: 0 })
+				.where(eq(episodes.id, episodeId));
 		}
 
 		// Audio-language verification (phase D): episode files carry the
