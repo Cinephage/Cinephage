@@ -34,6 +34,7 @@ export function buildTokensResponse() {
 			{ token: '{SeriesTitle}', description: 'Series title as-is' },
 			{ token: '{SeriesCleanTitle}', description: 'Series title with special chars removed' },
 			{ token: '{Year}', description: 'First air year' },
+			{ token: '{SeasonYear}', description: 'Year the season first aired' },
 			{ token: '{SeriesOriginalTitle}', description: 'Original series title as-is' },
 			{
 				token: '{SeriesOriginalCleanTitle}',

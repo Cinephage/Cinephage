@@ -160,6 +160,19 @@ describe('NamingService', () => {
 			expect(result).toBe('Breaking Bad (2008) - Season 01');
 		});
 
+		it('should render the season year, not the series year, in a season folder', () => {
+			const service = new NamingService({
+				...DEFAULT_NAMING_CONFIG,
+				seasonFolderFormat: 'Season {Season:00} ({SeasonYear})'
+			});
+			const result = service.generateSeasonFolderName(23, {
+				title: 'Pokemon',
+				year: 1997,
+				seasonYear: 2022
+			});
+			expect(result).toBe('Season 23 (2022)');
+		});
+
 		it('should render media server ID tokens in season folder', () => {
 			const service = new NamingService({
 				...DEFAULT_NAMING_CONFIG,

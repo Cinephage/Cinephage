@@ -26,6 +26,7 @@ import { eq, and, sql, inArray } from 'drizzle-orm';
 import { NamingService, type MediaNamingInfo } from '#lib/server/library/naming/NamingService.js';
 import { namingSettingsService } from '#lib/server/library/naming/NamingSettingsService.js';
 import { resolveLocalizedTitlesForFormats } from '#lib/server/library/naming/localization.js';
+import { yearOfDate } from '#lib/server/library/naming/season-year.js';
 
 const logger = createChildLogger({ module: 'StrmService' });
 
@@ -335,7 +336,8 @@ export class StrmService {
 					show,
 					season,
 					episode,
-					episodeRow?.title
+					episodeRow?.title,
+					episodeRow?.airDate
 				);
 				resolvedRootFolderId = show.rootFolderId;
 			} else {
@@ -489,10 +491,12 @@ export class StrmService {
 		},
 		seasonNumber: number,
 		episodeNumber: number,
-		episodeTitle?: string | null
+		episodeTitle?: string | null,
+		airDate?: string | null
 	): Promise<string> {
 		const namingService = this.getNamingService();
 		const localizedTitles = await resolveLocalizedTitlesForFormats('series', show.tmdbId);
+		const seasonYear = yearOfDate(airDate);
 		const seriesInfo: MediaNamingInfo = {
 			title: show.title,
 			originalTitle: show.originalTitle ?? undefined,
@@ -500,6 +504,7 @@ export class StrmService {
 			tmdbId: show.tmdbId,
 			tvdbId: show.tvdbId ?? undefined,
 			imdbId: show.imdbId ?? undefined,
+			seasonYear,
 			localizedTitles
 		};
 		const showPath = resolveFolderComponent(
@@ -514,6 +519,7 @@ export class StrmService {
 		const episodeInfo: MediaNamingInfo = {
 			...seriesInfo,
 			seasonNumber,
+			seasonYear,
 			episodeNumbers: [episodeNumber],
 			episodeTitle: episodeTitle ?? undefined,
 			originalExtension: '.strm'
@@ -1221,7 +1227,8 @@ export class StrmService {
 					show,
 					seasonNumber,
 					episodeRow.episodeNumber,
-					episodeRow.title
+					episodeRow.title,
+					episodeRow.airDate
 				);
 				resolvedRootFolderId = show.rootFolder.id;
 			} else {

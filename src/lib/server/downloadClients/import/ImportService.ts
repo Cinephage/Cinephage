@@ -34,6 +34,7 @@ import { resolveMovieMultiQuality } from '#lib/server/quality/movie-buckets.js';
 import { computeMovieReplacement, computeEpisodeReplacement } from './replacement.js';
 import { normalizeFilename } from '#lib/server/library/duplicates/DuplicateDetectionService.js';
 import { contentAlreadyPresent } from '#lib/server/library/content-identity.js';
+import { resolveSeasonYear } from '#lib/server/library/naming/season-year.js';
 import { blocklistService } from '#lib/server/blocklist/BlocklistService.js';
 import type { HdrFormat, Resolution } from '#lib/server/indexers/parser/types.js';
 import {
@@ -2385,6 +2386,14 @@ export class ImportService extends EventEmitter {
 			.from(episodeFiles)
 			.where(eq(episodeFiles.seriesId, seriesData.id));
 
+		// Season premiere year for `{SeasonYear}`: stored season air date, then the
+		// season's earliest episode, then the episode being imported.
+		const seasonYear = await resolveSeasonYear({
+			seriesId: seriesData.id,
+			seasonNumber: seasonNum,
+			fallbackAirDate: firstEpisode?.airDate ?? undefined
+		});
+
 		const destFileName = await this.buildEpisodeFileName(
 			seriesData,
 			seasonNum,
@@ -2394,7 +2403,8 @@ export class ImportService extends EventEmitter {
 			firstEpisode?.title ?? undefined,
 			absoluteNumber,
 			firstEpisode?.airDate ?? undefined,
-			mediaInfo
+			mediaInfo,
+			seasonYear
 		);
 		let relativePath = this.buildEpisodeRelativePath(
 			seriesData.seasonFolder ?? true,
@@ -2406,7 +2416,9 @@ export class ImportService extends EventEmitter {
 				year: seriesData.year ?? undefined,
 				tmdbId: seriesData.tmdbId,
 				tvdbId: seriesData.tvdbId ?? undefined,
-				imdbId: seriesData.imdbId ?? undefined
+				imdbId: seriesData.imdbId ?? undefined,
+				seasonNumber: seasonNum,
+				seasonYear
 			}
 		);
 		let destPath = join(seriesFolder, relativePath);
@@ -3352,7 +3364,8 @@ export class ImportService extends EventEmitter {
 		episodeTitle?: string,
 		absoluteNumber?: number,
 		airDate?: string,
-		mediaInfo?: Awaited<ReturnType<typeof mediaInfoService.extractMediaInfo>>
+		mediaInfo?: Awaited<ReturnType<typeof mediaInfoService.extractMediaInfo>>,
+		seasonYear?: number
 	): Promise<string> {
 		const parsed = this.parser.parse(queueItem.title);
 		const isAnime = seriesData.seriesType === 'anime';
@@ -3375,6 +3388,7 @@ export class ImportService extends EventEmitter {
 			imdbId: seriesData.imdbId ?? undefined,
 			localizedTitles,
 			seasonNumber: seasonNum,
+			seasonYear,
 			episodeNumbers: episodeNums,
 			episodeTitle,
 			absoluteNumber,

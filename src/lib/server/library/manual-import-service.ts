@@ -44,6 +44,7 @@ import { getLibraryEntityService } from '#lib/server/library/LibraryEntityServic
 import { isLikelyAnimeMedia } from '#lib/shared/anime-classification.js';
 import { getMediaParseStem } from '#lib/server/library/media-utils.js';
 import { normalizeTitleForMatch } from './title-matching.js';
+import { yearOfDate } from './naming/season-year.js';
 import { findSuggestedMatches, type SuggestedMatch } from './suggested-matches.js';
 import {
 	extractSeasonFromPath,
@@ -1714,6 +1715,7 @@ export class ManualImportService {
 			{
 				...namingInfoBase,
 				seasonNumber,
+				seasonYear: yearOfDate(airDate),
 				episodeNumbers,
 				episodeTitle,
 				absoluteNumber,

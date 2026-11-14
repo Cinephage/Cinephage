@@ -1,6 +1,6 @@
 import { db } from '#lib/server/db/index.js';
-import { movies, series, episodes } from '#lib/server/db/schema.js';
-import { eq } from 'drizzle-orm';
+import { movies, series, episodes, seasons } from '#lib/server/db/schema.js';
+import { and, eq } from 'drizzle-orm';
 import { tmdb } from '#lib/server/tmdb.js';
 import { isGeneratedEpisodeTitle } from './episode-title.js';
 import { createChildLogger } from '#lib/logging/index.js';
@@ -263,6 +263,23 @@ export async function refreshSeriesMetadata(seriesId: string): Promise<void> {
 			if (!isNaN(year)) updateData.year = year;
 		}
 		if (typeof d.first_air_date === 'string') updateData.firstAirDate = d.first_air_date;
+
+		// Season air dates drive `{SeasonYear}`. They were only written when the
+		// series was matched, so a season that was upcoming then stayed empty
+		// forever even though this response already carries the whole list.
+		const seasonList = d.seasons as
+			Array<{ season_number?: number; air_date?: string | null }> | undefined;
+		if (Array.isArray(seasonList)) {
+			for (const seasonInfo of seasonList) {
+				if (typeof seasonInfo.season_number !== 'number') continue;
+				await db
+					.update(seasons)
+					.set({ airDate: seasonInfo.air_date ?? null })
+					.where(
+						and(eq(seasons.seriesId, seriesId), eq(seasons.seasonNumber, seasonInfo.season_number))
+					);
+			}
+		}
 
 		const genres = d.genres as Array<{ name?: string }> | undefined;
 		if (genres) {
