@@ -248,6 +248,17 @@ const MIN_ADDON_BUDGET_MS = 18_000;
 const ACQUIRE_TIMEOUT_MS = 45_000;
 
 /**
+ * Fetch time the site-root warm-up may never spend.
+ *
+ * The warm-up waits for a challenge to clear on the origin root before the
+ * real URL is fetched, and it used to take as much of the budget as the
+ * challenge wanted: a 30s details-page fetch measured a 25s warm-up and a
+ * 4.5s navigation that died in `page.goto` without ever asking for the page
+ * it came for (#663). A losing draw now costs the warm-up a capped share.
+ */
+const WARMUP_FETCH_RESERVE_MS = 10_000;
+
+/**
  * Budget clock for one solve/fetch request. It starts when the first browser
  * becomes usable, so queueing and launching are not paid for twice.
  */
@@ -737,11 +748,17 @@ async function runBrowserFetchAttempt(
 			logger.debug({ host: target.hostname }, '[CamoufoxSolver] Warming up on site root');
 			await page
 				.goto(target.origin + '/', {
-					timeout: Math.min(remaining(), 30000),
+					timeout: Math.max(1000, Math.min(remaining(), 30000)),
 					waitUntil: 'domcontentloaded'
 				})
 				.catch(() => {});
-			await waitForChallengeComplete(page, Math.min(remaining(), 30000));
+			const warmupBudget = Math.max(
+				0,
+				Math.min(remaining() - WARMUP_FETCH_RESERVE_MS, opts.waitCapMs ?? remaining())
+			);
+			if (warmupBudget > 0) {
+				await waitForChallengeComplete(page, warmupBudget);
+			}
 		}
 
 		// Navigate to the actual target URL (reusing the warmed session).
