@@ -230,6 +230,14 @@ const ATTEMPT_RESERVE_MS = 3_000;
 /** Anything less than this cannot pay for a launch plus the start of a solve. */
 const MIN_ATTEMPT_BUDGET_MS = 4_000;
 
+/**
+ * The addon attempt is the last resort and a real solve still needs ~15s after
+ * its launch. Starting one with less spends the caller's remaining budget on a
+ * browser that gets killed mid-navigation - the launch is wasted and the
+ * failure arrives later than it had to.
+ */
+const MIN_ADDON_BUDGET_MS = 18_000;
+
 export interface ChallengeAttempt {
 	shadowUnlockAddon: boolean;
 	/** Wall-clock cap for this attempt; undefined spends whatever is left. */
@@ -277,7 +285,7 @@ export function planNextAttempt(
 	}
 
 	if (attemptsMade === 2) {
-		return { shadowUnlockAddon: true };
+		return budget >= MIN_ADDON_BUDGET_MS ? { shadowUnlockAddon: true } : null;
 	}
 
 	return null;

@@ -134,6 +134,13 @@ describe('CamoufoxSolver', () => {
 		it('refuses a later attempt the clock cannot fund', () => {
 			expect(planNextAttempt(6_000, 1)).toBeNull();
 		});
+
+		it('does not start the addon when it would be killed mid-navigation', () => {
+			// A 45s indexer search that spent two draws ends here: starting the addon
+			// with 17s left launches a browser and gets closed inside page.goto.
+			expect(planNextAttempt(20_000, 2)).toBeNull();
+			expect(planNextAttempt(24_000, 2)).toEqual({ shadowUnlockAddon: true });
+		});
 	});
 
 	describe('solveChallenge', () => {
@@ -650,7 +657,7 @@ describe('CamoufoxSolver', () => {
 
 				const promise = solveChallenge(
 					{ url: 'https://example.com' },
-					{ headless: true, timeoutSeconds: 60 }
+					{ headless: true, timeoutSeconds: 90 }
 				);
 				const drive = async () => {
 					for (let i = 0; i < 200; i++) {
