@@ -30,6 +30,12 @@ export const load: LayoutServerLoad = async ({ request, locals }) => {
 			where: eq(settings.key, 'tmdb_api_key')
 		});
 
+		// TheTVDB carries the broadcast air time TMDB has no field for, so the
+		// settings page needs to know whether that key exists.
+		const tvdbApiKeySetting = await db.query.settings.findFirst({
+			where: eq(settings.key, 'tvdb_api_key')
+		});
+
 		const metadataConfig = await getMetadataProviderConfig();
 
 		return {
@@ -43,6 +49,9 @@ export const load: LayoutServerLoad = async ({ request, locals }) => {
 			},
 			metadataProviders: {
 				animeEnrichmentEnabled: metadataConfig.animeEnrichmentEnabled
+			},
+			tvdb: {
+				hasApiKey: Boolean(tvdbApiKeySetting?.value)
 			}
 		};
 	} catch (err) {
@@ -56,6 +65,7 @@ export const load: LayoutServerLoad = async ({ request, locals }) => {
 			metadataProviders: {
 				animeEnrichmentEnabled: true
 			},
+			tvdb: { hasApiKey: false },
 			error: 'Failed to load system settings'
 		};
 	}

@@ -44,21 +44,36 @@
 		airTimesReady = true;
 	});
 
-	const localAirTimeCache = new SvelteMap<string, string | null>();
+	// Labels are computed once per data/locale change and kept as plain data.
+	// Filling a cache from inside a template expression is a state write during
+	// render, which Svelte 5 rejects (state_unsafe_mutation) and which took the
+	// whole calendar down instead of dropping the time.
+	let airTimeLabels = $state.raw<Record<string, string | null>>({});
+
+	$effect(() => {
+		const snapshot = $state.snapshot(days) as CalendarDay[];
+		const locale = getLocale();
+		const ready = airTimesReady;
+		const labels: Record<string, string | null> = {};
+		if (ready) {
+			for (const day of snapshot) {
+				for (const episode of day.episodes) {
+					labels[episode.episodeId] = localAirTimeLabel(
+						episode.airDate,
+						episode.airTime,
+						episode.airTz,
+						locale
+					);
+				}
+			}
+		}
+		airTimeLabels = labels;
+	});
 
 	/** Leading label so the time survives any truncation of the title. */
 	function airPrefix(ep: CalendarDay['episodes'][number]): string {
-		const label = localAirTime(ep) ?? ep.airTime;
+		const label = airTimeLabels[ep.episodeId] ?? ep.airTime;
 		return label ? `${label} · ` : '';
-	}
-
-	function localAirTime(ep: CalendarDay['episodes'][number]): string | null {
-		if (!airTimesReady) return null;
-		const cached = localAirTimeCache.get(ep.episodeId);
-		if (cached !== undefined) return cached;
-		const value = localAirTimeLabel(ep.airDate, ep.airTime, ep.airTz, getLocale());
-		localAirTimeCache.set(ep.episodeId, value);
-		return value;
 	}
 
 	const ALL_CERTIFICATIONS = ['G', 'PG', 'PG-13', 'R', 'NC-17', 'NR'];
@@ -760,9 +775,7 @@
 												<span class="text-xs text-secondary/60">
 													{airPrefix(ep)}S{String(ep.seasonNumber).padStart(2, '0')}E{String(
 														ep.episodeNumber
-													).padStart(2, '0')}{ep.title ? ` - ${ep.title}` : ''}{localAirTime(ep)
-														? ` · ${localAirTime(ep)}`
-														: ''}
+													).padStart(2, '0')}{ep.title ? ` - ${ep.title}` : ''}
 												</span>
 											</div>
 										</div>

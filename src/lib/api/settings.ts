@@ -328,6 +328,14 @@ export type TmdbSettingsUpdateResponse = {
 	unchanged?: boolean;
 };
 
+export type TvdbSettingsResponse = {
+	hasApiKey: boolean;
+};
+
+export type TvdbSettingsUpdateResponse = {
+	unchanged?: boolean;
+};
+
 export interface MetadataProviderSettingsPayload {
 	animeEnrichmentEnabled?: boolean;
 }
@@ -937,6 +945,14 @@ export async function getTmdbSettings() {
 
 export async function updateTmdbSettings(apiKey: string) {
 	return apiPut<TmdbSettingsUpdateResponse>('/api/settings/tmdb', { apiKey });
+}
+
+export async function getTvdbSettings() {
+	return apiGet<TvdbSettingsResponse>('/api/settings/tvdb');
+}
+
+export async function updateTvdbSettings(secret: string) {
+	return apiPut<TvdbSettingsUpdateResponse>('/api/settings/tvdb', { apiKey: secret });
 }
 
 export async function getMetadataProviderSettings() {
