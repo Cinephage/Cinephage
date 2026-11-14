@@ -238,6 +238,28 @@ const MIN_ATTEMPT_BUDGET_MS = 4_000;
  */
 const MIN_ADDON_BUDGET_MS = 18_000;
 
+/**
+ * Ceiling for getting a browser, independent of the caller's fetch timeout.
+ * A solve queues behind other browser work and a cold Camoufox launch costs a
+ * few seconds; charging either to the caller's budget left a 30s details-page
+ * fetch with 6s to navigate, so it died inside `page.goto` before the challenge
+ * could clear (#663).
+ */
+const ACQUIRE_TIMEOUT_MS = 45_000;
+
+/**
+ * Budget clock for one solve/fetch request. It starts when the first browser
+ * becomes usable, so queueing and launching are not paid for twice.
+ */
+export interface ChallengeClock {
+	/** When the first browser became usable; null until then. */
+	startedAt: number | null;
+}
+
+function fetchElapsedMs(clock: ChallengeClock): number {
+	return clock.startedAt === null ? 0 : Date.now() - clock.startedAt;
+}
+
 export interface ChallengeAttempt {
 	shadowUnlockAddon: boolean;
 	/** Wall-clock cap for this attempt; undefined spends whatever is left. */
@@ -299,12 +321,12 @@ export function planNextAttempt(
  * error, an abort, no response - ends the loop: another browser would repeat it.
  */
 async function runPlannedAttempts<T extends ChallengeAttemptOutcome>(
-	opts: { startTime: number; timeout: number; signal?: AbortSignal; unstarted: T },
+	opts: { clock: ChallengeClock; timeout: number; signal?: AbortSignal; unstarted: T },
 	attempt: (plan: ChallengeAttempt) => Promise<T>
 ): Promise<T> {
 	let result = opts.unstarted;
 	for (let attemptsMade = 0; ; attemptsMade += 1) {
-		const plan = planNextAttempt(opts.timeout - (Date.now() - opts.startTime), attemptsMade);
+		const plan = planNextAttempt(opts.timeout - fetchElapsedMs(opts.clock), attemptsMade);
 		if (!plan) break;
 
 		if (attemptsMade > 0) {
@@ -351,9 +373,10 @@ export async function solveChallenge(
 
 	const timeout = (request.timeout || config.timeoutSeconds) * 1000;
 
+	const clock: ChallengeClock = { startedAt: null };
 	return runPlannedAttempts<SolveResult>(
 		{
-			startTime,
+			clock,
 			timeout,
 			signal: request.signal,
 			unstarted: createErrorResult('No attempt fit the remaining budget', startTime)
@@ -362,6 +385,7 @@ export async function solveChallenge(
 			runSolveAttempt(request, config, camoufoxManager, {
 				startTime,
 				timeout,
+				clock,
 				shadowUnlockAddon: plan.shadowUnlockAddon,
 				waitCapMs: plan.waitCapMs
 			})
@@ -375,11 +399,12 @@ async function runSolveAttempt(
 	opts: {
 		startTime: number;
 		timeout: number;
+		clock: ChallengeClock;
 		shadowUnlockAddon: boolean;
 		waitCapMs?: number;
 	}
 ): Promise<SolveResult> {
-	const { startTime, timeout } = opts;
+	const { startTime, timeout, clock } = opts;
 	let managed: ManagedBrowser | null = null;
 	let detachAbort: () => void = () => {};
 
@@ -392,10 +417,15 @@ async function runSolveAttempt(
 		managed = await camoufoxManager.createBrowserForDomain(domain, {
 			headless: config.headless,
 			proxy: request.proxy,
-			acquireTimeoutMs: timeout,
+			acquireTimeoutMs: Math.max(timeout, ACQUIRE_TIMEOUT_MS),
 			signal: request.signal ?? undefined,
 			shadowUnlockAddon: opts.shadowUnlockAddon
 		});
+
+		// The budget starts here: queueing for a browser slot and launching one are
+		// infrastructure, not part of the fetch the caller asked for.
+		if (clock.startedAt === null) clock.startedAt = Date.now();
+		const remaining = () => timeout - fetchElapsedMs(clock);
 
 		detachAbort = attachAbort(request.signal, camoufoxManager, managed);
 
@@ -412,7 +442,7 @@ async function runSolveAttempt(
 		logger.debug({ url: request.url }, '[CamoufoxSolver] Navigating to URL');
 
 		const response = await page.goto(request.url, {
-			timeout: Math.min(timeout, 30000),
+			timeout: Math.max(1000, Math.min(remaining(), 30000)),
 			waitUntil: 'domcontentloaded'
 		});
 
@@ -458,9 +488,7 @@ async function runSolveAttempt(
 
 		// Wait for challenge to complete
 		// Camoufox + humanize handles most of this automatically
-		const waitBudget = opts.waitCapMs
-			? Math.min(timeout - (Date.now() - startTime), opts.waitCapMs)
-			: timeout - (Date.now() - startTime);
+		const waitBudget = opts.waitCapMs ? Math.min(remaining(), opts.waitCapMs) : remaining();
 		const solved = await waitForChallengeComplete(page, waitBudget);
 
 		if (solved) {
@@ -626,9 +654,10 @@ export async function browserFetch(
 
 	const timeout = (request.timeout || config.timeoutSeconds) * 1000;
 
+	const clock: ChallengeClock = { startedAt: null };
 	return runPlannedAttempts<BrowserFetchResult>(
 		{
-			startTime,
+			clock,
 			timeout,
 			signal: request.signal,
 			unstarted: createFetchFailure(request.url, 'No attempt fit the remaining budget', startTime)
@@ -637,6 +666,7 @@ export async function browserFetch(
 			runBrowserFetchAttempt(request, config, camoufoxManager, {
 				startTime,
 				timeout,
+				clock,
 				shadowUnlockAddon: plan.shadowUnlockAddon,
 				waitCapMs: plan.waitCapMs
 			})
@@ -650,11 +680,12 @@ async function runBrowserFetchAttempt(
 	opts: {
 		startTime: number;
 		timeout: number;
+		clock: ChallengeClock;
 		shadowUnlockAddon: boolean;
 		waitCapMs?: number;
 	}
 ): Promise<BrowserFetchResult> {
-	const { startTime, timeout } = opts;
+	const { startTime, timeout, clock } = opts;
 	let managed: ManagedBrowser | null = null;
 	let detachAbort: () => void = () => {};
 
@@ -664,10 +695,15 @@ async function runBrowserFetchAttempt(
 		managed = await camoufoxManager.createBrowserForDomain(domain, {
 			headless: config.headless,
 			proxy: request.proxy,
-			acquireTimeoutMs: timeout,
+			acquireTimeoutMs: Math.max(timeout, ACQUIRE_TIMEOUT_MS),
 			signal: request.signal ?? undefined,
 			shadowUnlockAddon: opts.shadowUnlockAddon
 		});
+
+		// The budget starts here: queueing for a browser slot and launching one are
+		// infrastructure, not part of the fetch the caller asked for.
+		if (clock.startedAt === null) clock.startedAt = Date.now();
+		const remaining = () => timeout - fetchElapsedMs(clock);
 
 		detachAbort = attachAbort(request.signal, camoufoxManager, managed);
 
@@ -696,7 +732,6 @@ async function runBrowserFetchAttempt(
 		// so this warm-up is always appropriate here.
 		const target = new URL(request.url);
 		const isDeepLink = target.pathname !== '/' || target.search !== '';
-		const remaining = () => timeout - (Date.now() - startTime);
 
 		if (isDeepLink && !request.signal?.aborted) {
 			logger.debug({ host: target.hostname }, '[CamoufoxSolver] Warming up on site root');
@@ -775,7 +810,7 @@ async function runBrowserFetchAttempt(
 			const apiResponse = await managed.context.request.get(request.url, {
 				headers: Object.keys(requestHeaders).length > 0 ? requestHeaders : undefined,
 				maxRedirects: 5,
-				timeout: Math.max(1000, timeout - (Date.now() - startTime))
+				timeout: Math.max(1000, remaining())
 			});
 			const data = await apiResponse.body().catch(() => Buffer.alloc(0));
 

@@ -609,6 +609,43 @@ describe('CamoufoxSolver', () => {
 		});
 	});
 
+	describe('fetch budget', () => {
+		it('does not charge browser acquisition to the fetch budget', async () => {
+			// A fetch queues behind other browser work and a cold launch takes seconds;
+			// charging that to the caller's timeout is what left a 30s details-page
+			// fetch with 6s to navigate, dying inside page.goto (#663). The 30s budget
+			// belongs to the fetch, so a 20s queue leaves all 30s for navigation.
+			vi.useFakeTimers();
+			try {
+				mockManager.createBrowserForDomain.mockImplementation(
+					() =>
+						new Promise((resolve) => {
+							setTimeout(() => resolve(mockManagedBrowser), 20_000);
+						})
+				);
+				const gotoMock = mockManagedBrowser.page.goto as ReturnType<typeof vi.fn>;
+				gotoMock.mockResolvedValue(createMockResponse(200));
+
+				const promise = browserFetch(
+					{ url: 'https://example.com/' },
+					{ headless: true, timeoutSeconds: 30 }
+				);
+				const drive = async () => {
+					for (let i = 0; i < 80; i++) {
+						await vi.advanceTimersByTimeAsync(500);
+					}
+					return promise;
+				};
+				await drive();
+
+				expect(gotoMock).toHaveBeenCalled();
+				expect(gotoMock.mock.calls[0][1]).toMatchObject({ timeout: 30_000 });
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+	});
+
 	describe('two-phase interactive fallback', () => {
 		it('first attempt launches without the shadow-unlock addon', async () => {
 			const gotoMock = mockManagedBrowser.page.goto as ReturnType<typeof vi.fn>;
