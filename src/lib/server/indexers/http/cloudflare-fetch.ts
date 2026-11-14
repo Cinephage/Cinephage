@@ -8,6 +8,7 @@
  * (like AuthManager, DownloadHandler) but still need Cloudflare bypass.
  */
 
+import type { Cookie } from 'playwright-core';
 import { isCloudflareProtected } from './CloudflareDetection';
 import { captchaSolverSettingsService, getCaptchaSolver } from '#lib/server/captcha/index.js';
 import { createChildLogger } from '#lib/logging/index.js';
@@ -36,10 +37,46 @@ export interface CloudflareFetchResult {
 }
 
 /**
+ * Turn the caller's `Cookie` header into cookies the browser can start with.
+ *
+ * The plain fetch carries the indexer's stored session, but the browser that
+ * takes over on a challenge starts with an empty cookie jar - so a private
+ * tracker answers it as an anonymous visitor. A definition that extracts its
+ * download URL from a details page then matches its selectors against a login
+ * page and reports "selector did not match" for a page it was never served
+ * (#663). Everything the caller already has belongs in the browser too.
+ */
+function cookiesFromHeaders(headers: Record<string, string>, url: string): Cookie[] {
+	const header = Object.entries(headers).find(([key]) => key.toLowerCase() === 'cookie')?.[1];
+	if (!header) return [];
+
+	const domain = new URL(url).hostname;
+	const expires = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60;
+	const cookies: Cookie[] = [];
+	for (const pair of header.split(';')) {
+		const trimmed = pair.trim();
+		const separator = trimmed.indexOf('=');
+		if (separator <= 0) continue;
+		cookies.push({
+			name: trimmed.slice(0, separator),
+			value: trimmed.slice(separator + 1),
+			domain,
+			path: '/',
+			expires,
+			httpOnly: false,
+			secure: true,
+			sameSite: 'Lax'
+		});
+	}
+	return cookies;
+}
+
+/**
  * Fetch a URL with automatic Cloudflare bypass.
  *
  * First attempts a normal fetch. If Cloudflare is detected and the
- * captcha solver is available, falls back to browser-based fetching.
+ * captcha solver is available, falls back to browser-based fetching with the
+ * caller's session cookies, so the browser sees the same authenticated site.
  */
 export async function cloudflareFetch(
 	url: string,
@@ -108,6 +145,7 @@ export async function cloudflareFetch(
 					url,
 					method,
 					body,
+					cookies: cookiesFromHeaders(headers, url),
 					timeout: Math.ceil(timeout / 1000)
 				});
 

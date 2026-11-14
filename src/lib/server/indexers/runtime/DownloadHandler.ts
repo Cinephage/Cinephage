@@ -14,6 +14,7 @@ import { FilterEngine } from '../engine/FilterEngine';
 import { SelectorEngine } from '../engine/SelectorEngine';
 import { CookieStore } from '../auth/CookieStore';
 import { cloudflareFetch } from '../http/cloudflare-fetch';
+import { isCloudflareProtected } from '../http/CloudflareDetection';
 import { createChildLogger } from '#lib/logging/index.js';
 
 export interface DownloadContext {
@@ -722,6 +723,26 @@ export class DownloadHandler {
 				},
 				'Download variable extraction response'
 			);
+
+			// A challenge page is not the details page. Parsing it anyway made
+			// every definition-specific selector report "did not match", which
+			// reads as a broken definition instead of a fetch that never landed
+			// on the page (#663).
+			if (
+				cfResponse.status >= 400 ||
+				isCloudflareProtected(cfResponse.status, cfResponse.headers, cfResponse.body)
+			) {
+				this.log.warn(
+					{
+						url: fetchUrl.substring(0, 80),
+						status: cfResponse.status,
+						bodyLength: cfResponse.body.length,
+						usedBrowser: cfResponse.usedBrowser
+					},
+					'Download variable extraction got a challenge or error page, not the details page'
+				);
+				return variables;
+			}
 
 			const $ = cheerio.load(cfResponse.body);
 
