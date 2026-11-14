@@ -205,9 +205,10 @@ function attachAbort(
 }
 
 /**
- * Failure kinds that justify a second, interactive (shadow-unlock addon) attempt.
- * Everything else (launch failures, aborts, no response) is terminal for the
- * current budget and must not trigger a relaunch.
+ * Failure kinds that justify another draw: the challenge was served and not
+ * cleared, so a fresh fingerprint may get a different verdict. Everything else
+ * (launch failures, aborts, no response) is terminal for the current budget and
+ * must not trigger a relaunch.
  */
 function isInteractiveFallbackCandidate(error?: string): boolean {
 	if (!error) return false;
@@ -221,13 +222,112 @@ function isInteractiveFallbackCandidate(error?: string): boolean {
 const PASSIVE_PHASE_BUDGET_MS = 25_000;
 
 /**
+ * Budget held back from an attempt so a later one can still launch a browser
+ * and navigate before the caller's deadline.
+ */
+const ATTEMPT_RESERVE_MS = 3_000;
+
+/** Anything less than this cannot pay for a launch plus the start of a solve. */
+const MIN_ATTEMPT_BUDGET_MS = 4_000;
+
+export interface ChallengeAttempt {
+	shadowUnlockAddon: boolean;
+	/** Wall-clock cap for this attempt; undefined spends whatever is left. */
+	waitCapMs?: number;
+}
+
+interface ChallengeAttemptOutcome {
+	success: boolean;
+	error?: string;
+}
+
+/**
+ * Decide the next solve attempt from the budget still on the clock.
+ *
+ * Cloudflare's verdict is per fingerprint, and every attempt launches a fresh
+ * browser with a new one, so a lost attempt is a lost lottery ticket rather
+ * than a bad login: re-rolling is the recovery (#663). Two passive draws come
+ * first - each capped so the next still fits - and the shadow-unlock addon,
+ * whose attachShadow patch Turnstile can detect, stays last. A budget that
+ * funds only one attempt returns exactly that one, which is the single-shot
+ * behaviour this replaces.
+ *
+ * Pure on purpose: the budget arithmetic is the part that goes wrong, and it
+ * is testable without a browser or a clock.
+ */
+export function planNextAttempt(
+	remainingMs: number,
+	attemptsMade: number
+): ChallengeAttempt | null {
+	const budget = remainingMs - ATTEMPT_RESERVE_MS;
+	const waitCapMs = Math.min(PASSIVE_PHASE_BUDGET_MS, Math.max(budget, MIN_ATTEMPT_BUDGET_MS));
+
+	// The first attempt runs whatever is left: a caller that has already spent
+	// its budget deserves a launch, not a silent no-op.
+	if (attemptsMade === 0) {
+		return { shadowUnlockAddon: false, waitCapMs };
+	}
+
+	if (budget < MIN_ATTEMPT_BUDGET_MS) {
+		return null;
+	}
+
+	if (attemptsMade === 1) {
+		return { shadowUnlockAddon: false, waitCapMs };
+	}
+
+	if (attemptsMade === 2) {
+		return { shadowUnlockAddon: true };
+	}
+
+	return null;
+}
+
+/**
+ * Run attempts while the budget funds one.
+ *
+ * Every attempt is a fresh browser, so this is the only place that decides how
+ * many draws a solve gets. A failure that is not a challenge verdict - a launch
+ * error, an abort, no response - ends the loop: another browser would repeat it.
+ */
+async function runPlannedAttempts<T extends ChallengeAttemptOutcome>(
+	opts: { startTime: number; timeout: number; signal?: AbortSignal; unstarted: T },
+	attempt: (plan: ChallengeAttempt) => Promise<T>
+): Promise<T> {
+	let result = opts.unstarted;
+	for (let attemptsMade = 0; ; attemptsMade += 1) {
+		const plan = planNextAttempt(opts.timeout - (Date.now() - opts.startTime), attemptsMade);
+		if (!plan) break;
+
+		if (attemptsMade > 0) {
+			logger.info(
+				{
+					attempt: attemptsMade + 1,
+					shadowUnlockAddon: plan.shadowUnlockAddon,
+					waitCapMs: plan.waitCapMs
+				},
+				'[CamoufoxSolver] Challenge persists; retrying with a fresh browser fingerprint'
+			);
+		}
+
+		result = await attempt(plan);
+		if (result.success || opts.signal?.aborted) break;
+		if (!isInteractiveFallbackCandidate(result.error)) break;
+	}
+
+	return result;
+}
+
+/**
  * Solve a challenge for the given URL using Camoufox
  *
  * Two-phase strategy (live-verified against rutracker.org, issue #228):
- * 1. Passive attempt WITHOUT the shadow-unlock addon - its MAIN-world
+ * 1. Passive attempts WITHOUT the shadow-unlock addon - its MAIN-world
  *    attachShadow patch is detected by Cloudflare Turnstile, which then serves
  *    an unwinnable challenge loop even when a clean fingerprint would auto-clear.
- * 2. Only if still challenged with budget remaining: retry WITH the addon so the
+ *    A lost passive attempt is re-rolled on a fresh fingerprint while the budget
+ *    funds one, because the verdict is per fingerprint (#663).
+ * 2. Only as the last resort with budget remaining: retry WITH the addon so the
  *    ClickSolver can handle genuinely interactive Turnstile checkboxes.
  */
 export async function solveChallenge(
@@ -243,27 +343,21 @@ export async function solveChallenge(
 
 	const timeout = (request.timeout || config.timeoutSeconds) * 1000;
 
-	let result = await runSolveAttempt(request, config, camoufoxManager, {
-		startTime,
-		timeout,
-		shadowUnlockAddon: false,
-		waitCapMs: PASSIVE_PHASE_BUDGET_MS
-	});
-
-	if (
-		isInteractiveFallbackCandidate(result.error) &&
-		!request.signal?.aborted &&
-		timeout - (Date.now() - startTime) > 10_000
-	) {
-		logger.info('[CamoufoxSolver] Challenge persists passively; retrying with shadow-unlock addon');
-		result = await runSolveAttempt(request, config, camoufoxManager, {
+	return runPlannedAttempts<SolveResult>(
+		{
 			startTime,
 			timeout,
-			shadowUnlockAddon: true
-		});
-	}
-
-	return result;
+			signal: request.signal,
+			unstarted: createErrorResult('No attempt fit the remaining budget', startTime)
+		},
+		(plan) =>
+			runSolveAttempt(request, config, camoufoxManager, {
+				startTime,
+				timeout,
+				shadowUnlockAddon: plan.shadowUnlockAddon,
+				waitCapMs: plan.waitCapMs
+			})
+	);
 }
 
 async function runSolveAttempt(
@@ -489,12 +583,28 @@ export async function testForChallenge(
  * from accessing Cloudflare-protected sites even with valid cookies.
  *
  * Two-phase strategy (live-verified against rutracker.org, issue #228):
- * 1. Passive attempt WITHOUT the shadow-unlock addon - its MAIN-world
+ * 1. Passive attempts WITHOUT the shadow-unlock addon - its MAIN-world
  *    attachShadow patch is detected by Cloudflare Turnstile, which then serves
  *    an unwinnable challenge loop even when a clean fingerprint would auto-clear.
- * 2. Only if still challenged with budget remaining: retry WITH the addon so the
+ *    A lost passive attempt is re-rolled on a fresh fingerprint while the budget
+ *    funds one, because the verdict is per fingerprint (#663).
+ * 2. Only as the last resort with budget remaining: retry WITH the addon so the
  *    ClickSolver can handle genuinely interactive Turnstile checkboxes.
  */
+function createFetchFailure(url: string, error: string, startTime: number): BrowserFetchResult {
+	return {
+		success: false,
+		body: '',
+		url,
+		status: 0,
+		headers: {},
+		cookies: [],
+		userAgent: '',
+		error,
+		timeMs: Date.now() - startTime
+	};
+}
+
 export async function browserFetch(
 	request: BrowserFetchRequest,
 	config: { headless: boolean; timeoutSeconds: number; blockMedia?: boolean }
@@ -503,42 +613,26 @@ export async function browserFetch(
 	const camoufoxManager = getCamoufoxManager();
 
 	if (request.signal?.aborted) {
-		return {
-			success: false,
-			body: '',
-			url: request.url,
-			status: 0,
-			headers: {},
-			cookies: [],
-			userAgent: '',
-			error: 'Aborted before start',
-			timeMs: Date.now() - startTime
-		};
+		return createFetchFailure(request.url, 'Aborted before start', startTime);
 	}
 
 	const timeout = (request.timeout || config.timeoutSeconds) * 1000;
 
-	let result = await runBrowserFetchAttempt(request, config, camoufoxManager, {
-		startTime,
-		timeout,
-		shadowUnlockAddon: false,
-		waitCapMs: PASSIVE_PHASE_BUDGET_MS
-	});
-
-	if (
-		isInteractiveFallbackCandidate(result.error) &&
-		!request.signal?.aborted &&
-		timeout - (Date.now() - startTime) > 10_000
-	) {
-		logger.info('[CamoufoxSolver] Challenge persists passively; retrying with shadow-unlock addon');
-		result = await runBrowserFetchAttempt(request, config, camoufoxManager, {
+	return runPlannedAttempts<BrowserFetchResult>(
+		{
 			startTime,
 			timeout,
-			shadowUnlockAddon: true
-		});
-	}
-
-	return result;
+			signal: request.signal,
+			unstarted: createFetchFailure(request.url, 'No attempt fit the remaining budget', startTime)
+		},
+		(plan) =>
+			runBrowserFetchAttempt(request, config, camoufoxManager, {
+				startTime,
+				timeout,
+				shadowUnlockAddon: plan.shadowUnlockAddon,
+				waitCapMs: plan.waitCapMs
+			})
+	);
 }
 
 async function runBrowserFetchAttempt(

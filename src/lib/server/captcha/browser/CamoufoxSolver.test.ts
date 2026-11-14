@@ -42,7 +42,8 @@ vi.mock('#lib/logging/index.js', () => ({
 }));
 
 // Import after mocking
-const { solveChallenge, testForChallenge, browserFetch } = await import('./CamoufoxSolver');
+const { planNextAttempt, solveChallenge, testForChallenge, browserFetch } =
+	await import('./CamoufoxSolver');
 const { detectChallengeFromPage } = await import('../detection/ChallengeDetector');
 
 /**
@@ -109,6 +110,30 @@ describe('CamoufoxSolver', () => {
 			type: 'unknown',
 			confidence: 0
 		} as ChallengeDetectionResult);
+	});
+
+	describe('planNextAttempt', () => {
+		it('fills a 45s budget with two passive draws and no addon', () => {
+			// Two draws fit; a third does not, because the last attempt needs its own
+			// launch budget and the passive cap would drop below a useful solve.
+			expect(planNextAttempt(45_000, 0)).toEqual({ shadowUnlockAddon: false, waitCapMs: 25_000 });
+			expect(planNextAttempt(20_000, 1)).toEqual({ shadowUnlockAddon: false, waitCapMs: 17_000 });
+			expect(planNextAttempt(3_500, 2)).toBeNull();
+		});
+
+		it('always runs the first attempt, however little budget is left', () => {
+			expect(planNextAttempt(1_000, 0)).toEqual({ shadowUnlockAddon: false, waitCapMs: 4_000 });
+		});
+
+		it('keeps the addon as the last resort after two lost draws', () => {
+			expect(planNextAttempt(60_000, 1)).toEqual({ shadowUnlockAddon: false, waitCapMs: 25_000 });
+			expect(planNextAttempt(40_000, 2)).toEqual({ shadowUnlockAddon: true });
+			expect(planNextAttempt(40_000, 3)).toBeNull();
+		});
+
+		it('refuses a later attempt the clock cannot fund', () => {
+			expect(planNextAttempt(6_000, 1)).toBeNull();
+		});
 	});
 
 	describe('solveChallenge', () => {
@@ -605,7 +630,7 @@ describe('CamoufoxSolver', () => {
 			});
 		});
 
-		it('retries with the addon enabled when the passive attempt stays challenged', async () => {
+		it('re-rolls a lost passive draw, then falls back to the addon', async () => {
 			vi.useFakeTimers();
 			try {
 				(detectChallengeFromPage as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -635,11 +660,14 @@ describe('CamoufoxSolver', () => {
 				};
 				const result = await drive();
 
-				expect(mockManager.createBrowserForDomain).toHaveBeenCalledTimes(2);
+				expect(mockManager.createBrowserForDomain).toHaveBeenCalledTimes(3);
 				expect(mockManager.createBrowserForDomain.mock.calls[0][1]).toMatchObject({
 					shadowUnlockAddon: false
 				});
 				expect(mockManager.createBrowserForDomain.mock.calls[1][1]).toMatchObject({
+					shadowUnlockAddon: false
+				});
+				expect(mockManager.createBrowserForDomain.mock.calls[2][1]).toMatchObject({
 					shadowUnlockAddon: true
 				});
 				expect(result.success).toBe(false);
