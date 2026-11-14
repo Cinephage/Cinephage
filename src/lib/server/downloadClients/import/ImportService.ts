@@ -812,7 +812,13 @@ export class ImportService extends EventEmitter {
 	): Promise<void> {
 		await db
 			.update(downloadQueue)
-			.set({ importAttempts: 0 })
+			.set({
+				// markImporting() moved the row to 'importing' before this check ran;
+				// leaving it there parks the download until the startup sweep, since
+				// only 'completed'/'stalled' rows are offered to the importer.
+				status: 'completed',
+				importAttempts: 0
+			})
 			.where(eq(downloadQueue.id, queueItem.id))
 			.run();
 		logger.info(

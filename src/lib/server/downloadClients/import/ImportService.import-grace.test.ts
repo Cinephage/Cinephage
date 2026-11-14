@@ -132,6 +132,9 @@ describe('import grace period (#668)', () => {
 		expect(markFailed).not.toHaveBeenCalled();
 		const row = testDb.db.select().from(downloadQueue).where(eq(downloadQueue.id, id)).get();
 		expect(row?.importAttempts).toBe(0);
+		// markImporting() parked the row at 'importing'; the deferral has to put it
+		// back, or nothing offers it to the importer again until a restart.
+		expect(row?.status).toBe('completed');
 	});
 
 	it('fails once the grace window has passed', async () => {
