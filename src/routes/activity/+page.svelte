@@ -25,6 +25,7 @@
 	import { layoutState, deriveMobileSseStatus } from '#lib/layout.svelte.js';
 	import ActivityTable from '#lib/components/activity/ActivityTable.svelte';
 	import ActivityUnmatchedCard from '#lib/components/activity/ActivityUnmatchedCard.svelte';
+	import ActivitySearchesCard from '#lib/components/activity/ActivitySearchesCard.svelte';
 	import ActivityFilters from '#lib/components/activity/ActivityFilters.svelte';
 	import ActiveFilters from '#lib/components/activity/ActiveFilters.svelte';
 	import QueueStatsCards from '#lib/components/activity/QueueStatsCards.svelte';
@@ -43,6 +44,7 @@
 		Download,
 		History,
 		Unlink,
+		Search,
 		Pause,
 		Play,
 		Ban,
@@ -86,7 +88,10 @@
 	// Initialize directly from server data so the first render already has correct content.
 	// The $effect below re-syncs on subsequent data changes (navigation / tab switch).
 	function getInitialTab(): ActivityTab {
-		return data.tab === 'active' ? 'active' : data.tab === 'unmatched' ? 'unmatched' : 'history';
+		if (data.tab === 'active') return 'active';
+		if (data.tab === 'unmatched') return 'unmatched';
+		if (data.tab === 'searches') return 'searches';
+		return 'history';
 	}
 
 	function getInitialFilters(): FiltersType {
@@ -121,6 +126,7 @@
 	let activeTabFilters = $state<FiltersType>(createDefaultFilters());
 	let historyTabFilters = $state<FiltersType>(createDefaultFilters());
 	let unmatchedTabFilters = $state<FiltersType>(createDefaultFilters());
+	let searchesTabFilters = $state<FiltersType>(createDefaultFilters());
 	let activityTab = $state<ActivityTab>('history');
 
 	// Sort state
@@ -155,6 +161,7 @@
 	function getFiltersForTab(tab: ActivityTab): FiltersType {
 		if (tab === 'active') return activeTabFilters;
 		if (tab === 'unmatched') return unmatchedTabFilters;
+		if (tab === 'searches') return searchesTabFilters;
 		return historyTabFilters;
 	}
 
@@ -165,6 +172,10 @@
 		}
 		if (tab === 'unmatched') {
 			unmatchedTabFilters = { ...nextFilters };
+			return;
+		}
+		if (tab === 'searches') {
+			searchesTabFilters = { ...nextFilters };
 			return;
 		}
 		historyTabFilters = { ...nextFilters };
@@ -1300,6 +1311,13 @@
 		syncActivityUrl(newFilters, 'unmatched');
 	}
 
+	// Searches reads from a dedicated monitoringHistory feed, not the queue/
+	// history pipeline - same reasoning as applyUnmatchedFilters above.
+	function applySearchesFilters(newFilters: FiltersType): void {
+		setFiltersForTab('searches', newFilters);
+		syncActivityUrl(newFilters, 'searches');
+	}
+
 	async function switchTab(tab: ActivityTab): Promise<void> {
 		if (tab === activityTab) return;
 
@@ -1309,6 +1327,15 @@
 			activityTab = 'unmatched';
 			setFiltersForTab('unmatched', getFiltersForTab('unmatched'));
 			syncActivityUrl(getFiltersForTab('unmatched'), 'unmatched');
+			return;
+		}
+
+		// The searches tab reads its own dedicated feed; keep it out of the
+		// queue/history fetch pipeline entirely, same as unmatched above.
+		if (tab === 'searches') {
+			activityTab = 'searches';
+			setFiltersForTab('searches', getFiltersForTab('searches'));
+			syncActivityUrl(getFiltersForTab('searches'), 'searches');
 			return;
 		}
 
@@ -1541,6 +1568,16 @@
 		</button>
 		<button
 			class="flex shrink-0 cursor-pointer items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors
+				{activityTab === 'searches'
+				? 'border-primary text-primary'
+				: 'border-transparent text-base-content/60 hover:text-base-content'}"
+			onclick={() => switchTab('searches')}
+		>
+			<Search class="h-4 w-4" />
+			{m.activity_tabSearches()}
+		</button>
+		<button
+			class="flex shrink-0 cursor-pointer items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors
 				{activityTab === 'unmatched'
 				? 'border-primary text-primary'
 				: 'border-transparent text-base-content/60 hover:text-base-content'}"
@@ -1564,6 +1601,8 @@
 			filters={unmatchedTabFilters}
 			onFiltersChange={applyUnmatchedFilters}
 		/>
+	{:else if activityTab === 'searches'}
+		<ActivitySearchesCard filters={searchesTabFilters} onFiltersChange={applySearchesFilters} />
 	{:else}
 		<!-- Unified Toolbar -->
 		<ActivityFilters
@@ -1582,7 +1621,7 @@
 					onClearAll={clearAllFilters}
 				/>
 				{#if activityTab === 'active'}
-					<div class="mt-3 flex flex-wrap items-center gap-2">
+					<div class="flex flex-wrap items-center gap-2">
 						<span class="text-sm font-bold tracking-wide text-base-content/70"
 							>{m.activity_queue_bulkActionsHeading()}</span
 						>

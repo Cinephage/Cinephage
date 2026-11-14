@@ -271,7 +271,10 @@ export async function searchForMissingEpisodes(
 								found: true,
 								grabbed: true,
 								releaseName: seasonSearchResult.releaseName,
-								wasPackGrab: true
+								wasPackGrab: true,
+								indexerId: seasonSearchResult.indexerId,
+								indexerName: seasonSearchResult.indexerName,
+								indexersQueried: seasonSearchResult.indexersQueried
 							});
 						}
 						processedEpisodes += seasonEpisodes.length;
@@ -326,7 +329,10 @@ export async function searchForMissingEpisodes(
 						found: wasFound,
 						grabbed: wasGrabbed,
 						releaseName: searchResult.releaseName,
-						error: wasGrabbed ? undefined : (searchResult.error ?? 'No suitable releases found')
+						error: wasGrabbed ? undefined : (searchResult.error ?? 'No suitable releases found'),
+						indexerId: searchResult.indexerId,
+						indexerName: searchResult.indexerName,
+						indexersQueried: searchResult.indexersQueried
 					});
 					processedEpisodes++;
 				}
@@ -397,7 +403,10 @@ export async function searchForMissingEpisodes(
 			grabbed: r.grabbed,
 			releaseName: r.releaseName,
 			error: r.error,
-			wasPackGrab: r.wasPackGrab
+			wasPackGrab: r.wasPackGrab,
+			indexerId: r.indexerId,
+			indexerName: r.indexerName,
+			indexersQueried: r.indexersQueried
 		}));
 
 		// Combine season packs and multi-season packs

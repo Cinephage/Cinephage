@@ -192,8 +192,20 @@ import {
  *   source of truth behind availability and the calendar.
  * Version 171: series.air_time / airs_days / air_tz - broadcast schedule from
  *   TVDB, which is the only provider that reports an air time.
+ * Version 173: movies.consecutive_failure_count, episodes.consecutive_failure_count -
+ *   per-item consecutive failed grab/import counter, independent of which
+ *   release was tried, powering the missing-content search failure cap.
+ *   Numbered 173 (not 172) because 172 was taken on origin/dev by an
+ *   independently-developed, since-discarded search_state table.
+ * Version 174: movies.auto_search_paused, episodes.auto_search_paused - lets a
+ *   user pause auto-search for a single item, independent of `monitored` and
+ *   the (missing-content-only) failure cap.
+ * Version 175: monitoring_history.indexer_id / indexer_name - attributes a
+ *   grabbed release to the indexer that supplied it.
+ * Version 176: monitoring_history.indexers_queried - how many distinct
+ *   indexers answered the search, regardless of outcome.
  */
-export const CURRENT_SCHEMA_VERSION = 171;
+export const CURRENT_SCHEMA_VERSION = 176;
 
 export const SYSTEM_LIBRARY_SEEDS = [
 	{

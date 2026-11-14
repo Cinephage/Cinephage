@@ -47,6 +47,7 @@ import { resolveMovieMultiQuality } from '#lib/server/quality/movie-buckets.js';
 import { getFilledResolutions } from '#lib/server/quality/buckets.js';
 import type { Resolution } from '#lib/server/indexers/parser/types.js';
 import { TaskCancelledException } from '#lib/server/tasks/TaskCancelledException.js';
+import { isAutoSearchGloballyPaused } from '../global-search-pause.js';
 import {
 	getMovieSearchTitles,
 	getSeriesSearchTitles
@@ -67,9 +68,16 @@ import {
 	MovieAvailabilitySpecification,
 	MovieSearchCooldownSpecification,
 	EpisodeSearchCooldownSpecification,
+	MovieFailureCapSpecification,
+	EpisodeFailureCapSpecification,
+	backoffCooldownHours,
+	MovieAutoSearchPausedSpecification,
+	EpisodeAutoSearchPausedSpecification,
 	ReleaseBlocklistSpecification,
 	MovieReadOnlyFolderSpecification,
 	EpisodeReadOnlyFolderSpecification,
+	describeRejectionReason,
+	DEFAULT_COOLDOWN_HOURS,
 	type MovieContext,
 	type EpisodeContext,
 	type ReleaseCandidate
@@ -92,10 +100,22 @@ export interface ItemSearchResult {
 	grabbedRelease?: string;
 	queueItemId?: string;
 	error?: string;
+	/**
+	 * Why a release was found (releasesFound > 0) but nothing was grabbed,
+	 * distinct from `error` - this is an expected outcome (e.g. the best
+	 * candidate didn't beat the existing file's score), not a failure, so it
+	 * must not flip the derived monitoringHistory status to 'error'.
+	 */
+	notGrabbedReason?: string;
 	rejectionType?: string;
 	skipped?: boolean;
 	skipReason?: string;
 	seasonNumber?: number;
+	/** Indexer that supplied the grabbed release, when one was grabbed. */
+	indexerId?: string;
+	indexerName?: string;
+	/** How many distinct indexers answered this search attempt. */
+	indexersQueried?: number;
 }
 
 /**
@@ -526,11 +546,26 @@ export class MonitoringSearchService {
 	 * Search for missing movies
 	 * @param signal - Optional AbortSignal for cancellation support
 	 */
+	/**
+	 * Empty result shape for when a search entry point short-circuits (global
+	 * pause) before doing any work.
+	 */
+	private emptySearchResults(): SearchResults {
+		return { items: [], summary: { searched: 0, found: 0, grabbed: 0, skipped: 0, errors: 0 } };
+	}
+
 	async searchMissingMovies(
 		signal?: AbortSignal,
 		options: MissingSearchOptions = {}
 	): Promise<SearchResults> {
 		logger.info('[MonitoringSearch] Starting missing movies search');
+
+		if (await isAutoSearchGloballyPaused()) {
+			logger.info(
+				'[MonitoringSearch] Skipping missing movies search - automatic search is globally paused'
+			);
+			return this.emptySearchResults();
+		}
 
 		const results: ItemSearchResult[] = [];
 		const ignoreCooldown = options.ignoreCooldown ?? false;
@@ -561,7 +596,8 @@ export class MonitoringSearchService {
 			const monitoredSpec = new MovieMonitoredSpecification();
 			const readOnlySpec = new MovieReadOnlyFolderSpecification();
 			const availabilitySpec = new MovieAvailabilitySpecification();
-			const cooldownSpec = new MovieSearchCooldownSpecification(cooldownHours);
+			const failureCapSpec = new MovieFailureCapSpecification();
+			const autoSearchPausedSpec = new MovieAutoSearchPausedSpecification();
 
 			for (const movie of missingMovies) {
 				// Check for cancellation before processing each movie
@@ -625,8 +661,33 @@ export class MonitoringSearchService {
 					continue;
 				}
 
-				// Check search cooldown (prevent hammering indexers), unless manually bypassed
+				// Check per-item auto-search pause (user-initiated, so this is
+				// checked even on a manual "Run Now" bypass - unlike cooldown and
+				// the failure cap below, which are rate limits, not user decisions)
+				const pausedResult = await autoSearchPausedSpec.isSatisfied(context);
+				if (!pausedResult.accepted) {
+					results.push({
+						itemId: movie.id,
+						itemType: 'movie',
+						title: movie.title,
+						searched: false,
+						releasesFound: 0,
+						grabbed: false,
+						skipped: true,
+						skipReason: pausedResult.reason
+					});
+					continue;
+				}
+
+				// Check search cooldown (prevent hammering indexers), unless manually
+				// bypassed - backs off further the more this item has failed in a
+				// row, short of the hard cap FailureCapSpecification enforces below.
 				if (!ignoreCooldown) {
+					const effectiveCooldownHours = backoffCooldownHours(
+						cooldownHours ?? DEFAULT_COOLDOWN_HOURS,
+						movie.consecutiveFailureCount
+					);
+					const cooldownSpec = new MovieSearchCooldownSpecification(effectiveCooldownHours);
 					const cooldownResult = await cooldownSpec.isSatisfied(context);
 					if (!cooldownResult.accepted) {
 						results.push({
@@ -638,6 +699,23 @@ export class MonitoringSearchService {
 							grabbed: false,
 							skipped: true,
 							skipReason: cooldownResult.reason
+						});
+						continue;
+					}
+
+					// Check consecutive failure cap (stop retrying an item that keeps
+					// failing against every release it's tried), unless manually bypassed
+					const failureCapResult = await failureCapSpec.isSatisfied(context);
+					if (!failureCapResult.accepted) {
+						results.push({
+							itemId: movie.id,
+							itemType: 'movie',
+							title: movie.title,
+							searched: false,
+							releasesFound: 0,
+							grabbed: false,
+							skipped: true,
+							skipReason: failureCapResult.reason
 						});
 						continue;
 					}
@@ -710,8 +788,6 @@ export class MonitoringSearchService {
 
 		if (candidates.length === 0) return results;
 
-		const cooldownSpec = new MovieSearchCooldownSpecification(cooldownHours);
-
 		for (const movie of candidates) {
 			if (signal?.aborted) {
 				throw new TaskCancelledException('search');
@@ -723,8 +799,15 @@ export class MonitoringSearchService {
 			);
 			if (!multiQuality) continue;
 
-			// Respect cooldown (per movie)
+			if (movie.autoSearchPaused) continue;
+
+			// Respect cooldown (per movie), backing off further with consecutive failures.
 			if (!ignoreCooldown) {
+				const effectiveCooldownHours = backoffCooldownHours(
+					cooldownHours ?? DEFAULT_COOLDOWN_HOURS,
+					movie.consecutiveFailureCount
+				);
+				const cooldownSpec = new MovieSearchCooldownSpecification(effectiveCooldownHours);
 				const cooldownResult = await cooldownSpec.isSatisfied({
 					movie,
 					profile: movie.scoringProfile ?? undefined
@@ -774,6 +857,7 @@ export class MonitoringSearchService {
 
 			if (searchResult.releases.length === 0) continue;
 
+			const indexersQueried = new Set(searchResult.releases.map((r) => r.indexerId)).size;
 			const blocklistSpec = new ReleaseBlocklistSpecification({ movieId: movie.id });
 			const filledSoFar = new Set<Resolution>(filled);
 
@@ -811,7 +895,10 @@ export class MonitoringSearchService {
 						releasesFound: searchResult.releases.length,
 						grabbed: true,
 						grabbedRelease: grabResult.releaseName,
-						queueItemId: grabResult.queueItemId
+						queueItemId: grabResult.queueItemId,
+						indexerId: bestRelease.indexerId,
+						indexerName: bestRelease.indexerName,
+						indexersQueried
 					});
 				}
 			}
@@ -873,6 +960,7 @@ export class MonitoringSearchService {
 
 		if (searchResult.releases.length === 0) return results;
 
+		const indexersQueried = new Set(searchResult.releases.map((r) => r.indexerId)).size;
 		const blocklistSpec = new ReleaseBlocklistSpecification({ movieId: movie.id });
 
 		for (const targetResolution of upgradeTargets) {
@@ -913,7 +1001,10 @@ export class MonitoringSearchService {
 					releasesFound: searchResult.releases.length,
 					grabbed: true,
 					grabbedRelease: grabResult.releaseName,
-					queueItemId: grabResult.queueItemId
+					queueItemId: grabResult.queueItemId,
+					indexerId: bestRelease.indexerId,
+					indexerName: bestRelease.indexerName,
+					indexersQueried
 				});
 			}
 		}
@@ -931,6 +1022,13 @@ export class MonitoringSearchService {
 		options: MissingSearchOptions = {}
 	): Promise<SearchResults> {
 		logger.info('[MonitoringSearch] Starting missing episodes search with cascading strategy');
+
+		if (await isAutoSearchGloballyPaused()) {
+			logger.info(
+				'[MonitoringSearch] Skipping missing episodes search - automatic search is globally paused'
+			);
+			return this.emptySearchResults();
+		}
 
 		const results: ItemSearchResult[] = [];
 		const ignoreCooldown = options.ignoreCooldown ?? false;
@@ -975,7 +1073,8 @@ export class MonitoringSearchService {
 			const missingSpec = new EpisodeMissingContentSpecification();
 			const monitoredSpec = new EpisodeMonitoredSpecification();
 			const readOnlySpec = new EpisodeReadOnlyFolderSpecification();
-			const cooldownSpec = new EpisodeSearchCooldownSpecification(cooldownHours);
+			const failureCapSpec = new EpisodeFailureCapSpecification();
+			const autoSearchPausedSpec = new EpisodeAutoSearchPausedSpecification();
 
 			// Filter and group episodes by series and season
 			const episodesBySeriesAndSeason = new Map<string, Map<number, typeof missingEpisodes>>();
@@ -1031,8 +1130,33 @@ export class MonitoringSearchService {
 					continue;
 				}
 
-				// Check search cooldown (prevent hammering indexers), unless manually bypassed
+				// Check per-item auto-search pause (user-initiated, so this is
+				// checked even on a manual "Run Now" bypass - unlike cooldown and
+				// the failure cap below, which are rate limits, not user decisions)
+				const pausedResult = await autoSearchPausedSpec.isSatisfied(context);
+				if (!pausedResult.accepted) {
+					results.push({
+						itemId: episode.id,
+						itemType: 'episode',
+						title: `${episode.series.title} S${episode.seasonNumber.toString().padStart(2, '0')}E${episode.episodeNumber.toString().padStart(2, '0')}`,
+						searched: false,
+						releasesFound: 0,
+						grabbed: false,
+						skipped: true,
+						skipReason: pausedResult.reason
+					});
+					continue;
+				}
+
+				// Check search cooldown (prevent hammering indexers), unless manually
+				// bypassed - backs off further the more this episode has failed in a
+				// row, short of the hard cap FailureCapSpecification enforces below.
 				if (!ignoreCooldown) {
+					const effectiveCooldownHours = backoffCooldownHours(
+						cooldownHours ?? DEFAULT_COOLDOWN_HOURS,
+						episode.consecutiveFailureCount
+					);
+					const cooldownSpec = new EpisodeSearchCooldownSpecification(effectiveCooldownHours);
 					const cooldownResult = await cooldownSpec.isSatisfied(context);
 					if (!cooldownResult.accepted) {
 						results.push({
@@ -1044,6 +1168,23 @@ export class MonitoringSearchService {
 							grabbed: false,
 							skipped: true,
 							skipReason: cooldownResult.reason
+						});
+						continue;
+					}
+
+					// Check consecutive failure cap (stop retrying an item that keeps
+					// failing against every release it's tried), unless manually bypassed
+					const failureCapResult = await failureCapSpec.isSatisfied(context);
+					if (!failureCapResult.accepted) {
+						results.push({
+							itemId: episode.id,
+							itemType: 'episode',
+							title: `${episode.series.title} S${episode.seasonNumber.toString().padStart(2, '0')}E${episode.episodeNumber.toString().padStart(2, '0')}`,
+							searched: false,
+							releasesFound: 0,
+							grabbed: false,
+							skipped: true,
+							skipReason: failureCapResult.reason
 						});
 						continue;
 					}
@@ -1409,6 +1550,8 @@ export class MonitoringSearchService {
 				}
 			});
 
+			const indexersQueried = new Set(searchResult.releases.map((r) => r.indexerId)).size;
+
 			if (searchResult.releases.length === 0) {
 				return {
 					itemId: episodeIds[0], // Use first episode as representative
@@ -1417,7 +1560,8 @@ export class MonitoringSearchService {
 					searched: true,
 					releasesFound: 0,
 					grabbed: false,
-					seasonNumber
+					seasonNumber,
+					indexersQueried
 				};
 			}
 
@@ -1440,7 +1584,8 @@ export class MonitoringSearchService {
 					searched: true,
 					releasesFound: searchResult.releases.length,
 					grabbed: false,
-					seasonNumber
+					seasonNumber,
+					indexersQueried
 				};
 			}
 
@@ -1454,6 +1599,8 @@ export class MonitoringSearchService {
 				error?: string;
 				rejectionType?: string;
 			} | null = null;
+			let grabbedIndexerId: string | undefined;
+			let grabbedIndexerName: string | undefined;
 
 			// Load scoring profile for explicit validation
 			let profile: ScoringProfile | undefined;
@@ -1513,6 +1660,8 @@ export class MonitoringSearchService {
 				});
 
 				if (grabResult.success) {
+					grabbedIndexerId = release.indexerId;
+					grabbedIndexerName = release.indexerName;
 					break; // Successfully grabbed
 				}
 			}
@@ -1528,7 +1677,10 @@ export class MonitoringSearchService {
 				queueItemId: grabResult?.queueItemId,
 				error: grabResult?.error,
 				rejectionType: grabResult?.rejectionType,
-				seasonNumber
+				seasonNumber,
+				indexerId: grabbedIndexerId,
+				indexerName: grabbedIndexerName,
+				indexersQueried
 			};
 		} catch (error) {
 			const message = error instanceof Error ? error.message : 'Unknown error';
@@ -1566,6 +1718,15 @@ export class MonitoringSearchService {
 			},
 			'[MonitoringSearch] Starting upgrade search'
 		);
+
+		// Dry-run is a read-only preview (nothing is grabbed), not automatic
+		// search - the global pause shouldn't block it.
+		if (!dryRun && (await isAutoSearchGloballyPaused())) {
+			logger.info(
+				'[MonitoringSearch] Skipping upgrade search - automatic search is globally paused'
+			);
+			return this.emptySearchResults();
+		}
 
 		const results: ItemSearchResult[] = [];
 		const upgradeDetails: UpgradeDecisionDetail[] = [];
@@ -1705,6 +1866,7 @@ export class MonitoringSearchService {
 			const monitoredSpec = new MovieMonitoredSpecification();
 			const readOnlySpec = new MovieReadOnlyFolderSpecification();
 			const cooldownSpec = new MovieSearchCooldownSpecification(cooldownHours);
+			const autoSearchPausedSpec = new MovieAutoSearchPausedSpecification();
 
 			for (const movie of moviesWithFiles) {
 				// Check for cancellation before each movie
@@ -1778,6 +1940,23 @@ export class MonitoringSearchService {
 						grabbed: false,
 						skipped: true,
 						skipReason: readOnlyResult.reason
+					});
+					continue;
+				}
+
+				// Check per-item auto-search pause (user-initiated, so checked even
+				// in dry-run/manual-bypass mode - unlike cooldown, which is a rate limit)
+				const pausedResult = await autoSearchPausedSpec.isSatisfied(context);
+				if (!pausedResult.accepted) {
+					results.push({
+						itemId: movie.id,
+						itemType: 'movie',
+						title: movie.title,
+						searched: false,
+						releasesFound: 0,
+						grabbed: false,
+						skipped: true,
+						skipReason: pausedResult.reason
 					});
 					continue;
 				}
@@ -1916,6 +2095,7 @@ export class MonitoringSearchService {
 			const monitoredSpec = new EpisodeMonitoredSpecification();
 			const readOnlySpec = new EpisodeReadOnlyFolderSpecification();
 			const cooldownSpec = new EpisodeSearchCooldownSpecification(cooldownHours);
+			const autoSearchPausedSpec = new EpisodeAutoSearchPausedSpecification();
 
 			for (const episode of episodesWithFiles) {
 				// Check for cancellation before each episode
@@ -1955,6 +2135,13 @@ export class MonitoringSearchService {
 				const readOnlyResult = await readOnlySpec.isSatisfied(context);
 				if (!readOnlyResult.accepted) {
 					continue; // Skip silently - can't upgrade in read-only folder
+				}
+
+				// Check per-item auto-search pause (user-initiated, so checked even
+				// in dry-run/manual-bypass mode - unlike cooldown, which is a rate limit)
+				const pausedResult = await autoSearchPausedSpec.isSatisfied(context);
+				if (!pausedResult.accepted) {
+					continue; // Skip silently - user paused this item
 				}
 
 				// Check search cooldown (prevent hammering indexers) - skip in dry-run mode
@@ -2079,7 +2266,8 @@ export class MonitoringSearchService {
 					title: movie.title,
 					searched: true,
 					releasesFound: 0,
-					grabbed: false
+					grabbed: false,
+					indexersQueried: 0
 				};
 				const detail: UpgradeDecisionDetail | undefined = dryRun
 					? {
@@ -2100,6 +2288,8 @@ export class MonitoringSearchService {
 				return { result, detail };
 			}
 
+			const indexersQueried = new Set(searchResult.releases.map((r) => r.indexerId)).size;
+
 			// Check each release to see if it's an upgrade
 			const upgradeSpec = new MovieUpgradeableSpecification();
 			const blocklistSpec = new ReleaseBlocklistSpecification({ movieId: movie.id });
@@ -2118,6 +2308,11 @@ export class MonitoringSearchService {
 			} | null = null;
 			let candidatesChecked = 0;
 			let wouldGrabReason = 'No candidates passed checks';
+			// Reason the LAST evaluated candidate was rejected - surfaced on the
+			// final "no upgrades found" result so a releasesFound > 0, grabbed:
+			// false outcome (status 'found' in the Searches tab) isn't left with
+			// no explanation at all (issue: "found" rows showing no reason).
+			let lastRejectionReason: string | undefined;
 
 			for (const release of searchResult.releases) {
 				candidatesChecked++;
@@ -2140,6 +2335,7 @@ export class MonitoringSearchService {
 				// Check blocklist first
 				const blocklistResult = await blocklistSpec.isSatisfied(releaseCandidate);
 				if (!blocklistResult.accepted) {
+					lastRejectionReason = blocklistResult.reason;
 					if (dryRun) {
 						logger.info(
 							{
@@ -2235,6 +2431,9 @@ export class MonitoringSearchService {
 				}
 
 				const upgradeResult = await upgradeSpec.isSatisfied(context, releaseCandidate);
+				if (!upgradeResult.accepted) {
+					lastRejectionReason = upgradeResult.reason;
+				}
 				if (upgradeResult.accepted) {
 					if (dryRun) {
 						// In dry-run mode, don't actually grab - just report what would happen
@@ -2256,7 +2455,8 @@ export class MonitoringSearchService {
 							searched: true,
 							releasesFound: searchResult.releases.length,
 							grabbed: false, // Didn't actually grab
-							grabbedRelease: release.title // What would have been grabbed
+							grabbedRelease: release.title, // What would have been grabbed
+							indexersQueried
 						};
 						const detail: UpgradeDecisionDetail = {
 							itemId: movie.id,
@@ -2298,7 +2498,10 @@ export class MonitoringSearchService {
 							grabbedRelease: grabResult.releaseName,
 							queueItemId: grabResult.queueItemId,
 							error: grabResult.error,
-							rejectionType: grabResult.rejectionType
+							rejectionType: grabResult.rejectionType,
+							indexerId: grabResult.success ? release.indexerId : undefined,
+							indexerName: grabResult.success ? release.indexerName : undefined,
+							indexersQueried
 						}
 					};
 				}
@@ -2311,7 +2514,9 @@ export class MonitoringSearchService {
 				title: movie.title,
 				searched: true,
 				releasesFound: searchResult.releases.length,
-				grabbed: false
+				grabbed: false,
+				notGrabbedReason: describeRejectionReason(lastRejectionReason),
+				indexersQueried
 			};
 			const detail: UpgradeDecisionDetail | undefined = dryRun
 				? {
@@ -2448,7 +2653,8 @@ export class MonitoringSearchService {
 					title,
 					searched: true,
 					releasesFound: 0,
-					grabbed: false
+					grabbed: false,
+					indexersQueried: 0
 				};
 				const detail: UpgradeDecisionDetail | undefined = dryRun
 					? {
@@ -2469,6 +2675,8 @@ export class MonitoringSearchService {
 				return { result, detail };
 			}
 
+			const indexersQueried = new Set(searchResult.releases.map((r) => r.indexerId)).size;
+
 			// Check each release to see if it's an upgrade
 			const upgradeSpec = new EpisodeUpgradeableSpecification();
 			const blocklistSpec = new ReleaseBlocklistSpecification({ seriesId: seriesData.id });
@@ -2488,6 +2696,8 @@ export class MonitoringSearchService {
 			} | null = null;
 			let candidatesChecked = 0;
 			let wouldGrabReason = 'No candidates passed checks';
+			// Mirrors searchAndUpgradeMovie's lastRejectionReason - see its comment.
+			let lastRejectionReason: string | undefined;
 
 			for (const release of searchResult.releases) {
 				candidatesChecked++;
@@ -2510,6 +2720,7 @@ export class MonitoringSearchService {
 				// Check blocklist first
 				const blocklistResult = await blocklistSpec.isSatisfied(releaseCandidate);
 				if (!blocklistResult.accepted) {
+					lastRejectionReason = blocklistResult.reason;
 					if (dryRun) {
 						logger.info(
 							{
@@ -2577,6 +2788,9 @@ export class MonitoringSearchService {
 				}
 
 				const upgradeResult = await upgradeSpec.isSatisfied(context, releaseCandidate);
+				if (!upgradeResult.accepted) {
+					lastRejectionReason = upgradeResult.reason;
+				}
 				if (upgradeResult.accepted) {
 					if (dryRun) {
 						// In dry-run mode, don't actually grab - just report what would happen
@@ -2598,7 +2812,8 @@ export class MonitoringSearchService {
 							searched: true,
 							releasesFound: searchResult.releases.length,
 							grabbed: false, // Didn't actually grab
-							grabbedRelease: release.title // What would have been grabbed
+							grabbedRelease: release.title, // What would have been grabbed
+							indexersQueried
 						};
 						const detail: UpgradeDecisionDetail = {
 							itemId: episode.id,
@@ -2642,7 +2857,10 @@ export class MonitoringSearchService {
 							grabbedRelease: grabResult.releaseName,
 							queueItemId: grabResult.queueItemId,
 							error: grabResult.error,
-							rejectionType: grabResult.rejectionType
+							rejectionType: grabResult.rejectionType,
+							indexerId: grabResult.success ? release.indexerId : undefined,
+							indexerName: grabResult.success ? release.indexerName : undefined,
+							indexersQueried
 						}
 					};
 				}
@@ -2655,7 +2873,9 @@ export class MonitoringSearchService {
 				title,
 				searched: true,
 				releasesFound: searchResult.releases.length,
-				grabbed: false
+				grabbed: false,
+				notGrabbedReason: describeRejectionReason(lastRejectionReason),
+				indexersQueried
 			};
 			const detail: UpgradeDecisionDetail | undefined = dryRun
 				? {
@@ -2712,6 +2932,13 @@ export class MonitoringSearchService {
 	 */
 	async searchNewEpisodes(intervalHours: number, signal?: AbortSignal): Promise<SearchResults> {
 		logger.info({ intervalHours }, '[MonitoringSearch] Starting new episode search');
+
+		if (await isAutoSearchGloballyPaused()) {
+			logger.info(
+				'[MonitoringSearch] Skipping new episode search - automatic search is globally paused'
+			);
+			return this.emptySearchResults();
+		}
 
 		const results: ItemSearchResult[] = [];
 
@@ -2775,6 +3002,7 @@ export class MonitoringSearchService {
 			// frequently-scheduled task would re-query the indexer for the same
 			// not-yet-found episode on every single run for up to 48h.
 			const cooldownSpec = new EpisodeSearchCooldownSpecification(intervalHours);
+			const autoSearchPausedSpec = new EpisodeAutoSearchPausedSpecification();
 
 			for (const episode of recentEpisodes) {
 				// Check for cancellation before each episode
@@ -2820,6 +3048,13 @@ export class MonitoringSearchService {
 						skipReason: readOnlyResult.reason
 					});
 					continue;
+				}
+
+				// Check per-item auto-search pause (user-initiated, checked even here
+				// since new-episode-check has no ignoreCooldown bypass to key off of)
+				const pausedResult = await autoSearchPausedSpec.isSatisfied(context);
+				if (!pausedResult.accepted) {
+					continue; // Skip silently - user paused this item
 				}
 
 				// Check if newly aired
@@ -2925,9 +3160,12 @@ export class MonitoringSearchService {
 					title: movie.title,
 					searched: true,
 					releasesFound: 0,
-					grabbed: false
+					grabbed: false,
+					indexersQueried: 0
 				};
 			}
+
+			const indexersQueried = new Set(searchResult.releases.map((r) => r.indexerId)).size;
 
 			// Find best non-blocklisted release that meets scoring requirements
 			const blocklistSpec = new ReleaseBlocklistSpecification({ movieId: movie.id });
@@ -2939,6 +3177,8 @@ export class MonitoringSearchService {
 				error?: string;
 				rejectionType?: string;
 			} | null = null;
+			let grabbedIndexerId: string | undefined;
+			let grabbedIndexerName: string | undefined;
 
 			// Load scoring profile for explicit validation
 			let _profile: ScoringProfile | undefined;
@@ -2992,6 +3232,8 @@ export class MonitoringSearchService {
 				});
 
 				if (grabResult.success) {
+					grabbedIndexerId = release.indexerId;
+					grabbedIndexerName = release.indexerName;
 					break; // Successfully grabbed
 				}
 			}
@@ -3006,7 +3248,10 @@ export class MonitoringSearchService {
 				grabbedRelease: grabResult?.releaseName,
 				queueItemId: grabResult?.queueItemId,
 				error: grabResult?.error,
-				rejectionType: grabResult?.rejectionType
+				rejectionType: grabResult?.rejectionType,
+				indexerId: grabbedIndexerId,
+				indexerName: grabbedIndexerName,
+				indexersQueried
 			};
 		} catch (error) {
 			const message = error instanceof Error ? error.message : 'Unknown error';
@@ -3101,9 +3346,12 @@ export class MonitoringSearchService {
 					title,
 					searched: true,
 					releasesFound: 0,
-					grabbed: false
+					grabbed: false,
+					indexersQueried: 0
 				};
 			}
+
+			const indexersQueried = new Set(searchResult.releases.map((r) => r.indexerId)).size;
 
 			// Find best non-blocklisted release that meets scoring requirements
 			const blocklistSpec = new ReleaseBlocklistSpecification({ seriesId: seriesData.id });
@@ -3115,6 +3363,8 @@ export class MonitoringSearchService {
 				error?: string;
 				rejectionType?: string;
 			} | null = null;
+			let grabbedIndexerId: string | undefined;
+			let grabbedIndexerName: string | undefined;
 
 			// Load scoring profile for explicit validation
 			let profile: ScoringProfile | undefined;
@@ -3181,6 +3431,8 @@ export class MonitoringSearchService {
 				});
 
 				if (grabResult.success) {
+					grabbedIndexerId = release.indexerId;
+					grabbedIndexerName = release.indexerName;
 					break; // Successfully grabbed
 				}
 			}
@@ -3195,7 +3447,10 @@ export class MonitoringSearchService {
 				grabbedRelease: grabResult?.releaseName,
 				queueItemId: grabResult?.queueItemId,
 				error: grabResult?.error,
-				rejectionType: grabResult?.rejectionType
+				rejectionType: grabResult?.rejectionType,
+				indexerId: grabbedIndexerId,
+				indexerName: grabbedIndexerName,
+				indexersQueried
 			};
 		} catch (error) {
 			const message = error instanceof Error ? error.message : 'Unknown error';

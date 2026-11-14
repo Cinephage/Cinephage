@@ -110,7 +110,12 @@ vi.mock('../specifications/index.js', () => ({
 	MovieUpgradeableSpecification: makeSpecClass(),
 	MovieAvailabilitySpecification: makeSpecClass(),
 	MovieSearchCooldownSpecification: makeSpecClass(),
-	MovieReadOnlyFolderSpecification: makeSpecClass()
+	MovieReadOnlyFolderSpecification: makeSpecClass(),
+	EpisodeFailureCapSpecification: makeSpecClass(),
+	MovieFailureCapSpecification: makeSpecClass(),
+	EpisodeAutoSearchPausedSpecification: makeSpecClass(),
+	MovieAutoSearchPausedSpecification: makeSpecClass(),
+	describeRejectionReason: (reason: string | undefined) => reason
 }));
 
 // Mock IndexerManager - return no search results to keep things simple
@@ -698,6 +703,80 @@ describe('MonitoringSearchService - episode-targeted season pack grabs', () => {
 			})
 		);
 	});
+
+	it('attributes a grabbed episode release to the indexer that supplied it', async () => {
+		findManyEpisodesMock.mockResolvedValue([{ id: 'ep-1', airDate: '2026-01-01' }]);
+		searchEnhancedMock.mockResolvedValue({
+			releases: [
+				createSearchRelease({
+					title: 'Test Series S01E01 720p WEB-DL-GROUP',
+					guid: 'release-1',
+					size: 1_000_000_000,
+					indexerId: 'idx-42',
+					indexerName: 'Test Indexer 42',
+					parsed: { episode: { isSeasonPack: false } },
+					episodeMatch: { isSeasonPack: false },
+					infoHash: 'hash-1'
+				})
+			],
+			rejections: []
+		});
+		vi.spyOn(testable, 'grabRelease').mockResolvedValue({
+			success: true,
+			releaseName: 'Test Series S01E01 720p WEB-DL-GROUP',
+			queueItemId: 'queue-1'
+		});
+
+		const result = await testable.searchAndGrabEpisode(
+			createSeries({ id: SERIES_ID, tmdbId: 1, tvdbId: 2, imdbId: null, scoringProfileId: null }),
+			createEpisode({ id: 'ep-1' })
+		);
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				grabbed: true,
+				indexerId: 'idx-42',
+				indexerName: 'Test Indexer 42',
+				indexersQueried: 1
+			})
+		);
+	});
+
+	it('counts distinct indexers queried, regardless of outcome', async () => {
+		findManyEpisodesMock.mockResolvedValue([{ id: 'ep-1', airDate: '2026-01-01' }]);
+		searchEnhancedMock.mockResolvedValue({
+			releases: [
+				createSearchRelease({
+					title: 'Test Series S01E01 720p WEB-DL-GROUP-A',
+					guid: 'release-a',
+					indexerId: 'idx-1',
+					indexerName: 'Indexer One',
+					parsed: { episode: { isSeasonPack: false } },
+					episodeMatch: { isSeasonPack: false }
+				}),
+				createSearchRelease({
+					title: 'Test Series S01E01 1080p WEB-DL-GROUP-B',
+					guid: 'release-b',
+					indexerId: 'idx-2',
+					indexerName: 'Indexer Two',
+					parsed: { episode: { isSeasonPack: false } },
+					episodeMatch: { isSeasonPack: false }
+				})
+			],
+			rejections: []
+		});
+		vi.spyOn(testable, 'grabRelease').mockResolvedValue({
+			success: false,
+			error: 'Rejected'
+		});
+
+		const result = await testable.searchAndGrabEpisode(
+			createSeries({ id: SERIES_ID, tmdbId: 1, tvdbId: 2, imdbId: null, scoringProfileId: null }),
+			createEpisode({ id: 'ep-1' })
+		);
+
+		expect(result).toEqual(expect.objectContaining({ grabbed: false, indexersQueried: 2 }));
+	});
 });
 
 describe('MonitoringSearchService - null scoring profile upgrade context (issue #492)', () => {
@@ -814,5 +893,83 @@ describe('MonitoringSearchService - null scoring profile upgrade context (issue 
 			expect(ctx.profile?.id).toBe('default');
 		}
 		expect(qualityGetDefaultScoringProfileMock).toHaveBeenCalled();
+	});
+});
+
+describe('MonitoringSearchService - notGrabbedReason on found-but-not-grabbed results', () => {
+	let service: InstanceType<typeof MonitoringSearchService>;
+
+	const defaultProfile = {
+		id: 'default',
+		name: 'Default',
+		upgradesAllowed: true,
+		minScore: 0,
+		upgradeUntilScore: 50000,
+		minScoreIncrement: 100,
+		formatScores: {}
+	};
+
+	beforeEach(() => {
+		findManyMoviesMock.mockReset();
+		findManyMovieFilesMock.mockReset();
+		findManyDownloadQueueMock.mockReset().mockResolvedValue([]);
+		qualityGetProfileMock.mockReset().mockResolvedValue(null);
+		qualityGetDefaultScoringProfileMock.mockReset().mockResolvedValue(defaultProfile);
+		mockIsSatisfied.mockReset();
+		searchAllMock.mockReset().mockResolvedValue([]);
+		searchEnhancedMock.mockReset().mockResolvedValue({
+			releases: [
+				createSearchRelease({
+					title: 'Example.Movie.2016.1080p.WEB-DL-GROUP',
+					size: 2_000_000_000
+				})
+			],
+			rejections: []
+		});
+		service = new MonitoringSearchService();
+	});
+
+	it('surfaces the rejection reason when a release is found but rejected as not an upgrade, without marking the result as an error', async () => {
+		const movie = createMovie({
+			id: 'movie-1',
+			tmdbId: 111,
+			title: 'Example Movie',
+			hasFile: true,
+			monitored: true
+		});
+		const movieFile = createMovieFile({
+			id: 'movie-file-1',
+			movieId: 'movie-1',
+			relativePath: 'Example.Movie.2016.720p.WEB-DL.mkv',
+			sceneName: 'Example.Movie.2016.720p.WEB-DL',
+			size: 1_000_000_000,
+			quality: { resolution: '720p', source: 'webdl' }
+		});
+
+		findManyMoviesMock.mockResolvedValue([movie]);
+		findManyMovieFilesMock.mockResolvedValue([movieFile]);
+
+		// Only the upgrade spec is called with a second (release) argument -
+		// monitored/readOnly/paused/blocklist checks all take a single arg, so
+		// this targets exactly the upgrade-decision call without needing to
+		// distinguish spec classes (they're all the same mocked class here).
+		mockIsSatisfied.mockImplementation(async (_ctx: unknown, release: unknown) => {
+			if (release) return { accepted: false, reason: 'quality_not_better' };
+			return { accepted: true };
+		});
+
+		const results = await service.searchForUpgrades({
+			movieIds: ['movie-1'],
+			cutoffUnmetOnly: false,
+			ignoreCooldown: true
+		});
+
+		expect(results.items).toHaveLength(1);
+		expect(results.items[0].grabbed).toBe(false);
+		expect(results.items[0].releasesFound).toBe(1);
+		// describeRejectionReason is mocked as identity here - its real mapping
+		// (enum code -> human sentence) is covered by types.test.ts.
+		expect(results.items[0].notGrabbedReason).toBe('quality_not_better');
+		expect(results.items[0].error).toBeUndefined();
 	});
 });

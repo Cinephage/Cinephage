@@ -730,6 +730,12 @@ export const movies = sqliteTable(
 		// dropped by migration 142, unlike the per-item adaptive subtitle
 		// columns that used to sit beside it.
 		lastSearchTime: text('last_search_time'),
+		// Consecutive failed grab/import attempts, independent of which release
+		// was tried - powers the missing-content search failure cap (migration 170).
+		consecutiveFailureCount: integer('consecutive_failure_count').notNull().default(0),
+		// User-initiated pause of auto-search for this item, independent of
+		// `monitored` and the (missing-content-only) failure cap above (migration 173).
+		autoSearchPaused: integer('auto_search_paused', { mode: 'boolean' }).notNull().default(false),
 		tmdbCollectionId: integer('tmdb_collection_id'),
 		collectionName: text('collection_name'),
 		releaseDate: text('release_date'),
@@ -983,7 +989,13 @@ export const episodes = sqliteTable(
 		// (CooldownStage / SearchCooldownSpecification) - intentionally NOT
 		// dropped by migration 142, unlike the per-item adaptive subtitle
 		// columns that used to sit beside it.
-		lastSearchTime: text('last_search_time')
+		lastSearchTime: text('last_search_time'),
+		// Consecutive failed grab/import attempts, independent of which release
+		// was tried - powers the missing-content search failure cap (migration 170).
+		consecutiveFailureCount: integer('consecutive_failure_count').notNull().default(0),
+		// User-initiated pause of auto-search for this item, independent of
+		// `monitored` and the (missing-content-only) failure cap above (migration 173).
+		autoSearchPaused: integer('auto_search_paused', { mode: 'boolean' }).notNull().default(false)
 	},
 	(table) => [
 		index('idx_episodes_series_season').on(table.seriesId, table.seasonNumber),
@@ -1999,6 +2011,12 @@ export const monitoringHistory = sqliteTable(
 		isUpgrade: integer('is_upgrade', { mode: 'boolean' }).default(false),
 		oldScore: integer('old_score'), // Previous file score (for upgrades)
 		newScore: integer('new_score'), // New release score (for upgrades)
+
+		// Indexer attribution for a grabbed release (migration 175)
+		indexerId: text('indexer_id'),
+		indexerName: text('indexer_name'),
+		// How many distinct indexers answered this search attempt (migration 176)
+		indexersQueried: integer('indexers_queried'),
 
 		// Timestamps
 		executedAt: text('executed_at').$defaultFn(() => new Date().toISOString()),
