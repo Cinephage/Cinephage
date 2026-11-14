@@ -79,7 +79,7 @@ describe('autoSelectEpisodeGroup', () => {
 		expect(autoSelectEpisodeGroup([])).toBeNull();
 	});
 
-	it('should select type 1 (TVDB Order) over type 2 and 4', () => {
+	it('should select type 1 (original air date) over digital and absolute', () => {
 		const groups = [
 			makeSummary({ id: 'g1', type: 4, episode_count: 50 }),
 			makeSummary({ id: 'g2', type: 1, episode_count: 20 }),
@@ -92,18 +92,27 @@ describe('autoSelectEpisodeGroup', () => {
 		expect(result!.type).toBe(1);
 	});
 
-	it('should select type 2 (Seasons) when no type 1 exists', () => {
+	it('never selects absolute order, which holds every episode in one group', () => {
+		// Attack on Titan's type-2 group is 97 episodes in a single group; taking
+		// it would rewrite four seasons as one.
 		const groups = [
-			makeSummary({ id: 'g1', type: 4, episode_count: 50 }),
-			makeSummary({ id: 'g2', type: 2, episode_count: 30 })
+			makeSummary({ id: 'absolute', type: 2, episode_count: 97, group_count: 1 })
+		];
+
+		expect(autoSelectEpisodeGroup(groups)).toBeNull();
+	});
+
+	it('prefers digital order over absolute order when both exist', () => {
+		const groups = [
+			makeSummary({ id: 'absolute', type: 2, episode_count: 97, group_count: 1 }),
+			makeSummary({ id: 'digital', type: 4, episode_count: 25, group_count: 4 })
 		];
 
 		const result = autoSelectEpisodeGroup(groups);
-		expect(result).not.toBeNull();
-		expect(result!.type).toBe(2);
+		expect(result?.id).toBe('digital');
 	});
 
-	it('should select type 4 (Streaming) when no type 1 or 2 exists', () => {
+	it('should select type 4 (digital) when no type 1 exists', () => {
 		const groups = [makeSummary({ id: 'g1', type: 4, episode_count: 50 })];
 
 		const result = autoSelectEpisodeGroup(groups);
