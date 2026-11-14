@@ -94,7 +94,21 @@ describe('discovery filters page after the language/region fold', () => {
 			min_vote_count: 100,
 			language: 'en-US',
 			region: 'US',
-			excluded_genre_ids: [28]
+			excluded_genre_ids: [28],
+			// Empty means "infer the search languages"; the field is always sent.
+			search_title_languages: []
 		});
+	});
+
+	it('sends the search-language allowlist as base codes', async () => {
+		renderPage();
+
+		const languages = screen.getByLabelText(/languages to search/i) as HTMLInputElement;
+		await fireEvent.input(languages, { target: { value: 'RU, en , ' } });
+		await fireEvent.click(screen.getByRole('button', { name: /save global filters/i }));
+
+		expect(updateTmdbFilters).toHaveBeenCalledWith(
+			expect.objectContaining({ search_title_languages: ['ru', 'en'] })
+		);
 	});
 });

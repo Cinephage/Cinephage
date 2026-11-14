@@ -42,7 +42,8 @@ vi.mock('#lib/logging/index.js', () => ({
 }));
 
 // Import after mocking
-const { solveChallenge, testForChallenge, browserFetch } = await import('./CamoufoxSolver');
+const { planNextAttempt, solveChallenge, testForChallenge, browserFetch } =
+	await import('./CamoufoxSolver');
 const { detectChallengeFromPage } = await import('../detection/ChallengeDetector');
 
 /**
@@ -109,6 +110,37 @@ describe('CamoufoxSolver', () => {
 			type: 'unknown',
 			confidence: 0
 		} as ChallengeDetectionResult);
+	});
+
+	describe('planNextAttempt', () => {
+		it('fills a 45s budget with two passive draws and no addon', () => {
+			// Two draws fit; a third does not, because the last attempt needs its own
+			// launch budget and the passive cap would drop below a useful solve.
+			expect(planNextAttempt(45_000, 0)).toEqual({ shadowUnlockAddon: false, waitCapMs: 25_000 });
+			expect(planNextAttempt(20_000, 1)).toEqual({ shadowUnlockAddon: false, waitCapMs: 17_000 });
+			expect(planNextAttempt(3_500, 2)).toBeNull();
+		});
+
+		it('always runs the first attempt, however little budget is left', () => {
+			expect(planNextAttempt(1_000, 0)).toEqual({ shadowUnlockAddon: false, waitCapMs: 4_000 });
+		});
+
+		it('keeps the addon as the last resort after two lost draws', () => {
+			expect(planNextAttempt(60_000, 1)).toEqual({ shadowUnlockAddon: false, waitCapMs: 25_000 });
+			expect(planNextAttempt(40_000, 2)).toEqual({ shadowUnlockAddon: true });
+			expect(planNextAttempt(40_000, 3)).toBeNull();
+		});
+
+		it('refuses a later attempt the clock cannot fund', () => {
+			expect(planNextAttempt(6_000, 1)).toBeNull();
+		});
+
+		it('does not start the addon when it would be killed mid-navigation', () => {
+			// A 45s indexer search that spent two draws ends here: starting the addon
+			// with 17s left launches a browser and gets closed inside page.goto.
+			expect(planNextAttempt(20_000, 2)).toBeNull();
+			expect(planNextAttempt(24_000, 2)).toEqual({ shadowUnlockAddon: true });
+		});
 	});
 
 	describe('solveChallenge', () => {
@@ -577,6 +609,85 @@ describe('CamoufoxSolver', () => {
 		});
 	});
 
+	describe('fetch budget', () => {
+		it('leaves a fetch window when the site-root warm-up never clears', async () => {
+			// The warm-up waits for the root challenge before the real URL is fetched.
+			// When a draw loses, that wait used to eat the whole budget: a 30s details
+			// fetch was measured with 4.5s left for page.goto (#663).
+			vi.useFakeTimers();
+			try {
+				(detectChallengeFromPage as ReturnType<typeof vi.fn>).mockResolvedValue({
+					detected: true,
+					type: 'cloudflare',
+					confidence: 0.95
+				} as ChallengeDetectionResult);
+				(mockManagedBrowser.page.title as ReturnType<typeof vi.fn>).mockResolvedValue(
+					'Just a moment...'
+				);
+				(mockManagedBrowser.page.context().cookies as ReturnType<typeof vi.fn>).mockResolvedValue(
+					[]
+				);
+				mockManager.extractCookies.mockResolvedValue([]);
+				const gotoMock = mockManagedBrowser.page.goto as ReturnType<typeof vi.fn>;
+				gotoMock.mockResolvedValue(createMockResponse(200));
+
+				const promise = browserFetch(
+					{ url: 'https://example.com/topic/1' },
+					{ headless: true, timeoutSeconds: 30 }
+				);
+				const drive = async () => {
+					for (let i = 0; i < 80; i++) {
+						await vi.advanceTimersByTimeAsync(500);
+					}
+					return promise;
+				};
+				const result = await drive();
+
+				// The warm-up is the first goto; the fetch of the real URL is the second.
+				expect(gotoMock.mock.calls.length).toBeGreaterThanOrEqual(2);
+				expect(gotoMock.mock.calls[1][1].timeout).toBeGreaterThanOrEqual(10_000);
+				expect(result.success).toBe(false);
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it('does not charge browser acquisition to the fetch budget', async () => {
+			// A fetch queues behind other browser work and a cold launch takes seconds;
+			// charging that to the caller's timeout is what left a 30s details-page
+			// fetch with 6s to navigate, dying inside page.goto (#663). The 30s budget
+			// belongs to the fetch, so a 20s queue leaves all 30s for navigation.
+			vi.useFakeTimers();
+			try {
+				mockManager.createBrowserForDomain.mockImplementation(
+					() =>
+						new Promise((resolve) => {
+							setTimeout(() => resolve(mockManagedBrowser), 20_000);
+						})
+				);
+				const gotoMock = mockManagedBrowser.page.goto as ReturnType<typeof vi.fn>;
+				gotoMock.mockResolvedValue(createMockResponse(200));
+
+				const promise = browserFetch(
+					{ url: 'https://example.com/' },
+					{ headless: true, timeoutSeconds: 30 }
+				);
+				const drive = async () => {
+					for (let i = 0; i < 80; i++) {
+						await vi.advanceTimersByTimeAsync(500);
+					}
+					return promise;
+				};
+				await drive();
+
+				expect(gotoMock).toHaveBeenCalled();
+				expect(gotoMock.mock.calls[0][1]).toMatchObject({ timeout: 30_000 });
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+	});
+
 	describe('two-phase interactive fallback', () => {
 		it('first attempt launches without the shadow-unlock addon', async () => {
 			const gotoMock = mockManagedBrowser.page.goto as ReturnType<typeof vi.fn>;
@@ -605,7 +716,7 @@ describe('CamoufoxSolver', () => {
 			});
 		});
 
-		it('retries with the addon enabled when the passive attempt stays challenged', async () => {
+		it('re-rolls a lost passive draw, then falls back to the addon', async () => {
 			vi.useFakeTimers();
 			try {
 				(detectChallengeFromPage as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -625,7 +736,7 @@ describe('CamoufoxSolver', () => {
 
 				const promise = solveChallenge(
 					{ url: 'https://example.com' },
-					{ headless: true, timeoutSeconds: 60 }
+					{ headless: true, timeoutSeconds: 90 }
 				);
 				const drive = async () => {
 					for (let i = 0; i < 200; i++) {
@@ -635,11 +746,14 @@ describe('CamoufoxSolver', () => {
 				};
 				const result = await drive();
 
-				expect(mockManager.createBrowserForDomain).toHaveBeenCalledTimes(2);
+				expect(mockManager.createBrowserForDomain).toHaveBeenCalledTimes(3);
 				expect(mockManager.createBrowserForDomain.mock.calls[0][1]).toMatchObject({
 					shadowUnlockAddon: false
 				});
 				expect(mockManager.createBrowserForDomain.mock.calls[1][1]).toMatchObject({
+					shadowUnlockAddon: false
+				});
+				expect(mockManager.createBrowserForDomain.mock.calls[2][1]).toMatchObject({
 					shadowUnlockAddon: true
 				});
 				expect(result.success).toBe(false);

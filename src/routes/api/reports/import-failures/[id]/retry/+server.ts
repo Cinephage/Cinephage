@@ -89,7 +89,15 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 	if (queueItem.status === 'failed') {
 		await db
 			.update(downloadQueue)
-			.set({ status: 'completed', errorMessage: null, lastAttemptAt: new Date().toISOString() })
+			.set({
+				status: 'completed',
+				errorMessage: null,
+				// A manual retry is a fresh attempt: this row may have exhausted the
+				// automatic budget, and carrying it over makes the retry fail on its
+				// first pass without doing any work (#668).
+				importAttempts: 0,
+				lastAttemptAt: new Date().toISOString()
+			})
 			.where(eq(downloadQueue.id, queueItem.id));
 	} else if (!['completed', 'postprocessing'].includes(queueItem.status)) {
 		return Response.json(

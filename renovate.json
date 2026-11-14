@@ -8,6 +8,11 @@
 	"automergeType": "pr",
 	"packageRules": [
 		{
+			"description": "camoufox 0.5.9 pairs browser v158.0.1-beta.41, whose new JS-side fingerprint generator loses the Cloudflare challenge where 0.5.8 (v156.0.1-beta.36) still wins it (measured upstream: 0/22 vs 3/6 logins on the same host and IP). The launcher pin also selects the browser build, so raising one raises both. Lift only after a camoufox release is re-verified against RuTracker's login.",
+			"matchPackageNames": ["camoufox"],
+			"allowedVersions": "<=0.5.8"
+		},
+		{
 			"description": "playwright-core is capped by camoufox at <1.63: the launcher and the paired Camoufox browser build implement the Juggler protocol for the Playwright versions the release was tested with. Lift only after the package raises its peer range.",
 			"matchPackageNames": ["playwright-core"],
 			"allowedVersions": "<1.63"

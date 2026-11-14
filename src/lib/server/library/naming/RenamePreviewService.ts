@@ -25,6 +25,7 @@ import { randomUUID } from 'node:crypto';
 
 import { NamingService, type MediaNamingInfo } from './NamingService';
 import { namingSettingsService } from './NamingSettingsService';
+import { seasonYearFromEpisodes, yearOfDate } from './season-year.js';
 import { libraryOperationLock } from '../library-operation-lock.js';
 import { diskScanService } from '../disk-scan.js';
 import { moveFile, fileExists } from '#lib/server/downloadClients/import/FileTransfer.js';
@@ -412,6 +413,7 @@ export class RenamePreviewService {
 			const seriesEpisodes = episodesBySeriesId.get(show.id) ?? [];
 			const episodeMap = new Map(seriesEpisodes.map((ep) => [ep.id, ep]));
 			const absoluteEpisodeMap = this.buildAbsoluteEpisodeFallbackMap(seriesEpisodes);
+			const seasonYears = await this.loadSeasonYears(show.id);
 			const localizedTitles = await this.resolveLocalizedTitlesFor(show.tmdbId, 'series');
 
 			for (const file of files) {
@@ -422,7 +424,8 @@ export class RenamePreviewService {
 					rootFolderPath,
 					absoluteEpisodeMap,
 					rootFolderReadOnly,
-					localizedTitles
+					localizedTitles,
+					seasonYears
 				);
 				result.totalFiles++;
 
@@ -504,6 +507,7 @@ export class RenamePreviewService {
 			const seriesEpisodes = episodesBySeriesId.get(show.id) ?? [];
 			const episodeMap = new Map(seriesEpisodes.map((ep) => [ep.id, ep]));
 			const absoluteEpisodeMap = this.buildAbsoluteEpisodeFallbackMap(seriesEpisodes);
+			const seasonYears = await this.loadSeasonYears(show.id);
 			const localizedTitles = await this.resolveLocalizedTitlesFor(show.tmdbId, 'series');
 
 			for (const file of files) {
@@ -514,7 +518,8 @@ export class RenamePreviewService {
 					rootFolderPath,
 					absoluteEpisodeMap,
 					rootFolderReadOnly,
-					localizedTitles
+					localizedTitles,
+					seasonYears
 				);
 				result.totalFiles++;
 
@@ -2363,6 +2368,20 @@ export class RenamePreviewService {
 		}
 	}
 
+	/** Season air years for a series, keyed by season number. */
+	private async loadSeasonYears(seriesId: string): Promise<Map<number, number>> {
+		const rows = await db
+			.select({ seasonNumber: seasons.seasonNumber, airDate: seasons.airDate })
+			.from(seasons)
+			.where(eq(seasons.seriesId, seriesId));
+		const map = new Map<number, number>();
+		for (const row of rows) {
+			const year = yearOfDate(row.airDate);
+			if (year !== undefined) map.set(row.seasonNumber, year);
+		}
+		return map;
+	}
+
 	/**
 	 * Build a preview item for an episode file
 	 */
@@ -2373,7 +2392,8 @@ export class RenamePreviewService {
 		rootFolderPath: string,
 		absoluteEpisodeMap: Map<string, number>,
 		rootFolderReadOnly = false,
-		localizedTitles: Record<string, string> = {}
+		localizedTitles: Record<string, string> = {},
+		seasonYears: Map<number, number> = new Map()
 	): RenamePreviewItem {
 		if (rootFolderReadOnly) {
 			const seriesFolderPath = join(rootFolderPath, show.path);
@@ -2451,6 +2471,12 @@ export class RenamePreviewService {
 				tmdbId: show.tmdbId,
 				localizedTitles,
 				seasonNumber: file.seasonNumber,
+				// Season premiere year for `{SeasonYear}`: the stored season air
+				// date first, then the earliest air date among the episodes this
+				// preview already loaded.
+				seasonYear:
+					seasonYears.get(file.seasonNumber) ??
+					seasonYearFromEpisodes(episodeMap.values(), file.seasonNumber),
 				episodeNumbers,
 				episodeTitle: firstEpisode.title ?? undefined,
 				absoluteNumber:

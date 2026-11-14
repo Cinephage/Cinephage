@@ -135,6 +135,13 @@ export const episodeTokens: TokenDefinition[] = [
 		}
 	},
 	{
+		name: 'SeasonYear',
+		category: 'episode',
+		description: 'Year the season first aired (season premiere year, not the series year)',
+		applicability: ['series', 'episode'],
+		render: (info) => (info.seasonYear ? String(info.seasonYear) : '')
+	},
+	{
 		name: 'AirDate',
 		aliases: ['Air Date'],
 		category: 'episode',

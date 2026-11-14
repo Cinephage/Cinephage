@@ -11,7 +11,7 @@ import { db } from '#lib/server/db/index.js';
 import { seasons, episodes } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 import type { EpisodeGroup, EpisodeGroupSummary, EpisodeGroupsResponse } from '#lib/types/tmdb.js';
-const AUTO_SELECTION_GROUP_TYPES = [1, 2, 4];
+const AUTO_SELECTION_GROUP_TYPES = [1, 4];
 
 export interface EpisodeGroupInfo {
 	id: string;
@@ -33,13 +33,21 @@ export async function fetchEpisodeGroups(tmdbId: number): Promise<EpisodeGroupsR
 /**
  * Auto-select the best episode group for a show using type priority heuristics.
  *
- * Priority:
- *   1. Type 1 (TVDB Order) - locked groups preferred
- *   2. Type 2 (Seasons) - locked groups preferred
- *   3. Type 4 (Streaming) - e.g. Crunchyroll, locked preferred
- * Falls back to null (default TMDB ordering) if no suitable group exists.
+ * TMDB enumerates the group types as: 1 original air date, 2 absolute, 3 DVD,
+ * 4 digital, 5 story arc, 6 production, 7 TV. Only orders that preserve the
+ * season split are eligible:
  *
- * Locked groups are verified by TMDB moderators and preferred.
+ *   1. Type 1 (original air date) - the split TMDB already reports.
+ *   2. Type 4 (digital) - a streaming service's ordering, e.g. Lupin's
+ *      "Parts", which is the case where the default split disagrees with how
+ *      the show was actually released.
+ *
+ * Absolute order (type 2) is deliberately not eligible. It is one group
+ * holding every episode, and buildSeasonsAndEpisodesFromGroup() writes one
+ * group as one season: Attack on Titan's type-2 group is 97 episodes in a
+ * single group, so selecting it collapses four seasons into one.
+ *
+ * Falls back to null (default TMDB ordering) if no suitable group exists.
  */
 export function autoSelectEpisodeGroup(groups: EpisodeGroupSummary[]): EpisodeGroupSummary | null {
 	if (groups.length === 0) return null;

@@ -131,3 +131,45 @@ describe('ResponseParser - scraped URL scheme safety', () => {
 		expect(result.releases[0].commentsUrl ?? '').not.toMatch(/^data:/i);
 	});
 });
+
+describe('ResponseParser - tracker-declared seeding requirement', () => {
+	function parser(): ResponseParser {
+		const definition = {
+			id: 'test-seeding-indexer',
+			name: 'Test Seeding Indexer',
+			type: 'private',
+			protocol: 'torrent',
+			links: ['https://example.test'],
+			caps: {},
+			search: {
+				paths: [{ path: '/api', method: 'get', inputs: {} }],
+				response: { type: 'json' },
+				rows: { selector: '$' },
+				fields: {
+					title: { selector: 'title' },
+					download: { selector: 'download' },
+					// Cardigann declares these statically for most private trackers.
+					minimumratio: { text: '1.0' },
+					minimumseedtime: { text: '172800' }
+				}
+			}
+		} as unknown as YamlDefinition;
+
+		const templateEngine = createTemplateEngine();
+		const filterEngine = createFilterEngine(templateEngine);
+		const selectorEngine = createSelectorEngine(templateEngine, filterEngine);
+		return new ResponseParser(definition, templateEngine, filterEngine, selectorEngine);
+	}
+
+	it('keeps the declared ratio and converts seed time to minutes', () => {
+		const result = parser().parse(
+			'[{"title":"Release","download":"https://example.test/torrent/1.torrent"}]',
+			undefined,
+			context
+		);
+
+		expect(result.releases[0].torrent?.minimumRatio).toBe(1);
+		// 172800 s = 2880 min = 2 days
+		expect(result.releases[0].torrent?.minimumSeedTime).toBe(2880);
+	});
+});

@@ -449,6 +449,11 @@ export interface GlobalTmdbFilters {
 	language: string;
 	region: string;
 	excluded_genre_ids: number[];
+	/**
+	 * Languages whose titles may be searched, as base codes. Empty means infer
+	 * them from the item and the language profile.
+	 */
+	search_title_languages?: string[];
 }
 
 /**

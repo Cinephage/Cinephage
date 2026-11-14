@@ -4,6 +4,7 @@ import { db } from '#lib/server/db/index.js';
 import { downloadQueue, downloadClients } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { getDownloadClientManager } from '#lib/server/downloadClients/DownloadClientManager.js';
+import { resolveSeedLimits } from '#lib/server/downloads/seed-limits.js';
 import { getImportService } from '#lib/server/downloadClients/import/index.js';
 import {
 	getContentPath,
@@ -452,12 +453,22 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 				? (clientConfig?.movieCategory ?? 'movies')
 				: (clientConfig?.tvCategory ?? 'tv');
 
+			// A retry re-adds the same release, so it must carry the same seeding
+			// floor the original grab did: re-adding without it silently re-seeds
+			// below what the tracker requires (#639).
+			const seedLimits = await resolveSeedLimits({
+				indexerId: queueItem.indexerId,
+				client: clientConfig ?? {}
+			});
+
 			// Re-add to download client
 			newInfoHash = await clientInstance.addDownload({
 				magnetUri: queueItem.magnetUrl || undefined,
 				downloadUrl: queueItem.magnetUrl ? undefined : queueItem.downloadUrl || undefined,
 				category,
-				title: queueItem.title
+				title: queueItem.title,
+				seedRatioLimit: seedLimits.ratio,
+				seedTimeLimit: seedLimits.timeMinutes
 			});
 		}
 

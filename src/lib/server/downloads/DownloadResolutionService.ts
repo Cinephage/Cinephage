@@ -76,7 +76,56 @@ class DownloadResolutionService {
 	 * @param input - Release download info
 	 * @returns Resolved download with torrent file or magnet URL
 	 */
+	/**
+	 * Resolved torrents, keyed by indexer + download URL.
+	 *
+	 * One search pass resolves the same pack once per missing episode - five
+	 * episodes across three pack variants meant 30-75 tracker requests, several
+	 * of them to `dl.php`, which is exactly the burst that gets rate limited.
+	 * The bytes for a topic do not change inside a pass, so reuse them.
+	 */
+	private readonly resolvedCache = new Map<string, { at: number; value: ResolvedDownload }>();
+	private static readonly RESOLVED_TTL_MS = 60_000;
+	private static readonly RESOLVED_CACHE_MAX = 200;
+
+	/**
+	 * A URL carrying a one-time token must not be replayed even within the TTL:
+	 * nCore's `&key=` is single-use, and serving a cached body for a second grab
+	 * would hand the client a torrent it can no longer announce to.
+	 */
+	private static isCacheableUrl(url: string | null | undefined): url is string {
+		if (!url) return false;
+		return !/[?&](key|token|auth|passkey|apikey)=/i.test(url);
+	}
+
 	async resolve(input: ResolveDownloadInput): Promise<ResolvedDownload> {
+		const key = DownloadResolutionService.isCacheableUrl(input.downloadUrl)
+			? `${input.indexerId ?? ''}|${input.downloadUrl}`
+			: null;
+
+		if (key) {
+			const hit = this.resolvedCache.get(key);
+			if (hit && Date.now() - hit.at < DownloadResolutionService.RESOLVED_TTL_MS) {
+				logger.debug({ title: input.title }, 'Reusing a torrent resolved moments ago');
+				return hit.value;
+			}
+		}
+
+		const value = await this.resolveUncached(input);
+
+		if (key && value.success) {
+			if (this.resolvedCache.size >= DownloadResolutionService.RESOLVED_CACHE_MAX) {
+				// Oldest first: a Map keeps insertion order.
+				const oldest = this.resolvedCache.keys().next();
+				if (!oldest.done) this.resolvedCache.delete(oldest.value);
+			}
+			this.resolvedCache.set(key, { at: Date.now(), value });
+		}
+
+		return value;
+	}
+
+	private async resolveUncached(input: ResolveDownloadInput): Promise<ResolvedDownload> {
 		const { downloadUrl, magnetUrl, infoHash, indexerId, title, commentsUrl } = input;
 
 		logger.debug(

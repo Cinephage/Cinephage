@@ -39,7 +39,8 @@ import {
 	languageProfiles,
 	languageSettings,
 	movies,
-	series
+	series,
+	settings
 } from '#lib/server/db/schema.js';
 
 const mockedAlternateTitles = tmdb as unknown as {
@@ -805,5 +806,139 @@ describe('search titles restricted to the requested languages', () => {
 		const titles = await getSeriesSearchTitles('series-explicit-language', 'ru');
 
 		expect(titles).toContain('Десятое королевство (озвучка)');
+	});
+});
+
+describe('preferred-language country ordering', () => {
+	it('applies the ordering for a locale-qualified language tag', async () => {
+		// The country map is keyed by base code. Passing `pt-BR` straight through
+		// used to miss, leaving the list in insertion order - so the alternate from
+		// a non-preferred country came first.
+		testDb.db
+			.insert(movies)
+			.values({
+				id: 'movie-locale-order',
+				tmdbId: 991001,
+				title: 'O Filme',
+				originalTitle: 'The Film',
+				originalLanguage: 'en',
+				path: 'movie-locale-order',
+				languageProfileId: null
+			})
+			.run();
+
+		testDb.db
+			.insert(alternateTitles)
+			.values([
+				// Inserted first so insertion order cannot produce the expectation.
+				{
+					mediaType: 'movie',
+					mediaId: 'movie-locale-order',
+					title: 'O Filme (EUA)',
+					cleanTitle: cleanTitle('O Filme (EUA)'),
+					country: 'US',
+					language: 'pt',
+					source: 'tmdb'
+				},
+				{
+					mediaType: 'movie',
+					mediaId: 'movie-locale-order',
+					title: 'O Filme (Brasil)',
+					cleanTitle: cleanTitle('O Filme (Brasil)'),
+					country: 'BR',
+					language: 'pt',
+					source: 'tmdb'
+				}
+			])
+			.run();
+
+		const titles = await getMovieSearchTitles('movie-locale-order', 'pt-BR');
+
+		expect(titles.indexOf('O Filme (Brasil)')).toBeGreaterThan(-1);
+		expect(titles.indexOf('O Filme (Brasil)')).toBeLessThan(titles.indexOf('O Filme (EUA)'));
+	});
+});
+
+describe('explicit search-language allowlist', () => {
+	const ALLOWLIST_PROFILE = 'profile-allowlist';
+
+	testDb.db
+		.insert(languageProfiles)
+		.values({
+			id: ALLOWLIST_PROFILE,
+			name: 'Russian',
+			audio: { preferOriginal: false, languages: ['ru'], mode: 'prefer' },
+			subtitles: [{ tag: 'ru', variant: 'regular', accessibility: 'any' }]
+		})
+		.run();
+
+	it('searches only the configured languages, ignoring the profile', async () => {
+		// Russian profile, English original. Without the allowlist the profile's
+		// Russian is searched; with it, only French is, and Russian must be dropped.
+		testDb.db
+			.insert(series)
+			.values({
+				id: 'series-allowlist',
+				tmdbId: 992001,
+				title: 'The Allowlist Show',
+				originalTitle: 'The Allowlist Show',
+				originalLanguage: 'en',
+				path: 'series-allowlist',
+				metadataLanguageMode: 'explicit',
+				metadataLanguageValue: 'en',
+				languageProfileId: ALLOWLIST_PROFILE
+			})
+			.run();
+
+		testDb.db
+			.insert(alternateTitles)
+			.values([
+				{
+					mediaType: 'series',
+					mediaId: 'series-allowlist',
+					title: 'Le Spectacle',
+					country: 'FR',
+					language: 'fr',
+					cleanTitle: cleanTitle('Le Spectacle'),
+					source: 'tmdb'
+				},
+				{
+					mediaType: 'series',
+					mediaId: 'series-allowlist',
+					title: 'Шоу',
+					country: 'RU',
+					language: 'ru',
+					cleanTitle: cleanTitle('Шоу'),
+					source: 'tmdb'
+				}
+			])
+			.run();
+
+		testDb.db
+			.insert(settings)
+			.values({
+				key: 'global_filters',
+				value: JSON.stringify({ search_title_languages: ['fr'] })
+			})
+			.onConflictDoUpdate({
+				target: settings.key,
+				set: { value: JSON.stringify({ search_title_languages: ['fr'] }) }
+			})
+			.run();
+
+		const titles = await getSeriesSearchTitles('series-allowlist');
+
+		expect(titles).toContain('Le Spectacle');
+		expect(titles).not.toContain('Шоу');
+
+		// Back to the inferred behaviour for every later test in this file.
+		testDb.db
+			.insert(settings)
+			.values({ key: 'global_filters', value: JSON.stringify({ search_title_languages: [] }) })
+			.onConflictDoUpdate({
+				target: settings.key,
+				set: { value: JSON.stringify({ search_title_languages: [] }) }
+			})
+			.run();
 	});
 });

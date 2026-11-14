@@ -2481,3 +2481,41 @@ describe('SearchOrchestrator.filterIndexers profile indexer allowlist', () => {
 		expect(result.rejected[0].indexerId).toBe('beta');
 	});
 });
+
+describe('RuTracker automatic season search predicate', () => {
+	function predicate() {
+		// Private method; it only reads its arguments, so a bare instance is enough.
+		const orchestrator = Object.create(SearchOrchestrator.prototype) as unknown as {
+			shouldUseRuTrackerAutomaticSeasonSearch(indexer: unknown, criteria: unknown): boolean;
+		};
+		return orchestrator.shouldUseRuTrackerAutomaticSeasonSearch.bind(orchestrator);
+	}
+
+	const criteria = { searchType: 'tv', season: 1, episode: 7, query: 'Show' };
+
+	it("engages for RuTracker imported through a proxy, where the base URL is the proxy's", () => {
+		// Prowlarr/Jackett store `.../prowlarr/<id>`, so a host test is false and
+		// the specialised path never fired for exactly those users.
+		const uses = predicate()(
+			{ name: 'RuTracker.org', baseUrl: 'http://192.168.11.20:9696/12' },
+			criteria
+		);
+		expect(uses).toBe(true);
+	});
+
+	it('still engages on a native host', () => {
+		expect(
+			predicate()({ name: 'RuTracker.org', baseUrl: 'https://rutracker.org/' }, criteria)
+		).toBe(true);
+	});
+
+	it('does not engage for an unrelated indexer or a season-only search', () => {
+		expect(predicate()({ name: 'YTS', baseUrl: 'https://yts.mx/' }, criteria)).toBe(false);
+		expect(
+			predicate()(
+				{ name: 'RuTracker.org', baseUrl: 'https://rutracker.org/' },
+				{ searchType: 'tv', season: 1, query: 'Show' }
+			)
+		).toBe(false);
+	});
+});

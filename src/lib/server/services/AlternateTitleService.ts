@@ -21,6 +21,7 @@ import { languageMatches } from '#lib/server/languages/audio-preference.js';
 import { getLanguageSettingsService } from '#lib/server/subtitles/services/LanguageSettingsService.js';
 import { getLanguageProfileService } from '#lib/server/subtitles/services/LanguageProfileService.js';
 import { createChildLogger } from '#lib/logging/index.js';
+import { getSearchTitleLanguages } from '#lib/server/settings/searchTitleLanguages.js';
 
 const logger = createChildLogger({ module: 'AlternateTitleService', logDomain: 'system' });
 
@@ -141,6 +142,11 @@ const COUNTRY_LANGUAGES: Map<string, string[]> = (() => {
  * provider gave us; falls back to the languages spoken in the alternate's
  * country, which is all TMDB's alternative-titles endpoint carries.
  */
+/** Base ISO-639 code of a language tag: `en-US` -> `en`, `zh_Hant` -> `zh`. */
+function baseLanguageCode(tag: string): string {
+	return tag.trim().replace(/_/g, '-').split('-')[0]!.toLowerCase();
+}
+
 function alternateLanguages(alt: SearchTitleAlternate): string[] {
 	if (alt.language) return [normalizeLanguageTag(alt.language)];
 	if (!alt.country) return [];
@@ -434,13 +440,30 @@ async function buildSearchTitles(
 	// Bulgarian or Ukrainian release title for a Russian library - and searching
 	// it spends a request (a browser-launched one, on a Cloudflare tracker) on a
 	// title nobody asked for.
-	const allowedLanguages = [
-		...new Set(
-			[preferredLanguage, displayLanguage, media.originalLanguage, ...profile.languages].filter(
-				(value): value is string => Boolean(value)
-			)
-		)
-	];
+	// An explicit allowlist wins over the inferred set. The display title and the
+	// original title are always searchable - dropping those would make the item
+	// itself unreachable - and the configured languages govern the rest of the
+	// TMDB alternates. Empty keeps the inferred behaviour every install already has.
+	const configuredSearchLanguages = await getSearchTitleLanguages();
+	const allowedLanguages =
+		configuredSearchLanguages.length > 0
+			? [
+					...new Set(
+						[displayLanguage, media.originalLanguage, ...configuredSearchLanguages].filter(
+							(value): value is string => Boolean(value)
+						)
+					)
+				]
+			: [
+					...new Set(
+						[
+							preferredLanguage,
+							displayLanguage,
+							media.originalLanguage,
+							...profile.languages
+						].filter((value): value is string => Boolean(value))
+					)
+				];
 
 	// Only TMDB's own alternate-title list is filtered: it is a dump of every
 	// country's release title. Provider variants (anilist romaji, mal native
@@ -463,8 +486,11 @@ async function buildSearchTitles(
 	}
 
 	// Split alternates: preferred-language countries first, others as fallback.
+	// The map is keyed by base code, so a locale-qualified value (`en-US`, which
+	// the interactive route passes straight through) must be reduced first or the
+	// lookup silently misses and the ordering never applies.
 	const preferredCountries = preferredLanguage
-		? (LANGUAGE_COUNTRIES[preferredLanguage.toLowerCase()] ?? null)
+		? (LANGUAGE_COUNTRIES[baseLanguageCode(preferredLanguage)] ?? null)
 		: null;
 	const [langAlts, otherAlts] = preferredCountries
 		? [

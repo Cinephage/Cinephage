@@ -1,5 +1,6 @@
 import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { ReleaseParser } from '#lib/server/indexers/parser/ReleaseParser.js';
+import { yearOfDate } from '#lib/server/library/naming/season-year.js';
 import { resolveLocalizedTitlesForFormats } from '#lib/server/library/naming/localization.js';
 import {
 	releaseToNamingInfo,
@@ -104,6 +105,9 @@ export class LibraryDestinationPlanner {
 			imdbId: input.media.imdbId ?? undefined,
 			localizedTitles,
 			seasonNumber: input.seasonNumber,
+			// Planning is pure and has no season row; the episode's own air date is
+			// the cheapest source and matches the import path's fallback.
+			seasonYear: yearOfDate(input.airDate),
 			episodeNumbers: input.episodeNumbers,
 			episodeTitle: input.episodeTitle,
 			absoluteNumber: input.absoluteNumber,

@@ -19,6 +19,7 @@ import { createSearchRelease } from '../../../../test/fixtures/releases.js';
 // --- Hoisted mocks (must be before any imports that use them) ---
 
 const {
+	insertMock,
 	findManyEpisodesMock,
 	findManyEpisodeFilesMock,
 	updateEpisodeMock,
@@ -35,6 +36,11 @@ const {
 	const searchAllMock = vi.fn().mockResolvedValue([]);
 	const searchEnhancedMock = vi.fn().mockResolvedValue({ releases: [], rejections: [] });
 	return {
+		insertMock: vi.fn().mockReturnValue({
+			values: vi.fn().mockReturnValue({
+				onConflictDoUpdate: vi.fn().mockResolvedValue(undefined)
+			})
+		}),
 		findManyEpisodesMock: vi.fn(),
 		findManyEpisodeFilesMock: vi.fn(),
 		updateEpisodeMock: vi.fn().mockReturnValue({
@@ -64,6 +70,7 @@ vi.mock('#lib/server/db/index.js', () => ({
 			downloadQueue: { findMany: findManyDownloadQueueMock }
 		},
 		update: updateEpisodeMock,
+		insert: insertMock,
 		select: vi.fn().mockReturnValue({
 			from: vi.fn().mockReturnValue({
 				where: vi.fn().mockResolvedValue([])
@@ -101,7 +108,6 @@ vi.mock('../specifications/index.js', () => ({
 	EpisodeCutoffUnmetSpecification: makeSpecClass(),
 	EpisodeUpgradeableSpecification: makeSpecClass(),
 	NewEpisodeSpecification: makeSpecClass(),
-	EpisodeSearchCooldownSpecification: makeSpecClass(),
 	EpisodeReadOnlyFolderSpecification: makeSpecClass(),
 	ReleaseBlocklistSpecification: makeSpecClass(),
 	MovieMonitoredSpecification: makeSpecClass(),
@@ -110,6 +116,7 @@ vi.mock('../specifications/index.js', () => ({
 	MovieUpgradeableSpecification: makeSpecClass(),
 	MovieAvailabilitySpecification: makeSpecClass(),
 	MovieSearchCooldownSpecification: makeSpecClass(),
+	EpisodeSearchCooldownSpecification: makeSpecClass(),
 	MovieReadOnlyFolderSpecification: makeSpecClass(),
 	EpisodeFailureCapSpecification: makeSpecClass(),
 	MovieFailureCapSpecification: makeSpecClass(),
@@ -719,7 +726,10 @@ describe('MonitoringSearchService - episode-targeted season pack grabs', () => {
 					infoHash: 'hash-1'
 				})
 			],
-			rejections: []
+			rejections: [],
+			indexerResults: [
+				{ indexerId: 'idx-42', indexerName: 'Test Indexer 42', results: [], searchTimeMs: 1 }
+			]
 		});
 		vi.spyOn(testable, 'grabRelease').mockResolvedValue({
 			success: true,
@@ -763,7 +773,11 @@ describe('MonitoringSearchService - episode-targeted season pack grabs', () => {
 					episodeMatch: { isSeasonPack: false }
 				})
 			],
-			rejections: []
+			rejections: [],
+			indexerResults: [
+				{ indexerId: 'idx-1', indexerName: 'Indexer One', results: [], searchTimeMs: 1 },
+				{ indexerId: 'idx-2', indexerName: 'Indexer Two', results: [], searchTimeMs: 1 }
+			]
 		});
 		vi.spyOn(testable, 'grabRelease').mockResolvedValue({
 			success: false,

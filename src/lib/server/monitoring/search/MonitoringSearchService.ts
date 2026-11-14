@@ -857,7 +857,7 @@ export class MonitoringSearchService {
 
 			if (searchResult.releases.length === 0) continue;
 
-			const indexersQueried = new Set(searchResult.releases.map((r) => r.indexerId)).size;
+			const indexersQueried = searchResult.indexerResults?.length ?? 0;
 			const blocklistSpec = new ReleaseBlocklistSpecification({ movieId: movie.id });
 			const filledSoFar = new Set<Resolution>(filled);
 
@@ -960,7 +960,7 @@ export class MonitoringSearchService {
 
 		if (searchResult.releases.length === 0) return results;
 
-		const indexersQueried = new Set(searchResult.releases.map((r) => r.indexerId)).size;
+		const indexersQueried = searchResult.indexerResults?.length ?? 0;
 		const blocklistSpec = new ReleaseBlocklistSpecification({ movieId: movie.id });
 
 		for (const targetResolution of upgradeTargets) {
@@ -1550,7 +1550,7 @@ export class MonitoringSearchService {
 				}
 			});
 
-			const indexersQueried = new Set(searchResult.releases.map((r) => r.indexerId)).size;
+			const indexersQueried = searchResult.indexerResults?.length ?? 0;
 
 			if (searchResult.releases.length === 0) {
 				return {
@@ -1598,6 +1598,8 @@ export class MonitoringSearchService {
 				addedToQueue?: boolean;
 				error?: string;
 				rejectionType?: string;
+				indexerId?: string;
+				indexerName?: string;
 			} | null = null;
 			let grabbedIndexerId: string | undefined;
 			let grabbedIndexerName: string | undefined;
@@ -2000,7 +2002,6 @@ export class MonitoringSearchService {
 					}
 				}
 
-				// Update lastSearchTime before searching (skip in dry-run mode)
 				if (!dryRun) {
 					await db
 						.update(movies)
@@ -2160,7 +2161,6 @@ export class MonitoringSearchService {
 					}
 				}
 
-				// Update lastSearchTime before searching (skip in dry-run mode)
 				if (!dryRun) {
 					await db
 						.update(episodes)
@@ -2267,7 +2267,7 @@ export class MonitoringSearchService {
 					searched: true,
 					releasesFound: 0,
 					grabbed: false,
-					indexersQueried: 0
+					indexersQueried: searchResult.indexerResults?.length ?? 0
 				};
 				const detail: UpgradeDecisionDetail | undefined = dryRun
 					? {
@@ -2288,7 +2288,7 @@ export class MonitoringSearchService {
 				return { result, detail };
 			}
 
-			const indexersQueried = new Set(searchResult.releases.map((r) => r.indexerId)).size;
+			const indexersQueried = searchResult.indexerResults?.length ?? 0;
 
 			// Check each release to see if it's an upgrade
 			const upgradeSpec = new MovieUpgradeableSpecification();
@@ -2654,7 +2654,7 @@ export class MonitoringSearchService {
 					searched: true,
 					releasesFound: 0,
 					grabbed: false,
-					indexersQueried: 0
+					indexersQueried: searchResult.indexerResults?.length ?? 0
 				};
 				const detail: UpgradeDecisionDetail | undefined = dryRun
 					? {
@@ -2675,7 +2675,7 @@ export class MonitoringSearchService {
 				return { result, detail };
 			}
 
-			const indexersQueried = new Set(searchResult.releases.map((r) => r.indexerId)).size;
+			const indexersQueried = searchResult.indexerResults?.length ?? 0;
 
 			// Check each release to see if it's an upgrade
 			const upgradeSpec = new EpisodeUpgradeableSpecification();
@@ -3161,11 +3161,11 @@ export class MonitoringSearchService {
 					searched: true,
 					releasesFound: 0,
 					grabbed: false,
-					indexersQueried: 0
+					indexersQueried: searchResult.indexerResults?.length ?? 0
 				};
 			}
 
-			const indexersQueried = new Set(searchResult.releases.map((r) => r.indexerId)).size;
+			const indexersQueried = searchResult.indexerResults?.length ?? 0;
 
 			// Find best non-blocklisted release that meets scoring requirements
 			const blocklistSpec = new ReleaseBlocklistSpecification({ movieId: movie.id });
@@ -3176,6 +3176,8 @@ export class MonitoringSearchService {
 				addedToQueue?: boolean;
 				error?: string;
 				rejectionType?: string;
+				indexerId?: string;
+				indexerName?: string;
 			} | null = null;
 			let grabbedIndexerId: string | undefined;
 			let grabbedIndexerName: string | undefined;
@@ -3347,11 +3349,11 @@ export class MonitoringSearchService {
 					searched: true,
 					releasesFound: 0,
 					grabbed: false,
-					indexersQueried: 0
+					indexersQueried: searchResult.indexerResults?.length ?? 0
 				};
 			}
 
-			const indexersQueried = new Set(searchResult.releases.map((r) => r.indexerId)).size;
+			const indexersQueried = searchResult.indexerResults?.length ?? 0;
 
 			// Find best non-blocklisted release that meets scoring requirements
 			const blocklistSpec = new ReleaseBlocklistSpecification({ seriesId: seriesData.id });
@@ -3362,6 +3364,8 @@ export class MonitoringSearchService {
 				addedToQueue?: boolean;
 				error?: string;
 				rejectionType?: string;
+				indexerId?: string;
+				indexerName?: string;
 			} | null = null;
 			let grabbedIndexerId: string | undefined;
 			let grabbedIndexerName: string | undefined;
@@ -3536,6 +3540,9 @@ export class MonitoringSearchService {
 		rejectionType?: string;
 		queueItemId?: string;
 		addedToQueue?: boolean;
+		/** Indexer that supplied the grabbed release (for the retry record). */
+		indexerId?: string;
+		indexerName?: string;
 	}> {
 		const { grabService } = await import('#lib/server/downloads/GrabService.js');
 
@@ -3572,7 +3579,9 @@ export class MonitoringSearchService {
 				indexerId: release.indexerId,
 				indexerName: release.indexerName,
 				size: release.size,
-				protocol: release.protocol as 'torrent' | 'usenet' | 'streaming' | undefined
+				protocol: release.protocol as 'torrent' | 'usenet' | 'streaming' | undefined,
+				minimumRatio: release.torrent?.minimumRatio,
+				minimumSeedTime: release.torrent?.minimumSeedTime
 			},
 			target,
 			options: {
@@ -3590,7 +3599,9 @@ export class MonitoringSearchService {
 			error: result.error ?? (result.success ? undefined : result.decision?.reason),
 			rejectionType: result.success ? undefined : result.decision?.rejectionType,
 			queueItemId: result.download?.queueId,
-			addedToQueue: result.download?.addedToQueue
+			addedToQueue: result.download?.addedToQueue,
+			indexerId: release.indexerId,
+			indexerName: release.indexerName
 		};
 	}
 

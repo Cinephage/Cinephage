@@ -30,6 +30,7 @@
 	let importMode = $state<ImportMethod>(untrack(() => data.settings.importMode));
 	let preferHardlink = $state<boolean>(untrack(() => data.settings.preferHardlink));
 	let minimumFreeSpaceGb = $state<number>(untrack(() => data.settings.minimumFreeSpaceGb));
+	let importGraceMinutes = $state<number>(untrack(() => data.settings.importGraceMinutes));
 	let deleteEmptyFolders = $state<boolean>(untrack(() => data.settings.deleteEmptyFolders));
 	let recycleEnabled = $state<boolean>(untrack(() => data.settings.recycleEnabled));
 	let extraFileExtensions = $state<string[]>(untrack(() => data.settings.extraFileExtensions));
@@ -101,6 +102,7 @@
 				importMode,
 				preferHardlink,
 				minimumFreeSpaceGb,
+				importGraceMinutes,
 				deleteEmptyFolders,
 				recycleEnabled,
 				extraFileExtensions,
@@ -271,6 +273,34 @@
 					</p>
 				</div>
 			</label>
+		</div>
+	</SettingsSection>
+
+	<SettingsSection
+		title={m.settings_fileManagement_importGraceSectionTitle()}
+		description={m.settings_fileManagement_importGraceSectionDescription()}
+	>
+		<div class="form-control">
+			<label class="label" for="importGraceMinutes">
+				<span class="label-text">{m.settings_fileManagement_importGraceLabel()}</span>
+			</label>
+			<div class="flex items-center gap-2">
+				<input
+					id="importGraceMinutes"
+					type="number"
+					min="0"
+					max="1440"
+					step="5"
+					class="input-bordered input w-32"
+					bind:value={importGraceMinutes}
+				/>
+				<span class="text-sm text-base-content/70">
+					{m.settings_fileManagement_importGraceUnit()}
+				</span>
+			</div>
+			<p class="mt-1 text-xs text-base-content/60">
+				{m.settings_fileManagement_importGraceDescription()}
+			</p>
 		</div>
 	</SettingsSection>
 

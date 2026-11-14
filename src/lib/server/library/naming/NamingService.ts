@@ -49,6 +49,8 @@ export interface MediaNamingInfo {
 
 	// TV specific
 	seasonNumber?: number;
+	/** Year the season first aired; `{SeasonYear}`. Distinct from `year` (series premiere). */
+	seasonYear?: number;
 	episodeNumbers?: number[];
 	absoluteNumber?: number;
 	episodeTitle?: string;

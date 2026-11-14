@@ -8,7 +8,8 @@ import { getDownloadResolutionService } from '../DownloadResolutionService.js';
 import { parseEpisodePointerFromGuid, parseEpisodePointerFromTitle } from '../episode-pointer.js';
 import type { EpisodePointerFileSelection } from '../episode-pointer.js';
 import { resolveEpisodePackSelection } from '../episode-pack-selection.js';
-import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
+import { resolveImportedScope } from '../imported-scope.js';
+import { resolveSeedLimits } from '../seed-limits.js';
 import { blocklistService } from '#lib/server/monitoring/specifications/BlocklistSpecification.js';
 import { acquisitionService } from '#lib/server/acquisition/AcquisitionService.js';
 import { createChildLogger } from '#lib/logging/index.js';
@@ -45,22 +46,18 @@ export class TorrentHandler {
 			languages: parsed.languages.length > 0 ? parsed.languages : undefined
 		};
 
-		let indexerSeedRatio: number | undefined;
-		let indexerSeedTime: number | undefined;
-
-		if (release.indexerId) {
-			const indexerManager = await getIndexerManager();
-			const indexer = await indexerManager.getIndexer(release.indexerId);
-			if (indexer) {
-				indexerSeedRatio = indexer.seedRatio ? parseFloat(indexer.seedRatio) : undefined;
-				indexerSeedTime = indexer.seedTime ?? undefined;
+		// A tracker's declared requirement is a floor, not a default; the shared
+		// composition keeps the grab and the queue retry in agreement.
+		const seedLimits = await resolveSeedLimits({
+			indexerId: release.indexerId,
+			client: clientConfig,
+			release: {
+				minimumRatio: release.minimumRatio,
+				minimumSeedTime: release.minimumSeedTime
 			}
-		}
-
-		const seedRatioLimit =
-			indexerSeedRatio ??
-			(clientConfig.seedRatioLimit ? parseFloat(clientConfig.seedRatioLimit) : undefined);
-		const seedTimeLimit = indexerSeedTime ?? clientConfig.seedTimeLimit ?? undefined;
+		});
+		const seedRatioLimit = seedLimits.ratio;
+		const seedTimeLimit = seedLimits.timeMinutes;
 
 		const resolutionService = getDownloadResolutionService();
 		const resolvedDownload = await resolutionService.resolve({
@@ -97,34 +94,43 @@ export class TorrentHandler {
 				};
 			}
 
-			if (!resolvedDownload.torrentFile) {
-				return {
-					success: false,
-					error:
-						'Episode pointer download requires torrent metadata, but only a magnet/download URL was available'
-				};
-			}
+			if (resolvedDownload.torrentFile) {
+				// A RuTracker/Kinozal season is a living topic: the pack is a
+				// snapshot, and every wanted episode already inside it should come
+				// down with the grab. Monitoring grabs fill the missing monitored
+				// episodes of the season; interactive grabs stay single-episode.
+				const packSelection = await resolveEpisodePackSelection({
+					torrentFile: resolvedDownload.torrentFile,
+					target: episodePointerTarget,
+					seriesId,
+					seasonNumber,
+					targetEpisodeId: episodeIds?.[0],
+					isAutomatic: options.isAutomatic ?? false
+				});
+				if (!packSelection.ok) {
+					return { success: false, error: packSelection.error };
+				}
 
-			// A RuTracker/Kinozal season is a living topic: the pack is a
-			// snapshot, and every wanted episode already inside it should come
-			// down with the grab. Monitoring grabs fill the missing monitored
-			// episodes of the season; interactive grabs stay single-episode.
-			const packSelection = await resolveEpisodePackSelection({
-				torrentFile: resolvedDownload.torrentFile,
-				target: episodePointerTarget,
-				seriesId,
-				seasonNumber,
-				targetEpisodeId: episodeIds?.[0],
-				isAutomatic: options.isAutomatic ?? false
-			});
-			if (!packSelection.ok) {
-				return { success: false, error: packSelection.error };
-			}
-
-			pointerFileSelection = packSelection.selection;
-			pointerSize = packSelection.selection.selectedSize;
-			if (packSelection.selection.episodeIds.length > 0) {
-				pointerEpisodeIds = packSelection.selection.episodeIds;
+				pointerFileSelection = packSelection.selection;
+				pointerSize = packSelection.selection.selectedSize;
+				if (packSelection.selection.episodeIds.length > 0) {
+					pointerEpisodeIds = packSelection.selection.episodeIds;
+				}
+			} else {
+				// No .torrent, so no file list to select against: the metadata that
+				// carries it arrives separately over BEP 9 and may never arrive from
+				// an idle swarm. Radarr and Sonarr never hit this because they do not
+				// select files at grab time at all - they download the pack and let
+				// the import step match filenames. Do the same rather than refusing a
+				// grab the client can complete: add the magnet unselected and record
+				// the whole requested episode scope so import knows what is coming.
+				logger.warn(
+					{ title: release.title, episodeIds, seasonNumber },
+					'[TorrentHandler] No torrent metadata at grab time; downloading the full pack and letting import select'
+				);
+				if (episodeIds && episodeIds.length > 0) {
+					pointerEpisodeIds = episodeIds;
+				}
 			}
 		}
 
@@ -285,10 +291,16 @@ export class TorrentHandler {
 
 				if (extendSelection && canExtend) {
 					try {
-						await extendSelection(existingTorrent.hash, {
-							fileIndices: pointerFileSelection?.fileIndices ?? [],
-							filePaths: pointerFileSelection?.filePaths
-						});
+						// Only touch file priorities when there is a selection to apply.
+						// A whole-pack fallback grab has none, and an empty index list
+						// would read as "deselect everything"; the torrent is already
+						// downloading in full, so extending the queue scope is enough.
+						if (pointerFileSelection) {
+							await extendSelection(existingTorrent.hash, {
+								fileIndices: pointerFileSelection.fileIndices,
+								filePaths: pointerFileSelection.filePaths
+							});
+						}
 						const updatedQueueItem = await downloadMonitor.extendQueueItemEpisodes(
 							existingTorrent.hash,
 							pointerEpisodeIds ?? episodeIds ?? [],
@@ -328,6 +340,93 @@ export class TorrentHandler {
 								err: extendError
 							},
 							'Failed to extend episode pointer file selection on existing torrent'
+						);
+					}
+				}
+
+				// The row that carried this hash may already be post-import: the pack
+				// delivered some episodes and this grab wants ones it did not (#663).
+				// Extending the client's selection is still the right move, but the old
+				// row is finished and import refuses a row it has already completed, so
+				// the new scope needs a live row of its own to be picked up.
+				const retryEpisodeIds = pointerEpisodeIds ?? episodeIds ?? [];
+				const importedScope = await resolveImportedScope({
+					infoHash: existingTorrent.hash,
+					movieId,
+					seriesId,
+					episodeIds: retryEpisodeIds
+				});
+
+				if (
+					extendSelection &&
+					pointerFileSelection &&
+					retryEpisodeIds.length > 0 &&
+					!importedScope.satisfied
+				) {
+					try {
+						await extendSelection(existingTorrent.hash, {
+							fileIndices: pointerFileSelection.fileIndices,
+							filePaths: pointerFileSelection.filePaths
+						});
+
+						const created = await downloadMonitor.addToQueue({
+							downloadClientId: clientConfig.id,
+							downloadId: existingTorrent.hash,
+							infoHash: existingTorrent.hash,
+							title: release.title,
+							indexerId: release.indexerId,
+							indexerName: release.indexerName,
+							downloadUrl: release.downloadUrl,
+							magnetUrl: resolvedDownload.magnetUrl || release.magnetUrl,
+							protocol: 'torrent',
+							movieId,
+							seriesId,
+							episodeIds: retryEpisodeIds,
+							seasonNumber,
+							quality,
+							size: pointerSize ?? release.size,
+							releaseGroup: parsed.releaseGroup ?? undefined,
+							isAutomatic: options.isAutomatic ?? false,
+							isUpgrade: options.isUpgrade ?? false
+						});
+
+						// addToQueue returns a concurrent row instead of creating one; merging
+						// the scope keeps both shapes correct with one call.
+						const retryRow =
+							(await downloadMonitor.extendQueueItemEpisodes(
+								existingTorrent.hash,
+								retryEpisodeIds,
+								pointerSize
+							)) ?? created;
+
+						logger.info(
+							{
+								title: release.title,
+								hash: existingTorrent.hash,
+								queueItemId: retryRow.id,
+								episodes: retryEpisodeIds.length,
+								alreadyImported: importedScope.coveredEpisodeIds.length
+							},
+							'Reused an imported season pack for episodes it had not delivered yet'
+						);
+
+						return {
+							success: true,
+							queueId: retryRow.id,
+							hash: existingTorrent.hash,
+							clientId: clientConfig.id,
+							clientName: clientConfig.name,
+							category,
+							wasDuplicate: true
+						};
+					} catch (retryError) {
+						logger.warn(
+							{
+								title: release.title,
+								hash: existingTorrent.hash,
+								err: retryError
+							},
+							'Failed to re-grab an imported season pack for its missing episodes'
 						);
 					}
 				}

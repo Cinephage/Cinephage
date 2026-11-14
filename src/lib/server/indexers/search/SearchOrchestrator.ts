@@ -47,7 +47,7 @@ import { ReleaseDeduplicator } from './ReleaseDeduplicator';
 import { ReleaseRanker } from './ReleaseRanker';
 import { ReleaseCache } from './ReleaseCache';
 import {
-	RUTRACKER_AUTOMATIC_MAX_TITLES,
+	limitedRuTrackerSeasonTitles,
 	RUTRACKER_AUTOMATIC_SEASON_CACHE_TTL_MS,
 	orderTitlesForCyrillicTracker,
 	prefersNativeCyrillicTitles,
@@ -1559,12 +1559,15 @@ export class SearchOrchestrator {
 		indexer: IIndexer,
 		criteria: SearchCriteria
 	): boolean {
+		// The name is the reliable signal: behind Prowlarr or Jackett the base URL
+		// is the proxy's (`.../prowlarr/<id>`), so a host test silently disables
+		// this path for exactly the users who need it - they then issue up to five
+		// titles x four TV formats inside one search budget instead of two titles.
 		return (
 			isTvSearch(criteria) &&
 			criteria.season !== undefined &&
 			criteria.episode !== undefined &&
-			isRuTrackerHost(indexer.baseUrl) &&
-			isRuTrackerIndexerName(indexer.name)
+			(isRuTrackerIndexerName(indexer.name) || isRuTrackerHost(indexer.baseUrl))
 		);
 	}
 
@@ -1634,7 +1637,10 @@ export class SearchOrchestrator {
 		const inFlightPromise = this.enqueueRuTrackerAutomaticSeasonSearch(async () => {
 			const allReleases: ReleaseResult[] = [];
 			const seenGuids = new Set<string>();
-			const limitedTitles = titlesToSearch.slice(0, RUTRACKER_AUTOMATIC_MAX_TITLES);
+			// Reserve the last slot for the Latin fallback: a plain slice drops it
+			// whenever two Cyrillic titles come first, and it is the only query that
+			// finds a topic filed under its English name.
+			const limitedTitles = limitedRuTrackerSeasonTitles(titlesToSearch);
 			let anyTitleSucceeded = false;
 
 			for (const title of limitedTitles) {
@@ -1717,8 +1723,9 @@ export class SearchOrchestrator {
 		const imdbId = 'imdbId' in criteria ? criteria.imdbId : undefined;
 		const primaryId =
 			tmdbId?.toString() ?? tvdbId?.toString() ?? imdbId ?? criteria.query ?? 'unknown';
-		const normalizedTitles = titlesToSearch
-			.slice(0, RUTRACKER_AUTOMATIC_MAX_TITLES)
+		// Key on the same subset that is actually searched, or the cache serves a
+		// different query set than the one it was built for.
+		const normalizedTitles = limitedRuTrackerSeasonTitles(titlesToSearch)
 			.map((title) => this.normalizeForComparison(title))
 			.filter(Boolean)
 			.join('|');

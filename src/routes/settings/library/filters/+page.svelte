@@ -19,6 +19,9 @@
 		excluded_genre_ids: []
 	});
 	let saving = $state(false);
+	// Comma-separated in the UI, an array in storage; kept as text so a half-typed
+	// entry is not rewritten while the user is still typing.
+	let titleLanguagesText = $state('');
 
 	function toggleExcludedGenre(genreId: number, checked: boolean) {
 		if (checked) {
@@ -36,7 +39,11 @@
 		saving = true;
 
 		try {
-			await updateTmdbFilters(filtersState);
+			const languages = titleLanguagesText
+				.split(',')
+				.map((value) => value.trim().toLowerCase())
+				.filter((value) => value !== '');
+			await updateTmdbFilters({ ...filtersState, search_title_languages: languages });
 			toasts.success(m.settings_filters_updated());
 		} catch (error) {
 			toasts.error(error instanceof Error ? error.message : m.settings_filters_failedToSave());
@@ -47,6 +54,7 @@
 
 	$effect(() => {
 		filtersState = { ...data.filters };
+		titleLanguagesText = (data.filters.search_title_languages ?? []).join(', ');
 	});
 </script>
 
@@ -74,6 +82,24 @@
 			</label>
 			<p class="pl-10 text-xs text-base-content/60">
 				{m.settings_filters_includeAdultHint()}
+			</p>
+		</div>
+	</SettingsSection>
+
+	<!-- Search Titles -->
+	<SettingsSection title={m.settings_filters_searchTitlesHeading()}>
+		<div class="form-control">
+			<label class="label" for="search-title-languages">
+				<span class="label-text">{m.settings_filters_searchTitleLanguages()}</span>
+			</label>
+			<input
+				id="search-title-languages"
+				class="input-bordered input w-full max-w-md"
+				placeholder="ru, en"
+				bind:value={titleLanguagesText}
+			/>
+			<p class="mt-1 text-xs text-base-content/60">
+				{m.settings_filters_searchTitleLanguagesHint()}
 			</p>
 		</div>
 	</SettingsSection>

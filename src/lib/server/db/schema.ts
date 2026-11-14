@@ -725,16 +725,16 @@ export const movies = sqliteTable(
 		// Whether to search for subtitles for this movie
 		wantsSubtitles: integer('wants_subtitles', { mode: 'boolean' }).default(true),
 		// Last time this movie was searched for releases (ISO timestamp).
-		// Still actively read/written by the release-search cooldown
-		// (CooldownStage / SearchCooldownSpecification) - intentionally NOT
-		// dropped by migration 142, unlike the per-item adaptive subtitle
-		// columns that used to sit beside it.
+		// Still actively read/written by the release-search cooldown gate
+		// (SearchCooldownSpecification) - intentionally NOT dropped by
+		// migration 142, unlike the per-item adaptive subtitle columns that
+		// used to sit beside it.
 		lastSearchTime: text('last_search_time'),
 		// Consecutive failed grab/import attempts, independent of which release
-		// was tried - powers the missing-content search failure cap (migration 170).
+		// was tried - powers the missing-content search failure cap (migration 173).
 		consecutiveFailureCount: integer('consecutive_failure_count').notNull().default(0),
 		// User-initiated pause of auto-search for this item, independent of
-		// `monitored` and the (missing-content-only) failure cap above (migration 173).
+		// `monitored` and the (missing-content-only) failure cap above (migration 174).
 		autoSearchPaused: integer('auto_search_paused', { mode: 'boolean' }).notNull().default(false),
 		tmdbCollectionId: integer('tmdb_collection_id'),
 		collectionName: text('collection_name'),
@@ -985,16 +985,16 @@ export const episodes = sqliteTable(
 			mode: 'json'
 		}).$type<SubtitleRequirement[]>(),
 		// Last time this episode was searched for releases (ISO timestamp).
-		// Still actively read/written by the release-search cooldown
-		// (CooldownStage / SearchCooldownSpecification) - intentionally NOT
-		// dropped by migration 142, unlike the per-item adaptive subtitle
-		// columns that used to sit beside it.
+		// Still actively read/written by the release-search cooldown gate
+		// (SearchCooldownSpecification) - intentionally NOT dropped by
+		// migration 142, unlike the per-item adaptive subtitle columns that
+		// used to sit beside it.
 		lastSearchTime: text('last_search_time'),
 		// Consecutive failed grab/import attempts, independent of which release
-		// was tried - powers the missing-content search failure cap (migration 170).
+		// was tried - powers the missing-content search failure cap (migration 173).
 		consecutiveFailureCount: integer('consecutive_failure_count').notNull().default(0),
 		// User-initiated pause of auto-search for this item, independent of
-		// `monitored` and the (missing-content-only) failure cap above (migration 173).
+		// `monitored` and the (missing-content-only) failure cap above (migration 174).
 		autoSearchPaused: integer('auto_search_paused', { mode: 'boolean' }).notNull().default(false)
 	},
 	(table) => [

@@ -1,7 +1,8 @@
 import { and, eq, notInArray, or } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
-import { downloadHistory, downloadQueue } from '#lib/server/db/schema.js';
+import { downloadQueue } from '#lib/server/db/schema.js';
 import { acquisitionService } from '#lib/server/acquisition/AcquisitionService.js';
+import { resolveImportedScope } from './imported-scope.js';
 
 export interface ResolvedIdentityRecheck {
 	blocked: boolean;
@@ -20,7 +21,7 @@ export interface ResolvedIdentityRecheck {
  *   1. active acquisition intents (including this one, via setIdentity's
  *      unique-active-identity enforcement - catches cross-target dupes)
  *   2. the download queue (any non-terminal row)
- *   3. imported download history
+ *   3. imported download history, for the episodes this intent reserved
  *
  * On a hit the caller must cancel its intent and abort the grab.
  */
@@ -63,19 +64,19 @@ export async function recheckResolvedIdentity(
 		};
 	}
 
-	// 3. Imported history (the release was already imported for some target).
-	const imported = await db
-		.select({ id: downloadHistory.id })
-		.from(downloadHistory)
-		.where(
-			and(
-				or(eq(downloadHistory.infoHash, infoHash), eq(downloadHistory.downloadId, infoHash)),
-				eq(downloadHistory.status, 'imported')
-			)
-		)
-		.limit(1);
+	// 3. Imported history, limited to the scope this intent reserved. A season
+	//    pack is a living topic: the same hash is legitimately grabbed again for
+	//    episodes it has not delivered yet (#663), and an unscoped check here
+	//    would make every one of them unreachable.
+	const intentTarget = acquisitionService.getIntentTarget(intentId);
+	const importedScope = await resolveImportedScope({
+		infoHash,
+		movieId: intentTarget?.movieId,
+		seriesId: intentTarget?.seriesId,
+		episodeIds: intentTarget?.episodeIds
+	});
 
-	if (imported.length > 0) {
+	if (importedScope.satisfied) {
 		return {
 			blocked: true,
 			reason: `Duplicate hash was already imported: ${infoHash}`

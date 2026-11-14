@@ -32,6 +32,12 @@ export interface ReleaseInfo {
 	category?: string;
 	/** When the release was first published on the indexer */
 	publishDate?: Date;
+	/**
+	 * Seeding requirement the tracker declared for this release (Cardigann
+	 * `minimumratio` / `minimumseedtime`). Seed time is in minutes.
+	 */
+	minimumRatio?: number;
+	minimumSeedTime?: number;
 	/** External IDs asserted by the indexer/search result, when available. */
 	tmdbId?: number;
 	imdbId?: string;

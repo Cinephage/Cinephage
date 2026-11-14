@@ -318,6 +318,31 @@ export class AcquisitionService {
 	}
 
 	/**
+	 * The media scope an intent reserved, read back by the post-resolution
+	 * duplicate check. Duplicate history has to be judged against the episodes
+	 * this acquisition is for - a season pack imported for other episodes is not
+	 * a duplicate of this grab (#663).
+	 */
+	getIntentTarget(intentId: string): {
+		mediaType: string;
+		movieId: string | null;
+		seriesId: string | null;
+		episodeIds: string[] | null;
+	} | null {
+		const row = db
+			.select({
+				mediaType: acquisitionIntents.mediaType,
+				movieId: acquisitionIntents.movieId,
+				seriesId: acquisitionIntents.seriesId,
+				episodeIds: acquisitionIntents.episodeIds
+			})
+			.from(acquisitionIntents)
+			.where(eq(acquisitionIntents.id, intentId))
+			.get();
+		return row ?? null;
+	}
+
+	/**
 	 * Re-arm the acquisition authority for a failed queue row being retried
 	 * (re-download / client retry). Without this the retried transport runs
 	 * with no reservation, so a concurrent automatic grab for the same slot

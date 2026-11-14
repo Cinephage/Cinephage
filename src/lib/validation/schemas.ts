@@ -331,7 +331,9 @@ export const globalTmdbFiltersSchema = z.object({
 	min_vote_count: z.number().int().min(0).default(0),
 	language: z.string().default('en-US'),
 	region: z.string().default(TMDB.DEFAULT_REGION),
-	excluded_genre_ids: z.array(z.number().int()).default([])
+	excluded_genre_ids: z.array(z.number().int()).default([]),
+	/** Base language codes; empty means infer from the item and the profile. */
+	search_title_languages: z.array(z.string()).default([])
 });
 
 /**
@@ -1916,6 +1918,13 @@ export const fileManagementSchema = z.object({
 	importMode: importMethodSchema.default('move'),
 	preferHardlink: z.boolean().default(true),
 	minimumFreeSpaceGb: z.number().min(0).default(1),
+	/**
+	 * How long a completed download may sit with no importable files before the
+	 * import counts as failed. A seedbox, a sync client or a slow mount can
+	 * deliver the payload long after the client reports completion (#668).
+	 * 0 disables waiting: an empty folder fails on the first attempt.
+	 */
+	importGraceMinutes: z.number().int().min(0).max(1440).default(60),
 	deleteEmptyFolders: z.boolean().default(false),
 	recycleEnabled: z.boolean().default(false),
 	extraFileExtensions: z.array(z.string()).default([]),
