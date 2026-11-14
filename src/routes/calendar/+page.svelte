@@ -44,7 +44,12 @@
 		airTimesReady = true;
 	});
 
-	const localAirTimeCache = new SvelteMap<string, string | null>();
+	// Plain Map (not SvelteMap): this is a pure memoization cache written to
+	// from inside template expressions, where mutating reactive state is
+	// forbidden. Its values don't need to be reactive themselves - callers
+	// already re-run when `airTimesReady` (a real $state) flips.
+	// eslint-disable-next-line svelte/prefer-svelte-reactivity
+	const localAirTimeCache = new Map<string, string | null>();
 
 	/** Leading label so the time survives any truncation of the title. */
 	function airPrefix(ep: CalendarDay['episodes'][number]): string {
