@@ -12,10 +12,15 @@
  * Imported history is the record of what actually reached the library, so it is
  * the only thing consulted here. Queue rows answer a different question (is a
  * download still running) and stay with the duplicate stages.
+ *
+ * A history row carries two different episode lists: the scope the grab asked
+ * for, and the files the import created. Only the files are delivery. Reading
+ * the requested scope as delivery is what let a pack whose import landed
+ * nothing report itself as covering every episode it was asked for.
  */
-import { and, eq, or } from 'drizzle-orm';
+import { and, eq, inArray, or } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
-import { downloadHistory } from '#lib/server/db/schema.js';
+import { downloadHistory, episodeFiles } from '#lib/server/db/schema.js';
 
 export interface ImportedScope {
 	/** An imported history row exists for this hash. */
@@ -49,7 +54,8 @@ export async function resolveImportedScope(input: ImportedScopeQuery): Promise<I
 		.select({
 			movieId: downloadHistory.movieId,
 			seriesId: downloadHistory.seriesId,
-			episodeIds: downloadHistory.episodeIds
+			episodeIds: downloadHistory.episodeIds,
+			episodeFileIds: downloadHistory.episodeFileIds
 		})
 		.from(downloadHistory)
 		.where(
@@ -96,11 +102,32 @@ export async function resolveImportedScope(input: ImportedScopeQuery): Promise<I
 		return { imported: true, coveredEpisodeIds: [], missingEpisodeIds: [], satisfied: true };
 	}
 
-	// A row with no episode scope records a whole-release import (a movie, or a
-	// pack imported before episode scopes were recorded): it covers whatever
-	// this grab asks for.
-	const coversEverything = scoped.some((row) => (row.episodeIds ?? []).length === 0);
-	const delivered = new Set(scoped.flatMap((row) => row.episodeIds ?? []));
+	// Delivery is the files, not the request. A row's `episodeIds` is the scope
+	// that was asked for at grab time, so a pack that imported two of five
+	// wanted episodes records all five - and one that imported none records
+	// five anyway. Answering from that list is what made an imported pack lock
+	// its own missing episodes behind a duplicate error (#663).
+	const delivered = new Set<string>();
+	const recordedFileIds = [...new Set(scoped.flatMap((row) => row.episodeFileIds ?? []))];
+	if (recordedFileIds.length > 0) {
+		const files = await db
+			.select({ episodeIds: episodeFiles.episodeIds })
+			.from(episodeFiles)
+			.where(inArray(episodeFiles.id, recordedFileIds));
+		for (const file of files) {
+			for (const episodeId of file.episodeIds ?? []) delivered.add(episodeId);
+		}
+	}
+
+	// Rows that recorded no file list (a movie, or history written before
+	// imports recorded their files) still answer from their own scope. An empty
+	// scope there means "whole release" rather than "nothing": refusing it
+	// would re-grab a release the library already holds.
+	const legacy = scoped.filter((row) => row.episodeFileIds === null);
+	const coversEverything = legacy.some((row) => (row.episodeIds ?? []).length === 0);
+	for (const row of legacy) {
+		for (const episodeId of row.episodeIds ?? []) delivered.add(episodeId);
+	}
 
 	const coveredEpisodeIds = coversEverything
 		? requested

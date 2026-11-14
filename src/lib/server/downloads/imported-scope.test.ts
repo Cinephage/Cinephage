@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestDb } from '../../../test/db-helper.js';
-import { downloadHistory, movies, series } from '#lib/server/db/schema.js';
+import { downloadHistory, episodeFiles, movies, series } from '#lib/server/db/schema.js';
 
 const testDb = createTestDb();
 
@@ -23,6 +23,7 @@ function addHistory(row: {
 	downloadId?: string;
 	status?: string;
 	episodeIds?: string[] | null;
+	episodeFileIds?: string[] | null;
 	seriesId?: string;
 	movieId?: string;
 }) {
@@ -36,8 +37,23 @@ function addHistory(row: {
 			downloadId: row.downloadId ?? null,
 			status: row.status ?? 'imported',
 			episodeIds: row.episodeIds ?? null,
+			episodeFileIds: row.episodeFileIds ?? null,
 			seriesId: row.seriesId ?? null,
 			movieId: row.movieId ?? null
+		})
+		.run();
+}
+
+/** A library file, as the import records it when it hands one over. */
+function addEpisodeFile(id: string, episodeIds: string[]) {
+	testDb.db
+		.insert(episodeFiles)
+		.values({
+			id,
+			seriesId: 'series-1',
+			seasonNumber: 1,
+			episodeIds,
+			relativePath: `Season 01/${id}.mkv`
 		})
 		.run();
 }
@@ -167,6 +183,66 @@ describe('resolveImportedScope', () => {
 			infoHash: 'abc',
 			seriesId: 'series-1',
 			episodeIds: ['ep-1']
+		});
+
+		expect(scope.satisfied).toBe(true);
+	});
+
+	it('reports the episodes an import did not land, whatever the grab asked for', async () => {
+		// The reported case: a pack grab scoped to five missing episodes imported
+		// one file. The history row still carries all five as its requested scope,
+		// so reading that as delivery claimed the pack had already delivered
+		// episodes it never dropped on disk (#663).
+		addEpisodeFile('file-1', ['ep-1']);
+		addHistory({
+			infoHash: 'abc',
+			seriesId: 'series-1',
+			episodeIds: ['ep-1', 'ep-2', 'ep-3'],
+			episodeFileIds: ['file-1']
+		});
+
+		const scope = await resolveImportedScope({
+			infoHash: 'abc',
+			seriesId: 'series-1',
+			episodeIds: ['ep-1', 'ep-2', 'ep-3']
+		});
+
+		expect(scope.coveredEpisodeIds).toEqual(['ep-1']);
+		expect(scope.missingEpisodeIds).toEqual(['ep-2', 'ep-3']);
+		expect(scope.satisfied).toBe(false);
+	});
+
+	it('treats an import that recorded no files as delivering nothing', async () => {
+		addHistory({
+			infoHash: 'abc',
+			seriesId: 'series-1',
+			episodeIds: ['ep-1', 'ep-2'],
+			episodeFileIds: []
+		});
+
+		const scope = await resolveImportedScope({
+			infoHash: 'abc',
+			seriesId: 'series-1',
+			episodeIds: ['ep-1', 'ep-2']
+		});
+
+		expect(scope.missingEpisodeIds).toEqual(['ep-1', 'ep-2']);
+		expect(scope.satisfied).toBe(false);
+	});
+
+	it('counts a multi-episode file as delivering every episode it holds', async () => {
+		addEpisodeFile('file-1', ['ep-1', 'ep-2']);
+		addHistory({
+			infoHash: 'abc',
+			seriesId: 'series-1',
+			episodeIds: ['ep-1'],
+			episodeFileIds: ['file-1']
+		});
+
+		const scope = await resolveImportedScope({
+			infoHash: 'abc',
+			seriesId: 'series-1',
+			episodeIds: ['ep-1', 'ep-2']
 		});
 
 		expect(scope.satisfied).toBe(true);
