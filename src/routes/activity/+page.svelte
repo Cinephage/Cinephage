@@ -1322,7 +1322,11 @@
 		if (tab === 'searches') {
 			activityTab = 'searches';
 			if (typeof window !== 'undefined') {
-				window.history.replaceState(window.history.state, '', resolvePath('/activity?tab=searches'));
+				window.history.replaceState(
+					window.history.state,
+					'',
+					resolvePath('/activity?tab=searches')
+				);
 			}
 			return;
 		}

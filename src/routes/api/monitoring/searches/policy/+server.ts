@@ -66,6 +66,9 @@ export const PUT: RequestHandler = async (event) => {
 		return Response.json({ success: true, policy });
 	} catch (error) {
 		logger.error({ err: error }, '[API] Failed to update search policy');
-		return Response.json({ success: false, error: 'Failed to update search policy' }, { status: 500 });
+		return Response.json(
+			{ success: false, error: 'Failed to update search policy' },
+			{ status: 500 }
+		);
 	}
 };

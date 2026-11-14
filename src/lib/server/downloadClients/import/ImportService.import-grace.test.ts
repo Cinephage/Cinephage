@@ -41,9 +41,8 @@ vi.mock('../DownloadClientManager', () => ({
 }));
 
 const { ImportService } = await import('./ImportService');
-const { setFileManagementSettings, invalidateFileManagementCache } = await import(
-	'#lib/server/settings/file-management.js'
-);
+const { setFileManagementSettings, invalidateFileManagementCache } =
+	await import('#lib/server/settings/file-management.js');
 
 const DOWNLOAD_CLIENT_ID = 'dc-import-grace';
 const ROOT = '/tmp/cinephage-import-grace-root';
@@ -68,7 +67,10 @@ async function runImport(id: string) {
 	const service = ImportService.getInstance();
 	return (
 		service as unknown as {
-			_processImport: (id: string, correlationId: string) => Promise<{ success: boolean; error?: string }>;
+			_processImport: (
+				id: string,
+				correlationId: string
+			) => Promise<{ success: boolean; error?: string }>;
 		}
 	)._processImport(id, 'test-correlation');
 }
@@ -117,8 +119,7 @@ describe('import grace period (#668)', () => {
 		return id;
 	}
 
-	const minutesAgo = (minutes: number) =>
-		new Date(Date.now() - minutes * 60_000).toISOString();
+	const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
 
 	it('keeps the download retryable while the files have not arrived', async () => {
 		// Nothing stored: the schema defaults apply, and the default grace is 60 minutes.
@@ -143,7 +144,9 @@ describe('import grace period (#668)', () => {
 	});
 
 	it('fails on the first attempt when waiting is disabled', async () => {
-		const settings = await (await import('#lib/server/settings/file-management.js')).getFileManagementSettings();
+		const settings = await (
+			await import('#lib/server/settings/file-management.js')
+		).getFileManagementSettings();
 		await setFileManagementSettings({ ...settings, importGraceMinutes: 0 });
 		const id = await makeQueueItem(minutesAgo(1));
 

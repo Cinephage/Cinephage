@@ -119,9 +119,9 @@ describe('evaluateSearchGate', () => {
 	});
 
 	it('does not exhaust new_episode at the missing budget', () => {
-		expect(evaluateSearchGate(row({ attempts: 6, searchKind: 'new_episode' }), POLICY, 'new_episode')).toEqual(
-			{ allowed: true }
-		);
+		expect(
+			evaluateSearchGate(row({ attempts: 6, searchKind: 'new_episode' }), POLICY, 'new_episode')
+		).toEqual({ allowed: true });
 	});
 
 	it('waits for the next allowed attempt', () => {
@@ -133,7 +133,9 @@ describe('evaluateSearchGate', () => {
 
 	it('allows once the next allowed attempt has passed', () => {
 		const past = new Date(Date.now() - 60_000).toISOString();
-		expect(evaluateSearchGate(row({ attempts: 1, nextAttemptAt: past }), POLICY, 'missing')).toEqual({
+		expect(
+			evaluateSearchGate(row({ attempts: 1, nextAttemptAt: past }), POLICY, 'missing')
+		).toEqual({
 			allowed: true
 		});
 	});
@@ -259,14 +261,24 @@ describe('policy persistence', () => {
 		// Untouched keys keep their defaults.
 		expect(after.maxDelayHours).toBe(SEARCH_POLICY_DEFAULTS.maxDelayHours);
 
-		await updateSearchPolicy({ maxAttempts: SEARCH_POLICY_DEFAULTS.maxAttempts, paused: false, minDelayHours: SEARCH_POLICY_DEFAULTS.minDelayHours });
+		await updateSearchPolicy({
+			maxAttempts: SEARCH_POLICY_DEFAULTS.maxAttempts,
+			paused: false,
+			minDelayHours: SEARCH_POLICY_DEFAULTS.minDelayHours
+		});
 	});
 
 	it('lists tracked items newest attempt first', async () => {
 		insertMovie('m7');
 		insertMovie('m8');
-		await recordAttempt('movie', 'm7', 'missing', { policy: POLICY, now: new Date('2026-01-01T00:00:00Z') });
-		await recordAttempt('movie', 'm8', 'missing', { policy: POLICY, now: new Date('2026-01-02T00:00:00Z') });
+		await recordAttempt('movie', 'm7', 'missing', {
+			policy: POLICY,
+			now: new Date('2026-01-01T00:00:00Z')
+		});
+		await recordAttempt('movie', 'm8', 'missing', {
+			policy: POLICY,
+			now: new Date('2026-01-02T00:00:00Z')
+		});
 
 		const rows = await listSearchStates();
 		expect(rows.map((r) => r.ownerId)).toEqual(['m8', 'm7']);

@@ -456,9 +456,12 @@ async function buildSearchTitles(
 				]
 			: [
 					...new Set(
-						[preferredLanguage, displayLanguage, media.originalLanguage, ...profile.languages].filter(
-							(value): value is string => Boolean(value)
-						)
+						[
+							preferredLanguage,
+							displayLanguage,
+							media.originalLanguage,
+							...profile.languages
+						].filter((value): value is string => Boolean(value))
 					)
 				];
 

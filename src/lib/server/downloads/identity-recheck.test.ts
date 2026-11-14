@@ -41,7 +41,13 @@ function resetDb() {
 		.run();
 	testDb.db
 		.insert(downloadClients)
-		.values({ id: 'client-1', name: 'qBittorrent', implementation: 'qbittorrent', host: 'localhost', port: 8080 })
+		.values({
+			id: 'client-1',
+			name: 'qBittorrent',
+			implementation: 'qbittorrent',
+			host: 'localhost',
+			port: 8080
+		})
 		.run();
 }
 

@@ -39,7 +39,9 @@ describe('declaredSeedLimits', () => {
 	});
 
 	it('accepts the plain-string field form', () => {
-		const limits = declaredSeedLimits(definition({ minimumratio: '1.1', minimumseedtime: '172800' }));
+		const limits = declaredSeedLimits(
+			definition({ minimumratio: '1.1', minimumseedtime: '172800' })
+		);
 
 		expect(limits.ratio).toBe('1.1');
 		expect(limits.seedTimeMinutes).toBe(2880);
@@ -70,7 +72,10 @@ describe('declaredSeedLimits', () => {
 
 	it('ignores a templated value', () => {
 		const limits = declaredSeedLimits(
-			definition({ minimumratio: { text: '{{ .Result.ratio }}' }, minimumseedtime: '{{ .Config.time }}' })
+			definition({
+				minimumratio: { text: '{{ .Result.ratio }}' },
+				minimumseedtime: '{{ .Config.time }}'
+			})
 		);
 
 		expect(limits.ratio).toBeUndefined();

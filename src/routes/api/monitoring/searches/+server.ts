@@ -97,35 +97,34 @@ export const GET: RequestHandler = async (event) => {
 			// trusting the stored column: raising the budget must immediately
 			// un-stick a row that was exhausted under the old one.
 			const status =
-				row.status === 'paused'
-					? 'paused'
-					: row.attempts >= maxAttempts
-						? 'exhausted'
-						: 'idle';
+				row.status === 'paused' ? 'paused' : row.attempts >= maxAttempts ? 'exhausted' : 'idle';
 			return {
-			ownerType: row.ownerType,
-			ownerId: row.ownerId,
-			kind: row.searchKind,
-			status,
-			attempts: row.attempts,
-			maxAttempts,
-			lastOutcome: row.lastOutcome,
-			lastAttemptAt: row.lastAttemptAt,
-			nextAttemptAt: row.nextAttemptAt,
-			lastIndexerName: row.lastIndexerName,
-			indexersQueried: row.indexersQueried,
-			pauseReason: row.pauseReason,
-			title:
-				row.ownerType === 'movie'
-					? (movieTitles.get(row.ownerId) ?? row.ownerId)
-					: (episodeTitles.get(row.ownerId) ?? row.ownerId)
+				ownerType: row.ownerType,
+				ownerId: row.ownerId,
+				kind: row.searchKind,
+				status,
+				attempts: row.attempts,
+				maxAttempts,
+				lastOutcome: row.lastOutcome,
+				lastAttemptAt: row.lastAttemptAt,
+				nextAttemptAt: row.nextAttemptAt,
+				lastIndexerName: row.lastIndexerName,
+				indexersQueried: row.indexersQueried,
+				pauseReason: row.pauseReason,
+				title:
+					row.ownerType === 'movie'
+						? (movieTitles.get(row.ownerId) ?? row.ownerId)
+						: (episodeTitles.get(row.ownerId) ?? row.ownerId)
 			};
 		});
 
 		return Response.json({ success: true, policy, items });
 	} catch (error) {
 		logger.error({ err: error }, '[API] Failed to list search states');
-		return Response.json({ success: false, error: 'Failed to list search states' }, { status: 500 });
+		return Response.json(
+			{ success: false, error: 'Failed to list search states' },
+			{ status: 500 }
+		);
 	}
 };
 
@@ -180,6 +179,9 @@ export const POST: RequestHandler = async (event) => {
 		return Response.json({ success: true, action: action.action, kinds });
 	} catch (error) {
 		logger.error({ err: error }, '[API] Failed to change search state');
-		return Response.json({ success: false, error: 'Failed to change search state' }, { status: 500 });
+		return Response.json(
+			{ success: false, error: 'Failed to change search state' },
+			{ status: 500 }
+		);
 	}
 };

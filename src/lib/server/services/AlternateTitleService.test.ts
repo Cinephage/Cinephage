@@ -920,7 +920,10 @@ describe('explicit search-language allowlist', () => {
 				key: 'global_filters',
 				value: JSON.stringify({ search_title_languages: ['fr'] })
 			})
-			.onConflictDoUpdate({ target: settings.key, set: { value: JSON.stringify({ search_title_languages: ['fr'] }) } })
+			.onConflictDoUpdate({
+				target: settings.key,
+				set: { value: JSON.stringify({ search_title_languages: ['fr'] }) }
+			})
 			.run();
 
 		const titles = await getSeriesSearchTitles('series-allowlist');
@@ -932,7 +935,10 @@ describe('explicit search-language allowlist', () => {
 		testDb.db
 			.insert(settings)
 			.values({ key: 'global_filters', value: JSON.stringify({ search_title_languages: [] }) })
-			.onConflictDoUpdate({ target: settings.key, set: { value: JSON.stringify({ search_title_languages: [] }) } })
+			.onConflictDoUpdate({
+				target: settings.key,
+				set: { value: JSON.stringify({ search_title_languages: [] }) }
+			})
 			.run();
 	});
 });

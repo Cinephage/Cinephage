@@ -2493,7 +2493,7 @@ describe('RuTracker automatic season search predicate', () => {
 
 	const criteria = { searchType: 'tv', season: 1, episode: 7, query: 'Show' };
 
-	it('engages for RuTracker imported through a proxy, where the base URL is the proxy\'s', () => {
+	it("engages for RuTracker imported through a proxy, where the base URL is the proxy's", () => {
 		// Prowlarr/Jackett store `.../prowlarr/<id>`, so a host test is false and
 		// the specialised path never fired for exactly those users.
 		const uses = predicate()(
@@ -2510,9 +2510,7 @@ describe('RuTracker automatic season search predicate', () => {
 	});
 
 	it('does not engage for an unrelated indexer or a season-only search', () => {
-		expect(
-			predicate()({ name: 'YTS', baseUrl: 'https://yts.mx/' }, criteria)
-		).toBe(false);
+		expect(predicate()({ name: 'YTS', baseUrl: 'https://yts.mx/' }, criteria)).toBe(false);
 		expect(
 			predicate()(
 				{ name: 'RuTracker.org', baseUrl: 'https://rutracker.org/' },

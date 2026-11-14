@@ -94,7 +94,7 @@
 			</label>
 			<input
 				id="search-title-languages"
-				class="input input-bordered w-full max-w-md"
+				class="input-bordered input w-full max-w-md"
 				placeholder="ru, en"
 				bind:value={titleLanguagesText}
 			/>

@@ -95,9 +95,7 @@ describe('autoSelectEpisodeGroup', () => {
 	it('never selects absolute order, which holds every episode in one group', () => {
 		// Attack on Titan's type-2 group is 97 episodes in a single group; taking
 		// it would rewrite four seasons as one.
-		const groups = [
-			makeSummary({ id: 'absolute', type: 2, episode_count: 97, group_count: 1 })
-		];
+		const groups = [makeSummary({ id: 'absolute', type: 2, episode_count: 97, group_count: 1 })];
 
 		expect(autoSelectEpisodeGroup(groups)).toBeNull();
 	});

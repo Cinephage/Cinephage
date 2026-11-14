@@ -110,13 +110,21 @@ export async function getSearchPolicy(): Promise<SearchPolicy> {
 	const map = new Map(rows.map((row) => [row.key, row.value]));
 
 	return {
-		maxAttempts: Math.floor(positiveNumber(map.get(SETTING_KEYS.maxAttempts), SEARCH_POLICY_DEFAULTS.maxAttempts)),
-		minDelayHours: positiveNumber(map.get(SETTING_KEYS.minDelayHours), SEARCH_POLICY_DEFAULTS.minDelayHours),
+		maxAttempts: Math.floor(
+			positiveNumber(map.get(SETTING_KEYS.maxAttempts), SEARCH_POLICY_DEFAULTS.maxAttempts)
+		),
+		minDelayHours: positiveNumber(
+			map.get(SETTING_KEYS.minDelayHours),
+			SEARCH_POLICY_DEFAULTS.minDelayHours
+		),
 		backoffMultiplier: positiveNumber(
 			map.get(SETTING_KEYS.backoffMultiplier),
 			SEARCH_POLICY_DEFAULTS.backoffMultiplier
 		),
-		maxDelayHours: positiveNumber(map.get(SETTING_KEYS.maxDelayHours), SEARCH_POLICY_DEFAULTS.maxDelayHours),
+		maxDelayHours: positiveNumber(
+			map.get(SETTING_KEYS.maxDelayHours),
+			SEARCH_POLICY_DEFAULTS.maxDelayHours
+		),
 		paused: map.get(SETTING_KEYS.paused) === 'true',
 		newEpisodeMaxAttempts: Math.floor(
 			positiveNumber(
@@ -130,7 +138,8 @@ export async function getSearchPolicy(): Promise<SearchPolicy> {
 /** Persist the parts of the policy that were supplied. */
 export async function updateSearchPolicy(patch: Partial<SearchPolicy>): Promise<void> {
 	const entries: [string, string][] = [];
-	if (patch.maxAttempts !== undefined) entries.push([SETTING_KEYS.maxAttempts, String(patch.maxAttempts)]);
+	if (patch.maxAttempts !== undefined)
+		entries.push([SETTING_KEYS.maxAttempts, String(patch.maxAttempts)]);
 	if (patch.minDelayHours !== undefined)
 		entries.push([SETTING_KEYS.minDelayHours, String(patch.minDelayHours)]);
 	if (patch.backoffMultiplier !== undefined)
@@ -337,11 +346,7 @@ export async function recordOutcome(
 
 	const succeeded = outcome === 'grabbed';
 	const budget = attemptBudget(searchKind, policy);
-	const status: SearchStateStatus = succeeded
-		? 'idle'
-		: attempts >= budget
-			? 'exhausted'
-			: 'idle';
+	const status: SearchStateStatus = succeeded ? 'idle' : attempts >= budget ? 'exhausted' : 'idle';
 
 	await db
 		.insert(searchState)

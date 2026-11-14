@@ -146,10 +146,12 @@
 
 	{#if loading}
 		<div class="flex justify-center py-12">
-			<span class="loading loading-spinner loading-md"></span>
+			<span class="loading loading-md loading-spinner"></span>
 		</div>
 	{:else if items.length === 0}
-		<div class="rounded-box border border-base-300 px-4 py-12 text-center text-sm text-base-content/60">
+		<div
+			class="rounded-box border border-base-300 px-4 py-12 text-center text-sm text-base-content/60"
+		>
 			{m.searchRetries_empty()}
 		</div>
 	{:else}
@@ -185,7 +187,7 @@
 								</span>
 							</td>
 							<td class="text-right tabular-nums">{item.attempts}/{item.maxAttempts}</td>
-							<td class="whitespace-nowrap text-xs">{when(item.nextAttemptAt)}</td>
+							<td class="text-xs whitespace-nowrap">{when(item.nextAttemptAt)}</td>
 							<td class="text-xs">{item.lastOutcome ?? '—'}</td>
 							<td class="text-xs">
 								{item.lastIndexerName ??
