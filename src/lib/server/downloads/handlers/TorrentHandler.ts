@@ -125,8 +125,16 @@ export class TorrentHandler {
 				// grab the client can complete: add the magnet unselected and record
 				// the whole requested episode scope so import knows what is coming.
 				logger.warn(
-					{ title: release.title, episodeIds, seasonNumber },
-					'[TorrentHandler] No torrent metadata at grab time; downloading the full pack and letting import select'
+					{
+						title: release.title,
+						episodeIds,
+						seasonNumber,
+						magnetOnly: Boolean(resolvedDownload.magnetUrl),
+						// A magnet carries no file list, so the per-episode selection this
+						// grab exists for cannot be applied and the whole pack comes down.
+						perFileSelection: 'skipped'
+					},
+					'[TorrentHandler] No .torrent at grab time: downloading the full pack, per-episode selection skipped'
 				);
 				if (episodeIds && episodeIds.length > 0) {
 					pointerEpisodeIds = episodeIds;

@@ -19,6 +19,7 @@ import {
 } from '#lib/server/downloadClients/utils/torrentParser.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { redactUrl } from '#lib/server/utils/urlSecurity.js';
+import { INDEXER_USER_AGENT } from '#lib/server/indexers/http/userAgent.js';
 
 const logger = createChildLogger({ module: 'DownloadResolutionService' });
 
@@ -491,7 +492,10 @@ class DownloadResolutionService {
 					method: 'GET',
 					headers: {
 						Accept: 'application/x-bittorrent, */*',
-						'User-Agent': 'Cinephage/1.0'
+						// A UA that says "Cinephage/1.0" is a bot signature, and trackers
+						// gate on it: RuTracker answers dl.php with a page instead of the
+						// .torrent. Use the same browser UA the indexer HTTP path sends.
+						'User-Agent': INDEXER_USER_AGENT
 					},
 					redirect: 'manual'
 				});
