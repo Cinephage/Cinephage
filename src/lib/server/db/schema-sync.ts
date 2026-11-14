@@ -204,8 +204,11 @@ import {
  *   grabbed release to the indexer that supplied it.
  * Version 176: monitoring_history.indexers_queried - how many distinct
  *   indexers answered the search, regardless of outcome.
+ * Version 177: drop the search_state table left behind by the discarded
+ *   retry-state model: its migration is gone, so upgraded installs kept the
+ *   table and its rows forever while fresh installs never create it.
  */
-export const CURRENT_SCHEMA_VERSION = 176;
+export const CURRENT_SCHEMA_VERSION = 177;
 
 export const SYSTEM_LIBRARY_SEEDS = [
 	{
@@ -649,6 +652,8 @@ const TABLE_DEFINITIONS: string[] = [
 		"has_file" integer DEFAULT false,
 		"wants_subtitles" integer DEFAULT true,
 		"last_search_time" text,
+		"consecutive_failure_count" integer NOT NULL DEFAULT 0,
+		"auto_search_paused" integer NOT NULL DEFAULT 0,
 		"tmdb_collection_id" integer,
 		"collection_name" text,
 		"release_date" text,
@@ -751,7 +756,9 @@ const TABLE_DEFINITIONS: string[] = [
 		"has_file" integer DEFAULT false,
 		"wants_subtitles_override" integer,
 		"subtitle_requirements_override" text,
-		"last_search_time" text
+		"last_search_time" text,
+		"consecutive_failure_count" integer NOT NULL DEFAULT 0,
+		"auto_search_paused" integer NOT NULL DEFAULT 0
 )`,
 
 	`CREATE TABLE IF NOT EXISTS "episode_files" (
@@ -1059,7 +1066,10 @@ const TABLE_DEFINITIONS: string[] = [
 		"old_score" integer,
 		"new_score" integer,
 		"executed_at" text,
-		"error_message" text
+		"error_message" text,
+		"indexer_id" text,
+		"indexer_name" text,
+		"indexers_queried" integer
 	)`,
 
 	`CREATE TABLE IF NOT EXISTS "subtitles" (

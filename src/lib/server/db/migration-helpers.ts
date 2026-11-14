@@ -723,7 +723,20 @@ export const MIGRATION_COLUMN_MAP: Record<number, Array<{ table: string; column:
 	154: [{ table: 'library_jobs', column: 'acknowledged_at' }],
 	155: [{ table: 'indexers', column: 'rate_limit_per_minute' }],
 	156: [{ table: 'indexer_status', column: 'disabled_reason' }],
-	166: [{ table: 'scoring_profiles', column: 'allowed_indexers' }]
+	166: [{ table: 'scoring_profiles', column: 'allowed_indexers' }],
+	173: [
+		{ table: 'movies', column: 'consecutive_failure_count' },
+		{ table: 'episodes', column: 'consecutive_failure_count' }
+	],
+	174: [
+		{ table: 'movies', column: 'auto_search_paused' },
+		{ table: 'episodes', column: 'auto_search_paused' }
+	],
+	175: [
+		{ table: 'monitoring_history', column: 'indexer_id' },
+		{ table: 'monitoring_history', column: 'indexer_name' }
+	],
+	176: [{ table: 'monitoring_history', column: 'indexers_queried' }]
 };
 
 /**

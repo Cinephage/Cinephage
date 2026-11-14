@@ -275,14 +275,32 @@
 						.catch(() => false)
 				),
 				...Array.from(seriesIds).map((id) =>
-					fetch(`/api/library/series/${id}/auto-search`, { method: 'POST' })
+					// The series route parses a JSON body and switches on `type`; a bare
+					// POST is a 500 there, so episode/season rows did nothing at all.
+					fetch(`/api/library/series/${id}/auto-search`, {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ type: 'missing' })
+					})
 						.then((r) => r.ok)
 						.catch(() => false)
 				)
 			]);
 			const triggered = results.filter(Boolean).length;
-			if (triggered > 0) {
-				toasts.success(m.activity_searches_searchNowTriggered({ count: triggered }));
+			if (triggered === 0) {
+				// Keep the selection: a silent no-op that also clears the checkboxes is
+				// indistinguishable from a search that ran and found nothing.
+				toasts.error(m.activity_searches_actionFailed());
+				return;
+			}
+			toasts.success(m.activity_searches_searchNowTriggered({ count: triggered }));
+			if (triggered < results.length) {
+				toasts.error(
+					m.activity_searches_searchNowPartial({
+						failed: results.length - triggered,
+						total: results.length
+					})
+				);
 			}
 			selected.clear();
 		} finally {
@@ -409,19 +427,30 @@
 				item.mediaType === 'movie'
 					? `/api/library/movies/${item.movieId}/auto-search`
 					: `/api/library/series/${item.seriesId}/auto-search`;
-			const [searchOk] = await Promise.all([
-				fetch(url, { method: 'POST' })
-					.then((r) => r.ok)
-					.catch(() => false),
-				item.movieId || item.episodeId
-					? resetSearchFailures(
-							item.movieId ? [item.movieId] : [],
-							item.episodeId ? [item.episodeId] : []
-						)
-					: Promise.resolve()
-			]);
+			const searchOk = await fetch(url, {
+				method: 'POST',
+				...(item.mediaType === 'movie'
+					? {}
+					: {
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify({ type: 'missing' })
+						})
+			})
+				.then((r) => r.ok)
+				.catch(() => false);
+
+			// The counter is the circuit breaker's state: clearing it after a call that
+			// never started a search erased that state with nothing to show for it.
+			if (searchOk && (item.movieId || item.episodeId)) {
+				await resetSearchFailures(
+					item.movieId ? [item.movieId] : [],
+					item.episodeId ? [item.episodeId] : []
+				);
+			}
 			if (searchOk) {
 				toasts.success(m.activity_searches_searchNowTriggered({ count: 1 }));
+			} else {
+				toasts.error(m.activity_searches_actionFailed());
 			}
 			await load();
 			if (expandedId === item.id) await loadDetail(item);

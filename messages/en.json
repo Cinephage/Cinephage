@@ -252,6 +252,8 @@
 	"activity_searches_deleteSelectedSuccess": "Deleted {count} record(s)",
 	"activity_searches_deleteSelectedFailed": "Failed to delete selected records",
 	"activity_searches_selectAll": "Select all",
+	"activity_searches_actionFailed": "That action failed - nothing was changed",
+	"activity_searches_searchNowPartial": "{failed} of {total} searches could not be started",
 	"activity_searches_bulkHint": "Select rows to search now, reset their failure count, pause/resume auto-search, or delete the record.",
 	"activity_searches_paused": "Paused",
 	"activity_searches_pause": "Pause",
