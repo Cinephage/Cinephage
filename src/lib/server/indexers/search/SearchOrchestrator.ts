@@ -47,7 +47,6 @@ import { ReleaseDeduplicator } from './ReleaseDeduplicator';
 import { ReleaseRanker } from './ReleaseRanker';
 import { ReleaseCache } from './ReleaseCache';
 import {
-	RUTRACKER_AUTOMATIC_MAX_TITLES,
 	limitedRuTrackerSeasonTitles,
 	RUTRACKER_AUTOMATIC_SEASON_CACHE_TTL_MS,
 	orderTitlesForCyrillicTracker,
