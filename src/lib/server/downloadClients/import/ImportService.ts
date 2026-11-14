@@ -708,7 +708,7 @@ export class ImportService extends EventEmitter {
 
 		// Need output path to import
 		if (!queueItem.outputPath) {
-			this.trackPendingImport(queueItemId, 'No output path');
+			await this.trackPendingImport(queueItemId, 'No output path');
 			return { status: 'pending_retry', reason: 'No output path available' };
 		}
 
@@ -725,7 +725,7 @@ export class ImportService extends EventEmitter {
 
 			// If outputPath equals the base path (or is shorter), it's invalid
 			if (outputPath === basePath || outputPath.length <= basePath.length) {
-				this.trackPendingImport(queueItemId, 'Invalid path - waiting for download client');
+				await this.trackPendingImport(queueItemId, 'Invalid path - waiting for download client');
 				return { status: 'pending_retry', reason: 'Path not ready yet' };
 			}
 		}
@@ -735,7 +735,7 @@ export class ImportService extends EventEmitter {
 		// source. Importing from one would scan (and move) every other
 		// download under it.
 		if (client && this.isRootLevelImportPath(queueItem.outputPath, client.client)) {
-			this.trackPendingImport(queueItemId, 'Invalid path - waiting for download client');
+			await this.trackPendingImport(queueItemId, 'Invalid path - waiting for download client');
 			return { status: 'pending_retry', reason: 'Path not ready yet' };
 		}
 
@@ -784,11 +784,71 @@ export class ImportService extends EventEmitter {
 	}
 
 	/**
+	 * Whether a completed download is still inside the window where its files
+	 * may legitimately not be on disk yet (seedbox sync, slow network mount).
+	 */
+	private async stillWaitingForFiles(row: {
+		completedAt?: string | null;
+		addedAt?: string | null;
+	}): Promise<boolean> {
+		const { importGraceMinutes } = await getFileManagementSettings();
+		if (importGraceMinutes <= 0) return false;
+		const anchor = row.completedAt ?? row.addedAt;
+		if (!anchor) return false;
+		return Date.now() - new Date(anchor).getTime() < importGraceMinutes * 60_000;
+	}
+
+	/**
+	 * Keep a completed download retryable while the files have not landed.
+	 *
+	 * The poll loop re-requests the import for as long as the row is completed
+	 * and not yet imported, so no timer is needed here. The attempt budget is
+	 * handed back because an empty folder is not a failed attempt - spending it
+	 * would hit the terminal-failure guard minutes into an hour-long wait.
+	 */
+	private async deferUntilFilesArrive(
+		queueItem: typeof downloadQueue.$inferSelect,
+		reason: string
+	): Promise<void> {
+		await db
+			.update(downloadQueue)
+			.set({ importAttempts: 0 })
+			.where(eq(downloadQueue.id, queueItem.id))
+			.run();
+		logger.info(
+			{
+				queueItemId: queueItem.id,
+				title: queueItem.title,
+				completedAt: queueItem.completedAt,
+				reason
+			},
+			'Deferring import: the download folder has no importable files yet'
+		);
+	}
+
+	/**
 	 * Track a pending import that needs retry (path was invalid)
 	 */
-	private trackPendingImport(queueItemId: string, reason: string): void {
+	private async trackPendingImport(queueItemId: string, reason: string): Promise<void> {
 		const existing = this.pendingImports.get(queueItemId);
 		const attempts = (existing?.attempts ?? 0) + 1;
+
+		const waitingRow = await db
+			.select({ completedAt: downloadQueue.completedAt, addedAt: downloadQueue.addedAt })
+			.from(downloadQueue)
+			.where(eq(downloadQueue.id, queueItemId))
+			.get();
+
+		// Waiting out the file-arrival window does not count against the retry
+		// budget: the download is not misbehaving, it is simply not visible yet.
+		if (waitingRow && (await this.stillWaitingForFiles(waitingRow))) {
+			this.pendingImports.set(queueItemId, { attempts: 0, lastAttempt: Date.now(), reason });
+			logger.info(
+				{ queueItemId, reason, completedAt: waitingRow.completedAt },
+				'Waiting for the download path before retrying the import'
+			);
+			return;
+		}
 
 		if (attempts > MAX_IMPORT_ATTEMPTS) {
 			logger.error(
@@ -1313,6 +1373,12 @@ export class ImportService extends EventEmitter {
 		const videoFiles = await this.findImportableFiles(downloadPath, importOptions);
 
 		if (videoFiles.length === 0) {
+			if (await this.stillWaitingForFiles(queueItem)) {
+				await this.deferUntilFilesArrive(queueItem, 'Movie import');
+				result.error = 'Waiting for files to appear in the download folder';
+				result.failureStage = 'path_resolution';
+				return result;
+			}
 			result.error = 'No video files found in download';
 			result.failureStage = 'path_resolution';
 			result.failureReason = 'path_unavailable';
@@ -1916,6 +1982,11 @@ export class ImportService extends EventEmitter {
 		const videoFiles = await this.findImportableFiles(downloadPath, importOptions);
 
 		if (videoFiles.length === 0) {
+			if (await this.stillWaitingForFiles(queueItem)) {
+				await this.deferUntilFilesArrive(queueItem, 'Series import');
+				result.error = 'Waiting for files to appear in the download folder';
+				return result;
+			}
 			result.error = 'No video files found in download';
 			await downloadMonitor.markFailed(queueItem.id, result.error);
 			return result;

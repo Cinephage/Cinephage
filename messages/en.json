@@ -5483,5 +5483,10 @@
 	"searchRetries_empty": "No automatic searches tracked yet.",
 	"settings_filters_searchTitlesHeading": "Search titles",
 	"settings_filters_searchTitleLanguages": "Languages to search",
-	"settings_filters_searchTitleLanguagesHint": "Comma-separated language codes (e.g. ru, en). Only titles in these languages are sent to indexers; the display and original titles are always included. Leave empty to infer them from the item and your language profile."
+	"settings_filters_searchTitleLanguagesHint": "Comma-separated language codes (e.g. ru, en). Only titles in these languages are sent to indexers; the display and original titles are always included. Leave empty to infer them from the item and your language profile.",
+	"settings_fileManagement_importGraceSectionTitle": "Waiting for Files",
+	"settings_fileManagement_importGraceSectionDescription": "A download client can report a download as finished before the files are visible to Cinephage - a seedbox syncing over the network, or a slow mount.",
+	"settings_fileManagement_importGraceLabel": "Wait before failing an import",
+	"settings_fileManagement_importGraceUnit": "minutes",
+	"settings_fileManagement_importGraceDescription": "How long Cinephage keeps checking for files before it treats the import as failed and blocklists an automatic grab. Set to 0 to fail on the first attempt."
 }
