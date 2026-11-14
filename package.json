@@ -64,7 +64,7 @@
 		"prettier-plugin-tailwindcss": "^0.8.1",
 		"semantic-release": "^25.0.9",
 		"svelte": "^5.57.2",
-		"svelte-check": "4.7.6",
+		"svelte-check": "4.7.8",
 		"tailwindcss": "^4.3.3",
 		"tsx": "^4.23.15",
 		"typescript": "^6.0.3",
@@ -77,8 +77,8 @@
 		"postcss": "^8.5.32",
 		"undici": "^8.12.2",
 		"npm": "$npm",
-		"tar": "7.5.22",
-		"brace-expansion": "5.0.12"
+		"tar": "7.5.23",
+		"brace-expansion": "5.0.13"
 	},
 	"engines": {
 		"node": ">=22.17.0"
@@ -88,12 +88,12 @@
 		"@rollup/rollup-linux-x64-gnu": "^4.62.3"
 	},
 	"dependencies": {
-		"@better-auth/api-key": "1.7.14",
+		"@better-auth/api-key": "1.7.21",
 		"@parcel/watcher": "^2.6.0",
 		"adm-zip": "^0.6.1",
-		"better-auth": "1.7.14",
+		"better-auth": "1.7.21",
 		"better-sqlite3": "^13.0.3",
-		"camoufox": "0.5.8",
+		"camoufox": "0.5.9",
 		"cheerio": "^1.2.0",
 		"date-format-parse": "^0.2.7",
 		"domhandler": "^6.0.1",
