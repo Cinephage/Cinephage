@@ -56,7 +56,8 @@ export const TASK_TYPE_LABELS: Record<string, string> = {
 	new_episode: 'New Episode Search',
 	pendingRelease: 'Pending Release',
 	smartListRefresh: 'Smart List Refresh',
-	media_move: 'File Move'
+	media_move: 'File Move',
+	manual: 'Manual (Autograb)'
 };
 
 /**
@@ -248,6 +249,10 @@ export interface ActivityFilters {
 	 * and 'stalled' have no ActivityStatus equivalent).
 	 */
 	unmatchedStatus?: string;
+	/** Searches tab only - a monitoringHistory status (SearchActivityStatus), separate from `status` above for the same reason as unmatchedStatus. */
+	searchStatus?: string;
+	/** Searches tab only - show only items with auto-search paused (migration 173). */
+	pausedOnly?: boolean;
 }
 
 /**

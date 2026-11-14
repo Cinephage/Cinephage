@@ -100,6 +100,34 @@ export enum RejectionReason {
 }
 
 /**
+ * Human-readable sentence for a RejectionReason enum value, for surfacing to
+ * users (e.g. the Searches tab's reason column/timeline) instead of the raw
+ * enum code. Falls back to the input unchanged for reasons already written
+ * as a sentence (e.g. BlocklistSpecification) or not in this map.
+ */
+const REJECTION_REASON_LABELS: Partial<Record<RejectionReason, string>> = {
+	[RejectionReason.QUALITY_NOT_BETTER]: 'No upgrades found - existing file quality is sufficient',
+	[RejectionReason.IMPROVEMENT_TOO_SMALL]:
+		'No upgrades found - best candidate did not meet the minimum improvement threshold',
+	[RejectionReason.ALREADY_AT_CUTOFF]: 'Already at quality cutoff - no upgrade needed',
+	[RejectionReason.UPGRADES_NOT_ALLOWED]: 'Upgrades are disabled for this quality profile',
+	[RejectionReason.RESOLUTION_DOWNGRADE]: 'Best candidate would downgrade resolution',
+	[RejectionReason.ALREADY_HAS_FILE]: 'Already has a file',
+	[RejectionReason.NOT_YET_AIRED]: 'Not yet aired',
+	[RejectionReason.READ_ONLY_FOLDER]: 'Target folder is read-only',
+	[RejectionReason.NO_PROFILE]: 'No quality profile assigned',
+	[RejectionReason.NOT_MONITORED]: 'Not monitored',
+	[RejectionReason.SERIES_NOT_MONITORED]: 'Series is not monitored',
+	[RejectionReason.SEASON_NOT_MONITORED]: 'Season is not monitored',
+	[RejectionReason.SEASON_LINK_MISSING]: 'Season link is missing'
+};
+
+export function describeRejectionReason(reason: string | undefined): string | undefined {
+	if (!reason) return reason;
+	return REJECTION_REASON_LABELS[reason as RejectionReason] ?? reason;
+}
+
+/**
  * Helper to create rejection result
  */
 export function reject(reason: RejectionReason | string): SpecificationResult {

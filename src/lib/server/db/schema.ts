@@ -725,12 +725,17 @@ export const movies = sqliteTable(
 		// Whether to search for subtitles for this movie
 		wantsSubtitles: integer('wants_subtitles', { mode: 'boolean' }).default(true),
 		// Last time this movie was searched for releases (ISO timestamp).
-		// Still actively read/written by the release-search gates
-		// (CooldownStage / SearchGateSpecification, and written together with
-		// search_state by monitoring/search/search-state.ts) - intentionally
-		// NOT dropped by migration 142, unlike the per-item adaptive subtitle
-		// columns that used to sit beside it.
+		// Still actively read/written by the release-search cooldown gate
+		// (SearchCooldownSpecification) - intentionally NOT dropped by
+		// migration 142, unlike the per-item adaptive subtitle columns that
+		// used to sit beside it.
 		lastSearchTime: text('last_search_time'),
+		// Consecutive failed grab/import attempts, independent of which release
+		// was tried - powers the missing-content search failure cap (migration 173).
+		consecutiveFailureCount: integer('consecutive_failure_count').notNull().default(0),
+		// User-initiated pause of auto-search for this item, independent of
+		// `monitored` and the (missing-content-only) failure cap above (migration 174).
+		autoSearchPaused: integer('auto_search_paused', { mode: 'boolean' }).notNull().default(false),
 		tmdbCollectionId: integer('tmdb_collection_id'),
 		collectionName: text('collection_name'),
 		releaseDate: text('release_date'),
@@ -980,12 +985,17 @@ export const episodes = sqliteTable(
 			mode: 'json'
 		}).$type<SubtitleRequirement[]>(),
 		// Last time this episode was searched for releases (ISO timestamp).
-		// Still actively read/written by the release-search gates
-		// (CooldownStage / SearchGateSpecification, and written together with
-		// search_state by monitoring/search/search-state.ts) - intentionally
-		// NOT dropped by migration 142, unlike the per-item adaptive subtitle
-		// columns that used to sit beside it.
-		lastSearchTime: text('last_search_time')
+		// Still actively read/written by the release-search cooldown gate
+		// (SearchCooldownSpecification) - intentionally NOT dropped by
+		// migration 142, unlike the per-item adaptive subtitle columns that
+		// used to sit beside it.
+		lastSearchTime: text('last_search_time'),
+		// Consecutive failed grab/import attempts, independent of which release
+		// was tried - powers the missing-content search failure cap (migration 173).
+		consecutiveFailureCount: integer('consecutive_failure_count').notNull().default(0),
+		// User-initiated pause of auto-search for this item, independent of
+		// `monitored` and the (missing-content-only) failure cap above (migration 174).
+		autoSearchPaused: integer('auto_search_paused', { mode: 'boolean' }).notNull().default(false)
 	},
 	(table) => [
 		index('idx_episodes_series_season').on(table.seriesId, table.seasonNumber),
@@ -2002,6 +2012,12 @@ export const monitoringHistory = sqliteTable(
 		oldScore: integer('old_score'), // Previous file score (for upgrades)
 		newScore: integer('new_score'), // New release score (for upgrades)
 
+		// Indexer attribution for a grabbed release (migration 175)
+		indexerId: text('indexer_id'),
+		indexerName: text('indexer_name'),
+		// How many distinct indexers answered this search attempt (migration 176)
+		indexersQueried: integer('indexers_queried'),
+
 		// Timestamps
 		executedAt: text('executed_at').$defaultFn(() => new Date().toISOString()),
 
@@ -2218,48 +2234,6 @@ export const subtitleSearchState = sqliteTable(
 	(table) => [
 		primaryKey({ columns: [table.ownerType, table.ownerId, table.requirementKey] }),
 		index('idx_subtitle_search_state_owner').on(table.ownerType, table.ownerId)
-	]
-);
-
-/**
- * Search State - bounded retry state for automatic release search.
- *
- * One row per (item, search kind). `attempts` and `next_attempt_at` are what
- * stop an item being retried forever; `last_outcome` and `last_indexer_*` are
- * what the Activity "Searches" view reads instead of collapsing every attempt
- * for an item into one anonymous row per day.
- */
-export const searchState = sqliteTable(
-	'search_state',
-	{
-		ownerType: text('owner_type', { enum: ['movie', 'episode'] }).notNull(),
-		ownerId: text('owner_id').notNull(),
-		searchKind: text('search_kind', {
-			enum: ['missing', 'upgrade', 'cutoff', 'new_episode']
-		}).notNull(),
-		status: text('status', {
-			enum: ['idle', 'searching', 'paused', 'exhausted']
-		})
-			.notNull()
-			.default('idle'),
-		attempts: integer('attempts').notNull().default(0),
-		firstAttemptAt: text('first_attempt_at'),
-		lastAttemptAt: text('last_attempt_at'),
-		nextAttemptAt: text('next_attempt_at'),
-		lastOutcome: text('last_outcome', {
-			enum: ['no_results', 'rejected', 'grabbed', 'error', 'skipped']
-		}),
-		lastIndexerId: text('last_indexer_id'),
-		lastIndexerName: text('last_indexer_name'),
-		indexersQueried: integer('indexers_queried').notNull().default(0),
-		pausedUntil: text('paused_until'),
-		pauseReason: text('pause_reason'),
-		updatedAt: text('updated_at').notNull()
-	},
-	(table) => [
-		primaryKey({ columns: [table.ownerType, table.ownerId, table.searchKind] }),
-		index('idx_search_state_next').on(table.status, table.nextAttemptAt),
-		index('idx_search_state_owner').on(table.ownerType, table.ownerId)
 	]
 );
 

@@ -119,7 +119,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			.where(eq(downloadClients.enabled, true))
 			.orderBy(downloadClients.name),
 		// Neither of these tabs reads the download feed: unmatched fetches live
-		// client state, searches reads search_state.
+		// client state, searches fetches on demand client-side too.
 		tab === 'unmatched' || tab === 'searches'
 			? Promise.resolve(null)
 			: activityService

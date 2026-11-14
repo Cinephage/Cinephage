@@ -24,8 +24,8 @@
 	} from '#lib/api/downloads.js';
 	import { layoutState, deriveMobileSseStatus } from '#lib/layout.svelte.js';
 	import ActivityTable from '#lib/components/activity/ActivityTable.svelte';
-	import SearchRetriesCard from '#lib/components/activity/SearchRetriesCard.svelte';
 	import ActivityUnmatchedCard from '#lib/components/activity/ActivityUnmatchedCard.svelte';
+	import ActivitySearchesCard from '#lib/components/activity/ActivitySearchesCard.svelte';
 	import ActivityFilters from '#lib/components/activity/ActivityFilters.svelte';
 	import ActiveFilters from '#lib/components/activity/ActiveFilters.svelte';
 	import QueueStatsCards from '#lib/components/activity/QueueStatsCards.svelte';
@@ -44,6 +44,7 @@
 		Download,
 		History,
 		Unlink,
+		Search,
 		Pause,
 		Play,
 		Ban,
@@ -54,8 +55,7 @@
 		RotateCcw,
 		Save,
 		CalendarX,
-		AlertTriangle,
-		Search
+		AlertTriangle
 	} from '@lucide/svelte';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { supportsQueuePauseResume } from '#lib/components/activity/activity-display-utils.js';
@@ -126,6 +126,7 @@
 	let activeTabFilters = $state<FiltersType>(createDefaultFilters());
 	let historyTabFilters = $state<FiltersType>(createDefaultFilters());
 	let unmatchedTabFilters = $state<FiltersType>(createDefaultFilters());
+	let searchesTabFilters = $state<FiltersType>(createDefaultFilters());
 	let activityTab = $state<ActivityTab>('history');
 
 	// Sort state
@@ -160,6 +161,7 @@
 	function getFiltersForTab(tab: ActivityTab): FiltersType {
 		if (tab === 'active') return activeTabFilters;
 		if (tab === 'unmatched') return unmatchedTabFilters;
+		if (tab === 'searches') return searchesTabFilters;
 		return historyTabFilters;
 	}
 
@@ -170,6 +172,10 @@
 		}
 		if (tab === 'unmatched') {
 			unmatchedTabFilters = { ...nextFilters };
+			return;
+		}
+		if (tab === 'searches') {
+			searchesTabFilters = { ...nextFilters };
 			return;
 		}
 		historyTabFilters = { ...nextFilters };
@@ -1305,6 +1311,13 @@
 		syncActivityUrl(newFilters, 'unmatched');
 	}
 
+	// Searches reads from a dedicated monitoringHistory feed, not the queue/
+	// history pipeline - same reasoning as applyUnmatchedFilters above.
+	function applySearchesFilters(newFilters: FiltersType): void {
+		setFiltersForTab('searches', newFilters);
+		syncActivityUrl(newFilters, 'searches');
+	}
+
 	async function switchTab(tab: ActivityTab): Promise<void> {
 		if (tab === activityTab) return;
 
@@ -1317,17 +1330,12 @@
 			return;
 		}
 
-		// Retry state is its own table, not part of the download feed, so it
-		// carries no activity filters - only the tab in the URL.
+		// The searches tab reads its own dedicated feed; keep it out of the
+		// queue/history fetch pipeline entirely, same as unmatched above.
 		if (tab === 'searches') {
 			activityTab = 'searches';
-			if (typeof window !== 'undefined') {
-				window.history.replaceState(
-					window.history.state,
-					'',
-					resolvePath('/activity?tab=searches')
-				);
-			}
+			setFiltersForTab('searches', getFiltersForTab('searches'));
+			syncActivityUrl(getFiltersForTab('searches'), 'searches');
 			return;
 		}
 
@@ -1587,14 +1595,14 @@
 		</button>
 	</div>
 
-	{#if activityTab === 'searches'}
-		<SearchRetriesCard />
-	{:else if activityTab === 'unmatched'}
+	{#if activityTab === 'unmatched'}
 		<ActivityUnmatchedCard
 			downloadClients={data.filterOptions.downloadClients}
 			filters={unmatchedTabFilters}
 			onFiltersChange={applyUnmatchedFilters}
 		/>
+	{:else if activityTab === 'searches'}
+		<ActivitySearchesCard filters={searchesTabFilters} onFiltersChange={applySearchesFilters} />
 	{:else}
 		<!-- Unified Toolbar -->
 		<ActivityFilters
@@ -1613,7 +1621,7 @@
 					onClearAll={clearAllFilters}
 				/>
 				{#if activityTab === 'active'}
-					<div class="mt-3 flex flex-wrap items-center gap-2">
+					<div class="flex flex-wrap items-center gap-2">
 						<span class="text-sm font-bold tracking-wide text-base-content/70"
 							>{m.activity_queue_bulkActionsHeading()}</span
 						>

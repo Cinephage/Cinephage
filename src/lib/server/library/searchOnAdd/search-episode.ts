@@ -137,8 +137,10 @@ export async function searchForEpisode(
 				},
 				'[SearchOnAdd] No suitable releases found for episode'
 			);
-			return { success: false, error: 'No suitable releases found' };
+			return { success: false, error: 'No suitable releases found', indexersQueried: 0 };
 		}
+
+		const indexersQueried = new Set(searchResult.releases.map((r) => r.indexerId)).size;
 
 		// If episode has existing file, filter to only upgrades
 		if (hasExistingFile) {
@@ -185,7 +187,10 @@ export async function searchForEpisode(
 						releaseName: grabResult.success ? release.title : undefined,
 						queueItemId: grabResult.download?.queueId,
 						error:
-							grabResult.error ?? (grabResult.success ? undefined : grabResult.decision?.reason)
+							grabResult.error ?? (grabResult.success ? undefined : grabResult.decision?.reason),
+						indexerId: release.indexerId,
+						indexerName: release.indexerName,
+						indexersQueried
 					};
 				}
 			}
@@ -196,7 +201,11 @@ export async function searchForEpisode(
 				},
 				'[SearchOnAdd] No upgrades found for episode with existing file'
 			);
-			return { success: false, error: 'No upgrades found - existing file quality is sufficient' };
+			return {
+				success: false,
+				error: 'No upgrades found - existing file quality is sufficient',
+				indexersQueried
+			};
 		}
 
 		// No existing file - grab the top-ranked release
@@ -230,7 +239,10 @@ export async function searchForEpisode(
 			success: grabResult.success,
 			releaseName: grabResult.success ? bestRelease.title : undefined,
 			queueItemId: grabResult.download?.queueId,
-			error: grabResult.error ?? (grabResult.success ? undefined : grabResult.decision?.reason)
+			error: grabResult.error ?? (grabResult.success ? undefined : grabResult.decision?.reason),
+			indexerId: grabResult.success ? bestRelease.indexerId : undefined,
+			indexerName: grabResult.success ? bestRelease.indexerName : undefined,
+			indexersQueried
 		};
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Unknown error';

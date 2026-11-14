@@ -444,15 +444,14 @@
 		</div>
 	{/if}
 
-	{#if showActiveFilters && activeFiltersContent}
-		<div class="mt-3 border-t border-base-content/10 pt-3">
-			{@render activeFiltersContent()}
-		</div>
-	{/if}
-
-	{#if showHistoryControls && historyControlsContent}
-		<div class="mt-3">
-			{@render historyControlsContent()}
+	{#if (showActiveFilters && activeFiltersContent) || (showHistoryControls && historyControlsContent)}
+		<div class="mt-3 space-y-3 border-t border-base-content/10 pt-3">
+			{#if showActiveFilters && activeFiltersContent}
+				{@render activeFiltersContent()}
+			{/if}
+			{#if showHistoryControls && historyControlsContent}
+				{@render historyControlsContent()}
+			{/if}
 		</div>
 	{/if}
 </div>

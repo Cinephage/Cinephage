@@ -2111,6 +2111,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 					queueItem.status !== 'failed' && updatedItem.status === 'failed';
 				if (transitionedToFailed) {
 					const failureMessage = updatedItem.errorMessage ?? 'Download client reported an error';
+					await this.incrementConsecutiveFailureCount(updatedItem);
 					await this.createFailedHistoryRecord(updatedItem, failureMessage);
 					// Terminal queue state must release the acquisition intent
 					// (slot + identity), or the target stays wedged until restart.
@@ -2245,6 +2246,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 
 				const failedItem = await this.getQueueItem(queueItem.id);
 				if (failedItem) {
+					await this.incrementConsecutiveFailureCount(failedItem);
 					await this.createFailedHistoryRecord(
 						failedItem,
 						'Download removed from client unexpectedly (recovery exhausted)'
@@ -3799,9 +3801,45 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 
 		const updatedItem = await this.getQueueItem(id);
 		if (updatedItem) {
+			await this.incrementConsecutiveFailureCount(updatedItem);
 			await this.createFailedHistoryRecord(updatedItem, errorMessage);
 			this.emit('queue:failed', updatedItem);
 			this.emitSSE('queue:failed', updatedItem);
+		}
+	}
+
+	/**
+	 * Increment the consecutive-failure counter for whichever movie/episode(s)
+	 * this queue item was for, independent of which release was tried. Powers
+	 * the missing-content search failure cap (FailureCapSpecification) - the
+	 * search cooldown and release blocklist both operate per-release, so
+	 * neither stops a different, not-yet-tried release from being grabbed and
+	 * failed every cycle, forever. A season-pack failure increments every
+	 * episode in the pack, matching how downloadHistory.episodeIds already
+	 * treats pack failures as affecting all of them.
+	 */
+	private async incrementConsecutiveFailureCount(queueItem: QueueItem): Promise<void> {
+		try {
+			if (queueItem.movieId) {
+				await db
+					.update(movies)
+					.set({ consecutiveFailureCount: sql`${movies.consecutiveFailureCount} + 1` })
+					.where(eq(movies.id, queueItem.movieId));
+			}
+			if (queueItem.episodeIds && queueItem.episodeIds.length > 0) {
+				await db
+					.update(episodes)
+					.set({ consecutiveFailureCount: sql`${episodes.consecutiveFailureCount} + 1` })
+					.where(inArray(episodes.id, queueItem.episodeIds));
+			}
+		} catch (error) {
+			logger.warn(
+				{
+					queueItemId: queueItem.id,
+					error: error instanceof Error ? error.message : String(error)
+				},
+				'Failed to increment consecutive failure count'
+			);
 		}
 	}
 

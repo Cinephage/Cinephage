@@ -55,6 +55,11 @@ export interface EpisodeSearchResult {
 	error?: string;
 	wasPackGrab?: boolean;
 	packSeason?: number;
+	/** Indexer that supplied the grabbed release, when one was grabbed. */
+	indexerId?: string;
+	indexerName?: string;
+	/** How many distinct indexers answered this search attempt. */
+	indexersQueried?: number;
 }
 
 export interface SeasonPackGrab {
@@ -234,7 +239,10 @@ export class MultiSeasonSearchStrategy {
 						grabbed: true,
 						releaseName: completeSeriesResult.releaseName,
 						queueItemId: completeSeriesResult.queueItemId,
-						wasPackGrab: true
+						wasPackGrab: true,
+						indexerId: completeSeriesResult.indexerId,
+						indexerName: completeSeriesResult.indexerName,
+						indexersQueried: completeSeriesResult.indexersQueried
 					});
 				}
 
@@ -331,7 +339,10 @@ export class MultiSeasonSearchStrategy {
 							grabbed: true,
 							releaseName: rangeResult.releaseName,
 							queueItemId: rangeResult.queueItemId,
-							wasPackGrab: true
+							wasPackGrab: true,
+							indexerId: rangeResult.indexerId,
+							indexerName: rangeResult.indexerName,
+							indexersQueried: rangeResult.indexersQueried
 						});
 					}
 				}
@@ -426,7 +437,10 @@ export class MultiSeasonSearchStrategy {
 							releaseName: packResult.releaseName,
 							queueItemId: packResult.queueItemId,
 							wasPackGrab: true,
-							packSeason: seasonNumber
+							packSeason: seasonNumber,
+							indexerId: packResult.indexerId,
+							indexerName: packResult.indexerName,
+							indexersQueried: packResult.indexersQueried
 						});
 					}
 				}
@@ -568,6 +582,9 @@ export class MultiSeasonSearchStrategy {
 		releaseName?: string;
 		queueItemId?: string;
 		episodesCovered: string[];
+		indexerId?: string;
+		indexerName?: string;
+		indexersQueried?: number;
 	}> {
 		const { seriesData, allEpisodes, seasonNumbers, searchSource, minScore, onProgress } = options;
 		const episodeIds = allEpisodes.map((e) => e.id);
@@ -610,8 +627,10 @@ export class MultiSeasonSearchStrategy {
 					percentComplete: 15,
 					details: { decision: 'rejected', rejectionReason: 'No releases found' }
 				});
-				return { grabbed: false, episodesCovered: [] };
+				return { grabbed: false, episodesCovered: [], indexersQueried: 0 };
 			}
+
+			const indexersQueried = new Set(searchResult.releases.map((r) => r.indexerId)).size;
 
 			// Filter to complete series packs.
 			// Use || (not ??) because isCompleteSeries is always a boolean (never undefined),
@@ -686,7 +705,10 @@ export class MultiSeasonSearchStrategy {
 						grabbed: true,
 						releaseName: release.title,
 						queueItemId: grabResult.download?.queueId,
-						episodesCovered: episodeIds
+						episodesCovered: episodeIds,
+						indexerId: release.indexerId,
+						indexerName: release.indexerName,
+						indexersQueried
 					};
 				} else {
 					this.reportProgress(onProgress, {
@@ -734,6 +756,9 @@ export class MultiSeasonSearchStrategy {
 		releaseName?: string;
 		queueItemId?: string;
 		episodesCovered: string[];
+		indexerId?: string;
+		indexerName?: string;
+		indexersQueried?: number;
 	}> {
 		const { seriesData, startSeason, endSeason, episodes, searchSource, minScore, onProgress } =
 			options;
@@ -766,8 +791,10 @@ export class MultiSeasonSearchStrategy {
 			});
 
 			if (searchResult.releases.length === 0) {
-				return { grabbed: false, episodesCovered: [] };
+				return { grabbed: false, episodesCovered: [], indexersQueried: 0 };
 			}
+
+			const indexersQueried = new Set(searchResult.releases.map((r) => r.indexerId)).size;
 
 			// Filter to multi-season packs covering our range
 			const multiSeasonPacks = searchResult.releases.filter((release) => {
@@ -831,7 +858,10 @@ export class MultiSeasonSearchStrategy {
 						grabbed: true,
 						releaseName: release.title,
 						queueItemId: grabResult.download?.queueId,
-						episodesCovered: episodeIds
+						episodesCovered: episodeIds,
+						indexerId: release.indexerId,
+						indexerName: release.indexerName,
+						indexersQueried
 					};
 				}
 			}
@@ -870,6 +900,9 @@ export class MultiSeasonSearchStrategy {
 		releaseName?: string;
 		queueItemId?: string;
 		episodesCovered: string[];
+		indexerId?: string;
+		indexerName?: string;
+		indexersQueried?: number;
 	}> {
 		const { seriesData, seasonNumber, episodes, totalEpisodes, searchSource, minScore } = options;
 		const episodeIds = episodes.map((e) => e.id);
@@ -899,8 +932,10 @@ export class MultiSeasonSearchStrategy {
 			});
 
 			if (searchResult.releases.length === 0) {
-				return { grabbed: false, episodesCovered: [] };
+				return { grabbed: false, episodesCovered: [], indexersQueried: 0 };
 			}
+
+			const indexersQueried = new Set(searchResult.releases.map((r) => r.indexerId)).size;
 
 			// Filter to single-season packs only
 			const singleSeasonPacks = searchResult.releases.filter((release) => {
@@ -951,7 +986,10 @@ export class MultiSeasonSearchStrategy {
 						grabbed: true,
 						releaseName: release.title,
 						queueItemId: grabResult.download?.queueId,
-						episodesCovered: episodeIds
+						episodesCovered: episodeIds,
+						indexerId: release.indexerId,
+						indexerName: release.indexerName,
+						indexersQueried
 					};
 				}
 			}

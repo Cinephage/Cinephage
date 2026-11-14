@@ -8,9 +8,10 @@ import {
 	series,
 	episodes,
 	settings,
-	blocklist
+	blocklist,
+	scoringProfiles
 } from '#lib/server/db/schema.js';
-import { and, desc, gte, inArray, eq, lte, lt, sql, count, or } from 'drizzle-orm';
+import { and, desc, gte, inArray, eq, lte, lt, sql, count, or, min } from 'drizzle-orm';
 import { upsertQueueTombstoneFromQueueItem } from '#lib/server/downloadClients/monitoring/QueueTombstoneService.js';
 import { getDownloadClientManager } from '#lib/server/downloadClients/DownloadClientManager.js';
 import { createChildLogger } from '#lib/logging/index.js';
@@ -30,7 +31,10 @@ import {
 	resolveMediaInfo,
 	resolveMonitoringMediaInfo,
 	type MediaMaps,
-	type BlocklistEntryInfo
+	type BlocklistEntryInfo,
+	type SearchActivityItem,
+	type SearchActivityStatus,
+	type SearchItemDetail
 } from './activity-transformers.js';
 import {
 	type UnifiedActivity,
@@ -63,6 +67,16 @@ import {
 	buildActivitySummary,
 	parseRetentionDays
 } from './activity-filters.js';
+import {
+	DEFAULT_MAX_CONSECUTIVE_FAILURES,
+	backoffCooldownHours
+} from '#lib/server/monitoring/specifications/FailureCapSpecification.js';
+import {
+	isAutoSearchGloballyPaused,
+	setAutoSearchGloballyPaused
+} from '#lib/server/monitoring/global-search-pause.js';
+import { getNextSearchTime } from '#lib/server/monitoring/specifications/SearchCooldownSpecification.js';
+import { monitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.js';
 
 const logger = createChildLogger({ module: 'ActivityService', logDomain: 'monitoring' });
 
@@ -1252,6 +1266,8 @@ export class ActivityService {
 				isUpgrade: monitoringHistory.isUpgrade,
 				oldScore: monitoringHistory.oldScore,
 				newScore: monitoringHistory.newScore,
+				indexerName: monitoringHistory.indexerName,
+				indexersQueried: monitoringHistory.indexersQueried,
 				executedAt: monitoringHistory.executedAt,
 				errorMessage: monitoringHistory.errorMessage
 			})
@@ -1262,6 +1278,462 @@ export class ActivityService {
 			.all()) as MonitoringHistoryRecord[];
 
 		return items;
+	}
+
+	/**
+	 * Read-only recency feed of search attempts (all statuses, not just
+	 * failures - fetchMonitoringItems deliberately excludes found/grabbed).
+	 * Backs the Activity page's "Searches" tab, so a retry loop like issue
+	 * #658's incident (69 distinct failed releases for one episode) would be
+	 * visible well before it needed that many attempts to become obvious.
+	 *
+	 * Collapsed to one row per item (movie / episode / season-pack), showing
+	 * only its most recent attempt - without this, an item searched
+	 * repeatedly (e.g. several manual re-searches of the same episode) would
+	 * fill the list with one row per attempt and look like duplicated/stuck
+	 * data rather than a single item's history. The full attempt history is
+	 * still available per item via fetchSearchItemDetail's timeline (the
+	 * row's expand panel), this just controls what the flat list shows.
+	 *
+	 * Pagination/search/sort are applied in-process after media titles are
+	 * resolved (monitoringHistory itself has no title column - it's joined in
+	 * via movies/series), not as a second SQL round-trip. Bounded by
+	 * MAX_SCAN below, which comfortably covers realistic monitoring-history
+	 * volume for this kind of feed.
+	 */
+	async fetchSearchActivity(
+		params: Pick<ActivityFilters, 'mediaType' | 'startDate' | 'endDate' | 'search'> & {
+			status?: SearchActivityStatus | 'all';
+			pausedOnly?: boolean;
+			sort?: 'media' | 'status' | 'releasesFound' | 'failures' | 'time';
+			order?: 'asc' | 'desc';
+			page?: number;
+			limit?: number;
+		} = {}
+	): Promise<{
+		items: SearchActivityItem[];
+		total: number;
+		maxConsecutiveFailures: number;
+		globallyPaused: boolean;
+	}> {
+		const allStatuses: SearchActivityStatus[] = [
+			'searched',
+			'found',
+			'grabbed',
+			'no_results',
+			'skipped',
+			'error'
+		];
+		const conditions: SQL[] = [
+			inArray(
+				monitoringHistory.status,
+				params.status && params.status !== 'all' ? [params.status] : allStatuses
+			)
+		];
+
+		if (params.mediaType === 'movie') {
+			conditions.push(sql`${monitoringHistory.movieId} IS NOT NULL`);
+		} else if (params.mediaType === 'tv') {
+			conditions.push(sql`${monitoringHistory.seriesId} IS NOT NULL`);
+		}
+
+		if (params.startDate) {
+			conditions.push(gte(monitoringHistory.executedAt, params.startDate));
+		}
+		if (params.endDate) {
+			conditions.push(lte(monitoringHistory.executedAt, params.endDate + 'T23:59:59.999Z'));
+		}
+
+		const MAX_SCAN = 1000;
+
+		const rows = (await db
+			.select({
+				id: monitoringHistory.id,
+				taskType: monitoringHistory.taskType,
+				movieId: monitoringHistory.movieId,
+				seriesId: monitoringHistory.seriesId,
+				seasonNumber: monitoringHistory.seasonNumber,
+				episodeId: monitoringHistory.episodeId,
+				status: monitoringHistory.status,
+				releasesFound: monitoringHistory.releasesFound,
+				releaseGrabbed: monitoringHistory.releaseGrabbed,
+				queueItemId: monitoringHistory.queueItemId,
+				isUpgrade: monitoringHistory.isUpgrade,
+				oldScore: monitoringHistory.oldScore,
+				newScore: monitoringHistory.newScore,
+				indexerName: monitoringHistory.indexerName,
+				indexersQueried: monitoringHistory.indexersQueried,
+				executedAt: monitoringHistory.executedAt,
+				errorMessage: monitoringHistory.errorMessage
+			})
+			.from(monitoringHistory)
+			.where(and(...conditions))
+			.orderBy(desc(monitoringHistory.executedAt))
+			.limit(MAX_SCAN)
+			.all()) as MonitoringHistoryRecord[];
+
+		const mediaMaps = await this.fetchMediaMaps([], [], rows);
+		const profileNames = await this.fetchScoringProfileNames(mediaMaps);
+		const { missingSearchIntervalHours } = await monitoringScheduler.getSettings();
+
+		let items: SearchActivityItem[] = rows
+			.filter((item) => item.executedAt)
+			.map((item) =>
+				this.toSearchActivityItem(item, mediaMaps, profileNames, missingSearchIntervalHours)
+			);
+
+		// Rows arrive ordered by executedAt desc, so keeping the first
+		// occurrence of each item key keeps its most recent attempt.
+		const seenItemKeys = new Set<string>();
+		items = items.filter((item) => {
+			const key = item.movieId
+				? `movie:${item.movieId}`
+				: item.episodeId
+					? `episode:${item.episodeId}`
+					: item.seriesId && item.seasonNumber !== undefined
+						? `season:${item.seriesId}:${item.seasonNumber}`
+						: `row:${item.id}`;
+			if (seenItemKeys.has(key)) return false;
+			seenItemKeys.add(key);
+			return true;
+		});
+
+		const search = params.search?.trim().toLowerCase();
+		if (search) {
+			items = items.filter((item) => item.mediaTitle.toLowerCase().includes(search));
+		}
+
+		if (params.pausedOnly) {
+			items = items.filter((item) => item.autoSearchPaused);
+		}
+
+		const sortField = params.sort ?? 'time';
+		const order = params.order ?? 'desc';
+		const dir = order === 'asc' ? 1 : -1;
+		items = [...items].sort((a, b) => {
+			switch (sortField) {
+				case 'media':
+					return dir * a.mediaTitle.localeCompare(b.mediaTitle);
+				case 'status':
+					return dir * a.status.localeCompare(b.status);
+				case 'releasesFound':
+					return dir * (a.releasesFound - b.releasesFound);
+				case 'failures':
+					return dir * (a.consecutiveFailureCount - b.consecutiveFailureCount);
+				default:
+					return dir * (a.executedAt < b.executedAt ? -1 : a.executedAt > b.executedAt ? 1 : 0);
+			}
+		});
+
+		const total = items.length;
+		const limit = params.limit ?? 25;
+		const page = Math.max(1, params.page ?? 1);
+		const start = (page - 1) * limit;
+
+		return {
+			items: items.slice(start, start + limit),
+			total,
+			maxConsecutiveFailures: DEFAULT_MAX_CONSECUTIVE_FAILURES,
+			globallyPaused: await isAutoSearchGloballyPaused()
+		};
+	}
+
+	/**
+	 * Clear the consecutive-failure counter (FailureCapSpecification) for the
+	 * given movies/episodes, unsticking them from the missing-content search
+	 * failure cap without waiting for a successful import to reset it
+	 * naturally. Called from the Searches tab's "Reset Failure Count" bulk
+	 * action.
+	 */
+	async resetFailureCounts(movieIds: string[], episodeIds: string[]): Promise<void> {
+		if (movieIds.length > 0) {
+			await db
+				.update(movies)
+				.set({ consecutiveFailureCount: 0 })
+				.where(inArray(movies.id, movieIds));
+		}
+		if (episodeIds.length > 0) {
+			await db
+				.update(episodes)
+				.set({ consecutiveFailureCount: 0 })
+				.where(inArray(episodes.id, episodeIds));
+		}
+	}
+
+	/**
+	 * Set or clear the user-initiated auto-search pause (migration 173) for
+	 * any number of movies/episodes in one call. Checked by
+	 * MonitoringSearchService independent of `monitored` and the
+	 * (missing-content-only) failure cap. Mirrors resetFailureCounts's
+	 * array shape so the Searches tab's per-item toggle and its bulk
+	 * pause/resume action both go through the same call (single-element
+	 * arrays for the former).
+	 */
+	async setAutoSearchPaused(
+		target: { movieIds?: string[]; episodeIds?: string[] },
+		paused: boolean
+	): Promise<void> {
+		if (target.movieIds && target.movieIds.length > 0) {
+			await db
+				.update(movies)
+				.set({ autoSearchPaused: paused })
+				.where(inArray(movies.id, target.movieIds));
+		}
+		if (target.episodeIds && target.episodeIds.length > 0) {
+			await db
+				.update(episodes)
+				.set({ autoSearchPaused: paused })
+				.where(inArray(episodes.id, target.episodeIds));
+		}
+	}
+
+	/**
+	 * Global "pause all automatic search" switch, independent of per-item
+	 * pause - blocks every MonitoringSearchService entry point, including a
+	 * manual "Run Now" on the whole task (unlike per-item pause, which a
+	 * single-item manual search still bypasses). See global-search-pause.ts.
+	 */
+	async getGlobalAutoSearchPaused(): Promise<boolean> {
+		return isAutoSearchGloballyPaused();
+	}
+
+	async setGlobalAutoSearchPaused(paused: boolean): Promise<void> {
+		await setAutoSearchGloballyPaused(paused);
+	}
+
+	/** Shared row mapper for fetchSearchActivity and fetchSearchItemDetail's timeline. */
+	/** Batch-resolve scoring-profile names for every profile id referenced by mediaMaps. */
+	private async fetchScoringProfileNames(mediaMaps: MediaMaps): Promise<Map<string, string>> {
+		const profileIds = new Set<string>([
+			...Array.from(mediaMaps.movies.values())
+				.map((m) => m.scoringProfileId)
+				.filter((id): id is string => Boolean(id)),
+			...Array.from(mediaMaps.series.values())
+				.map((s) => s.scoringProfileId)
+				.filter((id): id is string => Boolean(id))
+		]);
+		if (profileIds.size === 0) return new Map();
+
+		const rows = await db
+			.select({ id: scoringProfiles.id, name: scoringProfiles.name })
+			.from(scoringProfiles)
+			.where(inArray(scoringProfiles.id, Array.from(profileIds)))
+			.all();
+		return new Map(rows.map((r) => [r.id, r.name]));
+	}
+
+	private toSearchActivityItem(
+		item: MonitoringHistoryRecord,
+		mediaMaps: MediaMaps,
+		profileNames: Map<string, string>,
+		missingSearchIntervalHours: number
+	): SearchActivityItem {
+		const mediaInfo = resolveMonitoringMediaInfo(item, mediaMaps);
+		const mediaRecord =
+			mediaInfo.mediaType === 'movie'
+				? item.movieId
+					? mediaMaps.movies.get(item.movieId)
+					: undefined
+				: item.episodeId
+					? mediaMaps.episodes.get(item.episodeId)
+					: undefined;
+		const scoringProfileId =
+			mediaInfo.mediaType === 'movie'
+				? item.movieId
+					? mediaMaps.movies.get(item.movieId)?.scoringProfileId
+					: undefined
+				: item.seriesId
+					? mediaMaps.series.get(item.seriesId)?.scoringProfileId
+					: undefined;
+		return {
+			id: item.id,
+			taskType: item.taskType,
+			status: item.status as SearchActivityStatus,
+			mediaType: mediaInfo.mediaType,
+			movieId: item.movieId ?? undefined,
+			seriesId: item.seriesId ?? undefined,
+			episodeId: item.episodeId ?? undefined,
+			mediaTitle: mediaInfo.mediaTitle,
+			mediaYear: mediaInfo.mediaYear,
+			seriesTitle: mediaInfo.seriesTitle,
+			seasonNumber: mediaInfo.seasonNumber,
+			episodeNumber: mediaInfo.episodeNumber,
+			consecutiveFailureCount: mediaRecord?.consecutiveFailureCount ?? 0,
+			autoSearchPaused: mediaRecord?.autoSearchPaused ?? false,
+			qualityProfileName: scoringProfileId ? (profileNames.get(scoringProfileId) ?? null) : null,
+			releasesFound: item.releasesFound ?? 0,
+			releaseGrabbed: item.releaseGrabbed,
+			errorMessage: item.errorMessage,
+			executedAt: item.executedAt as string,
+			nextAttempt: mediaRecord?.lastSearchTime
+				? (getNextSearchTime(
+						mediaRecord.lastSearchTime,
+						backoffCooldownHours(
+							missingSearchIntervalHours,
+							mediaRecord?.consecutiveFailureCount ?? 0
+						)
+					)?.toISOString() ?? null)
+				: null,
+			isUpgrade: item.isUpgrade,
+			oldScore: item.oldScore,
+			newScore: item.newScore,
+			indexerName: item.indexerName,
+			indexersQueried: item.indexersQueried
+		};
+	}
+
+	/**
+	 * Detail payload for the Searches tab's per-item expand panel: media/
+	 * quality-profile info, attempts vs. the failure cap, first/last/next
+	 * attempt timestamps (next attempt reuses the same getNextSearchTime
+	 * helper and missing_search_interval_hours setting the live
+	 * missing-content task itself uses, rather than guessing a default), the
+	 * paused flag, and a short recent-attempts timeline.
+	 */
+	async fetchSearchItemDetail(target: {
+		movieId?: string;
+		episodeId?: string;
+	}): Promise<SearchItemDetail | null> {
+		const { movieId, episodeId } = target;
+		if (!movieId && !episodeId) return null;
+
+		const { missingSearchIntervalHours } = await monitoringScheduler.getSettings();
+
+		if (movieId) {
+			const movie = await db.query.movies.findFirst({ where: eq(movies.id, movieId) });
+			if (!movie) return null;
+
+			const [profile, firstAttemptRow, timelineRows] = await Promise.all([
+				movie.scoringProfileId
+					? db.query.scoringProfiles.findFirst({
+							where: eq(scoringProfiles.id, movie.scoringProfileId)
+						})
+					: Promise.resolve(undefined),
+				db
+					.select({ value: min(monitoringHistory.executedAt) })
+					.from(monitoringHistory)
+					.where(eq(monitoringHistory.movieId, movieId))
+					.get(),
+				db
+					.select({
+						id: monitoringHistory.id,
+						taskType: monitoringHistory.taskType,
+						movieId: monitoringHistory.movieId,
+						seriesId: monitoringHistory.seriesId,
+						seasonNumber: monitoringHistory.seasonNumber,
+						episodeId: monitoringHistory.episodeId,
+						status: monitoringHistory.status,
+						releasesFound: monitoringHistory.releasesFound,
+						releaseGrabbed: monitoringHistory.releaseGrabbed,
+						queueItemId: monitoringHistory.queueItemId,
+						isUpgrade: monitoringHistory.isUpgrade,
+						oldScore: monitoringHistory.oldScore,
+						newScore: monitoringHistory.newScore,
+						indexerName: monitoringHistory.indexerName,
+						indexersQueried: monitoringHistory.indexersQueried,
+						executedAt: monitoringHistory.executedAt,
+						errorMessage: monitoringHistory.errorMessage
+					})
+					.from(monitoringHistory)
+					.where(eq(monitoringHistory.movieId, movieId))
+					.orderBy(desc(monitoringHistory.executedAt))
+					.limit(20)
+					.all()
+			]);
+
+			const mediaMaps = await this.fetchMediaMaps(
+				[],
+				[],
+				timelineRows as MonitoringHistoryRecord[]
+			);
+			const nextAttempt = getNextSearchTime(
+				movie.lastSearchTime,
+				backoffCooldownHours(missingSearchIntervalHours, movie.consecutiveFailureCount)
+			);
+
+			return {
+				mediaType: 'movie',
+				mediaTitle: movie.title,
+				mediaYear: movie.year,
+				qualityProfileName: profile?.name ?? null,
+				consecutiveFailureCount: movie.consecutiveFailureCount,
+				maxConsecutiveFailures: DEFAULT_MAX_CONSECUTIVE_FAILURES,
+				paused: movie.autoSearchPaused,
+				firstAttempt: firstAttemptRow?.value ?? null,
+				lastAttempt: movie.lastSearchTime ?? null,
+				nextAttempt: nextAttempt ? nextAttempt.toISOString() : null,
+				timeline: (timelineRows as MonitoringHistoryRecord[]).map((row) =>
+					this.toSearchActivityItem(row, mediaMaps, new Map(), missingSearchIntervalHours)
+				)
+			};
+		}
+
+		const episode = await db.query.episodes.findFirst({ where: eq(episodes.id, episodeId!) });
+		if (!episode) return null;
+		const seriesRow = await db.query.series.findFirst({ where: eq(series.id, episode.seriesId) });
+
+		const [profile, firstAttemptRow, timelineRows] = await Promise.all([
+			seriesRow?.scoringProfileId
+				? db.query.scoringProfiles.findFirst({
+						where: eq(scoringProfiles.id, seriesRow.scoringProfileId)
+					})
+				: Promise.resolve(undefined),
+			db
+				.select({ value: min(monitoringHistory.executedAt) })
+				.from(monitoringHistory)
+				.where(eq(monitoringHistory.episodeId, episode.id))
+				.get(),
+			db
+				.select({
+					id: monitoringHistory.id,
+					taskType: monitoringHistory.taskType,
+					movieId: monitoringHistory.movieId,
+					seriesId: monitoringHistory.seriesId,
+					seasonNumber: monitoringHistory.seasonNumber,
+					episodeId: monitoringHistory.episodeId,
+					status: monitoringHistory.status,
+					releasesFound: monitoringHistory.releasesFound,
+					releaseGrabbed: monitoringHistory.releaseGrabbed,
+					queueItemId: monitoringHistory.queueItemId,
+					isUpgrade: monitoringHistory.isUpgrade,
+					oldScore: monitoringHistory.oldScore,
+					newScore: monitoringHistory.newScore,
+					indexerName: monitoringHistory.indexerName,
+					indexersQueried: monitoringHistory.indexersQueried,
+					executedAt: monitoringHistory.executedAt,
+					errorMessage: monitoringHistory.errorMessage
+				})
+				.from(monitoringHistory)
+				.where(eq(monitoringHistory.episodeId, episode.id))
+				.orderBy(desc(monitoringHistory.executedAt))
+				.limit(20)
+				.all()
+		]);
+
+		const mediaMaps = await this.fetchMediaMaps([], [], timelineRows as MonitoringHistoryRecord[]);
+		const nextAttempt = getNextSearchTime(
+			episode.lastSearchTime,
+			backoffCooldownHours(missingSearchIntervalHours, episode.consecutiveFailureCount)
+		);
+
+		return {
+			mediaType: 'episode',
+			mediaTitle: seriesRow?.title ?? 'Unknown Series',
+			mediaYear: seriesRow?.year ?? null,
+			seriesTitle: seriesRow?.title,
+			seasonNumber: episode.seasonNumber,
+			episodeNumber: episode.episodeNumber,
+			qualityProfileName: profile?.name ?? null,
+			consecutiveFailureCount: episode.consecutiveFailureCount,
+			maxConsecutiveFailures: DEFAULT_MAX_CONSECUTIVE_FAILURES,
+			paused: episode.autoSearchPaused,
+			firstAttempt: firstAttemptRow?.value ?? null,
+			lastAttempt: episode.lastSearchTime ?? null,
+			nextAttempt: nextAttempt ? nextAttempt.toISOString() : null,
+			timeline: (timelineRows as MonitoringHistoryRecord[]).map((row) =>
+				this.toSearchActivityItem(row, mediaMaps, new Map(), missingSearchIntervalHours)
+			)
+		};
 	}
 
 	/**
@@ -1525,7 +1997,15 @@ export class ActivityService {
 		const [moviesData, episodesData] = await Promise.all([
 			movieIds.size > 0
 				? db
-						.select({ id: movies.id, title: movies.title, year: movies.year })
+						.select({
+							id: movies.id,
+							title: movies.title,
+							year: movies.year,
+							consecutiveFailureCount: movies.consecutiveFailureCount,
+							autoSearchPaused: movies.autoSearchPaused,
+							scoringProfileId: movies.scoringProfileId,
+							lastSearchTime: movies.lastSearchTime
+						})
 						.from(movies)
 						.where(inArray(movies.id, Array.from(movieIds)))
 						.all()
@@ -1536,7 +2016,10 @@ export class ActivityService {
 							id: episodes.id,
 							seriesId: episodes.seriesId,
 							episodeNumber: episodes.episodeNumber,
-							seasonNumber: episodes.seasonNumber
+							seasonNumber: episodes.seasonNumber,
+							consecutiveFailureCount: episodes.consecutiveFailureCount,
+							autoSearchPaused: episodes.autoSearchPaused,
+							lastSearchTime: episodes.lastSearchTime
 						})
 						.from(episodes)
 						.where(inArray(episodes.id, Array.from(episodeIds)))
@@ -1553,7 +2036,12 @@ export class ActivityService {
 		const seriesData =
 			seriesIds.size > 0
 				? await db
-						.select({ id: series.id, title: series.title, year: series.year })
+						.select({
+							id: series.id,
+							title: series.title,
+							year: series.year,
+							scoringProfileId: series.scoringProfileId
+						})
 						.from(series)
 						.where(inArray(series.id, Array.from(seriesIds)))
 						.all()
@@ -1569,7 +2057,10 @@ export class ActivityService {
 						id: e.id,
 						seriesId: e.seriesId,
 						episodeNumber: e.episodeNumber,
-						seasonNumber: e.seasonNumber
+						seasonNumber: e.seasonNumber,
+						consecutiveFailureCount: e.consecutiveFailureCount,
+						autoSearchPaused: e.autoSearchPaused,
+						lastSearchTime: e.lastSearchTime
 					}
 				])
 			)

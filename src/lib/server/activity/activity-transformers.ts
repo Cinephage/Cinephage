@@ -14,6 +14,15 @@ export interface MediaInfo {
 
 export interface SeriesInfo extends MediaInfo {
 	seasonNumber?: number;
+	scoringProfileId: string | null;
+}
+
+/** Movies carry a consecutive-failure counter (migration 170); series don't. */
+export interface MovieInfo extends MediaInfo {
+	consecutiveFailureCount: number;
+	autoSearchPaused: boolean;
+	scoringProfileId: string | null;
+	lastSearchTime: string | null;
 }
 
 export interface EpisodeInfo {
@@ -21,10 +30,13 @@ export interface EpisodeInfo {
 	seriesId: string;
 	episodeNumber: number;
 	seasonNumber: number;
+	consecutiveFailureCount: number;
+	autoSearchPaused: boolean;
+	lastSearchTime: string | null;
 }
 
 export interface MediaMaps {
-	movies: Map<string, MediaInfo>;
+	movies: Map<string, MovieInfo>;
 	series: Map<string, SeriesInfo>;
 	episodes: Map<string, EpisodeInfo>;
 }
@@ -38,6 +50,72 @@ export interface ResolvedMediaInfo {
 	seriesTitle?: string;
 	seasonNumber?: number;
 	episodeNumber?: number;
+}
+
+/** Raw monitoringHistory.status values a search-attempt row can carry. */
+export type SearchActivityStatus =
+	'searched' | 'found' | 'grabbed' | 'no_results' | 'skipped' | 'error';
+
+/**
+ * One row in the Activity page's "Searches" tab - a read-only record of a
+ * single automatic search attempt (not a live/controllable item).
+ */
+export interface SearchActivityItem {
+	id: string;
+	taskType: string | null;
+	status: SearchActivityStatus;
+	mediaType: 'movie' | 'episode';
+	/** Raw ids for acting on this row (Search Now, Reset Failure Count) - not for display. */
+	movieId?: string;
+	seriesId?: string;
+	episodeId?: string;
+	mediaTitle: string;
+	mediaYear: number | null;
+	seriesTitle?: string;
+	seasonNumber?: number;
+	episodeNumber?: number;
+	/** Consecutive failed grab/import attempts for this movie/episode (FailureCapSpecification). */
+	consecutiveFailureCount: number;
+	/** User-initiated auto-search pause for this movie/episode (migration 173). */
+	autoSearchPaused: boolean;
+	/** Name of the scoring/quality profile this search is evaluated against. */
+	qualityProfileName: string | null;
+	releasesFound: number;
+	releaseGrabbed: string | null;
+	errorMessage: string | null;
+	executedAt: string;
+	/** When this item's auto-search is next eligible to run, or null if unknown/eligible now. */
+	nextAttempt: string | null;
+	isUpgrade: boolean | null;
+	oldScore: number | null;
+	newScore: number | null;
+	/** Indexer that supplied the grabbed release, when one was grabbed. */
+	indexerName: string | null;
+	/** How many distinct indexers answered this search attempt. */
+	indexersQueried: number | null;
+}
+
+/**
+ * Detail payload for the Searches tab's per-item expand panel - media/quality
+ * info, attempts-vs-cap, the first/last/next attempt timeline fields, the
+ * paused flag, and a short recent-attempts timeline. Fetched lazily on
+ * expand, not part of the paginated SearchActivityItem list.
+ */
+export interface SearchItemDetail {
+	mediaType: 'movie' | 'episode';
+	mediaTitle: string;
+	mediaYear: number | null;
+	seriesTitle?: string;
+	seasonNumber?: number;
+	episodeNumber?: number;
+	qualityProfileName: string | null;
+	consecutiveFailureCount: number;
+	maxConsecutiveFailures: number;
+	paused: boolean;
+	firstAttempt: string | null;
+	lastAttempt: string | null;
+	nextAttempt: string | null;
+	timeline: SearchActivityItem[];
 }
 
 export function deriveFallbackMediaInfo(
