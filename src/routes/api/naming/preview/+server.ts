@@ -12,7 +12,13 @@ import { createChildLogger } from '#lib/logging/index.js';
 const logger = createChildLogger({ module: 'NamingPreviewApi', logDomain: 'scans' });
 
 /**
- * Sample data for previews
+ * Sample data for previews.
+ *
+ * A sample has to carry every fact its format context can render, or the token
+ * reads as unsupported in the screen users test formats in - a sample without
+ * `seasonYear` is why `{SeasonYear}` previewed as empty (issue #669). The
+ * episode sample is a later season on purpose, so season-level facts
+ * (`seasonYear`, `airDate`) differ visibly from series-level ones (`year`).
  */
 const SAMPLE_MOVIE: MediaNamingInfo = {
 	title: 'The Dark Knight',
@@ -46,9 +52,11 @@ const SAMPLE_EPISODE: MediaNamingInfo = {
 	year: 2008,
 	tvdbId: 81189,
 	tmdbId: 1396,
-	seasonNumber: 1,
+	seasonNumber: 5,
 	episodeNumbers: [1],
-	episodeTitle: 'Pilot',
+	episodeTitle: 'Live Free or Die',
+	seasonYear: 2012,
+	airDate: '2012-07-15',
 	resolution: '1080p',
 	source: 'Bluray',
 	codec: 'x265',
@@ -63,8 +71,7 @@ const SAMPLE_EPISODE: MediaNamingInfo = {
 
 const SAMPLE_MULTI_EPISODE: MediaNamingInfo = {
 	...SAMPLE_EPISODE,
-	episodeNumbers: [1, 2, 3],
-	episodeTitle: 'Pilot'
+	episodeNumbers: [1, 2, 3]
 };
 
 const SAMPLE_ANIME: MediaNamingInfo = {
@@ -139,7 +146,10 @@ export const POST: RequestHandler = async (event) => {
 			},
 			series: {
 				folder: namingService.generateSeriesFolderName(SAMPLE_EPISODE),
-				season: namingService.generateSeasonFolderName(1, SAMPLE_EPISODE)
+				season: namingService.generateSeasonFolderName(
+					SAMPLE_EPISODE.seasonNumber ?? 1,
+					SAMPLE_EPISODE
+				)
 			},
 			episode: {
 				file: namingService.generateEpisodeFileName(SAMPLE_EPISODE)
@@ -189,7 +199,10 @@ export const GET: RequestHandler = async () => {
 			},
 			series: {
 				folder: namingService.generateSeriesFolderName(SAMPLE_EPISODE),
-				season: namingService.generateSeasonFolderName(1, SAMPLE_EPISODE)
+				season: namingService.generateSeasonFolderName(
+					SAMPLE_EPISODE.seasonNumber ?? 1,
+					SAMPLE_EPISODE
+				)
 			},
 			episode: {
 				file: namingService.generateEpisodeFileName(SAMPLE_EPISODE)
