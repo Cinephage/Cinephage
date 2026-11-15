@@ -234,7 +234,7 @@ describe('GrabService multi-quality two-bucket grab (integration)', () => {
 		).toHaveLength(1);
 	});
 
-	it('rejects an already imported hash when the media file still exists', async () => {
+	it('rejects an already imported hash for an automatic grab when the media file still exists', async () => {
 		const infoHash = 'abcdef0123456789abcdef0123456789abcdef01';
 		testDb.db
 			.insert(movieFiles)
@@ -269,7 +269,7 @@ describe('GrabService multi-quality two-bucket grab (integration)', () => {
 			options: {
 				force: false,
 				skipBlocklist: true,
-				isAutomatic: false,
+				isAutomatic: true,
 				allowSidegrade: false,
 				skipDelay: true
 			}
@@ -280,7 +280,7 @@ describe('GrabService multi-quality two-bucket grab (integration)', () => {
 		expect(testDb.db.select().from(downloadQueue).all()).toHaveLength(0);
 	});
 
-	it('rejects an imported hash even when the target has no file or differs', async () => {
+	it('rejects an imported hash for an automatic grab even when the target has no file or differs', async () => {
 		const infoHash = 'abcdef0123456789abcdef0123456789abcdef01';
 		testDb.db
 			.insert(downloadHistory)
@@ -306,7 +306,7 @@ describe('GrabService multi-quality two-bucket grab (integration)', () => {
 			options: {
 				force: false,
 				skipBlocklist: true,
-				isAutomatic: false,
+				isAutomatic: true,
 				allowSidegrade: false,
 				skipDelay: true
 			}
@@ -315,6 +315,59 @@ describe('GrabService multi-quality two-bucket grab (integration)', () => {
 		expect(result.success).toBe(false);
 		expect(result.decision.rejectionType).toBe('duplicate_hash');
 		expect(testDb.db.select().from(downloadQueue).all()).toHaveLength(0);
+	});
+
+	it('lets a manual grab through an already imported hash and an existing file', async () => {
+		const infoHash = 'abcdef0123456789abcdef0123456789abcdef01';
+		testDb.db
+			.insert(movieFiles)
+			.values({
+				id: 'file-existing',
+				movieId: 'movie-1',
+				relativePath: 'Test Movie (2026)/movie.1080p.mkv',
+				quality: { resolution: '1080p' }
+			})
+			.run();
+		testDb.db
+			.insert(downloadHistory)
+			.values({
+				id: 'history-existing',
+				downloadId: 'provider-item-1',
+				infoHash,
+				title: 'Test.Movie.2026.1080p.WEB-DL.DDP5.1.H.264-GROUP',
+				movieId: 'movie-1',
+				protocol: 'torrent',
+				status: 'imported'
+			})
+			.run();
+
+		const result = await grabService.grab({
+			release: {
+				title: 'Test.Movie.2026.1080p.WEB-DL.DDP5.1.H.264-GROUP',
+				infoHash,
+				protocol: 'torrent',
+				size: 4_000_000_000
+			},
+			target: { type: 'movie', movieId: 'movie-1' },
+			options: {
+				force: true,
+				skipBlocklist: false,
+				isAutomatic: false,
+				allowSidegrade: false,
+				skipDelay: true
+			}
+		});
+
+		expect(result.success).toBe(true);
+		expect(result.decision.audit.stages.find((s) => s.name === 'duplicateHash')?.skipped).toBe(
+			true
+		);
+		expect(result.decision.audit.stages.find((s) => s.name === 'mediaOccupancy')?.skipped).toBe(
+			true
+		);
+		expect(
+			testDb.db.select().from(downloadQueue).where(eq(downloadQueue.infoHash, infoHash)).all()
+		).toHaveLength(1);
 	});
 
 	it('allows a re-grab when only a failed row matches the magnet hash', async () => {

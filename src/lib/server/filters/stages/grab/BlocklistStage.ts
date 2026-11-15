@@ -1,12 +1,13 @@
 import type { DecisionStage, StageResult } from '../../types.js';
 import type { GrabDecisionContext } from './types.js';
 import { blocklistService } from '#lib/server/blocklist/BlocklistService.js';
+import { skipsHardStages } from './hard-stage-policy.js';
 
 export class BlocklistStage implements DecisionStage<GrabDecisionContext> {
 	name = 'blocklist';
 
 	isEnabled(ctx: GrabDecisionContext): boolean {
-		return ctx.options.overrideHardStages !== true && !ctx.options.skipBlocklist;
+		return !skipsHardStages(ctx.options) && !ctx.options.skipBlocklist;
 	}
 
 	async evaluate(ctx: GrabDecisionContext): Promise<StageResult> {

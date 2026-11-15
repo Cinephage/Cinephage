@@ -2,6 +2,7 @@ import { mediaOccupancyService } from '#lib/server/acquisition/MediaOccupancySer
 import type { DecisionStage, StageResult } from '../../types.js';
 import type { GrabDecisionContext } from './types.js';
 import { createChildLogger } from '#lib/logging/index.js';
+import { skipsHardStages } from './hard-stage-policy.js';
 
 const logger = createChildLogger({ module: 'MediaOccupancyStage' });
 
@@ -10,11 +11,12 @@ export class MediaOccupancyStage implements DecisionStage<GrabDecisionContext> {
 
 	// Pre-flight advisory check for a readable rejection message. The
 	// authoritative enforcement is the DB-level reservation in
-	// AcquisitionService.createIntent, which applies to manual grabs too.
-	// This stage runs for manual (non-automatic) grabs as well; only an
-	// explicit force skips it - and force never bypasses the reservation.
+	// AcquisitionService.createIntent, which still applies to a manual grab
+	// (one active acquisition per slot). What this stage adds - and what a
+	// manual grab must not be refused for - is the "already has a file" case:
+	// a manual grab replaces the file instead of being turned away.
 	isEnabled(ctx: GrabDecisionContext): boolean {
-		return ctx.options.overrideHardStages !== true;
+		return !skipsHardStages(ctx.options);
 	}
 
 	async evaluate(ctx: GrabDecisionContext): Promise<StageResult> {

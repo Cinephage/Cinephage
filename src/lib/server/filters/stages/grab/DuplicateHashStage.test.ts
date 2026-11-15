@@ -156,4 +156,13 @@ describe('DuplicateHashStage', () => {
 
 		expect(stage.isEnabled(ctx)).toBe(false);
 	});
+
+	it('does not run for a manual grab - a re-grab of a known hash is allowed', async () => {
+		const ctx = makeGrabDecisionContext({
+			release: { title: 'Movie.2024.1080p-GRP', infoHash: HASH, protocol: 'torrent' },
+			options: { force: true, skipBlocklist: false, allowSidegrade: false, isAutomatic: false }
+		});
+
+		expect(stage.isEnabled(ctx)).toBe(false);
+	});
 });

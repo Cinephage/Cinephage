@@ -9,6 +9,16 @@ export interface ResolvedIdentityRecheck {
 	reason?: string;
 }
 
+export interface ResolvedIdentityRecheckOptions {
+	/**
+	 * A manual grab is the user's decision: a hash that was already imported, or
+	 * that already sits in the queue, does not veto it - the release was requested
+	 * on purpose. Active-acquisition identity exclusivity still applies, because
+	 * two live acquisitions of one release cannot coexist.
+	 */
+	manual?: boolean;
+}
+
 /**
  * Post-resolution identity recheck (acquisition-system redesign).
  *
@@ -27,7 +37,8 @@ export interface ResolvedIdentityRecheck {
  */
 export async function recheckResolvedIdentity(
 	intentId: string,
-	infoHash: string
+	infoHash: string,
+	options: ResolvedIdentityRecheckOptions = {}
 ): Promise<ResolvedIdentityRecheck> {
 	// 1. Record the identity on the intent; the partial unique index on
 	//    active identities rejects a duplicate cross-target acquisition.
@@ -42,6 +53,12 @@ export async function recheckResolvedIdentity(
 			reason: `Duplicate release: "${conflict.releaseTitle}" is already being acquired (since ${conflict.createdAt})`
 		};
 	}
+
+	// A manual grab stops here: the hash is recorded on its intent and
+	// exclusivity against a live acquisition was already held above. The two
+	// history checks below stop the app duplicating its own work - they are
+	// not a veto over an explicit request.
+	if (options.manual) return { blocked: false };
 
 	// 2. Queue rows (covers pre-migration rows without intents). Any
 	//    non-terminal row with this hash is an active duplicate - including

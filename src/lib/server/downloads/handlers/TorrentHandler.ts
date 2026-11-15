@@ -253,7 +253,9 @@ export class TorrentHandler {
 		// already checked by the pipeline and the intent's identity.
 		if (options.intentId && resolvedDownload.infoHash) {
 			const { recheckResolvedIdentity } = await import('../identity-recheck.js');
-			const recheck = await recheckResolvedIdentity(options.intentId, resolvedDownload.infoHash);
+			const recheck = await recheckResolvedIdentity(options.intentId, resolvedDownload.infoHash, {
+				manual: options.isAutomatic === false
+			});
 			if (recheck.blocked) {
 				acquisitionService.cancelIntent(options.intentId, recheck.reason);
 				logger.info(

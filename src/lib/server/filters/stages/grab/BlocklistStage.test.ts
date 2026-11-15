@@ -20,9 +20,16 @@ describe('BlocklistStage', () => {
 			expect(stage.isEnabled(makeGrabDecisionContext())).toBe(true);
 		});
 
-		it('stays enabled for manual force grabs (hard stage)', () => {
+		it('skips a manual grab - the owner decided, the release is not vetoed', () => {
 			const ctx = makeGrabDecisionContext({
 				options: { force: true, skipBlocklist: false, allowSidegrade: false, isAutomatic: false }
+			});
+			expect(stage.isEnabled(ctx)).toBe(false);
+		});
+
+		it('stays enabled for an automatic grab', () => {
+			const ctx = makeGrabDecisionContext({
+				options: { force: false, skipBlocklist: false, allowSidegrade: false, isAutomatic: true }
 			});
 			expect(stage.isEnabled(ctx)).toBe(true);
 		});

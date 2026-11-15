@@ -113,8 +113,8 @@ export interface GrabDecisionOptions {
 	/**
 	 * Explicit hard-override (admin "override rejected release" flows). When
 	 * true, the hard stages (blocklist, duplicate-hash, media-occupancy) are
-	 * skipped. Plain manual grabs set `force` to skip policy only - they must
-	 * still pass identity and the hard stages. Identity ignores this flag
+	 * skipped. A manual grab (`isAutomatic: false`) gets this treatment
+	 * automatically - see `skipsHardStages`. Identity ignores this flag
 	 * entirely and always runs.
 	 */
 	overrideHardStages?: boolean;

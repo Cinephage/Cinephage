@@ -6,6 +6,7 @@ import { and, eq, notInArray } from 'drizzle-orm';
 import { resolveInfoHash } from '#lib/server/downloadClients/utils/hashUtils.js';
 import { resolveImportedScope } from '#lib/server/downloads/imported-scope.js';
 import { POST_IMPORT_QUEUE_STATUSES, TERMINAL_QUEUE_STATUSES } from '#lib/types/queue.js';
+import { skipsHardStages } from './hard-stage-policy.js';
 
 /**
  * Queue statuses that must NOT block a re-grab: failed attempts are retryable
@@ -44,7 +45,7 @@ export class DuplicateHashStage implements DecisionStage<GrabDecisionContext> {
 	name = 'duplicateHash';
 
 	isEnabled(ctx: GrabDecisionContext): boolean {
-		return ctx.options.overrideHardStages !== true && !!getReleaseInfoHash(ctx);
+		return !skipsHardStages(ctx.options) && !!getReleaseInfoHash(ctx);
 	}
 
 	async evaluate(ctx: GrabDecisionContext): Promise<StageResult> {

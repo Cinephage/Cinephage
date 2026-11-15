@@ -121,6 +121,44 @@ describe('recheckResolvedIdentity', () => {
 		expect(result.reason).toContain('already importing');
 	});
 
+	it('lets a manual grab through an already-imported hash', async () => {
+		const intentId = createTvIntent(['ep-1', 'ep-2']);
+		addImportedHistory(['ep-1', 'ep-2']);
+
+		const result = await recheckResolvedIdentity(intentId, HASH, { manual: true });
+
+		expect(result.blocked).toBe(false);
+	});
+
+	it('lets a manual grab through a live queue row holding the hash', async () => {
+		const intentId = createTvIntent(['ep-3']);
+		testDb.db
+			.insert(downloadQueue)
+			.values({
+				downloadClientId: 'client-1',
+				downloadId: HASH,
+				infoHash: HASH,
+				title: 'Show.S01.Pack-GRP',
+				status: 'stalled'
+			})
+			.run();
+
+		const result = await recheckResolvedIdentity(intentId, HASH, { manual: true });
+
+		expect(result.blocked).toBe(false);
+	});
+
+	it('still blocks a manual grab that duplicates a live acquisition', async () => {
+		const first = createTvIntent(['ep-1']);
+		await recheckResolvedIdentity(first, HASH);
+
+		const second = createTvIntent(['ep-2']);
+		const result = await recheckResolvedIdentity(second, HASH, { manual: true });
+
+		expect(result.blocked).toBe(true);
+		expect(result.reason).toContain('already being acquired');
+	});
+
 	it('blocks a second active acquisition of the same release identity', async () => {
 		const first = createTvIntent(['ep-1']);
 		await recheckResolvedIdentity(first, HASH);

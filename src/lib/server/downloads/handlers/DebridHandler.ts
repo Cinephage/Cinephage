@@ -78,7 +78,8 @@ export class DebridHandler {
 			if (request.options.intentId) {
 				const recheck = await recheckResolvedIdentity(
 					request.options.intentId,
-					prepared.value.infoHash
+					prepared.value.infoHash,
+					{ manual: request.options.isAutomatic === false }
 				);
 				if (recheck.blocked) {
 					acquisitionService.cancelIntent(request.options.intentId, recheck.reason);
