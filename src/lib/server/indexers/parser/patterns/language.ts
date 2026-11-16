@@ -295,6 +295,35 @@ const FAN_TAG_SLOT =
 	/\((?:19|20)\d{2}\)\s+([A-Za-z]{2}(?:\s+[A-Za-z]{2}){0,5})(?=\s*(?:[-–)\]]|$))/;
 
 /**
+ * True when a title clause announces subtitle languages rather than audio.
+ *
+ * Releases group tracks with `+` or `|`, and a clause that opens with
+ * Sub/Subs/Subtitles names its subtitle languages - `Dub + MVO + Sub Rus,
+ * Eng, Zho` carries Russian/Chinese audio and an English subtitle, so those
+ * tags must not count as audio evidence.
+ */
+const SUBTITLE_CLAUSE = /^\s*(?:subs?|subtitles?|titles)\b/i;
+
+/** A mid-title subtitle marker, e.g. `Movie.2026.Sub.Eng.1080p`. */
+const INLINE_SUBTITLE_MARKER = /(?:^|[.\s_-])(?:subs?|subtitles?|titles)\s*[.:\s_-].*$/i;
+
+/**
+ * Drop subtitle-language clauses from a release title before audio-language
+ * extraction. Splits on the same `+`/`|` group separators release names use,
+ * so only the clauses that *are* subtitle lists disappear; a title with no
+ * such marker is returned unchanged.
+ */
+export function stripSubtitleClauses(title: string): string {
+	if (!title) return title;
+	const kept = title
+		.split(/[+|]/)
+		.map((part) => part.trim())
+		.filter((part) => part !== '' && !SUBTITLE_CLAUSE.test(part))
+		.join(' + ');
+	return kept.replace(INLINE_SUBTITLE_MARKER, '').trim();
+}
+
+/**
  * Extract all languages from a release title
  *
  * @param title - The release title to parse
@@ -329,6 +358,16 @@ export function extractLanguages(title: string): LanguageMatch {
 	// evidence of English audio. The marker/empty contract is handled explicitly
 	// by consumers (language boost ignores 'multi'; naming renders `und`).
 	return { languages, matchedTexts };
+}
+
+/**
+ * Audio-language evidence from a release title: `extractLanguages` with the
+ * subtitle clauses removed. Use this wherever the tags are read as *audio*
+ * evidence (acquisition ranking, the grab gate); subtitle detection keeps
+ * using `extractLanguages`.
+ */
+export function extractAudioLanguages(title: string): LanguageMatch {
+	return extractLanguages(stripSubtitleClauses(title));
 }
 
 /**

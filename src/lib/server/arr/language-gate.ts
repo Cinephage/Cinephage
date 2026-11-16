@@ -5,7 +5,7 @@
  * drift apart.
  */
 
-import { extractLanguages } from '#lib/server/indexers/parser/patterns/language.js';
+import { extractAudioLanguages } from '#lib/server/indexers/parser/patterns/language.js';
 import {
 	AUDIO_PREFERENCE_BUCKETS,
 	rankLanguageEvidenceSet,
@@ -29,7 +29,7 @@ export function evaluatePushLanguageGate(
 		preference.originalLanguage !== '';
 	if (preference.languages.length === 0 && !hasOriginalSignal) return null;
 
-	const evidence = extractLanguages(title).languages;
+	const evidence = extractAudioLanguages(title).languages;
 	if (evidence.length === 0) return null;
 
 	const { bucket } = rankLanguageEvidenceSet(evidence, preference);

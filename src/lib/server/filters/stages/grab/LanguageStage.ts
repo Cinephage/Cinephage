@@ -1,6 +1,6 @@
 import type { DecisionStage, StageResult } from '../../types.js';
 import type { GrabDecisionContext, GrabTarget } from './types.js';
-import { extractLanguages } from '#lib/server/indexers/parser/patterns/language.js';
+import { extractAudioLanguages } from '#lib/server/indexers/parser/patterns/language.js';
 import {
 	AUDIO_PREFERENCE_BUCKETS,
 	rankLanguageEvidenceSet
@@ -39,7 +39,7 @@ export class LanguageStage implements DecisionStage<GrabDecisionContext> {
 			return { accepted: true };
 		}
 
-		const evidence = extractLanguages(ctx.release.title).languages;
+		const evidence = extractAudioLanguages(ctx.release.title).languages;
 		if (evidence.length === 0) {
 			// Absence of evidence is never a rejection.
 			return { accepted: true };

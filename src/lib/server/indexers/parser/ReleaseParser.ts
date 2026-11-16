@@ -14,7 +14,7 @@ import { extractResolution } from './patterns/resolution.js';
 import { extractSource } from './patterns/source.js';
 import { extractBitDepth, extractCodec } from './patterns/codec.js';
 import { extractEnhancedAudio, extractHdrFormats } from './patterns/audio.js';
-import { extractLanguages } from './patterns/language.js';
+import { extractAudioLanguages } from './patterns/language.js';
 import { extractEpisode, extractTitleBeforeEpisode } from './patterns/episode.js';
 import { extractReleaseGroup } from './patterns/releaseGroup.js';
 
@@ -135,7 +135,7 @@ export class ReleaseParser {
 		});
 
 		// Extract other metadata
-		const languageMatch = extractLanguages(normalized);
+		const languageMatch = extractAudioLanguages(normalized);
 		const groupMatch = extractReleaseGroup(normalized);
 		const releaseGroup = this.resolveReleaseGroup(normalized, groupMatch, episodeMatch, [
 			resolutionMatch?.index,
@@ -148,9 +148,10 @@ export class ReleaseParser {
 		const year = this.extractYear(normalized);
 		const edition = this.extractEdition(normalized);
 
-		// Title-detected languages only: the indexer definition language is
-		// source metadata (where the release came from), not audio evidence,
-		// and stays available separately via `sourceLanguage`.
+		// Title-detected AUDIO languages only: the indexer definition language is
+		// source metadata (where the release came from), not audio evidence, and
+		// stays available separately via `sourceLanguage`; a title's subtitle
+		// clause ("Sub Eng, Fra") names subtitles, never an audio track.
 		const languages = languageMatch.languages;
 
 		// Extract special flags

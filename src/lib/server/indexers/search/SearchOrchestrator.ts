@@ -55,7 +55,7 @@ import {
 	isRuTrackerHost
 } from './russian-trackers';
 import { parseRelease } from '../parser';
-import { extractLanguages } from '../parser/patterns/language';
+import { extractAudioLanguages, extractLanguages } from '../parser/patterns/language';
 import {
 	rankLanguageEvidenceSet,
 	type EffectiveAudioPreference
@@ -2813,7 +2813,7 @@ export class SearchOrchestrator {
 
 		for (const tag of release.languages ?? []) push(tag);
 		for (const tag of release.parsed?.languages ?? []) push(tag);
-		for (const tag of extractLanguages(release.title).languages) push(tag);
+		for (const tag of extractAudioLanguages(release.title).languages) push(tag);
 		return tokens;
 	}
 
