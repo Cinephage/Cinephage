@@ -18,7 +18,8 @@ export type RejectionType =
 	| 'not_upgrade'
 	| 'upgrades_disabled'
 	| 'pending_delay'
-	| 'missing_required_format';
+	| 'missing_required_format'
+	| 'desired_quality';
 
 export interface ReleaseInfo {
 	title: string;

@@ -126,6 +126,30 @@ describe('GrabDecisionPipeline', () => {
 		expect(decision.rejectionType).toBeUndefined();
 	});
 
+	it('rejects a release outside the movie desired qualities', async () => {
+		mockCalculateEnhancedScore.mockReturnValue({
+			scoringResult: {
+				totalScore: 250,
+				resolution: '2160p',
+				isBanned: false,
+				bannedReasons: [],
+				sizeRejected: false,
+				sizeRejectionReason: undefined,
+				protocolRejected: false,
+				protocolRejectionReason: undefined,
+				meetsMinimum: true
+			},
+			score: 250
+		});
+
+		const ctx = makeGrabDecisionContext({ desiredQualities: ['1080p'] });
+		const decision = await pipeline.evaluate(ctx);
+
+		expect(decision.accepted).toBe(false);
+		expect(decision.rejectionType).toBe('desired_quality');
+		expect(decision.reason).toContain('2160p');
+	});
+
 	it('skips most stages when force is true', async () => {
 		const ctx = makeGrabDecisionContext({
 			options: { force: true, skipBlocklist: false, allowSidegrade: false, isAutomatic: false },
@@ -293,6 +317,7 @@ describe('GrabDecisionPipeline', () => {
 			'scoring',
 			'bannedFormat',
 			'requiredFormats',
+			'desiredQuality',
 			'language',
 			'sizeValidation',
 			'protocol',

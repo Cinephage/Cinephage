@@ -739,6 +739,7 @@ class GrabServiceImpl {
 				case 'banned':
 					return 'required_format_mismatch';
 				case 'below_minimum':
+				case 'desired_quality':
 				case 'not_upgrade':
 				case 'upgrades_disabled':
 				case 'size_rejected':

@@ -21,6 +21,7 @@ import { UpgradeStage } from './stages/grab/UpgradeStage.js';
 import { DelayStage } from './stages/grab/DelayStage.js';
 import { LanguageStage } from './stages/grab/LanguageStage.js';
 import { RequiredFormatsStage } from './stages/grab/RequiredFormatsStage.js';
+import { DesiredQualityStage } from './stages/grab/DesiredQualityStage.js';
 
 export class GrabDecisionPipeline {
 	private stages = [
@@ -29,6 +30,7 @@ export class GrabDecisionPipeline {
 		new ScoringStage(),
 		new BannedFormatStage(),
 		new RequiredFormatsStage(),
+		new DesiredQualityStage(),
 		new LanguageStage(),
 		new SizeValidationStage(),
 		new ProtocolStage(),
@@ -103,7 +105,8 @@ export class GrabDecisionPipeline {
 			mediaOccupancy: 'media_occupied',
 			blockedExtension: 'blocked_extension',
 			upgrade: 'not_upgrade',
-			delay: 'pending_delay'
+			delay: 'pending_delay',
+			desiredQuality: 'desired_quality'
 		};
 
 		return map[rejectingStage.name];
