@@ -217,7 +217,19 @@ export class ReleaseDeduplicator {
 		const yearMatch =
 			release.title.match(/\((19|20)\d{2}\)/) ?? release.title.match(/\b(?:19|20)\d{2}\b/);
 		const yearSuffix = yearMatch ? `:${yearMatch[0].replace(/[()]/g, '')}` : '';
-		return `title:${this.normalizeTitle(release.title)}${yearSuffix}`;
+
+		// Include the resolution for the same reason: indexers that bracket it
+		// ("Movie (2025) [1080p] [BluRay]") lose it to normalisation, so a 1080p
+		// and a 2160p release of one film collided on this key and only the
+		// higher-scoring survivor reached the grab loop - a movie with 1080p
+		// desired saw nothing but 4K candidates and looked unfetchable.
+		const parsed = (release as { parsed?: { resolution?: string } }).parsed;
+		const resolution =
+			parsed?.resolution?.toLowerCase() ??
+			release.title.match(/\b(2160p|1080p|720p|480p|4k|uhd)\b/i)?.[1]?.toLowerCase() ??
+			'unknown';
+
+		return `title:${this.normalizeTitle(release.title)}${yearSuffix}:${resolution}`;
 	}
 
 	/**
