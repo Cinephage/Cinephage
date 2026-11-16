@@ -249,6 +249,7 @@ export async function searchForMovie(
 			? effective.filter((r) => filledResolutions.includes(r))
 			: [];
 		let lastGrab: GrabResult | null = null;
+		const rejections: string[] = [];
 
 		for (const release of searchResult.releases) {
 			const res = release.parsed?.resolution as Resolution | undefined;
@@ -280,12 +281,15 @@ export async function searchForMovie(
 				continue;
 			}
 
+			rejections.push(grabResult.decision?.rejectionType ?? 'rejected');
 			lastGrab = {
 				success: false,
 				error: grabResult.error ?? grabResult.decision?.reason ?? 'Unknown error',
 				indexersQueried
 			};
-			if (!multiQuality) break;
+			// A single-quality search stops after one *grab*, not after one
+			// rejection: the ranked list holds every tier, so a movie set to 1080p
+			// must still reach its 1080p candidates after the 4K ones are refused.
 		}
 
 		if (lastGrab?.success) {
@@ -300,7 +304,21 @@ export async function searchForMovie(
 			});
 		}
 
-		return lastGrab ?? { success: false, error: 'No releases found', indexersQueried };
+		if (!lastGrab) return { success: false, error: 'No releases found', indexersQueried };
+		if (lastGrab.success) return lastGrab;
+
+		// Every candidate was refused. Report the distribution rather than the
+		// last refusal: one reason alone reads as the whole story when it is not.
+		const counts = new Map<string, number>();
+		for (const reason of rejections) counts.set(reason, (counts.get(reason) ?? 0) + 1);
+		const breakdown = [...counts.entries()]
+			.map(([reason, count]) => `${count} x ${reason}`)
+			.join(', ');
+		return {
+			success: false,
+			error: `No acceptable release: ${rejections.length} rejected (${breakdown})`,
+			indexersQueried
+		};
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Unknown error';
 		logger.error({ movieId, err: error }, '[SearchOnAdd] Movie search failed');
