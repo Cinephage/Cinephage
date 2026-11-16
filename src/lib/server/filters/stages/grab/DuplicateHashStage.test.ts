@@ -142,11 +142,34 @@ describe('DuplicateHashStage', () => {
 		const result = await stage.evaluate(
 			makeGrabDecisionContext({
 				release: { title: 'Movie.2024.1080p-GRP', infoHash: HASH, protocol: 'torrent' },
-				target: { type: 'movie', movieId: 'movie-1' }
+				target: { type: 'movie', movieId: 'movie-1' },
+				existingFiles: [{ id: 'file-1', relativePath: 'Movie/movie.1080p.mkv' }]
 			})
 		);
 
 		expect(result.accepted).toBe(false);
+	});
+
+	it('allows a re-grab of an imported movie whose file is gone', async () => {
+		testDb.db
+			.insert(downloadHistory)
+			.values({
+				title: 'Movie.2024.1080p-GRP',
+				infoHash: HASH,
+				downloadId: HASH,
+				status: 'imported',
+				movieId: 'movie-1'
+			})
+			.run();
+
+		const result = await stage.evaluate(
+			makeGrabDecisionContext({
+				release: { title: 'Movie.2024.1080p-GRP', infoHash: HASH, protocol: 'torrent' },
+				target: { type: 'movie', movieId: 'movie-1' }
+			})
+		);
+
+		expect(result.accepted).toBe(true);
 	});
 
 	it('does not run when the hash is not known before resolution', async () => {

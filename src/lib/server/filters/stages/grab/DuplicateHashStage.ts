@@ -59,7 +59,18 @@ export class DuplicateHashStage implements DecisionStage<GrabDecisionContext> {
 		// and treating it as one leaves the rest of the season unreachable (#663).
 		const importedScope = await resolveImportedScope({ infoHash, ...requestedScope(ctx.target) });
 
-		if (importedScope.satisfied) {
+		// Imported history records what a hash once delivered, not what is on disk.
+		// A movie the user deleted has nothing left to duplicate, so the releases
+		// it already used must be grabbable again - blocking them made the item
+		// look unfetchable while the only candidates left failed for unrelated
+		// reasons. A hash imported for a *different* movie stays a duplicate:
+		// that is a misidentification, not a re-grab.
+		const reGrabOfDeletedMovie =
+			ctx.target.type === 'movie' &&
+			ctx.existingFiles.length === 0 &&
+			importedScope.movieIds.includes(ctx.target.movieId);
+
+		if (importedScope.satisfied && !reGrabOfDeletedMovie) {
 			return {
 				accepted: false,
 				reason: `Duplicate hash was already imported: ${infoHash}`,

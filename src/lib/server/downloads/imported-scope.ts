@@ -31,6 +31,12 @@ export interface ImportedScope {
 	missingEpisodeIds: string[];
 	/** The hash is a duplicate for this request: imported, and covering its scope. */
 	satisfied: boolean;
+	/**
+	 * Movies the imported history rows name. A row with no movie id (legacy, or a
+	 * cleared media link) is unknown provenance. Callers use this to tell a
+	 * same-item re-grab apart from a hash imported for a different movie.
+	 */
+	movieIds: string[];
 }
 
 export interface ImportedScopeQuery {
@@ -68,12 +74,15 @@ export async function resolveImportedScope(input: ImportedScopeQuery): Promise<I
 			)
 		);
 
+	const movieIds = [...new Set(rows.map((row) => row.movieId).filter((id): id is string => !!id))];
+
 	if (rows.length === 0) {
 		return {
 			imported: false,
 			coveredEpisodeIds: [],
 			missingEpisodeIds: requested,
-			satisfied: false
+			satisfied: false,
+			movieIds: []
 		};
 	}
 
@@ -94,12 +103,19 @@ export async function resolveImportedScope(input: ImportedScopeQuery): Promise<I
 			imported: true,
 			coveredEpisodeIds: [],
 			missingEpisodeIds: [],
-			satisfied: true
+			satisfied: true,
+			movieIds
 		};
 	}
 
 	if (requested.length === 0) {
-		return { imported: true, coveredEpisodeIds: [], missingEpisodeIds: [], satisfied: true };
+		return {
+			imported: true,
+			coveredEpisodeIds: [],
+			missingEpisodeIds: [],
+			satisfied: true,
+			movieIds
+		};
 	}
 
 	// Delivery is the files, not the request. A row's `episodeIds` is the scope
@@ -140,6 +156,7 @@ export async function resolveImportedScope(input: ImportedScopeQuery): Promise<I
 		imported: true,
 		coveredEpisodeIds,
 		missingEpisodeIds,
-		satisfied: missingEpisodeIds.length === 0
+		satisfied: missingEpisodeIds.length === 0,
+		movieIds
 	};
 }
