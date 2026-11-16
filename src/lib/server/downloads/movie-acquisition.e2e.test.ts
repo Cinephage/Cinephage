@@ -22,7 +22,7 @@ import {
 	languageProfiles,
 	movies
 } from '#lib/server/db/schema.js';
-import type { ReleaseResult } from '#lib/server/indexers/types/index.js';
+import type { IIndexer, ReleaseResult } from '#lib/server/indexers/types/index.js';
 
 const testDb: TestDatabase = createTestDb();
 
@@ -159,14 +159,14 @@ function bracketed(title: string, size: number): ReleaseResult {
 	};
 }
 
-function buildIndexer(releases: ReleaseResult[]) {
+function buildIndexer(releases: ReleaseResult[]): IIndexer {
 	return createMockIndexer({
 		id: 'idx-1',
 		name: 'Prowlarr',
 		protocol: 'torrent',
 		capabilities: CAPABILITIES as unknown as Record<string, unknown>,
 		search: vi.fn(async () => releases)
-	});
+	}) as unknown as IIndexer;
 }
 
 function resetDb() {
