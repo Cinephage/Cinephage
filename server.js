@@ -28,7 +28,33 @@ process.env.BODY_SIZE_LIMIT ??= '10M';
 // errors on connection reuse; keepAliveTimeout is raised to 65s below.
 // adapter-node 6 exports the underlying http.Server directly (kit 2 wrapped
 // it in a ServerApp object, hence the removed `.server` indirection here).
+// adapter-node 6 does not read the ORIGIN env when it builds a request URL: it takes
+// the Host header and assumes https unless PROTOCOL_HEADER names a header it can read.
+// A direct plain-HTTP install therefore mints https:// URLs for the stream proxy, .strm
+// files and the Live TV playlist, pointing clients at a TLS port that does not exist.
+// Expose the protocol the socket actually used. A deployment that sets PROTOCOL_HEADER
+// itself keeps its own value and this block stays out of the way.
+const SOCKET_PROTOCOL_HEADER = 'x-cinephage-proto';
+const deriveProtocolFromSocket = !process.env.PROTOCOL_HEADER;
+if (deriveProtocolFromSocket) process.env.PROTOCOL_HEADER = SOCKET_PROTOCOL_HEADER;
+
 const server = (await import('./build/index.js')).server;
+
+if (deriveProtocolFromSocket) {
+	// Runs ahead of adapter-node's own request listener, so the header is in place
+	// before the adapter resolves the origin. A proxy that states the scheme wins;
+	// one that only forwards a host keeps the adapter's previous behaviour.
+	server.prependListener('request', (req) => {
+		const headers = req.headers;
+		if (!headers || headers[SOCKET_PROTOCOL_HEADER]) return;
+		const forwarded = (headers['x-forwarded-proto'] || '').split(',')[0].trim().toLowerCase();
+		if (forwarded === 'http' || forwarded === 'https') {
+			headers[SOCKET_PROTOCOL_HEADER] = forwarded;
+		} else if (!headers['x-forwarded-host'] && !headers['forwarded']) {
+			headers[SOCKET_PROTOCOL_HEADER] = req.socket?.encrypted ? 'https' : 'http';
+		}
+	});
+}
 
 // Set keepAliveTimeout to 65 seconds (higher than typical proxy timeouts of 60s)
 // This prevents 502 errors from connection reuse issues
