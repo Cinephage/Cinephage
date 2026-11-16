@@ -20,7 +20,11 @@
 import { db } from '#lib/server/db/index.js';
 import { episodeFiles, episodes, movieFiles, movies, series } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { languageMatches, type EffectiveAudioPreference } from './audio-preference';
+import {
+	languageMatches,
+	originalLanguageCounts,
+	type EffectiveAudioPreference
+} from './audio-preference';
 import { resolveAudioPreferenceForItem } from './audio-preference-resolver';
 import { createChildLogger } from '#lib/logging/index.js';
 
@@ -39,10 +43,7 @@ export function evaluateShortfall(
 	const probed = audioLanguages.filter(usable);
 	if (probed.length === 0) return 'unknown';
 
-	const hasOriginalSignal =
-		preference.preferOriginal &&
-		typeof preference.originalLanguage === 'string' &&
-		preference.originalLanguage !== '';
+	const hasOriginalSignal = originalLanguageCounts(preference);
 	if (preference.languages.length === 0 && !hasOriginalSignal) return 'satisfied';
 
 	if (

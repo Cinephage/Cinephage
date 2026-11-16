@@ -42,6 +42,25 @@ export function getLanguagePriority(
 }
 
 /**
+ * Whether the media's original language is itself a preference signal.
+ *
+ * `preferOriginal` means "the original track first", but an explicit ordered
+ * language list is the user's stated target. When the original language is not
+ * in that list the user asked for a dub, and an original-language release must
+ * not outrank the languages they named - otherwise "English, then Spanish" on
+ * a Chinese film always resolves to the untranslated Chinese audio, which is
+ * the reported defect. With no list, the original simply is the preference,
+ * and an original language that IS listed keeps the top bucket.
+ */
+export function originalLanguageCounts(preference: EffectiveAudioPreference): boolean {
+	const original = preference.originalLanguage;
+	if (!preference.preferOriginal) return false;
+	if (typeof original !== 'string' || original === '') return false;
+	if (preference.languages.length === 0) return true;
+	return preference.languages.some((tag) => languageMatches(original, tag));
+}
+
+/**
  * A fully resolved audio preference used for playback source selection and
  * snapshotted onto the playback session. Field order and values are canonical
  * (languages normalized + deduped) so snapshots can be compared reliably.
@@ -92,7 +111,11 @@ export function audioPreferencesEqual(
 
 /** Selection buckets for a candidate against a resolved audio preference. */
 export const AUDIO_PREFERENCE_BUCKETS = {
-	/** Matches the original language (when preferOriginal is on and it is known) */
+	/**
+	 * Matches the original language - only when `preferOriginal` is on, the
+	 * original is known, and it is not overridden by an explicit language list
+	 * (see `originalLanguageCounts`).
+	 */
 	original: 0,
 	/** Matches one of the profile's ordered fallback languages */
 	preferred: 1,
@@ -104,7 +127,8 @@ export const AUDIO_PREFERENCE_BUCKETS = {
 
 /**
  * Rank a single candidate for the four-bucket audio ordering:
- * 0 = original-language match, 1 = preferred-language match (tie-broken by
+ * 0 = original-language match (see `originalLanguageCounts` for when the
+ * original is allowed to win), 1 = preferred-language match (tie-broken by
  * preference index), 2 = untagged (neutral), 3 = everything else.
  *
  * Comparisons are normalized with base-tag fallback (see `languageMatches`):
@@ -118,10 +142,8 @@ function rankByAudioPreference<T extends { language?: string }>(
 	preference: EffectiveAudioPreference
 ): { bucket: number; preferenceIndex: number } {
 	if (
-		preference.preferOriginal &&
-		typeof preference.originalLanguage === 'string' &&
-		preference.originalLanguage !== '' &&
-		languageMatches(candidate.language, preference.originalLanguage)
+		originalLanguageCounts(preference) &&
+		languageMatches(candidate.language, preference.originalLanguage!)
 	) {
 		return { bucket: AUDIO_PREFERENCE_BUCKETS.original, preferenceIndex: 0 };
 	}
@@ -169,11 +191,9 @@ export function rankLanguageEvidenceSet(
 ): { bucket: number; preferenceIndex: number } {
 	const originalLanguage = preference.originalLanguage;
 	if (
-		preference.preferOriginal &&
-		typeof originalLanguage === 'string' &&
-		originalLanguage !== '' &&
+		originalLanguageCounts(preference) &&
 		(languages.includes('orig') ||
-			languages.some((tag) => tag !== 'multi' && languageMatches(tag, originalLanguage)))
+			languages.some((tag) => tag !== 'multi' && languageMatches(tag, originalLanguage!)))
 	) {
 		return { bucket: AUDIO_PREFERENCE_BUCKETS.original, preferenceIndex: 0 };
 	}
@@ -208,7 +228,8 @@ export function rankLanguageEvidenceSet(
 /**
  * Order candidates by audio preference:
  * bucket 0: candidates matching `originalLanguage` (only when `preferOriginal`
- *           is on and an original language is known),
+ *           is on, an original language is known, and no explicit language
+ *           list excludes it),
  * bucket 1: candidates matching `preference.languages`, in preference order
  *           (lower preference index first),
  * bucket 2: candidates without a language tag (neutral),

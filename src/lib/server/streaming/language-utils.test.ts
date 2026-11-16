@@ -58,14 +58,20 @@ describe('sortSourcesByAudioPreference', () => {
 		expect(sorted.map((s) => s.id)).toEqual(['pt-BR', 'fr', 'untagged', 'de']);
 	});
 
-	it('lets the original language win over profile fallback languages', () => {
+	it('lets a listed original language outrank the rest of the list', () => {
+		const pref = preference({ originalLanguage: 'en', languages: ['pt-BR', 'en'] });
+		// en-US is the original AND listed, so preferOriginal keeps it in bucket 0.
+		const sorted = sortSourcesByAudioPreference([source('pt-BR'), source('en-US')], pref);
+		expect(sorted.map((s) => s.id)).toEqual(['en-US', 'pt-BR']);
+	});
+
+	it('keeps a non-listed original language below the list (a dub was asked for)', () => {
 		const pref = preference({ originalLanguage: 'en', languages: ['pt-BR', 'fr'] });
-		// en-US matches the original by base tag; pt-BR (rank 0) outranks fr (rank 1).
 		const sorted = sortSourcesByAudioPreference(
-			[source('fr'), source('en-US'), source('pt-BR')],
+			[source('en-US'), source('fr'), source('pt-BR')],
 			pref
 		);
-		expect(sorted.map((s) => s.id)).toEqual(['en-US', 'pt-BR', 'fr']);
+		expect(sorted.map((s) => s.id)).toEqual(['pt-BR', 'fr', 'en-US']);
 	});
 
 	it('ignores the original language when preferOriginal is off', () => {
@@ -100,7 +106,9 @@ describe('sortSourcesByAudioPreference', () => {
 
 describe('resolveAudioPreferenceBucket', () => {
 	it('classifies the four buckets', () => {
-		const pref = preference({ originalLanguage: 'ja', languages: ['fr'] });
+		// ja is listed, so the original bucket is in play; an unlisted original
+		// is no longer an original match (see the sort tests above).
+		const pref = preference({ originalLanguage: 'ja', languages: ['fr', 'ja'] });
 		expect(resolveAudioPreferenceBucket(source('jpn'), pref)).toBe(
 			AUDIO_PREFERENCE_BUCKETS.original
 		);

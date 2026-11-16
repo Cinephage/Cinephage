@@ -96,6 +96,33 @@ describe('rankLanguageEvidenceSet', () => {
 		// 'en' is not in the fallback list → not preferred via original either
 		expect(rank.bucket).toBe(AUDIO_PREFERENCE_BUCKETS.other);
 	});
+
+	it('does not let a non-listed original language outrank the list', () => {
+		// Chinese original, profile "English then Spanish": the user asked for a
+		// dub, so the untranslated original is not a preference signal.
+		const rank = rankLanguageEvidenceSet(
+			['zh'],
+			preference({ preferOriginal: true, originalLanguage: 'zh', languages: ['en', 'es'] })
+		);
+		expect(rank.bucket).toBe(AUDIO_PREFERENCE_BUCKETS.other);
+	});
+
+	it('ranks a listed fallback language above a non-listed original', () => {
+		const rank = rankLanguageEvidenceSet(
+			['es'],
+			preference({ preferOriginal: true, originalLanguage: 'zh', languages: ['en', 'es'] })
+		);
+		expect(rank.bucket).toBe(AUDIO_PREFERENCE_BUCKETS.preferred);
+		expect(rank.preferenceIndex).toBe(1);
+	});
+
+	it('keeps the original bucket when the original language is listed', () => {
+		const rank = rankLanguageEvidenceSet(
+			['en'],
+			preference({ preferOriginal: true, originalLanguage: 'en', languages: ['es', 'en'] })
+		);
+		expect(rank.bucket).toBe(AUDIO_PREFERENCE_BUCKETS.original);
+	});
 });
 
 describe('audioPreferencesEqual mode normalization', () => {

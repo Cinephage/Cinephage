@@ -255,7 +255,7 @@ describe('PlaybackSessionService', () => {
 		expect(second.session?.entryUrl).toBe('https://stream.example.com/fr.mp4');
 	});
 
-	it('lets the original language win over profile fallback languages', async () => {
+	it('keeps a non-listed original language below the profile list', async () => {
 		seedProfile('p-br2', { languages: ['pt-BR', 'fr'] });
 		seedMovie(311, { originalLanguage: 'en', languageProfileId: 'p-br2' });
 		mockStreams(
@@ -267,8 +267,9 @@ describe('PlaybackSessionService', () => {
 		const service = getPlaybackSessionService();
 
 		const { session } = await service.createOrReuseSession({ tmdbId: 311, type: 'movie' });
-		expect(session?.entryUrl).toBe('https://stream.example.com/en.mp4');
-		expect(session?.chosenAudioLanguage).toBe('en');
+		// 'en' is the original but not in the list, so the list decides.
+		expect(session?.entryUrl).toBe('https://stream.example.com/ptbr.mp4');
+		expect(session?.chosenAudioLanguage).toBe('pt-BR');
 	});
 
 	it('treats language-less sources as neutral and ranks unknown languages last', async () => {

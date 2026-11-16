@@ -3728,7 +3728,7 @@
 	"settings_languages_profiles_moveAudioLanguageUp": "Move audio language up",
 	"settings_languages_profiles_moveRequirementDown": "Move subtitle requirement down",
 	"settings_languages_profiles_moveRequirementUp": "Move subtitle requirement up",
-	"settings_languages_profiles_preferOriginalAudio": "Prefer original audio track",
+	"settings_languages_profiles_preferOriginalAudio": "Prefer original audio (only when it is a listed language)",
 	"settings_languages_profiles_audioMode": "Audio matching",
 	"settings_languages_profiles_audioModePrefer": "Prefer (others allowed)",
 	"settings_languages_profiles_audioModeRequire": "Require (verify after grab)",

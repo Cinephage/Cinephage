@@ -85,6 +85,19 @@ describe('LanguageStage (require-mode gate)', () => {
 		expect(result.accepted).toBe(true);
 	});
 
+	it('rejects a non-listed original language in require mode', async () => {
+		resolveMock.mockResolvedValue(
+			preference({
+				mode: 'require',
+				preferOriginal: true,
+				originalLanguage: 'zh',
+				languages: ['en', 'es']
+			})
+		);
+		const result = await stage.evaluate(ctx('Movie.2026.CHINESE.1080p.WEB-DL.x264-GROUP'));
+		expect(result.accepted).toBe(false);
+	});
+
 	it('skips when the preference has no expectation at all', async () => {
 		resolveMock.mockResolvedValue(preference({ mode: 'require', languages: [] }));
 		const result = await stage.evaluate(ctx('Movie.2026.GERMAN.1080p.x264-GROUP'));
