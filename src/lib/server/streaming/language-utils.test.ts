@@ -22,7 +22,8 @@ describe('sortSourcesByAudioPreference', () => {
 			preferOriginal: true,
 			languages: [],
 			originalLanguage: null,
-			mode: 'prefer'
+			mode: 'prefer',
+			requireAll: false
 		});
 	});
 

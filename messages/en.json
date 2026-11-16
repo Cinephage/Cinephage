@@ -3731,6 +3731,7 @@
 	"settings_languages_profiles_preferOriginalAudio": "Prefer original audio (only when it is a listed language)",
 	"settings_languages_profiles_audioMode": "Audio matching",
 	"settings_languages_profiles_audioModePrefer": "Prefer (others allowed)",
+	"settings_languages_profiles_audioRequireAll": "Require every listed audio language (verified after download)",
 	"settings_languages_profiles_audioModeRequire": "Require (verify after grab)",
 	"settings_languages_profiles_removeAudioLanguage": "Remove audio language",
 	"settings_languages_profiles_subtitleAccessibilitySelect": "Subtitle accessibility",

@@ -46,6 +46,14 @@ export function evaluateShortfall(
 	const hasOriginalSignal = originalLanguageCounts(preference);
 	if (preference.languages.length === 0 && !hasOriginalSignal) return 'satisfied';
 
+	// requireAll: every listed language must be in the probed audio, not just one.
+	if (preference.requireAll === true && preference.languages.length > 0) {
+		const missing = preference.languages.filter(
+			(pref) => !probed.some((tag) => languageMatches(tag, pref))
+		);
+		return missing.length === 0 ? 'satisfied' : 'shortfall';
+	}
+
 	if (
 		(hasOriginalSignal &&
 			probed.some((tag) => languageMatches(tag, preference.originalLanguage!))) ||

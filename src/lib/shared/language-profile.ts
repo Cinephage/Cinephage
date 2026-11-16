@@ -27,6 +27,13 @@ export interface AudioPreference {
 	languages: LanguageTag[];
 	/** Enforcement mode for acquisition (default 'prefer') */
 	mode: AudioAcquisitionMode;
+	/**
+	 * Require EVERY listed language in the file's audio (verified by ffprobe
+	 * after import). Off by default: the list is otherwise an ordered set of
+	 * alternatives. Stored in the profile's JSON blob, so absent means false -
+	 * profiles saved before the field existed keep their current meaning.
+	 */
+	requireAll?: boolean;
 }
 
 export interface SubtitleRequirement {

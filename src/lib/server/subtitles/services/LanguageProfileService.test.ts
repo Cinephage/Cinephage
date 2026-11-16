@@ -65,7 +65,7 @@ async function seedProfile(id: string, name: string): Promise<void> {
 	await testDb.db.insert(languageProfiles).values({
 		id,
 		name,
-		audio: { preferOriginal: true, languages: [], mode: 'prefer' },
+		audio: { preferOriginal: true, languages: [], mode: 'prefer', requireAll: false },
 		subtitles: [{ tag: 'en', variant: 'regular', accessibility: 'any' }],
 		cutoffRank: null,
 		minimumScore: 70,
@@ -138,7 +138,7 @@ function makeProfile(overrides: Partial<LanguageProfile> = {}): LanguageProfile 
 	return {
 		id: 'test-profile',
 		name: 'Test Profile',
-		audio: { preferOriginal: true, languages: [], mode: 'prefer' },
+		audio: { preferOriginal: true, languages: [], mode: 'prefer', requireAll: false },
 		subtitles: [{ tag: 'en', variant: 'regular', accessibility: 'any' }],
 		cutoffRank: null,
 		minimumScore: 70,
@@ -153,7 +153,7 @@ function makeCreateBody(
 ): Omit<LanguageProfile, 'id' | 'createdAt' | 'updatedAt'> {
 	return {
 		name: 'Created Profile',
-		audio: { preferOriginal: true, languages: ['ja'], mode: 'prefer' },
+		audio: { preferOriginal: true, languages: ['ja'], mode: 'prefer', requireAll: false },
 		subtitles: [{ tag: 'en', variant: 'regular', accessibility: 'any' }],
 		cutoffRank: null,
 		minimumScore: 70,
@@ -269,19 +269,26 @@ describe('LanguageProfileService', () => {
 		it('should fall back to audio defaults on malformed JSON', () => {
 			const audio = parseAudioPreference('{not json', 'profile-1');
 
-			expect(audio).toEqual({ preferOriginal: true, languages: [], mode: 'prefer' });
+			expect(audio).toEqual({
+				preferOriginal: true,
+				languages: [],
+				mode: 'prefer',
+				requireAll: false
+			});
 		});
 
 		it('should fall back to audio defaults on shape-mismatched data', () => {
 			expect(parseAudioPreference('null', 'profile-1')).toEqual({
 				preferOriginal: true,
 				languages: [],
-				mode: 'prefer'
+				mode: 'prefer',
+				requireAll: false
 			});
 			expect(parseAudioPreference({ preferOriginal: 'yes' }, 'profile-1')).toEqual({
 				preferOriginal: true,
 				languages: [],
-				mode: 'prefer'
+				mode: 'prefer',
+				requireAll: false
 			});
 			const partial = parseAudioPreference(
 				{ preferOriginal: false, languages: ['en', '', 42] },
@@ -323,7 +330,12 @@ describe('LanguageProfileService', () => {
 
 			expect(created.id).toBeTruthy();
 			expect(created.name).toBe('Created Profile');
-			expect(created.audio).toEqual({ preferOriginal: true, languages: ['ja'], mode: 'prefer' });
+			expect(created.audio).toEqual({
+				preferOriginal: true,
+				languages: ['ja'],
+				mode: 'prefer',
+				requireAll: false
+			});
 			expect(created.subtitles).toEqual([{ tag: 'en', variant: 'regular', accessibility: 'any' }]);
 			expect(created.cutoffRank).toBeNull();
 			expect(created.minimumScore).toBe(80);
@@ -372,7 +384,12 @@ describe('LanguageProfileService', () => {
 			const updated = await profileService.updateProfile(created.id, { name: 'Renamed Only' });
 
 			expect(updated.name).toBe('Renamed Only');
-			expect(updated.audio).toEqual({ preferOriginal: false, languages: ['de'], mode: 'require' });
+			expect(updated.audio).toEqual({
+				preferOriginal: false,
+				languages: ['de'],
+				mode: 'require',
+				requireAll: false
+			});
 			expect(updated.minimumScore).toBe(25);
 			expect(updated.upgradesAllowed).toBe(false);
 			expect(updated.cutoffRank).toBe(0);
@@ -1149,7 +1166,12 @@ describe('LanguageProfileService', () => {
 			expect(profile.cutoffRank).toBeNull();
 			expect(profile.upgradesAllowed).toBe(true);
 			expect(profile.minimumScore).toBe(70);
-			expect(profile.audio).toEqual({ preferOriginal: true, languages: [], mode: 'prefer' });
+			expect(profile.audio).toEqual({
+				preferOriginal: true,
+				languages: [],
+				mode: 'prefer',
+				requireAll: false
+			});
 			expect(profile.subtitles[0]).toEqual({ tag: 'en', variant: 'regular', accessibility: 'any' });
 		});
 

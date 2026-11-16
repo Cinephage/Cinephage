@@ -876,12 +876,18 @@ export const subtitleRequirementSchema = z.object({
 export const audioPreferenceSchema = z.object({
 	preferOriginal: z.boolean().default(true),
 	languages: z.array(languageTagSchema).default([]),
-	mode: z.enum(['prefer', 'require']).default('prefer')
+	mode: z.enum(['prefer', 'require']).default('prefer'),
+	requireAll: z.boolean().default(false)
 });
 
 const languageProfileV2BaseSchema = z.object({
 	name: z.string().min(1, 'Name is required').max(60, 'Name must be 60 characters or less'),
-	audio: audioPreferenceSchema.default({ preferOriginal: true, languages: [], mode: 'prefer' }),
+	audio: audioPreferenceSchema.default({
+		preferOriginal: true,
+		languages: [],
+		mode: 'prefer',
+		requireAll: false
+	}),
 	subtitles: z
 		.array(subtitleRequirementSchema)
 		.min(1, 'At least one subtitle language is required'),

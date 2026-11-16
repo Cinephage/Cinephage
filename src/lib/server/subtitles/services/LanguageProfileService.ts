@@ -97,7 +97,7 @@ export function parseAudioPreference(value: unknown, profileId: string): AudioPr
 		if (parsed != null) {
 			logger.warn({ profileId }, 'Malformed language profile audio JSON; using defaults');
 		}
-		return { preferOriginal: true, languages: [], mode: 'prefer' };
+		return { preferOriginal: true, languages: [], mode: 'prefer', requireAll: false };
 	}
 
 	const raw = parsed as Partial<AudioPreference>;
@@ -106,7 +106,8 @@ export function parseAudioPreference(value: unknown, profileId: string): AudioPr
 		languages: Array.isArray(raw.languages)
 			? raw.languages.filter((tag): tag is string => typeof tag === 'string' && tag.trim() !== '')
 			: [],
-		mode: raw.mode === 'require' ? 'require' : 'prefer'
+		mode: raw.mode === 'require' ? 'require' : 'prefer',
+		requireAll: raw.requireAll === true
 	};
 }
 

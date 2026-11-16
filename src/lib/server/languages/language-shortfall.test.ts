@@ -49,6 +49,17 @@ describe('evaluateShortfall (truth table)', () => {
 		expect(evaluateShortfall(preference({ languages: ['es', 'en'] }), ['ita'])).toBe('shortfall');
 	});
 
+	it('requires every listed language when requireAll is on', () => {
+		const preference = {
+			...DEFAULT_EFFECTIVE_AUDIO_PREFERENCE,
+			languages: ['en', 'es'],
+			requireAll: true
+		};
+		expect(evaluateShortfall(preference, ['eng', 'spa'])).toBe('satisfied');
+		expect(evaluateShortfall(preference, ['eng'])).toBe('shortfall');
+		expect(evaluateShortfall(preference, ['eng', 'spa', 'deu'])).toBe('satisfied');
+	});
+
 	it('ignores the original language when preferOriginal is off', () => {
 		expect(
 			evaluateShortfall(

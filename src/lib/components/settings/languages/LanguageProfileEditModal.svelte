@@ -58,6 +58,7 @@
 	let formAudioPreferOriginal = $state(true);
 	let formAudioLanguages = $state<string[]>([]);
 	let formAudioMode = $state<'prefer' | 'require'>('prefer');
+	let formAudioRequireAll = $state(false);
 	let formSubtitles = $state<SubtitleRequirement[]>([]);
 	let formCutoffRank = $state<number | null>(null);
 	let formMinimumScore = $state(70);
@@ -92,6 +93,7 @@
 			formAudioPreferOriginal = source.audio?.preferOriginal ?? true;
 			formAudioLanguages = [...(source.audio?.languages ?? [])];
 			formAudioMode = source.audio?.mode ?? 'prefer';
+			formAudioRequireAll = source.audio?.requireAll ?? false;
 			formSubtitles = (source.subtitles ?? []).map((requirement) => ({ ...requirement }));
 			formCutoffRank = source.cutoffRank ?? null;
 			formMinimumScore = source.minimumScore ?? 70;
@@ -101,6 +103,7 @@
 			formAudioPreferOriginal = true;
 			formAudioLanguages = [];
 			formAudioMode = 'prefer';
+			formAudioRequireAll = false;
 			formSubtitles = [{ tag: 'en', variant: 'regular', accessibility: 'any' }];
 			formCutoffRank = null;
 			formMinimumScore = 70;
@@ -194,7 +197,8 @@
 				audio: {
 					preferOriginal: formAudioPreferOriginal,
 					languages: formAudioLanguages,
-					mode: formAudioMode
+					mode: formAudioMode,
+					requireAll: formAudioRequireAll
 				},
 				subtitles: formSubtitles,
 				cutoffRank: formCutoffRank,
@@ -411,6 +415,18 @@
 					/>
 					<span class="text-sm">
 						{m.settings_languages_profiles_preferOriginalAudio()}
+					</span>
+				</label>
+				<label
+					class="flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 transition-colors hover:bg-base-200/50"
+				>
+					<input
+						type="checkbox"
+						class="checkbox checkbox-sm checkbox-primary"
+						bind:checked={formAudioRequireAll}
+					/>
+					<span class="text-sm">
+						{m.settings_languages_profiles_audioRequireAll()}
 					</span>
 				</label>
 				<label

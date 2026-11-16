@@ -39,7 +39,8 @@ const NO_PROFILE_DEFAULT = {
 	preferOriginal: true,
 	languages: [],
 	originalLanguage: null,
-	mode: 'prefer'
+	mode: 'prefer',
+	requireAll: false
 };
 
 let mediaSeq = 0;
@@ -218,7 +219,8 @@ describe('PlaybackSessionService', () => {
 			preferOriginal: true,
 			languages: [],
 			originalLanguage: 'ja',
-			mode: 'prefer'
+			mode: 'prefer',
+			requireAll: false
 		});
 		expect(session?.entryUrl).toBe('https://stream.example.com/jpn.mp4');
 		expect(session?.chosenAudioLanguage).toBe('jpn');
@@ -307,7 +309,8 @@ describe('PlaybackSessionService', () => {
 			preferOriginal: false,
 			languages: ['fr'],
 			originalLanguage: 'ja',
-			mode: 'prefer'
+			mode: 'prefer',
+			requireAll: false
 		});
 		expect(session?.entryUrl).toBe('https://stream.example.com/fr.mp4');
 	});
@@ -334,7 +337,8 @@ describe('PlaybackSessionService', () => {
 			preferOriginal: true,
 			languages: [],
 			originalLanguage: 'ko',
-			mode: 'prefer'
+			mode: 'prefer',
+			requireAll: false
 		});
 
 		const second = await service.createOrReuseSession({
@@ -361,7 +365,8 @@ describe('PlaybackSessionService', () => {
 			preferOriginal: true,
 			languages: ['ja'],
 			originalLanguage: null,
-			mode: 'prefer'
+			mode: 'prefer',
+			requireAll: false
 		});
 
 		// The profile changes (e.g. user edits it); no forceRefresh is passed.
@@ -375,7 +380,8 @@ describe('PlaybackSessionService', () => {
 			preferOriginal: true,
 			languages: ['fr'],
 			originalLanguage: null,
-			mode: 'prefer'
+			mode: 'prefer',
+			requireAll: false
 		});
 	});
 

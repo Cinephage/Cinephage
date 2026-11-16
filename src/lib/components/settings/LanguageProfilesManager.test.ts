@@ -128,7 +128,12 @@ describe('language profile editor payload', () => {
 		expect(createLanguageProfile).toHaveBeenCalledWith(
 			expect.objectContaining({
 				name: 'Test Profile',
-				audio: { preferOriginal: true, languages: [], mode: 'prefer' as const },
+				audio: {
+					preferOriginal: true,
+					languages: [],
+					mode: 'prefer' as const,
+					requireAll: false
+				},
 				subtitles: [{ tag: 'en', variant: 'regular', accessibility: 'any' }],
 				cutoffRank: null,
 				minimumScore: 70,
@@ -271,8 +276,13 @@ describe('language profile editor labels via paraglide keys', () => {
 		await fireEvent.click(screen.getByRole('button', { name: /add profile/i }));
 
 		expect(screen.getByText('Audio & Matching')).not.toBeNull();
-		expect(screen.getByText('Prefer original audio track')).not.toBeNull();
+		expect(
+			screen.getByText('Prefer original audio (only when it is a listed language)')
+		).not.toBeNull();
 		expect(screen.getByText('Preferred audio languages')).not.toBeNull();
+		expect(
+			screen.getByText('Require every listed audio language (verified after download)')
+		).not.toBeNull();
 		expect(screen.getByRole('button', { name: 'Add audio language' })).not.toBeNull();
 		// No audio language rows yet: the per-row controls appear only after adding one.
 		await fireEvent.click(screen.getByRole('button', { name: 'Add audio language' }));

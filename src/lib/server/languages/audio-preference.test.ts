@@ -116,6 +116,33 @@ describe('rankLanguageEvidenceSet', () => {
 		expect(rank.preferenceIndex).toBe(1);
 	});
 
+	it('puts a multi-audio pack in the top bucket under requireAll', () => {
+		const rank = rankLanguageEvidenceSet(
+			['multi'],
+			preference({ languages: ['en', 'es'], requireAll: true })
+		);
+		expect(rank.bucket).toBe(AUDIO_PREFERENCE_BUCKETS.original);
+	});
+
+	it('keeps a single-language match below a multi pack under requireAll', () => {
+		const single = rankLanguageEvidenceSet(
+			['en'],
+			preference({ languages: ['en', 'es'], requireAll: true })
+		);
+		const multi = rankLanguageEvidenceSet(
+			['multi'],
+			preference({ languages: ['en', 'es'], requireAll: true })
+		);
+		expect(single.bucket).toBe(AUDIO_PREFERENCE_BUCKETS.preferred);
+		expect(multi.bucket).toBeLessThan(single.bucket);
+	});
+
+	it('leaves multi ranking untouched when requireAll is off', () => {
+		const rank = rankLanguageEvidenceSet(['multi'], preference({ languages: ['en', 'es'] }));
+		expect(rank.bucket).toBe(AUDIO_PREFERENCE_BUCKETS.preferred);
+		expect(rank.preferenceIndex).toBe(2);
+	});
+
 	it('keeps the original bucket when the original language is listed', () => {
 		const rank = rankLanguageEvidenceSet(
 			['en'],

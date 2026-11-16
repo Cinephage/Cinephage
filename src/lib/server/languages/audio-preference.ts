@@ -75,6 +75,11 @@ export interface EffectiveAudioPreference {
 	originalLanguage: string | null;
 	/** Acquisition enforcement mode ('prefer' ranks, 'require' may also reject) */
 	mode: AudioAcquisitionMode;
+	/**
+	 * Every listed language must be present in the file's audio. Absent on
+	 * snapshots stored before the field existed, so compare with `=== true`.
+	 */
+	requireAll?: boolean;
 }
 
 /**
@@ -88,7 +93,8 @@ export const DEFAULT_EFFECTIVE_AUDIO_PREFERENCE: EffectiveAudioPreference = {
 	preferOriginal: true,
 	languages: [],
 	originalLanguage: null,
-	mode: 'prefer'
+	mode: 'prefer',
+	requireAll: false
 };
 
 /**
@@ -105,6 +111,7 @@ export function audioPreferencesEqual(
 	if (a.preferOriginal !== b.preferOriginal) return false;
 	if ((a.originalLanguage ?? null) !== (b.originalLanguage ?? null)) return false;
 	if ((a.mode ?? 'prefer') !== (b.mode ?? 'prefer')) return false;
+	if ((a.requireAll ?? false) !== (b.requireAll ?? false)) return false;
 	if (a.languages.length !== b.languages.length) return false;
 	return a.languages.every((tag, index) => tag === b.languages[index]);
 }
@@ -200,10 +207,21 @@ export function rankLanguageEvidenceSet(
 
 	if (preference.languages.length > 0) {
 		let best = Infinity;
+		const matchedIndexes = new Set<number>();
 		for (const tag of languages) {
 			if (tag === 'multi' || tag === 'orig') continue;
 			const index = getLanguagePriority(tag, preference.languages);
-			if (index !== Infinity && index < best) best = index;
+			if (index === Infinity) continue;
+			matchedIndexes.add(index);
+			if (index < best) best = index;
+		}
+		if (
+			preference.requireAll === true &&
+			(languages.includes('multi') || matchedIndexes.size >= 2)
+		) {
+			// Under requireAll the only useful pre-download evidence that every
+			// listed language is present is a multi mark or several listed tags.
+			return { bucket: AUDIO_PREFERENCE_BUCKETS.original, preferenceIndex: 0 };
 		}
 		if (best !== Infinity) {
 			return { bucket: AUDIO_PREFERENCE_BUCKETS.preferred, preferenceIndex: best };

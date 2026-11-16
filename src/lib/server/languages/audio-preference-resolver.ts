@@ -27,13 +27,14 @@ import {
  * order-preserving). Nulls default.
  */
 export function materializeAudioPreference(
-	audio: Pick<AudioPreference, 'preferOriginal' | 'languages' | 'mode'> | null,
+	audio: Pick<AudioPreference, 'preferOriginal' | 'languages' | 'mode' | 'requireAll'> | null,
 	originalLanguage: string | null | undefined
 ): EffectiveAudioPreference {
 	const base = audio ?? {
 		preferOriginal: DEFAULT_EFFECTIVE_AUDIO_PREFERENCE.preferOriginal,
 		languages: DEFAULT_EFFECTIVE_AUDIO_PREFERENCE.languages,
-		mode: DEFAULT_EFFECTIVE_AUDIO_PREFERENCE.mode
+		mode: DEFAULT_EFFECTIVE_AUDIO_PREFERENCE.mode,
+		requireAll: DEFAULT_EFFECTIVE_AUDIO_PREFERENCE.requireAll
 	};
 
 	const seen = new Set<string>();
@@ -50,7 +51,8 @@ export function materializeAudioPreference(
 		preferOriginal: base.preferOriginal,
 		languages,
 		originalLanguage: rawOriginal ? normalizeLanguageCode(rawOriginal) : null,
-		mode: base.mode ?? 'prefer'
+		mode: base.mode ?? 'prefer',
+		requireAll: base.requireAll === true
 	};
 }
 

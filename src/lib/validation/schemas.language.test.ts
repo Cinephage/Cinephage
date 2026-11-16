@@ -26,7 +26,8 @@ describe('audioPreferenceSchema', () => {
 		expect(audioPreferenceSchema.parse({})).toEqual({
 			preferOriginal: true,
 			languages: [],
-			mode: 'prefer'
+			mode: 'prefer',
+			requireAll: false
 		});
 	});
 
@@ -34,7 +35,8 @@ describe('audioPreferenceSchema', () => {
 		expect(audioPreferenceSchema.parse({ languages: ['FRE', 'ger'] })).toEqual({
 			preferOriginal: true,
 			languages: ['fr', 'de'],
-			mode: 'prefer'
+			mode: 'prefer',
+			requireAll: false
 		});
 	});
 });
