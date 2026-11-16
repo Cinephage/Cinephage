@@ -27,6 +27,7 @@ import {
 	isRuTrackerIndexerName
 } from '#lib/server/indexers/search/russian-trackers.js';
 import { AUTO_GRAB_MIN_SCORE } from '#lib/server/library/searchOnAdd/search-utils.js';
+import { summarizeRejections } from '#lib/server/downloads/rejection-summary.js';
 import {
 	countAiredSeasonEpisodes,
 	getAiredSeasonEpisodeIds,
@@ -3169,6 +3170,7 @@ export class MonitoringSearchService {
 
 			// Find best non-blocklisted release that meets scoring requirements
 			const blocklistSpec = new ReleaseBlocklistSpecification({ movieId: movie.id });
+			const rejections: string[] = [];
 			let grabResult: {
 				success: boolean;
 				releaseName?: string;
@@ -3238,6 +3240,7 @@ export class MonitoringSearchService {
 					grabbedIndexerName = release.indexerName;
 					break; // Successfully grabbed
 				}
+				rejections.push(grabResult.rejectionType ?? 'rejected');
 			}
 
 			return {
@@ -3249,7 +3252,7 @@ export class MonitoringSearchService {
 				grabbed: (grabResult?.success ?? false) && grabResult?.addedToQueue !== false,
 				grabbedRelease: grabResult?.releaseName,
 				queueItemId: grabResult?.queueItemId,
-				error: grabResult?.error,
+				error: grabResult?.success ? undefined : summarizeRejections(rejections, grabResult?.error),
 				rejectionType: grabResult?.rejectionType,
 				indexerId: grabbedIndexerId,
 				indexerName: grabbedIndexerName,
@@ -3357,6 +3360,7 @@ export class MonitoringSearchService {
 
 			// Find best non-blocklisted release that meets scoring requirements
 			const blocklistSpec = new ReleaseBlocklistSpecification({ seriesId: seriesData.id });
+			const rejections: string[] = [];
 			let grabResult: {
 				success: boolean;
 				releaseName?: string;
@@ -3439,6 +3443,7 @@ export class MonitoringSearchService {
 					grabbedIndexerName = release.indexerName;
 					break; // Successfully grabbed
 				}
+				rejections.push(grabResult.rejectionType ?? 'rejected');
 			}
 
 			return {
@@ -3450,7 +3455,7 @@ export class MonitoringSearchService {
 				grabbed: (grabResult?.success ?? false) && grabResult?.addedToQueue !== false,
 				grabbedRelease: grabResult?.releaseName,
 				queueItemId: grabResult?.queueItemId,
-				error: grabResult?.error,
+				error: grabResult?.success ? undefined : summarizeRejections(rejections, grabResult?.error),
 				rejectionType: grabResult?.rejectionType,
 				indexerId: grabbedIndexerId,
 				indexerName: grabbedIndexerName,

@@ -14,6 +14,7 @@ import {
 import type { Resolution } from '#lib/server/indexers/parser/types.js';
 import type { SearchCriteria, EnhancedReleaseResult } from '#lib/server/indexers/types/index.js';
 import { AUTO_GRAB_MIN_SCORE } from './search-utils.js';
+import { summarizeRejections } from '#lib/server/downloads/rejection-summary.js';
 import type { AltTitleRefresher } from './alt-titles.js';
 import type { SearchForMovieParams, GrabResult } from './types.js';
 import { createChildLogger } from '#lib/logging/index.js';
@@ -307,16 +308,9 @@ export async function searchForMovie(
 		if (!lastGrab) return { success: false, error: 'No releases found', indexersQueried };
 		if (lastGrab.success) return lastGrab;
 
-		// Every candidate was refused. Report the distribution rather than the
-		// last refusal: one reason alone reads as the whole story when it is not.
-		const counts = new Map<string, number>();
-		for (const reason of rejections) counts.set(reason, (counts.get(reason) ?? 0) + 1);
-		const breakdown = [...counts.entries()]
-			.map(([reason, count]) => `${count} x ${reason}`)
-			.join(', ');
 		return {
 			success: false,
-			error: `No acceptable release: ${rejections.length} rejected (${breakdown})`,
+			error: summarizeRejections(rejections, lastGrab.error),
 			indexersQueried
 		};
 	} catch (error) {

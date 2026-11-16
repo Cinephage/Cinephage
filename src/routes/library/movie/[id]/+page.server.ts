@@ -7,9 +7,10 @@ import {
 	scoringProfiles,
 	downloadQueue,
 	subtitles,
-	libraries
+	libraries,
+	rejectedReleases
 } from '#lib/server/db/schema.js';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, desc, gte } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import type { LibraryMovie, MovieFile, QualityProfileSummary } from '#lib/types/library.js';
@@ -96,6 +97,17 @@ export interface LibraryMoviePageData {
 	languageProfiles: Array<{ id: string; name: string }>;
 	/** Instance default for original-title display (language_settings.prefer_original_title). */
 	preferOriginalTitleDefault: boolean;
+	/** Why recent automatic searches refused the candidates they found (last 7 days). */
+	searchRejections: {
+		total: number;
+		byReason: Array<{ reason: string; count: number }>;
+		latest: Array<{
+			title: string;
+			reason: string | null;
+			detail: string | null;
+			rejectedAt: string;
+		}>;
+	};
 }
 
 export const load: PageServerLoad = async ({ params }): Promise<LibraryMoviePageData> => {
@@ -405,8 +417,36 @@ export const load: PageServerLoad = async ({ params }): Promise<LibraryMoviePage
 
 	const delayProfiles = await delayProfileService.getProfiles();
 
+	// Why the last automatic search refused what it found: one rejection message
+	// on its own reads as the whole story when a search refused several tiers.
+	const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+	const rejectionRows = await db
+		.select({
+			title: rejectedReleases.releaseTitle,
+			reason: rejectedReleases.primaryReason,
+			detail: rejectedReleases.ruleFired,
+			rejectedAt: rejectedReleases.rejectedAt
+		})
+		.from(rejectedReleases)
+		.where(and(eq(rejectedReleases.tmdbId, movie.tmdbId), gte(rejectedReleases.rejectedAt, since)))
+		.orderBy(desc(rejectedReleases.rejectedAt))
+		.limit(50);
+
+	const rejectionCounts = new Map<string, number>();
+	for (const row of rejectionRows) {
+		const reason = row.reason ?? 'other';
+		rejectionCounts.set(reason, (rejectionCounts.get(reason) ?? 0) + 1);
+	}
+
 	return {
 		movie: movieWithFiles,
+		searchRejections: {
+			total: rejectionRows.length,
+			byReason: [...rejectionCounts.entries()]
+				.map(([reason, count]) => ({ reason, count }))
+				.sort((a, b) => b.count - a.count),
+			latest: rejectionRows.slice(0, 5)
+		},
 		librarySlug,
 		libraryName,
 		tmdbDetails,

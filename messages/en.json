@@ -1481,6 +1481,8 @@
 	"library_movieDetail_deleteMovieTitle": "Delete Movie",
 	"library_movieDetail_detailsHeading": "Details",
 	"library_movieDetail_filesHeading": "Files",
+	"library_movieDetail_searchRejectionsHeading": "Recent search rejections",
+	"library_movieDetail_searchRejectionsWindow": "{count} candidate(s) refused in the last 7 days",
 	"library_movieDetail_genres": "Genres",
 	"library_movieDetail_imdb": "IMDb",
 	"library_movieDetail_metaDescription": "Manage {title} in your library",

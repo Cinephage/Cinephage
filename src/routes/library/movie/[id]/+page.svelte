@@ -1026,6 +1026,36 @@
 					onSubtitleAutoSearch={handleSubtitleAutoSearch}
 					{subtitleAutoSearching}
 				/>
+				{#if data.searchRejections.total > 0}
+					<div class="mt-4 rounded-lg bg-base-300/40 p-3">
+						<div class="mb-2 flex items-center justify-between gap-2">
+							<h3 class="text-sm font-semibold">
+								{m.library_movieDetail_searchRejectionsHeading()}
+							</h3>
+							<span class="text-xs text-base-content/60">
+								{m.library_movieDetail_searchRejectionsWindow({
+									count: data.searchRejections.total
+								})}
+							</span>
+						</div>
+						<div class="mb-2 flex flex-wrap gap-1">
+							{#each data.searchRejections.byReason as entry (entry.reason)}
+								<span class="badge badge-ghost badge-sm">
+									{entry.reason}
+									<span class="ml-1 font-mono">{entry.count}</span>
+								</span>
+							{/each}
+						</div>
+						<ul class="space-y-1 text-xs text-base-content/70">
+							{#each data.searchRejections.latest as row (row.title + row.rejectedAt)}
+								<li class="truncate" title={row.detail ?? row.reason ?? ''}>
+									<span class="text-base-content/50">{row.reason}</span>
+									· {row.title}
+								</li>
+							{/each}
+						</ul>
+					</div>
+				{/if}
 			</div>
 
 			{#if data.collection}
