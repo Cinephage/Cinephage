@@ -37,7 +37,7 @@ export const GET: RequestHandler = async ({ url }) => {
 				currentPath: requestedPath,
 				parentPath: null,
 				entries: [],
-				error: 'Access denied: Path is outside allowed directories'
+				error: 'Access denied: system and application directories are not browsable'
 			} satisfies BrowseResponse,
 			{ status: 403 }
 		);
@@ -74,6 +74,11 @@ export const GET: RequestHandler = async ({ url }) => {
 				.filter((item) => !item.name.startsWith('.'))
 				.map(async (item): Promise<DirectoryEntry | null> => {
 					const entryPath = join(requestedPath, item.name);
+					// Hide what cannot be entered: listing a blocked child and then
+					// refusing to open it reads as a broken picker (bug #676).
+					if (!(await isPathAllowed(entryPath))) {
+						return null;
+					}
 					if (excludeManagedRoots && (await isManagedRootPath(entryPath))) {
 						return null;
 					}

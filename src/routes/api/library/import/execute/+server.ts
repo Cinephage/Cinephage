@@ -63,7 +63,7 @@ export const POST: RequestHandler = async (event) => {
 			return Response.json(
 				{
 					success: false,
-					error: 'Access denied: Path is outside allowed directories'
+					error: 'Access denied: this is a restricted system path'
 				},
 				{ status: 403 }
 			);

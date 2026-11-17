@@ -64,7 +64,7 @@ export const POST: RequestHandler = async (event) => {
 				return Response.json(
 					{
 						success: false,
-						error: `Access denied: Path ${importPath} is outside allowed directories`
+						error: `Access denied: ${importPath} is a restricted system path`
 					},
 					{ status: 403 }
 				);

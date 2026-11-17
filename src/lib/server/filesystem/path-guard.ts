@@ -1,28 +1,50 @@
 import { realpath } from 'node:fs/promises';
-import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { RootFolderService } from '#lib/server/downloadClients/RootFolderService.js';
 
-// Bases the browse/import surfaces may touch. Deliberately NOT '/': with the
-// filesystem root in this list every absolute path is "allowed" and the whole
-// guard becomes a no-op. A deployment whose media lives outside these bases
-// plus the configured root folders (the intended escape hatch for exotic
-// mount points) should register that path as a root folder in settings.
-const COMMON_BASE_PATHS = [
-	'/mnt',
-	'/media',
-	'/srv',
-	'/data',
-	'/storage',
-	'/home',
-	'/opt',
-	'/vol',
-	'/downloads',
-	// Scratch space: test fixtures and the occasional download client land
-	// here; browsing it is admin-only and low-sensitivity.
-	'/tmp',
-	'/var/tmp'
+/**
+ * Trees the browse/import surfaces must never touch.
+ *
+ * This is a denylist, not an allowlist. An allowlist can only name the mount
+ * points that existed when it was written, so any deployment that binds media
+ * somewhere else (`-v /pool2:/media2`, an LXC bind mount, a fresh ZFS dataset)
+ * is locked out of its own media - and because the root folder picker runs
+ * through the same guard, it cannot reach the path it would have to register to
+ * escape the list (bug #676). Denying the OS-critical trees plus the app's own
+ * data directory keeps the scanner out of /proc and the picker out of the auth
+ * database, while every media mount stays browsable.
+ *
+ * This is a guardrail, not the security boundary. Every caller is already
+ * admin-gated (browse is absent from the viewer allowlist in hooks.server.ts,
+ * the import routes call requireAdmin), and playback containment is enforced
+ * separately by isPathInsideManagedRoot. Configured root folders stay the
+ * intentional escape hatch: they are allowed even when they sit inside a
+ * blocked tree.
+ */
+const BLOCKED_PATHS = [
+	'/etc',
+	'/proc',
+	'/sys',
+	'/dev',
+	'/boot',
+	'/bin',
+	'/sbin',
+	'/lib',
+	'/lib32',
+	'/lib64',
+	'/usr',
+	'/run',
+	'/root'
 ];
+
+/**
+ * The app's own config/data directory: database, auth secret, logs. Mirrors the
+ * DATA_DIR resolution used by db/connection.ts (relative paths resolve against
+ * the process cwd).
+ */
+function appDataDir(): string {
+	return process.env.DATA_DIR || 'data';
+}
 
 function isPathWithinScope(pathToCheck: string, scopePath: string): boolean {
 	const normalizedPath = resolve(pathToCheck);
@@ -94,22 +116,47 @@ export async function isManagedRootPath(requestedPath: string): Promise<boolean>
 	return rootFolderPaths.some((rootPath) => rootPath === normalizedPath);
 }
 
+let blockedPathsCache: { dataDir: string; paths: Promise<string[]> } | null = null;
+
 /**
- * Validate a filesystem path is within allowed boundaries.
+ * Canonicalized blocked prefixes, resolved once per DATA_DIR value.
  *
- * Allowed:
- * - User home directory
- * - Configured root folders
- * - Common mount base paths
+ * The browse listing validates one path per directory child, so re-resolving
+ * the static prefixes on every call would put a realpath syscall storm on the
+ * event loop - the same shape as bug #495. The cache is keyed by the configured
+ * data dir so an env change (tests, restarts) is picked up without a stale
+ * entry.
+ */
+function getBlockedPaths(): Promise<string[]> {
+	const dataDir = appDataDir();
+	if (blockedPathsCache?.dataDir !== dataDir) {
+		blockedPathsCache = {
+			dataDir,
+			paths: Promise.all(
+				[...BLOCKED_PATHS, dataDir].map((candidate) => canonicalizePath(candidate))
+			)
+		};
+	}
+	return blockedPathsCache.paths;
+}
+
+function isWithinAnyBlockedPath(pathToCheck: string, blockedPaths: string[]): boolean {
+	return blockedPaths.some((blockedPath) => isPathWithinScope(pathToCheck, blockedPath));
+}
+
+/**
+ * Validate a filesystem path is inside allowed boundaries.
+ *
+ * Blocked:
+ * - OS-critical trees and the app's own data directory (BLOCKED_PATHS)
+ *
+ * Everything else is allowed, so non-standard mount names need no
+ * configuration. Configured root folders are always allowed, including their
+ * ancestors (the picker has to descend from / into them) - a root folder inside
+ * a blocked tree is the operator explicitly saying media lives there.
  */
 export async function isPathAllowed(requestedPath: string): Promise<boolean> {
 	const normalizedPath = await canonicalizePath(requestedPath);
-	const homeDir = await canonicalizePath(homedir());
-
-	if (isPathWithinScope(normalizedPath, homeDir) || isPathWithinScope(homeDir, normalizedPath)) {
-		return true;
-	}
-
 	const rootFolderPaths = await getRootFolderPaths();
 
 	for (const normalizedRootPath of rootFolderPaths) {
@@ -121,15 +168,5 @@ export async function isPathAllowed(requestedPath: string): Promise<boolean> {
 		}
 	}
 
-	for (const basePath of COMMON_BASE_PATHS) {
-		const normalizedBasePath = await canonicalizePath(basePath);
-		if (
-			isPathWithinScope(normalizedPath, normalizedBasePath) ||
-			isPathWithinScope(normalizedBasePath, normalizedPath)
-		) {
-			return true;
-		}
-	}
-
-	return false;
+	return !isWithinAnyBlockedPath(normalizedPath, await getBlockedPaths());
 }

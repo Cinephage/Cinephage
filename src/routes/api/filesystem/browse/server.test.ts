@@ -85,4 +85,49 @@ describe('Filesystem Browse API', () => {
 		// two top-level boundary checks). Must be a small constant after the fix.
 		expect(rootFolderStats.getFoldersCalls).toBeLessThanOrEqual(3);
 	});
+
+	it('serves a listing for a directory whose name is not a well-known base path', async () => {
+		testDir = await mkdtemp(join(tmpdir(), 'cinephage-browse-test-'));
+		await mkdir(join(testDir, 'media2'));
+		await mkdir(join(testDir, 'media2', 'Movies'));
+
+		const url = `http://localhost/api/filesystem/browse?path=${encodeURIComponent(join(testDir, 'media2'))}`;
+		const { status, data } = await api.get<{
+			entries: Array<{ name: string }>;
+			error?: string;
+		}>(GET, { url });
+
+		expect(status).toBe(200);
+		expect(data.error).toBeUndefined();
+		expect(data.entries.map((entry) => entry.name)).toEqual(['Movies']);
+	});
+
+	it('does not list, and refuses to open, a blocked directory', async () => {
+		testDir = await mkdtemp(join(tmpdir(), 'cinephage-browse-test-'));
+		const blockedDir = join(testDir, 'blocked');
+		await mkdir(blockedDir);
+		await mkdir(join(testDir, 'media2'));
+
+		const previousDataDir = process.env.DATA_DIR;
+		process.env.DATA_DIR = blockedDir;
+		try {
+			const listing = await api.get<{ entries: Array<{ name: string }> }>(GET, {
+				url: `http://localhost/api/filesystem/browse?path=${encodeURIComponent(testDir)}`
+			});
+			expect(listing.status).toBe(200);
+			expect(listing.data.entries.map((entry) => entry.name)).toEqual(['media2']);
+
+			const direct = await api.get<{ error?: string }>(GET, {
+				url: `http://localhost/api/filesystem/browse?path=${encodeURIComponent(blockedDir)}`
+			});
+			expect(direct.status).toBe(403);
+			expect(direct.data.error).toContain('Access denied');
+		} finally {
+			if (previousDataDir === undefined) {
+				delete process.env.DATA_DIR;
+			} else {
+				process.env.DATA_DIR = previousDataDir;
+			}
+		}
+	});
 });

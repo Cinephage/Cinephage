@@ -77,13 +77,53 @@ describe('path-guard', () => {
 		expect(mockGetFolders).toHaveBeenCalledTimes(2);
 	});
 
-	it('confines browsing to common bases and root folders - system paths are denied', async () => {
+	it('allows a mount whose name is not a well-known base path (bug #676)', async () => {
 		const { isPathAllowed } = await import('./path-guard.js');
 
 		await expect(isPathAllowed('/mnt/media')).resolves.toBe(true);
+		await expect(isPathAllowed('/media2')).resolves.toBe(true);
+		await expect(isPathAllowed('/media2/Movies/Film (2024)')).resolves.toBe(true);
+		await expect(isPathAllowed('/pool2/downloads')).resolves.toBe(true);
+	});
+
+	it('denies OS-critical trees and the app data directory', async () => {
+		vi.stubEnv('DATA_DIR', '/srv/cinephage-data');
+
+		const { isPathAllowed } = await import('./path-guard.js');
+
 		await expect(isPathAllowed('/etc')).resolves.toBe(false);
+		await expect(isPathAllowed('/etc/passwd')).resolves.toBe(false);
 		await expect(isPathAllowed('/proc/self')).resolves.toBe(false);
 		await expect(isPathAllowed('/usr/bin')).resolves.toBe(false);
+		await expect(isPathAllowed('/dev/shm')).resolves.toBe(false);
+		await expect(isPathAllowed('/root/.ssh')).resolves.toBe(false);
+		await expect(isPathAllowed('/srv/cinephage-data/cinephage.db')).resolves.toBe(false);
+
+		vi.unstubAllEnvs();
+	});
+
+	it('denies a symlink that resolves into a blocked tree', async () => {
+		mockRealpath.mockImplementation(async (input: string) => {
+			if (input === '/media2/etc-link') {
+				return '/etc';
+			}
+			return input;
+		});
+
+		const { isPathAllowed } = await import('./path-guard.js');
+		await expect(isPathAllowed('/media2/etc-link')).resolves.toBe(false);
+	});
+
+	it('keeps a configured root folder reachable when it lives inside a blocked tree', async () => {
+		const { isPathAllowed } = await import('./path-guard.js');
+		await expect(isPathAllowed('/root')).resolves.toBe(false);
+
+		mockGetFolders.mockResolvedValue([{ id: 'rf-1', path: '/root/media' }]);
+		vi.resetModules();
+
+		const after = await import('./path-guard.js');
+		await expect(after.isPathAllowed('/root/media/Movies')).resolves.toBe(true);
+		await expect(after.isPathAllowed('/root')).resolves.toBe(true);
 	});
 
 	it('still allows the filesystem root listing (ancestor of the mount bases)', async () => {
