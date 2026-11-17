@@ -82,6 +82,46 @@ function extractCompactAirDate(fileStem: string): string | undefined {
 	return `${match[1]}-${match[2]}-${match[3]}`;
 }
 
+function extractExplicitEpisodeMarker(
+	fileStem: string
+): Extract<ResolvedTvEpisodeIdentifier, { numbering: 'standard' }> | undefined {
+	// Two separate SxxExx markers describe a range ("S01E01-S08E99"), not one episode
+	const markers = fileStem.match(/\bS\d{1,2}[\s._-]?E\d{1,3}/gi) ?? [];
+	if (markers.length !== 1) {
+		return undefined;
+	}
+
+	const match = fileStem.match(/\bS(\d{1,2})[\s._-]?E(\d{1,3})((?:[\s._-]?E\d{1,3})*)(?!\d)/i);
+	if (!match) {
+		return undefined;
+	}
+
+	let episodeNumbers = [
+		parseInt(match[2], 10),
+		...[...match[3].matchAll(/E(\d{1,3})/gi)].map((extra) => parseInt(extra[1], 10))
+	].filter((episode) => episode > 0);
+	if (episodeNumbers.length === 0) {
+		return undefined;
+	}
+
+	// "S01E03-E05" is a range, same rule as the release parser (up to 20 episodes)
+	const [first, last] = episodeNumbers;
+	if (
+		episodeNumbers.length === 2 &&
+		match[3].trimStart().startsWith('-') &&
+		last > first &&
+		last < first + 20
+	) {
+		episodeNumbers = Array.from({ length: last - first + 1 }, (_, index) => first + index);
+	}
+
+	return {
+		numbering: 'standard',
+		seasonNumber: parseInt(match[1], 10),
+		episodeNumbers: [...new Set(episodeNumbers)]
+	};
+}
+
 function extractTrailingEpisodeToken(fileStem: string): number | undefined {
 	const patterns = [
 		/(?:^|[\s._-])(?:ep?|episode)[\s._-]*0*([1-9]\d{0,2})(?:v\d+)?$/i,
@@ -141,7 +181,10 @@ export function resolveTvEpisodeIdentifier(
 	}
 
 	if (episodeInfo?.isSeasonPack) {
-		return null;
+		// Pack wording ("Complete Series", "S01-S05") is matched before SxxExx by
+		// the release parser, which is right for a release title but wrong for a
+		// single file inside the pack that still names its episode.
+		return extractExplicitEpisodeMarker(fileStem) ?? null;
 	}
 
 	if (episodeInfo?.absoluteEpisode !== undefined) {

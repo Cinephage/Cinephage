@@ -1,5 +1,6 @@
-import { basename } from 'node:path';
-import { DOWNLOAD, EXCLUDED_FILE_PATTERNS, isVideoFile } from '#lib/config/constants.js';
+import { basename, dirname } from 'node:path';
+import { isVideoFile } from '#lib/config/constants.js';
+import { classifyImportCandidate } from '#lib/server/downloadClients/import/import-candidate.js';
 import { LibraryDestinationPlanner } from '#lib/server/downloadClients/import/LibraryDestinationPlanner.js';
 import {
 	matchEpisodesByIdentifier,
@@ -323,11 +324,12 @@ export class ReadyProviderFileMapper {
 		if (file.selected === false) return false;
 		const pathForFiltering = this.normalizedProviderPath(file);
 		if (!isVideoFile(pathForFiltering)) return false;
-		if (file.sizeBytes < DOWNLOAD.MIN_IMPORT_SIZE_BYTES) return false;
-		// Mirror ImportService: excluded patterns are tested against the basename
-		// only, never the provider folder path.
+		// Same verdict as ImportService: name patterns on the basename, extras
+		// only when a folder segment is exactly an extras/sample folder.
 		const baseName = this.safeProviderParseReference(file);
-		return !EXCLUDED_FILE_PATTERNS.some((pattern) => pattern.test(baseName));
+		const folder = dirname(pathForFiltering);
+		const candidatePath = folder === '.' || folder === '/' ? baseName : `${folder}/${baseName}`;
+		return classifyImportCandidate(candidatePath, file.sizeBytes).importable;
 	}
 
 	private safeProviderParseReference(file: ProviderFile): string {
