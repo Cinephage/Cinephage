@@ -12,12 +12,36 @@ import { resolveImportedScope } from '../imported-scope.js';
 import { resolveSeedLimits } from '../seed-limits.js';
 import { blocklistService } from '#lib/server/monitoring/specifications/BlocklistSpecification.js';
 import { acquisitionService } from '#lib/server/acquisition/AcquisitionService.js';
+import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import type { GrabRequest, ResolvedContext, HandlerResult } from '../grab-types.js';
 import type { DownloadInfo } from '#lib/server/downloadClients/core/interfaces.js';
 
 const logger = createChildLogger({ module: 'TorrentHandler' });
 const parser = new ReleaseParser();
+
+const MAGNET_FALLBACK_DISABLED =
+	'Magnet fallback is disabled for this indexer and no .torrent could be obtained, so the file list and the tracker announce would be lost. The grab will be retried.';
+
+/**
+ * Whether this indexer lets a grab that asked for a .torrent proceed on a magnet
+ * instead. A definition that does not declare the setting, and a settings read
+ * that fails, both keep the previous behaviour: allow the fallback and warn.
+ */
+async function magnetFallbackAllowed(indexerId: string | null | undefined): Promise<boolean> {
+	if (!indexerId) return true;
+
+	try {
+		const indexerManager = await getIndexerManager();
+		const config = await indexerManager.getIndexer(indexerId);
+		const value = config?.settings?.magnetFallback;
+		if (value === undefined || value === null) return true;
+		return value !== false && value !== 'false' && value !== 0 && value !== '0';
+	} catch (error) {
+		logger.debug({ err: error, indexerId }, 'Could not read magnetFallback; allowing the fallback');
+		return true;
+	}
+}
 
 export class TorrentHandler {
 	async handle(request: GrabRequest, resolved: ResolvedContext): Promise<HandlerResult> {
@@ -84,12 +108,33 @@ export class TorrentHandler {
 		// warning lived inside the pointer branch only (#663). `release.magnetUrl`
 		// is set for indexers that publish magnets by design (public trackers),
 		// so only a grab that asked for a torrent file lands here.
+		//
+		// An indexer may refuse the substitution instead (`magnetFallback:
+		// false`): the .torrent also carries the announce URL and the topic
+		// comment, and a magnet add that succeeds consumes the grab, while a
+		// refused one is retried on monitoring's own schedule with another
+		// chance at the file.
 		if (
 			!resolvedDownload.torrentFile &&
 			resolvedDownload.magnetUrl &&
 			release.downloadUrl &&
 			!release.magnetUrl
 		) {
+			if (!(await magnetFallbackAllowed(release.indexerId))) {
+				logger.warn(
+					{
+						title: release.title,
+						indexerId: release.indexerId,
+						seasonNumber,
+						episodeIds,
+						magnetOnly: true,
+						perFileSelection: 'skipped'
+					},
+					'[TorrentHandler] Refusing a magnet-only grab: this indexer requires a .torrent'
+				);
+				return { success: false, error: MAGNET_FALLBACK_DISABLED };
+			}
+
 			logger.warn(
 				{
 					title: release.title,

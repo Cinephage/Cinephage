@@ -103,4 +103,18 @@ describe('RuTracker definition settings', () => {
 		// user was trying to avoid came from the definition's own selector chain.
 		expect(names).not.toContain('usemagnetlinks');
 	});
+
+	it('declares the magnet-fallback choice, on by default', async () => {
+		// Replaces the dead knob with the one the code reads: unchecked, a grab
+		// that can only get a magnet fails instead of downloading the whole pack
+		// without a file list (#663).
+		const loader = new YamlDefinitionLoader(definitionsDir);
+		const result = await loader.loadOne(definitionPath);
+		const setting = (result!.definition.settings ?? []).find(
+			(entry) => entry.name === 'magnetFallback'
+		);
+		expect(setting).toBeDefined();
+		expect(setting?.type).toBe('checkbox');
+		expect(setting?.default).toBe(true);
+	});
 });

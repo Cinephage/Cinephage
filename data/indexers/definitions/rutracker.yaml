@@ -30,6 +30,16 @@ settings:
     type: checkbox
     label: Strip Cyrillic Letters
     default: false
+  # When no .torrent can be fetched (dl.php answering with a page), RuTracker's
+  # magnet selector is the only link left. A magnet carries no file list and no
+  # personal announce, so a grab that falls back to one downloads the whole pack
+  # without per-episode selection. Uncheck to fail such a grab instead and let
+  # monitoring retry - the next cycle often gets the real .torrent, but nothing
+  # downloads this cycle.
+  - name: magnetFallback
+    type: checkbox
+    label: Allow magnet fallback
+    default: true
 
 caps:
   modes:
