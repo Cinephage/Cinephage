@@ -26,7 +26,6 @@ import type { TorrentProtocolSettings } from '../types/protocol';
  * Score bonuses for torrent-specific features
  */
 const TORRENT_SCORE_BONUSES = {
-	freeleech: 50,
 	internalRelease: 30,
 	highSeeders: 20, // > 100 seeders
 	excellentHealth: 15,
@@ -141,11 +140,6 @@ export class TorrentProtocolHandler extends BaseProtocolHandler implements ITorr
 				// Heavy penalty for not meeting minimum seeders
 				adjustment += TORRENT_SCORE_PENALTIES.noSeeders;
 			}
-		}
-
-		// Freeleech bonus
-		if (this.isFreeleech(result)) {
-			adjustment += TORRENT_SCORE_BONUSES.freeleech;
 		}
 
 		// Internal release bonus

@@ -33,6 +33,39 @@ async function expandRow() {
 	await fireEvent.click(screen.getAllByTitle('Expand details')[0]);
 }
 
+describe('SearchResultRow freeleech chip', () => {
+	// The chip is the only place a manual search says "this costs you nothing".
+	// It must follow the torrent's own credit fields, not the title text, and it
+	// must stay absent for a release that charges full credit.
+	it('shows the chip when the torrent reports freeleech', async () => {
+		const release = createRelease({
+			torrent: { freeleech: true, downloadFactor: 0 }
+		});
+		render(SearchResultRow, { props: { release, onGrab } });
+
+		expect(screen.getAllByText('Freeleech').length).toBeGreaterThan(0);
+	});
+
+	it('shows the chip for a zero download factor without the boolean', async () => {
+		const release = createRelease({
+			torrent: { downloadFactor: 0 }
+		});
+		render(SearchResultRow, { props: { release, onGrab } });
+
+		expect(screen.getAllByText('Freeleech').length).toBeGreaterThan(0);
+	});
+
+	it('stays hidden for a partially free release', async () => {
+		// 50% leech is not freeleech; claiming it is would be a lie the user acts on.
+		const release = createRelease({
+			torrent: { downloadFactor: 0.5 }
+		});
+		render(SearchResultRow, { props: { release, onGrab } });
+
+		expect(screen.queryByText('Freeleech')).toBeNull();
+	});
+});
+
 describe('SearchResultRow parsed attribute display (#586)', () => {
 	it('shows the audio pill and parsed rows when data is present', async () => {
 		const release = createRelease({

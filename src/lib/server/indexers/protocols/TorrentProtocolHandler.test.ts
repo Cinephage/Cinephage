@@ -81,3 +81,24 @@ describe('TorrentProtocolHandler seeder validation', () => {
 		expect(handler.calculateScoreAdjustment(result, context)).toBeLessThan(0);
 	});
 });
+
+describe('TorrentProtocolHandler freeleech is not a ranking signal', () => {
+	it('scores a freeleech release exactly as a paid one', () => {
+		const handler = new TorrentProtocolHandler();
+		const context = createContext();
+
+		const paid = createResult({ seeders: 50, leechers: 2 });
+		const freeleech = createResult({
+			seeders: 50,
+			leechers: 2,
+			torrent: { seeders: 50, leechers: 2, freeleech: true, downloadFactor: 0 }
+		});
+
+		// Freeleech is a credit fact the user reads off the row, not a reason to
+		// prefer one release over another: identical health must score identically.
+		expect(handler.calculateScoreAdjustment(freeleech, context)).toBe(
+			handler.calculateScoreAdjustment(paid, context)
+		);
+		expect(handler.isFreeleech(freeleech)).toBe(true);
+	});
+});
