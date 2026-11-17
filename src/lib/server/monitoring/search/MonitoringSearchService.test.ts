@@ -129,7 +129,16 @@ vi.mock('../specifications/index.js', () => ({
 vi.mock('#lib/server/indexers/IndexerManager.js', () => ({
 	getIndexerManager: vi.fn(async () => ({
 		searchAll: searchAllMock,
-		searchEnhanced: searchEnhancedMock
+		searchEnhanced: searchEnhancedMock,
+		// Release-level gates resolve each release's definition, so the mock has to
+		// answer for the ids the fixtures use.
+		getIndexer: vi.fn(async (id: string) => ({
+			id,
+			definitionId: /rutracker|kinozal/i.test(id) ? 'rutracker' : id
+		})),
+		getDefinition: vi.fn((definitionId: string) => ({
+			features: /rutracker|kinozal/i.test(definitionId) ? { livingSeasonPacks: true } : {}
+		}))
 	}))
 }));
 

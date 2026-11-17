@@ -22,10 +22,7 @@ import {
 } from '#lib/server/db/schema.js';
 import { eq, and, lte, gte, inArray, isNotNull } from 'drizzle-orm';
 import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
-import {
-	isRuTrackerHost,
-	isRuTrackerIndexerName
-} from '#lib/server/indexers/search/russian-trackers.js';
+import { getFeaturesByIndexerId, NO_INDEXER_FEATURES } from '#lib/server/indexers/features.js';
 import { AUTO_GRAB_MIN_SCORE } from '#lib/server/library/searchOnAdd/search-utils.js';
 import { summarizeRejections } from '#lib/server/downloads/rejection-summary.js';
 import {
@@ -1224,8 +1221,7 @@ export class MonitoringSearchService {
 			// Preload all season episode counts in a single query to avoid N+1
 			const allSeriesIds = Array.from(episodesBySeriesAndSeason.keys());
 			await this.preloadSeasonEpisodeCounts(allSeriesIds);
-			const useRuTrackerEpisodePointerPolicy =
-				await this.shouldApplyRuTrackerEpisodePointerPolicy();
+			const useEpisodePointerPolicy = await this.shouldApplyEpisodePointerPolicy();
 
 			// Process each series with cascading strategy
 			for (const [currentSeriesId, seasonMap] of episodesBySeriesAndSeason) {
@@ -1242,7 +1238,7 @@ export class MonitoringSearchService {
 					seriesData,
 					seasonMap,
 					signal,
-					useRuTrackerEpisodePointerPolicy
+					useEpisodePointerPolicy
 				);
 				results.push(...seriesResults);
 			}
@@ -1267,7 +1263,7 @@ export class MonitoringSearchService {
 		>,
 		seasonMap: Map<number, Array<typeof episodes.$inferSelect>>,
 		signal?: AbortSignal,
-		useRuTrackerEpisodePointerPolicy: boolean = false
+		useEpisodePointerPolicy: boolean = false
 	): Promise<ItemSearchResult[]> {
 		const results: ItemSearchResult[] = [];
 		const grabbedEpisodeIds = new Set<string>();
@@ -1307,7 +1303,7 @@ export class MonitoringSearchService {
 			// When RuTracker/Kinozal is the only automatic TV source, avoid season-pack
 			// requests unless the full season is missing. Partial seasons should use
 			// episode-pointer flow.
-			if (useRuTrackerEpisodePointerPolicy && !isEntireSeasonMissing) {
+			if (useEpisodePointerPolicy && !isEntireSeasonMissing) {
 				logger.debug(
 					{
 						seriesTitle: seriesData.title,
@@ -1617,8 +1613,16 @@ export class MonitoringSearchService {
 			const isEntireSeasonMissing =
 				seasonEpisodeCount > 0 && missingEpisodes.length >= seasonEpisodeCount;
 
+			// Behaviour comes from each release's definition, resolved once here
+			// rather than sniffed from the indexer's display name.
+			const packFeatures = await getFeaturesByIndexerId(
+				seasonPacks.map((release) => release.indexerId)
+			);
+
 			for (const release of seasonPacks) {
-				if (isRuTrackerIndexerName(release.indexerName) && !isEntireSeasonMissing) {
+				const livingSeasonPacks = (packFeatures.get(release.indexerId) ?? NO_INDEXER_FEATURES)
+					.livingSeasonPacks;
+				if (livingSeasonPacks && !isEntireSeasonMissing) {
 					logger.debug(
 						{
 							seriesId: seriesData.id,
@@ -3383,15 +3387,21 @@ export class MonitoringSearchService {
 				profile = await qualityFilter.getDefaultScoringProfile();
 			}
 
+			const releaseFeatures = await getFeaturesByIndexerId(
+				searchResult.releases.map((release) => release.indexerId)
+			);
+
 			for (const release of searchResult.releases) {
 				const parsedEpisode = release.parsed.episode ?? release.episodeMatch;
 				const isSeasonPack = parsedEpisode?.isSeasonPack ?? false;
 				const isEpisodePointer = this.isEpisodePointerRelease(release);
+				const livingSeasonPacks = (releaseFeatures.get(release.indexerId) ?? NO_INDEXER_FEATURES)
+					.livingSeasonPacks;
 
-				// Pointer-indexer episode-targeted missing-content search should not grab
-				// full season packs.
+				// An episode-targeted missing-content search on a living-season-pack
+				// indexer should not grab full season packs.
 				// Allow virtual episode pointers because they resolve to per-episode file selection.
-				if (isRuTrackerIndexerName(release.indexerName) && isSeasonPack && !isEpisodePointer) {
+				if (livingSeasonPacks && isSeasonPack && !isEpisodePointer) {
 					logger.debug(
 						{
 							seriesId: seriesData.id,
@@ -3481,7 +3491,11 @@ export class MonitoringSearchService {
 		);
 	}
 
-	private async shouldApplyRuTrackerEpisodePointerPolicy(): Promise<boolean> {
+	/**
+	 * Whether every automatic TV indexer declares living season packs, in which
+	 * case episode-targeted searches are the only way to fill a snapshot pack.
+	 */
+	private async shouldApplyEpisodePointerPolicy(): Promise<boolean> {
 		try {
 			const indexerManager = await getIndexerManager();
 			const maybeGetIndexers = (indexerManager as { getIndexers?: () => Promise<unknown[]> })
@@ -3508,16 +3522,22 @@ export class MonitoringSearchService {
 				return false;
 			}
 
-			const hasRuTracker = automaticTvIndexers.some((indexer) => {
-				const config = indexer as { name?: string; baseUrl?: string };
-				return isRuTrackerIndexerName(config.name) || isRuTrackerHost(config.baseUrl);
-			});
-			const hasNonRuTracker = automaticTvIndexers.some((indexer) => {
-				const config = indexer as { name?: string; baseUrl?: string };
-				return !(isRuTrackerIndexerName(config.name) || isRuTrackerHost(config.baseUrl));
-			});
+			const manager = indexerManager as {
+				getDefinition?: (id: string) => { features?: { livingSeasonPacks?: boolean } } | undefined;
+			};
+			const isLivingSeasonPackIndexer = (indexer: unknown) => {
+				const definitionId = (indexer as { definitionId?: string }).definitionId;
+				return definitionId
+					? manager.getDefinition?.(definitionId)?.features?.livingSeasonPacks === true
+					: false;
+			};
 
-			return hasRuTracker && !hasNonRuTracker;
+			const hasLivingSeasonPacks = automaticTvIndexers.some(isLivingSeasonPackIndexer);
+			const hasPlainIndexers = automaticTvIndexers.some(
+				(indexer) => !isLivingSeasonPackIndexer(indexer)
+			);
+
+			return hasLivingSeasonPacks && !hasPlainIndexers;
 		} catch {
 			return false;
 		}

@@ -20,6 +20,7 @@ import {
 import { createChildLogger } from '#lib/logging/index.js';
 import { redactUrl } from '#lib/server/utils/urlSecurity.js';
 import { INDEXER_USER_AGENT } from '#lib/server/indexers/http/userAgent.js';
+import { getIndexerFeatures } from '#lib/server/indexers/features.js';
 
 const logger = createChildLogger({ module: 'DownloadResolutionService' });
 
@@ -249,10 +250,20 @@ class DownloadResolutionService {
 		title: string,
 		commentsUrl?: string
 	): Promise<ResolvedDownload> {
-		const normalizedCommentsUrl = this.normalizeRuTrackerForumUrl(commentsUrl);
-		const normalizedDownloadUrl = this.normalizeRuTrackerForumUrl(downloadUrl) ?? downloadUrl;
+		// The definition says whether this tracker's download links are forum
+		// endpoints; the host does not (a proxied indexer, a mirror or a renamed
+		// instance all answer differently from the same tracker).
+		const features = await getIndexerFeatures(indexerId);
+		const normalizedCommentsUrl = features.forumDownloadLinks
+			? this.normalizeForumDownloadUrl(commentsUrl)
+			: commentsUrl;
+		const normalizedDownloadUrl =
+			(features.forumDownloadLinks ? this.normalizeForumDownloadUrl(downloadUrl) : undefined) ??
+			downloadUrl;
 		const fallbackDetailsUrl =
-			normalizedCommentsUrl ?? this.deriveDetailsUrl(normalizedDownloadUrl);
+			(features.forumDownloadLinks
+				? (normalizedCommentsUrl ?? this.deriveForumDetailsUrl(normalizedDownloadUrl))
+				: normalizedCommentsUrl) ?? undefined;
 
 		logger.debug(
 			{
@@ -351,11 +362,12 @@ class DownloadResolutionService {
 				};
 			};
 
-			// RuTracker-style links are often transient on /dl.php endpoints; prefer details page first.
+			// Forum download endpoints are often transient, so derive the details
+			// page from the link and try that first.
 			const preferDetailsFirst =
+				features.forumDownloadLinks &&
 				!!fallbackDetailsUrl &&
-				fallbackDetailsUrl !== normalizedDownloadUrl &&
-				/rutracker\./i.test(normalizedDownloadUrl);
+				fallbackDetailsUrl !== normalizedDownloadUrl;
 			if (preferDetailsFirst) {
 				const detailsFirstResult = await tryIndexer(
 					fallbackDetailsUrl,
@@ -413,18 +425,17 @@ class DownloadResolutionService {
 	}
 
 	/**
-	 * Derive a stable release details URL from ephemeral download links.
-	 * Currently used for RuTracker links like /forum/dl.php?t=<id>.
+	 * Derive a stable details URL from an ephemeral forum download link
+	 * (`/forum/dl.php?t=<id>`). Only called for definitions that declare
+	 * `forumDownloadLinks`, so the path shape is the definition's promise.
 	 */
-	private deriveDetailsUrl(downloadUrl: string): string | undefined {
+	private deriveForumDetailsUrl(downloadUrl: string): string | undefined {
 		try {
 			const parsed = new URL(downloadUrl);
-			const host = parsed.hostname.toLowerCase();
 			const topicId = parsed.searchParams.get('t');
-			const isRuTracker = host.includes('rutracker.');
 			const isDlEndpoint = /(?:\/forum)?\/dl\.php$/i.test(parsed.pathname);
 
-			if (isRuTracker && isDlEndpoint && topicId) {
+			if (isDlEndpoint && topicId) {
 				const details = new URL(parsed.toString());
 				details.pathname = '/forum/viewtopic.php';
 				details.search = '';
@@ -438,16 +449,18 @@ class DownloadResolutionService {
 		return undefined;
 	}
 
-	private normalizeRuTrackerForumUrl(url: string | undefined): string | undefined {
+	/**
+	 * Forum endpoints live under `/forum`, but the page and the download link are
+	 * served from both `/viewtopic.php` and `/forum/viewtopic.php` (and the same
+	 * for `dl.php`). Only called for definitions that declare `forumDownloadLinks`.
+	 */
+	private normalizeForumDownloadUrl(url: string | undefined): string | undefined {
 		if (!url) {
 			return undefined;
 		}
 
 		try {
 			const parsed = new URL(url);
-			if (!parsed.hostname.toLowerCase().includes('rutracker.')) {
-				return url;
-			}
 
 			if (/^\/viewtopic\.php$/i.test(parsed.pathname)) {
 				parsed.pathname = '/forum/viewtopic.php';

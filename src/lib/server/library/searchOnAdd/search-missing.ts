@@ -98,7 +98,9 @@ export async function searchForMissingEpisodes(
 						searchSource,
 						scoringProfileId: seriesData.scoringProfileId,
 						getDefinitionCapabilities: (definitionId) =>
-							indexerManager.getDefinitionCapabilities(definitionId)
+							indexerManager.getDefinitionCapabilities(definitionId),
+						getDefinitionFeatures: (definitionId) =>
+							indexerManager.getDefinition(definitionId)?.features
 					})
 				: searchStrategy;
 

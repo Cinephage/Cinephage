@@ -7,10 +7,6 @@ import {
 	indexerHasCategoriesForSearchType
 } from '#lib/server/indexers/types/index.js';
 import type { IndexerCapabilities, IndexerConfig } from '#lib/server/indexers/types/index.js';
-import {
-	isRuTrackerHost,
-	isRuTrackerIndexerName
-} from '#lib/server/indexers/search/russian-trackers.js';
 
 export const AUTO_GRAB_MIN_SCORE = 0;
 
@@ -20,6 +16,7 @@ export function resolveAutoMissingSearchStrategy(
 		searchSource: 'interactive' | 'automatic';
 		scoringProfileId?: string | null;
 		getDefinitionCapabilities: (definitionId: string) => IndexerCapabilities | undefined;
+		getDefinitionFeatures: (definitionId: string) => { livingSeasonPacks?: boolean } | undefined;
 	}
 ): 'pack-first' | 'episode-only' {
 	const isStreamerProfile = options.scoringProfileId === 'streamer';
@@ -41,12 +38,13 @@ export function resolveAutoMissingSearchStrategy(
 		);
 	});
 
-	const hasRuTracker = eligibleTvIndexers.some(
-		(config) => isRuTrackerIndexerName(config.name) || isRuTrackerHost(config.baseUrl)
-	);
-	const hasNonRuTracker = eligibleTvIndexers.some(
-		(config) => !(isRuTrackerIndexerName(config.name) || isRuTrackerHost(config.baseUrl))
-	);
+	// A living-season-pack tracker needs episode-targeted searches to fill a
+	// snapshot pack; the definition says which trackers those are.
+	const isLivingSeasonPackIndexer = (config: IndexerConfig) =>
+		options.getDefinitionFeatures(config.definitionId)?.livingSeasonPacks === true;
 
-	return hasRuTracker && !hasNonRuTracker ? 'episode-only' : 'pack-first';
+	const hasLivingSeasonPacks = eligibleTvIndexers.some(isLivingSeasonPackIndexer);
+	const hasPlainIndexers = eligibleTvIndexers.some((config) => !isLivingSeasonPackIndexer(config));
+
+	return hasLivingSeasonPacks && !hasPlainIndexers ? 'episode-only' : 'pack-first';
 }

@@ -15,6 +15,26 @@ import {
 	type RejectedIndexer
 } from '../types';
 import { createMockIndexer as _createMockIndexer } from '../../../../test/fixtures/indexers.js';
+import type { ResolvedIndexerFeatures } from '../features';
+
+/**
+ * The runtime asks the definition what a tracker does; these tests answer for
+ * it. Indexer ids follow the indexer name, so a RuTracker-named mock is a
+ * living-season-pack indexer and everything else is plain - which is what the
+ * shipped definitions declare.
+ */
+vi.mock('../features.js', async () => {
+	const actual = await vi.importActual<typeof import('../features.js')>('../features.js');
+	return {
+		...actual,
+		getIndexerFeatures: async (id: string | null | undefined) => {
+			const living = typeof id === 'string' && /^(rutracker|kinozal)/i.test(id);
+			return living
+				? { livingSeasonPacks: true, forumDownloadLinks: true }
+				: actual.NO_INDEXER_FEATURES;
+		}
+	};
+});
 
 const mockCapabilities: IndexerCapabilities = {
 	search: { available: true, supportedParams: ['q'] },
@@ -38,9 +58,15 @@ function buildIndexer(
 		search?: (criteria: SearchCriteria) => Promise<ReleaseResult[]>;
 	} = {}
 ): IIndexer {
+	const name = overrides.name ?? 'FakeIndexer';
 	return _createMockIndexer({
-		id: 'test-indexer',
-		name: overrides.name ?? 'FakeIndexer',
+		// Features are resolved per indexer id, so a living-season-pack mock needs
+		// an id the feature mock below recognises; everything else keeps the shared
+		// id the other assertions use.
+		id: /rutracker|kinozal/i.test(name)
+			? name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+			: 'test-indexer',
+		name,
 		capabilities: (overrides.capabilities ?? mockCapabilities) as unknown as Record<
 			string,
 			unknown
@@ -63,7 +89,7 @@ function createMusicCriteria(overrides: Partial<MusicSearchCriteria> = {}): Musi
 }
 
 function createRelease(overrides: Partial<ReleaseResult> = {}): ReleaseResult {
-	return {
+	const release: ReleaseResult = {
 		guid: 'test-guid',
 		title: '',
 		downloadUrl: 'https://example.test/download',
@@ -75,6 +101,25 @@ function createRelease(overrides: Partial<ReleaseResult> = {}): ReleaseResult {
 		categories: [],
 		...overrides
 	};
+
+	// A release carries the id of the indexer that produced it, and the filters
+	// resolve behaviour from that id - so an overridden name has to move the id
+	// with it or every release would answer as the same plain indexer.
+	if (overrides.indexerName && !overrides.indexerId) {
+		release.indexerId = overrides.indexerName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+	}
+
+	return release;
+}
+
+/** The feature map production builds per search, stood up from the releases. */
+function featuresFor(releases: ReleaseResult[]): Map<string, ResolvedIndexerFeatures> {
+	const map = new Map<string, ResolvedIndexerFeatures>();
+	for (const release of releases) {
+		const living = /rutracker|kinozal/i.test(release.indexerName ?? '');
+		map.set(release.indexerId, { livingSeasonPacks: living, forumDownloadLinks: living });
+	}
+	return map;
 }
 
 type OrchestratorPrivateApi = {
@@ -89,7 +134,11 @@ type OrchestratorPrivateApi = {
 	filterBySeasonEpisode(
 		releases: ReleaseResult[],
 		criteria: SearchCriteria,
-		context?: { seasonEpisodeCount?: number; airedEpisodeCount?: number }
+		context?: {
+			featuresByIndexer?: Map<string, ResolvedIndexerFeatures>;
+			seasonEpisodeCount?: number;
+			airedEpisodeCount?: number;
+		}
 	): ReleaseResult[];
 	filterByCategoryMatch(
 		releases: ReleaseResult[],
@@ -908,7 +957,9 @@ describe('SearchOrchestrator.filterBySeasonEpisode', () => {
 			episode: 1
 		});
 
-		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria);
+		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria, {
+			featuresByIndexer: featuresFor(releases)
+		});
 		const titles = filtered.map((r) => r.title);
 
 		expect(titles).toEqual(['Smallville.S01E01.1080p.WEBRip']);
@@ -926,7 +977,9 @@ describe('SearchOrchestrator.filterBySeasonEpisode', () => {
 			episode: 1
 		});
 
-		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria);
+		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria, {
+			featuresByIndexer: featuresFor(releases)
+		});
 		const titles = filtered.map((r) => r.title);
 		const guids = filtered.map((r) => r.guid ?? '');
 
@@ -949,7 +1002,9 @@ describe('SearchOrchestrator.filterBySeasonEpisode', () => {
 			season: 1
 		});
 
-		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria);
+		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria, {
+			featuresByIndexer: featuresFor(releases)
+		});
 
 		expect(filtered).toHaveLength(1);
 		expect(filtered[0].title).toBe('Smallville.S01.COMPLETE.1080p.BluRay');
@@ -965,7 +1020,9 @@ describe('SearchOrchestrator.filterBySeasonEpisode', () => {
 			season: 1
 		});
 
-		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria);
+		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria, {
+			featuresByIndexer: featuresFor(releases)
+		});
 
 		expect(filtered).toHaveLength(1);
 		expect(filtered[0].title).toBe('Stranger Things: S1E1-8 of 8 [2016, WEB-DL 2160p]');
@@ -984,7 +1041,9 @@ describe('SearchOrchestrator.filterBySeasonEpisode', () => {
 			episode: 1
 		});
 
-		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria);
+		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria, {
+			featuresByIndexer: featuresFor(releases)
+		});
 		const titles = filtered.map((r) => r.title).sort();
 
 		expect(titles).toEqual(
@@ -1010,6 +1069,7 @@ describe('SearchOrchestrator.filterBySeasonEpisode', () => {
 		});
 
 		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria, {
+			featuresByIndexer: featuresFor(releases),
 			seasonEpisodeCount: 8
 		});
 
@@ -1031,6 +1091,7 @@ describe('SearchOrchestrator.filterBySeasonEpisode', () => {
 		});
 
 		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria, {
+			featuresByIndexer: featuresFor(releases),
 			seasonEpisodeCount: 8,
 			airedEpisodeCount: 7
 		});
@@ -1053,6 +1114,7 @@ describe('SearchOrchestrator.filterBySeasonEpisode', () => {
 		});
 
 		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria, {
+			featuresByIndexer: featuresFor(releases),
 			seasonEpisodeCount: 8,
 			airedEpisodeCount: 7
 		});
@@ -1074,6 +1136,7 @@ describe('SearchOrchestrator.filterBySeasonEpisode', () => {
 		});
 
 		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria, {
+			featuresByIndexer: featuresFor(releases),
 			seasonEpisodeCount: 22
 		});
 
@@ -1093,7 +1156,9 @@ describe('SearchOrchestrator.filterBySeasonEpisode', () => {
 			season: 4
 		});
 
-		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria);
+		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria, {
+			featuresByIndexer: featuresFor(releases)
+		});
 
 		expect(filtered).toHaveLength(1);
 	});
@@ -1111,7 +1176,9 @@ describe('SearchOrchestrator.filterBySeasonEpisode', () => {
 			season: 4
 		});
 
-		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria);
+		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria, {
+			featuresByIndexer: featuresFor(releases)
+		});
 
 		expect(filtered).toHaveLength(0);
 	});
@@ -1131,7 +1198,9 @@ describe('SearchOrchestrator.filterBySeasonEpisode', () => {
 			episode: 8
 		});
 
-		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria);
+		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria, {
+			featuresByIndexer: featuresFor(releases)
+		});
 
 		expect(filtered).toHaveLength(1);
 		expect(filtered[0].title).toContain('Season 1 Episode 8 - ');
@@ -1158,7 +1227,9 @@ describe('SearchOrchestrator.filterBySeasonEpisode', () => {
 			episode: 8
 		});
 
-		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria);
+		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria, {
+			featuresByIndexer: featuresFor(releases)
+		});
 
 		expect(filtered).toHaveLength(1);
 		expect(filtered[0].guid).toContain('episode-pointer::s01e08');
@@ -1185,7 +1256,9 @@ describe('SearchOrchestrator.filterBySeasonEpisode', () => {
 			episode: 8
 		});
 
-		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria);
+		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria, {
+			featuresByIndexer: featuresFor(releases)
+		});
 
 		expect(filtered).toHaveLength(1);
 		expect(filtered[0].guid).toContain('episode-pointer::s01e08');
@@ -2170,7 +2243,9 @@ describe('SearchOrchestrator.filterBySeasonEpisode movie titles with season mark
 			createRelease({ title: 'Open.Season.3.2010.1080p.AMZN.WEB-DL.H264-GPRS' })
 		];
 
-		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria);
+		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria, {
+			featuresByIndexer: featuresFor(releases)
+		});
 
 		expect(filtered).toHaveLength(2);
 	});
@@ -2179,7 +2254,9 @@ describe('SearchOrchestrator.filterBySeasonEpisode movie titles with season mark
 		const criteria = createMovieCriteria({ query: 'Open Season 3', year: 2010 });
 		const releases = [createRelease({ title: 'Open Season 3 S01E03.1080p.WEBRip' })];
 
-		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria);
+		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria, {
+			featuresByIndexer: featuresFor(releases)
+		});
 
 		expect(filtered).toHaveLength(0);
 	});
@@ -2190,7 +2267,9 @@ describe('SearchOrchestrator.filterBySeasonEpisode movie titles with season mark
 
 		// Movie-mode parsing keeps "Season 1" unflagged (ambiguous with the title),
 		// so the season filter passes it through...
-		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria);
+		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria, {
+			featuresByIndexer: featuresFor(releases)
+		});
 		expect(filtered).toHaveLength(1);
 
 		// ...and the metadata-aware ID/title filter rejects it instead.
@@ -2235,7 +2314,9 @@ describe('filterBySeasonEpisode ID-first classification (movie search)', () => {
 			createRelease({ title: 'Open Season 3 S01E03 1080p WEBRip', tmdbId: 51170 })
 		];
 
-		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria);
+		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria, {
+			featuresByIndexer: featuresFor(releases)
+		});
 
 		expect(filtered).toHaveLength(2);
 	});
@@ -2250,7 +2331,9 @@ describe('filterBySeasonEpisode ID-first classification (movie search)', () => {
 			})
 		];
 
-		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria);
+		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria, {
+			featuresByIndexer: featuresFor(releases)
+		});
 
 		expect(filtered).toHaveLength(0);
 	});
@@ -2265,7 +2348,9 @@ describe('filterBySeasonEpisode ID-first classification (movie search)', () => {
 			})
 		];
 
-		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria);
+		const filtered = privateApi(orchestrator).filterBySeasonEpisode(releases, criteria, {
+			featuresByIndexer: featuresFor(releases)
+		});
 
 		// aggregator mismatch is not definitive: parse says "the movie" → kept
 		expect(filtered).toHaveLength(1);
@@ -2482,40 +2567,41 @@ describe('SearchOrchestrator.filterIndexers profile indexer allowlist', () => {
 	});
 });
 
-describe('RuTracker automatic season search predicate', () => {
+describe('automatic season search predicate', () => {
 	function predicate() {
 		// Private method; it only reads its arguments, so a bare instance is enough.
 		const orchestrator = Object.create(SearchOrchestrator.prototype) as unknown as {
-			shouldUseRuTrackerAutomaticSeasonSearch(indexer: unknown, criteria: unknown): boolean;
+			shouldUseAutomaticSeasonSearch(indexer: unknown, criteria: unknown): Promise<boolean>;
 		};
-		return orchestrator.shouldUseRuTrackerAutomaticSeasonSearch.bind(orchestrator);
+		return orchestrator.shouldUseAutomaticSeasonSearch.bind(orchestrator);
 	}
 
 	const criteria = { searchType: 'tv', season: 1, episode: 7, query: 'Show' };
 
-	it("engages for RuTracker imported through a proxy, where the base URL is the proxy's", () => {
-		// Prowlarr/Jackett store `.../prowlarr/<id>`, so a host test is false and
-		// the specialised path never fired for exactly those users.
-		const uses = predicate()(
-			{ name: 'RuTracker.org', baseUrl: 'http://192.168.11.20:9696/12' },
-			criteria
-		);
-		expect(uses).toBe(true);
-	});
-
-	it('still engages on a native host', () => {
-		expect(
-			predicate()({ name: 'RuTracker.org', baseUrl: 'https://rutracker.org/' }, criteria)
-		).toBe(true);
-	});
-
-	it('does not engage for an unrelated indexer or a season-only search', () => {
-		expect(predicate()({ name: 'YTS', baseUrl: 'https://yts.mx/' }, criteria)).toBe(false);
-		expect(
+	it("engages through a proxy, where the base URL is the proxy's", async () => {
+		// Prowlarr/Jackett store `.../prowlarr/<id>`. A host test was false here, so
+		// the specialised path never fired for exactly those users; the definition
+		// still says what the tracker does.
+		await expect(
 			predicate()(
-				{ name: 'RuTracker.org', baseUrl: 'https://rutracker.org/' },
+				{ id: 'rutracker-org', name: 'My tracker', baseUrl: 'http://192.168.11.20:9696/12' },
+				criteria
+			)
+		).resolves.toBe(true);
+	});
+
+	it('does not engage for an indexer whose definition does not declare it', async () => {
+		await expect(
+			predicate()({ id: 'yts', name: 'YTS', baseUrl: 'https://yts.mx/' }, criteria)
+		).resolves.toBe(false);
+	});
+
+	it('does not engage for a season-only search', async () => {
+		await expect(
+			predicate()(
+				{ id: 'rutracker-org', name: 'RuTracker.org', baseUrl: 'https://rutracker.org/' },
 				{ searchType: 'tv', season: 1, query: 'Show' }
 			)
-		).toBe(false);
+		).resolves.toBe(false);
 	});
 });

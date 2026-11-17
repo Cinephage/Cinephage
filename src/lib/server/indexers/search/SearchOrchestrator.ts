@@ -50,10 +50,14 @@ import {
 	limitedRuTrackerSeasonTitles,
 	RUTRACKER_AUTOMATIC_SEASON_CACHE_TTL_MS,
 	orderTitlesForCyrillicTracker,
-	prefersNativeCyrillicTitles,
-	isRuTrackerIndexerName,
-	isRuTrackerHost
+	prefersNativeCyrillicTitles
 } from './russian-trackers';
+import {
+	NO_INDEXER_FEATURES,
+	getFeaturesByIndexerId,
+	getIndexerFeatures,
+	type ResolvedIndexerFeatures
+} from '../features.js';
 import { parseRelease } from '../parser';
 import { extractAudioLanguages, extractLanguages } from '../parser/patterns/language';
 import {
@@ -230,6 +234,12 @@ interface TvEpisodeCounts {
 }
 
 interface SeasonEpisodeFilterContext {
+	/**
+	 * Features of every indexer that produced these releases, resolved once per
+	 * search. These filters run on merged results, so the definition a release
+	 * came from is looked up per release rather than passed down a stack.
+	 */
+	featuresByIndexer?: Map<string, ResolvedIndexerFeatures>;
 	seasonEpisodeCount?: number;
 	seasonEpisodeCounts?: Map<number, number>;
 	/**
@@ -262,14 +272,14 @@ export class SearchOrchestrator {
 	/** Cache for TV show episode counts (tmdbId -> aggregate + per-season counts) */
 	private tvEpisodeCountsCache: Map<number, TvEpisodeCounts> = new Map();
 	/** Short-lived cache for RuTracker automatic TV season searches (reduces per-episode query fan-out). */
-	private rutrackerAutomaticSeasonSearchCache: Map<
+	private automaticSeasonSearchCache: Map<
 		string,
 		{ cachedAtMs: number; releases: ReleaseResult[] }
 	> = new Map();
 	/** In-flight dedupe for identical RuTracker automatic season searches. */
-	private rutrackerAutomaticSeasonSearchInFlight: Map<string, Promise<ReleaseResult[]>> = new Map();
+	private automaticSeasonSearchInFlight: Map<string, Promise<ReleaseResult[]>> = new Map();
 	/** Single-lane queue for RuTracker automatic season searches to avoid bursty host traffic. */
-	private rutrackerAutomaticSearchLane: Promise<void> = Promise.resolve();
+	private automaticSearchLane: Promise<void> = Promise.resolve();
 	private rateLimitRegistry: RateLimitRegistry;
 	private hostRateLimiter: HostRateLimiter;
 	private hostConcurrencyLimiter: HostConcurrencyLimiter;
@@ -386,7 +396,12 @@ export class SearchOrchestrator {
 		// Use criteriaWithSource so interactive/automatic behavior is respected.
 		// (season/episode fields are unchanged from original criteria)
 		let filtered = await this.filterByBlocklist(deduped, criteriaWithSource);
-		filtered = this.filterBySeasonEpisode(filtered, criteriaWithSource);
+		// One map per search: these filters see releases from every indexer at
+		// once, and each release's behaviour is whatever its definition declares.
+		const featuresByIndexer = await getFeaturesByIndexerId(
+			filtered.map((release) => release.indexerId)
+		);
+		filtered = this.filterBySeasonEpisode(filtered, criteriaWithSource, { featuresByIndexer });
 
 		// Filter by category match (reject releases in wrong categories).
 		// Skip for season-only TV searches: the season/episode filter already validated
@@ -612,6 +627,7 @@ export class SearchOrchestrator {
 		// Filter by season/episode if specified
 		let filtered = await this.filterByBlocklist(deduped, enrichedCriteria);
 		filtered = this.filterBySeasonEpisode(filtered, enrichedCriteria, {
+			featuresByIndexer: await getFeaturesByIndexerId(filtered.map((release) => release.indexerId)),
 			seasonEpisodeCount,
 			seasonEpisodeCounts,
 			airedEpisodeCount
@@ -1375,8 +1391,8 @@ export class SearchOrchestrator {
 			return [];
 		}
 
-		if (this.shouldUseRuTrackerAutomaticSeasonSearch(indexer, criteria)) {
-			return this.executeRuTrackerAutomaticSeasonSearch(indexer, criteria, titlesToSearch);
+		if (await this.shouldUseAutomaticSeasonSearch(indexer, criteria)) {
+			return this.executeAutomaticSeasonSearch(indexer, criteria, titlesToSearch);
 		}
 
 		let episodeFormats: EpisodeFormat[] = [];
@@ -1555,20 +1571,21 @@ export class SearchOrchestrator {
 		return allReleases;
 	}
 
-	private shouldUseRuTrackerAutomaticSeasonSearch(
+	private async shouldUseAutomaticSeasonSearch(
 		indexer: IIndexer,
 		criteria: SearchCriteria
-	): boolean {
-		// The name is the reliable signal: behind Prowlarr or Jackett the base URL
-		// is the proxy's (`.../prowlarr/<id>`), so a host test silently disables
-		// this path for exactly the users who need it - they then issue up to five
-		// titles x four TV formats inside one search budget instead of two titles.
-		return (
-			isTvSearch(criteria) &&
-			criteria.season !== undefined &&
-			criteria.episode !== undefined &&
-			(isRuTrackerIndexerName(indexer.name) || isRuTrackerHost(indexer.baseUrl))
-		);
+	): Promise<boolean> {
+		if (!isTvSearch(criteria) || criteria.season === undefined || criteria.episode === undefined) {
+			return false;
+		}
+
+		// The definition declares the capability; the indexer's name and base URL
+		// do not. Behind Prowlarr or Jackett the base URL is the proxy's
+		// (`.../prowlarr/<id>`), so a host test silently disabled this path for
+		// exactly the users who need it - they then issue up to five titles x four
+		// TV formats inside one search budget instead of two titles.
+		const features = await getIndexerFeatures(indexer.id);
+		return features.livingSeasonPacks;
 	}
 
 	/**
@@ -1616,20 +1633,20 @@ export class SearchOrchestrator {
 		return newReleases;
 	}
 
-	private async executeRuTrackerAutomaticSeasonSearch(
+	private async executeAutomaticSeasonSearch(
 		indexer: IIndexer,
 		criteria: SearchCriteria,
 		titlesToSearch: string[]
 	): Promise<ReleaseResult[]> {
-		const cacheKey = this.buildRuTrackerAutomaticSeasonCacheKey(indexer, criteria, titlesToSearch);
+		const cacheKey = this.buildAutomaticSeasonCacheKey(indexer, criteria, titlesToSearch);
 		const now = Date.now();
-		const cached = this.rutrackerAutomaticSeasonSearchCache.get(cacheKey);
+		const cached = this.automaticSeasonSearchCache.get(cacheKey);
 
 		if (cached && now - cached.cachedAtMs <= RUTRACKER_AUTOMATIC_SEASON_CACHE_TTL_MS) {
 			return cached.releases;
 		}
 
-		const existingInFlight = this.rutrackerAutomaticSeasonSearchInFlight.get(cacheKey);
+		const existingInFlight = this.automaticSeasonSearchInFlight.get(cacheKey);
 		if (existingInFlight) {
 			return existingInFlight;
 		}
@@ -1687,7 +1704,7 @@ export class SearchOrchestrator {
 			// serve "no results" for the whole TTL and never retry. Only cache when
 			// at least one query actually reached the indexer.
 			if (anyTitleSucceeded) {
-				this.rutrackerAutomaticSeasonSearchCache.set(cacheKey, {
+				this.automaticSeasonSearchCache.set(cacheKey, {
 					cachedAtMs: Date.now(),
 					releases: allReleases
 				});
@@ -1696,24 +1713,24 @@ export class SearchOrchestrator {
 			return allReleases;
 		});
 
-		this.rutrackerAutomaticSeasonSearchInFlight.set(cacheKey, inFlightPromise);
+		this.automaticSeasonSearchInFlight.set(cacheKey, inFlightPromise);
 		try {
 			return await inFlightPromise;
 		} finally {
-			this.rutrackerAutomaticSeasonSearchInFlight.delete(cacheKey);
+			this.automaticSeasonSearchInFlight.delete(cacheKey);
 		}
 	}
 
 	private enqueueRuTrackerAutomaticSeasonSearch<T>(work: () => Promise<T>): Promise<T> {
-		const queuedWork = this.rutrackerAutomaticSearchLane.then(work, work);
-		this.rutrackerAutomaticSearchLane = queuedWork.then(
+		const queuedWork = this.automaticSearchLane.then(work, work);
+		this.automaticSearchLane = queuedWork.then(
 			() => undefined,
 			() => undefined
 		);
 		return queuedWork;
 	}
 
-	private buildRuTrackerAutomaticSeasonCacheKey(
+	private buildAutomaticSeasonCacheKey(
 		indexer: IIndexer,
 		criteria: SearchCriteria,
 		titlesToSearch: string[]
@@ -2036,7 +2053,8 @@ export class SearchOrchestrator {
 							release,
 							episodeInfo,
 							expectedSeasonEpisodeCount,
-							context?.airedEpisodeCount
+							context?.airedEpisodeCount,
+							this.featuresFor(release, context)
 						)
 				)
 				.map(({ release }) => this.withFormattedSeasonPackTitle(release));
@@ -2092,16 +2110,24 @@ export class SearchOrchestrator {
 					isSingleSeasonMatch(episodeInfo) &&
 					seasonPackContainsEpisode(episodeInfo, targetEpisode)
 			);
-			const rutrackerSeasonPackPointers = seasonPackMatches
-				.filter(({ release }) => this.shouldCreateRutrackerEpisodePointer(release))
+			const seasonPackPointerReleases = seasonPackMatches
+				.filter(({ release }) =>
+					this.shouldCreateEpisodePointer(release, this.featuresFor(release, context))
+				)
 				.map(({ release, episodeInfo }) =>
 					this.createEpisodePointerRelease(release, targetEpisode, targetSeason, episodeInfo)
 				);
-			const nonRuTrackerExactReleases = allExactMatches
-				.filter(({ release }) => !this.shouldCreateRutrackerEpisodePointer(release))
+			const plainExactReleases = allExactMatches
+				.filter(
+					({ release }) =>
+						!this.shouldCreateEpisodePointer(release, this.featuresFor(release, context))
+				)
 				.map(({ release }) => release);
-			const nonRuTrackerSeasonPackReleases = seasonPackMatches
-				.filter(({ release }) => !this.shouldCreateRutrackerEpisodePointer(release))
+			const plainSeasonPackReleases = seasonPackMatches
+				.filter(
+					({ release }) =>
+						!this.shouldCreateEpisodePointer(release, this.featuresFor(release, context))
+				)
 				.map(({ release }) => release);
 
 			// Anime packs like "[01-08 END]" have episodeInfo=null and are absent from
@@ -2117,12 +2143,12 @@ export class SearchOrchestrator {
 				: [];
 
 			if (isInteractiveSearch) {
-				if (rutrackerSeasonPackPointers.length > 0) {
-					return [...nonRuTrackerExactReleases, ...rutrackerSeasonPackPointers];
+				if (seasonPackPointerReleases.length > 0) {
+					return [...plainExactReleases, ...seasonPackPointerReleases];
 				}
 
-				if (nonRuTrackerExactReleases.length > 0) {
-					return nonRuTrackerExactReleases;
+				if (plainExactReleases.length > 0) {
+					return plainExactReleases;
 				}
 
 				return [
@@ -2134,9 +2160,9 @@ export class SearchOrchestrator {
 			}
 
 			return [
-				...nonRuTrackerExactReleases,
-				...rutrackerSeasonPackPointers,
-				...nonRuTrackerSeasonPackReleases,
+				...plainExactReleases,
+				...seasonPackPointerReleases,
+				...plainSeasonPackReleases,
 				...animeUnparsedFallback
 			];
 		}
@@ -2152,25 +2178,33 @@ export class SearchOrchestrator {
 			const seasonPackMatches = parsedReleases.filter(({ episodeInfo }) =>
 				seasonPackContainsEpisode(episodeInfo, targetEpisode)
 			);
-			const rutrackerSeasonPackPointers = seasonPackMatches
-				.filter(({ release }) => this.shouldCreateRutrackerEpisodePointer(release))
+			const seasonPackPointerReleases = seasonPackMatches
+				.filter(({ release }) =>
+					this.shouldCreateEpisodePointer(release, this.featuresFor(release, context))
+				)
 				.map(({ release, episodeInfo }) =>
 					this.createEpisodePointerRelease(release, targetEpisode, undefined, episodeInfo)
 				);
-			const nonRuTrackerExactReleases = exactEpisodeMatches
-				.filter(({ release }) => !this.shouldCreateRutrackerEpisodePointer(release))
+			const plainExactReleases = exactEpisodeMatches
+				.filter(
+					({ release }) =>
+						!this.shouldCreateEpisodePointer(release, this.featuresFor(release, context))
+				)
 				.map(({ release }) => release);
-			const nonRuTrackerSeasonPackReleases = seasonPackMatches
-				.filter(({ release }) => !this.shouldCreateRutrackerEpisodePointer(release))
+			const plainSeasonPackReleases = seasonPackMatches
+				.filter(
+					({ release }) =>
+						!this.shouldCreateEpisodePointer(release, this.featuresFor(release, context))
+				)
 				.map(({ release }) => release);
 
 			if (isInteractiveSearch) {
-				if (rutrackerSeasonPackPointers.length > 0) {
-					return [...nonRuTrackerExactReleases, ...rutrackerSeasonPackPointers];
+				if (seasonPackPointerReleases.length > 0) {
+					return [...plainExactReleases, ...seasonPackPointerReleases];
 				}
 
-				if (nonRuTrackerExactReleases.length > 0) {
-					return nonRuTrackerExactReleases;
+				if (plainExactReleases.length > 0) {
+					return plainExactReleases;
 				}
 
 				return seasonPackMatches.map(({ release, episodeInfo }) =>
@@ -2178,31 +2212,45 @@ export class SearchOrchestrator {
 				);
 			}
 
-			return [
-				...nonRuTrackerExactReleases,
-				...rutrackerSeasonPackPointers,
-				...nonRuTrackerSeasonPackReleases
-			];
+			return [...plainExactReleases, ...seasonPackPointerReleases, ...plainSeasonPackReleases];
 		}
 
 		return releases;
 	}
 
-	private shouldCreateRutrackerEpisodePointer(release: ReleaseResult): boolean {
-		return isRuTrackerIndexerName(release.indexerName);
+	/**
+	 * Features of the definition the release came from. A release whose indexer
+	 * could not be resolved gets the plain behaviour, which is what an undeclared
+	 * definition asks for anyway.
+	 */
+	private featuresFor(
+		release: ReleaseResult,
+		context?: SeasonEpisodeFilterContext
+	): ResolvedIndexerFeatures {
+		return context?.featuresByIndexer?.get(release.indexerId) ?? NO_INDEXER_FEATURES;
+	}
+
+	private shouldCreateEpisodePointer(
+		release: ReleaseResult,
+		features: ResolvedIndexerFeatures
+	): boolean {
+		return features.livingSeasonPacks;
 	}
 
 	private isAllowedSeasonPackForSeasonOnlySearch(
 		release: ReleaseResult,
 		episodeInfo: NonNullable<ReturnType<typeof parseRelease>['episode']>,
-		expectedSeasonEpisodeCount?: number,
-		airedEpisodeCount?: number
+		expectedSeasonEpisodeCount: number | undefined,
+		airedEpisodeCount: number | undefined,
+		features: ResolvedIndexerFeatures
 	): boolean {
-		if (!isRuTrackerIndexerName(release.indexerName)) {
+		// Only an indexer that declares living season packs needs the completeness
+		// check: its "1..K of N" is a snapshot that grows as episodes air.
+		if (!features.livingSeasonPacks) {
 			return true;
 		}
 
-		const isCompleted = this.isCompletedRuTrackerSeasonPack(
+		const isCompleted = this.isCompleteLivingSeasonPack(
 			release.title,
 			episodeInfo,
 			expectedSeasonEpisodeCount,
@@ -2224,7 +2272,7 @@ export class SearchOrchestrator {
 		return isCompleted;
 	}
 
-	private isCompletedRuTrackerSeasonPack(
+	private isCompleteLivingSeasonPack(
 		title: string,
 		episodeInfo: NonNullable<ReturnType<typeof parseRelease>['episode']>,
 		expectedSeasonEpisodeCount?: number,

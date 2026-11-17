@@ -129,7 +129,11 @@ function createIndexerManagerMockWith(configs: Array<Record<string, any>>) {
 		getIndexers: vi.fn().mockResolvedValue(configs),
 		getDefinitionCapabilities: vi.fn((definitionId: string) =>
 			capabilitiesByDefinition.get(definitionId)
-		)
+		),
+		// The strategy decision reads the definition, not the indexer name.
+		getDefinition: vi.fn((definitionId: string) => ({
+			features: /rutracker|kinozal/i.test(definitionId) ? { livingSeasonPacks: true } : {}
+		}))
 	};
 }
 

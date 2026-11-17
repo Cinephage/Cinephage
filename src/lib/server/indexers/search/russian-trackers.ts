@@ -86,24 +86,3 @@ export function limitedRuTrackerSeasonTitles(
 	if (max <= 1 || fallback === undefined) return cyrillic.slice(0, max);
 	return [...cyrillic.slice(0, max - 1), fallback];
 }
-
-export function isRuTrackerIndexerName(indexerName: string | undefined): boolean {
-	if (!indexerName) return false;
-	const normalized = indexerName.toLowerCase();
-	return normalized.includes('rutracker') || normalized.includes('kinozal');
-}
-
-export function isRuTrackerHost(baseUrl: string | undefined): boolean {
-	if (!baseUrl) return false;
-	const normalized = baseUrl.toLowerCase();
-	try {
-		const hostname = new URL(baseUrl).hostname.toLowerCase();
-		return hostname.includes('rutracker.') || hostname.includes('kinozal.');
-	} catch {
-		return normalized.includes('rutracker.') || normalized.includes('kinozal.');
-	}
-}
-
-export function isRuTrackerRelease(indexerName: string | undefined): boolean {
-	return isRuTrackerIndexerName(indexerName);
-}

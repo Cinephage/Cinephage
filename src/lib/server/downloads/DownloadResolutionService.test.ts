@@ -6,9 +6,11 @@ import {
 } from './DownloadResolutionService.js';
 
 const getIndexerInstance = vi.fn();
+const getIndexer = vi.fn();
+const getDefinition = vi.fn();
 
 vi.mock('#lib/server/indexers/IndexerManager.js', () => ({
-	getIndexerManager: vi.fn(async () => ({ getIndexerInstance }))
+	getIndexerManager: vi.fn(async () => ({ getIndexerInstance, getIndexer, getDefinition }))
 }));
 
 const INFO_HASH = 'D21B6FEC98653908CA62002A16B149E8C6FC77C4';
@@ -21,6 +23,8 @@ describe('DownloadResolutionService', () => {
 	beforeEach(() => {
 		resetDownloadResolutionService();
 		getIndexerInstance.mockReset();
+		getIndexer.mockReset();
+		getDefinition.mockReset();
 	});
 
 	afterEach(() => {
@@ -124,5 +128,48 @@ describe('DownloadResolutionService', () => {
 		expect(result.success).toBe(true);
 		expect(result.torrentFile).toEqual(torrentBytes);
 		expect(result.magnetUrl).toBeUndefined();
+	});
+	it('tries the details page first for a definition that declares forum download links', async () => {
+		// The definition says the tracker's download links are forum endpoints;
+		// historically this was decided by matching the URL's host, which is false
+		// behind a proxy and for a mirror.
+		const downloadTorrent = vi.fn().mockResolvedValue({
+			success: true,
+			data: Buffer.from('d4:infod4:name4:testee'),
+			infoHash: INFO_HASH
+		});
+		getIndexerInstance.mockResolvedValue(fakeIndexer('semi-private', downloadTorrent));
+		getIndexer.mockResolvedValue({ id: 'rt', definitionId: 'rutracker' });
+		getDefinition.mockReturnValue({ features: { forumDownloadLinks: true } });
+
+		await getDownloadResolutionService().resolve({
+			downloadUrl: 'https://rutracker.org/dl.php?t=123',
+			indexerId: 'rt',
+			title: 'Show S01E07'
+		});
+
+		expect(downloadTorrent.mock.calls[0][0]).toBe(
+			'https://rutracker.org/forum/viewtopic.php?t=123'
+		);
+	});
+
+	it('leaves a plain indexer link untouched', async () => {
+		const downloadTorrent = vi.fn().mockResolvedValue({
+			success: true,
+			data: Buffer.from('d4:infod4:name4:testee'),
+			infoHash: INFO_HASH
+		});
+		getIndexerInstance.mockResolvedValue(fakeIndexer('private', downloadTorrent));
+		getIndexer.mockResolvedValue({ id: 'plain', definitionId: 'plain' });
+		getDefinition.mockReturnValue({ features: {} });
+
+		await getDownloadResolutionService().resolve({
+			downloadUrl: 'https://tracker.test/dl.php?t=123',
+			indexerId: 'plain',
+			title: 'Show S01E07'
+		});
+
+		expect(downloadTorrent).toHaveBeenCalledTimes(1);
+		expect(downloadTorrent.mock.calls[0][0]).toBe('https://tracker.test/dl.php?t=123');
 	});
 });
