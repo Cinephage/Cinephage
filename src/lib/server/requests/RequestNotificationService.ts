@@ -2,6 +2,7 @@ import { db } from '#lib/server/db/index.js';
 import { requestNotifications, user } from '#lib/server/db/schema.js';
 import { and, desc, eq, inArray, isNotNull, isNull, lt, sql } from 'drizzle-orm';
 import { requestStreamEvents } from './RequestStreamEvents.js';
+import { publishRequestEvent } from '#lib/server/notifications/core/app-events.js';
 
 export type RequestNotificationEvent =
 	| 'request_pending'
@@ -51,6 +52,9 @@ export class RequestNotificationService {
 			notificationForUserIds: admins.map((a) => a.id),
 			timestamp: new Date().toISOString()
 		});
+
+		// Mirror to external agents: same event, same moment as the feed row.
+		publishRequestEvent(event, payload, requestId);
 	}
 
 	async notifyUser(
@@ -72,6 +76,8 @@ export class RequestNotificationService {
 			notificationForUserIds: [userId],
 			timestamp: new Date().toISOString()
 		});
+
+		publishRequestEvent(event, payload, requestId);
 	}
 
 	async getFeed(userId: string, options: { unreadOnly?: boolean; take?: number } = {}) {

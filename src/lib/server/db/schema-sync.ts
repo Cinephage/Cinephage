@@ -207,8 +207,11 @@ import {
  * Version 177: drop the search_state table left behind by the discarded
  *   retry-state model: its migration is gone, so upgraded installs kept the
  *   table and its rows forever while fresh installs never create it.
+ * Version 178: notification_connections / notification_deliveries - external
+ *   notification agents (webhook, Discord, Pushover, ntfy) with per-connection
+ *   event subscriptions, failure backoff and a capped delivery log.
  */
-export const CURRENT_SCHEMA_VERSION = 177;
+export const CURRENT_SCHEMA_VERSION = 178;
 
 export const SYSTEM_LIBRARY_SEEDS = [
 	{
@@ -1736,6 +1739,32 @@ const TABLE_DEFINITIONS: string[] = [
 		"payload" text NOT NULL,
 		"read_at" text,
 		"created_at" text NOT NULL
+	)`,
+	`CREATE TABLE IF NOT EXISTS "notification_connections" (
+		"id" text PRIMARY KEY NOT NULL,
+		"name" text NOT NULL,
+		"provider" text NOT NULL,
+		"enabled" integer NOT NULL DEFAULT 1,
+		"events" text NOT NULL,
+		"config" text NOT NULL,
+		"consecutive_failures" integer NOT NULL DEFAULT 0,
+		"disabled_until" text,
+		"last_success_at" text,
+		"last_attempt_at" text,
+		"last_error" text,
+		"created_at" text NOT NULL,
+		"updated_at" text NOT NULL
+	)`,
+
+	`CREATE TABLE IF NOT EXISTS "notification_deliveries" (
+		"id" text PRIMARY KEY NOT NULL,
+		"connection_id" text NOT NULL REFERENCES "notification_connections"("id") ON DELETE CASCADE,
+		"event" text NOT NULL,
+		"ok" integer NOT NULL,
+		"status_code" integer,
+		"error" text,
+		"duration_ms" integer,
+		"created_at" text NOT NULL
 	)`
 ];
 
@@ -1748,6 +1777,9 @@ const INDEX_DEFINITIONS: string[] = [
 	`CREATE INDEX IF NOT EXISTS "idx_release_events_media" ON "release_events" ("media_type", "media_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_release_events_date" ON "release_events" ("release_date")`,
 	`CREATE INDEX IF NOT EXISTS "idx_release_events_kind_date" ON "release_events" ("kind", "release_date")`,
+	`CREATE INDEX IF NOT EXISTS "idx_notification_deliveries_connection"
+		ON "notification_deliveries" ("connection_id", "created_at")`,
+	`CREATE INDEX IF NOT EXISTS "idx_notification_deliveries_created" ON "notification_deliveries" ("created_at")`,
 
 	`CREATE INDEX IF NOT EXISTS "idx_indexers_definition" ON "indexers" ("definition_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_indexers_enabled" ON "indexers" ("enabled")`,

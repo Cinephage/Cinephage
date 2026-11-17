@@ -91,6 +91,7 @@ import { searchSubtitlesForNewMedia } from '#lib/server/subtitles/services/Subti
 import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
 import { getMediaBrowserNotifier } from '#lib/server/notifications/mediabrowser/index.js';
 import { notifyMovieDownload, notifySeriesDownload } from '#lib/server/arr/notifications.js';
+import { publishImport } from '#lib/server/notifications/core/app-events.js';
 import { getOrAssignArrId } from '#lib/server/arr/ArrIdMappingService.js';
 import { getSidecarSettings } from '#lib/server/library/sidecar/sidecarSettings.js';
 import {
@@ -1814,6 +1815,14 @@ export class ImportService extends EventEmitter {
 			);
 		});
 
+		publishImport({
+			mediaType: 'movie',
+			mediaId: movie.id,
+			releaseName: fileData.sceneName ?? relativePath,
+			quality: fileData.quality,
+			wasUpgrade
+		});
+
 		// Optional sidecar files (.nfo + poster/fanart) - see NfoGenerator.ts /
 		// SidecarImageService.ts for why this exists (Jellyfin never probes
 		// .strm files during a scan, so a movie can otherwise sit with no
@@ -2697,6 +2706,15 @@ export class ImportService extends EventEmitter {
 				{ seriesId: seriesData.id, err: err instanceof Error ? err.message : String(err) },
 				'Failed to notify arr-compat webhooks'
 			);
+		});
+
+		publishImport({
+			mediaType: 'series',
+			mediaId: seriesData.id,
+			episodeIds,
+			releaseName: fileData.sceneName ?? relativePath,
+			quality: fileData.quality,
+			wasUpgrade: filesToReplace.length > 0
 		});
 
 		// Optional sidecar files - see NfoGenerator.ts / SidecarImageService.ts

@@ -38,6 +38,7 @@ import {
 } from '#lib/server/library/suggested-matches.js';
 import { isPathInsideManagedRoot } from '#lib/server/filesystem/path-guard.js';
 import { isVideoFile } from '#lib/config/constants.js';
+import { publishGrab } from '#lib/server/notifications/core/app-events.js';
 import type { ImportFailureReason } from '../import/ImportService.js';
 import {
 	cleanupExpiredQueueTombstones,
@@ -2734,6 +2735,19 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 
 		if (!result.created) return result.item;
 		const item = result.item;
+
+		// One publisher call covers every grab path: all three protocol
+		// handlers funnel through addToQueue, and duplicates never reach here.
+		publishGrab({
+			releaseName: item.title,
+			movieId: item.movieId,
+			seriesId: item.seriesId,
+			episodeIds: item.episodeIds ?? undefined,
+			seasonNumber: item.seasonNumber ?? null,
+			quality: item.quality ?? null,
+			indexerName: item.indexerName ?? null,
+			isUpgrade: item.isUpgrade ?? false
+		});
 
 		this.emit('queue:added', item);
 		this.emitSSE('queue:added', item);

@@ -31,6 +31,8 @@ const STORAGE_TABLES = [
 ] as const;
 
 const CORE_TABLES = [
+	'notificationDeliveries',
+	'notificationConnections',
 	'releaseEvents',
 	'scoringProfiles',
 	'customFormats',

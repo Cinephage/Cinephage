@@ -2759,3 +2759,19 @@ export const calendarPreferencesSchema = z.object({
 	certifications: z.array(z.string()).default([])
 });
 export type CalendarPreferences = z.infer<typeof calendarPreferencesSchema>;
+
+// ============================================================
+// Notification Connections
+// ============================================================
+
+export const notificationConnectionCreateSchema = z.object({
+	name: z.string().trim().min(1).max(100),
+	provider: z.string().min(1).max(50),
+	enabled: z.boolean().optional(),
+	events: z.array(z.string().max(50)).max(50).optional(),
+	config: z.record(z.string(), z.unknown()).optional()
+});
+export type NotificationConnectionCreate = z.infer<typeof notificationConnectionCreateSchema>;
+
+export const notificationConnectionUpdateSchema = notificationConnectionCreateSchema.partial();
+export type NotificationConnectionUpdate = z.infer<typeof notificationConnectionUpdateSchema>;

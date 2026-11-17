@@ -4628,6 +4628,61 @@ export type RequestNotificationRecord = typeof requestNotifications.$inferSelect
 export type NewRequestNotificationRecord = typeof requestNotifications.$inferInsert;
 
 /**
+ * External notification agents (admin-configured). One row per connection.
+ * `config` is a provider-shaped JSON object held in one encrypted envelope and
+ * `events` is the subscribed subset of the notification vocabulary ('*' = all).
+ * Delivery state lives on the row so a failing endpoint backs off instead of
+ * retrying on every event.
+ */
+export const notificationConnections = sqliteTable('notification_connections', {
+	id: text('id')
+		.primaryKey()
+		.$defaultFn(() => randomUUID()),
+	name: text('name').notNull(),
+	provider: text('provider').notNull(),
+	enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+	events: text('events', { mode: 'json' }).$type<string[]>().notNull(),
+	config: text('config').notNull(),
+	consecutiveFailures: integer('consecutive_failures').notNull().default(0),
+	disabledUntil: text('disabled_until'),
+	lastSuccessAt: text('last_success_at'),
+	lastAttemptAt: text('last_attempt_at'),
+	lastError: text('last_error'),
+	createdAt: text('created_at').notNull(),
+	updatedAt: text('updated_at').notNull()
+});
+
+/**
+ * Delivery log: one row per attempt, capped by a retention sweep. Carries no
+ * message body (it can hold a user's request title) - only the event, the
+ * outcome and the provider's error.
+ */
+export const notificationDeliveries = sqliteTable(
+	'notification_deliveries',
+	{
+		id: text('id').primaryKey(),
+		connectionId: text('connection_id')
+			.notNull()
+			.references(() => notificationConnections.id, { onDelete: 'cascade' }),
+		event: text('event').notNull(),
+		ok: integer('ok', { mode: 'boolean' }).notNull(),
+		statusCode: integer('status_code'),
+		error: text('error'),
+		durationMs: integer('duration_ms'),
+		createdAt: text('created_at').notNull()
+	},
+	(table) => [
+		index('idx_notification_deliveries_connection').on(table.connectionId, table.createdAt),
+		index('idx_notification_deliveries_created').on(table.createdAt)
+	]
+);
+
+export type NotificationConnectionRow = typeof notificationConnections.$inferSelect;
+export type NewNotificationConnectionRow = typeof notificationConnections.$inferInsert;
+export type NotificationDeliveryRow = typeof notificationDeliveries.$inferSelect;
+export type NewNotificationDeliveryRow = typeof notificationDeliveries.$inferInsert;
+
+/**
  * Release events - the source of truth for when media becomes watchable or
  * grabbable. See `src/lib/server/availability/`.
  *

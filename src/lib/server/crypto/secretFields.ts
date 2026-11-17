@@ -145,6 +145,14 @@ export const SECRET_FIELD_SPECS: SecretFieldSpec[] = [
 		table: 'nzb_stream_mounts',
 		idColumn: 'id',
 		scalarFields: ['password']
+	},
+	{
+		// One envelope per connection holds the whole provider config, so a new
+		// agent needs no new secret registry entry.
+		purpose: 'notification-config',
+		table: 'notification_connections',
+		idColumn: 'id',
+		scalarFields: ['config']
 	}
 ];
 
