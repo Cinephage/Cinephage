@@ -168,7 +168,10 @@
 	}
 
 	function toggleAllEvents(checked: boolean) {
-		form.events = checked ? ['*'] : [...data.events];
+		// Unchecking the master clears the selection rather than leaving every
+		// box ticked: "All events" is a selection, so turning it off must not
+		// silently save the wildcard anyway.
+		form.events = checked ? ['*'] : [];
 	}
 
 	function toggleEvent(event: string, checked: boolean) {
