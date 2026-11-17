@@ -151,6 +151,28 @@ describe('ReadyProviderFileMapper', () => {
 		expect(multiFile.files.map(({ media }) => media.episodeIds)).toEqual([['e1'], ['e2']]);
 	});
 
+	it('reads extras folders inside the pack, never a release folder that says extras', async () => {
+		// A file in the pack's own Extras folder is bonus material and must not be
+		// mapped onto the episode it happens to name.
+		await expect(
+			mapper().map({
+				providerItem: item([
+					file('one', '/Show.S01E01.mkv'),
+					file('bonus', '/Show.S01/Extras/Show.S01E02.mkv')
+				]),
+				context: series()
+			})
+		).rejects.toThrow(/omitted/i);
+
+		// A release folder whose name merely contains the word keeps its file: the
+		// folder check matches whole segment names, not substrings.
+		const releaseFolder = await mapper().map({
+			providerItem: item([file('one', '/Extras.S01.1080p/Show.S01E01.mkv')]),
+			context: series(['e1'])
+		});
+		expect(releaseFolder.files[0].providerFileRef.providerFileId).toBe('one');
+	});
+
 	it('ignores clearly unqueued episode files while mapping every queued episode', async () => {
 		const result = await mapper().map({
 			providerItem: item([

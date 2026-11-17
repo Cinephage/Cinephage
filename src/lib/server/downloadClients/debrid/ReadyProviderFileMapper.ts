@@ -1,4 +1,4 @@
-import { basename, dirname } from 'node:path';
+import { basename } from 'node:path';
 import { isVideoFile } from '#lib/config/constants.js';
 import { classifyImportCandidate } from '#lib/server/downloadClients/import/import-candidate.js';
 import { LibraryDestinationPlanner } from '#lib/server/downloadClients/import/LibraryDestinationPlanner.js';
@@ -324,11 +324,12 @@ export class ReadyProviderFileMapper {
 		if (file.selected === false) return false;
 		const pathForFiltering = this.normalizedProviderPath(file);
 		if (!isVideoFile(pathForFiltering)) return false;
-		// Same verdict as ImportService: name patterns on the basename, extras
-		// only when a folder segment is exactly an extras/sample folder.
-		const baseName = this.safeProviderParseReference(file);
-		const folder = dirname(pathForFiltering);
-		const candidatePath = folder === '.' || folder === '/' ? baseName : `${folder}/${baseName}`;
+		// Same verdict as ImportService, on the same scope: provider paths are
+		// relative to the item and root-prefixed ("/Show.S01/Extras/x.mkv"), so the
+		// segments above the file are exactly its folders inside the download -
+		// never folders that happen to sit above the download. Name patterns still
+		// run on the basename only.
+		const candidatePath = pathForFiltering.replace(/^\/+/, '');
 		return classifyImportCandidate(candidatePath, file.sizeBytes).importable;
 	}
 

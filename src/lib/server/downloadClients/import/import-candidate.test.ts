@@ -18,11 +18,26 @@ describe('classifyImportCandidate', () => {
 		});
 	});
 
+	it('keeps short anime and daily episodes under the generic floor', () => {
+		// Neither carries SxxExx; the episode is named by an absolute number or an
+		// air date, and a compressed x265 episode is routinely under 50MB.
+		for (const name of [
+			'[SubsPlease] Show - 05 [1080p].mkv',
+			'Show - 105 (1080p) [ABCD1234].mkv',
+			'Show.2026.11.17.720p.mkv',
+			'Show.20261117.720p.mkv'
+		]) {
+			expect(classifyImportCandidate(name, 35 * MB).importable, name).toBe(true);
+		}
+	});
+
 	it('keeps the 50MB floor for files without an episode marker', () => {
-		expect(classifyImportCandidate('Some.Movie.2020.mkv', 35 * MB)).toEqual({
-			importable: false,
-			reason: 'too-small'
-		});
+		for (const name of ['Some.Movie.2020.mkv', 'Concert.2020.1080p.mkv']) {
+			expect(classifyImportCandidate(name, 35 * MB), name).toEqual({
+				importable: false,
+				reason: 'too-small'
+			});
+		}
 	});
 
 	it('keeps episodes whose title contains an extras word', () => {
