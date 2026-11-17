@@ -47,6 +47,32 @@ export const selectorBlockSchema = z.object({
 export type SelectorBlock = z.infer<typeof selectorBlockSchema>;
 
 // ============================================================================
+// Indexer Features
+// ============================================================================
+
+/**
+ * Behaviour a definition opts into, so the runtime never has to recognise a
+ * tracker by its name or base URL. Name/host matching breaks behind Prowlarr or
+ * Jackett (the base URL is the proxy's) and for any renamed mirror or instance.
+ */
+export const indexerFeaturesSchema = z.object({
+	/**
+	 * Season packs are living topics: the author re-creates the torrent as
+	 * episodes air, so a pack holding "1..K of N" is complete for an ongoing
+	 * season, and a pack grab should select every wanted episode inside it.
+	 */
+	livingSeasonPacks: z.boolean().optional(),
+	/**
+	 * Download links are forum endpoints (`/viewtopic.php`, `/dl.php?t=<id>`):
+	 * normalise those paths and fetch the details page first, because the bare
+	 * download link is transient.
+	 */
+	forumDownloadLinks: z.boolean().optional()
+});
+
+export type IndexerFeatures = z.infer<typeof indexerFeaturesSchema>;
+
+// ============================================================================
 // Settings Field
 // ============================================================================
 
@@ -602,6 +628,7 @@ export const yamlDefinitionSchema = z.object({
 	settings: z.array(settingsFieldSchema).optional(),
 
 	// Capabilities
+	features: indexerFeaturesSchema.optional(),
 	caps: capabilitiesBlockSchema,
 
 	// Authentication

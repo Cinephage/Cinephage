@@ -41,6 +41,18 @@ settings:
     label: Allow magnet fallback
     default: true
 
+# Behaviour this definition opts into, so the runtime never has to recognise the
+# tracker by name or host. See src/lib/server/indexers/features.ts.
+features:
+  # Season packs are living topics: the author re-creates the torrent as episodes
+  # air, so "1..K of N" is complete for an ongoing season and a pack grab should
+  # select every wanted episode inside it.
+  livingSeasonPacks: true
+  # Download links are forum endpoints (/viewtopic.php, /dl.php?t=): normalise
+  # those paths, and fetch the details page first because the direct link is
+  # transient.
+  forumDownloadLinks: true
+
 caps:
   modes:
     search: [q]

@@ -15,6 +15,12 @@ legacylinks:
   - http://kinozal.tv/
   - https://kinozal-guru.appspot.com/
 
+# Season packs are living topics here too: the topic is re-created as episodes
+# air, so a pack is a snapshot and a grab should fill every wanted episode it
+# already holds. See src/lib/server/indexers/features.ts.
+features:
+  livingSeasonPacks: true
+
 caps:
   categorymappings:
     # TV
