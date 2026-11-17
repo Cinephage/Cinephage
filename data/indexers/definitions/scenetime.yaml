@@ -137,7 +137,7 @@ search:
         c77: '1'
         c43: '1'
         c1: '1'
-        freeleech: '{{ if .Config.freeleech }}on{{ else }}{{ end }}'
+        fl: '{{ if .Config.freeleech }}1{{ else }}{{ end }}'
 
     # Movie-specific search
     - path: /browse.php
@@ -153,7 +153,7 @@ search:
         c64: '1'
         c82: '1'
         c47: '1'
-        freeleech: '{{ if .Config.freeleech }}on{{ else }}{{ end }}'
+        fl: '{{ if .Config.freeleech }}1{{ else }}{{ end }}'
 
     # TV-specific search
     - path: /browse.php
@@ -168,7 +168,7 @@ search:
         c77: '1'
         c43: '1'
         c1: '1'
-        freeleech: '{{ if .Config.freeleech }}on{{ else }}{{ end }}'
+        fl: '{{ if .Config.freeleech }}1{{ else }}{{ end }}'
 
   response:
     type: html
