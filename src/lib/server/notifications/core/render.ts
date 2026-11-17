@@ -20,6 +20,7 @@ const EVENT_TITLE: Record<NotificationEvent, string> = {
 	request_available: 'Request available',
 	request_failed: 'Request failed',
 	request_expired: 'Request expired',
+	task_failed: 'Task failed',
 	test: 'Test notification'
 };
 
@@ -34,6 +35,7 @@ const EVENT_COLOR: Record<NotificationEvent, number> = {
 	request_available: 0x1abc9c,
 	request_failed: 0xed4245,
 	request_expired: 0x95a5a6,
+	task_failed: 0xe67e22,
 	test: 0x3498db
 };
 
@@ -74,7 +76,7 @@ function mediaSubject(payload: NotificationPayload): string | null {
  * release name and request so a notification is never blank.
  */
 export function renderNotification(payload: NotificationPayload): RenderedNotification {
-	const subject = mediaSubject(payload) ?? payload.releaseName ?? null;
+	const subject = mediaSubject(payload) ?? payload.releaseName ?? payload.task?.name ?? null;
 	const heading = eventLabel(payload.event);
 	const title =
 		payload.event === 'test'
@@ -102,9 +104,11 @@ export function renderNotification(payload: NotificationPayload): RenderedNotifi
 		fields.push({ name: 'Requested by', value: payload.request.requestedBy });
 	}
 	if (payload.request?.reason) fields.push({ name: 'Reason', value: payload.request.reason });
+	if (payload.task?.error) fields.push({ name: 'Error', value: payload.task.error });
 
 	const lines: string[] = [];
 	if (payload.summary) lines.push(payload.summary);
+	if (payload.task?.error) lines.push(payload.task.error);
 	if (payload.event === 'test') {
 		lines.push('This is a test notification from Cinephage. Your agent is configured correctly.');
 	}
@@ -119,6 +123,7 @@ export function renderNotification(payload: NotificationPayload): RenderedNotifi
 		title,
 		body: lines.join('\n'),
 		color: eventColor(payload.event),
+		imageUrl: payload.media?.posterUrl ?? null,
 		url: payload.link ?? null,
 		fields,
 		timestamp: payload.occurredAt ?? new Date().toISOString()

@@ -5644,5 +5644,18 @@
 	"notifications_field_ntfyPriority": "Priority",
 	"notifications_option_priorityMin": "Min",
 	"notifications_option_priorityLow": "Low",
-	"notifications_option_priorityMax": "Max"
+	"notifications_option_priorityMax": "Max",
+	"notifications_fieldRequired": "Required",
+	"notifications_urlInvalid": "Must be an http(s) URL",
+	"notifications_errorRequiredFields": "Check the highlighted fields",
+	"notifications_actionSendTest": "Send test",
+	"notifications_helpDraftTest": "Tested before saving \u2014 nothing is stored yet.",
+	"notifications_filterLabel": "Filter by connection",
+	"notifications_filterAll": "All connections",
+	"notifications_actionRetry": "Retry",
+	"notifications_retrySuccess": "Retry delivered",
+	"notifications_retryFailed": "Retry failed: {error}",
+	"notifications_enabledToast": "{name} enabled",
+	"notifications_disabledToast": "{name} disabled",
+	"notifications_event_task_failed": "Task failed"
 }

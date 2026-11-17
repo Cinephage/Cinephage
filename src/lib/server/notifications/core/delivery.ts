@@ -79,6 +79,20 @@ export class NotificationDeliveryService {
 		void this.maybePrune();
 	}
 
+	/**
+	 * Re-sends one logged attempt to its own connection. Uses the stored message
+	 * so a retry says exactly what the original said, and ignores the backoff
+	 * window because a manual retry is the operator asking "is it fixed now?".
+	 */
+	async retry(deliveryId: string): Promise<AgentResult> {
+		const delivery = await this.store.getDelivery(deliveryId);
+		if (!delivery) return { ok: false, error: 'Delivery not found' };
+		const connection = await this.store.getRecord(delivery.connectionId);
+		if (!connection) return { ok: false, error: 'Connection no longer exists' };
+		const message = delivery.message ?? renderTestNotification();
+		return this.deliver(connection, message, { event: delivery.event as NotificationEvent }, true);
+	}
+
 	/** Sends the canned test message to one connection; used by the admin UI. */
 	async test(connectionId: string): Promise<AgentResult> {
 		const connection = await this.store.getRecord(connectionId);
@@ -112,7 +126,8 @@ export class NotificationDeliveryService {
 					ok: false,
 					error: `Unknown provider: ${connection.provider}`
 				},
-				0
+				0,
+				message
 			);
 			await this.store.recordFailure(
 				connection.id,
@@ -131,7 +146,7 @@ export class NotificationDeliveryService {
 		}
 		const durationMs = Date.now() - startedAt;
 
-		await this.record(connection.id, payload.event, result, durationMs);
+		await this.record(connection.id, payload.event, result, durationMs, message);
 
 		if (result.ok) {
 			await this.store.recordSuccess(connection.id);
@@ -174,7 +189,8 @@ export class NotificationDeliveryService {
 		connectionId: string,
 		event: string,
 		result: AgentResult,
-		durationMs: number
+		durationMs: number,
+		message: ReturnType<typeof renderNotification>
 	): Promise<void> {
 		try {
 			await db.insert(notificationDeliveries).values({
@@ -185,6 +201,11 @@ export class NotificationDeliveryService {
 				statusCode: result.status ?? null,
 				error: result.ok ? null : (result.error ?? 'Delivery failed').slice(0, 500),
 				durationMs,
+				// The rendered message is kept so a failed attempt can be retried
+				// exactly, and so the log can show what was said. Capped: a
+				// message is bounded by construction, but a hostile provider
+				// string must not be able to grow the row.
+				message: JSON.stringify(message).slice(0, 8000),
 				createdAt: new Date().toISOString()
 			});
 		} catch (error) {

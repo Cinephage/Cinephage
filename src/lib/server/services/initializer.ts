@@ -6,6 +6,8 @@ import { isFFprobeAvailable, getFFprobeVersion } from '#lib/server/library/ffpro
 import { getDownloadMonitor } from '#lib/server/downloadClients/monitoring/index.js';
 import { getImportService } from '#lib/server/downloadClients/import/ImportService.js';
 import { getMonitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.js';
+import { getUnifiedTaskById } from '#lib/server/tasks/UnifiedTaskRegistry.js';
+import { publishTaskFailed } from '#lib/server/notifications/core/app-events.js';
 import { getExternalIdService } from '#lib/server/services/ExternalIdService.js';
 import { getDataRepairService } from '#lib/server/services/DataRepairService.js';
 import { qualityFilter } from '#lib/server/quality/index.js';
@@ -119,6 +121,16 @@ async function initializeServices(): Promise<void> {
 			getImportService().start();
 
 			const monitoringScheduler = getMonitoringScheduler();
+			// A failed scheduled task is otherwise only visible in Monitoring →
+			// Tasks; mirror it to external agents like an *arr health issue.
+			monitoringScheduler.on('taskFailed', (taskType: string, error: unknown) => {
+				const label = getUnifiedTaskById(taskType)?.name ?? taskType;
+				publishTaskFailed({
+					taskId: taskType,
+					taskName: label,
+					error: error instanceof Error ? error.message : String(error)
+				});
+			});
 			serviceManager.register(monitoringScheduler);
 
 			const externalIdService = getExternalIdService();

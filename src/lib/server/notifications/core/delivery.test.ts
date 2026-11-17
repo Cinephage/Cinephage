@@ -204,3 +204,32 @@ describe('NotificationDeliveryService.publish', () => {
 		expect(healed?.disabledUntil).toBeNull();
 	});
 });
+
+describe('NotificationDeliveryService.retry', () => {
+	it('re-sends a failed attempt with the stored message', async () => {
+		const delivery = new NotificationDeliveryService();
+		const connection = await store.create({
+			name: 'Retry probe',
+			provider: 'webhook',
+			events: ['*'],
+			config: { url: 'http://127.0.0.1:1/dead' }
+		});
+
+		await delivery.publish('import', {
+			event: 'import',
+			media: { type: 'movie', title: 'Arrival', year: 2016 }
+		});
+		const [failure] = await deliveriesFor(connection.id);
+		expect(failure.ok).toBe(false);
+		expect(JSON.parse(String(failure.message)).title).toBe('Imported: Arrival (2016)');
+
+		await store.update(connection.id, { config: { url: `${baseUrl}/retried` } });
+		const result = await delivery.retry(failure.id);
+
+		expect(result.ok).toBe(true);
+		expect(received.at(-1)?.path).toBe('/retried');
+		expect(received.at(-1)?.body.title).toBe('Imported: Arrival (2016)');
+		const rows = await deliveriesFor(connection.id);
+		expect(rows.filter((row) => row.ok)).toHaveLength(1);
+	});
+});

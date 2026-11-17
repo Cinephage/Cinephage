@@ -53,6 +53,8 @@ export interface RenderedNotification {
 	body: string;
 	/** Discord embed colour, decimal RGB. */
 	color?: number;
+	/** Absolute poster URL, when one is known (Discord thumbnail, ntfy icon). */
+	imageUrl?: string | null;
 	/** Absolute link back into Cinephage, when one can be built. */
 	url?: string | null;
 	fields: Array<{ name: string; value: string }>;

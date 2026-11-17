@@ -73,3 +73,26 @@ describe('renderNotification', () => {
 		expect(message.body).toContain('test notification');
 	});
 });
+
+describe('task failure rendering', () => {
+	it('titles a failed task with its label and carries the error', () => {
+		const message = renderNotification({
+			event: 'task_failed',
+			task: { name: 'Missing Content Search', error: 'indexer timeout' }
+		});
+
+		expect(message.title).toBe('Task failed: Missing Content Search');
+		expect(message.body).toContain('indexer timeout');
+		expect(message.fields).toEqual(
+			expect.arrayContaining([{ name: 'Error', value: 'indexer timeout' }])
+		);
+	});
+
+	it('carries a poster into imageUrl', () => {
+		const message = renderNotification({
+			event: 'import',
+			media: { type: 'movie', title: 'Dune', posterUrl: 'https://image.tmdb.org/t/p/w500/x.jpg' }
+		});
+		expect(message.imageUrl).toBe('https://image.tmdb.org/t/p/w500/x.jpg');
+	});
+});

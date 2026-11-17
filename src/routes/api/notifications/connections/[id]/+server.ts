@@ -6,7 +6,7 @@ import {
 	NotificationConnectionStore
 } from '#lib/server/notifications/core/connections.js';
 import { notificationConnectionUpdateSchema } from '#lib/validation/schemas.js';
-import { NotFoundError, ValidationError } from '#lib/errors/index.js';
+import { NotFoundError } from '#lib/errors/index.js';
 
 /** PATCH /api/notifications/connections/[id] — update an agent. */
 export const PATCH: RequestHandler = async (event) => {
@@ -27,7 +27,7 @@ export const PATCH: RequestHandler = async (event) => {
 		return Response.json({ connection });
 	} catch (error) {
 		if (error instanceof NotificationConnectionError) {
-			throw new ValidationError(error.message);
+			return Response.json({ success: false, error: error.message }, { status: 400 });
 		}
 		throw error;
 	}

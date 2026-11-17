@@ -13,6 +13,7 @@ import { episodes, movies, requests, series, user } from '#lib/server/db/schema.
 import type { RequestNotificationEvent } from '#lib/server/requests/RequestNotificationService.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { getNotificationDeliveryService } from './delivery.js';
+import { buildLink, libraryPath, tmdbPosterUrl } from './links.js';
 import type { NotificationEvent, NotificationEpisodeRef, NotificationMediaRef } from './events.js';
 
 const logger = createChildLogger({ module: 'NotificationEvents', logDomain: 'system' });
@@ -43,11 +44,24 @@ function swallow(event: NotificationEvent, run: Promise<void>): void {
 
 async function movieRef(movieId: string): Promise<NotificationMediaRef | null> {
 	const [row] = await db
-		.select({ title: movies.title, year: movies.year, tmdbId: movies.tmdbId })
+		.select({
+			title: movies.title,
+			year: movies.year,
+			tmdbId: movies.tmdbId,
+			posterPath: movies.posterPath
+		})
 		.from(movies)
 		.where(eq(movies.id, movieId))
 		.limit(1);
-	return row ? { type: 'movie', title: row.title, year: row.year, tmdbId: row.tmdbId } : null;
+	return row
+		? {
+				type: 'movie',
+				title: row.title,
+				year: row.year,
+				tmdbId: row.tmdbId,
+				posterUrl: tmdbPosterUrl(row.posterPath)
+			}
+		: null;
 }
 
 async function seriesRef(seriesId: string): Promise<NotificationMediaRef | null> {
@@ -56,13 +70,21 @@ async function seriesRef(seriesId: string): Promise<NotificationMediaRef | null>
 			title: series.title,
 			year: series.year,
 			tmdbId: series.tmdbId,
-			tvdbId: series.tvdbId
+			tvdbId: series.tvdbId,
+			posterPath: series.posterPath
 		})
 		.from(series)
 		.where(eq(series.id, seriesId))
 		.limit(1);
 	return row
-		? { type: 'series', title: row.title, year: row.year, tmdbId: row.tmdbId, tvdbId: row.tvdbId }
+		? {
+				type: 'series',
+				title: row.title,
+				year: row.year,
+				tmdbId: row.tmdbId,
+				tvdbId: row.tvdbId,
+				posterUrl: tmdbPosterUrl(row.posterPath)
+			}
 		: null;
 }
 
@@ -115,6 +137,9 @@ export function publishGrab(params: {
 				releaseName: params.releaseName,
 				quality: formatQuality(params.quality),
 				indexer: params.indexerName ?? null,
+				link: media
+					? await buildLink(libraryPath(media.type, (params.movieId ?? params.seriesId) as string))
+					: null,
 				summary: params.isUpgrade
 					? 'Upgrade release sent to the download client'
 					: 'Release sent to the download client'
@@ -147,6 +172,7 @@ export function publishImport(params: {
 				episodes: refs.length > 0 ? refs : undefined,
 				releaseName: params.releaseName ?? null,
 				quality: formatQuality(params.quality),
+				link: media ? await buildLink(libraryPath(params.mediaType, params.mediaId)) : null,
 				summary:
 					params.mediaType === 'movie'
 						? params.wasUpgrade
@@ -185,6 +211,7 @@ interface RequestContext {
 	requestedBy: string | null;
 	tmdbId: number | null;
 	mediaType: 'movie' | 'series' | null;
+	posterUrl: string | null;
 }
 
 /**
@@ -192,23 +219,25 @@ interface RequestContext {
  * carries: who asked, and which title (some request events omit the TMDB id).
  */
 async function requestContext(requestId: string | undefined): Promise<RequestContext> {
-	if (!requestId) return { requestedBy: null, tmdbId: null, mediaType: null };
+	if (!requestId) return { requestedBy: null, tmdbId: null, mediaType: null, posterUrl: null };
 	const [row] = await db
 		.select({
 			name: user.name,
 			username: user.displayUsername,
 			tmdbId: requests.tmdbId,
-			mediaType: requests.mediaType
+			mediaType: requests.mediaType,
+			posterPath: requests.posterPath
 		})
 		.from(requests)
 		.innerJoin(user, eq(requests.requestedBy, user.id))
 		.where(eq(requests.id, requestId))
 		.limit(1);
-	if (!row) return { requestedBy: null, tmdbId: null, mediaType: null };
+	if (!row) return { requestedBy: null, tmdbId: null, mediaType: null, posterUrl: null };
 	return {
 		requestedBy: row.name ?? row.username ?? null,
 		tmdbId: row.tmdbId,
-		mediaType: row.mediaType === 'series' ? 'series' : 'movie'
+		mediaType: row.mediaType === 'series' ? 'series' : 'movie',
+		posterUrl: tmdbPosterUrl(row.posterPath)
 	};
 }
 
@@ -238,7 +267,7 @@ export function publishRequestEvent(
 						: null;
 			await getNotificationDeliveryService().publish(externalEvent, {
 				event: externalEvent,
-				media: title ? { type: mediaType, title, tmdbId } : undefined,
+				media: title ? { type: mediaType, title, tmdbId, posterUrl: context.posterUrl } : undefined,
 				request: requestId
 					? {
 							id: requestId,
@@ -247,7 +276,31 @@ export function publishRequestEvent(
 							reason
 						}
 					: undefined,
+				link: await buildLink('/requests'),
 				summary: REQUEST_SUMMARY[event]
+			});
+		})()
+	);
+}
+
+/**
+ * A scheduled task threw. This is the *arr-style "something needs you" event:
+ * a failed missing-search, indexer refresh or maintenance run otherwise only
+ * shows up in Monitoring → Tasks, where nobody is looking.
+ */
+export function publishTaskFailed(params: {
+	taskId: string;
+	taskName: string;
+	error: string;
+}): void {
+	swallow(
+		'task_failed',
+		(async () => {
+			await getNotificationDeliveryService().publish('task_failed', {
+				event: 'task_failed',
+				task: { name: params.taskName, error: params.error },
+				link: await buildLink('/settings/monitoring/tasks'),
+				summary: `${params.taskName} failed`
 			});
 		})()
 	);

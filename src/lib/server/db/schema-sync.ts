@@ -210,8 +210,10 @@ import {
  * Version 178: notification_connections / notification_deliveries - external
  *   notification agents (webhook, Discord, Pushover, ntfy) with per-connection
  *   event subscriptions, failure backoff and a capped delivery log.
+ * Version 179: notification_deliveries.message - the rendered message is kept
+ *   so a failed attempt can be retried exactly and the log can be read.
  */
-export const CURRENT_SCHEMA_VERSION = 178;
+export const CURRENT_SCHEMA_VERSION = 179;
 
 export const SYSTEM_LIBRARY_SEEDS = [
 	{
@@ -1764,6 +1766,7 @@ const TABLE_DEFINITIONS: string[] = [
 		"status_code" integer,
 		"error" text,
 		"duration_ms" integer,
+		"message" text,
 		"created_at" text NOT NULL
 	)`
 ];

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { refreshAll } from '$app/navigation';
+	import { goto, refreshAll } from '$app/navigation';
 	import {
 		Bell,
 		CheckCircle2,
@@ -28,7 +28,11 @@
 		deleteNotificationConnection,
 		testNotificationConnection,
 		updateNotificationConnection,
-		type NotificationProvider
+		retryNotificationDelivery,
+		testDraftNotification,
+		type NotificationDelivery,
+		type NotificationProvider,
+		type NotificationTestResult
 	} from '#lib/api/notifications.js';
 
 	let { data }: { data: PageData } = $props();
@@ -89,7 +93,8 @@
 		notifications_event_request_declined: m.notifications_event_request_declined,
 		notifications_event_request_available: m.notifications_event_request_available,
 		notifications_event_request_failed: m.notifications_event_request_failed,
-		notifications_event_request_expired: m.notifications_event_request_expired
+		notifications_event_request_expired: m.notifications_event_request_expired,
+		notifications_event_task_failed: m.notifications_event_task_failed
 	};
 
 	function msg(key: string, fallback = ''): string {
@@ -133,6 +138,18 @@
 	let testingId = $state<string | null>(null);
 	let deleteTarget = $state<Connection | null>(null);
 	let deleting = $state(false);
+	let togglingId = $state<string | null>(null);
+	let retryingId = $state<string | null>(null);
+	let testingDraft = $state(false);
+	let draftTest = $state<NotificationTestResult | null>(null);
+	let fieldErrors = $state<Record<string, string>>({});
+	let filterConnection = $state('');
+
+	// The filter lives in the URL (?connection=…), so a back/forward navigation
+	// or a reload must move the select with it.
+	$effect(() => {
+		filterConnection = data.selectedConnectionId ?? '';
+	});
 
 	const activeProvider = $derived(
 		data.providers.find((provider) => provider.id === form.provider) ?? data.providers[0]
@@ -142,6 +159,8 @@
 	function openAdd() {
 		form = emptyDraft();
 		saveError = null;
+		draftTest = null;
+		fieldErrors = {};
 		modalOpen = true;
 	}
 
@@ -158,6 +177,8 @@
 			}
 		};
 		saveError = null;
+		draftTest = null;
+		fieldErrors = {};
 		modalOpen = true;
 	}
 
@@ -219,13 +240,96 @@
 		return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString();
 	}
 
-	async function save() {
-		if (!form.name.trim()) {
-			saveError = m.notifications_nameRequired();
-			return;
+	function validateDraft(): boolean {
+		const errors: Record<string, string> = {};
+		if (!form.name.trim()) errors.name = m.notifications_nameRequired();
+		if (form.events.length === 0) errors.events = m.notifications_eventsRequired();
+		for (const field of activeProvider?.fields ?? []) {
+			const value = String(form.config[field.key] ?? '').trim();
+			// A stored secret is never round-tripped, so a blank secret field on
+			// an existing connection is "keep the current one", not "missing".
+			const storedSecret = field.secret === true && form.id !== null;
+			if (field.required && !value && !storedSecret) {
+				errors[field.key] = m.notifications_fieldRequired();
+			}
+			if (field.type === 'url' && value && !/^https?:\/\/[^\s/]+/i.test(value)) {
+				errors[field.key] = m.notifications_urlInvalid();
+			}
 		}
-		if (form.events.length === 0) {
-			saveError = m.notifications_eventsRequired();
+		fieldErrors = errors;
+		return Object.keys(errors).length === 0;
+	}
+
+	/** Tests the draft config, before it is saved. */
+	async function runDraftTest() {
+		if (!validateDraft()) return;
+		testingDraft = true;
+		draftTest = null;
+		try {
+			const result = await testDraftNotification({
+				provider: form.provider,
+				connectionId: form.id ?? undefined,
+				config: form.config
+			});
+			draftTest = result;
+			if (result.ok) toasts.success(m.notifications_testSuccess({ name: form.name }));
+			else toasts.error(result.error ?? m.notifications_testFailed({ name: form.name }));
+		} catch (error) {
+			draftTest = { ok: false, error: error instanceof Error ? error.message : String(error) };
+		} finally {
+			testingDraft = false;
+		}
+	}
+
+	async function toggleEnabled(connection: Connection) {
+		togglingId = connection.id;
+		try {
+			await updateNotificationConnection(connection.id, { enabled: !connection.enabled });
+			toasts.success(
+				connection.enabled
+					? m.notifications_disabledToast({ name: connection.name })
+					: m.notifications_enabledToast({ name: connection.name })
+			);
+			await refreshAll();
+		} catch (error) {
+			toasts.error(error instanceof Error ? error.message : String(error));
+		} finally {
+			togglingId = null;
+		}
+	}
+
+	async function retryDelivery(delivery: NotificationDelivery) {
+		retryingId = delivery.id;
+		try {
+			const result = await retryNotificationDelivery(delivery.id);
+			if (result.ok) toasts.success(m.notifications_retrySuccess());
+			else
+				toasts.error(
+					m.notifications_retryFailed({ error: result.error ?? m.notifications_deliveryFailed() })
+				);
+			await refreshAll();
+		} catch (error) {
+			toasts.error(error instanceof Error ? error.message : String(error));
+		} finally {
+			retryingId = null;
+		}
+	}
+
+	function changeFilter(value: string) {
+		filterConnection = value;
+		const url = new URL(window.location.href);
+		if (value) url.searchParams.set('connection', value);
+		else url.searchParams.delete('connection');
+		void goto(url.pathname + url.search, {
+			replaceState: true,
+			invalidateAll: true
+		});
+	}
+
+	async function save() {
+		saveError = null;
+		if (!validateDraft()) {
+			saveError = m.notifications_errorRequiredFields();
 			return;
 		}
 		saving = true;
@@ -317,6 +421,16 @@
 								{@const status = statusOf(connection)}
 								<tr>
 									<td>
+										<input
+											type="checkbox"
+											class="toggle toggle-primary toggle-sm"
+											checked={connection.enabled}
+											disabled={togglingId === connection.id}
+											aria-label={m.notifications_fieldEnabled()}
+											onchange={() => toggleEnabled(connection)}
+										/>
+									</td>
+									<td>
 										<div class="font-medium">{connection.name}</div>
 										{#if status.detail}
 											<div
@@ -390,9 +504,24 @@
 
 	<div class="card border border-base-300 bg-base-100">
 		<div class="card-body gap-3">
-			<div class="flex items-center gap-2">
-				<Clock class="h-4 w-4 text-base-content/60" />
-				<h2 class="font-semibold">{m.notifications_recentDeliveries()}</h2>
+			<div class="flex flex-wrap items-center justify-between gap-2">
+				<div class="flex items-center gap-2">
+					<Clock class="h-4 w-4 text-base-content/60" />
+					<h2 class="font-semibold">{m.notifications_recentDeliveries()}</h2>
+				</div>
+				{#if data.connections.length > 1}
+					<select
+						class="select-bordered select w-56 select-xs"
+						aria-label={m.notifications_filterLabel()}
+						value={filterConnection}
+						onchange={(event) => changeFilter((event.currentTarget as HTMLSelectElement).value)}
+					>
+						<option value="">{m.notifications_filterAll()}</option>
+						{#each data.connections as connection (connection.id)}
+							<option value={connection.id}>{connection.name}</option>
+						{/each}
+					</select>
+				{/if}
 			</div>
 			{#if data.deliveries.length === 0}
 				<p class="text-sm text-base-content/60">{m.notifications_deliveriesEmpty()}</p>
@@ -435,6 +564,16 @@
 												<span class="max-w-md truncate" title={delivery.error ?? ''}>
 													{delivery.error ?? m.notifications_deliveryFailed()}
 												</span>
+												<button
+													class="btn gap-1 btn-ghost btn-xs"
+													disabled={retryingId === delivery.id}
+													onclick={() => retryDelivery(delivery)}
+												>
+													{#if retryingId === delivery.id}
+														<Loader2 class="h-3 w-3 animate-spin" />
+													{/if}
+													{m.notifications_actionRetry()}
+												</button>
 											</span>
 										{/if}
 									</td>
@@ -461,6 +600,7 @@
 			value={form.name}
 			placeholder={m.notifications_placeholderName()}
 			required
+			error={fieldErrors.name}
 			onchange={(value) => (form.name = String(value))}
 		/>
 
@@ -495,6 +635,7 @@
 					}))}
 					helpText={field.helpKey ? msg(field.helpKey) : undefined}
 					required={field.required}
+					error={fieldErrors[field.key]}
 					onchange={(value) => (form.config[field.key] = String(value))}
 				/>
 			{:else if field.type === 'boolean'}
@@ -512,6 +653,7 @@
 					value={String(form.config[field.key] ?? '')}
 					placeholder={field.placeholder}
 					required={field.required}
+					error={fieldErrors[field.key]}
 					helpText={field.secret
 						? msg('notifications_help_secretBlankKeeps')
 						: field.helpKey
@@ -533,6 +675,10 @@
 			onchange={(checked) => toggleAllEvents(checked)}
 		/>
 
+		{#if fieldErrors.events}
+			<p class="text-xs text-error">{fieldErrors.events}</p>
+		{/if}
+
 		<div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
 			{#each data.events as event (event)}
 				<FormCheckbox
@@ -547,6 +693,26 @@
 		{#if saveError}
 			<div class="alert text-sm alert-error">{saveError}</div>
 		{/if}
+
+		{#if draftTest}
+			<div class="alert text-sm {draftTest.ok ? 'alert-success' : 'alert-error'}">
+				{draftTest.ok
+					? m.notifications_testSuccess({ name: form.name || activeProvider?.label || '' })
+					: (draftTest.error ?? m.notifications_deliveryFailed())}
+			</div>
+		{/if}
+
+		<div class="flex flex-wrap items-center gap-3 pt-1">
+			<button class="btn gap-1.5 btn-outline btn-sm" onclick={runDraftTest} disabled={testingDraft}>
+				{#if testingDraft}
+					<Loader2 class="h-4 w-4 animate-spin" />
+				{:else}
+					<Send class="h-4 w-4" />
+				{/if}
+				{m.notifications_actionSendTest()}
+			</button>
+			<span class="text-xs text-base-content/60">{m.notifications_helpDraftTest()}</span>
+		</div>
 	</div>
 
 	<ModalFooter onCancel={() => (modalOpen = false)} onSave={save} {saving} />

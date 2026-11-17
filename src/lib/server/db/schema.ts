@@ -4669,6 +4669,8 @@ export const notificationDeliveries = sqliteTable(
 		statusCode: integer('status_code'),
 		error: text('error'),
 		durationMs: integer('duration_ms'),
+		/** Rendered message JSON, kept so a failed attempt can be retried exactly. */
+		message: text('message'),
 		createdAt: text('created_at').notNull()
 	},
 	(table) => [

@@ -16,6 +16,7 @@ export const NOTIFICATION_EVENTS = [
 	'request_available',
 	'request_failed',
 	'request_expired',
+	'task_failed',
 	'test'
 ] as const;
 
@@ -37,6 +38,8 @@ export interface NotificationMediaRef {
 	year?: number | null;
 	tmdbId?: number | null;
 	tvdbId?: number | null;
+	/** Absolute poster URL, when the provider gave us a path. */
+	posterUrl?: string | null;
 }
 
 export interface NotificationEpisodeRef {
@@ -53,6 +56,13 @@ export interface NotificationRequestRef {
 	reason?: string | null;
 }
 
+/** Context for a scheduled task that failed. */
+export interface NotificationTaskRef {
+	/** Human label, e.g. "Missing Content Search". */
+	name: string;
+	error?: string | null;
+}
+
 /**
  * Everything an agent can be told about an event. Providers receive only the
  * rendered message; the payload is kept for the delivery log and for agents
@@ -66,6 +76,8 @@ export interface NotificationPayload {
 	quality?: string | null;
 	indexer?: string | null;
 	request?: NotificationRequestRef;
+	/** Present for `task_failed`. */
+	task?: NotificationTaskRef;
 	/** Deep link into the app (absolute URL when a base URL is configured). */
 	link?: string | null;
 	/** Caller-supplied one-line summary, appended to the rendered body. */

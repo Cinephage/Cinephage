@@ -28,6 +28,7 @@ async function post(config: AgentConfig, message: RenderedNotification): Promise
 				description: message.body,
 				color: message.color,
 				url: message.url ?? undefined,
+				thumbnail: message.imageUrl ? { url: message.imageUrl } : undefined,
 				fields: message.fields.map((field) => ({
 					name: field.name,
 					value: field.value.slice(0, 1024),

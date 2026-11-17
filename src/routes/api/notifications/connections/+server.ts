@@ -6,7 +6,6 @@ import {
 	NotificationConnectionStore
 } from '#lib/server/notifications/core/connections.js';
 import { notificationConnectionCreateSchema } from '#lib/validation/schemas.js';
-import { ValidationError } from '#lib/errors/index.js';
 
 /**
  * GET /api/notifications/connections
@@ -38,7 +37,7 @@ export const POST: RequestHandler = async (event) => {
 		return Response.json({ connection }, { status: 201 });
 	} catch (error) {
 		if (error instanceof NotificationConnectionError) {
-			throw new ValidationError(error.message);
+			return Response.json({ success: false, error: error.message }, { status: 400 });
 		}
 		throw error;
 	}

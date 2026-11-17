@@ -18,7 +18,7 @@ import {
 } from '#lib/server/crypto/credentialsCrypto.js';
 import { ALL_EVENTS, SUBSCRIBABLE_EVENTS } from './events.js';
 import { getNotificationAgent } from './registry.js';
-import type { AgentConfig } from './agent.js';
+import type { AgentConfig, RenderedNotification } from './agent.js';
 
 const CONFIG_PURPOSE = 'notification-config';
 
@@ -61,6 +61,8 @@ export interface NotificationDeliveryRecord {
 	statusCode: number | null;
 	error: string | null;
 	durationMs: number | null;
+	/** The rendered message that was sent, kept for retry and inspection. */
+	message: RenderedNotification | null;
 	createdAt: string;
 	connectionName?: string | null;
 	connectionProvider?: string | null;
@@ -142,6 +144,36 @@ function missingRequiredFields(providerId: string, config: AgentConfig): string[
 		.map((field) => field.key);
 }
 
+/**
+ * Field-shape validation. Only the rules a transport actually depends on live
+ * here — a URL that can never resolve is worth refusing at save time instead
+ * of discovering it as a failed delivery at 3am.
+ */
+function invalidFieldErrors(providerId: string, config: AgentConfig): string[] {
+	const agent = getNotificationAgent(providerId);
+	if (!agent) return [];
+	const errors: string[] = [];
+	for (const field of agent.fields) {
+		const value = config[field.key];
+		if (field.type !== 'url' || typeof value !== 'string' || !value) continue;
+		if (!/^https?:\/\/[^\s/]+/i.test(value)) {
+			errors.push(`${field.key} must be an http(s) URL`);
+		}
+	}
+	return errors;
+}
+
+function assertValidConfig(providerId: string, config: AgentConfig): void {
+	const missing = missingRequiredFields(providerId, config);
+	if (missing.length > 0) {
+		throw new NotificationConnectionError(`Missing required fields: ${missing.join(', ')}`);
+	}
+	const invalid = invalidFieldErrors(providerId, config);
+	if (invalid.length > 0) {
+		throw new NotificationConnectionError(invalid.join('; '));
+	}
+}
+
 function toPublic(
 	row: typeof notificationConnections.$inferSelect,
 	config: AgentConfig
@@ -217,10 +249,7 @@ export class NotificationConnectionStore {
 		const id = randomUUID();
 		const now = new Date().toISOString();
 		const config = sanitizeConfig(input.provider, input.config);
-		const missing = missingRequiredFields(input.provider, config);
-		if (missing.length > 0) {
-			throw new NotificationConnectionError(`Missing required fields: ${missing.join(', ')}`);
-		}
+		assertValidConfig(input.provider, config);
 		const [row] = await db
 			.insert(notificationConnections)
 			.values({
@@ -252,10 +281,7 @@ export class NotificationConnectionStore {
 		const existingConfig = decryptConfig(existing.id, existing.config);
 		const incoming = sanitizeConfig(provider, { ...existingConfig, ...(input.config ?? {}) });
 		const config = preserveSecrets(provider, incoming, existingConfig);
-		const missing = missingRequiredFields(provider, config);
-		if (missing.length > 0) {
-			throw new NotificationConnectionError(`Missing required fields: ${missing.join(', ')}`);
-		}
+		assertValidConfig(provider, config);
 
 		const [row] = await db
 			.update(notificationConnections)
@@ -272,11 +298,34 @@ export class NotificationConnectionStore {
 		return toPublic(row, config);
 	}
 
+	/**
+	 * Resolves a *draft* config for a pre-save test: sanitised, with stored
+	 * secrets filled in when the admin is editing an existing connection
+	 * (the form never round-trips them), and validated the same way a save is.
+	 */
+	async prepareDraftConfig(
+		providerId: string,
+		config: AgentConfig,
+		connectionId?: string
+	): Promise<AgentConfig> {
+		const existing = connectionId ? await this.getRecord(connectionId) : null;
+		const existingConfig = existing?.config ?? {};
+		const merged = sanitizeConfig(providerId, { ...existingConfig, ...config });
+		const resolved = preserveSecrets(providerId, merged, existingConfig);
+		assertValidConfig(providerId, resolved);
+		return resolved;
+	}
+
 	async delete(id: string): Promise<boolean> {
 		const result = await db
 			.delete(notificationConnections)
 			.where(eq(notificationConnections.id, id));
 		return result.changes > 0;
+	}
+
+	/** One logged attempt, for retry. */
+	async getDelivery(id: string): Promise<NotificationDeliveryRecord | null> {
+		return getDelivery(id);
 	}
 
 	/** Resets backoff and clears the error after a successful manual test. */
@@ -315,28 +364,59 @@ function defaultName(providerId: string): string {
 }
 
 /** Delivery log reads live with the store: same table family, same lifecycle. */
-export async function listRecentDeliveries(limit = 50): Promise<NotificationDeliveryRecord[]> {
+const DELIVERY_SELECTION = {
+	id: notificationDeliveries.id,
+	connectionId: notificationDeliveries.connectionId,
+	event: notificationDeliveries.event,
+	ok: notificationDeliveries.ok,
+	statusCode: notificationDeliveries.statusCode,
+	error: notificationDeliveries.error,
+	durationMs: notificationDeliveries.durationMs,
+	message: notificationDeliveries.message,
+	createdAt: notificationDeliveries.createdAt,
+	connectionName: notificationConnections.name,
+	connectionProvider: notificationConnections.provider
+};
+
+function parseMessage(raw: string | null): RenderedNotification | null {
+	if (!raw) return null;
+	try {
+		const parsed = JSON.parse(raw);
+		return parsed && typeof parsed === 'object' ? (parsed as RenderedNotification) : null;
+	} catch {
+		return null;
+	}
+}
+
+export async function listRecentDeliveries(
+	limit = 50,
+	connectionId?: string
+): Promise<NotificationDeliveryRecord[]> {
 	const rows = await db
-		.select({
-			id: notificationDeliveries.id,
-			connectionId: notificationDeliveries.connectionId,
-			event: notificationDeliveries.event,
-			ok: notificationDeliveries.ok,
-			statusCode: notificationDeliveries.statusCode,
-			error: notificationDeliveries.error,
-			durationMs: notificationDeliveries.durationMs,
-			createdAt: notificationDeliveries.createdAt,
-			connectionName: notificationConnections.name,
-			connectionProvider: notificationConnections.provider
-		})
+		.select(DELIVERY_SELECTION)
 		.from(notificationDeliveries)
 		.leftJoin(
 			notificationConnections,
 			eq(notificationDeliveries.connectionId, notificationConnections.id)
 		)
+		.where(connectionId ? eq(notificationDeliveries.connectionId, connectionId) : undefined)
 		.orderBy(desc(notificationDeliveries.createdAt))
 		.limit(Math.min(Math.max(limit, 1), 200));
-	return rows;
+	return rows.map((row) => ({ ...row, message: parseMessage(row.message) }));
+}
+
+/** One logged attempt, resolved to its connection — the retry entry point. */
+export async function getDelivery(id: string): Promise<NotificationDeliveryRecord | null> {
+	const [row] = await db
+		.select(DELIVERY_SELECTION)
+		.from(notificationDeliveries)
+		.leftJoin(
+			notificationConnections,
+			eq(notificationDeliveries.connectionId, notificationConnections.id)
+		)
+		.where(eq(notificationDeliveries.id, id))
+		.limit(1);
+	return row ? { ...row, message: parseMessage(row.message) } : null;
 }
 
 export async function pruneDeliveries(olderThanDays = 14): Promise<number> {

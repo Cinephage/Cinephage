@@ -41,6 +41,7 @@ async function post(
 		title: message.title,
 		message: message.body,
 		url: message.url ?? null,
+		imageUrl: message.imageUrl ?? null,
 		media: payload.media ?? null,
 		episodes: payload.episodes ?? [],
 		request: payload.request ?? null,

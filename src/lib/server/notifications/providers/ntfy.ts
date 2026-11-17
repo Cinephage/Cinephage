@@ -46,6 +46,7 @@ async function post(config: AgentConfig, message: RenderedNotification): Promise
 		body = `${message.title}\n\n${body}`;
 	}
 	if (message.url) headers.click = message.url;
+	if (message.imageUrl) headers.icon = message.imageUrl;
 
 	const attempt = await withTimeout((signal) =>
 		fetch(`${base}/${encodeURIComponent(topic)}`, { method: 'POST', headers, body, signal })

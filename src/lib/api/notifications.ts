@@ -41,13 +41,15 @@ export interface NotificationProvider {
 export interface NotificationDelivery {
 	id: string;
 	connectionId: string;
-	connectionName: string | null;
-	connectionProvider: string | null;
+	connectionName?: string | null;
+	connectionProvider?: string | null;
 	event: string;
 	ok: boolean;
 	statusCode: number | null;
 	error: string | null;
 	durationMs: number | null;
+	/** The rendered message, kept server-side for retry and inspection. */
+	message?: unknown;
 	createdAt: string;
 }
 
@@ -95,8 +97,22 @@ export async function testNotificationConnection(id: string) {
 	return apiPost<NotificationTestResult>(`/api/notifications/connections/${id}/test`);
 }
 
-export async function listNotificationDeliveries(limit = 25) {
+export async function listNotificationDeliveries(limit = 25, connectionId?: string) {
 	return apiGet<{ deliveries: NotificationDelivery[] }>('/api/notifications/deliveries', {
-		limit: String(limit)
+		limit: String(limit),
+		...(connectionId ? { connectionId } : {})
 	});
+}
+
+/** Tests a draft config (optionally an existing connection, for its stored secrets). */
+export async function testDraftNotification(body: {
+	provider: string;
+	connectionId?: string;
+	config?: NotificationConnectionConfig;
+}) {
+	return apiPost<NotificationTestResult>('/api/notifications/test', body);
+}
+
+export async function retryNotificationDelivery(id: string) {
+	return apiPost<NotificationTestResult>(`/api/notifications/deliveries/${id}/retry`);
 }

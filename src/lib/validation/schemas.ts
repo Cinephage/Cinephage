@@ -2775,3 +2775,11 @@ export type NotificationConnectionCreate = z.infer<typeof notificationConnection
 
 export const notificationConnectionUpdateSchema = notificationConnectionCreateSchema.partial();
 export type NotificationConnectionUpdate = z.infer<typeof notificationConnectionUpdateSchema>;
+
+/** Pre-save "send a test" for a draft notification connection. */
+export const notificationConnectionTestSchema = z.object({
+	provider: z.string().min(1).max(50),
+	connectionId: z.string().min(1).max(80).optional(),
+	config: z.record(z.string(), z.unknown()).optional()
+});
+export type NotificationConnectionTest = z.infer<typeof notificationConnectionTestSchema>;
