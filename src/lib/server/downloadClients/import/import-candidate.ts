@@ -65,8 +65,9 @@ export function classifyImportCandidate(
 
 	const explicitEpisode = hasExplicitEpisodeMarker(fileName);
 	const isSmallStrm = options.allowStrmSmall === true && ext === '.strm';
+	// The episode floor only ever relaxes the generic one, never tightens it
 	const minSize = explicitEpisode
-		? DOWNLOAD.MIN_EPISODE_IMPORT_SIZE_BYTES
+		? Math.min(DOWNLOAD.MIN_EPISODE_IMPORT_SIZE_BYTES, DOWNLOAD.MIN_IMPORT_SIZE_BYTES)
 		: DOWNLOAD.MIN_IMPORT_SIZE_BYTES;
 	if (!isSmallStrm && size < minSize) {
 		return { importable: false, reason: 'too-small' };
