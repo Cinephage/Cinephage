@@ -10,7 +10,7 @@
 
 import { EventEmitter } from 'events';
 import { stat } from 'fs/promises';
-import { join, basename, dirname, extname, resolve } from 'path';
+import { join, basename, dirname, extname, relative, resolve } from 'path';
 import { randomUUID } from 'node:crypto';
 import { db } from '#lib/server/db/index.js';
 import { eventBuffer } from '#lib/server/sse/EventBuffer.js';
@@ -47,7 +47,6 @@ import {
 	findVideoFiles,
 	ensureDirectory,
 	fileExists,
-	isVideoFile,
 	hasSufficientDiskSpace,
 	removeEmptyDirectories,
 	moveToRecycleBin,
@@ -78,12 +77,8 @@ import { resolveAudioLanguages } from '#lib/server/library/naming/preview-metada
 import { resolveLocalizedTitlesForFormats } from '#lib/server/library/naming/localization.js';
 import { createChildLogger, runWithLogContext } from '#lib/logging/index.js';
 import { todayDateString, formatBytes } from '#lib/utils/format.js';
-import {
-	DOWNLOAD,
-	EXCLUDED_FILE_PATTERNS,
-	DANGEROUS_EXTENSIONS,
-	EXECUTABLE_EXTENSIONS
-} from '#lib/config/constants.js';
+import { classifyImportCandidate } from './import-candidate.js';
+import { DANGEROUS_EXTENSIONS, EXECUTABLE_EXTENSIONS } from '#lib/config/constants.js';
 import { ImportWorker, workerManager } from '#lib/server/workers/index.js';
 import { monitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.js';
 import { getFileManagementSettings } from '#lib/server/settings/file-management.js';
@@ -3017,21 +3012,30 @@ export class ImportService extends EventEmitter {
 
 			if (stats.isFile()) {
 				// Single file download
-				if (this.isImportableFile(downloadPath, stats.size, options)) {
+				if (this.isImportableFile(downloadPath, basename(downloadPath), stats.size, options)) {
 					files.push({ path: downloadPath, size: stats.size });
 				}
 			} else if (stats.isDirectory()) {
-				// Directory - find all video files
+				// Directory - find all video files. The walker already confirmed
+				// extensionless entries are video by their magic bytes.
 				const videoFiles = await findVideoFiles(downloadPath);
+				const walkedOptions = { ...options, extensionlessIsVideo: true };
 
 				for (const filePath of videoFiles) {
 					try {
 						const fileStats = await stat(filePath);
-						if (this.isImportableFile(filePath, fileStats.size, options)) {
+						const relativePath = relative(downloadPath, filePath);
+						if (this.isImportableFile(filePath, relativePath, fileStats.size, walkedOptions)) {
 							files.push({ path: filePath, size: fileStats.size });
 						}
-					} catch {
-						// Skip files we can't stat
+					} catch (error) {
+						logger.warn(
+							{
+								filePath,
+								error: error instanceof Error ? error.message : String(error)
+							},
+							'[ImportService] Skipping file that could not be read'
+						);
 					}
 				}
 			}
@@ -3114,29 +3118,19 @@ export class ImportService extends EventEmitter {
 	 */
 	private isImportableFile(
 		filePath: string,
+		relativePath: string,
 		size: number,
-		options: ImportableFileOptions
+		options: ImportableFileOptions & { extensionlessIsVideo?: boolean }
 	): boolean {
-		// Check size
-		const ext = extname(filePath).toLowerCase();
-		if (!(options.allowStrmSmall && ext === '.strm') && size < DOWNLOAD.MIN_IMPORT_SIZE_BYTES) {
-			return false;
+		const verdict = classifyImportCandidate(relativePath, size, options);
+		if (!verdict.importable) {
+			// Logged so a file that is on disk but never imported can be explained
+			logger.info(
+				{ filePath, size, reason: verdict.reason },
+				'[ImportService] Skipping file in download'
+			);
 		}
-
-		// Check extension
-		if (!isVideoFile(filePath)) {
-			return false;
-		}
-
-		// Check for sample/extra patterns
-		const fileName = basename(filePath);
-		for (const pattern of EXCLUDED_FILE_PATTERNS) {
-			if (pattern.test(fileName)) {
-				return false;
-			}
-		}
-
-		return true;
+		return verdict.importable;
 	}
 
 	private async checkBlockedVideoExtensions(

@@ -67,6 +67,13 @@ export const DOWNLOAD = {
 	/** Minimum file size to consider for import (50MB) */
 	MIN_IMPORT_SIZE_BYTES: 50 * 1024 * 1024,
 
+	/**
+	 * Minimum size for a file whose name carries an explicit episode marker
+	 * (S01E05, 1x05). Short or heavily compressed episodes fall under the
+	 * generic threshold; samples are still caught by name and folder (10MB)
+	 */
+	MIN_EPISODE_IMPORT_SIZE_BYTES: 10 * 1024 * 1024,
+
 	/** Minimum file size for library scanning (10MB) */
 	MIN_SCAN_SIZE_BYTES: 10 * 1024 * 1024,
 

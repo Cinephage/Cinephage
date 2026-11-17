@@ -43,6 +43,31 @@ describe('tv-episode-resolver', () => {
 		});
 	});
 
+	it('reads the episode of a file whose name also carries pack wording', () => {
+		expect(
+			resolveTvEpisodeIdentifier({
+				filePath: '/downloads/Show.Complete.Series/Show.Complete.Series.S03E04.1080p.mkv',
+				seriesType: 'standard'
+			})
+		).toEqual({ numbering: 'standard', seasonNumber: 3, episodeNumbers: [4] });
+
+		expect(
+			resolveTvEpisodeIdentifier({
+				filePath: '/downloads/Show.S01-S05/Show S01-S05 S02E07E08.mkv',
+				seriesType: 'standard'
+			})
+		).toEqual({ numbering: 'standard', seasonNumber: 2, episodeNumbers: [7, 8] });
+	});
+
+	it('does not read a multi-season range title as its first episode', () => {
+		expect(
+			resolveTvEpisodeIdentifier({
+				filePath: '/downloads/Show.S01E01-S08E99.1080p',
+				seriesType: 'standard'
+			})
+		).toBeNull();
+	});
+
 	it('matches episodes by standard, daily, and absolute identifiers', () => {
 		const episodes = [
 			{
