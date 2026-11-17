@@ -16,6 +16,7 @@ import { CookieStore } from '../auth/CookieStore';
 import { cloudflareFetch } from '../http/cloudflare-fetch';
 import { isCloudflareProtected } from '../http/CloudflareDetection';
 import { createChildLogger } from '#lib/logging/index.js';
+import { redactUrl } from '#lib/server/utils/urlSecurity.js';
 
 export interface DownloadContext {
 	baseUrl: string;
@@ -570,25 +571,51 @@ export class DownloadHandler {
 		url: string,
 		headers: Record<string, string>
 	): Promise<{ valid: boolean; data?: Buffer }> {
+		// Validation has to travel the same route as the transfer it validates.
+		// A plain fetch of RuTracker's dl.php is challenged on TLS fingerprint
+		// however valid the session is, while the browser-context fetch passes;
+		// probing plainly therefore rejected working links, the chain fell
+		// through to `a.magnet-link`, and the pack was added as a magnet with no
+		// file list (#663). Use the Cloudflare-aware binary fetch and say out
+		// loud when a link really does hand back a page instead of a torrent.
 		try {
-			const response = await fetch(url, {
-				method: 'GET',
+			const result = await cloudflareFetch(url, {
 				headers,
-				redirect: 'follow'
+				timeout: 30000,
+				binary: true
 			});
+			const data = result.data;
+			const head = data ? data.subarray(0, 32).toString('latin1') : '';
 
-			if (!response.ok) {
-				return { valid: false };
+			// Torrent files start with 'd' (bencoded dict).
+			if (result.status < 400 && data && data.length > 0 && data[0] === 0x64) {
+				return { valid: true, data };
 			}
 
-			// Check first byte - torrent files start with 'd' (bencoded dict)
-			const buffer = await response.arrayBuffer();
-			const bytes = new Uint8Array(buffer);
-			if (bytes.length > 0 && bytes[0] === 0x64) {
-				return { valid: true, data: Buffer.from(buffer) };
-			}
+			this.log.warn(
+				{
+					// Cap it: when the definition could not extract its download
+					// variable the candidate URL can arrive as a whole page, and one
+					// grab would otherwise write kilobytes into the log.
+					url: redactUrl(url.slice(0, 200)),
+					status: result.status,
+					dataLength: data?.length ?? 0,
+					head,
+					usedBrowser: result.usedBrowser
+				},
+				data && data.length > 0
+					? 'Torrent link returned a non-bencoded payload (a page, not a .torrent)'
+					: 'Torrent link did not return a payload'
+			);
 			return { valid: false };
-		} catch {
+		} catch (error) {
+			this.log.warn(
+				{
+					url: redactUrl(url.slice(0, 200)),
+					error: error instanceof Error ? error.message : String(error)
+				},
+				'Torrent link validation failed'
+			);
 			return { valid: false };
 		}
 	}

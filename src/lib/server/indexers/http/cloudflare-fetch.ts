@@ -10,6 +10,7 @@
 
 import type { Cookie } from 'playwright-core';
 import { isCloudflareProtected } from './CloudflareDetection';
+import { rememberSolvedUserAgent } from './browser-session.js';
 import { captchaSolverSettingsService, getCaptchaSolver } from '#lib/server/captcha/index.js';
 import { createChildLogger } from '#lib/logging/index.js';
 
@@ -25,10 +26,19 @@ export interface CloudflareFetchOptions {
 	skipBrowserFallback?: boolean;
 	/** Response encoding (default: UTF-8) */
 	encoding?: string;
+	/**
+	 * Fetch a binary payload (e.g. a .torrent) instead of a document. The plain
+	 * path keeps the raw bytes, and a challenged fetch asks the solver for the
+	 * bytes through the browser context - the only route that passes a
+	 * tracker's TLS-fingerprint gate (see issue #663).
+	 */
+	binary?: boolean;
 }
 
 export interface CloudflareFetchResult {
 	body: string;
+	/** Raw payload when `binary: true` was requested (e.g. .torrent bytes) */
+	data?: Buffer;
 	status: number;
 	headers: Headers;
 	url: string;
@@ -88,7 +98,8 @@ export async function cloudflareFetch(
 		body,
 		timeout = 30000,
 		skipBrowserFallback = false,
-		encoding = 'UTF-8'
+		encoding = 'UTF-8',
+		binary = false
 	} = options;
 
 	// Try normal fetch first
@@ -114,6 +125,7 @@ export async function cloudflareFetch(
 			if (skipBrowserFallback) {
 				return {
 					body: responseBody,
+					data: binary ? buffer : undefined,
 					status: response.status,
 					headers: response.headers,
 					url: response.url,
@@ -146,7 +158,9 @@ export async function cloudflareFetch(
 					method,
 					body,
 					cookies: cookiesFromHeaders(headers, url),
-					timeout: Math.ceil(timeout / 1000)
+					timeout: Math.ceil(timeout / 1000),
+					binary,
+					referer: headers.Referer
 				});
 
 				if (browserResult.success) {
@@ -168,8 +182,14 @@ export async function cloudflareFetch(
 						}
 					}
 
+					// Keep what the solve earned: a `cf_clearance` is bound to the
+					// client that passed the challenge, so the replay must present
+					// the same User-Agent (as IndexerHttp already does).
+					rememberSolvedUserAgent(host, browserResult.userAgent);
+
 					return {
 						body: browserResult.body,
+						data: binary ? browserResult.data : undefined,
 						status: browserResult.status,
 						headers: responseHeaders,
 						url: browserResult.url,
@@ -190,6 +210,7 @@ export async function cloudflareFetch(
 		// Return normal response
 		return {
 			body: responseBody,
+			data: binary ? buffer : undefined,
 			status: response.status,
 			headers: response.headers,
 			url: response.url,

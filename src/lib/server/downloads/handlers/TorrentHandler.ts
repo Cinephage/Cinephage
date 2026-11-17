@@ -77,6 +77,31 @@ export class TorrentHandler {
 			return { success: false, error: `Failed to resolve download: ${resolvedDownload.error}` };
 		}
 
+		// A magnet at grab time is a degraded grab: the .torrent carries the
+		// file list, so without it no per-file selection can be applied and the
+		// whole pack comes down. Warn once, here, whatever branch the release
+		// takes - a season pack parses without an episode pointer, and the old
+		// warning lived inside the pointer branch only (#663). `release.magnetUrl`
+		// is set for indexers that publish magnets by design (public trackers),
+		// so only a grab that asked for a torrent file lands here.
+		if (
+			!resolvedDownload.torrentFile &&
+			resolvedDownload.magnetUrl &&
+			release.downloadUrl &&
+			!release.magnetUrl
+		) {
+			logger.warn(
+				{
+					title: release.title,
+					seasonNumber,
+					episodeIds,
+					magnetOnly: true,
+					perFileSelection: 'skipped'
+				},
+				'[TorrentHandler] Grab resolved to a magnet: no file list, the whole pack will download'
+			);
+		}
+
 		const episodePointerTarget =
 			parseEpisodePointerFromGuid(release.guid) ?? parseEpisodePointerFromTitle(release.title);
 		let pointerFileSelection: EpisodePointerFileSelection | undefined;
@@ -124,18 +149,7 @@ export class TorrentHandler {
 				// the import step match filenames. Do the same rather than refusing a
 				// grab the client can complete: add the magnet unselected and record
 				// the whole requested episode scope so import knows what is coming.
-				logger.warn(
-					{
-						title: release.title,
-						episodeIds,
-						seasonNumber,
-						magnetOnly: Boolean(resolvedDownload.magnetUrl),
-						// A magnet carries no file list, so the per-episode selection this
-						// grab exists for cannot be applied and the whole pack comes down.
-						perFileSelection: 'skipped'
-					},
-					'[TorrentHandler] No .torrent at grab time: downloading the full pack, per-episode selection skipped'
-				);
+				// (The magnet-only warning above already covers the log surface.)
 				if (episodeIds && episodeIds.length > 0) {
 					pointerEpisodeIds = episodeIds;
 				}

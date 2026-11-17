@@ -79,4 +79,47 @@ describe('cloudflareFetch', () => {
 		expect(result.status).toBe(200);
 		expect(result.usedBrowser).toBe(false);
 	});
+	it('returns raw bytes when a binary fetch is challenged', async () => {
+		// A `.torrent` is not a document: decoding it as text mangles it, and the
+		// browser fetch has to be asked for the payload as bytes (#663).
+		const bytes = Buffer.from('d8:announce23:http://bt4.t-ru.org/ann', 'latin1');
+		protectFetchWith(CHALLENGE_BODY, 403);
+		solverFetch.mockResolvedValue({
+			success: true,
+			status: 200,
+			body: '',
+			data: bytes,
+			headers: {},
+			cookies: [],
+			userAgent: 'ua',
+			url: 'https://rutracker.org/forum/dl.php?t=1',
+			timeMs: 10
+		});
+
+		const result = await cloudflareFetch('https://rutracker.org/forum/dl.php?t=1', {
+			headers: { Referer: 'https://rutracker.org/forum/viewtopic.php?t=1' },
+			binary: true
+		});
+
+		expect(solverFetch.mock.calls[0][0]).toMatchObject({
+			binary: true,
+			referer: 'https://rutracker.org/forum/viewtopic.php?t=1'
+		});
+		expect(result.usedBrowser).toBe(true);
+		expect(result.data).toEqual(bytes);
+	});
+
+	it('returns raw bytes on the plain path without launching a browser', async () => {
+		const bytes = 'd8:announce23:http://bt4.t-ru.org/ann';
+		protectFetchWith(bytes, 200);
+
+		const result = await cloudflareFetch('https://rutracker.org/forum/dl.php?t=1', {
+			headers: { Referer: 'https://rutracker.org/' },
+			binary: true
+		});
+
+		expect(solverFetch).not.toHaveBeenCalled();
+		expect(result.usedBrowser).toBe(false);
+		expect(result.data?.toString('latin1')).toBe(bytes);
+	});
 });
