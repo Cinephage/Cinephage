@@ -30,10 +30,6 @@ settings:
     type: checkbox
     label: Strip Cyrillic Letters
     default: false
-  - name: usemagnetlinks
-    type: checkbox
-    label: Use Magnet Links
-    default: false
 
 caps:
   modes:
@@ -541,8 +537,11 @@ search:
       selector: td.tor-size a.tr-dl
       attribute: href
       filters:
+        # Anchors arrive as dl.php?t=N, /forum/dl.php?t=N or an absolute URL
+        # depending on the page and mirror. The origin and /forum are both
+        # optional here, so prepending the site link cannot double it up (#663).
         - name: re_replace
-          args: ['^/?dl\.php', '/forum/dl.php']
+          args: ['^(?:https?://[^/]+)?(?:/forum)?/?dl\.php', '/forum/dl.php']
         - name: prepend
           args: '{{ re_replace .Config.sitelink "/$" "" }}'
     details:
@@ -550,7 +549,7 @@ search:
       attribute: href
       filters:
         - name: re_replace
-          args: ['^/?viewtopic\.php', '/forum/viewtopic.php']
+          args: ['^(?:https?://[^/]+)?(?:/forum)?/?viewtopic\.php', '/forum/viewtopic.php']
         - name: prepend
           args: '{{ re_replace .Config.sitelink "/$" "" }}'
     category:
@@ -596,7 +595,7 @@ download:
       attribute: href
       filters:
         - name: re_replace
-          args: ['^/?dl\.php', '/forum/dl.php']
+          args: ['^(?:https?://[^/]+)?(?:/forum)?/?dl\.php', '/forum/dl.php']
         - name: prepend
           args: '{{ re_replace .Config.sitelink "/$" "" }}'
   selectors:
