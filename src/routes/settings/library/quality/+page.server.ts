@@ -62,7 +62,11 @@ export const load: PageServerLoad = async ({ url }) => {
 
 		return {
 			...p,
+			upgradesAllowed: dbProfile?.upgradesAllowed ?? p.upgradesAllowed,
 			preventDowngrades: dbProfile?.preventDowngrades ?? p.preventDowngrades,
+			minScore: dbProfile?.minScore ?? p.minScore,
+			upgradeUntilScore: dbProfile?.upgradeUntilScore ?? p.upgradeUntilScore,
+			minScoreIncrement: dbProfile?.minScoreIncrement ?? p.minScoreIncrement,
 			formatScores: dbProfile?.formatScores ?? p.formatScores ?? {},
 			requiredFormats: dbProfile?.requiredFormats ?? [],
 			allowedIndexerIds: dbProfile?.allowedIndexerIds ?? null,

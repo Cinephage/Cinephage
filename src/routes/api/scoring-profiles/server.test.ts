@@ -380,6 +380,36 @@ describe('Scoring Profiles API', () => {
 			expect(data.isBuiltIn).toBe(true);
 		});
 
+		it('updates upgrade settings on a built-in profile', async () => {
+			const { status, data } = await api.put<ProfileResponse>(PUT, {
+				id: 'balanced',
+				upgradesAllowed: false,
+				minScore: 500,
+				minScoreIncrement: 25
+			});
+
+			expect(status).toBe(200);
+			expect(data.upgradesAllowed).toBe(false);
+			expect(data.minScore).toBe(500);
+			expect(data.minScoreIncrement).toBe(25);
+
+			const row = await testDb.db
+				.select()
+				.from(scoringProfiles)
+				.where(eq(scoringProfiles.id, 'balanced'))
+				.get();
+			expect(row?.upgradesAllowed).toBe(false);
+		});
+
+		it('still rejects renaming a built-in profile', async () => {
+			const { status } = await api.put<ProfileResponse>(PUT, {
+				id: 'balanced',
+				name: 'Renamed'
+			});
+
+			expect(status).toBe(400);
+		});
+
 		it('sets isDefault on built-in profile', async () => {
 			await api.post<ProfileResponse>(POST, {
 				id: 'temp-default',

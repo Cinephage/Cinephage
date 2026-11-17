@@ -269,16 +269,7 @@ export const PUT: RequestHandler = async (event) => {
 				throw new NotFoundError('Built-in profile', id);
 			}
 
-			const disallowedFields = [
-				'name',
-				'description',
-				'upgradesAllowed',
-				'minScore',
-				'upgradeUntilScore',
-				'minScoreIncrement',
-				'resolutionOrder',
-				'allowedProtocols'
-			];
+			const disallowedFields = ['name', 'description', 'resolutionOrder', 'allowedProtocols'];
 			const submittedDisallowed = disallowedFields.filter((f) => f in updateData);
 			if (submittedDisallowed.length > 0) {
 				throw new ValidationError(
@@ -293,8 +284,15 @@ export const PUT: RequestHandler = async (event) => {
 			const updateFields: Record<string, unknown> = {
 				updatedAt: new Date().toISOString()
 			};
+			if (updateData.upgradesAllowed !== undefined)
+				updateFields.upgradesAllowed = updateData.upgradesAllowed;
 			if (updateData.preventDowngrades !== undefined)
 				updateFields.preventDowngrades = updateData.preventDowngrades;
+			if (updateData.minScore !== undefined) updateFields.minScore = updateData.minScore;
+			if (updateData.upgradeUntilScore !== undefined)
+				updateFields.upgradeUntilScore = updateData.upgradeUntilScore;
+			if (updateData.minScoreIncrement !== undefined)
+				updateFields.minScoreIncrement = updateData.minScoreIncrement;
 			if (updateData.formatScores !== undefined)
 				updateFields.formatScores = updateData.formatScores;
 			if (updateData.requiredFormats !== undefined)
@@ -328,7 +326,12 @@ export const PUT: RequestHandler = async (event) => {
 
 			return Response.json({
 				...builtIn,
+				upgradesAllowed: updated.upgradesAllowed ?? true,
 				preventDowngrades: updated.preventDowngrades ?? false,
+				minScore: updated.minScore ?? 0,
+				upgradeUntilScore: updated.upgradeUntilScore ?? -1,
+				minScoreIncrement: updated.minScoreIncrement ?? 0,
+				requiredFormats: updated.requiredFormats ?? [],
 				formatScores: updated.formatScores ?? {},
 				allowedIndexerIds: updated.allowedIndexerIds ?? null,
 				movieMinSizeGb: toNullableNumber(updated.movieMinSizeGb),

@@ -6,6 +6,7 @@ import {
 	type TestDatabase
 } from '../../../test/db-helper';
 import { scoringProfiles } from '#lib/server/db/schema.js';
+import { eq } from 'drizzle-orm';
 import { COMPACT_PROFILE, BALANCED_PROFILE } from '../scoring';
 
 const testDb: TestDatabase = createTestDb();
@@ -139,6 +140,39 @@ describe('QualityFilter (database)', () => {
 			expect(profile.episodeMinSizeMb).toBe(100);
 			expect(profile.episodeMaxSizeMb).toBe(800);
 			expect(profile.name).toBe('My Custom');
+		});
+	});
+
+	describe('seedDefaultScoringProfiles', () => {
+		it('keeps user-edited upgrade settings on built-in profiles across a startup sync', async () => {
+			await filter.seedDefaultScoringProfiles();
+
+			testDb.db
+				.update(scoringProfiles)
+				.set({
+					upgradesAllowed: false,
+					preventDowngrades: false,
+					minScore: 123,
+					upgradeUntilScore: 456,
+					minScoreIncrement: 7
+				})
+				.where(eq(scoringProfiles.id, 'balanced'))
+				.run();
+
+			await filter.seedDefaultScoringProfiles();
+
+			const row = testDb.db
+				.select()
+				.from(scoringProfiles)
+				.where(eq(scoringProfiles.id, 'balanced'))
+				.get();
+
+			expect(row?.upgradesAllowed).toBe(false);
+			expect(row?.preventDowngrades).toBe(false);
+			expect(row?.minScore).toBe(123);
+			expect(row?.upgradeUntilScore).toBe(456);
+			expect(row?.minScoreIncrement).toBe(7);
+			expect(row?.name).toBe(BALANCED_PROFILE.name);
 		});
 	});
 
