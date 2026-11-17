@@ -66,11 +66,7 @@
 	let requiredFormatSearch = $state('');
 	// Modal title
 	const modalTitle = $derived(
-		mode === 'add'
-			? m.profiles_createProfile()
-			: profile?.isBuiltIn
-				? m.profiles_editSizeLimits()
-				: m.profiles_editProfile()
+		mode === 'add' ? m.profiles_createProfile() : m.profiles_editProfile()
 	);
 
 	// Form state
@@ -79,8 +75,7 @@
 	let copyFromId = $state<string>('');
 	let upgradesAllowed = $state(true);
 	let preventDowngrades = $state(true);
-	// Score thresholds (enforced at grab time; both are disallowed fields on
-	// built-in profiles, so they only apply to custom profiles)
+	// Score thresholds (enforced at grab time; editable on every profile)
 	let minScore = $state(0);
 	let minScoreIncrement = $state(0);
 	// Media-specific size limits (string inputs to preserve cursor/editing)
@@ -343,7 +338,10 @@
 
 		if (profile?.isBuiltIn) {
 			onSave({
+				upgradesAllowed,
 				preventDowngrades,
+				minScore: minScore ?? 0,
+				minScoreIncrement: minScoreIncrement ?? 0,
 				movieMinSizeGb: normalizeGbLimit(movieMinSizeGbValue),
 				movieMaxSizeGb: normalizeGbLimit(movieMaxSizeGbValue),
 				episodeMinSizeMb: normalizeMbLimit(episodeMinSizeMbValue),
@@ -535,7 +533,7 @@
 							type="checkbox"
 							class="checkbox checkbox-sm checkbox-primary"
 							bind:checked={upgradesAllowed}
-							disabled={isCoreReadonly}
+							disabled={isFullyReadonly}
 						/>
 						<span class="label-text">{m.profiles_allowUpgrades_label()}</span>
 					</label>
@@ -718,7 +716,7 @@
 							step={1}
 							class="input-bordered input input-sm"
 							bind:value={minScore}
-							disabled={isCoreReadonly}
+							disabled={isFullyReadonly}
 						/>
 						<div class="label py-0.5">
 							<span class="label-text-alt text-xs">
@@ -738,7 +736,7 @@
 							min={0}
 							class="input-bordered input input-sm"
 							bind:value={minScoreIncrement}
-							disabled={isCoreReadonly}
+							disabled={isFullyReadonly}
 						/>
 						<div class="label py-0.5">
 							<span class="label-text-alt text-xs">

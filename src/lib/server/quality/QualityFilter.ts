@@ -204,17 +204,15 @@ export class QualityFilter {
 				const dbFormatScores = existing.formatScores ?? {};
 				const mergedFormatScores = { ...codeFormatScores, ...dbFormatScores };
 
+				// upgradesAllowed, preventDowngrades, minScore, upgradeUntilScore and
+				// minScoreIncrement are user-editable on built-in profiles, so they are
+				// only written on insert and must survive every startup sync.
 				await db
 					.update(scoringProfiles)
 					.set({
 						name: profile.name,
 						description: profile.description ?? null,
 						tags: profile.tags ?? [],
-						upgradesAllowed: profile.upgradesAllowed ?? true,
-						preventDowngrades: profile.preventDowngrades ?? false,
-						minScore: profile.minScore ?? 0,
-						upgradeUntilScore: profile.upgradeUntilScore ?? -1,
-						minScoreIncrement: profile.minScoreIncrement ?? 0,
 						resolutionOrder: profile.resolutionOrder ?? null,
 						formatScores: mergedFormatScores,
 						allowedProtocols: profile.allowedProtocols ?? null,
