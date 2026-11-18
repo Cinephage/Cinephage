@@ -533,6 +533,12 @@ export const downloadClients = sqliteTable('download_clients', {
 	// Category settings (separate for movie/tv)
 	movieCategory: text('movie_category').default('movies'),
 	tvCategory: text('tv_category').default('tv'),
+	/**
+	 * Per-kind category map, e.g. { movie: 'Movies', tv: 'TV', music: 'Music' }.
+	 * The movie/tv columns stay as the source of truth for video; new kinds read
+	 * this map so adding one is not another column.
+	 */
+	categoryMap: text('category_map', { mode: 'json' }).$type<Record<string, string>>(),
 
 	// Priority settings
 	recentPriority: text('recent_priority').default('normal'), // 'normal' | 'high' | 'force'

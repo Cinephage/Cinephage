@@ -1,5 +1,13 @@
 <script lang="ts">
-	import { Clock, Disc3, CircleCheck, CircleDashed, Search, LoaderCircle } from '@lucide/svelte';
+	import {
+		Clock,
+		Disc3,
+		CircleCheck,
+		CircleDashed,
+		Search,
+		LoaderCircle,
+		Download
+	} from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 
 	let { data } = $props<{
@@ -45,6 +53,7 @@
 	}
 
 	type Candidate = {
+		guid: string | null;
 		title: string;
 		indexerName: string | null;
 		size: number | null;
@@ -56,6 +65,7 @@
 		sampleRateKhz?: number | null;
 		score?: number;
 		accepted?: boolean;
+		tierLabel?: string | null;
 		reasons?: string[];
 	};
 
@@ -67,6 +77,9 @@
 	}
 
 	let searchingReleases = $state(false);
+	let grabError = $state<string | null>(null);
+	let grabbed = $state<string | null>(null);
+	let grabbingGuid = $state<string | 'best' | null>(null);
 	let candidates = $state<Candidate[]>([]);
 	let releaseError = $state<string | null>(null);
 
@@ -87,6 +100,36 @@
 			releaseError = err instanceof Error ? err.message : m.music_searchFailed();
 		} finally {
 			searchingReleases = false;
+		}
+	}
+
+	async function grab(candidate: Candidate | null) {
+		if (grabbingGuid) return;
+		grabbingGuid = candidate?.guid ?? 'best';
+		grabError = null;
+		grabbed = null;
+		try {
+			const response = await fetch(`/api/music/albums/${album.id}/grab`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(candidate?.guid ? { releaseGuid: candidate.guid } : {})
+			});
+			const body = await response.json();
+			if (!response.ok) {
+				grabError = body.details ?? body.error ?? m.music_grabFailed();
+				return;
+			}
+			grabbed = body.title ?? candidate?.title ?? '';
+			// The accepted set changes once a download is in flight.
+			candidates = candidates.map((entry) =>
+				entry.guid === (candidate?.guid ?? null)
+					? { ...entry, accepted: false, reasons: [m.music_grabInFlight()] }
+					: entry
+			);
+		} catch (err) {
+			grabError = err instanceof Error ? err.message : m.music_grabFailed();
+		} finally {
+			grabbingGuid = null;
 		}
 	}
 
@@ -188,7 +231,27 @@
 					{/if}
 					{m.music_findReleases()}
 				</button>
+				{#if candidates.some((candidate) => candidate.accepted)}
+					<button
+						class="btn btn-primary btn-sm"
+						disabled={grabbingGuid !== null}
+						onclick={() => grab(null)}
+					>
+						{#if grabbingGuid === 'best'}
+							<LoaderCircle class="h-4 w-4 animate-spin" />
+						{:else}
+							<Download class="h-4 w-4" />
+						{/if}
+						{m.music_grabBest()}
+					</button>
+				{/if}
 			</div>
+			{#if grabError}
+				<p class="text-sm text-error">{grabError}</p>
+			{/if}
+			{#if grabbed}
+				<p class="text-sm text-success">{m.music_grabbed({ title: grabbed })}</p>
+			{/if}
 			{#if releaseError}
 				<p class="text-sm opacity-70">{releaseError}</p>
 			{/if}
@@ -201,6 +264,7 @@
 							<th class="w-24 text-right">{m.music_size()}</th>
 							<th class="w-24">{m.music_quality()}</th>
 							<th class="w-20 text-right">{m.music_seeders()}</th>
+							<th class="w-16"></th>
 						</tr>
 					</thead>
 					<tbody>
@@ -218,6 +282,22 @@
 									{/if}
 								</td>
 								<td class="text-right tabular-nums">{candidate.seeders ?? '–'}</td>
+								<td class="text-right">
+									<button
+										class="btn btn-ghost btn-xs"
+										disabled={grabbingGuid !== null || candidate.accepted === false}
+										title={candidate.accepted === false
+											? (candidate.reasons?.[0] ?? m.music_grabFailed())
+											: (candidate.tierLabel ?? '')}
+										onclick={() => grab(candidate)}
+									>
+										{#if grabbingGuid === candidate.guid}
+											<LoaderCircle class="h-3 w-3 animate-spin" />
+										{:else}
+											{m.music_grab()}
+										{/if}
+									</button>
+								</td>
 							</tr>
 						{/each}
 					</tbody>

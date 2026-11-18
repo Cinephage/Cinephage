@@ -222,8 +222,11 @@ import {
  * Version 182: download_queue.media_item_id - a music (and later book) grab is
  *   stored against the spine identity instead of growing another movie/series
  *   column pair. Additive ALTER, no rebuild.
+ * Version 183: download_clients.category_map - per-kind download categories as
+ *   JSON, backfilled from movie_category/tv_category, so a new media kind reads
+ *   the map instead of gaining another column.
  */
-export const CURRENT_SCHEMA_VERSION = 182;
+export const CURRENT_SCHEMA_VERSION = 183;
 
 /**
  * Seed rows for the *legacy* backfill in migration 078 only.
@@ -383,6 +386,7 @@ const TABLE_DEFINITIONS: string[] = [
 		"remove_after_import" integer DEFAULT 0,
 		"movie_category" text DEFAULT 'movies',
 		"tv_category" text DEFAULT 'tv',
+		"category_map" text,
 		"recent_priority" text DEFAULT 'normal',
 		"older_priority" text DEFAULT 'normal',
 		"initial_state" text DEFAULT 'start',

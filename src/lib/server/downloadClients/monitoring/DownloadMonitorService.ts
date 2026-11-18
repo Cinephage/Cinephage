@@ -793,10 +793,12 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 
 							if (!isTracked) {
 								// Check if it's in our category (if client supports categories)
+								const categoryMap = (client.categoryMap ?? {}) as Record<string, string>;
 								const isOurCategory =
 									!client.tvCategory ||
 									download.category === client.tvCategory ||
-									download.category === client.movieCategory;
+									download.category === client.movieCategory ||
+									Object.values(categoryMap).includes(download.category ?? '');
 
 								if (isOurCategory) {
 									orphanedDownloads.push(download);
@@ -983,10 +985,12 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 						const hashLower = download.hash.toLowerCase();
 
 						// Skip if not in our category
+						const categoryMap = (client.categoryMap ?? {}) as Record<string, string>;
 						const isOurCategory =
 							!client.tvCategory ||
 							download.category === client.tvCategory ||
-							download.category === client.movieCategory;
+							download.category === client.movieCategory ||
+							Object.values(categoryMap).includes(download.category ?? '');
 
 						if (!isOurCategory) {
 							continue;
@@ -2629,6 +2633,8 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 		protocol?: string;
 		movieId?: string;
 		seriesId?: string;
+		/** Spine identity for kinds without a movie/series row (music today). */
+		mediaItemId?: string;
 		episodeIds?: string[];
 		seasonNumber?: number;
 		quality?: QueueItem['quality'];
@@ -2710,6 +2716,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 					magnetUrl: params.magnetUrl,
 					protocol: params.protocol || 'torrent',
 					movieId: params.movieId,
+					mediaItemId: params.mediaItemId ?? null,
 					seriesId: params.seriesId,
 					episodeIds: params.episodeIds,
 					seasonNumber: params.seasonNumber,

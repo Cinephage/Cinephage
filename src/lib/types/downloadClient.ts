@@ -66,6 +66,12 @@ export interface DownloadClient {
 	// Categories
 	movieCategory: string;
 	tvCategory: string;
+	/**
+	 * Per-kind categories, e.g. { movie: "Movies", tv: "TV", music: "Music" }.
+	 * Video keeps using the two columns above; kinds added later read this map so
+	 * a new kind is not another column on every client.
+	 */
+	categoryMap?: Record<string, string> | null;
 
 	// Priority
 	recentPriority: DownloadPriority;
