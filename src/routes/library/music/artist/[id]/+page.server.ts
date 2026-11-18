@@ -3,14 +3,15 @@ import type { PageServerLoad } from './$types.js';
 import { requireAdminPage } from '#lib/server/auth/authorization.js';
 import { musicAlbumService } from '#lib/server/music/MusicAlbumService.js';
 import { musicArtistService } from '#lib/server/music/MusicArtistService.js';
+import { musicTrackService } from '#lib/server/music/MusicTrackService.js';
 
 /**
- * One artist's shelf: the artist row plus its albums.
+ * One artist's shelf: the artist row, its albums and the songs inside them.
  *
  * The artist is a library entity here, not a MusicBrainz lookup — this page is
  * reached from the library grid, and a slow upstream must never stand between
- * the owner and their own records. The MusicBrainz link in the hero is how you
- * get to the catalogue side.
+ * the owner and their own records. Albums carry their tracklists so the page
+ * can expand one in place, the way a series page expands a season.
  */
 export const load: PageServerLoad = async ({ locals, params }) => {
 	requireAdminPage(locals);
@@ -19,13 +20,21 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	if (!artist) error(404, 'Artist not found');
 
 	const albums = musicAlbumService.listAlbums({ artistId: artist.id });
+	const songs = musicTrackService.listTracks({ artistId: artist.id });
+	const byAlbum = new Map<string, typeof songs>();
+	for (const song of songs) {
+		byAlbum.set(song.albumId, [...(byAlbum.get(song.albumId) ?? []), song]);
+	}
 
 	return {
 		artist,
-		albums,
+		albums: albums.map((album) => ({ ...album, tracks: byAlbum.get(album.id) ?? [] })),
+		songs,
 		counts: {
 			albums: albums.length,
-			inLibrary: albums.filter((album) => album.hasFile).length
+			inLibrary: albums.filter((album) => album.hasFile).length,
+			songs: songs.length,
+			songsWithFile: songs.filter((song) => song.hasFile).length
 		}
 	};
 };

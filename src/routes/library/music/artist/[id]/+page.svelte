@@ -1,19 +1,56 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import type { PageData } from './$types.js';
-	import { LoaderCircle, Plus, Search } from '@lucide/svelte';
+	import { Disc3, LoaderCircle, Music, Plus, Search } from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import ArtistHero from '#lib/components/music/ArtistHero.svelte';
-	import AlbumCard from '#lib/components/music/AlbumCard.svelte';
+	import AlbumAccordion from '#lib/components/music/AlbumAccordion.svelte';
+	import TrackTable from '#lib/components/music/TrackTable.svelte';
+	import type { AlbumWithTracks } from '#lib/components/music/music-card.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 
 	let { data }: { data: PageData } = $props();
 
 	const artist = $derived(data.artist);
-	const albums = $derived(
+	const albums = $derived<AlbumWithTracks[]>(
 		[...data.albums].sort((a, b) => (a.year ?? 9999) - (b.year ?? 9999) || a.title.localeCompare(b.title))
 	);
 	const coverAlbum = $derived(albums.find((album) => album.hasCover) ?? null);
+
+	/**
+	 * Discography grouped the way a series page groups seasons: the primary type
+	 * is the section (Albums, EPs, Singles…), and the section order is stable so
+	 * the page does not reshuffle as albums are added.
+	 */
+	const TYPE_ORDER = ['Album', 'EP', 'Single', 'Broadcast', 'Other'];
+	const groupLabel = (type: string): string =>
+		type === 'Album'
+			? m.music_tabAlbums()
+			: type === 'EP'
+				? m.music_groupEps()
+				: type === 'Single'
+					? m.music_groupSingles()
+					: type;
+
+	const groups = $derived.by(() => {
+		const map = new Map<string, AlbumWithTracks[]>();
+		for (const album of albums) {
+			const key = album.primaryType ?? 'Album';
+			map.set(key, [...(map.get(key) ?? []), album]);
+		}
+		return [...map.entries()].sort(
+			(a, b) =>
+				(TYPE_ORDER.indexOf(a[0]) === -1 ? 99 : TYPE_ORDER.indexOf(a[0])) -
+				(TYPE_ORDER.indexOf(b[0]) === -1 ? 99 : TYPE_ORDER.indexOf(b[0]))
+		);
+	});
+
+	let tab = $state<'albums' | 'songs'>('albums');
+	let openAlbumId = $state<string | null>(null);
+
+	function toggleAlbum(albumId: string) {
+		openAlbumId = openAlbumId === albumId ? null : albumId;
+	}
 
 	// Optimistic toggle: null follows the server value, an override survives
 	// until the PATCH settles (and reverts on failure).
@@ -106,9 +143,9 @@
 				{#if monitorBusy}
 					<LoaderCircle class="h-4 w-4 animate-spin" />
 				{:else if monitored}
-					{m.common_monitored()}
+					{m.music_unmonitorAction()}
 				{:else}
-					{m.common_unmonitored()}
+					{m.music_monitorAction()}
 				{/if}
 			</button>
 			{#if artist.mbid}
@@ -124,35 +161,81 @@
 		{/snippet}
 	</ArtistHero>
 
-	<div class="mt-6">
-		<div class="mb-3 flex items-center justify-between">
-			<h2 class="text-sm font-semibold tracking-wide uppercase text-base-content/50">
-				{m.music_discography()}
-			</h2>
-			<a class="link link-hover text-xs text-base-content/50" href="/discover?type=music">
-				{m.music_browseDiscover()}
-			</a>
+	<!-- Stat strip: the series page's "episodes / files / complete" row, in music terms. -->
+	<div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+		<div class="rounded-xl border border-base-content/10 bg-base-100 px-4 py-3">
+			<p class="text-xs text-base-content/45">{m.music_tabAlbums()}</p>
+			<p class="text-lg font-semibold tabular-nums">{data.counts.albums}</p>
 		</div>
+		<div class="rounded-xl border border-base-content/10 bg-base-100 px-4 py-3">
+			<p class="text-xs text-base-content/45">{m.music_tabSongs()}</p>
+			<p class="text-lg font-semibold tabular-nums">{data.counts.songs}</p>
+		</div>
+		<div class="rounded-xl border border-base-content/10 bg-base-100 px-4 py-3">
+			<p class="text-xs text-base-content/45">{m.common_downloaded()}</p>
+			<p class="text-lg font-semibold tabular-nums text-success">{data.counts.songsWithFile}</p>
+		</div>
+		<div class="rounded-xl border border-base-content/10 bg-base-100 px-4 py-3">
+			<p class="text-xs text-base-content/45">{m.common_missing()}</p>
+			<p class="text-lg font-semibold tabular-nums {data.counts.songs - data.counts.songsWithFile > 0 ? 'text-warning' : ''}">
+				{data.counts.songs - data.counts.songsWithFile}
+			</p>
+		</div>
+	</div>
 
+	<div class="mt-5 flex items-center justify-between gap-3 border-b border-base-content/10">
+		<div class="flex items-center gap-1">
+			<button
+				class="flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors {tab ===
+				'albums'
+					? 'border-primary text-primary'
+					: 'border-transparent text-base-content/55 hover:text-base-content'}"
+				onclick={() => (tab = 'albums')}
+			>
+				<Disc3 class="h-4 w-4" />
+				{m.music_tabAlbums()}
+				<span class="badge badge-sm badge-ghost">{albums.length}</span>
+			</button>
+			<button
+				class="flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors {tab ===
+				'songs'
+					? 'border-primary text-primary'
+					: 'border-transparent text-base-content/55 hover:text-base-content'}"
+				onclick={() => (tab = 'songs')}
+			>
+				<Music class="h-4 w-4" />
+				{m.music_tabSongs()}
+				<span class="badge badge-sm badge-ghost">{data.counts.songs}</span>
+			</button>
+		</div>
+		<a class="link link-hover text-xs text-base-content/50" href="/discover?type=music">
+			{m.music_browseDiscover()}
+		</a>
+	</div>
+
+	<div class="mt-4">
 		{#if albums.length === 0}
 			<div class="rounded-xl border border-dashed border-base-content/15 px-6 py-14 text-center">
 				<Search class="mx-auto mb-3 h-8 w-8 text-base-content/25" />
 				<p class="font-medium">{m.music_artistEmpty()}</p>
 				<p class="mt-1 text-sm text-base-content/55">{m.music_artistEmptyHint()}</p>
 			</div>
+		{:else if tab === 'songs'}
+			<TrackTable tracks={data.songs} showArtist={false} />
 		{:else}
-			<ul class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-				{#each albums as album (album.id)}
-					<li>
-						<AlbumCard
-							{album}
-							href={`/library/music/${album.id}`}
-							coverUrl={album.hasCover ? `/api/music/albums/${album.id}/cover` : null}
-							showMonitor
-						/>
-					</li>
+			<div class="space-y-6">
+				{#each groups as [type, groupAlbums] (type)}
+					<section>
+						<div class="mb-2 flex items-center gap-2">
+							<h2 class="text-xs font-semibold tracking-wide uppercase text-base-content/45">
+								{groupLabel(type)}
+							</h2>
+							<span class="badge badge-xs badge-ghost">{groupAlbums.length}</span>
+						</div>
+						<AlbumAccordion albums={groupAlbums} {openAlbumId} onToggle={toggleAlbum} />
+					</section>
 				{/each}
-			</ul>
+			</div>
 		{/if}
 	</div>
 </div>

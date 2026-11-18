@@ -83,3 +83,21 @@ export function formatRuntime(seconds: number | null | undefined): string | null
 	if (hours > 0) return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
 	return `${minutes}m`;
 }
+
+/** Album plus its tracklist — the shape the artist page's accordion needs. */
+export type AlbumWithTracks = AlbumCardData & { tracks: TrackListTrack[] };
+
+/** One row of the songs table, across the whole library. */
+export interface TrackTableRow {
+	id: string;
+	albumId: string;
+	albumTitle: string;
+	artistId: string;
+	artistName: string;
+	title: string;
+	artistCredit: string | null;
+	discNumber: number | null;
+	trackNumber: number | null;
+	duration: number | null;
+	hasFile: boolean | null;
+}

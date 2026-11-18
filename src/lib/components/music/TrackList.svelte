@@ -61,6 +61,16 @@
 			</div>
 		{/if}
 		<table class="table table-sm">
+			<thead>
+				<tr class="border-none bg-base-200/30 text-[11px] text-base-content/45">
+					<th class="w-12 text-right font-medium">#</th>
+					<th class="font-medium">{m.common_title()}</th>
+					<th class="w-20 text-right font-medium">{m.music_durationLabel()}</th>
+					{#if showFileState}
+						<th class="w-10"></th>
+					{/if}
+				</tr>
+			</thead>
 			<tbody>
 				{#each discTracks as track (track.id)}
 					<tr class="group border-none hover:bg-base-200/50">

@@ -3,6 +3,7 @@ import { requireAdminPage } from '#lib/server/auth/authorization.js';
 import { getLibraryEntityService } from '#lib/server/library/LibraryEntityService.js';
 import { musicAlbumService } from '#lib/server/music/MusicAlbumService.js';
 import { musicArtistService } from '#lib/server/music/MusicArtistService.js';
+import { musicTrackService } from '#lib/server/music/MusicTrackService.js';
 import type { ArtistCardData } from '#lib/components/music/music-card.js';
 
 /**
@@ -22,6 +23,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const libraryId = library?.id ?? null;
 
 	const albums = musicAlbumService.listAlbums({ libraryId });
+	const songs = musicTrackService.listTracks({ libraryId });
 	const artistRows = musicArtistService.listArtists([
 		...new Set(albums.map((album) => album.artistId))
 	]);
@@ -52,9 +54,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 			: null,
 		albums,
 		artists,
+		songs,
 		counts: {
 			albums: albums.length,
 			artists: artists.length,
+			songs: songs.length,
 			missing: albums.filter((album) => !album.hasFile).length,
 			monitored: albums.filter((album) => album.monitored).length
 		}

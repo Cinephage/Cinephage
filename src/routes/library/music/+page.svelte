@@ -16,20 +16,24 @@
 	import * as m from '#lib/paraglide/messages.js';
 	import AlbumCard from '#lib/components/music/AlbumCard.svelte';
 	import ArtistCard from '#lib/components/music/ArtistCard.svelte';
+	import TrackTable from '#lib/components/music/TrackTable.svelte';
 	import MusicAddModal from '#lib/components/music/MusicAddModal.svelte';
 	import type { AlbumCardData, ArtistCardData } from '#lib/components/music/music-card.js';
 	import { formatRuntime } from '#lib/components/music/music-card.js';
 
 	let { data }: { data: PageData } = $props();
 
-	type Tab = 'artists' | 'albums';
+	type Tab = 'artists' | 'albums' | 'songs';
 	type FileFilter = 'all' | 'downloaded' | 'missing';
 	type MonitorFilter = 'all' | 'monitored' | 'unmonitored';
 	type Sort = 'artist-asc' | 'title-asc' | 'year-desc' | 'year-asc' | 'tracks-desc';
 
 	const initial = new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search);
 
-	let tab = $state<Tab>(initial.get('tab') === 'albums' ? 'albums' : 'artists');
+	const initialTab = initial.get('tab');
+	let tab = $state<Tab>(
+		initialTab === 'albums' || initialTab === 'songs' ? initialTab : 'artists'
+	);
 	let query = $state(initial.get('q') ?? '');
 	let sort = $state<Sort>((initial.get('sort') as Sort) ?? 'artist-asc');
 	let fileFilter = $state<FileFilter>((initial.get('file') as FileFilter) ?? 'all');
@@ -99,11 +103,26 @@
 			.sort((a, b) => a.name.localeCompare(b.name))
 	);
 
-	const activeFilterCount = $derived(
-		(fileFilter === 'all' ? 0 : 1) + (monitorFilter === 'all' ? 0 : 1)
+	const filteredSongs = $derived.by(() =>
+		data.songs.filter((song) => {
+			if (!matches(`${song.title} ${song.artistName} ${song.albumTitle}`)) return false;
+			if (fileFilter === 'downloaded' && !song.hasFile) return false;
+			if (fileFilter === 'missing' && song.hasFile) return false;
+			return true;
+		})
 	);
 
-	const totalShown = $derived(tab === 'artists' ? filteredArtists.length : filteredAlbums.length);
+	const activeFilterCount = $derived(
+		(fileFilter === 'all' ? 0 : 1) + (tab === 'songs' || monitorFilter === 'all' ? 0 : 1)
+	);
+
+	const totalShown = $derived(
+		tab === 'artists'
+			? filteredArtists.length
+			: tab === 'albums'
+				? filteredAlbums.length
+				: filteredSongs.length
+	);
 
 	// Keep the view in the URL so a reload and the detail page's back link land on
 	// the same slice. `replaceState`, not `goto`: filtering is not navigation.
@@ -243,6 +262,7 @@
 							{/each}
 						</div>
 					</div>
+					{#if tab !== 'songs'}
 					<div>
 						<p class="mb-1.5 text-xs font-medium text-base-content/50">{m.music_filterMonitoring()}</p>
 						<div class="join">
@@ -257,6 +277,7 @@
 							{/each}
 						</div>
 					</div>
+					{/if}
 					{#if activeFilterCount > 0}
 						<button class="btn btn-ghost btn-xs" onclick={clearFilters}>
 							{m.library_movies_clearFilters()}
@@ -297,6 +318,10 @@
 				<button class="tab gap-1.5" class:tab-active={tab === 'albums'} onclick={() => (tab = 'albums')}>
 					{m.music_tabAlbums()}
 					<span class="badge badge-sm badge-ghost">{data.counts.albums}</span>
+				</button>
+				<button class="tab gap-1.5" class:tab-active={tab === 'songs'} onclick={() => (tab = 'songs')}>
+					{m.music_tabSongs()}
+					<span class="badge badge-sm badge-ghost">{data.counts.songs}</span>
 				</button>
 			</div>
 
@@ -342,6 +367,8 @@
 					{m.library_movies_clearFilters()}
 				</button>
 			</div>
+		{:else if tab === 'songs'}
+			<TrackTable tracks={filteredSongs} />
 		{:else if view === 'grid' && tab === 'artists'}
 			<ul class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
 				{#each filteredArtists as artist (artist.id)}
