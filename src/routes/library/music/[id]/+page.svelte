@@ -51,7 +51,20 @@
 		seeders: number | null;
 		protocol: string | null;
 		isAudioCategory: boolean;
+		format?: string;
+		bitDepth?: number | null;
+		sampleRateKhz?: number | null;
+		score?: number;
+		accepted?: boolean;
+		reasons?: string[];
 	};
+
+	function qualityLabel(candidate: Candidate): string {
+		const format = (candidate.format ?? 'unknown').toUpperCase();
+		const depth = candidate.bitDepth ? ` ${candidate.bitDepth}-bit` : '';
+		const rate = candidate.sampleRateKhz ? `/${candidate.sampleRateKhz}` : '';
+		return `${format}${depth}${rate}`;
+	}
 
 	let searchingReleases = $state(false);
 	let candidates = $state<Candidate[]>([]);
@@ -186,6 +199,7 @@
 							<th>{m.music_titleHeader()}</th>
 							<th class="w-32">{m.music_indexer()}</th>
 							<th class="w-24 text-right">{m.music_size()}</th>
+							<th class="w-24">{m.music_quality()}</th>
 							<th class="w-20 text-right">{m.music_seeders()}</th>
 						</tr>
 					</thead>
@@ -195,6 +209,14 @@
 								<td class="truncate">{candidate.title}</td>
 								<td class="text-xs opacity-60">{candidate.indexerName ?? '–'}</td>
 								<td class="text-right tabular-nums opacity-70">{gib(candidate.size)}</td>
+								<td>
+									<span class="badge badge-sm" class:badge-ghost={candidate.accepted === false}>
+										{qualityLabel(candidate)}
+									</span>
+									{#if candidate.accepted === false && candidate.reasons?.length}
+										<span class="ml-1 text-xs opacity-50">{candidate.reasons[0]}</span>
+									{/if}
+								</td>
 								<td class="text-right tabular-nums">{candidate.seeders ?? '–'}</td>
 							</tr>
 						{/each}

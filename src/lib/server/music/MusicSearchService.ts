@@ -9,6 +9,11 @@ import {
 	calculateTitleSimilarity,
 	normalizeTitleForMatch
 } from '#lib/server/library/title-matching.js';
+import {
+	DEFAULT_MUSIC_PROFILE,
+	gradeMusicRelease,
+	type MusicQualityProfile
+} from './parse-release.js';
 
 const logger = createChildLogger({ module: 'MusicSearchService', logDomain: 'system' });
 
@@ -32,6 +37,19 @@ export interface MusicReleaseCandidate {
 	isAudioCategory: boolean;
 	/** 0-1 similarity between the release title and the album being searched for. */
 	relevance?: number;
+	/** Parsed format (flac/mp3/…) so the UI can say what the release actually is. */
+	format?: string;
+	bitDepth?: number | null;
+	sampleRateKhz?: number | null;
+	/** Profile score, 0-1000, same scale as video profiles. */
+	score?: number;
+	/** False when the quality profile rejects it (no tier matches, size bounds…). */
+	accepted?: boolean;
+	/** Ladder rung, 0 = best; -1 when nothing matched. */
+	tierIndex?: number;
+	tierLabel?: string | null;
+	/** Why it was rejected, when it was. */
+	reasons?: string[];
 }
 
 /** Audio categories are the only ones worth offering for an album. */
@@ -53,13 +71,24 @@ const RELEVANCE_FLOOR = 0.55;
  */
 export function rankCandidates<T extends MusicReleaseCandidate>(candidates: T[]): T[] {
 	return [...candidates].sort((a, b) => {
+		// 1. Is it this album at all? A rejected FLAC of the wrong album is noise.
 		const relevantA = (a.relevance ?? 0) >= RELEVANCE_FLOOR;
 		const relevantB = (b.relevance ?? 0) >= RELEVANCE_FLOOR;
 		if (relevantA !== relevantB) return relevantA ? -1 : 1;
-		if (relevantA && relevantB) {
-			const relevance = (b.relevance ?? 0) - (a.relevance ?? 0);
-			if (Math.abs(relevance) > 0.01) return relevance;
-		}
+
+		// 2. Does the quality profile accept it? Only then does quality matter.
+		if ((a.accepted ?? true) !== (b.accepted ?? true)) return a.accepted ? -1 : 1;
+
+		// 3. Quality is the ranking: the profile's ladder rung first, then the
+		// tie-break score inside that rung. Seeders never outrank quality — a
+		// fallback to a lower rung is `allowFallback` on the profile, not a
+		// well-seeded worse copy.
+		const tier = (a.tierIndex ?? 99) - (b.tierIndex ?? 99);
+		if (tier !== 0) return tier;
+		const score = (b.score ?? 0) - (a.score ?? 0);
+		if (score !== 0) return score;
+
+		// 4. Equal quality: category, then seeders (availability breaks ties only).
 		if (a.isAudioCategory !== b.isAudioCategory) return a.isAudioCategory ? -1 : 1;
 		const seeders = (b.seeders ?? 0) - (a.seeders ?? 0);
 		if (seeders !== 0) return seeders;
@@ -94,13 +123,15 @@ export function albumRelevance(releaseTitle: string, albumTitle: string): number
 export class MusicSearchService {
 	async searchForAlbum(
 		albumId: string,
-		options: { limit?: number } = {}
+		options: { limit?: number; profile?: MusicQualityProfile } = {}
 	): Promise<{
 		albumId: string;
 		title: string;
 		artist: string;
+		profile: { id: string; name: string };
 		candidates: MusicReleaseCandidate[];
 	}> {
+		const profile = options.profile ?? DEFAULT_MUSIC_PROFILE;
 		const row = db
 			.select({ title: albums.title, year: albums.year, artist: artists.name })
 			.from(albums)
@@ -125,6 +156,10 @@ export class MusicSearchService {
 
 		const candidates = (result.releases ?? []).map((release) => {
 			const categories = (release.categories ?? []).map(Number);
+			const grade = gradeMusicRelease(profile, {
+				title: release.title,
+				size: release.size ?? null
+			});
 			return {
 				title: release.title,
 				guid: release.guid ?? null,
@@ -139,7 +174,15 @@ export class MusicSearchService {
 				magnetUrl: release.magnetUrl ?? null,
 				infoHash: release.infoHash ?? null,
 				isAudioCategory: categories.some(isAudioCategory),
-				relevance: albumRelevance(release.title, row.title)
+				relevance: albumRelevance(release.title, row.title),
+				format: grade.parsed.format,
+				bitDepth: grade.parsed.bitDepth,
+				sampleRateKhz: grade.parsed.sampleRateKhz,
+				score: grade.score,
+				accepted: grade.accepted,
+				tierIndex: grade.tierIndex,
+				tierLabel: grade.tierLabel,
+				reasons: grade.reasons
 			} satisfies MusicReleaseCandidate;
 		});
 
@@ -152,6 +195,7 @@ export class MusicSearchService {
 			albumId,
 			title: row.title,
 			artist: row.artist,
+			profile: { id: profile.id, name: profile.name },
 			candidates: rankCandidates(candidates)
 		};
 	}

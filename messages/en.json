@@ -2582,6 +2582,7 @@
 	"music_indexer": "Indexer",
 	"music_size": "Size",
 	"music_seeders": "Seeders",
+	"music_quality": "Quality",
 	"music_noRootFolder": "no root folder configured",
 	"music_addAlbum": "Add album",
 	"music_artistLabel": "Artist",
