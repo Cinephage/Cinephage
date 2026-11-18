@@ -1,6 +1,7 @@
 import { resolveWithOriginalLanguage } from '#lib/server/discover.js';
 import { catalogSource, catalogSourceForKind } from '#lib/server/catalog/registry.js';
 import { legacyRows } from '#lib/server/catalog/tmdb.js';
+import { musicLegacyRows } from '#lib/server/catalog/deezer.js';
 import { contentFilterPipeline } from '#lib/server/filters/ContentFilterPipeline.js';
 import { enrichWithReleaseDates } from '#lib/server/release-enrichment.js';
 import { db } from '#lib/server/db/index.js';
@@ -16,7 +17,7 @@ const logger = createChildLogger({ module: 'DiscoverApi', logDomain: 'system' })
  * Query parameter validation schema for discover endpoint.
  */
 const discoverQuerySchema = z.object({
-	type: z.enum(['movie', 'tv', 'all']).default('all'),
+	type: z.enum(['movie', 'tv', 'music', 'all']).default('all'),
 	page: z.coerce.number().int().min(1).default(1),
 	sort_by: z.string().default('popularity.desc'),
 	trending: z.enum(['day', 'week']).optional(),
@@ -74,11 +75,11 @@ export const GET: RequestHandler = async ({ url }) => {
 			storedOriginalFilter
 		);
 
-		// The catalog source owns the rows: 'movie'/'tv' resolve by kind, 'all'
+		// The catalog source owns the rows: each kind resolves by source, 'all'
 		// stays on the browse source, whose own discover merges its kinds. A
 		// kind no source serves answers 400 instead of an empty grid.
 		const source =
-			params.type === 'movie' || params.type === 'tv'
+			params.type === 'movie' || params.type === 'tv' || params.type === 'music'
 				? catalogSourceForKind(params.type)
 				: catalogSource('tmdb');
 		if (!source) {
@@ -109,6 +110,16 @@ export const GET: RequestHandler = async ({ url }) => {
 		});
 		if (!catalog) {
 			return Response.json({ error: 'Catalog source unavailable' }, { status: 503 });
+		}
+
+		if (params.type === 'music') {
+			// Music rows keep provider ids as strings and skip the video
+			// pipelines (tmdbId blocklists and release-date enrichment are
+			// keyed to movie/tv).
+			return Response.json({
+				results: musicLegacyRows(catalog.items),
+				pagination: catalog.pagination
+			});
 		}
 
 		const results = legacyRows(catalog.items) as DiscoverRow[];

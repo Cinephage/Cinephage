@@ -24,7 +24,6 @@ describe('tmdb catalog source', () => {
 		expect(tmdbCatalogSource.kinds).toEqual(['movie', 'tv']);
 		expect(catalogSourceForKind('movie')).toBe(tmdbCatalogSource);
 		expect(catalogSourceForKind('tv')).toBe(tmdbCatalogSource);
-		expect(catalogSourceForKind('music')).toBeNull();
 	});
 
 	it('finds the source by id', () => {

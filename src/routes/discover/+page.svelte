@@ -8,6 +8,8 @@
 	import { tick } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import MediaCard from '#lib/components/tmdb/MediaCard.svelte';
+	import MusicRowCard from '#lib/components/discover/MusicRowCard.svelte';
+	import type { MusicRowItem } from '#lib/components/discover/music-row-item.js';
 	import FilterDrawer from '#lib/components/discover/FilterDrawer.svelte';
 	import SectionRow from '#lib/components/discover/SectionRow.svelte';
 	import SelectionActionBar from '#lib/components/discover/SelectionActionBar.svelte';
@@ -36,6 +38,11 @@
 	import { getMediaTypeLabel } from '#lib/types/tmdb-guards.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { searchTmdb, getDiscover, getDiscoverUnfiltered, getKeyword } from '#lib/api/index.js';
+
+	/** Music rows arrive as loose fetch JSON; their media_type field is untyped there. */
+	function isMusicRow(item: { media_type?: unknown }): boolean {
+		return item.media_type === 'music';
+	}
 
 	let { data } = $props();
 
@@ -839,7 +846,7 @@
 			class="flex flex-wrap items-center justify-between gap-2 border-t border-base-200/50 px-4 py-2 lg:px-8"
 		>
 			<div class="join" role="group" aria-label={m.discover_filter_mediaType()}>
-				{#each [{ value: 'all', label: m.common_all() }, { value: 'movie', label: m.common_movies() }, { value: 'tv', label: m.common_tvShows() }] as tab (tab.value)}
+				{#each [{ value: 'all', label: m.common_all() }, { value: 'movie', label: m.common_movies() }, { value: 'tv', label: m.common_tvShows() }, { value: 'music', label: m.nav_music() }] as tab (tab.value)}
 					<button
 						class="btn join-item btn-sm {type === tab.value
 							? 'btn-primary'
@@ -1104,13 +1111,18 @@
 
 				<div class="grid grid-cols-3 gap-2 sm:gap-4 lg:grid-cols-9">
 					{#each allResults as item (`${item.id}-${item.media_type ?? ''}`)}
-						<MediaCard
-							{item}
-							onAddToLibrary={addHandler}
-							selectable={selectMode}
-							selected={isItemSelected(item)}
-							onToggleSelect={() => toggleItemSelect(item)}
-						/>
+						{#if isMusicRow(item)}
+							<!-- Rows arrive as loose fetch JSON; the card owns the typed shape. -->
+							<MusicRowCard item={item as unknown as MusicRowItem} />
+						{:else}
+							<MediaCard
+								{item}
+								onAddToLibrary={addHandler}
+								selectable={selectMode}
+								selected={isItemSelected(item)}
+								onToggleSelect={() => toggleItemSelect(item)}
+							/>
+						{/if}
 					{/each}
 				</div>
 

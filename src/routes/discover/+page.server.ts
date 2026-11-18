@@ -1,5 +1,7 @@
 import { tmdb } from '#lib/server/tmdb.js';
 import { getDiscoverResults, resolveWithOriginalLanguage } from '#lib/server/discover.js';
+import { catalogSourceForKind } from '#lib/server/catalog/registry.js';
+import { musicLegacyRows } from '#lib/server/catalog/deezer.js';
 import { contentFilterPipeline } from '#lib/server/filters/ContentFilterPipeline.js';
 import type { WatchProvider } from '#lib/types/tmdb.js';
 import type { TmdbCertificationsResponse } from '#lib/server/tmdb.js';
@@ -453,6 +455,41 @@ export const load: PageServerLoad = async ({ url }) => {
 				}
 			};
 		} else {
+			// Music has no TMDB grammar: its rows come from the music catalog
+			// source and the video filter/enrichment pipelines skip it.
+			if (type === 'music') {
+				const musicSource = catalogSourceForKind('music');
+				let musicRows: Record<string, unknown>[] = [];
+				let musicPagination = { page: parseInt(page), total_pages: 0, total_results: 0 };
+				if (musicSource) {
+					const music = await musicSource.discover({ page: parseInt(page) });
+					if (music) {
+						musicRows = musicLegacyRows(music.items);
+						musicPagination = music.pagination;
+					}
+				}
+				return {
+					viewType: 'grid',
+					tmdbConfigured: true,
+					results: musicRows,
+					pagination: musicPagination,
+					providers: [],
+					networks: [],
+					genres: [],
+					certifications: [],
+					languages: [],
+					filters: {
+						type,
+						sort_by: sortBy,
+						trending,
+						with_watch_providers: withWatchProviders,
+						with_genres: withGenres,
+						with_original_language: withOriginalLanguage,
+						certification,
+						exclude_in_library: excludeInLibrary
+					}
+				};
+			}
 			// Use shared logic
 			const { results, pagination } = await getDiscoverResults({
 				type,

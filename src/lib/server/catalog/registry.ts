@@ -1,6 +1,7 @@
 import type { KindId } from '#lib/media-kinds/registry.js';
 import type { CatalogSource } from './types.js';
 import { tmdbCatalogSource } from './tmdb.js';
+import { deezerChartSource } from './deezer.js';
 
 export type { CatalogItem, CatalogPage, CatalogSource, Facet } from './types.js';
 
@@ -8,7 +9,10 @@ export type { CatalogItem, CatalogPage, CatalogSource, Facet } from './types.js'
 // registers one. Today one source serves each kind; when a kind grows a
 // second source (say, charts), the resolver becomes a list and the page
 // decides how to merge.
-const sources = new Map<string, CatalogSource>([['tmdb', tmdbCatalogSource]]);
+const sources = new Map<string, CatalogSource>([
+	['tmdb', tmdbCatalogSource],
+	['deezer', deezerChartSource]
+]);
 
 export function catalogSource(id: string): CatalogSource | undefined {
 	return sources.get(id);
