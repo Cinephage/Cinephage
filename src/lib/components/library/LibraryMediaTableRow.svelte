@@ -1,6 +1,4 @@
 <script lang="ts">
-	import type { LibraryMovie, LibrarySeries } from '#lib/types/library.js';
-	import { displayTitle } from '#lib/types/library.js';
 	import {
 		CheckCircle2,
 		XCircle,
@@ -9,76 +7,61 @@
 		Trash2,
 		Clapperboard,
 		Tv,
+		Disc3,
+		Mic2,
 		MoreVertical,
 		Zap,
 		Search,
 		Download
 	} from '@lucide/svelte';
 	import { resolvePath } from '#lib/utils/routing.js';
-	import { formatBytes, getStatusColor } from '#lib/utils/format.js';
 	import { formatRelativeDate } from '#lib/utils/format-relative-date.js';
-	import { formatSeriesStatus } from '#lib/utils/format-status.js';
-	import { getPosterUrl } from '#lib/utils/poster-url.js';
-	import type { MediaType } from '#lib/utils/media-type.js';
-	import {
-		isMovie,
-		isSeries,
-		getItemSize,
-		getQualityBadges,
-		isItemMissing
-	} from './mediaTableUtils.ts';
+	import type { LibraryKind, MediaRowView } from './media-view.js';
 	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
-		item: LibraryMovie | LibrarySeries;
-		mediaType: MediaType;
+		row: MediaRowView;
 		selected: boolean;
 		selectable: boolean;
 		idx: number;
 		isLoading: boolean;
 		downloadingIds: Set<string>;
-		hasStreamerProfile: boolean;
-		profileName: string | null;
-		isTv: boolean;
+		showProgress: boolean;
 		onSelectChange: (id: string, selected: boolean) => void;
-		onMonitorToggle?: (id: string) => void;
+		onMonitorToggle?: (id: string, monitored: boolean) => void;
 		onAutoGrab?: (id: string) => void;
 		onManualGrab?: (id: string) => void;
 		onDelete?: (id: string) => void;
 		onNavigate: () => void;
-		/** Instance default for items with no explicit prefer-original flag. */
-		preferOriginalTitleDefault?: boolean | null;
 	}
 
 	let {
-		item,
-		mediaType,
+		row,
 		selected,
 		selectable,
 		idx,
 		isLoading,
 		downloadingIds,
-		hasStreamerProfile,
-		profileName,
-		isTv,
+		showProgress,
 		onSelectChange,
 		onMonitorToggle,
 		onAutoGrab,
 		onManualGrab,
 		onDelete,
-		onNavigate,
-		preferOriginalTitleDefault = false
+		onNavigate
 	}: Props = $props();
 
-	const itemIsMovie = $derived(isMovie(item));
-	const size = $derived(getItemSize(item));
-	const qualityBadges = $derived(getQualityBadges(item, () => hasStreamerProfile));
-	const missing = $derived(isItemMissing(item));
+	const FALLBACK_ICON: Record<LibraryKind, typeof Clapperboard> = {
+		movie: Clapperboard,
+		tv: Tv,
+		album: Disc3,
+		artist: Mic2
+	};
+	const FallbackIcon = $derived(FALLBACK_ICON[row.kind]);
+	const missing = $derived(row.state?.tone === 'error');
+	const relDate = $derived(row.added ? formatRelativeDate(row.added) : null);
 	const isNearBottom = $derived(idx >= 10);
-	const relDate = $derived(formatRelativeDate(item.added));
-	const partiallyMonitored = $derived(
-		isSeries(item) && (item as LibrarySeries).partiallyMonitored === true
-	);
+	const downloading = $derived(downloadingIds.has(row.id));
 </script>
 
 <tr
@@ -99,54 +82,54 @@
 				type="checkbox"
 				class="checkbox checkbox-sm checkbox-primary"
 				checked={selected}
-				onchange={(e) => onSelectChange(item.id, e.currentTarget.checked)}
+				onchange={(e) => onSelectChange(row.id, e.currentTarget.checked)}
 			/>
 		</td>
 	{/if}
 
 	<td>
-		{#if item.posterPath}
-			<a href={resolvePath(`/library/${mediaType}/${item.id}`)}>
+		<a href={resolvePath(row.href)} class="block h-14 w-10 overflow-hidden rounded bg-base-300">
+			{#if row.art?.source === 'tmdb'}
 				<img
-					src={getPosterUrl(item.posterPath)}
-					alt={item.title}
-					class="h-14 w-10 rounded object-cover"
+					src={`https://image.tmdb.org/t/p/w92${row.art.path}`}
+					alt={row.title}
+					class="h-full w-full object-cover"
 					loading="lazy"
 				/>
-			</a>
-		{:else}
-			<div class="flex h-14 w-10 items-center justify-center rounded bg-base-300">
-				{#if itemIsMovie}
-					<Clapperboard class="h-4 w-4 opacity-40" />
-				{:else}
-					<Tv class="h-4 w-4 opacity-40" />
-				{/if}
-			</div>
-		{/if}
+			{:else if row.art?.source === 'url'}
+				<img src={row.art.url} alt={row.title} class="h-full w-full object-cover" loading="lazy" />
+			{:else}
+				<div class="flex h-full w-full items-center justify-center">
+					<FallbackIcon class="h-4 w-4 opacity-40" />
+				</div>
+			{/if}
+		</a>
 	</td>
 
 	<td>
 		<a
-			href={resolvePath(`/library/${mediaType}/${item.id}`)}
+			href={resolvePath(row.href)}
 			class="block max-w-xs truncate text-base font-medium hover:text-primary"
 		>
-			{displayTitle(item, preferOriginalTitleDefault)}
+			{row.title}
 		</a>
-		{#if itemIsMovie && 'collectionName' in item && item.collectionName}
-			<span class="mt-0.5 badge badge-outline badge-xs">{item.collectionName}</span>
+		{#if row.tag}
+			<span class="mt-0.5 badge badge-outline badge-xs">{row.tag}</span>
+		{:else if row.subtitle}
+			<span class="mt-0.5 block max-w-xs truncate text-xs text-base-content/50">{row.subtitle}</span>
 		{/if}
 	</td>
 
 	<td>
-		<span class="text-base">{item.year ?? '-'}</span>
+		<span class="text-base">{row.year ?? '-'}</span>
 	</td>
 
 	<td>
 		<div class="flex items-center gap-1.5">
-			{#if item.monitored}
+			{#if row.monitored}
 				<span
-					class="badge gap-1.5 badge-sm {partiallyMonitored ? 'badge-warning' : 'badge-success'}"
-					title={partiallyMonitored
+					class="badge gap-1.5 badge-sm {row.partiallyMonitored ? 'badge-warning' : 'badge-success'}"
+					title={row.partiallyMonitored
 						? m.library_monitorToggle_partiallyMonitored()
 						: m.common_monitored()}
 				>
@@ -157,42 +140,33 @@
 					<EyeOff class="h-3.5 w-3.5" />
 				</span>
 			{/if}
-			{#if itemIsMovie}
-				{#if 'hasFile' in item && item.hasFile}
-					<span class="badge gap-1 badge-sm badge-success">
-						<CheckCircle2 class="h-3 w-3" />
-						{m.common_downloaded()}
-					</span>
-				{:else if downloadingIds.has(item.id)}
-					<span class="badge gap-1 badge-sm badge-info">
-						<Download class="h-3 w-3 animate-pulse" />
-						{m.status_downloading()}
-					</span>
-				{:else}
-					<span class="badge gap-1 badge-sm badge-warning">
-						<XCircle class="h-3 w-3" />
-						{m.common_missing()}
-					</span>
-				{/if}
-			{/if}
-			{#if isSeries(item) && item.status}
-				<span class="badge badge-sm {getStatusColor(item.status)}">
-					{formatSeriesStatus(item.status)}
+			{#if row.state?.icon === 'file'}
+				<span class="badge gap-1 badge-sm badge-success">
+					<CheckCircle2 class="h-3 w-3" />
+					{m.common_downloaded()}
 				</span>
+			{:else if downloading}
+				<span class="badge gap-1 badge-sm badge-info">
+					<Download class="h-3 w-3 animate-pulse" />
+					{m.status_downloading()}
+				</span>
+			{:else if row.state?.icon === 'cross'}
+				<span class="badge gap-1 badge-sm badge-warning">
+					<XCircle class="h-3 w-3" />
+					{m.common_missing()}
+				</span>
+			{:else if row.state}
+				<span class="badge badge-sm badge-ghost" title={row.state.label}>{row.state.label}</span>
 			{/if}
 		</div>
 	</td>
 
 	<td>
-		{#if isTv && isSeries(item)}
-			{#if profileName}
-				<span class="badge badge-outline badge-sm">{profileName}</span>
-			{:else}
-				<span class="text-base text-base-content/40">-</span>
-			{/if}
-		{:else if qualityBadges.length > 0}
+		{#if row.profileLabel}
+			<span class="badge badge-outline badge-sm">{row.profileLabel}</span>
+		{:else if row.qualityBadges.length > 0}
 			<div class="flex flex-wrap gap-1.5">
-				{#each qualityBadges as badge (`${badge.type}-${badge.label}`)}
+				{#each row.qualityBadges as badge (`${badge.type}-${badge.label}`)}
 					<span class="badge badge-outline badge-sm">{badge.label}</span>
 				{/each}
 			</div>
@@ -202,37 +176,30 @@
 	</td>
 
 	<td>
-		<span class="text-base">{size > 0 ? formatBytes(size) : '-'}</span>
+		<span class="text-base">{row.sizeLabel ?? '-'}</span>
 	</td>
 
-	{#if isTv}
+	{#if showProgress}
 		<td>
-			{#if isSeries(item)}
-				<div class="flex items-center gap-2">
-					<span class="text-base">
-						{item.episodeFileCount ?? 0}/{item.episodeCount ?? 0}
+			<div class="flex items-center gap-2">
+				<span class="text-base">{row.progressLabel ?? '-'}</span>
+				{#if row.progress !== null && row.progress > 0 && row.progress < 100}
+					<progress class="progress w-16 progress-primary" value={row.progress} max="100"
+					></progress>
+				{/if}
+				{#if row.progress === 100}
+					<span class="badge badge-sm badge-success">
+						<CheckCircle2 class="h-3 w-3" />
+						{m.library_libraryMediaTable_completeBadge()}
 					</span>
-					{#if item.percentComplete > 0 && item.percentComplete < 100}
-						<progress class="progress w-16 progress-primary" value={item.percentComplete} max="100"
-						></progress>
-					{/if}
-					{#if item.percentComplete === 100}
-						<span class="badge badge-sm badge-success">
-							<CheckCircle2 class="h-3 w-3" />
-							{m.library_libraryMediaTable_completeBadge()}
-						</span>
-					{/if}
-					{#if downloadingIds.has(item.id)}
-						<Download class="h-4 w-4 animate-pulse text-info" />
-					{/if}
-				</div>
-			{/if}
+				{/if}
+			</div>
 		</td>
 	{/if}
 
 	<td>
-		<span class="text-base text-base-content/60" title={relDate.full}>
-			{relDate.display}
+		<span class="text-base text-base-content/60" title={relDate?.full ?? ''}>
+			{relDate?.display ?? '-'}
 		</span>
 	</td>
 
@@ -254,8 +221,8 @@
 				>
 					{#if onMonitorToggle}
 						<li>
-							<button onclick={() => onMonitorToggle(item.id)}>
-								{#if item.monitored}
+							<button onclick={() => onMonitorToggle(row.id, row.monitored)}>
+								{#if row.monitored}
 									<EyeOff class="mr-2 h-4 w-4" />
 									{m.library_libraryMediaTable_unmonitorButton()}
 								{:else}
@@ -267,7 +234,7 @@
 					{/if}
 					{#if onAutoGrab}
 						<li>
-							<button onclick={() => onAutoGrab(item.id)}>
+							<button onclick={() => onAutoGrab(row.id)}>
 								<Zap class="mr-2 h-4 w-4" />
 								{m.library_libraryMediaTable_autoGrabButton()}
 							</button>
@@ -275,7 +242,7 @@
 					{/if}
 					{#if onManualGrab}
 						<li>
-							<button onclick={() => onManualGrab(item.id)}>
+							<button onclick={() => onManualGrab(row.id)}>
 								<Search class="mr-2 h-4 w-4" />
 								{m.library_libraryMediaTable_manualGrabButton()}
 							</button>
@@ -283,7 +250,7 @@
 					{/if}
 					{#if onDelete}
 						<li>
-							<button class="text-error" onclick={() => onDelete(item.id)}>
+							<button class="text-error" onclick={() => onDelete(row.id)}>
 								<Trash2 class="mr-2 h-4 w-4" />
 								{m.action_delete()}
 							</button>

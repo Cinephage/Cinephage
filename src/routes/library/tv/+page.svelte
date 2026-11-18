@@ -5,6 +5,7 @@
 	import { resolvePath } from '#lib/utils/routing.js';
 	import { SvelteSet } from 'svelte/reactivity';
 	import LibraryMediaCard from '#lib/components/library/LibraryMediaCard.svelte';
+	import { seriesCardView, seriesRowView } from '#lib/components/library/media-view.js';
 	import LibraryMediaTable from '#lib/components/library/LibraryMediaTable.svelte';
 	import LibraryDrawer from '#lib/components/library/LibraryDrawer.svelte';
 	import LibraryBulkActionBar from '#lib/components/library/LibraryBulkActionBar.svelte';
@@ -46,6 +47,16 @@
 
 	// Viewer accounts browse a read-only library; admin controls stay hidden.
 	const isAdminUser = $derived(data.user?.role === 'admin');
+
+	/** The table shows the profile's name, not its id — same rule the movie list uses. */
+	const profileNameMap = $derived(
+		new Map((data.qualityProfiles ?? []).map((entry) => [entry.id, entry.name]))
+	);
+	function profileNameFor(series: (typeof data.series)[number]): string | null {
+		const id = series.scoringProfileId;
+		if (!id) return profileNameMap.get('balanced') ?? 'Default';
+		return profileNameMap.get(id) ?? id;
+	}
 
 	const SCROLL_KEY = 'cinephage:library:tv:scrollY';
 
@@ -806,21 +817,21 @@
 						>
 							{#each renderer.visible as show (show.id)}
 								<LibraryMediaCard
-									item={show}
+									view={seriesCardView(show, data.preferOriginalTitleDefault)}
 									selectable={showCheckboxes}
 									selected={selectedSeries.has(show.id)}
 									onSelectChange={handleItemSelectChange}
-									preferOriginalTitleDefault={data.preferOriginalTitleDefault}
 								/>
 							{/each}
 						</div>
 					{:else}
 						<LibraryMediaTable
-							items={renderer.visible}
-							mediaType="tv"
+							rows={renderer.visible.map((series) =>
+								seriesRowView(series, data.preferOriginalTitleDefault, profileNameFor(series))
+							)}
+							kind="tv"
 							selectedItems={selectedSeries}
 							selectable={showCheckboxes}
-							qualityProfiles={data.qualityProfiles}
 							downloadingIds={downloadingSeriesIdSet}
 							{autoSearchingIds}
 							onSelectChange={handleItemSelectChange}
@@ -828,7 +839,6 @@
 							onDelete={isAdminUser ? handleDeleteSeries : undefined}
 							onAutoGrab={isAdminUser ? handleAutoGrab : undefined}
 							onManualGrab={isAdminUser ? handleManualGrab : undefined}
-							preferOriginalTitleDefault={data.preferOriginalTitleDefault}
 						/>
 					{/if}
 

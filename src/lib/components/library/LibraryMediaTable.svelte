@@ -1,165 +1,115 @@
 <script lang="ts">
 	import { SvelteSet } from 'svelte/reactivity';
-	import type { LibraryMovie, LibrarySeries } from '#lib/types/library.js';
-	import { Clapperboard, Tv } from '@lucide/svelte';
+	import { Clapperboard, Tv, Disc3, Mic2 } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { resolvePath } from '#lib/utils/routing.js';
-	import type { MediaType } from '#lib/utils/media-type.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import type { LibraryKind, MediaRowView } from './media-view.js';
 	import LibraryMediaMobileCard from './LibraryMediaMobileCard.svelte';
 	import LibraryMediaTableRow from './LibraryMediaTableRow.svelte';
 	import LibraryMediaTableHeader from './LibraryMediaTableHeader.svelte';
 
-	interface QualityProfile {
-		id: string;
-		name: string;
-	}
-
 	interface Props {
-		items: (LibraryMovie | LibrarySeries)[];
-		mediaType: MediaType;
+		/** Rows already adapted by the page's kind (`media-view.ts`). */
+		rows: MediaRowView[];
+		kind: LibraryKind;
 		selectedItems: SvelteSet<string>;
 		selectable: boolean;
-		qualityProfiles?: QualityProfile[];
 		sortField?: string;
 		sortDirection?: 'asc' | 'desc';
 		onSort?: (field: string) => void;
 		onSelectChange?: (id: string, selected: boolean) => void;
 		onMonitorToggle?: (id: string, monitored: boolean) => void;
-		onDelete?: (id: string) => void;
 		onAutoGrab?: (id: string) => void;
 		onManualGrab?: (id: string) => void;
+		onDelete?: (id: string) => void;
 		downloadingIds?: Set<string>;
 		autoSearchingIds?: Set<string>;
-		/** Instance default for items with no explicit prefer-original flag. */
-		preferOriginalTitleDefault?: boolean | null;
+		/** Column labels that differ by kind (an album's size is its track count). */
+		columnLabels?: { quality?: string; size?: string; progress?: string };
 	}
 
 	let {
-		items,
-		mediaType,
+		rows,
+		kind,
 		selectedItems,
 		selectable,
-		qualityProfiles = [],
 		sortField = 'title',
 		sortDirection = 'asc',
 		onSort,
 		onSelectChange,
 		onMonitorToggle,
-		onDelete,
 		onAutoGrab,
 		onManualGrab,
+		onDelete,
 		downloadingIds = new Set(),
 		autoSearchingIds = new Set(),
-		preferOriginalTitleDefault = false
+		columnLabels = {}
 	}: Props = $props();
 
 	let actionLoadingRows = new SvelteSet<string>();
 
-	const isTv = $derived(mediaType === 'tv');
+	const showProgress = $derived(kind === 'tv' || kind === 'artist');
+	const labels = $derived({
+		quality: columnLabels.quality ?? m.library_libraryMediaTable_qualityColumn(),
+		size: columnLabels.size ?? m.library_libraryMediaTable_sizeColumn(),
+		progress: columnLabels.progress ?? m.library_libraryMediaTable_progressColumn()
+	});
 
-	const profileNameMap = $derived(new Map(qualityProfiles.map((p) => [p.id, p.name])));
-
-	function getProfileName(item: LibraryMovie | LibrarySeries): string | null {
-		const id = item.scoringProfileId;
-		if (!id) return profileNameMap.get('balanced') ?? 'Default';
-		return profileNameMap.get(id) ?? id;
-	}
-
-	function hasStreamerProfile(item: LibraryMovie | LibrarySeries): boolean {
-		const profileId = item.scoringProfileId?.toLowerCase();
-		const profileName = getProfileName(item)?.toLowerCase();
-		return profileId === 'streamer' || profileName === 'streamer';
-	}
-
-	function handleSort(field: string) {
-		if (onSort) {
-			onSort(field);
-		}
-	}
+	const EMPTY_ICON: Record<LibraryKind, typeof Clapperboard> = {
+		movie: Clapperboard,
+		tv: Tv,
+		album: Disc3,
+		artist: Mic2
+	};
+	const EmptyIcon = $derived(EMPTY_ICON[kind]);
 
 	function handleSelectChange(id: string, checked: boolean) {
-		if (onSelectChange) {
-			onSelectChange(id, checked);
-		}
+		onSelectChange?.(id, checked);
 	}
 
 	function handleSelectAll(checked: boolean) {
-		items.forEach((i) => handleSelectChange(i.id, checked));
+		rows.forEach((row) => handleSelectChange(row.id, checked));
 	}
 
-	async function handleMonitorToggle(id: string, currentMonitored: boolean) {
-		if (!onMonitorToggle || actionLoadingRows.has(id)) return;
+	async function runRowAction(
+		id: string,
+		action?: (id: string) => void | Promise<void>
+	) {
+		if (!action || actionLoadingRows.has(id)) return;
 		actionLoadingRows.add(id);
 		try {
-			await onMonitorToggle(id, !currentMonitored);
+			await action(id);
 		} finally {
 			actionLoadingRows.delete(id);
 		}
 	}
 
-	async function handleDelete(id: string) {
-		if (!onDelete || actionLoadingRows.has(id)) return;
-		actionLoadingRows.add(id);
-		try {
-			await onDelete(id);
-		} finally {
-			actionLoadingRows.delete(id);
-		}
-	}
-
-	async function handleAutoGrab(id: string) {
-		if (!onAutoGrab || actionLoadingRows.has(id)) return;
-		actionLoadingRows.add(id);
-		try {
-			await onAutoGrab(id);
-		} finally {
-			actionLoadingRows.delete(id);
-		}
-	}
-
-	async function handleManualGrab(id: string) {
-		if (!onManualGrab || actionLoadingRows.has(id)) return;
-		actionLoadingRows.add(id);
-		try {
-			await onManualGrab(id);
-		} finally {
-			actionLoadingRows.delete(id);
-		}
-	}
-
-	function navigateToItem(id: string) {
-		goto(resolvePath(`/library/${mediaType}/${id}`));
+	function navigateTo(row: MediaRowView) {
+		goto(resolvePath(row.href));
 	}
 </script>
 
-{#if items.length === 0}
+{#if rows.length === 0}
 	<div class="py-12 text-center text-base-content/60">
-		{#if mediaType === 'movie'}
-			<Clapperboard class="mx-auto mb-4 h-12 w-12 opacity-40" />
-		{:else}
-			<Tv class="mx-auto mb-4 h-12 w-12 opacity-40" />
-		{/if}
+		<EmptyIcon class="mx-auto mb-4 h-12 w-12 opacity-40" />
 		<p class="text-lg font-medium">No items found</p>
 	</div>
 {:else}
 	<div class="space-y-3 lg:hidden">
-		{#each items as item (item.id)}
+		{#each rows as row (row.id)}
 			<LibraryMediaMobileCard
-				{item}
-				selected={selectedItems.has(item.id)}
+				{row}
+				selected={selectedItems.has(row.id)}
 				{selectable}
-				isLoading={actionLoadingRows.has(item.id) || autoSearchingIds.has(item.id)}
+				isLoading={actionLoadingRows.has(row.id) || autoSearchingIds.has(row.id)}
 				{downloadingIds}
-				hasStreamerProfile={hasStreamerProfile(item)}
 				onSelectChange={handleSelectChange}
-				onMonitorToggle={onMonitorToggle
-					? (id) => handleMonitorToggle(id, item.monitored ?? false)
-					: undefined}
-				onAutoGrab={onAutoGrab ? handleAutoGrab : undefined}
-				onManualGrab={onManualGrab ? handleManualGrab : undefined}
-				onDelete={onDelete ? handleDelete : undefined}
-				onNavigate={() => navigateToItem(item.id)}
-				{preferOriginalTitleDefault}
+				onMonitorToggle={onMonitorToggle ? (id, monitored) => runRowAction(id, () => onMonitorToggle(id, monitored)) : undefined}
+				onAutoGrab={onAutoGrab ? (id) => runRowAction(id, onAutoGrab) : undefined}
+				onManualGrab={onManualGrab ? (id) => runRowAction(id, onManualGrab) : undefined}
+				onDelete={onDelete ? (id) => runRowAction(id, onDelete) : undefined}
+				onNavigate={() => navigateTo(row)}
 			/>
 		{/each}
 	</div>
@@ -168,39 +118,34 @@
 		<table class="table table-sm">
 			<thead>
 				<LibraryMediaTableHeader
-					{items}
+					ids={rows.map((row) => row.id)}
 					{selectable}
-					{isTv}
+					{showProgress}
 					{selectedItems}
 					{sortField}
 					{sortDirection}
 					hasSort={!!onSort}
-					onSort={handleSort}
+					{labels}
+					onSort={(field) => onSort?.(field)}
 					onSelectAll={handleSelectAll}
 				/>
 			</thead>
 			<tbody>
-				{#each items as item, idx (item.id)}
+				{#each rows as row, idx (row.id)}
 					<LibraryMediaTableRow
-						{item}
-						{mediaType}
-						selected={selectedItems.has(item.id)}
+						{row}
+						selected={selectedItems.has(row.id)}
 						{selectable}
 						{idx}
-						isLoading={actionLoadingRows.has(item.id) || autoSearchingIds.has(item.id)}
+						isLoading={actionLoadingRows.has(row.id) || autoSearchingIds.has(row.id)}
 						{downloadingIds}
-						hasStreamerProfile={hasStreamerProfile(item)}
-						profileName={getProfileName(item)}
-						{isTv}
+						{showProgress}
 						onSelectChange={handleSelectChange}
-						onMonitorToggle={onMonitorToggle
-							? (id) => handleMonitorToggle(id, item.monitored ?? false)
-							: undefined}
-						onAutoGrab={onAutoGrab ? handleAutoGrab : undefined}
-						onManualGrab={onManualGrab ? handleManualGrab : undefined}
-						onDelete={onDelete ? handleDelete : undefined}
-						onNavigate={() => navigateToItem(item.id)}
-						{preferOriginalTitleDefault}
+						onMonitorToggle={onMonitorToggle ? (id, monitored) => runRowAction(id, () => onMonitorToggle(id, monitored)) : undefined}
+						onAutoGrab={onAutoGrab ? (id) => runRowAction(id, onAutoGrab) : undefined}
+						onManualGrab={onManualGrab ? (id) => runRowAction(id, onManualGrab) : undefined}
+						onDelete={onDelete ? (id) => runRowAction(id, onDelete) : undefined}
+						onNavigate={() => navigateTo(row)}
 					/>
 				{/each}
 			</tbody>

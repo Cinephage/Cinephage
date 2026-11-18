@@ -1,34 +1,35 @@
 <script lang="ts">
-	import type { LibraryMovie, LibrarySeries } from '#lib/types/library.js';
 	import { ArrowUpDown, ArrowUp, ArrowDown } from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
-		items: (LibraryMovie | LibrarySeries)[];
+		ids: string[];
 		selectable: boolean;
-		isTv: boolean;
+		showProgress: boolean;
 		selectedItems: Set<string>;
 		sortField: string;
 		sortDirection: 'asc' | 'desc';
 		hasSort: boolean;
+		labels: { quality: string; size: string; progress: string };
 		onSort: (field: string) => void;
 		onSelectAll: (checked: boolean) => void;
 	}
 
 	let {
-		items,
+		ids,
 		selectable,
-		isTv,
+		showProgress,
 		selectedItems,
 		sortField,
 		sortDirection,
 		hasSort,
+		labels,
 		onSort,
 		onSelectAll
 	}: Props = $props();
 
-	const allSelected = $derived(items.every((i) => selectedItems.has(i.id)));
-	const someSelected = $derived(items.some((i) => selectedItems.has(i.id)) && !allSelected);
+	const allSelected = $derived(ids.length > 0 && ids.every((id) => selectedItems.has(id)));
+	const someSelected = $derived(ids.some((id) => selectedItems.has(id)) && !allSelected);
 
 	function getSortIcon(field: string) {
 		if (sortField !== field) return ArrowUpDown;
@@ -71,18 +72,10 @@
 		</span>
 	</th>
 	<th class="text-base">{m.library_libraryMediaTable_statusColumn()}</th>
-	<th class="text-base">{m.library_libraryMediaTable_qualityColumn()}</th>
-	<th class="cursor-pointer text-base select-none hover:bg-base-200" onclick={() => onSort('size')}>
-		<span class="flex items-center gap-1">
-			{m.library_libraryMediaTable_sizeColumn()}
-			{#if hasSort}
-				{@const Icon = getSortIcon('size')}
-				<Icon class="h-4 w-4 opacity-50" />
-			{/if}
-		</span>
-	</th>
-	{#if isTv}
-		<th class="text-base">{m.library_libraryMediaTable_progressColumn()}</th>
+	<th class="text-base">{labels.quality}</th>
+	<th class="text-base">{labels.size}</th>
+	{#if showProgress}
+		<th class="text-base">{labels.progress}</th>
 	{/if}
 	<th
 		class="cursor-pointer text-base select-none hover:bg-base-200"

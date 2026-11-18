@@ -5,6 +5,7 @@
 	import { resolvePath } from '#lib/utils/routing.js';
 	import { SvelteSet } from 'svelte/reactivity';
 	import LibraryMediaCard from '#lib/components/library/LibraryMediaCard.svelte';
+	import { movieCardView, movieRowView } from '#lib/components/library/media-view.js';
 	import LibraryMediaTable from '#lib/components/library/LibraryMediaTable.svelte';
 	import LibraryDrawer from '#lib/components/library/LibraryDrawer.svelte';
 	import LibraryBulkActionBar from '#lib/components/library/LibraryBulkActionBar.svelte';
@@ -973,20 +974,20 @@
 										>
 											{#each group.movies as movie (movie.id)}
 												<LibraryMediaCard
-													item={movie}
+													view={movieCardView(movie, data.preferOriginalTitleDefault)}
 													selectable={showCheckboxes}
 													selected={selectedMovies.has(movie.id)}
 													onSelectChange={handleItemSelectChange}
-													collectionName={movie.collectionName ?? undefined}
-													preferOriginalTitleDefault={data.preferOriginalTitleDefault}
 												/>
 											{/each}
 										</div>
 									{:else}
 										<div class="pt-2">
 											<LibraryMediaTable
-												items={group.movies}
-												mediaType="movie"
+												rows={group.movies.map((movie) =>
+													movieRowView(movie, data.preferOriginalTitleDefault)
+												)}
+												kind="movie"
 												selectedItems={selectedMovies}
 												selectable={showCheckboxes}
 												downloadingIds={downloadingMovieIdSet}
@@ -996,7 +997,6 @@
 												onDelete={isAdminUser ? handleDeleteMovie : undefined}
 												onAutoGrab={isAdminUser ? handleAutoGrab : undefined}
 												onManualGrab={isAdminUser ? handleManualGrab : undefined}
-												preferOriginalTitleDefault={data.preferOriginalTitleDefault}
 											/>
 										</div>
 									{/if}
@@ -1010,19 +1010,19 @@
 							>
 								{#each renderer.visible as movie (movie.id)}
 									<LibraryMediaCard
-										item={movie}
+										view={movieCardView(movie, data.preferOriginalTitleDefault)}
 										selectable={showCheckboxes}
 										selected={selectedMovies.has(movie.id)}
 										onSelectChange={handleItemSelectChange}
-										collectionName={movie.collectionName ?? undefined}
-										preferOriginalTitleDefault={data.preferOriginalTitleDefault}
 									/>
 								{/each}
 							</div>
 						{:else}
 							<LibraryMediaTable
-								items={renderer.visible}
-								mediaType="movie"
+								rows={renderer.visible.map((movie) =>
+									movieRowView(movie, data.preferOriginalTitleDefault)
+								)}
+								kind="movie"
 								selectedItems={selectedMovies}
 								selectable={showCheckboxes}
 								downloadingIds={downloadingMovieIdSet}
@@ -1032,7 +1032,6 @@
 								onDelete={isAdminUser ? handleDeleteMovie : undefined}
 								onAutoGrab={isAdminUser ? handleAutoGrab : undefined}
 								onManualGrab={isAdminUser ? handleManualGrab : undefined}
-								preferOriginalTitleDefault={data.preferOriginalTitleDefault}
 							/>
 						{/if}
 
