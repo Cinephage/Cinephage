@@ -34,7 +34,11 @@ const BLOCKED_PATHS = [
 	'/lib64',
 	'/usr',
 	'/run',
-	'/root'
+	'/root',
+	'/app',
+	'/config',
+	'/var',
+	'/tmp'
 ];
 
 /**
