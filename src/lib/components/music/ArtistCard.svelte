@@ -39,16 +39,9 @@
 				src={coverUrl}
 				alt={artist.name}
 				loading="lazy"
-				class="h-full w-full scale-110 object-cover opacity-90 blur-[1px] transition-transform duration-300 group-hover:scale-[1.14]"
+				class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
 			/>
-			<div class="absolute inset-0 bg-linear-to-t from-base-300 via-base-300/20 to-transparent"></div>
-			<div class="absolute inset-0 flex items-end justify-center pb-4">
-				<div
-					class="flex h-20 w-20 items-center justify-center rounded-full border border-white/20 bg-base-100/85 shadow-lg backdrop-blur-sm"
-				>
-					<span class="text-xl font-bold tracking-tight text-base-content/80">{initials}</span>
-				</div>
-			</div>
+			<div class="absolute inset-0 bg-linear-to-t from-black/45 via-transparent to-transparent"></div>
 		{:else}
 			<div
 				class="flex h-full w-full items-center justify-center bg-linear-to-br from-base-300 via-base-200 to-base-300"

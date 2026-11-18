@@ -2392,6 +2392,7 @@
 	"music_browseDiscover": "Explorar Discover",
 	"music_artistEmpty": "Nada de este artista todavía",
 	"music_artistEmptyHint": "Añade sus álbumes desde Discover o usa Añadir música.",
+	"music_releasesTab": "Ediciones",
 	"naming_preview": "Vista previa",
 	"naming_reset": "Restablecer",
 	"naming_tokenCategoryAudio": "Audio",

@@ -248,7 +248,7 @@
 				if (!searched) findReleases();
 			}}
 		>
-			{m.music_releasesTitle()}
+			{m.music_releasesTab()}
 			{#if releaseCount > 0}
 				<span class="ml-1.5 badge badge-sm badge-ghost">{releaseCount}</span>
 			{/if}
@@ -269,7 +269,7 @@
 		{:else}
 			<div class="rounded-xl border border-base-content/10 bg-base-100">
 				<div class="flex flex-wrap items-center justify-between gap-3 border-b border-base-content/10 px-4 py-3">
-					<p class="text-sm font-medium">{m.music_releasesTitle()}</p>
+					<p class="text-sm font-medium">{m.music_releasesTab()}</p>
 					<div class="flex items-center gap-2">
 						{#if candidates.some((candidate) => candidate.accepted)}
 							<button

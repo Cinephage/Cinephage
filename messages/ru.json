@@ -2392,6 +2392,7 @@
 	"music_browseDiscover": "Открыть Discover",
 	"music_artistEmpty": "Пока ничего от этого исполнителя",
 	"music_artistEmptyHint": "Добавьте альбомы из Discover или через «Добавить музыку».",
+	"music_releasesTab": "Издания",
 	"naming_preview": "Предпросмотр",
 	"naming_reset": "Сбросить",
 	"naming_tokenCategoryAudio": "Аудио",
