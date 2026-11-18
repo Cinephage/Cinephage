@@ -982,13 +982,18 @@
 
 				<div class="grid grid-cols-3 gap-2 sm:gap-4 lg:grid-cols-9">
 					{#each searchResults as item (item.id + (item.media_type || ''))}
-						<MediaCard
-							item={item as unknown as TmdbMediaItem}
-							onAddToLibrary={addHandler}
-							selectable={selectMode}
-							selected={isItemSelected(item)}
-							onToggleSelect={() => toggleItemSelect(item)}
-						/>
+						{#if isMusicRow(item)}
+							<!-- Music search rows carry their MusicBrainz ids; the card links or resolves. -->
+							<MusicRowCard item={item as unknown as MusicRowItem} onAdded={() => refreshAll()} />
+						{:else}
+							<MediaCard
+								item={item as unknown as TmdbMediaItem}
+								onAddToLibrary={addHandler}
+								selectable={selectMode}
+								selected={isItemSelected(item)}
+								onToggleSelect={() => toggleItemSelect(item)}
+							/>
+						{/if}
 					{/each}
 				</div>
 

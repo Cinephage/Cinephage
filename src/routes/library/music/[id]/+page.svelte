@@ -16,6 +16,7 @@
 				id: string;
 				title: string;
 				artistName: string;
+				artistMbid: string | null;
 				year: number | null;
 				primaryType: string | null;
 				secondaryTypes: string[] | null;
@@ -170,7 +171,13 @@
 
 		<div class="min-w-0">
 			<h1 class="text-2xl font-semibold">{album.title}</h1>
-			<p class="mt-1 text-lg opacity-80">{album.artistName}</p>
+			{#if album.artistMbid}
+				<a class="link link-hover mt-1 inline-block text-lg opacity-80" href={`/discover/music/artist/${album.artistMbid}`}>
+					{album.artistName}
+				</a>
+			{:else}
+				<p class="mt-1 text-lg opacity-80">{album.artistName}</p>
+			{/if}
 
 			<div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
 				{#if album.year}<span class="badge badge-ghost">{album.year}</span>{/if}

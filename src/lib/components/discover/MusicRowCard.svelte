@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { Check, Disc3, LoaderCircle, Plus } from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
-	import { invalidateAll } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
+	import { toasts } from '#lib/stores/toast.svelte.js';
 	import type { MusicRowItem } from './music-row-item.js';
 
 	let { item, onAdded }: { item: MusicRowItem; onAdded?: () => void } = $props();
@@ -12,15 +13,50 @@
 	// Not named `state`: it collides with svelte-check's generated component
 	// scope and breaks the TS transform for the whole file.
 	let addState = $state<AddState>('idle');
+	let resolving = $state(false);
 	let errored = $state(false);
 
+	const title = $derived(item.title ?? '');
+	const done = $derived(addState === 'added' || addState === 'exists');
+	const isArtist = $derived(item.musicKind === 'artist');
+	const badge = $derived(isArtist ? m.music_artistLabel() : m.nav_music());
+
+	// Search rows carry their MusicBrainz id and link straight to the detail
+	// pages; Deezer chart rows resolve on click and navigate.
+	const target = $derived.by(() => {
+		if (!item.mbid) return null;
+		return isArtist ? `/discover/music/artist/${item.mbid}` : `/discover/music/${item.mbid}`;
+	});
+
+	async function open() {
+		if (resolving || target) return;
+		resolving = true;
+		try {
+			const params = new URLSearchParams({ type: 'album' });
+			if (item.subtitle && !isArtist) params.set('artist', item.subtitle);
+			if (item.title) params.set('album', item.title);
+			const search = await fetch(`/api/music/search?${params}`).then((r) => r.json());
+			const group = (search.results ?? [])[0] as { mbid?: string } | undefined;
+			if (group?.mbid) {
+				await goto(`/discover/music/${group.mbid}`);
+				return;
+			}
+			toasts.error(m.music_noResults());
+		} catch {
+			toasts.error(m.music_noResults());
+		} finally {
+			resolving = false;
+		}
+	}
+
 	/**
-	 * The row carries no MusicBrainz id, so adding resolves the release group
-	 * the same way the Music library page does: search by artist + album, then
-	 * add the top hit.
+	 * Quick add without leaving the grid: resolve the release group the same
+	 * way the Music library page does, then add the top hit.
 	 */
-	async function add() {
-		if (busy || addState === 'added' || addState === 'exists') return;
+	async function add(event?: Event) {
+		event?.preventDefault();
+		event?.stopPropagation();
+		if (busy || done || isArtist) return;
 		busy = true;
 		addState = 'idle';
 		try {
@@ -52,12 +88,9 @@
 			busy = false;
 		}
 	}
-
-	const title = $derived(item.title ?? '');
-	const done = $derived(addState === 'added' || addState === 'exists');
 </script>
 
-<div class="group relative aspect-square overflow-hidden rounded-lg bg-base-300 shadow-md transition-all duration-300 hover:scale-105">
+{#snippet chrome()}
 	{#if item.image_url && !errored}
 		<img
 			src={item.image_url}
@@ -72,31 +105,33 @@
 		</div>
 	{/if}
 
-	<!-- Top-right: quick add, same grammar as the movie/TV card -->
+	<!-- Top-right: quick add (albums only) + kind badge -->
 	<div class="absolute top-2 right-2 z-10 flex items-center gap-1">
-		<button
-			type="button"
-			class="flex h-8 w-8 items-center justify-center rounded-full shadow-lg transition-all
-				{addState === 'failed' || addState === 'missing'
-				? 'bg-error/90 text-error-content'
-				: done
-					? 'bg-success/90 text-success-content'
-					: 'bg-primary text-primary-content opacity-0 group-hover:opacity-100 hover:scale-110 focus-visible:opacity-100 active:scale-95'}"
-			title={done ? m.music_inLibrary() : m.tmdb_addToLibrary()}
-			aria-label={done ? m.music_inLibrary() : m.tmdb_addToLibrary()}
-			disabled={busy || done}
-			onclick={add}
-		>
-			{#if busy}
-				<LoaderCircle class="h-4 w-4 animate-spin" />
-			{:else if done}
-				<Check class="h-4 w-4" strokeWidth={3} />
-			{:else}
-				<Plus class="h-5 w-5" strokeWidth={2.5} />
-			{/if}
-		</button>
+		{#if !isArtist}
+			<button
+				type="button"
+				class="flex h-8 w-8 items-center justify-center rounded-full shadow-lg transition-all
+					{addState === 'failed' || addState === 'missing'
+					? 'bg-error/90 text-error-content'
+					: done
+						? 'bg-success/90 text-success-content'
+						: 'bg-primary text-primary-content opacity-0 group-hover:opacity-100 hover:scale-110 focus-visible:opacity-100 active:scale-95'}"
+				title={done ? m.music_inLibrary() : m.tmdb_addToLibrary()}
+				aria-label={done ? m.music_inLibrary() : m.tmdb_addToLibrary()}
+				disabled={busy || done}
+				onclick={add}
+			>
+				{#if busy}
+					<LoaderCircle class="h-4 w-4 animate-spin" />
+				{:else if done}
+					<Check class="h-4 w-4" strokeWidth={3} />
+				{:else}
+					<Plus class="h-5 w-5" strokeWidth={2.5} />
+				{/if}
+			</button>
+		{/if}
 		<span class="badge border-none badge-sm font-semibold shadow-sm backdrop-blur-sm badge-neutral/80">
-			{m.nav_music()}
+			{badge}
 		</span>
 	</div>
 
@@ -113,7 +148,26 @@
 				<p class="mt-0.5 text-xs font-medium text-white/50">{m.music_noResults()}</p>
 			{:else if addState === 'failed'}
 				<p class="mt-0.5 text-xs font-medium text-white/50">{m.music_addFailed()}</p>
+			{:else if resolving}
+				<p class="mt-0.5 text-xs font-medium text-white/50">{m.common_searching()}</p>
 			{/if}
 		</div>
 	</div>
-</div>
+{/snippet}
+
+{#if target}
+	<a
+		href={target}
+		class="group relative block aspect-square overflow-hidden rounded-lg bg-base-300 shadow-md transition-all duration-300 hover:scale-105"
+	>
+		{@render chrome()}
+	</a>
+{:else}
+	<button
+		type="button"
+		onclick={() => open()}
+		class="group relative block aspect-square overflow-hidden rounded-lg bg-base-300 shadow-md transition-all duration-300 hover:scale-105"
+	>
+		{@render chrome()}
+	</button>
+{/if}

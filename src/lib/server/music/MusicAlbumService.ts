@@ -36,6 +36,8 @@ export interface AlbumSummary {
 	title: string;
 	artistId: string;
 	artistName: string;
+	/** The artist's MusicBrainz id — links every album surface to the artist page. */
+	artistMbid: string | null;
 	year: number | null;
 	trackCount: number | null;
 	hasFile: boolean | null;
@@ -251,6 +253,7 @@ export class MusicAlbumService {
 				title: albums.title,
 				artistId: albums.artistId,
 				artistName: artists.name,
+				artistMbid: artists.mbid,
 				year: albums.year,
 				trackCount: albums.trackCount,
 				hasFile: albums.hasFile,
@@ -280,6 +283,7 @@ export class MusicAlbumService {
 				title: albums.title,
 				artistId: albums.artistId,
 				artistName: artists.name,
+				artistMbid: artists.mbid,
 				year: albums.year,
 				trackCount: albums.trackCount,
 				hasFile: albums.hasFile,

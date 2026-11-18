@@ -138,6 +138,9 @@ export interface ReleaseGroupSearchOptions {
 	artist?: string;
 	/** Album title as typed by the user. */
 	album?: string;
+	/** Join artist and title with OR instead of AND — a one-box search that
+	 *  should hit either field, ranked by MusicBrainz relevance. */
+	matchAny?: boolean;
 	limit?: number;
 }
 
@@ -287,7 +290,7 @@ export class MusicBrainzClient {
 		if (clauses.length === 0) return [];
 
 		const body = await this.request<{ 'release-groups'?: RawReleaseGroup[] }>('/release-group', {
-			query: clauses.join(' AND '),
+			query: clauses.join(options.matchAny ? ' OR ' : ' AND '),
 			limit: String(options.limit ?? 25)
 		});
 
