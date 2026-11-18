@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { db } from '#lib/server/db/index.js';
 import { artists } from '#lib/server/db/schema.js';
@@ -39,6 +39,22 @@ export interface AddArtistResult {
 	total: number;
 	failures: AddArtistFailure[];
 	albums: AddAlbumResult[];
+}
+
+/** The artist row as the library surfaces read it (no MusicBrainz round trip). */
+export interface ArtistRecord {
+	id: string;
+	mbid: string | null;
+	name: string;
+	sortName: string | null;
+	disambiguation: string | null;
+	artistType: string | null;
+	country: string | null;
+	genres: string[] | null;
+	overview: string | null;
+	imagePath: string | null;
+	monitored: boolean | null;
+	added: string | null;
 }
 
 /**
@@ -91,6 +107,63 @@ export class MusicArtistService {
 			})
 			.run();
 		return id;
+	}
+
+	/** Flip an artist's monitored flag; false when the id is unknown. */
+	setMonitored(artistId: string, monitored: boolean): boolean {
+		const result = db.update(artists).set({ monitored }).where(eq(artists.id, artistId)).run();
+		return result.changes > 0;
+	}
+
+	/** One artist row, for the artist page hero and its card. */
+	getArtist(artistId: string): ArtistRecord | null {
+		return (
+			db
+				.select({
+					id: artists.id,
+					mbid: artists.mbid,
+					name: artists.name,
+					sortName: artists.sortName,
+					disambiguation: artists.disambiguation,
+					artistType: artists.artistType,
+					country: artists.country,
+					genres: artists.genres,
+					overview: artists.overview,
+					imagePath: artists.imagePath,
+					monitored: artists.monitored,
+					added: artists.added
+				})
+				.from(artists)
+				.where(eq(artists.id, artistId))
+				.get() ?? null
+		);
+	}
+
+	/**
+	 * Artist rows for a known set of ids. The library list groups albums by
+	 * artist, then asks here for the flags the album rows do not carry
+	 * (monitoring, portrait, genres) — one query, not one per artist.
+	 */
+	listArtists(ids: string[]): ArtistRecord[] {
+		if (ids.length === 0) return [];
+		return db
+			.select({
+				id: artists.id,
+				mbid: artists.mbid,
+				name: artists.name,
+				sortName: artists.sortName,
+				disambiguation: artists.disambiguation,
+				artistType: artists.artistType,
+				country: artists.country,
+				genres: artists.genres,
+				overview: artists.overview,
+				imagePath: artists.imagePath,
+				monitored: artists.monitored,
+				added: artists.added
+			})
+			.from(artists)
+			.where(inArray(artists.id, ids))
+			.all();
 	}
 
 	/** How much an artist would add, without writing anything — the preview. */

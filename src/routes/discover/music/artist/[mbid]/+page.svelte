@@ -1,7 +1,11 @@
 <script lang="ts">
-	import { ArrowLeft, Check, Disc3 } from '@lucide/svelte';
+	import { invalidateAll } from '$app/navigation';
+	import { LoaderCircle, Plus } from '@lucide/svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import * as m from '#lib/paraglide/messages.js';
+	import ArtistHero from '#lib/components/music/ArtistHero.svelte';
+	import AlbumCard from '#lib/components/music/AlbumCard.svelte';
+	import { toasts } from '#lib/stores/toast.svelte.js';
 
 	type ReleaseGroupRow = {
 		mbid: string;
@@ -29,83 +33,108 @@
 	} = $props();
 
 	const artist = $derived(data.artist);
-	const stored = $derived(new Set(data.storedMbids));
-	const coverErrors = new SvelteSet<string>();
+	const stored = $derived(new SvelteSet(data.storedMbids));
 
 	// A discography reads oldest-first, like every track listing in the app.
 	const discography = $derived(
 		[...data.releaseGroups].sort((a, b) => (a.year ?? 9999) - (b.year ?? 9999))
 	);
+
+	let busy = $state(false);
+
+	/**
+	 * Add the rest of the discography. The server writes a bounded batch and
+	 * reports what it left, so this loops until nothing remains.
+	 */
+	async function addDiscography() {
+		if (busy) return;
+		busy = true;
+		let added = 0;
+		let batches = 0;
+		try {
+			for (;;) {
+				const response = await fetch('/api/music/artists', {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({
+						artist: { mbid: artist.mbid, name: artist.name },
+						limit: 25
+					})
+				});
+				const body = await response.json();
+				if (!response.ok) {
+					toasts.error(body.details ?? body.error ?? m.music_addFailed());
+					return;
+				}
+				batches += 1;
+				added += body.added ?? 0;
+				toasts.info(m.music_addingArtist({ artist: artist.name, added, remaining: body.remaining ?? 0 }));
+				await invalidateAll();
+				if (!body.remaining || batches >= 12) break;
+			}
+		} catch (err) {
+			toasts.error(err instanceof Error ? err.message : m.music_addFailed());
+		} finally {
+			busy = false;
+		}
+	}
+
+	function coverUrl(mbid: string): string {
+		return `https://coverartarchive.org/release-group/${mbid}/front-250`;
+	}
 </script>
 
 <svelte:head><title>{artist.name} · Cinephage</title></svelte:head>
 
 <div class="mx-auto max-w-6xl p-4 sm:p-6">
-	<a class="link link-hover mb-4 inline-flex items-center gap-1.5 text-sm opacity-60" href="/discover?type=music">
-		<ArrowLeft class="h-4 w-4" />
-		{m.nav_music()}
-	</a>
+	<ArtistHero
+		artist={{ ...artist, id: artist.mbid, monitored: null }}
+		backdropUrl={discography[0] ? coverUrl(discography[0].mbid) : null}
+		albumCount={discography.length}
+		inLibraryCount={discography.filter((group) => stored.has(group.mbid)).length}
+		backHref="/discover?type=music"
+		backLabel={m.nav_music()}
+		sourceUrl={`https://musicbrainz.org/artist/${artist.mbid}`}
+	>
+		{#snippet actions()}
+			<button class="btn gap-1.5 btn-primary btn-sm" disabled={busy} onclick={addDiscography}>
+				{#if busy}
+					<LoaderCircle class="h-4 w-4 animate-spin" />
+				{:else}
+					<Plus class="h-4 w-4" />
+				{/if}
+				{m.music_addArtist()}
+			</button>
+		{/snippet}
+	</ArtistHero>
 
-	<header class="mb-6">
-		<h1 class="text-2xl font-semibold">{artist.name}</h1>
-		{#if artist.disambiguation}
-			<p class="mt-1 text-sm opacity-60">{artist.disambiguation}</p>
+	<div class="mt-6">
+		<h2 class="mb-3 text-sm font-semibold tracking-wide uppercase text-base-content/50">
+			{m.music_discography()}
+		</h2>
+
+		{#if discography.length === 0}
+			<p class="text-sm text-base-content/55">{m.music_noResults()}</p>
+		{:else}
+			<ul class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+				{#each discography as group (group.mbid)}
+					<li>
+						<AlbumCard
+							album={{
+								id: group.mbid,
+								title: group.title,
+								artistName: artist.name,
+								year: group.year ?? null,
+								primaryType: group.primaryType ?? null,
+								mbid: group.mbid
+							}}
+							coverUrl={coverUrl(group.mbid)}
+							href={`/discover/music/${group.mbid}`}
+							inLibrary={stored.has(group.mbid)}
+						/>
+					</li>
+				{/each}
+			</ul>
 		{/if}
-		<div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
-			{#if artist.type}<span class="badge badge-ghost">{artist.type}</span>{/if}
-			{#if artist.country}<span class="badge badge-ghost">{artist.country}</span>{/if}
-			{#each artist.genres.slice(0, 5) as genre (genre)}
-				<span class="badge badge-ghost">{genre}</span>
-			{/each}
-		</div>
-	</header>
-
-	{#if discography.length === 0}
-		<p class="opacity-50">{m.music_noResults()}</p>
-	{:else}
-		<ul class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-			{#each discography as group (group.mbid)}
-				<li>
-					<a class="group block" href={`/discover/music/${group.mbid}`}>
-						<div class="relative aspect-square overflow-hidden rounded-lg bg-base-300 shadow-md transition-all duration-300 group-hover:scale-105">
-							{#if !coverErrors.has(group.mbid)}
-								<img
-									src={`https://coverartarchive.org/release-group/${group.mbid}/front-250`}
-									alt={group.title}
-									loading="lazy"
-									class="h-full w-full object-cover"
-									onerror={() => coverErrors.add(group.mbid)}
-								/>
-							{:else}
-								<div class="flex h-full w-full items-center justify-center">
-									<Disc3 class="h-10 w-10 opacity-40" />
-								</div>
-							{/if}
-							{#if stored.has(group.mbid)}
-								<div
-									class="absolute top-2 left-2 flex h-6 w-6 items-center justify-center rounded-full bg-success/90 text-success-content shadow-md"
-									title={m.music_inLibrary()}
-								>
-									<Check class="h-4 w-4" strokeWidth={3} />
-								</div>
-							{/if}
-							<div
-								class="absolute inset-0 flex flex-col justify-end bg-linear-to-t from-black/90 via-black/20 to-transparent p-3 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-							>
-								<h3 class="line-clamp-2 text-sm leading-tight font-bold text-white">
-									{group.title}
-								</h3>
-								<div class="mt-1 flex items-center justify-between">
-									<span class="text-xs text-white/70">{group.year ?? ''}</span>
-									{#if group.primaryType}
-										<span class="text-xs font-medium text-white/70">{group.primaryType}</span>
-									{/if}
-								</div>
-							</div>
-						</div>
-					</a>
-				</li>
-			{/each}
-		</ul>
-	{/if}
+	</div>
 </div>

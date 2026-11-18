@@ -1,57 +1,14 @@
 <script lang="ts">
-	import {
-		Clock,
-		Disc3,
-		CircleCheck,
-		CircleDashed,
-		Search,
-		LoaderCircle,
-		Download
-	} from '@lucide/svelte';
+	import { goto, invalidateAll } from '$app/navigation';
+	import type { PageData } from './$types.js';
+	import { Download, HardDriveDownload, LoaderCircle, Search, Trash2 } from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
+	import AlbumHero from '#lib/components/music/AlbumHero.svelte';
+	import TrackList from '#lib/components/music/TrackList.svelte';
+	import { ConfirmationModal, ModalWrapper } from '#lib/components/ui/modal/index.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
 
-	let { data } = $props<{
-		data: {
-			album: {
-				id: string;
-				title: string;
-				artistName: string;
-				artistMbid: string | null;
-				year: number | null;
-				primaryType: string | null;
-				secondaryTypes: string[] | null;
-				status: string | null;
-				labelName: string | null;
-				catalogNumber: string | null;
-				barcode: string | null;
-				country: string | null;
-				mediaCount: number | null;
-				trackCount: number | null;
-				duration: number | null;
-				hasFile: boolean | null;
-				monitored: boolean | null;
-				hasCover: boolean;
-				tracks: Array<{
-					id: string;
-					title: string;
-					artistCredit: string | null;
-					discNumber: number | null;
-					trackNumber: number | null;
-					duration: number | null;
-					hasFile: boolean | null;
-				}>;
-			};
-		};
-	}>();
-
-	const album = $derived(data.album);
-
-	function clock(seconds: number | null | undefined): string {
-		if (!seconds) return '–';
-		const mins = Math.floor(seconds / 60);
-		const secs = seconds % 60;
-		return `${mins}:${String(secs).padStart(2, '0')}`;
-	}
+	let { data }: { data: PageData } = $props();
 
 	type Candidate = {
 		guid: string | null;
@@ -70,12 +27,13 @@
 		reasons?: string[];
 	};
 
-	function qualityLabel(candidate: Candidate): string {
-		const format = (candidate.format ?? 'unknown').toUpperCase();
-		const depth = candidate.bitDepth ? ` ${candidate.bitDepth}-bit` : '';
-		const rate = candidate.sampleRateKhz ? `/${candidate.sampleRateKhz}` : '';
-		return `${format}${depth}${rate}`;
-	}
+	const album = $derived(data.album);
+	let activeTab = $state<'tracks' | 'releases'>('tracks');
+	// The toggle is optimistic: null means "whatever the server sent", and a
+	// failure puts the override back rather than leaving the UI lying.
+	let monitoredOverride = $state<boolean | null>(null);
+	const monitored = $derived(monitoredOverride ?? Boolean(data.album.monitored));
+	let monitorBusy = $state(false);
 
 	let searchingReleases = $state(false);
 	let grabError = $state<string | null>(null);
@@ -83,10 +41,55 @@
 	let grabbingGuid = $state<string | 'best' | null>(null);
 	let candidates = $state<Candidate[]>([]);
 	let releaseError = $state<string | null>(null);
+	let searched = $state(false);
+
+	let importOpen = $state(false);
+	let importPath = $state('');
+	let importing = $state(false);
+	let deleteOpen = $state(false);
+	let deleting = $state(false);
+
+	function qualityLabel(candidate: Candidate): string {
+		const format = (candidate.format ?? 'unknown').toUpperCase();
+		const depth = candidate.bitDepth ? ` ${candidate.bitDepth}-bit` : '';
+		const rate = candidate.sampleRateKhz ? `/${candidate.sampleRateKhz}` : '';
+		return `${format}${depth}${rate}`;
+	}
+
+	function gib(bytes: number | null): string {
+		if (!bytes) return '–';
+		return `${(bytes / 1_073_741_824).toFixed(2)} GB`;
+	}
+
+	async function toggleMonitor(next: boolean) {
+		if (monitorBusy) return;
+		monitorBusy = true;
+		const previous = monitoredOverride;
+		monitoredOverride = next;
+		try {
+			const response = await fetch(`/api/music/albums/${album.id}`, {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ monitored: next })
+			});
+			if (!response.ok) {
+				const body = await response.json().catch(() => ({}));
+				monitoredOverride = previous;
+				toasts.error(body.details ?? body.error ?? m.common_failedToSave());
+			}
+		} catch (err) {
+			monitoredOverride = previous;
+			toasts.error(err instanceof Error ? err.message : m.common_failedToSave());
+		} finally {
+			monitorBusy = false;
+		}
+	}
 
 	async function findReleases() {
 		if (searchingReleases) return;
 		searchingReleases = true;
+		searched = true;
+		activeTab = 'releases';
 		releaseError = null;
 		try {
 			const response = await fetch(`/api/music/albums/${album.id}/search`, { method: 'POST' });
@@ -121,7 +124,6 @@
 				return;
 			}
 			grabbed = body.title ?? candidate?.title ?? '';
-			// The accepted set changes once a download is in flight.
 			candidates = candidates.map((entry) =>
 				entry.guid === (candidate?.guid ?? null)
 					? { ...entry, accepted: false, reasons: [m.music_grabInFlight()] }
@@ -134,219 +136,269 @@
 		}
 	}
 
-	function gib(bytes: number | null): string {
-		if (!bytes) return '–';
-		return `${(bytes / 1_073_741_824).toFixed(2)} GB`;
+	async function importFolder() {
+		if (importing || !importPath.trim()) return;
+		importing = true;
+		try {
+			const response = await fetch(`/api/music/albums/${album.id}/import`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ path: importPath.trim() })
+			});
+			const body = await response.json();
+			if (!response.ok) {
+				toasts.error(body.details ?? body.error ?? m.music_importFailed());
+				return;
+			}
+			toasts.success(m.music_importedAlbum({ title: album.title }));
+			importOpen = false;
+			importPath = '';
+			await invalidateAll();
+		} catch (err) {
+			toasts.error(err instanceof Error ? err.message : m.music_importFailed());
+		} finally {
+			importing = false;
+		}
 	}
 
-	const discs = $derived.by(() => {
-		const groups = new Map<number, typeof album.tracks>();
-		for (const track of album.tracks) {
-			const disc = track.discNumber ?? 1;
-			groups.set(disc, [...(groups.get(disc) ?? []), track]);
+	async function removeAlbum() {
+		if (deleting) return;
+		deleting = true;
+		try {
+			const response = await fetch(`/api/music/albums/${album.id}`, { method: 'DELETE' });
+			if (!response.ok) {
+				const body = await response.json().catch(() => ({}));
+				toasts.error(body.details ?? body.error ?? m.common_failedToSave());
+				return;
+			}
+			toasts.success(m.music_removedAlbum({ title: album.title }));
+			await goto('/library/music');
+		} catch (err) {
+			toasts.error(err instanceof Error ? err.message : m.common_failedToSave());
+		} finally {
+			deleting = false;
 		}
-		return [...groups.entries()].sort((a, b) => a[0] - b[0]);
-	});
+	}
+
+	const releaseCount = $derived(candidates.length);
 </script>
 
-<div class="mx-auto max-w-5xl p-4 sm:p-6">
-	<a class="mb-4 inline-block link text-sm link-hover opacity-60" href="/library/music">
-		← {m.nav_music()}
-	</a>
+<svelte:head><title>{album.title} · {m.nav_music()} · Cinephage</title></svelte:head>
 
-	<header class="mb-6 flex flex-col gap-5 sm:flex-row">
-		<div class="w-44 shrink-0 overflow-hidden rounded-lg bg-base-300">
-			{#if album.hasCover}
-				<img
-					src={`/api/music/albums/${album.id}/cover`}
-					alt={album.title}
-					class="aspect-square h-full w-full object-cover"
-				/>
-			{:else}
-				<div class="flex aspect-square items-center justify-center">
-					<Disc3 class="h-12 w-12 opacity-30" />
-				</div>
-			{/if}
-		</div>
-
-		<div class="min-w-0">
-			<h1 class="text-2xl font-semibold">{album.title}</h1>
-			{#if album.artistMbid}
-				<a class="link link-hover mt-1 inline-block text-lg opacity-80" href={`/discover/music/artist/${album.artistMbid}`}>
-					{album.artistName}
-				</a>
-			{:else}
-				<p class="mt-1 text-lg opacity-80">{album.artistName}</p>
-			{/if}
-
-			<div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
-				{#if album.year}<span class="badge badge-ghost">{album.year}</span>{/if}
-				{#if album.primaryType}<span class="badge badge-ghost">{album.primaryType}</span>{/if}
-				{#each album.secondaryTypes ?? [] as type (type)}
-					<span class="badge badge-ghost">{type}</span>
-				{/each}
-				{#if album.status}<span class="badge badge-ghost">{album.status}</span>{/if}
-				{#if album.hasFile}
-					<span class="badge gap-1 badge-success">
-						<CircleCheck class="h-3 w-3" />{m.music_inLibrary()}
-					</span>
+<div class="mx-auto max-w-6xl p-4 sm:p-6">
+	<AlbumHero
+		album={{ ...album, monitored }}
+		coverUrl={album.hasCover ? `/api/music/albums/${album.id}/cover` : null}
+		artistHref={album.artistMbid ? `/discover/music/artist/${album.artistMbid}` : null}
+		backHref="/library/music"
+		backLabel={m.nav_music()}
+		onMonitorToggle={toggleMonitor}
+		{monitorBusy}
+	>
+		{#snippet actions()}
+			<button class="btn gap-1.5 btn-primary btn-sm" disabled={searchingReleases} onclick={findReleases}>
+				{#if searchingReleases}
+					<LoaderCircle class="h-4 w-4 animate-spin" />
 				{:else}
-					<span class="badge gap-1 badge-ghost">
-						<CircleDashed class="h-3 w-3" />{m.music_missingFiles()}
-					</span>
+					<Search class="h-4 w-4" />
 				{/if}
-			</div>
-
-			<dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
-				<div class="flex gap-2">
-					<dt class="opacity-50">{m.music_tracksLabel()}</dt>
-					<dd>{album.trackCount ?? album.tracks.length}</dd>
-				</div>
-				<div class="flex gap-2">
-					<dt class="opacity-50">{m.music_durationLabel()}</dt>
-					<dd class="flex items-center gap-1"><Clock class="h-3 w-3" />{clock(album.duration)}</dd>
-				</div>
-				{#if album.mediaCount && album.mediaCount > 1}
-					<div class="flex gap-2">
-						<dt class="opacity-50">{m.music_discsLabel()}</dt>
-						<dd class="flex items-center gap-1"><Disc3 class="h-3 w-3" />{album.mediaCount}</dd>
-					</div>
-				{/if}
-				{#if album.labelName}
-					<div class="flex gap-2">
-						<dt class="opacity-50">{m.music_labelLabel()}</dt>
-						<dd class="truncate">
-							{album.labelName}{#if album.catalogNumber}<span class="opacity-50">
-									· {album.catalogNumber}</span
-								>{/if}
-						</dd>
-					</div>
-				{/if}
-			</dl>
-		</div>
-	</header>
-
-	<section class="card mb-6 bg-base-200">
-		<div class="card-body gap-3">
-			<div class="flex items-center justify-between gap-3">
-				<h2 class="card-title text-base">{m.music_releasesTitle()}</h2>
-				<button class="btn btn-outline btn-sm" disabled={searchingReleases} onclick={findReleases}>
-					{#if searchingReleases}
+				{m.music_findReleases()}
+			</button>
+			{#if candidates.some((candidate) => candidate.accepted)}
+				<button
+					class="btn gap-1.5 btn-secondary btn-sm"
+					disabled={grabbingGuid !== null}
+					onclick={() => grab(null)}
+				>
+					{#if grabbingGuid === 'best'}
 						<LoaderCircle class="h-4 w-4 animate-spin" />
 					{:else}
-						<Search class="h-4 w-4" />
+						<Download class="h-4 w-4" />
 					{/if}
-					{m.music_findReleases()}
+					{m.music_grabBest()}
 				</button>
-				{#if candidates.some((candidate) => candidate.accepted)}
-					<button
-						class="btn btn-primary btn-sm"
-						disabled={grabbingGuid !== null}
-						onclick={() => grab(null)}
-					>
-						{#if grabbingGuid === 'best'}
-							<LoaderCircle class="h-4 w-4 animate-spin" />
-						{:else}
-							<Download class="h-4 w-4" />
+			{/if}
+			<button class="btn gap-1.5 btn-ghost btn-sm" onclick={() => (importOpen = true)}>
+				<HardDriveDownload class="h-4 w-4" />
+				{m.music_importFromDisk()}
+			</button>
+			<button class="btn gap-1.5 btn-ghost btn-sm text-error hover:bg-error/10" onclick={() => (deleteOpen = true)}>
+				<Trash2 class="h-4 w-4" />
+				{m.music_removeAlbum()}
+			</button>
+		{/snippet}
+	</AlbumHero>
+
+	<div class="mt-5 flex items-center gap-1 border-b border-base-content/10">
+		<button
+			class="border-b-2 px-3 py-2 text-sm font-medium transition-colors {activeTab === 'tracks'
+				? 'border-primary text-primary'
+				: 'border-transparent text-base-content/55 hover:text-base-content'}"
+			onclick={() => (activeTab = 'tracks')}
+		>
+			{m.music_tracksLabel()}
+			<span class="ml-1.5 badge badge-sm badge-ghost">{album.tracks.length}</span>
+		</button>
+		<button
+			class="border-b-2 px-3 py-2 text-sm font-medium transition-colors {activeTab === 'releases'
+				? 'border-primary text-primary'
+				: 'border-transparent text-base-content/55 hover:text-base-content'}"
+			onclick={() => {
+				activeTab = 'releases';
+				if (!searched) findReleases();
+			}}
+		>
+			{m.music_releasesTitle()}
+			{#if releaseCount > 0}
+				<span class="ml-1.5 badge badge-sm badge-ghost">{releaseCount}</span>
+			{/if}
+		</button>
+	</div>
+
+	<div class="mt-4">
+		{#if activeTab === 'tracks'}
+			{#if album.tracks.length === 0}
+				<div
+					class="rounded-xl border border-dashed border-base-content/15 px-6 py-12 text-center text-sm text-base-content/55"
+				>
+					{m.music_noTracks()}
+				</div>
+			{:else}
+				<TrackList tracks={album.tracks} artistName={album.artistName} />
+			{/if}
+		{:else}
+			<div class="rounded-xl border border-base-content/10 bg-base-100">
+				<div class="flex flex-wrap items-center justify-between gap-3 border-b border-base-content/10 px-4 py-3">
+					<p class="text-sm font-medium">{m.music_releasesTitle()}</p>
+					<div class="flex items-center gap-2">
+						{#if candidates.some((candidate) => candidate.accepted)}
+							<button
+								class="btn gap-1.5 btn-primary btn-xs"
+								disabled={grabbingGuid !== null}
+								onclick={() => grab(null)}
+							>
+								{#if grabbingGuid === 'best'}
+									<LoaderCircle class="h-3.5 w-3.5 animate-spin" />
+								{:else}
+									<Download class="h-3.5 w-3.5" />
+								{/if}
+								{m.music_grabBest()}
+							</button>
 						{/if}
-						{m.music_grabBest()}
-					</button>
+						<button class="btn gap-1.5 btn-outline btn-xs" disabled={searchingReleases} onclick={findReleases}>
+							{#if searchingReleases}
+								<LoaderCircle class="h-3.5 w-3.5 animate-spin" />
+							{:else}
+								<Search class="h-3.5 w-3.5" />
+							{/if}
+							{m.music_findReleases()}
+						</button>
+					</div>
+				</div>
+
+				{#if grabError}
+					<p class="px-4 pt-3 text-sm text-error">{grabError}</p>
+				{/if}
+				{#if grabbed}
+					<p class="px-4 pt-3 text-sm text-success">{m.music_grabbed({ title: grabbed })}</p>
+				{/if}
+				{#if releaseError}
+					<p class="px-4 py-6 text-sm text-base-content/55">{releaseError}</p>
+				{:else if searchingReleases && candidates.length === 0}
+					<p class="px-4 py-6 text-sm text-base-content/55">{m.common_searching()}</p>
+				{:else if candidates.length === 0}
+					<p class="px-4 py-6 text-sm text-base-content/55">{m.common_noResults()}</p>
+				{:else}
+					<table class="table table-sm">
+						<thead>
+							<tr class="border-base-content/10 bg-base-200/40">
+								<th>{m.music_titleHeader()}</th>
+								<th class="w-32">{m.music_indexer()}</th>
+								<th class="w-24 text-right">{m.music_size()}</th>
+								<th class="w-28">{m.music_quality()}</th>
+								<th class="w-20 text-right">{m.music_seeders()}</th>
+								<th class="w-16"></th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each candidates as candidate (candidate.title + (candidate.indexerName ?? ''))}
+								<tr class="border-base-content/5 hover:bg-base-200/40">
+									<td class="max-w-0 truncate" title={candidate.title}>
+										<span class="font-medium">{candidate.title}</span>
+										{#if candidate.accepted === false && candidate.reasons?.length}
+											<span class="ml-2 text-xs text-warning">{candidate.reasons[0]}</span>
+										{/if}
+									</td>
+									<td class="text-xs text-base-content/55">{candidate.indexerName ?? '–'}</td>
+									<td class="text-right font-mono text-xs text-base-content/60 tabular-nums">
+										{gib(candidate.size)}
+									</td>
+									<td>
+										<span class="badge badge-sm" class:badge-ghost={candidate.accepted === false}>
+											{qualityLabel(candidate)}
+										</span>
+									</td>
+									<td class="text-right tabular-nums">{candidate.seeders ?? '–'}</td>
+									<td class="text-right">
+										<button
+											class="btn btn-ghost btn-xs"
+											disabled={grabbingGuid !== null || candidate.accepted === false}
+											title={candidate.accepted === false
+												? (candidate.reasons?.[0] ?? m.music_grabFailed())
+												: (candidate.tierLabel ?? '')}
+											onclick={() => grab(candidate)}
+										>
+											{#if grabbingGuid === candidate.guid}
+												<LoaderCircle class="h-3 w-3 animate-spin" />
+											{:else}
+												{m.music_grab()}
+											{/if}
+										</button>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
 				{/if}
 			</div>
-			{#if grabError}
-				<p class="text-sm text-error">{grabError}</p>
-			{/if}
-			{#if grabbed}
-				<p class="text-sm text-success">{m.music_grabbed({ title: grabbed })}</p>
-			{/if}
-			{#if releaseError}
-				<p class="text-sm opacity-70">{releaseError}</p>
-			{/if}
-			{#if candidates.length > 0}
-				<table class="table table-sm">
-					<thead>
-						<tr>
-							<th>{m.music_titleHeader()}</th>
-							<th class="w-32">{m.music_indexer()}</th>
-							<th class="w-24 text-right">{m.music_size()}</th>
-							<th class="w-24">{m.music_quality()}</th>
-							<th class="w-20 text-right">{m.music_seeders()}</th>
-							<th class="w-16"></th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each candidates as candidate (candidate.title + (candidate.indexerName ?? ''))}
-							<tr class="hover">
-								<td class="truncate">{candidate.title}</td>
-								<td class="text-xs opacity-60">{candidate.indexerName ?? '–'}</td>
-								<td class="text-right tabular-nums opacity-70">{gib(candidate.size)}</td>
-								<td>
-									<span class="badge badge-sm" class:badge-ghost={candidate.accepted === false}>
-										{qualityLabel(candidate)}
-									</span>
-									{#if candidate.accepted === false && candidate.reasons?.length}
-										<span class="ml-1 text-xs opacity-50">{candidate.reasons[0]}</span>
-									{/if}
-								</td>
-								<td class="text-right tabular-nums">{candidate.seeders ?? '–'}</td>
-								<td class="text-right">
-									<button
-										class="btn btn-ghost btn-xs"
-										disabled={grabbingGuid !== null || candidate.accepted === false}
-										title={candidate.accepted === false
-											? (candidate.reasons?.[0] ?? m.music_grabFailed())
-											: (candidate.tierLabel ?? '')}
-										onclick={() => grab(candidate)}
-									>
-										{#if grabbingGuid === candidate.guid}
-											<LoaderCircle class="h-3 w-3 animate-spin" />
-										{:else}
-											{m.music_grab()}
-										{/if}
-									</button>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			{/if}
-		</div>
-	</section>
-
-	{#each discs as [disc, discTracks] (disc)}
-		{#if discs.length > 1}
-			<h2 class="mb-1 text-xs font-semibold tracking-wide uppercase opacity-50">
-				{m.music_disc({ number: disc })}
-			</h2>
 		{/if}
-		<table class="table table-sm">
-			<thead>
-				<tr>
-					<th class="w-12">{m.music_trackHeader()}</th>
-					<th>{m.music_titleHeader()}</th>
-					<th class="w-20 text-right">{m.music_durationLabel()}</th>
-					<th class="w-8"></th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each discTracks as track (track.id)}
-					<tr class="hover">
-						<td class="opacity-50">{track.trackNumber ?? '–'}</td>
-						<td>
-							<p class="font-medium">{track.title}</p>
-							{#if track.artistCredit && track.artistCredit !== album.artistName}
-								<p class="text-xs opacity-50">{track.artistCredit}</p>
-							{/if}
-						</td>
-						<td class="text-right tabular-nums opacity-60">{clock(track.duration)}</td>
-						<td>
-							{#if track.hasFile}
-								<CircleCheck class="h-4 w-4 text-success" />
-							{/if}
-						</td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-	{/each}
+	</div>
 </div>
+
+<ModalWrapper open={importOpen} onClose={() => (importOpen = false)} maxWidth="lg">
+	<h2 class="text-lg font-bold">{m.music_importFromDisk()}</h2>
+	<p class="mt-1 text-sm text-base-content/55">{m.music_importHint()}</p>
+	<form
+		class="mt-4 flex gap-2"
+		onsubmit={(event) => {
+			event.preventDefault();
+			importFolder();
+		}}
+	>
+		<input
+			class="input w-full input-sm font-mono"
+			bind:value={importPath}
+			placeholder="/media/Music/Artist/Album"
+			aria-label={m.common_path()}
+		/>
+		<button class="btn gap-1.5 btn-primary btn-sm" type="submit" disabled={importing || !importPath.trim()}>
+			{#if importing}
+				<LoaderCircle class="h-4 w-4 animate-spin" />
+			{:else}
+				<HardDriveDownload class="h-4 w-4" />
+			{/if}
+			{m.music_importAction()}
+		</button>
+	</form>
+</ModalWrapper>
+
+<ConfirmationModal
+	open={deleteOpen}
+	title={m.music_removeAlbum()}
+	message={m.music_removeAlbumConfirm({ title: album.title })}
+	confirmLabel={m.common_delete()}
+	confirmVariant="error"
+	loading={deleting}
+	onConfirm={removeAlbum}
+	onCancel={() => (deleteOpen = false)}
+/>

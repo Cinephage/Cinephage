@@ -40,6 +40,8 @@ export interface AlbumSummary {
 	artistMbid: string | null;
 	year: number | null;
 	trackCount: number | null;
+	/** Total runtime in seconds, summed across the tracklist. */
+	duration: number | null;
 	hasFile: boolean | null;
 	monitored: boolean | null;
 	coverPath: string | null;
@@ -245,8 +247,43 @@ export class MusicAlbumService {
 		return new Set(rows.flatMap((row) => (row.mbid ? [row.mbid] : [])));
 	}
 
-	/** Albums for the library list, artist-major then chronological. */
-	listAlbums(options: { libraryId?: string | null } = {}): AlbumSummary[] {
+	/**
+	 * Flip an album's monitored flag. Returns false when the id is unknown, so
+	 * the route can answer 404 instead of pretending it updated something.
+	 */
+	setMonitored(albumId: string, monitored: boolean): boolean {
+		const result = db.update(albums).set({ monitored }).where(eq(albums.id, albumId)).run();
+		return result.changes > 0;
+	}
+
+	/**
+	 * Remove an album and its tracklist. The `media_items` identity row is
+	 * deleted with it — that row exists only to carry this album's cross-cutting
+	 * links, and leaving it behind would strand them on a subject that no longer
+	 * exists. Files on disk are never touched: this is a catalogue write, and
+	 * the movie/series delete paths behave the same way.
+	 */
+	deleteAlbum(albumId: string): boolean {
+		const row = db
+			.select({ mediaItemId: albums.mediaItemId })
+			.from(albums)
+			.where(eq(albums.id, albumId))
+			.get();
+		if (!row) return false;
+
+		db.transaction((tx) => {
+			tx.delete(albums).where(eq(albums.id, albumId)).run();
+			tx.delete(mediaItems).where(eq(mediaItems.id, row.mediaItemId)).run();
+		});
+		logger.info({ albumId }, '[MusicAlbum] album removed');
+		return true;
+	}
+
+	/**
+	 * Albums for the library list, artist-major then chronological. `artistId`
+	 * narrows it to one artist's discography for the artist page.
+	 */
+	listAlbums(options: { libraryId?: string | null; artistId?: string | null } = {}): AlbumSummary[] {
 		const base = db
 			.select({
 				id: albums.id,
@@ -256,6 +293,7 @@ export class MusicAlbumService {
 				artistMbid: artists.mbid,
 				year: albums.year,
 				trackCount: albums.trackCount,
+				duration: albums.duration,
 				hasFile: albums.hasFile,
 				monitored: albums.monitored,
 				coverPath: albums.coverPath,
@@ -265,7 +303,16 @@ export class MusicAlbumService {
 			.from(albums)
 			.innerJoin(artists, eq(albums.artistId, artists.id));
 
-		const rows = (options.libraryId ? base.where(eq(albums.libraryId, options.libraryId)) : base)
+		const rows = (
+			options.libraryId || options.artistId
+				? base.where(
+						and(
+							options.libraryId ? eq(albums.libraryId, options.libraryId) : undefined,
+							options.artistId ? eq(albums.artistId, options.artistId) : undefined
+						)
+					)
+				: base
+		)
 			.orderBy(asc(artists.name), asc(albums.year), asc(albums.title))
 			.all();
 
