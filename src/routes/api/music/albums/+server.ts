@@ -120,3 +120,38 @@ export const POST: RequestHandler = async (event) => {
 		);
 	}
 };
+
+
+const bulkMonitoredSchema = z.object({
+	ids: z.array(z.string().min(1)).min(1).max(500),
+	monitored: z.boolean()
+});
+
+/**
+ * PATCH /api/music/albums — the list page's Monitor All / Unmonitor All.
+ *
+ * One request for a whole filtered shelf: the library toolbar acts on what the
+ * user is looking at, and a loop of per-album PATCHes would be N round trips
+ * with no atomicity between them.
+ */
+export const PATCH: RequestHandler = async (event) => {
+	const authError = requireAdmin(event);
+	if (authError) return authError;
+
+	let input: z.infer<typeof bulkMonitoredSchema>;
+	try {
+		input = await parseBody(event.request, bulkMonitoredSchema);
+	} catch (err) {
+		return Response.json(
+			{ error: 'Invalid request', details: err instanceof Error ? err.message : String(err) },
+			{ status: 400 }
+		);
+	}
+
+	let updated = 0;
+	for (const id of input.ids) {
+		if (musicAlbumService.setMonitored(id, input.monitored)) updated += 1;
+	}
+
+	return Response.json({ success: true, updated, requested: input.ids.length });
+};

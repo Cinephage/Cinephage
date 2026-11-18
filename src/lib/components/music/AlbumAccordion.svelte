@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ChevronDown, Disc3, Eye, EyeOff } from '@lucide/svelte';
+	import { ChevronDown, Disc3, Eye, EyeOff, LoaderCircle, MoreVertical, Search, Trash2, Zap } from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import { resolvePath } from '#lib/utils/routing.js';
 	import type { AlbumWithTracks } from './music-card.js';
@@ -10,16 +10,37 @@
 		albums: AlbumWithTracks[];
 		openAlbumId: string | null;
 		onToggle: (albumId: string) => void;
+		/** Row actions: the album is the unit that searches and grabs, like a season. */
+		onMonitorToggle?: (album: AlbumWithTracks) => void;
+		onAutoSearch?: (album: AlbumWithTracks) => void;
+		onRemove?: (album: AlbumWithTracks) => void;
+		/** Albums with a request in flight (search, monitor, delete). */
+		busyAlbumIds?: Set<string>;
+		/** Per-track action: grab the best release for the track's album. */
+		onAutoSearchTrack?: (track: AlbumWithTracks['tracks'][number], album: AlbumWithTracks) => void;
+		/** Per-track action: open the interactive search for the track. */
+		onOpenSearchTrack?: (track: AlbumWithTracks['tracks'][number], album: AlbumWithTracks) => void;
 	};
 
-	let { albums, openAlbumId, onToggle }: Props = $props();
+	let {
+		albums,
+		openAlbumId,
+		onToggle,
+		onMonitorToggle,
+		onAutoSearch,
+		onRemove,
+		busyAlbumIds = new Set(),
+		onAutoSearchTrack,
+		onOpenSearchTrack
+	}: Props = $props();
 </script>
 
 <ul class="space-y-2">
 	{#each albums as album (album.id)}
 		{@const open = openAlbumId === album.id}
+		{@const busy = busyAlbumIds.has(album.id)}
 		<li class="overflow-hidden rounded-xl border border-base-content/10 bg-base-100">
-			<div class="flex items-center gap-3 p-3">
+			<div class="flex items-center gap-2 p-3">
 				<button
 					class="flex min-w-0 flex-1 items-center gap-3 text-left"
 					onclick={() => onToggle(album.id)}
@@ -55,30 +76,71 @@
 						{:else}
 							<span class="badge badge-sm border-none bg-warning/15 text-warning">{m.common_missing()}</span>
 						{/if}
-						<span
-							class="flex h-6 w-6 items-center justify-center rounded-full {album.monitored
-								? 'bg-success/15 text-success'
-								: 'bg-base-content/10 text-base-content/40'}"
-							title={album.monitored ? m.common_monitored() : m.common_unmonitored()}
-						>
-							{#if album.monitored}
-								<Eye class="h-3.5 w-3.5" />
-							{:else}
-								<EyeOff class="h-3.5 w-3.5" />
-							{/if}
-						</span>
 					</div>
 
 					<ChevronDown
 						class="h-4 w-4 shrink-0 text-base-content/40 transition-transform {open ? 'rotate-180' : ''}"
 					/>
 				</button>
-				<a
-					class="hidden shrink-0 text-xs font-medium text-base-content/45 hover:text-primary sm:block"
-					href={resolvePath(`/library/music/${album.id}`)}
-				>
-					{m.common_details()}
-				</a>
+
+				<!-- Row actions: monitor, search, more — the season row's set. -->
+				{#if onMonitorToggle}
+					<button
+						class="btn btn-ghost btn-xs {album.monitored ? 'text-success' : 'text-base-content/40'}"
+						title={album.monitored ? m.common_monitored() : m.common_unmonitored()}
+						disabled={busy}
+						onclick={() => onMonitorToggle(album)}
+					>
+						{#if album.monitored}
+							<Eye class="h-4 w-4" />
+						{:else}
+							<EyeOff class="h-4 w-4" />
+						{/if}
+					</button>
+				{/if}
+
+				{#if onAutoSearch}
+					<button
+						class="btn btn-ghost btn-xs"
+						title={m.music_findReleases()}
+						disabled={busy}
+						onclick={() => onAutoSearch(album)}
+					>
+						{#if busy}
+							<LoaderCircle class="h-4 w-4 animate-spin" />
+						{:else}
+							<Zap class="h-4 w-4" />
+						{/if}
+					</button>
+				{/if}
+
+				{#if onRemove || album.id}
+					<div class="dropdown dropdown-end">
+						<div tabindex="0" role="button" class="btn btn-ghost btn-xs">
+							<MoreVertical class="h-4 w-4" />
+						</div>
+						<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+						<ul
+							tabindex="0"
+							class="menu dropdown-content z-50 w-44 rounded-box border border-base-content/10 bg-base-200 p-2 shadow-lg"
+						>
+							<li>
+								<a href={resolvePath(`/library/music/${album.id}`)}>
+									<Search class="h-4 w-4" />
+									{m.common_details()}
+								</a>
+							</li>
+							{#if onRemove}
+								<li>
+									<button class="text-error" onclick={() => onRemove(album)}>
+										<Trash2 class="h-4 w-4" />
+										{m.music_removeAlbum()}
+									</button>
+								</li>
+							{/if}
+						</ul>
+					</div>
+				{/if}
 			</div>
 
 			{#if open}
@@ -86,7 +148,16 @@
 					{#if album.tracks.length === 0}
 						<p class="px-2 py-6 text-center text-sm text-base-content/50">{m.music_noTracks()}</p>
 					{:else}
-						<TrackList tracks={album.tracks} artistName={album.artistName} />
+						<TrackList
+							tracks={album.tracks}
+							artistName={album.artistName}
+							onAutoSearch={onAutoSearchTrack
+								? (track) => onAutoSearchTrack(track, album)
+								: undefined}
+							onOpenSearch={onOpenSearchTrack
+								? (track) => onOpenSearchTrack(track, album)
+								: undefined}
+						/>
 					{/if}
 				</div>
 			{/if}

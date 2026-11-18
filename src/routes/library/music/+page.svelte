@@ -1,57 +1,66 @@
 <script lang="ts">
+	import { invalidateAll, replaceState } from '$app/navigation';
 	import type { PageData } from './$types.js';
-	import { replaceState } from '$app/navigation';
 	import {
 		Disc3,
 		Eye,
 		EyeOff,
-		LayoutGrid,
-		List,
-		LoaderCircle,
-		Plus,
 		Search,
 		SlidersHorizontal,
-		X
+		X,
+		LayoutGrid,
+		List,
+		ChevronDown,
+		Plus,
+		Mic2,
+		Music
 	} from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
-	import AlbumCard from '#lib/components/music/AlbumCard.svelte';
-	import ArtistCard from '#lib/components/music/ArtistCard.svelte';
+	import LibraryMediaCard from '#lib/components/library/LibraryMediaCard.svelte';
+	import LibraryMediaTable from '#lib/components/library/LibraryMediaTable.svelte';
+	import LibraryDrawer from '#lib/components/library/LibraryDrawer.svelte';
+	import {
+		albumCardView,
+		albumRowView,
+		artistCardView,
+		artistRowView
+	} from '#lib/components/library/media-view.js';
 	import TrackTable from '#lib/components/music/TrackTable.svelte';
+	import TrackSearchModal from '#lib/components/music/TrackSearchModal.svelte';
 	import MusicAddModal from '#lib/components/music/MusicAddModal.svelte';
-	import type { AlbumCardData, ArtistCardData } from '#lib/components/music/music-card.js';
-	import { formatRuntime } from '#lib/components/music/music-card.js';
+	import { viewPreferences } from '#lib/stores/view-preferences.svelte.js';
+	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { SvelteSet } from 'svelte/reactivity';
+	import type { TrackTableRow } from '#lib/components/music/music-card.js';
 
 	let { data }: { data: PageData } = $props();
 
-	type Tab = 'artists' | 'albums' | 'songs';
+	type Browse = 'artists' | 'albums' | 'songs';
 	type FileFilter = 'all' | 'downloaded' | 'missing';
 	type MonitorFilter = 'all' | 'monitored' | 'unmonitored';
-	type Sort = 'artist-asc' | 'title-asc' | 'year-desc' | 'year-asc' | 'tracks-desc';
 
 	const initial = new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search);
-
-	const initialTab = initial.get('tab');
-	let tab = $state<Tab>(
-		initialTab === 'albums' || initialTab === 'songs' ? initialTab : 'artists'
+	const initialBrowse = initial.get('type');
+	let browse = $state<Browse>(
+		initialBrowse === 'albums' || initialBrowse === 'songs' ? initialBrowse : 'artists'
 	);
-	let query = $state(initial.get('q') ?? '');
-	let sort = $state<Sort>((initial.get('sort') as Sort) ?? 'artist-asc');
+	let searchQuery = $state(initial.get('q') ?? '');
 	let fileFilter = $state<FileFilter>((initial.get('file') as FileFilter) ?? 'all');
 	let monitorFilter = $state<MonitorFilter>((initial.get('monitor') as MonitorFilter) ?? 'all');
-	let view = $state<'grid' | 'list'>(initial.get('view') === 'list' ? 'list' : 'grid');
+	let sortField = $state(initial.get('sort') ?? 'name-asc');
+	let drawerOpen = $state(false);
 	let addOpen = $state(false);
-	let filtersOpen = $state(false);
 
-	const sortOptions: Array<{ value: Sort; label: string }> = [
-		{ value: 'artist-asc', label: m.music_sortArtistAsc() },
-		{ value: 'title-asc', label: m.music_sortTitleAsc() },
-		{ value: 'year-desc', label: m.music_sortYearDesc() },
-		{ value: 'year-asc', label: m.music_sortYearAsc() },
-		{ value: 'tracks-desc', label: m.music_sortTracksDesc() }
-	];
+	const isAdminUser = $derived(data.user?.role === 'admin');
 
+	/**
+	 * One search box, three levels. A query looks at artists, albums and songs at
+	 * once — the way the movie list's search looks at every movie — and the
+	 * matching kind decides how a result is drawn. An empty query is the browse
+	 * state, which shows one level at a time.
+	 */
 	const needles = $derived(
-		query
+		searchQuery
 			.trim()
 			.toLowerCase()
 			.split(/\s+/)
@@ -64,64 +73,150 @@
 		return needles.every((needle) => haystack.includes(needle));
 	}
 
-	const filteredAlbums = $derived.by(() => {
-		const rows = data.albums.filter((album) => {
-			if (!matches(`${album.title} ${album.artistName}`)) return false;
-			if (fileFilter === 'downloaded' && !album.hasFile) return false;
-			if (fileFilter === 'missing' && album.hasFile) return false;
-			if (monitorFilter === 'monitored' && !album.monitored) return false;
-			if (monitorFilter === 'unmonitored' && album.monitored) return false;
-			return true;
-		});
+	function keepFile(hasFile: boolean | null | undefined): boolean {
+		if (fileFilter === 'downloaded' && !hasFile) return false;
+		if (fileFilter === 'missing' && hasFile) return false;
+		return true;
+	}
 
-		return [...rows].sort((a, b) => {
-			switch (sort) {
-				case 'title-asc':
-					return a.title.localeCompare(b.title);
-				case 'year-desc':
-					return (b.year ?? 0) - (a.year ?? 0);
-				case 'year-asc':
-					return (a.year ?? 9999) - (b.year ?? 9999);
-				case 'tracks-desc':
-					return (b.trackCount ?? 0) - (a.trackCount ?? 0);
-				default:
-					return a.artistName.localeCompare(b.artistName) || (a.year ?? 0) - (b.year ?? 0);
-			}
-		});
+	function keepMonitor(monitored: boolean | null | undefined): boolean {
+		if (monitorFilter === 'monitored' && !monitored) return false;
+		if (monitorFilter === 'unmonitored' && monitored) return false;
+		return true;
+	}
+
+	const artists = $derived(
+		[...data.artists]
+			.filter(
+				(artist) =>
+					matches(artist.name) &&
+					keepMonitor(artist.monitored) &&
+					(fileFilter === 'all' ||
+						(fileFilter === 'downloaded' && artist.inLibraryCount > 0) ||
+						(fileFilter === 'missing' && artist.inLibraryCount < artist.albumCount))
+			)
+			.sort((a, b) => {
+				if (sortField === 'name-desc') return b.name.localeCompare(a.name);
+				if (sortField === 'albums-desc') return b.albumCount - a.albumCount;
+				if (sortField === 'missing-desc')
+					return b.albumCount - b.inLibraryCount - (a.albumCount - a.inLibraryCount);
+				return a.name.localeCompare(b.name);
+			})
+	);
+
+	const albums = $derived(
+		[...data.albums]
+			.filter(
+				(album) =>
+					matches(`${album.title} ${album.artistName}`) &&
+					keepFile(album.hasFile) &&
+					keepMonitor(album.monitored)
+			)
+			.sort((a, b) => {
+				if (sortField === 'title-asc') return a.title.localeCompare(b.title);
+				if (sortField === 'year-desc') return (b.year ?? 0) - (a.year ?? 0);
+				if (sortField === 'year-asc') return (a.year ?? 9999) - (b.year ?? 9999);
+				if (sortField === 'tracks-desc') return (b.trackCount ?? 0) - (a.trackCount ?? 0);
+				return (
+					a.artistName.localeCompare(b.artistName) ||
+					(a.year ?? 0) - (b.year ?? 0) ||
+					a.title.localeCompare(b.title)
+				);
+			})
+	);
+
+	const songs = $derived(
+		data.songs
+			.filter(
+				(song) =>
+					matches(`${song.title} ${song.artistName} ${song.albumTitle}`) && keepFile(song.hasFile)
+			)
+			.sort((a, b) => {
+				if (sortField === 'artist-asc') return a.artistName.localeCompare(b.artistName);
+				if (sortField === 'album-asc') return a.albumTitle.localeCompare(b.albumTitle);
+				if (sortField === 'duration-desc') return (b.duration ?? 0) - (a.duration ?? 0);
+				return a.title.localeCompare(b.title);
+			})
+	);
+
+	const searching = $derived(needles.length > 0);
+
+	function defaultSort(view: Browse): string {
+		if (view === 'songs') return 'title-asc';
+		if (view === 'albums') return 'artist-asc';
+		return 'name-asc';
+	}
+
+	const sortOptions = $derived.by(() => {
+		if (browse === 'songs') {
+			return [
+				{ value: 'title-asc', label: m.music_sortTitleAsc() },
+				{ value: 'artist-asc', label: m.music_sortArtistAsc() },
+				{ value: 'album-asc', label: m.music_sortAlbumAsc() },
+				{ value: 'duration-desc', label: m.music_sortDurationDesc() }
+			];
+		}
+		if (browse === 'albums') {
+			return [
+				{ value: 'artist-asc', label: m.music_sortArtistAsc() },
+				{ value: 'title-asc', label: m.music_sortTitleAsc() },
+				{ value: 'year-desc', label: m.music_sortYearDesc() },
+				{ value: 'year-asc', label: m.music_sortYearAsc() },
+				{ value: 'tracks-desc', label: m.music_sortTracksDesc() }
+			];
+		}
+		return [
+			{ value: 'name-asc', label: m.music_sortNameAsc() },
+			{ value: 'name-desc', label: m.music_sortNameDesc() },
+			{ value: 'albums-desc', label: m.music_sortAlbumsDesc() },
+			{ value: 'missing-desc', label: m.music_sortMissingDesc() }
+		];
 	});
 
-	const filteredArtists = $derived.by(() =>
-		data.artists
-			.filter((artist) => {
-				if (!matches(artist.name)) return false;
-				if (fileFilter === 'downloaded' && artist.inLibraryCount === 0) return false;
-				if (fileFilter === 'missing' && artist.inLibraryCount === artist.albumCount) return false;
-				if (monitorFilter === 'monitored' && !artist.monitored) return false;
-				if (monitorFilter === 'unmonitored' && artist.monitored) return false;
-				return true;
-			})
-			.sort((a, b) => a.name.localeCompare(b.name))
-	);
-
-	const filteredSongs = $derived.by(() =>
-		data.songs.filter((song) => {
-			if (!matches(`${song.title} ${song.artistName} ${song.albumTitle}`)) return false;
-			if (fileFilter === 'downloaded' && !song.hasFile) return false;
-			if (fileFilter === 'missing' && song.hasFile) return false;
-			return true;
-		})
-	);
+	const filterOptions = $derived.by(() => {
+		const options = [
+			{
+				key: 'type',
+				label: m.music_typeLabel(),
+				options: [
+					{ value: 'artists', label: m.music_tabArtists() },
+					{ value: 'albums', label: m.music_tabAlbums() },
+					{ value: 'songs', label: m.music_tabSongs() }
+				]
+			},
+			{
+				key: 'file',
+				label: m.music_filterFile(),
+				options: [
+					{ value: 'all', label: m.common_all() },
+					{ value: 'downloaded', label: m.common_downloaded() },
+					{ value: 'missing', label: m.common_missing() }
+				]
+			}
+		];
+		if (browse !== 'songs') {
+			options.push({
+				key: 'monitor',
+				label: m.music_filterMonitoring(),
+				options: [
+					{ value: 'all', label: m.common_all() },
+					{ value: 'monitored', label: m.common_monitored() },
+					{ value: 'unmonitored', label: m.common_unmonitored() }
+				]
+			});
+		}
+		return options;
+	});
 
 	const activeFilterCount = $derived(
-		(fileFilter === 'all' ? 0 : 1) + (tab === 'songs' || monitorFilter === 'all' ? 0 : 1)
+		(browse === 'artists' ? 0 : 1) + (fileFilter === 'all' ? 0 : 1) + (monitorFilter === 'all' ? 0 : 1)
 	);
 
-	const totalShown = $derived(
-		tab === 'artists'
-			? filteredArtists.length
-			: tab === 'albums'
-				? filteredAlbums.length
-				: filteredSongs.length
+	const browseLabel = $derived(
+		browse === 'albums' ? m.music_tabAlbums() : browse === 'songs' ? m.music_tabSongs() : m.music_tabArtists()
+	);
+	const browseCount = $derived(
+		browse === 'albums' ? data.counts.albums : browse === 'songs' ? data.counts.songs : data.counts.artists
 	);
 
 	// Keep the view in the URL so a reload and the detail page's back link land on
@@ -129,12 +224,11 @@
 	$effect(() => {
 		if (typeof window === 'undefined') return;
 		const params = new URLSearchParams();
-		if (tab !== 'artists') params.set('tab', tab);
-		if (query.trim()) params.set('q', query.trim());
-		if (sort !== 'artist-asc') params.set('sort', sort);
+		if (browse !== 'artists') params.set('type', browse);
+		if (searchQuery.trim()) params.set('q', searchQuery.trim());
 		if (fileFilter !== 'all') params.set('file', fileFilter);
 		if (monitorFilter !== 'all') params.set('monitor', monitorFilter);
-		if (view !== 'grid') params.set('view', view);
+		if (sortField !== sortOptions[0]?.value) params.set('sort', sortField);
 		const next = params.toString();
 		const current = window.location.search.replace(/^\?/, '');
 		if (next !== current) replaceState(`/library/music${next ? `?${next}` : ''}`, {});
@@ -145,19 +239,139 @@
 		monitorFilter = 'all';
 	}
 
-	function coverUrl(album: AlbumCardData): string | null {
-		return album.hasCover ? `/api/music/albums/${album.id}/cover` : null;
+	async function setMonitored(ids: string[], monitored: boolean) {
+		if (ids.length === 0) return;
+		const response = await fetch('/api/music/albums', {
+			method: 'PATCH',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ ids, monitored })
+		});
+		if (!response.ok) {
+			const body = await response.json().catch(() => ({}));
+			toasts.error(body.details ?? body.error ?? m.common_failedToSave());
+			return;
+		}
+		await invalidateAll();
 	}
 
-	function artistCover(artist: ArtistCardData): string | null {
-		return artist.coverAlbumId ? `/api/music/albums/${artist.coverAlbumId}/cover` : null;
+	async function handleMonitorAll(monitored: boolean) {
+		if (browse === 'artists') {
+			await setArtistsMonitored(
+				artists.map((artist) => artist.id),
+				monitored
+			);
+			return;
+		}
+		await setMonitored(
+			albums.map((album) => album.id),
+			monitored
+		);
 	}
+
+	async function setArtistsMonitored(ids: string[], monitored: boolean) {
+		if (ids.length === 0) return;
+		const response = await fetch('/api/music/artists', {
+			method: 'PATCH',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ ids, monitored })
+		});
+		if (!response.ok) {
+			const body = await response.json().catch(() => ({}));
+			toasts.error(body.details ?? body.error ?? m.common_failedToSave());
+			return;
+		}
+		await invalidateAll();
+	}
+
+	async function toggleAlbumMonitored(id: string) {
+		const album = data.albums.find((entry) => entry.id === id);
+		if (!album) return;
+		await setMonitored([id], !album.monitored);
+	}
+
+	async function toggleArtistMonitored(id: string) {
+		const artist = data.artists.find((entry) => entry.id === id);
+		if (!artist) return;
+		await setArtistsMonitored([id], !artist.monitored);
+	}
+
+	async function removeAlbum(id: string) {
+		const album = data.albums.find((entry) => entry.id === id);
+		const response = await fetch(`/api/music/albums/${id}`, { method: 'DELETE' });
+		if (!response.ok) {
+			toasts.error(m.common_failedToSave());
+			return;
+		}
+		toasts.success(m.music_removedAlbum({ title: album?.title ?? '' }));
+		await invalidateAll();
+	}
+
+	async function removeArtist(id: string) {
+		const artist = data.artists.find((entry) => entry.id === id);
+		const response = await fetch(`/api/music/artists/${id}`, { method: 'DELETE' });
+		if (!response.ok) {
+			toasts.error(m.common_failedToSave());
+			return;
+		}
+		toasts.success(m.music_removedArtist({ name: artist?.name ?? '' }));
+		await invalidateAll();
+	}
+
+	/** Song rows search their album — the unit acquisition actually acts on. */
+	const busySongIds = new SvelteSet<string>();
+	let songSearch = $state<{
+		track: { id: string; title: string };
+		albumId: string;
+		albumTitle: string;
+	} | null>(null);
+
+	async function autoSearchSong(track: TrackTableRow) {
+		if (busySongIds.has(track.id)) return;
+		busySongIds.add(track.id);
+		try {
+			const response = await fetch(`/api/music/albums/${track.albumId}/auto-search`, {
+				method: 'POST'
+			});
+			const body = await response.json().catch(() => ({}));
+			if (body.grabbed) {
+				toasts.success(m.music_grabbed({ title: body.release ?? track.albumTitle }));
+				await invalidateAll();
+			} else {
+				toasts.info(body.error ?? m.music_noReleases());
+			}
+		} catch (err) {
+			toasts.error(err instanceof Error ? err.message : m.music_searchFailed());
+		} finally {
+			busySongIds.delete(track.id);
+		}
+	}
+
+	async function searchDiscography(id: string) {
+		for (;;) {
+			const response = await fetch(`/api/music/artists/${id}/search`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ limit: 5 })
+			});
+			const body = await response.json();
+			if (!response.ok) {
+				toasts.error(body.details ?? body.error ?? m.music_searchFailed());
+				return;
+			}
+			if (!body.remaining) break;
+		}
+		await invalidateAll();
+	}
+
+	const selectedIds = new SvelteSet<string>();
+
+	const emptyLibrary = $derived(data.counts.albums === 0);
 </script>
 
 <svelte:head><title>{m.nav_music()} · Cinephage</title></svelte:head>
 
 <div class="min-h-screen bg-base-100 pb-20">
-	<!-- Sticky toolbar: the movie and TV libraries' header, same shape. -->
+	<!-- Header: the movie and TV libraries' toolbar, same shape. -->
 	<div
 		class="sticky top-16 z-30 -mx-4 border-b border-base-200 bg-base-100/80 backdrop-blur-md lg:top-0 lg:mx-0"
 	>
@@ -166,29 +380,29 @@
 				<h1
 					class="min-w-0 bg-linear-to-r from-primary to-secondary bg-clip-text text-xl font-bold text-transparent sm:text-2xl"
 				>
-					{data.library?.name ?? m.nav_music()}
+					{m.nav_music()}
 				</h1>
-				<span class="badge badge-ghost badge-sm sm:badge-lg">{data.counts.albums}</span>
+				<span class="badge badge-ghost badge-sm sm:badge-lg">{browseCount}</span>
 				{#if data.library && data.library.rootFolderCount === 0}
 					<span class="hidden text-xs text-warning sm:inline">{m.music_noRootFolder()}</span>
 				{/if}
 			</div>
 
 			<div class="hidden flex-1 items-center justify-center gap-2 md:flex">
-				<div class="group relative w-full max-w-md">
+				<div class="group relative w-full max-w-lg">
 					<Search
 						class="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-base-content/40 transition-colors group-focus-within:text-primary"
 					/>
 					<input
+						type="text"
+						placeholder={m.music_searchEverything()}
 						class="input w-full rounded-full border-base-content/20 bg-base-200/60 pr-9 pl-10 transition-all duration-200 input-md placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
-						placeholder={m.music_searchLibraryPlaceholder()}
-						bind:value={query}
-						aria-label={m.music_searchLibraryPlaceholder()}
+						bind:value={searchQuery}
 					/>
-					{#if query}
+					{#if searchQuery}
 						<button
 							class="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-0.5 text-base-content/40 transition-colors hover:bg-base-300 hover:text-base-content"
-							onclick={() => (query = '')}
+							onclick={() => (searchQuery = '')}
 							aria-label={m.library_movies_clearSearch()}
 						>
 							<X class="h-3.5 w-3.5" />
@@ -198,281 +412,362 @@
 			</div>
 
 			<div class="ml-auto flex shrink-0 items-center gap-1.5">
-				<button class="btn gap-1.5 btn-primary btn-xs sm:btn-sm" onclick={() => (addOpen = true)}>
-					<Plus class="h-4 w-4" />
-					<span class="hidden sm:inline">{m.music_addMusic()}</span>
-				</button>
+				{#if isAdminUser}
+					<button class="btn gap-1.5 btn-primary btn-xs sm:btn-sm" onclick={() => (addOpen = true)}>
+						<Plus class="h-4 w-4" />
+						<span class="hidden xl:inline">{m.music_addMusic()}</span>
+					</button>
+				{/if}
 
-				<div class="join hidden sm:inline-flex">
-					<button
-						class="btn join-item btn-xs sm:btn-sm"
-						class:btn-active={view === 'grid'}
-						onclick={() => (view = 'grid')}
-						title={m.library_movies_grid()}
-						aria-label={m.library_movies_grid()}
+				<div class="dropdown dropdown-end">
+					<div
+						tabindex="0"
+						role="button"
+						class="btn gap-1.5 btn-ghost btn-xs sm:btn-sm"
+						aria-label={m.music_typeLabel()}
 					>
-						<LayoutGrid class="h-4 w-4" />
-					</button>
-					<button
-						class="btn join-item btn-xs sm:btn-sm"
-						class:btn-active={view === 'list'}
-						onclick={() => (view = 'list')}
-						title={m.library_movies_list()}
-						aria-label={m.library_movies_list()}
+						{#if browse === 'albums'}
+							<Disc3 class="h-4 w-4" />
+						{:else if browse === 'songs'}
+							<Music class="h-4 w-4" />
+						{:else}
+							<Mic2 class="h-4 w-4" />
+						{/if}
+						<span class="hidden xl:inline">{browseLabel}</span>
+						<ChevronDown class="hidden h-3 w-3 sm:block" />
+					</div>
+					<ul
+						class="menu dropdown-content z-50 mt-2 w-44 rounded-box border border-base-300 bg-base-100 p-2 shadow-xl"
 					>
-						<List class="h-4 w-4" />
-					</button>
+						{#each [{ value: 'artists', label: m.music_tabArtists() }, { value: 'albums', label: m.music_tabAlbums() }, { value: 'songs', label: m.music_tabSongs() }] as option (option.value)}
+							<li>
+								<button
+									class={browse === option.value ? 'menu-active' : ''}
+									onclick={() => {
+										browse = option.value as Browse;
+										sortField = defaultSort(option.value as Browse);
+									}}
+								>
+									{option.label}
+								</button>
+							</li>
+						{/each}
+					</ul>
 				</div>
 
-				<select class="select w-40 select-sm hidden lg:block" bind:value={sort} aria-label={m.music_sortTitleAsc()}>
-					{#each sortOptions as option (option.value)}
-						<option value={option.value}>{option.label}</option>
-					{/each}
-				</select>
+				<div class="dropdown dropdown-end">
+					{#if isAdminUser}
+						<div
+							tabindex="0"
+							role="button"
+							class="btn gap-1.5 btn-ghost btn-xs sm:btn-sm"
+							aria-label="Monitoring actions"
+						>
+							<Eye class="h-4 w-4" />
+							<span class="hidden xl:inline">Monitoring</span>
+							<ChevronDown class="hidden h-3 w-3 sm:block" />
+						</div>
+						<ul
+							class="menu dropdown-content z-50 mt-2 w-44 rounded-box border border-base-300 bg-base-100 p-2 shadow-xl"
+						>
+							<li>
+								<button onclick={() => handleMonitorAll(true)}>
+									<Eye class="h-4 w-4" />
+									{m.library_movies_monitorAll()}
+								</button>
+							</li>
+							<li>
+								<button onclick={() => handleMonitorAll(false)}>
+									<EyeOff class="h-4 w-4" />
+									{m.library_movies_unmonitorAll()}
+								</button>
+							</li>
+						</ul>
+					{/if}
+				</div>
 
 				<button
-					class="btn gap-1.5 btn-xs sm:btn-sm {activeFilterCount > 0 ? 'btn-primary' : 'btn-ghost'}"
-					onclick={() => (filtersOpen = !filtersOpen)}
-					aria-expanded={filtersOpen}
+					class="btn btn-ghost btn-sm"
+					onclick={() => viewPreferences.toggleViewMode()}
+					aria-label={viewPreferences.viewMode === 'grid'
+						? m.library_movies_switchToList()
+						: m.library_movies_switchToGrid()}
+				>
+					{#if viewPreferences.viewMode === 'grid'}
+						<List class="h-4 w-4" />
+					{:else}
+						<LayoutGrid class="h-4 w-4" />
+					{/if}
+				</button>
+
+				<button
+					class="btn gap-1.5 btn-sm {activeFilterCount > 0 ? 'btn-primary' : 'btn-ghost'}"
+					onclick={() => (drawerOpen = true)}
+					aria-label={m.library_drawer_title()}
 				>
 					<SlidersHorizontal class="h-4 w-4" />
 					{#if activeFilterCount > 0}
 						<span class="badge badge-sm">{activeFilterCount}</span>
-					{:else}
-						<span class="hidden sm:inline">{m.music_filters()}</span>
 					{/if}
 				</button>
 			</div>
 		</div>
 
-		{#if filtersOpen}
-			<div class="border-t border-base-200 bg-base-100/95 px-4 py-3 lg:px-8">
-				<div class="flex flex-wrap items-end gap-6">
-					<div>
-						<p class="mb-1.5 text-xs font-medium text-base-content/50">{m.music_filterFile()}</p>
-						<div class="join">
-							{#each [{ value: 'all', label: m.common_all() }, { value: 'downloaded', label: m.common_downloaded() }, { value: 'missing', label: m.common_missing() }] as option (option.value)}
-								<button
-									class="btn join-item btn-xs"
-									class:btn-active={fileFilter === option.value}
-									onclick={() => (fileFilter = option.value as FileFilter)}
-								>
-									{option.label}
-								</button>
-							{/each}
-						</div>
-					</div>
-					{#if tab !== 'songs'}
-					<div>
-						<p class="mb-1.5 text-xs font-medium text-base-content/50">{m.music_filterMonitoring()}</p>
-						<div class="join">
-							{#each [{ value: 'all', label: m.common_all() }, { value: 'monitored', label: m.common_monitored() }, { value: 'unmonitored', label: m.common_unmonitored() }] as option (option.value)}
-								<button
-									class="btn join-item btn-xs"
-									class:btn-active={monitorFilter === option.value}
-									onclick={() => (monitorFilter = option.value as MonitorFilter)}
-								>
-									{option.label}
-								</button>
-							{/each}
-						</div>
-					</div>
-					{/if}
-					{#if activeFilterCount > 0}
-						<button class="btn btn-ghost btn-xs" onclick={clearFilters}>
-							{m.library_movies_clearFilters()}
-						</button>
-					{/if}
-					<div class="ml-auto lg:hidden">
-						<select class="select w-40 select-xs" bind:value={sort} aria-label={m.music_sortTitleAsc()}>
-							{#each sortOptions as option (option.value)}
-								<option value={option.value}>{option.label}</option>
-							{/each}
-						</select>
-					</div>
-				</div>
+		<div class="flex items-center gap-2 border-t border-base-200/50 px-4 py-2 md:hidden">
+			<div class="group relative w-full">
+				<Search
+					class="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-base-content/40 transition-colors group-focus-within:text-primary"
+				/>
+				<input
+					type="text"
+					placeholder={m.music_searchEverything()}
+					class="input w-full rounded-full border-base-content/20 bg-base-200/60 pr-9 pl-10 transition-all duration-200 input-md placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
+					bind:value={searchQuery}
+				/>
+				{#if searchQuery}
+					<button
+						class="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-0.5 text-base-content/40 transition-colors hover:bg-base-300 hover:text-base-content"
+						onclick={() => (searchQuery = '')}
+						aria-label={m.library_movies_clearSearch()}
+					>
+						<X class="h-3.5 w-3.5" />
+					</button>
+				{/if}
 			</div>
-		{/if}
+		</div>
 	</div>
 
-	<div class="px-4 pt-4 lg:px-8">
-		<!-- Mobile search: the header field is hidden below md. -->
-		<div class="mb-3 md:hidden">
-			<label class="input w-full">
-				<Search class="h-4 w-4 opacity-40" />
-				<input
-					class="grow"
-					placeholder={m.music_searchLibraryPlaceholder()}
-					bind:value={query}
-					aria-label={m.music_searchLibraryPlaceholder()}
-				/>
-			</label>
-		</div>
-
-		<div class="mb-4 flex flex-wrap items-center gap-2">
-			<div class="tabs tabs-box tabs-sm w-fit">
-				<button class="tab gap-1.5" class:tab-active={tab === 'artists'} onclick={() => (tab = 'artists')}>
-					{m.music_tabArtists()}
-					<span class="badge badge-sm badge-ghost">{data.counts.artists}</span>
-				</button>
-				<button class="tab gap-1.5" class:tab-active={tab === 'albums'} onclick={() => (tab = 'albums')}>
-					{m.music_tabAlbums()}
-					<span class="badge badge-sm badge-ghost">{data.counts.albums}</span>
-				</button>
-				<button class="tab gap-1.5" class:tab-active={tab === 'songs'} onclick={() => (tab = 'songs')}>
-					{m.music_tabSongs()}
-					<span class="badge badge-sm badge-ghost">{data.counts.songs}</span>
-				</button>
-			</div>
-
-			<div class="ml-auto flex flex-wrap items-center gap-3 text-xs text-base-content/50">
-				<span>{m.music_showingCount({ shown: totalShown })}</span>
-				{#if data.counts.missing > 0}
-					<span class="flex items-center gap-1 text-warning">
-						<LoaderCircle class="h-3 w-3" />
-						{m.music_missingCount({ count: data.counts.missing })}
-					</span>
-				{/if}
-				{#if data.counts.monitored > 0}
-					<span class="flex items-center gap-1 text-success">
-						<Eye class="h-3 w-3" />
-						{m.music_monitoredCount({ count: data.counts.monitored })}
-					</span>
-				{/if}
-			</div>
-		</div>
-
-		{#if data.albums.length === 0}
-			<div class="rounded-xl border border-dashed border-base-content/15 px-6 py-16 text-center">
-				<Disc3 class="mx-auto mb-3 h-10 w-10 text-base-content/25" />
-				<p class="font-semibold">{m.music_emptyTitle()}</p>
-				<p class="mx-auto mt-1 max-w-sm text-sm text-base-content/55">{m.music_emptyHint()}</p>
-				<button class="btn mt-4 gap-1.5 btn-primary btn-sm" onclick={() => (addOpen = true)}>
-					<Plus class="h-4 w-4" />
+	<!-- Main content -->
+	<main class="w-full px-4 py-8 lg:px-8">
+		{#if emptyLibrary}
+			<div class="flex flex-col items-center justify-center py-20 text-center opacity-50">
+				<Disc3 class="mb-4 h-20 w-20" />
+				<p class="text-2xl font-bold">{m.music_emptyTitle()}</p>
+				<p class="mt-2">{m.music_emptyHint()}</p>
+				<button class="btn mt-6 btn-primary" onclick={() => (addOpen = true)}>
 					{m.music_addMusic()}
 				</button>
 			</div>
-		{:else if totalShown === 0}
-			<div class="rounded-xl border border-dashed border-base-content/15 px-6 py-14 text-center">
-				<Search class="mx-auto mb-3 h-8 w-8 text-base-content/25" />
-				<p class="font-medium">{m.music_noFilterMatch()}</p>
-				<p class="mt-1 text-sm text-base-content/55">{m.music_tryDifferentFilter()}</p>
-				<button
-					class="btn mt-3 btn-ghost btn-sm"
-					onclick={() => {
-						query = '';
-						clearFilters();
-					}}
-				>
-					{m.library_movies_clearFilters()}
-				</button>
-			</div>
-		{:else if tab === 'songs'}
-			<TrackTable tracks={filteredSongs} />
-		{:else if view === 'grid' && tab === 'artists'}
-			<ul class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-				{#each filteredArtists as artist (artist.id)}
-					<li>
-						<ArtistCard
-							{artist}
-							href={`/library/music/artist/${artist.id}`}
-							coverUrl={artistCover(artist)}
-							showMonitor
+		{:else if searching}
+			<!-- One query, every level. A section appears only when it has matches. -->
+			{#if artists.length > 0}
+				<section class="mb-8">
+					<div class="mb-3 flex items-center gap-2">
+						<h2 class="font-semibold">{m.music_tabArtists()}</h2>
+						<span class="badge badge-sm badge-ghost">{artists.length}</span>
+					</div>
+					{#if viewPreferences.viewMode === 'grid'}
+						<ul class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-9">
+							{#each artists as artist (artist.id)}
+								<li>
+									<LibraryMediaCard view={artistCardView(artist)} />
+								</li>
+							{/each}
+						</ul>
+					{:else}
+						<LibraryMediaTable
+							rows={artists.map((artist) => artistRowView(artist))}
+							kind="artist"
+							selectedItems={selectedIds}
+							selectable={false}
+							onMonitorToggle={isAdminUser ? toggleArtistMonitored : undefined}
+							onAutoGrab={isAdminUser ? searchDiscography : undefined}
+							onDelete={isAdminUser ? removeArtist : undefined}
 						/>
-					</li>
-				{/each}
-			</ul>
-		{:else if view === 'grid'}
-			<ul class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-				{#each filteredAlbums as album (album.id)}
-					<li>
-						<AlbumCard {album} href={`/library/music/${album.id}`} coverUrl={coverUrl(album)} showMonitor />
-					</li>
-				{/each}
-			</ul>
+					{/if}
+				</section>
+			{/if}
+
+			{#if albums.length > 0}
+				<section class="mb-8">
+					<div class="mb-3 flex items-center gap-2">
+						<h2 class="font-semibold">{m.music_tabAlbums()}</h2>
+						<span class="badge badge-sm badge-ghost">{albums.length}</span>
+					</div>
+					{#if viewPreferences.viewMode === 'grid'}
+						<ul class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-9">
+							{#each albums as album (album.id)}
+								<li>
+									<LibraryMediaCard view={albumCardView(album)} />
+								</li>
+							{/each}
+						</ul>
+					{:else}
+						<LibraryMediaTable
+							rows={albums.map((album) => albumRowView(album))}
+							kind="album"
+							selectedItems={selectedIds}
+							selectable={false}
+							columnLabels={{ quality: m.music_typeLabel(), size: m.music_tracksLabel() }}
+							onMonitorToggle={isAdminUser ? toggleAlbumMonitored : undefined}
+							onDelete={isAdminUser ? removeAlbum : undefined}
+						/>
+					{/if}
+				</section>
+			{/if}
+
+			{#if songs.length > 0}
+				<section class="mb-8">
+					<div class="mb-3 flex items-center gap-2">
+						<h2 class="font-semibold">{m.music_tabSongs()}</h2>
+						<span class="badge badge-sm badge-ghost">{songs.length}</span>
+					</div>
+					<TrackTable
+						tracks={songs as TrackTableRow[]}
+						onAutoSearch={autoSearchSong}
+						onOpenSearch={(track) =>
+							(songSearch = {
+								track: { id: track.id, title: track.title },
+								albumId: track.albumId,
+								albumTitle: track.albumTitle
+							})}
+						busyTrackIds={busySongIds}
+					/>
+				</section>
+			{/if}
+
+			{#if artists.length === 0 && albums.length === 0 && songs.length === 0}
+				<div class="flex flex-col items-center justify-center py-20 text-center">
+					<div class="opacity-50">
+						<Search class="mx-auto mb-4 h-16 w-16" />
+						<p class="text-2xl font-bold">{m.music_noSearchMatch({ query: searchQuery })}</p>
+						<p class="mt-2">{m.music_tryDifferentFilter()}</p>
+					</div>
+					<div class="mt-6 flex gap-3">
+						<button class="btn btn-ghost" onclick={() => (searchQuery = '')}>
+							{m.library_movies_clearSearchBtn()}
+						</button>
+						<a
+							href={`/discover?type=music&q=${encodeURIComponent(searchQuery)}`}
+							class="btn btn-primary"
+						>
+							Search in Discover
+						</a>
+					</div>
+				</div>
+			{/if}
+		{:else if browse === 'songs'}
+			{#if songs.length === 0}
+				<div class="flex flex-col items-center justify-center py-20 text-center opacity-50">
+					<Music class="mb-4 h-20 w-20" />
+					<p class="text-2xl font-bold">{m.music_noFilterMatch()}</p>
+					<button class="btn mt-6 btn-primary" onclick={clearFilters}>
+						{m.library_movies_clearFilters()}
+					</button>
+				</div>
+			{:else}
+				<div class="animate-in fade-in slide-in-from-bottom-4 duration-500">
+					<TrackTable
+						tracks={songs as TrackTableRow[]}
+						onAutoSearch={autoSearchSong}
+						onOpenSearch={(track) =>
+							(songSearch = {
+								track: { id: track.id, title: track.title },
+								albumId: track.albumId,
+								albumTitle: track.albumTitle
+							})}
+						busyTrackIds={busySongIds}
+					/>
+				</div>
+			{/if}
+		{:else if browse === 'albums'}
+			{#if albums.length === 0}
+				<div class="flex flex-col items-center justify-center py-20 text-center opacity-50">
+					<Disc3 class="mb-4 h-20 w-20" />
+					<p class="text-2xl font-bold">{m.music_noFilterMatch()}</p>
+					<p class="mt-2">{m.music_tryDifferentFilter()}</p>
+					<button class="btn mt-6 btn-primary" onclick={clearFilters}>
+						{m.library_movies_clearFilters()}
+					</button>
+				</div>
+			{:else}
+				<div class="animate-in fade-in slide-in-from-bottom-4 duration-500">
+					{#if viewPreferences.viewMode === 'grid'}
+						<ul class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-9">
+							{#each albums as album (album.id)}
+								<li>
+									<LibraryMediaCard view={albumCardView(album)} />
+								</li>
+							{/each}
+						</ul>
+					{:else}
+						<LibraryMediaTable
+							rows={albums.map((album) => albumRowView(album))}
+							kind="album"
+							selectedItems={selectedIds}
+							selectable={false}
+							columnLabels={{ quality: m.music_typeLabel(), size: m.music_tracksLabel() }}
+							onMonitorToggle={isAdminUser ? toggleAlbumMonitored : undefined}
+							onDelete={isAdminUser ? removeAlbum : undefined}
+						/>
+					{/if}
+				</div>
+			{/if}
 		{:else}
-			<div class="overflow-hidden rounded-xl border border-base-content/10">
-				<table class="table table-sm">
-					<thead>
-						<tr class="border-base-content/10 bg-base-200/50">
-							<th class="w-10"></th>
-							<th>{m.common_title()}</th>
-							<th class="hidden sm:table-cell">{m.music_tabArtists()}</th>
-							<th class="hidden w-16 text-right sm:table-cell">{m.common_year()}</th>
-							<th class="hidden w-16 text-right md:table-cell">{m.music_tracksLabel()}</th>
-							<th class="hidden w-20 text-right lg:table-cell">{m.music_durationLabel()}</th>
-							<th class="w-28">{m.common_status()}</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#if tab === 'artists'}
-							{#each filteredArtists as artist (artist.id)}
-								<tr class="border-base-content/5 hover:bg-base-200/50">
-									<td>
-										<a href={`/library/music/artist/${artist.id}`} class="block h-9 w-9 overflow-hidden rounded bg-base-300">
-											{#if artistCover(artist)}
-												<img src={artistCover(artist)} alt="" class="h-full w-full object-cover" />
-											{:else}
-												<div class="flex h-full w-full items-center justify-center text-xs font-bold text-base-content/40">
-													{artist.name.charAt(0)}
-												</div>
-											{/if}
-										</a>
-									</td>
-									<td class="max-w-0 truncate font-medium">
-										<a href={`/library/music/artist/${artist.id}`} class="hover:text-primary">{artist.name}</a>
-									</td>
-									<td class="hidden sm:table-cell">{m.music_albumsCount({ count: artist.albumCount })}</td>
-									<td class="hidden text-right text-base-content/40 sm:table-cell">–</td>
-									<td class="hidden text-right md:table-cell">{artist.inLibraryCount}</td>
-									<td class="hidden text-right lg:table-cell">–</td>
-									<td>
-										{#if artist.monitored}
-											<span class="badge gap-1 badge-sm border-none bg-success/15 text-success">
-												<Eye class="h-3 w-3" />{m.common_monitored()}
-											</span>
-										{:else}
-											<span class="badge gap-1 badge-sm border-none bg-base-content/10 text-base-content/50">
-												<EyeOff class="h-3 w-3" />{m.common_unmonitored()}
-											</span>
-										{/if}
-									</td>
-								</tr>
+			{#if artists.length === 0}
+				<div class="flex flex-col items-center justify-center py-20 text-center opacity-50">
+					<Mic2 class="mb-4 h-20 w-20" />
+					<p class="text-2xl font-bold">{m.music_noFilterMatch()}</p>
+					<p class="mt-2">{m.music_tryDifferentFilter()}</p>
+					<button class="btn mt-6 btn-primary" onclick={clearFilters}>
+						{m.library_movies_clearFilters()}
+					</button>
+				</div>
+			{:else}
+				<div class="animate-in fade-in slide-in-from-bottom-4 duration-500">
+					{#if viewPreferences.viewMode === 'grid'}
+						<ul class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-9">
+							{#each artists as artist (artist.id)}
+								<li>
+									<LibraryMediaCard view={artistCardView(artist)} />
+								</li>
 							{/each}
-						{:else}
-							{#each filteredAlbums as album (album.id)}
-								<tr class="border-base-content/5 hover:bg-base-200/50">
-									<td>
-										<a href={`/library/music/${album.id}`} class="block h-9 w-9 overflow-hidden rounded bg-base-300">
-											{#if coverUrl(album)}
-												<img src={coverUrl(album)} alt="" class="h-full w-full object-cover" />
-											{:else}
-												<Disc3 class="m-2 h-5 w-5 text-base-content/30" />
-											{/if}
-										</a>
-									</td>
-									<td class="max-w-0 truncate font-medium">
-										<a href={`/library/music/${album.id}`} class="hover:text-primary">{album.title}</a>
-									</td>
-									<td class="hidden max-w-0 truncate text-base-content/60 sm:table-cell">{album.artistName}</td>
-									<td class="hidden text-right text-base-content/50 sm:table-cell">{album.year ?? '–'}</td>
-									<td class="hidden text-right md:table-cell">{album.trackCount ?? '–'}</td>
-									<td class="hidden text-right lg:table-cell">{formatRuntime(album.duration) ?? '–'}</td>
-									<td>
-										{#if album.hasFile}
-											<span class="badge badge-sm border-none bg-success/15 text-success">{m.common_downloaded()}</span>
-										{:else}
-											<span class="badge badge-sm border-none bg-warning/15 text-warning">{m.common_missing()}</span>
-										{/if}
-									</td>
-								</tr>
-							{/each}
-						{/if}
-					</tbody>
-				</table>
-			</div>
+						</ul>
+					{:else}
+						<LibraryMediaTable
+							rows={artists.map((artist) => artistRowView(artist))}
+							kind="artist"
+							selectedItems={selectedIds}
+							selectable={false}
+							onMonitorToggle={isAdminUser ? toggleArtistMonitored : undefined}
+							onAutoGrab={isAdminUser ? searchDiscography : undefined}
+							onDelete={isAdminUser ? removeArtist : undefined}
+						/>
+					{/if}
+				</div>
+			{/if}
 		{/if}
-	</div>
+	</main>
+
+	<LibraryDrawer
+		isOpen={drawerOpen}
+		{sortOptions}
+		{filterOptions}
+		currentSort={sortField}
+		currentFilters={{ type: browse, file: fileFilter, monitor: monitorFilter }}
+		hiddenActiveFilterKeys={[]}
+		onClose={() => (drawerOpen = false)}
+		onSortChange={(value) => (sortField = value)}
+		onFilterChange={(key, value) => {
+			if (key === 'type') {
+				browse = value as Browse;
+				sortField = defaultSort(value as Browse);
+			}
+			if (key === 'file') fileFilter = value as FileFilter;
+			if (key === 'monitor') monitorFilter = value as MonitorFilter;
+		}}
+		onClearFilters={clearFilters}
+	/>
 </div>
+
+{#if songSearch}
+	<TrackSearchModal
+		open={songSearch !== null}
+		track={songSearch.track}
+		albumId={songSearch.albumId}
+		albumTitle={songSearch.albumTitle}
+		onClose={() => (songSearch = null)}
+	/>
+{/if}
 
 <MusicAddModal open={addOpen} onClose={() => (addOpen = false)} libraryId={data.library?.id ?? null} />

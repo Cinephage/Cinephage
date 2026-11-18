@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { CircleCheck, CircleDashed, Clock } from '@lucide/svelte';
+	import { ChevronDown, CircleCheck, CircleDashed, Clock, LoaderCircle, Search, Zap } from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import type { TrackListTrack } from './music-card.js';
 
@@ -9,9 +9,22 @@
 		artistName?: string | null;
 		/** False on discovery pages, where "have we got the file" has no meaning. */
 		showFileState?: boolean;
+		/** Row action: grab the best release for this track's album. */
+		onAutoSearch?: (track: TrackListTrack) => void;
+		/** Row action: open the interactive search for this track. */
+		onOpenSearch?: (track: TrackListTrack) => void;
+		/** Track ids with a request in flight. */
+		busyTrackIds?: Set<string>;
 	};
 
-	let { tracks, artistName = null, showFileState = true }: Props = $props();
+	let {
+		tracks,
+		artistName = null,
+		showFileState = true,
+		onAutoSearch,
+		onOpenSearch,
+		busyTrackIds = new Set()
+	}: Props = $props();
 
 	const discs = $derived.by(() => {
 		const groups = new Map<number, TrackListTrack[]>();
@@ -69,10 +82,14 @@
 					{#if showFileState}
 						<th class="w-10"></th>
 					{/if}
+					{#if onAutoSearch || onOpenSearch}
+						<th class="w-10"></th>
+					{/if}
 				</tr>
 			</thead>
 			<tbody>
 				{#each discTracks as track (track.id)}
+					{@const busy = busyTrackIds.has(track.id)}
 					<tr class="group border-none hover:bg-base-200/50">
 						<td class="w-12 text-right font-mono text-xs text-base-content/40">
 							{track.trackNumber ?? '–'}
@@ -93,6 +110,49 @@
 								{:else}
 									<CircleDashed class="h-4 w-4 text-base-content/25" />
 								{/if}
+							</td>
+						{/if}
+						{#if onAutoSearch || onOpenSearch}
+							<td class="w-10">
+								<!-- The episode row's search control: auto-grab or pick a release. -->
+								<div class="dropdown dropdown-end">
+									<div
+										tabindex={busy ? -1 : 0}
+										role="button"
+										class="btn btn-ghost btn-xs"
+										class:btn-disabled={busy}
+										title={m.music_searchTrack()}
+									>
+										{#if busy}
+											<LoaderCircle class="h-3.5 w-3.5 animate-spin" />
+										{:else}
+											<Search class="h-3.5 w-3.5" />
+										{/if}
+										<ChevronDown class="h-2.5 w-2.5" />
+									</div>
+									<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+									<ul
+										tabindex="0"
+										class="menu dropdown-content z-50 w-56 rounded-box bg-base-200 p-2 shadow-lg"
+									>
+										{#if onAutoSearch}
+											<li>
+												<button disabled={busy} onclick={() => onAutoSearch(track)}>
+													<Zap class="h-4 w-4" />
+													{m.music_grabBest()}
+												</button>
+											</li>
+										{/if}
+										{#if onOpenSearch}
+											<li>
+												<button onclick={() => onOpenSearch(track)}>
+													<Search class="h-4 w-4" />
+													{m.music_interactiveSearch()}
+												</button>
+											</li>
+										{/if}
+									</ul>
+								</div>
 							</td>
 						{/if}
 					</tr>

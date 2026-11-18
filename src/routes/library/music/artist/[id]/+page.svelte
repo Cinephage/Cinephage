@@ -1,15 +1,16 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
+	import { invalidateAll, goto } from '$app/navigation';
 	import type { PageData } from './$types.js';
-	import { Disc3, LoaderCircle, Music, Pencil, Plus, Search, Trash2 } from '@lucide/svelte';
+	import { LoaderCircle, Search } from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import ArtistHero from '#lib/components/music/ArtistHero.svelte';
 	import AlbumAccordion from '#lib/components/music/AlbumAccordion.svelte';
 	import TrackTable from '#lib/components/music/TrackTable.svelte';
+	import TrackSearchModal from '#lib/components/music/TrackSearchModal.svelte';
 	import type { AlbumWithTracks } from '#lib/components/music/music-card.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { ConfirmationModal, ModalWrapper } from '#lib/components/ui/modal/index.js';
-	import { goto } from '$app/navigation';
 
 	let { data }: { data: PageData } = $props();
 
@@ -34,23 +35,10 @@
 					? m.music_groupSingles()
 					: type;
 
-	const groups = $derived.by(() => {
-		const map = new Map<string, AlbumWithTracks[]>();
-		for (const album of visibleAlbums) {
-			const key = album.primaryType ?? 'Album';
-			map.set(key, [...(map.get(key) ?? []), album]);
-		}
-		return [...map.entries()].sort(
-			(a, b) =>
-				(TYPE_ORDER.indexOf(a[0]) === -1 ? 99 : TYPE_ORDER.indexOf(a[0])) -
-				(TYPE_ORDER.indexOf(b[0]) === -1 ? 99 : TYPE_ORDER.indexOf(b[0]))
-		);
-	});
-
-	let tab = $state<'albums' | 'songs'>('albums');
 	let filter = $state('');
 	let searchingDiscography = $state(false);
 	let searchProgress = $state<{ done: number; total: number } | null>(null);
+	let openAlbumId = $state<string | null>(null);
 
 	const needles = $derived(
 		filter
@@ -69,15 +57,31 @@
 	const visibleAlbums = $derived(
 		albums.filter((album) => matches(`${album.title} ${album.primaryType ?? ''} ${album.year ?? ''}`))
 	);
-	const visibleSongs = $derived(
-		data.songs.filter((song) => matches(`${song.title} ${song.albumTitle}`))
-	);
 
 	/**
-	 * Walk the discography and grab the best accepted release for each album,
-	 * one bounded batch at a time — the artist-level equivalent of the series
-	 * page's search-all.
+	 * The filter searches songs as well as albums, the same way the library's
+	 * one box does. Song matches render as their own section under the
+	 * discography so an album filter never hides a track that matched.
 	 */
+	const visibleSongs = $derived(
+		needles.length === 0
+			? []
+			: data.songs.filter((song) => matches(`${song.title} ${song.albumTitle}`))
+	);
+
+	const groups = $derived.by(() => {
+		const map = new Map<string, AlbumWithTracks[]>();
+		for (const album of visibleAlbums) {
+			const key = album.primaryType ?? 'Album';
+			map.set(key, [...(map.get(key) ?? []), album]);
+		}
+		return [...map.entries()].sort(
+			(a, b) =>
+				(TYPE_ORDER.indexOf(a[0]) === -1 ? 99 : TYPE_ORDER.indexOf(a[0])) -
+				(TYPE_ORDER.indexOf(b[0]) === -1 ? 99 : TYPE_ORDER.indexOf(b[0]))
+		);
+	});
+
 	let editOpen = $state(false);
 	let editName = $state('');
 	let editSortName = $state('');
@@ -170,11 +174,6 @@
 			searchProgress = null;
 		}
 	}
-	let openAlbumId = $state<string | null>(null);
-
-	function toggleAlbum(albumId: string) {
-		openAlbumId = openAlbumId === albumId ? null : albumId;
-	}
 
 	// Optimistic toggle: null follows the server value, an override survives
 	// until the PATCH settles (and reverts on failure).
@@ -244,58 +243,88 @@
 			addingMissing = false;
 		}
 	}
+
+	function toggleAlbum(albumId: string) {
+		openAlbumId = openAlbumId === albumId ? null : albumId;
+	}
+
+	/** Per-album row actions: the same monitor / search / remove set a season row has. */
+	const busyAlbumIds = new SvelteSet<string>();
+	let searchTrack = $state<{
+		track: { id: string; title: string };
+		albumId: string;
+		albumTitle: string;
+	} | null>(null);
+	let removeAlbumTarget = $state<AlbumWithTracks | null>(null);
+	let removingAlbum = $state(false);
+
+	async function toggleAlbumMonitorRow(album: AlbumWithTracks) {
+		if (busyAlbumIds.has(album.id)) return;
+		busyAlbumIds.add(album.id);
+		try {
+			const response = await fetch(`/api/music/albums/${album.id}`, {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ monitored: !album.monitored })
+			});
+			if (!response.ok) {
+				const body = await response.json().catch(() => ({}));
+				toasts.error(body.details ?? body.error ?? m.common_failedToSave());
+				return;
+			}
+			await invalidateAll();
+		} catch (err) {
+			toasts.error(err instanceof Error ? err.message : m.common_failedToSave());
+		} finally {
+			busyAlbumIds.delete(album.id);
+		}
+	}
+
+	async function autoSearchAlbumRow(album: AlbumWithTracks) {
+		if (busyAlbumIds.has(album.id)) return;
+		busyAlbumIds.add(album.id);
+		try {
+			const response = await fetch(`/api/music/albums/${album.id}/auto-search`, { method: 'POST' });
+			const body = await response.json().catch(() => ({}));
+			if (body.grabbed) {
+				toasts.success(m.music_grabbed({ title: body.release ?? album.title }));
+				await invalidateAll();
+			} else {
+				toasts.info(body.error ?? m.music_noReleases());
+			}
+		} catch (err) {
+			toasts.error(err instanceof Error ? err.message : m.music_searchFailed());
+		} finally {
+			busyAlbumIds.delete(album.id);
+		}
+	}
+
+	async function removeAlbumRow() {
+		const album = removeAlbumTarget;
+		if (!album || removingAlbum) return;
+		removingAlbum = true;
+		try {
+			const response = await fetch(`/api/music/albums/${album.id}`, { method: 'DELETE' });
+			if (!response.ok) {
+				const body = await response.json().catch(() => ({}));
+				toasts.error(body.details ?? body.error ?? m.common_failedToSave());
+				return;
+			}
+			toasts.success(m.music_removedAlbum({ title: album.title }));
+			removeAlbumTarget = null;
+			await invalidateAll();
+		} catch (err) {
+			toasts.error(err instanceof Error ? err.message : m.common_failedToSave());
+		} finally {
+			removingAlbum = false;
+		}
+	}
 </script>
 
 <svelte:head><title>{artist.name} · {m.nav_music()} · Cinephage</title></svelte:head>
 
-<div class="w-full px-4 pt-4 pb-20 md:px-6 lg:px-8">
-	<!-- Action bar: the series page's Auto-grab / Edit / Delete row. -->
-	<div class="mb-3 flex flex-wrap items-center justify-end gap-2">
-		<button class="btn gap-1.5 btn-primary btn-sm" disabled={searchingDiscography} onclick={searchDiscography}>
-			{#if searchingDiscography}
-				<LoaderCircle class="h-4 w-4 animate-spin" />
-			{:else}
-				<Search class="h-4 w-4" />
-			{/if}
-			{#if searchProgress}
-				{m.music_searchProgress({ done: searchProgress.done, total: searchProgress.total })}
-			{:else}
-				{m.music_searchDiscography()}
-			{/if}
-		</button>
-		{#if artist.mbid}
-			<button class="btn gap-1.5 btn-outline btn-sm" disabled={addingMissing} onclick={addMissing}>
-				{#if addingMissing}
-					<LoaderCircle class="h-4 w-4 animate-spin" />
-				{:else}
-					<Plus class="h-4 w-4" />
-				{/if}
-				{m.music_addMissing()}
-			</button>
-		{/if}
-		<button
-			class="btn gap-1.5 btn-sm {monitored ? 'bg-success/10 text-success hover:bg-success/20' : 'btn-ghost'}"
-			disabled={monitorBusy}
-			onclick={() => toggleMonitor(!monitored)}
-		>
-			{#if monitorBusy}
-				<LoaderCircle class="h-4 w-4 animate-spin" />
-			{:else if monitored}
-				{m.music_unmonitorAction()}
-			{:else}
-				{m.music_monitorAction()}
-			{/if}
-		</button>
-		<button class="btn gap-1.5 btn-ghost btn-sm" onclick={openEdit}>
-			<Pencil class="h-4 w-4" />
-			{m.music_editAction()}
-		</button>
-		<button class="btn gap-1.5 btn-ghost btn-sm text-error hover:bg-error/10" onclick={() => (deleteOpen = true)}>
-			<Trash2 class="h-4 w-4" />
-			{m.common_delete()}
-		</button>
-	</div>
-
+<div class="flex w-full flex-col gap-4 overflow-x-hidden px-4 pb-20 md:gap-6 md:px-6 lg:px-8">
+	<!-- Header -->
 	<ArtistHero
 		artist={{ ...artist, monitored }}
 		backdropUrl={coverAlbum ? `/api/music/albums/${coverAlbum.id}/cover` : null}
@@ -306,80 +335,127 @@
 		backHref="/library/music"
 		backLabel={m.nav_music()}
 		sourceUrl={artist.mbid ? `https://musicbrainz.org/artist/${artist.mbid}` : null}
+		onMonitorToggle={toggleMonitor}
+		{monitorBusy}
+		onSearchDiscography={searchDiscography}
+		searching={searchingDiscography}
+		searchProgressText={searchProgress
+			? m.music_searchProgress({ done: searchProgress.done, total: searchProgress.total })
+			: null}
+		onAddMissing={artist.mbid ? addMissing : null}
+		{addingMissing}
+		onEdit={openEdit}
+		onRemove={() => (deleteOpen = true)}
 	/>
 
-	<div class="mt-5 flex flex-wrap items-center justify-between gap-3">
-		<div class="flex items-center gap-2">
-			<h2 class="text-sm font-semibold tracking-wide uppercase text-base-content/50">
-				{m.music_discography()}
-			</h2>
-			<span class="badge badge-sm badge-ghost">{visibleAlbums.length}</span>
-		</div>
-		<label class="input w-full max-w-sm input-sm">
-			<Search class="h-4 w-4 opacity-40" />
-			<input
-				class="grow"
-				placeholder={m.music_filterDiscography()}
-				bind:value={filter}
-				aria-label={m.music_filterDiscography()}
-			/>
-		</label>
-	</div>
-
-	<div class="mt-3 flex items-center justify-between gap-3 border-b border-base-content/10">
-		<div class="flex items-center gap-1">
-			<button
-				class="flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors {tab ===
-				'albums'
-					? 'border-primary text-primary'
-					: 'border-transparent text-base-content/55 hover:text-base-content'}"
-				onclick={() => (tab = 'albums')}
-			>
-				<Disc3 class="h-4 w-4" />
-				{m.music_tabAlbums()}
-				<span class="badge badge-sm badge-ghost">{visibleAlbums.length}</span>
-			</button>
-			<button
-				class="flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors {tab ===
-				'songs'
-					? 'border-primary text-primary'
-					: 'border-transparent text-base-content/55 hover:text-base-content'}"
-				onclick={() => (tab = 'songs')}
-			>
-				<Music class="h-4 w-4" />
-				{m.music_tabSongs()}
-				<span class="badge badge-sm badge-ghost">{visibleSongs.length}</span>
-			</button>
-		</div>
-		<a class="link link-hover text-xs text-base-content/50" href="/discover?type=music">
-			{m.music_browseDiscover()}
-		</a>
-	</div>
-
-	<div class="mt-4">
-		{#if albums.length === 0}
-			<div class="rounded-xl border border-dashed border-base-content/15 px-6 py-14 text-center">
-				<Search class="mx-auto mb-3 h-8 w-8 text-base-content/25" />
-				<p class="font-medium">{m.music_artistEmpty()}</p>
-				<p class="mt-1 text-sm text-base-content/55">{m.music_artistEmptyHint()}</p>
+	<!-- Main content: the series page's Seasons panel plus its sidebar. -->
+	<div class="grid gap-4 lg:grid-cols-2 lg:gap-6 xl:grid-cols-3">
+		<div class="min-w-0 space-y-4 md:col-span-2 lg:col-span-2">
+			<div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+				<div class="flex items-center gap-3">
+					<h2 class="text-lg font-semibold">{m.music_discography()}</h2>
+					<span class="badge badge-ghost badge-sm">{visibleAlbums.length}</span>
+				</div>
+				<label class="input w-full max-w-xs input-sm">
+					<Search class="h-4 w-4 opacity-40" />
+					<input
+						class="grow"
+						placeholder={m.music_filterDiscography()}
+						bind:value={filter}
+						aria-label={m.music_filterDiscography()}
+					/>
+				</label>
 			</div>
-		{:else if tab === 'songs'}
-			<TrackTable tracks={visibleSongs} showArtist={false} />
-		{:else}
-			<div class="space-y-6">
+
+			{#if albums.length === 0}
+				<div class="rounded-xl bg-base-200 p-8 text-center text-base-content/60">
+					<p class="font-medium">{m.music_artistEmpty()}</p>
+					<p class="mt-1 text-sm">{m.music_artistEmptyHint()}</p>
+				</div>
+			{:else if visibleAlbums.length === 0}
+				<div class="rounded-xl bg-base-200 p-8 text-center text-sm text-base-content/60">
+					{m.music_noFilterMatch()}
+				</div>
+			{:else}
 				{#each groups as [type, groupAlbums] (type)}
-					<section>
-						<div class="mb-2 flex items-center gap-2">
-							<h2 class="text-xs font-semibold tracking-wide uppercase text-base-content/45">
+					<section class="space-y-2">
+						<div class="flex items-center gap-2">
+							<h3 class="text-xs font-semibold tracking-wide text-base-content/45 uppercase">
 								{groupLabel(type)}
-							</h2>
+							</h3>
 							<span class="badge badge-xs badge-ghost">{groupAlbums.length}</span>
 						</div>
-						<AlbumAccordion albums={groupAlbums} {openAlbumId} onToggle={toggleAlbum} />
+						<AlbumAccordion
+							albums={groupAlbums}
+							{openAlbumId}
+							onToggle={toggleAlbum}
+							onMonitorToggle={toggleAlbumMonitorRow}
+							onAutoSearch={autoSearchAlbumRow}
+							onRemove={(album) => (removeAlbumTarget = album)}
+							{busyAlbumIds}
+							onAutoSearchTrack={(_track, album) => autoSearchAlbumRow(album)}
+							onOpenSearchTrack={(track, album) =>
+								(searchTrack = {
+									track: { id: track.id, title: track.title },
+									albumId: album.id,
+									albumTitle: album.title
+								})}
+						/>
 					</section>
 				{/each}
+			{/if}
+
+			{#if visibleSongs.length > 0}
+				<section class="space-y-2 pt-2">
+					<div class="flex items-center gap-2">
+						<h3 class="text-xs font-semibold tracking-wide text-base-content/45 uppercase">
+							{m.music_tabSongs()}
+						</h3>
+						<span class="badge badge-xs badge-ghost">{visibleSongs.length}</span>
+					</div>
+					<TrackTable tracks={visibleSongs} showArtist={false} />
+				</section>
+			{/if}
+		</div>
+
+		<!-- Sidebar -->
+		<div class="min-w-0 space-y-4 md:space-y-6">
+			<div class="rounded-xl bg-base-200 p-4 md:p-6">
+				<h3 class="mb-3 font-semibold">{m.common_details()}</h3>
+				<dl class="space-y-2 text-sm">
+					<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
+						<dt class="text-base-content/60">{m.music_typeLabel()}</dt>
+						<dd class="sm:text-right">{artist.artistType ?? m.common_unknown()}</dd>
+					</div>
+					{#if artist.country}
+						<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
+							<dt class="text-base-content/60">{m.music_country()}</dt>
+							<dd class="sm:text-right">{artist.country}</dd>
+						</div>
+					{/if}
+					<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
+						<dt class="text-base-content/60">{m.music_tabAlbums()}</dt>
+						<dd class="sm:text-right">{data.counts.albums}</dd>
+					</div>
+					<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
+						<dt class="text-base-content/60">{m.music_inLibrary()}</dt>
+						<dd class="sm:text-right">{data.counts.inLibrary}</dd>
+					</div>
+					<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
+						<dt class="text-base-content/60">{m.music_tabSongs()}</dt>
+						<dd class="sm:text-right">{data.counts.songs}</dd>
+					</div>
+					{#if artist.mbid}
+						<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
+							<dt class="text-base-content/60">MusicBrainz</dt>
+							<dd class="truncate font-mono text-[11px] text-base-content/60 sm:text-right" title={artist.mbid}>
+								{artist.mbid}
+							</dd>
+						</div>
+					{/if}
+				</dl>
 			</div>
-		{/if}
+		</div>
 	</div>
 </div>
 
@@ -393,11 +469,11 @@
 		}}
 	>
 		<label class="form-control">
-			<span class="mb-1 text-xs uppercase text-base-content/50">{m.common_name()}</span>
+			<span class="mb-1 text-xs text-base-content/50 uppercase">{m.common_name()}</span>
 			<input class="input w-full input-sm" bind:value={editName} />
 		</label>
 		<label class="form-control">
-			<span class="mb-1 text-xs uppercase text-base-content/50">{m.music_sortName()}</span>
+			<span class="mb-1 text-xs text-base-content/50 uppercase">{m.music_sortName()}</span>
 			<input class="input w-full input-sm" bind:value={editSortName} placeholder={artist.name} />
 		</label>
 		<div class="flex justify-end gap-2 pt-1">
@@ -411,6 +487,27 @@
 		</div>
 	</form>
 </ModalWrapper>
+
+{#if searchTrack}
+	<TrackSearchModal
+		open={searchTrack !== null}
+		track={searchTrack.track}
+		albumId={searchTrack.albumId}
+		albumTitle={searchTrack.albumTitle}
+		onClose={() => (searchTrack = null)}
+	/>
+{/if}
+
+<ConfirmationModal
+	open={removeAlbumTarget !== null}
+	title={m.music_removeAlbum()}
+	message={m.music_removeAlbumConfirm({ title: removeAlbumTarget?.title ?? '' })}
+	confirmLabel={m.common_delete()}
+	confirmVariant="error"
+	loading={removingAlbum}
+	onConfirm={removeAlbumRow}
+	onCancel={() => (removeAlbumTarget = null)}
+/>
 
 <ConfirmationModal
 	open={deleteOpen}

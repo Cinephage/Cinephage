@@ -123,3 +123,38 @@ export const POST: RequestHandler = async (event) => {
 		);
 	}
 };
+
+
+const bulkMonitoredSchema = z.object({
+	ids: z.array(z.string().min(1)).min(1).max(500),
+	monitored: z.boolean()
+});
+
+/**
+ * PATCH /api/music/artists — the list page's Monitor All / Unmonitor All.
+ *
+ * Monitoring an artist only decides what a discography refresh treats as
+ * wanted; each album keeps its own acquisition flag, and this route does not
+ * touch those.
+ */
+export const PATCH: RequestHandler = async (event) => {
+	const authError = requireAdmin(event);
+	if (authError) return authError;
+
+	let input: z.infer<typeof bulkMonitoredSchema>;
+	try {
+		input = await parseBody(event.request, bulkMonitoredSchema);
+	} catch (err) {
+		return Response.json(
+			{ error: 'Invalid request', details: err instanceof Error ? err.message : String(err) },
+			{ status: 400 }
+		);
+	}
+
+	let updated = 0;
+	for (const id of input.ids) {
+		if (musicArtistService.updateArtist(id, { monitored: input.monitored })) updated += 1;
+	}
+
+	return Response.json({ success: true, updated, requested: input.ids.length });
+};

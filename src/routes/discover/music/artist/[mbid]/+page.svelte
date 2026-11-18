@@ -4,7 +4,8 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import * as m from '#lib/paraglide/messages.js';
 	import ArtistHero from '#lib/components/music/ArtistHero.svelte';
-	import AlbumCard from '#lib/components/music/AlbumCard.svelte';
+	import LibraryMediaCard from '#lib/components/library/LibraryMediaCard.svelte';
+	import { albumCardView } from '#lib/components/library/media-view.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 
 	type ReleaseGroupRow = {
@@ -95,18 +96,18 @@
 		backHref="/discover?type=music"
 		backLabel={m.nav_music()}
 		sourceUrl={`https://musicbrainz.org/artist/${artist.mbid}`}
-	>
-		{#snippet actions()}
-			<button class="btn gap-1.5 btn-primary btn-sm" disabled={busy} onclick={addDiscography}>
-				{#if busy}
-					<LoaderCircle class="h-4 w-4 animate-spin" />
-				{:else}
-					<Plus class="h-4 w-4" />
-				{/if}
-				{m.music_addArtist()}
-			</button>
-		{/snippet}
-	</ArtistHero>
+
+		extraActions={[
+			{
+				key: 'add',
+				icon: Plus,
+				label: m.music_addArtist(),
+				emphasis: 'primary',
+				busy,
+				onSelect: addDiscography
+			}
+		]}
+	/>
 
 	<div class="mt-6">
 		<h2 class="mb-3 text-sm font-semibold tracking-wide uppercase text-base-content/50">
@@ -119,18 +120,19 @@
 			<ul class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
 				{#each discography as group (group.mbid)}
 					<li>
-						<AlbumCard
-							album={{
-								id: group.mbid,
-								title: group.title,
-								artistName: artist.name,
-								year: group.year ?? null,
-								primaryType: group.primaryType ?? null,
-								mbid: group.mbid
-							}}
-							coverUrl={coverUrl(group.mbid)}
-							href={`/discover/music/${group.mbid}`}
-							inLibrary={stored.has(group.mbid)}
+						<LibraryMediaCard
+							view={albumCardView(
+								{
+									id: group.mbid,
+									title: group.title,
+									artistName: artist.name,
+									year: group.year ?? null,
+									primaryType: group.primaryType ?? null,
+									mbid: group.mbid,
+									hasFile: stored.has(group.mbid)
+								},
+								{ artUrl: coverUrl(group.mbid), href: `/discover/music/${group.mbid}` }
+							)}
 						/>
 					</li>
 				{/each}

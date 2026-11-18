@@ -127,25 +127,27 @@
 		backHref="/discover?type=music"
 		backLabel={m.nav_music()}
 		readOnly
-	>
-		{#snippet actions()}
-			{#if data.libraryAlbumId}
-				<a class="btn gap-1.5 btn-success btn-sm" href={`/library/music/${data.libraryAlbumId}`}>
-					<Check class="h-4 w-4" />
-					{m.music_inLibrary()}
-				</a>
-			{:else}
-				<button class="btn gap-1.5 btn-primary btn-sm" onclick={addToLibrary} disabled={busy}>
-					{#if busy}
-						<LoaderCircle class="h-4 w-4 animate-spin" />
-					{:else}
-						<Plus class="h-4 w-4" />
-					{/if}
-					{m.music_addAlbum()}
-				</button>
-			{/if}
-		{/snippet}
-	</AlbumHero>
+		extraActions={data.libraryAlbumId
+			? [
+					{
+						key: 'in-library',
+						icon: Check,
+						label: m.music_inLibrary(),
+						href: `/library/music/${data.libraryAlbumId}`,
+						tone: 'success'
+					}
+				]
+			: [
+					{
+						key: 'add',
+						icon: Plus,
+						label: m.music_addAlbum(),
+						emphasis: 'primary',
+						busy,
+						onSelect: addToLibrary
+					}
+				]}
+	/>
 
 	{#if tracks.length > 0}
 		<div class="mt-5">
