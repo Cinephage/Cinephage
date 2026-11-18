@@ -111,6 +111,13 @@ export class MusicGrabService {
 			);
 		}
 
+		// Save inside the client's mapped download root. A category can carry its
+		// own save path on the client, and when that path sits outside the mapping
+		// the files land where the importer cannot see them — the first live grab
+		// did exactly that. One subdirectory per kind keeps them together.
+		const remoteRoot = clientConfig.downloadPathRemote?.replace(/\/+$/, '');
+		const savePath = remoteRoot ? `${remoteRoot}/${category}` : undefined;
+
 		const downloadId = await instance.addDownload({
 			magnetUri: resolved.magnetUrl,
 			torrentFile: resolved.torrentFile,
@@ -118,6 +125,7 @@ export class MusicGrabService {
 			downloadUrl:
 				resolved.magnetUrl || resolved.torrentFile ? undefined : (chosen.downloadUrl ?? undefined),
 			category,
+			savePath,
 			title: chosen.title,
 			paused: false
 		});
