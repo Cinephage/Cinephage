@@ -31,6 +31,11 @@ const STORAGE_TABLES = [
 ] as const;
 
 const CORE_TABLES = [
+	'trackFiles',
+	'tracks',
+	'albums',
+	'artists',
+	'mediaItems',
 	'notificationDeliveries',
 	'notificationConnections',
 	'releaseEvents',

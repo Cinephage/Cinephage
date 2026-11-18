@@ -175,6 +175,7 @@ import { migration_v176 } from './176-monitoring-history-indexers-queried.js';
 import { migration_v177 } from './177-drop-search-state.js';
 import { migration_v178 } from './178-notification-connections.js';
 import { migration_v179 } from './179-notification-delivery-message.js';
+import { migration_v180 } from './180-music-library.js';
 
 export const MIGRATIONS: MigrationDefinition[] = [
 	migration_v002,
@@ -352,5 +353,6 @@ export const MIGRATIONS: MigrationDefinition[] = [
 	migration_v176,
 	migration_v177,
 	migration_v178,
-	migration_v179
+	migration_v179,
+	migration_v180
 ];

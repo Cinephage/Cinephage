@@ -4732,3 +4732,224 @@ export const releaseEvents = sqliteTable(
 
 export type ReleaseEventRecord = typeof releaseEvents.$inferSelect;
 export type NewReleaseEventRecord = typeof releaseEvents.$inferInsert;
+
+// ============================================================================
+// Music library (artist → album → track)
+// ============================================================================
+
+/**
+ * Shared identity row for the media kinds that do not have their own tree.
+ *
+ * Albums are its first client: the cross-cutting tables (`download_queue`,
+ * `requests`, monitoring) reach an album through `media_item_id` instead of
+ * growing another nullable FK pair per kind. `movies` and `series` keep their
+ * own trees until they are backfilled, so their columns stay in place.
+ *
+ * `kind` is deliberately unconstrained: adding a value here must not be a
+ * table rebuild (that is the trap the five `media_type` CHECKs already set).
+ */
+export const mediaItems = sqliteTable(
+	'media_items',
+	{
+		id: text('id')
+			.primaryKey()
+			.$defaultFn(() => randomUUID()),
+		/** 'album' today; 'book' when the books domain lands. */
+		kind: text('kind').notNull(),
+		title: text('title').notNull(),
+		sortTitle: text('sort_title'),
+		year: integer('year'),
+		/** Path relative to the root folder, set on import. */
+		path: text('path'),
+		libraryId: text('library_id').references(() => libraries.id, { onDelete: 'set null' }),
+		rootFolderId: text('root_folder_id').references(() => rootFolders.id, { onDelete: 'set null' }),
+		monitored: integer('monitored', { mode: 'boolean' }).default(true),
+		providerRefs: text('provider_refs', { mode: 'json' }).$type<Record<string, string>>(),
+		added: text('added').$defaultFn(() => new Date().toISOString()),
+		updatedAt: text('updated_at').$defaultFn(() => new Date().toISOString())
+	},
+	(table) => [
+		index('idx_media_items_kind').on(table.kind),
+		index('idx_media_items_library').on(table.libraryId),
+		index('idx_media_items_monitored').on(table.monitored)
+	]
+);
+
+/**
+ * A music artist. `mbid` is the MusicBrainz artist id and the natural key:
+ * metadata refresh, dedupe and the release-group lookup all key on it, the
+ * same way `movies.tmdb_id` anchors video metadata.
+ */
+export const artists = sqliteTable(
+	'artists',
+	{
+		id: text('id')
+			.primaryKey()
+			.$defaultFn(() => randomUUID()),
+		mbid: text('mbid'),
+		name: text('name').notNull(),
+		sortName: text('sort_name'),
+		disambiguation: text('disambiguation'),
+		artistType: text('artist_type'),
+		country: text('country'),
+		genres: text('genres', { mode: 'json' }).$type<string[]>(),
+		overview: text('overview'),
+		imagePath: text('image_path'),
+		monitored: integer('monitored', { mode: 'boolean' }).default(true),
+		libraryId: text('library_id').references(() => libraries.id, { onDelete: 'set null' }),
+		rootFolderId: text('root_folder_id').references(() => rootFolders.id, { onDelete: 'set null' }),
+		added: text('added').$defaultFn(() => new Date().toISOString()),
+		refreshedAt: text('refreshed_at')
+	},
+	(table) => [
+		uniqueIndex('idx_artists_mbid').on(table.mbid),
+		index('idx_artists_library').on(table.libraryId),
+		index('idx_artists_monitored').on(table.monitored)
+	]
+);
+
+/**
+ * One album = one MusicBrainz release group (the work), with the chosen
+ * edition's release MBID kept on the row — the same "one primary edition per
+ * format" shape the books domain decided on. Acquisition, monitoring and the
+ * library list are all album-level; a track on its own is never the subject.
+ */
+export const albums = sqliteTable(
+	'albums',
+	{
+		id: text('id')
+			.primaryKey()
+			.$defaultFn(() => randomUUID()),
+		mediaItemId: text('media_item_id')
+			.notNull()
+			.references(() => mediaItems.id, { onDelete: 'cascade' }),
+		artistId: text('artist_id')
+			.notNull()
+			.references(() => artists.id, { onDelete: 'cascade' }),
+		/** MusicBrainz release-group id (the work). */
+		mbid: text('mbid'),
+		/** MusicBrainz release id of the primary edition actually wanted. */
+		releaseMbid: text('release_mbid'),
+		title: text('title').notNull(),
+		sortTitle: text('sort_title'),
+		year: integer('year'),
+		/** MusicBrainz primary type: Album, EP, Single, Broadcast, Other. */
+		primaryType: text('primary_type'),
+		secondaryTypes: text('secondary_types', { mode: 'json' }).$type<string[]>(),
+		/** Release status of the primary edition: official, promotion, bootleg… */
+		status: text('status'),
+		labelName: text('label_name'),
+		catalogNumber: text('catalog_number'),
+		barcode: text('barcode'),
+		country: text('country'),
+		mediaCount: integer('media_count'),
+		trackCount: integer('track_count'),
+		/** Total runtime in seconds, summed across the tracklist. */
+		duration: integer('duration'),
+		coverPath: text('cover_path'),
+		path: text('path'),
+		libraryId: text('library_id').references(() => libraries.id, { onDelete: 'set null' }),
+		rootFolderId: text('root_folder_id').references(() => rootFolders.id, { onDelete: 'set null' }),
+		monitored: integer('monitored', { mode: 'boolean' }).default(true),
+		/** Cached: does this album have at least one file? Mirrors movies.has_file. */
+		hasFile: integer('has_file', { mode: 'boolean' }).default(false),
+		added: text('added').$defaultFn(() => new Date().toISOString()),
+		refreshedAt: text('refreshed_at'),
+		lastSearchedAt: text('last_searched_at')
+	},
+	(table) => [
+		uniqueIndex('idx_albums_media_item').on(table.mediaItemId),
+		uniqueIndex('idx_albums_mbid_artist').on(table.mbid, table.artistId),
+		index('idx_albums_artist').on(table.artistId),
+		index('idx_albums_library').on(table.libraryId),
+		index('idx_albums_root_folder').on(table.rootFolderId),
+		index('idx_albums_monitored_hasfile').on(table.monitored, table.hasFile)
+	]
+);
+
+/**
+ * The tracklist. A track is metadata, not a file: one file may hold many
+ * tracks (a rip, a cue sheet) and a multi-disc album holds several media, so
+ * position is `(disc_number, track_number)` and files attach separately.
+ */
+export const tracks = sqliteTable(
+	'tracks',
+	{
+		id: text('id')
+			.primaryKey()
+			.$defaultFn(() => randomUUID()),
+		albumId: text('album_id')
+			.notNull()
+			.references(() => albums.id, { onDelete: 'cascade' }),
+		/** MusicBrainz recording id — stable across releases of the same take. */
+		recordingMbid: text('recording_mbid'),
+		title: text('title').notNull(),
+		artistCredit: text('artist_credit'),
+		discNumber: integer('disc_number').default(1),
+		trackNumber: integer('track_number'),
+		/** Sort key across the whole album (disc-major). */
+		position: integer('position'),
+		/** Duration in seconds, rounded from MusicBrainz milliseconds. */
+		duration: integer('duration'),
+		explicit: integer('explicit', { mode: 'boolean' }).default(false),
+		hasFile: integer('has_file', { mode: 'boolean' }).default(false),
+		added: text('added').$defaultFn(() => new Date().toISOString())
+	},
+	(table) => [
+		uniqueIndex('idx_tracks_album_disc_track').on(
+			table.albumId,
+			table.discNumber,
+			table.trackNumber
+		),
+		index('idx_tracks_album').on(table.albumId),
+		index('idx_tracks_recording').on(table.recordingMbid)
+	]
+);
+
+/**
+ * Files on disk. `track_id` is nullable on purpose: a single FLAC with a cue
+ * sheet, or a file whose tags do not line up with the tracklist, still needs a
+ * row — the importer attaches per-track rows only where the mapping is known.
+ *
+ * Video quality vocabulary (resolution, codec tiers) does not apply here;
+ * format/bitrate/sample rate are what music graders compare.
+ */
+export const trackFiles = sqliteTable(
+	'track_files',
+	{
+		id: text('id')
+			.primaryKey()
+			.$defaultFn(() => randomUUID()),
+		albumId: text('album_id')
+			.notNull()
+			.references(() => albums.id, { onDelete: 'cascade' }),
+		trackId: text('track_id').references(() => tracks.id, { onDelete: 'set null' }),
+		relativePath: text('relative_path').notNull(),
+		sizeBytes: integer('size_bytes'),
+		/** Closed vocabulary from the importer: FLAC, ALAC, MP3, AAC, OGG, OPUS, WAV. */
+		format: text('format'),
+		bitrateKbps: integer('bitrate_kbps'),
+		bitDepth: integer('bit_depth'),
+		sampleRateHz: integer('sample_rate_hz'),
+		channels: integer('channels'),
+		/** Seconds, from the audio stream. */
+		duration: integer('duration'),
+		added: text('added').$defaultFn(() => new Date().toISOString())
+	},
+	(table) => [
+		uniqueIndex('idx_track_files_album_path').on(table.albumId, table.relativePath),
+		index('idx_track_files_album').on(table.albumId),
+		index('idx_track_files_track').on(table.trackId)
+	]
+);
+
+export type MediaItemRecord = typeof mediaItems.$inferSelect;
+export type NewMediaItemRecord = typeof mediaItems.$inferInsert;
+export type ArtistRecord = typeof artists.$inferSelect;
+export type NewArtistRecord = typeof artists.$inferInsert;
+export type AlbumRecord = typeof albums.$inferSelect;
+export type NewAlbumRecord = typeof albums.$inferInsert;
+export type TrackRecord = typeof tracks.$inferSelect;
+export type NewTrackRecord = typeof tracks.$inferInsert;
+export type TrackFileRecord = typeof trackFiles.$inferSelect;
+export type NewTrackFileRecord = typeof trackFiles.$inferInsert;
