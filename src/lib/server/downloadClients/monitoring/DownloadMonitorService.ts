@@ -419,6 +419,7 @@ function rowToQueueItem(row: typeof downloadQueue.$inferSelect): QueueItem {
 		protocol: row.protocol,
 		movieId: row.movieId,
 		seriesId: row.seriesId,
+		mediaItemId: row.mediaItemId,
 		episodeIds: row.episodeIds as string[] | null,
 		seasonNumber: row.seasonNumber,
 		status: row.status as QueueStatus,
@@ -1878,13 +1879,31 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 						this.emit('queue:completed', updatedItem);
 						this.emitSSE('queue:completed', updatedItem);
 
-						// Request import through ImportService (handles all validation and deduplication)
-						const importService = await getImportService();
-						importService.requestImport(updatedItem.id).catch((err) => {
+						// Request import through ImportService (handles all validation and deduplication).
+						// Music splits off here rather than inside ImportService: an album folder
+						// is one item with a flat file list, while that service resolves a movie
+						// or a series and picks files per episode. This is the single place a
+						// finished download is handed to an importer, so the branch lives here.
+						const isMusic = updatedItem.mediaItemId
+							? await (async () => {
+									const { isMusicMediaItem } =
+										await import('#lib/server/music/MusicImportService.js');
+									return isMusicMediaItem(updatedItem.mediaItemId!);
+								})()
+							: false;
+
+						const importWork = isMusic
+							? (
+									await import('#lib/server/music/MusicImportService.js')
+								).musicImportService.importFromQueue(updatedItem.id)
+							: (await getImportService()).requestImport(updatedItem.id);
+
+						importWork.catch((err) => {
 							logger.error(
 								{
 									queueId: updatedItem.id,
 									title: updatedItem.title,
+									kind: isMusic ? 'music' : 'video',
 									error: err instanceof Error ? err.message : String(err)
 								},
 								'Failed to request import for completed download'

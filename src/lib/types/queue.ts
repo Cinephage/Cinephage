@@ -85,6 +85,8 @@ export interface QueueItem {
 	// Linked media
 	movieId?: string | null;
 	seriesId?: string | null;
+	/** Spine identity for kinds without a movie/series row (music today). */
+	mediaItemId?: string | null;
 	episodeIds?: string[] | null;
 	seasonNumber?: number | null;
 

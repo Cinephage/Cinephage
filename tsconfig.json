@@ -3,7 +3,8 @@
 	"compilerOptions": {
 		"sourceMap": true,
 		"strict": true,
-		"disableSizeLimit": true
+		"disableSizeLimit": true,
+		"customConditions": ["node"]
 	},
 	"include": [
 		".svelte-kit/ambient.d.ts",
