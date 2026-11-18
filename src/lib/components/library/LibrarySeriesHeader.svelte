@@ -7,7 +7,9 @@
 	import type { SubtitleRequirementProgress } from '#lib/utils/subtitle-status-display.js';
 	import CrewList from '#lib/components/tmdb/CrewList.svelte';
 	import WatchProviders from '#lib/components/tmdb/WatchProviders.svelte';
-	import MonitorToggle from './MonitorToggle.svelte';
+	import DetailActionBar from './DetailActionBar.svelte';
+	import DetailMobileBar from './DetailMobileBar.svelte';
+	import type { DetailAction } from './detail-actions.js';
 	import {
 		Settings,
 		Trash2,
@@ -216,122 +218,93 @@
 			tmdbSeries.content_ratings.results.find((r) => r.iso_3166_1 === 'US');
 		return rating?.rating || null;
 	});
+
+	/** The page's controls, described once and rendered by the shared bars. */
+	const desktopActions = $derived<DetailAction[]>(
+		readOnly
+			? []
+			: [
+					{
+						key: 'monitor',
+						icon: series.monitored ? Eye : EyeOff,
+						iconOnly: true,
+						active: Boolean(series.monitored),
+						tone: 'success' as const,
+						label: series.monitored
+							? partiallyMonitored
+								? m.library_monitorToggle_partiallyMonitored()
+								: m.library_monitorToggle_monitored()
+							: m.library_monitorToggle_notMonitored(),
+						onSelect: () => onMonitorToggle?.(!series.monitored)
+					},
+					{
+						key: 'auto-grab',
+						icon: Zap,
+						label: m.library_seriesHeader_autoGrab(),
+						emphasis: 'primary',
+						busy: searchingMissing,
+						disabled: missingEpisodeCount === 0,
+						badge: missingEpisodeCount > 0 ? missingEpisodeCount : null,
+						onSelect: onSearchMissing
+					},
+					{
+						key: 'season-packs',
+						icon: Package,
+						label: m.library_seriesHeader_seasonPacks(),
+						onSelect: onSearch
+					}
+				]
+	);
+
+	const mobileActions = $derived<DetailAction[]>([
+		...desktopActions,
+		...(readOnly || !onEdit
+			? []
+			: [{ key: 'edit', icon: Settings, label: m.action_edit(), onSelect: onEdit }])
+	]);
+
+	const menu = $derived<DetailAction[]>([
+		...(onImport ? [{ key: 'import', icon: Download, label: m.action_import(), onSelect: onImport }] : []),
+		...(onRefresh
+			? [
+					{
+						key: 'refresh',
+						icon: RefreshCw,
+						label: refreshing ? m.common_loading() : m.library_seriesHeader_refreshTooltip(),
+						busy: refreshing,
+						onSelect: onRefresh
+					}
+				]
+			: []),
+		...(onSubtitleAutoSearch
+			? [
+					{
+						key: 'auto-subs',
+						icon: Captions,
+						label: m.library_seriesHeader_autoDownloadSubs(),
+						busy: subtitleAutoSearching,
+						onSelect: onSubtitleAutoSearch
+					}
+				]
+			: []),
+		...(onChangeMatch
+			? [{ key: 'change-match', icon: Replace, label: m.library_changeMatch_menuLabel(), onSelect: onChangeMatch }]
+			: []),
+		...(onEdit ? [{ key: 'edit', icon: Settings, label: m.action_edit(), onSelect: onEdit }] : []),
+		...(onDelete ? [{ key: 'delete', icon: Trash2, label: m.action_delete(), tone: 'error' as const, onSelect: onDelete }] : []),
+		{ key: 'block', icon: Ban, label: m.library_blockMediaTooltip(), tone: 'error' as const, onSelect: () => (showBlockConfirm = true) }
+	]);
+
+	const mobileMenu = $derived(menu.filter((entry) => entry.key !== 'edit'));
 </script>
 
 <div class="flex flex-col gap-4">
-	<!-- Top action bar -->
-	<div class="flex items-center justify-between gap-2">
-		<a
-			href={resolvePath(
-				backHref ?? (librarySlug ? `/library/tv?library=${librarySlug}` : '/library/tv')
-			)}
-			class="btn gap-1.5 btn-ghost text-base-content/60 btn-sm"
-		>
-			<ArrowLeft size={16} />
-			<span class="sm:inline"
-				>{m.library_backTo({ name: libraryName ?? m.library_tv_heading() })}</span
-			>
-		</a>
-		<div class="flex shrink-0 items-center gap-1 sm:gap-2">
-			{#if !readOnly}
-				<!-- MonitorToggle hidden on mobile (shown in bottom bar) -->
-				<div class="hidden sm:block">
-					<MonitorToggle
-						monitored={series.monitored ?? false}
-						{partiallyMonitored}
-						onToggle={onMonitorToggle}
-						size="md"
-					/>
-				</div>
-				<!-- Auto-grab (desktop) -->
-				<button
-					class="btn hidden gap-1.5 btn-primary btn-sm sm:flex"
-					onclick={onSearchMissing}
-					disabled={searchingMissing || missingEpisodeCount === 0}
-				>
-					{#if searchingMissing}
-						<span class="loading loading-xs loading-spinner"></span>
-					{:else}
-						<Zap size={14} />
-					{/if}
-					{m.library_seriesHeader_autoGrab()}
-					{#if missingEpisodeCount > 0}
-						<span class="badge badge-sm">{missingEpisodeCount}</span>
-					{/if}
-				</button>
-				<!-- Season Packs (desktop) -->
-				<button class="btn hidden gap-1.5 btn-ghost btn-sm sm:flex" onclick={onSearch}>
-					<Package size={14} />
-					{m.library_seriesHeader_seasonPacks()}
-				</button>
-				<!-- Overflow menu (desktop only) -->
-				<div class="dropdown dropdown-end hidden sm:block">
-					<button tabindex="0" class="btn btn-ghost btn-sm">
-						<MoreHorizontal size={18} />
-					</button>
-					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-					<ul
-						tabindex="0"
-						class="menu dropdown-content z-50 w-56 rounded-box border border-base-content/10 bg-base-200 p-2 shadow-lg"
-					>
-						{#if onImport}
-							<li>
-								<button onclick={onImport}>
-									<Download size={16} />
-									{m.action_import()}
-								</button>
-							</li>
-						{/if}
-						<li>
-							<button onclick={onRefresh} disabled={refreshing}>
-								<RefreshCw size={16} />
-								{#if refreshing}
-									{m.common_loading()}
-								{:else}
-									{m.library_seriesHeader_refreshTooltip()}
-								{/if}
-							</button>
-						</li>
-						{#if onSubtitleAutoSearch}
-							<li>
-								<button onclick={onSubtitleAutoSearch} disabled={subtitleAutoSearching}>
-									<Captions size={16} />
-									{m.library_seriesHeader_autoDownloadSubs()}
-								</button>
-							</li>
-						{/if}
-						<div class="divider my-1"></div>
-						{#if onChangeMatch}
-							<li>
-								<button onclick={onChangeMatch}>
-									<Replace size={16} />
-									{m.library_changeMatch_menuLabel()}
-								</button>
-							</li>
-						{/if}
-						<li>
-							<button onclick={onEdit}>
-								<Settings size={16} />
-								{m.action_edit()}
-							</button>
-						</li>
-						<li>
-							<button class="text-error" onclick={onDelete}>
-								<Trash2 size={16} />
-								{m.action_delete()}
-							</button>
-						</li>
-						<li>
-							<button class="text-error" onclick={() => (showBlockConfirm = true)}>
-								<Ban size={16} />
-								{m.library_blockMediaTooltip()}
-							</button>
-						</li>
-					</ul>
-				</div>
-			{/if}
-		</div>
-	</div>
+	<DetailActionBar
+		backHref={backHref ?? (librarySlug ? `/library/tv?library=${librarySlug}` : '/library/tv')}
+		backLabel={libraryName ?? m.library_tv_heading()}
+		actions={desktopActions}
+		menu={menu}
+	/>
 
 	<!-- Hero card -->
 	<div class="relative w-full overflow-hidden rounded-xl bg-base-200 shadow-xl">
@@ -694,122 +667,6 @@
 	confirmVariant="error"
 />
 
-<!-- Mobile action bar (admin only: every entry mutates or acquires) -->
 {#if !readOnly}
-	<div
-		class="fixed right-0 bottom-0 left-0 z-40 border-t border-base-content/6 bg-base-100/75 backdrop-blur-xl sm:hidden"
-		style="padding-bottom: env(safe-area-inset-bottom)"
-	>
-		<div class="flex items-stretch justify-around">
-			<!-- Monitor -->
-			<button
-				class="flex flex-1 flex-col items-center gap-1 py-3 transition-colors
-				{series.monitored ? 'text-success' : 'text-base-content/55'}"
-				onclick={() => onMonitorToggle?.(!series.monitored)}
-			>
-				{#if series.monitored}
-					<Eye size={20} />
-				{:else}
-					<EyeOff size={20} />
-				{/if}
-				<span class="text-[10px] tracking-wide">{series.monitored ? 'Monitored' : 'Off'}</span>
-			</button>
-
-			<!-- Auto-grab -->
-			<button
-				class="flex flex-1 flex-col items-center gap-1 py-3 transition-colors
-				{searchingMissing || missingEpisodeCount === 0 ? 'text-primary/40' : 'text-primary'}"
-				onclick={onSearchMissing}
-				disabled={searchingMissing || missingEpisodeCount === 0}
-			>
-				{#if searchingMissing}
-					<span class="loading loading-xs loading-spinner"></span>
-				{:else}
-					<Zap size={20} />
-				{/if}
-				<span class="text-[10px] tracking-wide">{m.library_seriesHeader_autoGrab()}</span>
-			</button>
-
-			<!-- Season Packs -->
-			<button
-				class="flex flex-1 flex-col items-center gap-1 py-3 text-base-content/55 transition-colors active:text-base-content/90"
-				onclick={onSearch}
-			>
-				<Package size={20} />
-				<span class="text-[10px] tracking-wide">{m.library_seriesHeader_seasonPacks()}</span>
-			</button>
-
-			<!-- Edit -->
-			<button
-				class="flex flex-1 flex-col items-center gap-1 py-3 text-base-content/55 transition-colors active:text-base-content/90"
-				onclick={onEdit}
-			>
-				<Settings size={20} />
-				<span class="text-[10px] tracking-wide">{m.action_edit()}</span>
-			</button>
-
-			<!-- Overflow (dropdown-top) -->
-			<div class="dropdown dropdown-end dropdown-top flex flex-1">
-				<button
-					tabindex="0"
-					class="flex flex-1 flex-col items-center gap-1 py-3 text-error/60 transition-colors active:text-error"
-				>
-					<MoreHorizontal size={20} />
-					<span class="text-[10px] tracking-wide">More</span>
-				</button>
-				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-				<ul
-					tabindex="0"
-					class="menu dropdown-content z-50 mb-2 w-52 rounded-box border border-base-content/10 bg-base-200 p-2 shadow-lg"
-				>
-					<li>
-						<button onclick={onRefresh} disabled={refreshing}>
-							<RefreshCw size={16} />
-							{#if refreshing}
-								{m.common_loading()}
-							{:else}
-								{m.library_seriesHeader_refreshTooltip()}
-							{/if}
-						</button>
-					</li>
-					{#if onImport}
-						<li>
-							<button onclick={onImport}>
-								<Download size={16} />
-								{m.action_import()}
-							</button>
-						</li>
-					{/if}
-					{#if onSubtitleAutoSearch}
-						<li>
-							<button onclick={onSubtitleAutoSearch} disabled={subtitleAutoSearching}>
-								<Captions size={16} />
-								{m.library_seriesHeader_autoDownloadSubs()}
-							</button>
-						</li>
-					{/if}
-					{#if onChangeMatch}
-						<li>
-							<button onclick={onChangeMatch}>
-								<Replace size={16} />
-								{m.library_changeMatch_menuLabel()}
-							</button>
-						</li>
-					{/if}
-					<li>
-						<button class="text-error" onclick={onDelete}>
-							<Trash2 size={16} />
-							{m.action_delete()}
-						</button>
-					</li>
-					<li>
-						<button class="text-error" onclick={() => (showBlockConfirm = true)}>
-							<Ban size={16} />
-							{m.library_blockMediaTooltip()}
-						</button>
-					</li>
-				</ul>
-			</div>
-		</div>
-	</div>
+	<DetailMobileBar actions={mobileActions} menu={mobileMenu} />
 {/if}

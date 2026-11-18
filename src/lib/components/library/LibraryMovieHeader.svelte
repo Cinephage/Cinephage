@@ -6,7 +6,9 @@
 	import TmdbImage from '#lib/components/tmdb/TmdbImage.svelte';
 	import CrewList from '#lib/components/tmdb/CrewList.svelte';
 	import WatchProviders from '#lib/components/tmdb/WatchProviders.svelte';
-	import MonitorToggle from './MonitorToggle.svelte';
+	import DetailActionBar from './DetailActionBar.svelte';
+	import DetailMobileBar from './DetailMobileBar.svelte';
+	import type { DetailAction } from './detail-actions.js';
 	import StatusIndicator from './StatusIndicator.svelte';
 	import QualityBadge from './QualityBadge.svelte';
 	import ScoreBadge from './ScoreBadge.svelte';
@@ -214,6 +216,59 @@
 		return `${bestQuality.quality}${bestQuality.hdr ? ` ${bestQuality.hdr}` : ''}`;
 	});
 
+	/** The page's controls, described once and rendered by the shared bars. */
+	const desktopActions = $derived<DetailAction[]>(
+		readOnly
+			? []
+			: [
+					{
+						key: 'monitor',
+						icon: movie.monitored ? Eye : EyeOff,
+						iconOnly: true,
+						active: Boolean(movie.monitored),
+						label: movie.monitored
+							? m.library_monitorToggle_monitored()
+							: m.library_monitorToggle_notMonitored(),
+						onSelect: () => onMonitorToggle?.(!movie.monitored)
+					},
+					{
+						key: 'auto-grab',
+						icon: Zap,
+						label: m.library_movieHeader_autoGrab(),
+						emphasis: 'primary',
+						busy: autoSearching,
+						onSelect: onAutoSearch
+					},
+					{
+						key: 'manual',
+						icon: Search,
+						label: m.library_movieHeader_manual(),
+						onSelect: onSearch
+					},
+					...(onImport
+						? [{ key: 'import', icon: Download, label: m.action_import(), onSelect: onImport }]
+						: [])
+				]
+	);
+
+	const mobileActions = $derived<DetailAction[]>([
+		...desktopActions,
+		...(readOnly || !onEdit
+			? []
+			: [{ key: 'edit', icon: Settings, label: m.action_edit(), onSelect: onEdit }])
+	]);
+
+	const menu = $derived<DetailAction[]>([
+		...(onEdit ? [{ key: 'edit', icon: Settings, label: m.action_edit(), onSelect: onEdit }] : []),
+		...(onChangeMatch
+			? [{ key: 'change-match', icon: Replace, label: m.library_changeMatch_menuLabel(), onSelect: onChangeMatch }]
+			: []),
+		...(onDelete ? [{ key: 'delete', icon: Trash2, label: m.action_delete(), tone: 'error' as const, onSelect: onDelete }] : []),
+		{ key: 'block', icon: Ban, label: m.library_blockMediaTooltip(), tone: 'error' as const, onSelect: () => (showBlockConfirm = true) }
+	]);
+
+	const mobileMenu = $derived(menu.filter((entry) => entry.key !== 'edit'));
+
 	const overview = $derived(tmdbMovie?.overview ?? movie.overview);
 	const hasTrailer = $derived(
 		tmdbMovie?.videos?.results?.some(
@@ -279,90 +334,12 @@
 </script>
 
 <div class="flex flex-col gap-4">
-	<!-- Top action bar -->
-	<div class="flex items-center justify-between gap-2">
-		<a
-			href={resolvePath(
-				backHref ?? (librarySlug ? `/library/movies?library=${librarySlug}` : '/library/movies')
-			)}
-			class="btn gap-1.5 btn-ghost text-base-content/60 btn-sm"
-		>
-			<ArrowLeft size={16} />
-			<span class="sm:inline"
-				>{m.library_backTo({ name: libraryName ?? m.library_movies_heading() })}</span
-			>
-		</a>
-		<div class="flex shrink-0 items-center gap-1 sm:gap-2">
-			{#if !readOnly}
-				<div class="hidden sm:block">
-					<MonitorToggle
-						monitored={movie.monitored ?? false}
-						onToggle={onMonitorToggle}
-						size="md"
-					/>
-				</div>
-				<button
-					class="btn hidden gap-1.5 btn-primary btn-sm sm:flex"
-					onclick={onAutoSearch}
-					disabled={autoSearching}
-				>
-					{#if autoSearching}
-						<span class="loading loading-xs loading-spinner"></span>
-					{:else}
-						<Zap size={14} />
-					{/if}
-					{m.library_movieHeader_autoGrab()}
-				</button>
-				<button class="btn hidden gap-1.5 btn-ghost btn-sm sm:flex" onclick={onSearch}>
-					<Search size={14} />
-					{m.library_movieHeader_manual()}
-				</button>
-				{#if onImport}
-					<button class="btn hidden gap-1.5 btn-ghost btn-sm sm:flex" onclick={onImport}>
-						<Download size={14} />
-						{m.action_import()}
-					</button>
-				{/if}
-				<div class="dropdown dropdown-end hidden sm:block">
-					<button tabindex="0" class="btn btn-ghost btn-sm">
-						<MoreHorizontal size={18} />
-					</button>
-					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-					<ul
-						tabindex="0"
-						class="menu dropdown-content z-50 w-52 rounded-box border border-base-content/10 bg-base-200 p-2 shadow-lg"
-					>
-						<li class="hidden sm:flex">
-							<button onclick={onEdit}>
-								<Settings size={16} />
-								{m.action_edit()}
-							</button>
-						</li>
-						{#if onChangeMatch}
-							<li>
-								<button onclick={onChangeMatch}>
-									<Replace size={16} />
-									{m.library_changeMatch_menuLabel()}
-								</button>
-							</li>
-						{/if}
-						<li>
-							<button class="text-error" onclick={onDelete}>
-								<Trash2 size={16} />
-								{m.action_delete()}
-							</button>
-						</li>
-						<li>
-							<button class="text-error" onclick={() => (showBlockConfirm = true)}>
-								<Ban size={16} />
-								{m.library_blockMediaTooltip()}
-							</button>
-						</li>
-					</ul>
-				</div>
-			{/if}
-		</div>
-	</div>
+	<DetailActionBar
+		backHref={backHref ?? (librarySlug ? `/library/movies?library=${librarySlug}` : '/library/movies')}
+		backLabel={libraryName ?? m.library_movies_heading()}
+		actions={desktopActions}
+		menu={menu}
+	/>
 
 	{#snippet metaPanel()}
 		{#if tmdbMovie}
@@ -726,107 +703,6 @@
 	confirmVariant="error"
 />
 
-<!-- Mobile action bar (admin only: every entry mutates or acquires) -->
 {#if !readOnly}
-	<div
-		class="fixed right-0 bottom-0 left-0 z-40 border-t border-base-content/6 bg-base-100/75 backdrop-blur-xl sm:hidden"
-		style="padding-bottom: env(safe-area-inset-bottom)"
-	>
-		<div class="flex items-stretch justify-around">
-			<!-- Monitor -->
-			<button
-				class="flex flex-1 flex-col items-center gap-1 py-3 transition-colors
-				{movie.monitored ? 'text-success' : 'text-base-content/55'}"
-				onclick={() => onMonitorToggle?.(!movie.monitored)}
-			>
-				{#if movie.monitored}
-					<Eye size={20} />
-				{:else}
-					<EyeOff size={20} />
-				{/if}
-				<span class="text-[10px] tracking-wide">{movie.monitored ? 'Monitored' : 'Off'}</span>
-			</button>
-
-			<!-- Auto-grab -->
-			<button
-				class="flex flex-1 flex-col items-center gap-1 py-3 transition-colors
-				{autoSearching ? 'text-primary/40' : 'text-primary'}"
-				onclick={onAutoSearch}
-				disabled={autoSearching}
-			>
-				{#if autoSearching}
-					<span class="loading loading-xs loading-spinner"></span>
-				{:else}
-					<Zap size={20} />
-				{/if}
-				<span class="text-[10px] tracking-wide">{m.library_movieHeader_autoGrab()}</span>
-			</button>
-
-			<!-- Manual -->
-			<button
-				class="flex flex-1 flex-col items-center gap-1 py-3 text-base-content/55 transition-colors active:text-base-content/90"
-				onclick={onSearch}
-			>
-				<Search size={20} />
-				<span class="text-[10px] tracking-wide">{m.library_movieHeader_manual()}</span>
-			</button>
-
-			{#if onImport}
-				<!-- Import -->
-				<button
-					class="flex flex-1 flex-col items-center gap-1 py-3 text-base-content/55 transition-colors active:text-base-content/90"
-					onclick={onImport}
-				>
-					<Download size={20} />
-					<span class="text-[10px] tracking-wide">{m.action_import()}</span>
-				</button>
-			{/if}
-
-			<!-- Edit -->
-			<button
-				class="flex flex-1 flex-col items-center gap-1 py-3 text-base-content/55 transition-colors active:text-base-content/90"
-				onclick={onEdit}
-			>
-				<Settings size={20} />
-				<span class="text-[10px] tracking-wide">{m.action_edit()}</span>
-			</button>
-
-			<!-- Overflow -->
-			<div class="dropdown dropdown-end dropdown-top flex flex-1">
-				<button
-					tabindex="0"
-					class="flex flex-1 flex-col items-center gap-1 py-3 text-error/80 transition-colors active:text-error"
-				>
-					<MoreHorizontal size={20} />
-					<span class="text-[10px] tracking-wide">More</span>
-				</button>
-				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-				<ul
-					tabindex="0"
-					class="menu dropdown-content z-50 mb-2 w-52 rounded-box border border-base-content/10 bg-base-200 p-2 shadow-lg"
-				>
-					{#if onChangeMatch}
-						<li>
-							<button onclick={onChangeMatch}>
-								<Replace size={16} />
-								{m.library_changeMatch_menuLabel()}
-							</button>
-						</li>
-					{/if}
-					<li>
-						<button class="text-error" onclick={onDelete}>
-							<Trash2 size={16} />
-							{m.action_delete()}
-						</button>
-					</li>
-					<li>
-						<button class="text-error" onclick={() => (showBlockConfirm = true)}>
-							<Ban size={16} />
-							{m.library_blockMediaTooltip()}
-						</button>
-					</li>
-				</ul>
-			</div>
-		</div>
-	</div>
+	<DetailMobileBar actions={mobileActions} menu={mobileMenu} />
 {/if}
