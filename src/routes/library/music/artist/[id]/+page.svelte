@@ -124,7 +124,7 @@
 
 <svelte:head><title>{artist.name} · {m.nav_music()} · Cinephage</title></svelte:head>
 
-<div class="mx-auto max-w-6xl p-4 sm:p-6">
+<div class="w-full px-4 pt-4 pb-20 md:px-6 lg:px-8">
 	<ArtistHero
 		artist={{ ...artist, monitored }}
 		backdropUrl={coverAlbum ? `/api/music/albums/${coverAlbum.id}/cover` : null}

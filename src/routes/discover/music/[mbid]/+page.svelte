@@ -119,7 +119,7 @@
 
 <svelte:head><title>{group.title} · Cinephage</title></svelte:head>
 
-<div class="mx-auto max-w-6xl p-4 sm:p-6">
+<div class="w-full px-4 pt-4 pb-20 md:px-6 lg:px-8">
 	<AlbumHero
 		{album}
 		coverUrl={`https://coverartarchive.org/release-group/${group.mbid}/front-500`}

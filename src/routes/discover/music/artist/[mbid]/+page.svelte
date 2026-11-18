@@ -86,7 +86,7 @@
 
 <svelte:head><title>{artist.name} · Cinephage</title></svelte:head>
 
-<div class="mx-auto max-w-6xl p-4 sm:p-6">
+<div class="w-full px-4 pt-4 pb-20 md:px-6 lg:px-8">
 	<ArtistHero
 		artist={{ ...artist, id: artist.mbid, monitored: null }}
 		backdropUrl={discography[0] ? coverUrl(discography[0].mbid) : null}
