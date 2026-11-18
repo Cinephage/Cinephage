@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Clock, Disc3, CircleCheck, CircleDashed } from '@lucide/svelte';
+	import { Clock, Disc3, CircleCheck, CircleDashed, Search, LoaderCircle } from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 
 	let { data } = $props<{
@@ -42,6 +42,44 @@
 		const mins = Math.floor(seconds / 60);
 		const secs = seconds % 60;
 		return `${mins}:${String(secs).padStart(2, '0')}`;
+	}
+
+	type Candidate = {
+		title: string;
+		indexerName: string | null;
+		size: number | null;
+		seeders: number | null;
+		protocol: string | null;
+		isAudioCategory: boolean;
+	};
+
+	let searchingReleases = $state(false);
+	let candidates = $state<Candidate[]>([]);
+	let releaseError = $state<string | null>(null);
+
+	async function findReleases() {
+		if (searchingReleases) return;
+		searchingReleases = true;
+		releaseError = null;
+		try {
+			const response = await fetch(`/api/music/albums/${album.id}/search`, { method: 'POST' });
+			const body = await response.json();
+			if (!response.ok) {
+				releaseError = body.details ?? body.error ?? m.music_searchFailed();
+				return;
+			}
+			candidates = body.candidates ?? [];
+			if (candidates.length === 0) releaseError = m.music_noReleases();
+		} catch (err) {
+			releaseError = err instanceof Error ? err.message : m.music_searchFailed();
+		} finally {
+			searchingReleases = false;
+		}
+	}
+
+	function gib(bytes: number | null): string {
+		if (!bytes) return '–';
+		return `${(bytes / 1_073_741_824).toFixed(2)} GB`;
 	}
 
 	const discs = $derived.by(() => {
@@ -124,6 +162,47 @@
 			</dl>
 		</div>
 	</header>
+
+	<section class="card mb-6 bg-base-200">
+		<div class="card-body gap-3">
+			<div class="flex items-center justify-between gap-3">
+				<h2 class="card-title text-base">{m.music_releasesTitle()}</h2>
+				<button class="btn btn-outline btn-sm" disabled={searchingReleases} onclick={findReleases}>
+					{#if searchingReleases}
+						<LoaderCircle class="h-4 w-4 animate-spin" />
+					{:else}
+						<Search class="h-4 w-4" />
+					{/if}
+					{m.music_findReleases()}
+				</button>
+			</div>
+			{#if releaseError}
+				<p class="text-sm opacity-70">{releaseError}</p>
+			{/if}
+			{#if candidates.length > 0}
+				<table class="table table-sm">
+					<thead>
+						<tr>
+							<th>{m.music_titleHeader()}</th>
+							<th class="w-32">{m.music_indexer()}</th>
+							<th class="w-24 text-right">{m.music_size()}</th>
+							<th class="w-20 text-right">{m.music_seeders()}</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each candidates as candidate (candidate.title + (candidate.indexerName ?? ''))}
+							<tr class="hover">
+								<td class="truncate">{candidate.title}</td>
+								<td class="text-xs opacity-60">{candidate.indexerName ?? '–'}</td>
+								<td class="text-right tabular-nums opacity-70">{gib(candidate.size)}</td>
+								<td class="text-right tabular-nums">{candidate.seeders ?? '–'}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			{/if}
+		</div>
+	</section>
 
 	{#each discs as [disc, discTracks] (disc)}
 		{#if discs.length > 1}
