@@ -18,7 +18,7 @@ import {
 type StorageBreakdownItem = {
 	id: string;
 	name: string;
-	mediaType: 'movie' | 'tv';
+	mediaType: 'movie' | 'tv' | 'music';
 	mediaSubType: 'standard' | 'anime';
 	usedBytes: number;
 	itemCount: number;

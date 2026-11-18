@@ -11,7 +11,7 @@ import {
 } from '#lib/server/db/schema.js';
 import { NotFoundError, ValidationError } from '#lib/errors/index.js';
 
-export type LibraryMediaType = 'movie' | 'tv';
+export type LibraryMediaType = 'movie' | 'tv' | 'music';
 export type LibraryMediaSubType = 'standard' | 'anime';
 
 export interface LibraryRootFolder {
@@ -118,6 +118,16 @@ const SYSTEM_LIBRARY_DEFS: Array<{
 		systemKey: 'tv_anime',
 		isDefault: false,
 		sortOrder: 10
+	},
+	{
+		id: 'lib-music-standard',
+		name: 'Music',
+		slug: 'music',
+		mediaType: 'music',
+		mediaSubType: 'standard',
+		systemKey: 'music_standard',
+		isDefault: true,
+		sortOrder: 0
 	}
 ];
 
@@ -142,6 +152,12 @@ function uniqueStringArray(values: string[] | undefined): string[] {
 	return [...new Set(values.filter((value) => value.trim().length > 0))];
 }
 
+const MEDIA_TYPE_LABELS: Record<LibraryMediaType, string> = {
+	movie: 'Movies',
+	tv: 'TV Shows',
+	music: 'Music'
+};
+
 async function ensureRootFoldersMatchLibrary(
 	rootFolderIds: string[] | undefined,
 	mediaType: LibraryMediaType,
@@ -164,7 +180,7 @@ async function ensureRootFoldersMatchLibrary(
 			throw new NotFoundError('Root folder', rootFolderId);
 		}
 		if (folder.mediaType !== mediaType) {
-			const expectedLabel = mediaType === 'movie' ? 'Movies' : 'TV Shows';
+			const expectedLabel = MEDIA_TYPE_LABELS[mediaType];
 			throw new ValidationError(`Root folder must be configured for ${expectedLabel}`);
 		}
 		if (normalizeMediaSubType(folder.mediaSubType) !== mediaSubType) {

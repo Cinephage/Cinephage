@@ -4,6 +4,7 @@
 	import type {
 		RootFolder,
 		RootFolderFormData,
+		RootFolderMediaType,
 		PathValidationResult
 	} from '#lib/types/downloadClient.js';
 	import { FolderBrowser } from '#lib/components/library/index.js';
@@ -47,7 +48,7 @@
 	// Form state (defaults only, effect syncs from props)
 	let name = $state('');
 	let path = $state('');
-	let mediaType = $state<'movie' | 'tv'>('movie');
+	let mediaType = $state<RootFolderMediaType>('movie');
 	let mediaSubType = $state<'standard' | 'anime'>('standard');
 	let isDefault = $state(false);
 	let readOnly = $state(false);
@@ -66,7 +67,7 @@
 		mode === 'add' ? m.rootFolders_addTitle() : m.rootFolders_editTitle()
 	);
 	const defaultScopeLabel = $derived.by(() => {
-		const mediaLabel = mediaType === 'movie' ? 'Movies' : 'TV Shows';
+		const mediaLabel = mediaType === 'movie' ? 'Movies' : mediaType === 'tv' ? 'TV Shows' : 'Music';
 		const subtypeLabel = mediaSubType === 'anime' ? 'Anime' : 'Standard';
 		return `${subtypeLabel} ${mediaLabel}`;
 	});

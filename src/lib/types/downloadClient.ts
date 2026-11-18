@@ -16,7 +16,7 @@ export type DownloadClientImplementation =
 export type DownloadClientHealth = 'healthy' | 'warning' | 'failing';
 export type DownloadPriority = 'normal' | 'high' | 'force';
 export type DownloadInitialState = 'start' | 'pause' | 'force';
-export type RootFolderMediaType = 'movie' | 'tv';
+export type RootFolderMediaType = 'movie' | 'tv' | 'music';
 export type RootFolderMediaSubType = 'standard' | 'anime';
 export type DownloadClientMountMode = 'nzbdav' | 'altmount';
 

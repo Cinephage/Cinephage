@@ -717,7 +717,7 @@ export type DownloadClientTestDiscriminated =
 /**
  * Media type for root folders.
  */
-export const rootFolderMediaTypeSchema = z.enum(['movie', 'tv']);
+export const rootFolderMediaTypeSchema = z.enum(['movie', 'tv', 'music']);
 export const rootFolderMediaSubTypeSchema = z.enum(['standard', 'anime']);
 
 /**
@@ -770,7 +770,7 @@ export type RootFolderUpdate = z.infer<typeof rootFolderUpdateSchema>;
 /**
  * Media type and subtype for first-class libraries.
  */
-export const libraryMediaTypeSchema = z.enum(['movie', 'tv']);
+export const libraryMediaTypeSchema = z.enum(['movie', 'tv', 'music']);
 export const libraryMediaSubTypeSchema = z.enum(['standard', 'anime']);
 export const metadataProviderSelectionSchema = z.enum(['auto', 'tmdb', 'anilist', 'mal']);
 

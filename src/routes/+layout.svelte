@@ -23,6 +23,7 @@
 		Home,
 		Clapperboard,
 		Tv,
+		Disc3,
 		Settings,
 		ChevronLeft,
 		ChevronRight,
@@ -286,6 +287,12 @@
 					url.pathname === '/library/tv' &&
 					(url.searchParams.get('library')?.trim() ?? '') === library.slug
 			})),
+			{
+				href: '/library/music',
+				label: m.nav_music,
+				icon: Disc3,
+				match: (url: ReadonlyURL) => url.pathname.startsWith('/library/music')
+			},
 			...(isAdmin
 				? [
 						{ href: '/library/import', label: m.nav_import, icon: Download },

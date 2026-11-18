@@ -222,6 +222,14 @@ import {
  */
 export const CURRENT_SCHEMA_VERSION = 181;
 
+/**
+ * Seed rows for the *legacy* backfill in migration 078 only.
+ *
+ * Frozen on purpose: migration 140 rebuilds `libraries` with a hardcoded
+ * ('movie','tv') CHECK, so a new media kind added here makes a fresh install
+ * fail that migration. Live system libraries come from `SYSTEM_LIBRARY_DEFS`
+ * in `LibraryEntityService`, which runs after the schema is current.
+ */
 export const SYSTEM_LIBRARY_SEEDS = [
 	{
 		id: 'lib-movies-standard',

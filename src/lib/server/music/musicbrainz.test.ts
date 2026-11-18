@@ -124,6 +124,30 @@ describe('MusicBrainzClient.searchReleaseGroups', () => {
 	});
 });
 
+describe('MusicBrainzClient.getReleaseGroup', () => {
+	it('asks for artist credits, without which the entity has no artist', async () => {
+		let requested = '';
+		const client = clientWith((async (url: string | URL | Request) => {
+			requested = String(url);
+			return jsonResponse({
+				id: '48117b90-a16e-34ca-a514-19c702df1158',
+				title: 'Discovery',
+				'primary-type': 'Album',
+				'first-release-date': '2001-02-26',
+				'artist-credit': [
+					{ name: 'Daft Punk', artist: { id: '056e4f3e', name: 'Daft Punk', 'sort-name': 'Daft Punk' } }
+				]
+			});
+		}) as typeof fetch);
+
+		const group = await client.getReleaseGroup('48117b90-a16e-34ca-a514-19c702df1158');
+
+		expect(new URL(requested).searchParams.get('inc')).toBe('artist-credits');
+		expect(group.artist.name).toBe('Daft Punk');
+		expect(group.year).toBe(2001);
+	});
+});
+
 describe('MusicBrainzClient.getRelease', () => {
 	it('flattens media into one tracklist with disc-major positions', async () => {
 		const client = clientWith((async () => jsonResponse(RELEASE_DETAIL)) as typeof fetch);

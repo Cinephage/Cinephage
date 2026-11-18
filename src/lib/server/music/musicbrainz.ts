@@ -106,7 +106,7 @@ export interface ReleaseGroupSearchOptions {
 	/** Artist name as typed by the user; matched loosely, MusicBrainz ranks the result. */
 	artist?: string;
 	/** Album title as typed by the user. */
-	album: string;
+	album?: string;
 	limit?: number;
 }
 
@@ -130,9 +130,7 @@ function artistOf(credits: ArtistCredit[] | null | undefined): MusicArtistRef | 
 }
 
 function artistCreditOf(credits: ArtistCredit[] | null | undefined): string | null {
-	const names = (credits ?? [])
-		.map((credit) => credit.name)
-		.filter((name): name is string => !!name);
+	const names = (credits ?? []).map((credit) => credit.name).filter((name): name is string => !!name);
 	return names.length > 0 ? names.join(', ') : null;
 }
 
@@ -232,11 +230,7 @@ export class MusicBrainzClient {
 				const error =
 					err instanceof MusicBrainzError
 						? err
-						: new MusicBrainzError(
-								err instanceof Error ? err.message : String(err),
-								undefined,
-								true
-							);
+						: new MusicBrainzError(err instanceof Error ? err.message : String(err), undefined, true);
 				lastError = error;
 				if (!error.retryable || attempt === this.maxAttempts) throw error;
 
@@ -252,6 +246,8 @@ export class MusicBrainzClient {
 		const clauses: string[] = [];
 		if (options.artist?.trim()) clauses.push(`artist:"${escapeLucene(options.artist.trim())}"`);
 		if (options.album?.trim()) clauses.push(`releasegroup:"${escapeLucene(options.album.trim())}"`);
+
+		if (clauses.length === 0) return [];
 
 		const body = await this.request<{ 'release-groups'?: RawReleaseGroup[] }>('/release-group', {
 			query: clauses.join(' AND '),
@@ -274,6 +270,28 @@ export class MusicBrainzClient {
 				} satisfies MusicReleaseGroup
 			];
 		});
+	}
+
+	/** One release group by MBID — the album's own metadata, without its editions. */
+	async getReleaseGroup(releaseGroupMbid: string): Promise<MusicReleaseGroup> {
+		// `artist-credits` is not included by default on a lookup, and without it the
+		// entity carries no artist — which read as "not found" on the first live call.
+		const body = await this.request<RawReleaseGroup>(`/release-group/${releaseGroupMbid}`, {
+			inc: 'artist-credits'
+		});
+		const artist = artistOf(body['artist-credit']);
+		if (!body.id || !body.title || !artist) {
+			throw new MusicBrainzError(`Release group ${releaseGroupMbid} not found`, 404, false);
+		}
+		return {
+			mbid: body.id,
+			title: body.title,
+			primaryType: body['primary-type'] ?? null,
+			secondaryTypes: body['secondary-types'] ?? [],
+			firstReleaseDate: body['first-release-date'] ?? null,
+			year: yearOf(body['first-release-date']),
+			artist
+		};
 	}
 
 	/** Every edition that belongs to a release group, in MusicBrainz order. */
@@ -312,12 +330,9 @@ export class MusicBrainzClient {
 		// A lookup by MBID answers the entity itself; only a *search* wraps its
 		// results in `{ releases: [...] }`. Accept both so callers never have to
 		// know which endpoint produced the release.
-		const body = await this.request<{ releases?: RawRelease[] } & RawRelease>(
-			`/release/${releaseMbid}`,
-			{
-				inc: 'recordings+artist-credits+labels'
-			}
-		);
+		const body = await this.request<{ releases?: RawRelease[] } & RawRelease>(`/release/${releaseMbid}`, {
+			inc: 'recordings+artist-credits+labels'
+		});
 		const release = body.releases?.[0] ?? body;
 		if (!release?.id) throw new MusicBrainzError(`Release ${releaseMbid} not found`, 404, false);
 
@@ -372,8 +387,7 @@ export class MusicBrainzClient {
 			genres?: Array<{ name?: string | null }>;
 		}>(`/artist/${artistMbid}`, { inc: 'genres' });
 
-		if (!body.id || !body.name)
-			throw new MusicBrainzError(`Artist ${artistMbid} not found`, 404, false);
+		if (!body.id || !body.name) throw new MusicBrainzError(`Artist ${artistMbid} not found`, 404, false);
 		return {
 			mbid: body.id,
 			name: body.name,

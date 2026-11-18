@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { db } from '#lib/server/db/index.js';
 import { albums, artists, mediaItems, tracks } from '#lib/server/db/schema.js';
@@ -16,6 +16,46 @@ export interface AddAlbumInput {
 	rootFolderId?: string | null;
 	monitored?: boolean;
 	coverPath?: string | null;
+}
+
+/** One row of the music library list: enough for a card, no tracklist. */
+export interface AlbumSummary {
+	id: string;
+	title: string;
+	artistId: string;
+	artistName: string;
+	year: number | null;
+	trackCount: number | null;
+	hasFile: boolean | null;
+	monitored: boolean | null;
+	coverPath: string | null;
+	path: string | null;
+	/** True when the cover can be served: a local file, or a MusicBrainz edition to proxy. */
+	hasCover: boolean;
+}
+
+export interface AlbumDetail extends AlbumSummary {
+	releaseMbid: string | null;
+	mbid: string | null;
+	primaryType: string | null;
+	secondaryTypes: string[] | null;
+	status: string | null;
+	labelName: string | null;
+	catalogNumber: string | null;
+	barcode: string | null;
+	country: string | null;
+	mediaCount: number | null;
+	duration: number | null;
+	tracks: Array<{
+		id: string;
+		title: string;
+		artistCredit: string | null;
+		discNumber: number | null;
+		trackNumber: number | null;
+		position: number | null;
+		duration: number | null;
+		hasFile: boolean | null;
+	}>;
 }
 
 export interface AddAlbumResult {
@@ -37,7 +77,11 @@ export class MusicAlbumService {
 	 * album — there is no standalone artist import yet.
 	 */
 	private ensureArtist(artist: MusicArtistRef): string {
-		const existing = db.select({ id: artists.id }).from(artists).where(eq(artists.mbid, artist.mbid)).get();
+		const existing = db
+			.select({ id: artists.id })
+			.from(artists)
+			.where(eq(artists.mbid, artist.mbid))
+			.get();
 		if (existing) return existing.id;
 
 		const id = randomUUID();
@@ -69,7 +113,11 @@ export class MusicAlbumService {
 				.where(and(eq(albums.mbid, releaseGroup.mbid), eq(albums.artistId, artistId)))
 				.get();
 			if (existing) {
-				return { albumId: existing.id, mediaItemId: existing.mediaItemId, created: false } satisfies AddAlbumResult;
+				return {
+					albumId: existing.id,
+					mediaItemId: existing.mediaItemId,
+					created: false
+				} satisfies AddAlbumResult;
 			}
 
 			const mediaItemId = randomUUID();
@@ -140,6 +188,86 @@ export class MusicAlbumService {
 			'[MusicAlbum] album add'
 		);
 		return result;
+	}
+
+	/** Albums for the library list, artist-major then chronological. */
+	listAlbums(options: { libraryId?: string | null } = {}): AlbumSummary[] {
+		const base = db
+			.select({
+				id: albums.id,
+				title: albums.title,
+				artistId: albums.artistId,
+				artistName: artists.name,
+				year: albums.year,
+				trackCount: albums.trackCount,
+				hasFile: albums.hasFile,
+				monitored: albums.monitored,
+				coverPath: albums.coverPath,
+				path: albums.path,
+				releaseMbid: albums.releaseMbid
+			})
+			.from(albums)
+			.innerJoin(artists, eq(albums.artistId, artists.id));
+
+		const rows = (options.libraryId ? base.where(eq(albums.libraryId, options.libraryId)) : base)
+			.orderBy(asc(artists.name), asc(albums.year), asc(albums.title))
+			.all();
+
+		return rows.map(({ releaseMbid, ...row }) => ({
+			...row,
+			hasCover: Boolean(row.coverPath ?? releaseMbid)
+		}));
+	}
+
+	/** One album with its tracklist, or null when the id is unknown. */
+	getAlbum(albumId: string): AlbumDetail | null {
+		const row = db
+			.select({
+				id: albums.id,
+				title: albums.title,
+				artistId: albums.artistId,
+				artistName: artists.name,
+				year: albums.year,
+				trackCount: albums.trackCount,
+				hasFile: albums.hasFile,
+				monitored: albums.monitored,
+				coverPath: albums.coverPath,
+				path: albums.path,
+				releaseMbid: albums.releaseMbid,
+				mbid: albums.mbid,
+				primaryType: albums.primaryType,
+				secondaryTypes: albums.secondaryTypes,
+				status: albums.status,
+				labelName: albums.labelName,
+				catalogNumber: albums.catalogNumber,
+				barcode: albums.barcode,
+				country: albums.country,
+				mediaCount: albums.mediaCount,
+				duration: albums.duration
+			})
+			.from(albums)
+			.innerJoin(artists, eq(albums.artistId, artists.id))
+			.where(eq(albums.id, albumId))
+			.get();
+		if (!row) return null;
+
+		const trackRows = db
+			.select({
+				id: tracks.id,
+				title: tracks.title,
+				artistCredit: tracks.artistCredit,
+				discNumber: tracks.discNumber,
+				trackNumber: tracks.trackNumber,
+				position: tracks.position,
+				duration: tracks.duration,
+				hasFile: tracks.hasFile
+			})
+			.from(tracks)
+			.where(eq(tracks.albumId, albumId))
+			.orderBy(asc(tracks.position))
+			.all();
+
+		return { ...row, hasCover: Boolean(row.coverPath ?? row.releaseMbid), tracks: trackRows };
 	}
 }
 
