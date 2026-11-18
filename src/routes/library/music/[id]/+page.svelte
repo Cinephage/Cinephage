@@ -43,6 +43,13 @@
 	let releaseError = $state<string | null>(null);
 	let searched = $state(false);
 
+	let trackFilter = $state('');
+	const visibleTracks = $derived.by(() => {
+		const needle = trackFilter.trim().toLowerCase();
+		if (!needle) return album.tracks;
+		return album.tracks.filter((track) => track.title.toLowerCase().includes(needle));
+	});
+
 	let importOpen = $state(false);
 	let importPath = $state('');
 	let importing = $state(false);
@@ -237,7 +244,7 @@
 			onclick={() => (activeTab = 'tracks')}
 		>
 			{m.music_tracksLabel()}
-			<span class="ml-1.5 badge badge-sm badge-ghost">{album.tracks.length}</span>
+			<span class="ml-1.5 badge badge-sm badge-ghost">{visibleTracks.length}</span>
 		</button>
 		<button
 			class="border-b-2 px-3 py-2 text-sm font-medium transition-colors {activeTab === 'releases'
@@ -264,7 +271,18 @@
 					{m.music_noTracks()}
 				</div>
 			{:else}
-				<TrackList tracks={album.tracks} artistName={album.artistName} />
+				<div class="mb-3">
+					<label class="input w-full max-w-md input-sm">
+						<Search class="h-4 w-4 opacity-40" />
+						<input
+							class="grow"
+							placeholder={m.music_filterTracks()}
+							bind:value={trackFilter}
+							aria-label={m.music_filterTracks()}
+						/>
+					</label>
+				</div>
+				<TrackList tracks={visibleTracks} artistName={album.artistName} />
 			{/if}
 		{:else}
 			<div class="rounded-xl border border-base-content/10 bg-base-100">

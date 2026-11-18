@@ -4,9 +4,13 @@ import { requireAdmin, requireAuth } from '#lib/server/auth/authorization.js';
 import { parseBody } from '#lib/server/api/validate.js';
 import { musicArtistService } from '#lib/server/music/MusicArtistService.js';
 
-const patchArtistSchema = z.object({
-	monitored: z.boolean()
-});
+const patchArtistSchema = z
+	.object({
+		name: z.string().trim().min(1).max(300).optional(),
+		sortName: z.string().trim().max(300).nullable().optional(),
+		monitored: z.boolean().optional()
+	})
+	.refine((value) => Object.keys(value).length > 0, { message: 'Nothing to update' });
 
 /** GET /api/music/artists/[id] — one artist row as the library stores it. */
 export const GET: RequestHandler = async (event) => {
@@ -40,11 +44,22 @@ export const PATCH: RequestHandler = async (event) => {
 		);
 	}
 
-	const updated = musicArtistService.setMonitored(event.params.id, input.monitored);
+	const updated = musicArtistService.updateArtist(event.params.id, input);
 	if (!updated) return Response.json({ error: 'Artist not found' }, { status: 404 });
 
 	return Response.json({
 		success: true,
 		artist: musicArtistService.getArtist(event.params.id)
 	});
+};
+
+/** DELETE /api/music/artists/[id] — remove the artist and every album under it. */
+export const DELETE: RequestHandler = async (event) => {
+	const authError = requireAdmin(event);
+	if (authError) return authError;
+
+	const removed = musicArtistService.deleteArtist(event.params.id);
+	if (!removed) return Response.json({ error: 'Artist not found' }, { status: 404 });
+
+	return Response.json({ success: true });
 };

@@ -1,7 +1,7 @@
 import { eq, inArray } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { db } from '#lib/server/db/index.js';
-import { artists } from '#lib/server/db/schema.js';
+import { albums, artists, mediaItems } from '#lib/server/db/schema.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { musicBrainz, MusicBrainzError, pickPrimaryRelease } from './musicbrainz.js';
 import {
@@ -109,10 +109,48 @@ export class MusicArtistService {
 		return id;
 	}
 
-	/** Flip an artist's monitored flag; false when the id is unknown. */
-	setMonitored(artistId: string, monitored: boolean): boolean {
-		const result = db.update(artists).set({ monitored }).where(eq(artists.id, artistId)).run();
+	/**
+	 * Update the artist's own fields. Monitoring lives here too, because the
+	 * artist flag decides whether a future discography refresh treats unowned
+	 * albums as wanted — albums carry their own acquisition flag.
+	 */
+	updateArtist(
+		artistId: string,
+		patch: { name?: string; sortName?: string | null; monitored?: boolean }
+	): boolean {
+		const values: Record<string, unknown> = {};
+		if (patch.name !== undefined) values.name = patch.name;
+		if (patch.sortName !== undefined) values.sortName = patch.sortName;
+		if (patch.monitored !== undefined) values.monitored = patch.monitored;
+		if (Object.keys(values).length === 0) return false;
+		const result = db.update(artists).set(values).where(eq(artists.id, artistId)).run();
 		return result.changes > 0;
+	}
+
+	/**
+	 * Remove an artist and the albums under it. `albums` cascades on the artist
+	 * foreign key, but each album's `media_items` identity row does not — those
+	 * are deleted explicitly, the same way the single-album path does it. Files
+	 * on disk are never touched.
+	 */
+	deleteArtist(artistId: string): boolean {
+		const artist = db.select({ id: artists.id }).from(artists).where(eq(artists.id, artistId)).get();
+		if (!artist) return false;
+
+		const owned = db
+			.select({ mediaItemId: albums.mediaItemId })
+			.from(albums)
+			.where(eq(albums.artistId, artistId))
+			.all();
+
+		db.transaction((tx) => {
+			tx.delete(artists).where(eq(artists.id, artistId)).run();
+			for (const album of owned) {
+				tx.delete(mediaItems).where(eq(mediaItems.id, album.mediaItemId)).run();
+			}
+		});
+		logger.info({ artistId, albums: owned.length }, '[MusicArtist] artist removed');
+		return true;
 	}
 
 	/** One artist row, for the artist page hero and its card. */
