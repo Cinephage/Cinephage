@@ -2400,6 +2400,8 @@
 	"music_unmonitorAction": "Не отслеживать",
 	"music_groupEps": "EP",
 	"music_groupSingles": "Синглы",
+	"music_songsCount": "{count} песен",
+	"music_featuredArtists": "Приглашённые исполнители",
 	"naming_preview": "Предпросмотр",
 	"naming_reset": "Сбросить",
 	"naming_tokenCategoryAudio": "Аудио",

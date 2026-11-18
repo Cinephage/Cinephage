@@ -2491,6 +2491,8 @@
 	"music_unmonitorAction": "Unmonitor",
 	"music_groupEps": "EPs",
 	"music_groupSingles": "Singles",
+	"music_songsCount": "{count} songs",
+	"music_featuredArtists": "Featured artists",
 	"naming_preview": "Preview",
 	"naming_reset": "Reset",
 	"naming_tokenCategoryAudio": "Audio",

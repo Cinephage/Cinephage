@@ -2400,6 +2400,8 @@
 	"music_unmonitorAction": "Nicht mehr überwachen",
 	"music_groupEps": "EPs",
 	"music_groupSingles": "Singles",
+	"music_songsCount": "{count} Titel",
+	"music_featuredArtists": "Beteiligte Künstler",
 	"naming_preview": "Vorschau",
 	"naming_reset": "Zurücksetzen",
 	"naming_tokenCategoryAudio": "Audio",

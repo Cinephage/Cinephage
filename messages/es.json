@@ -2400,6 +2400,8 @@
 	"music_unmonitorAction": "Dejar de monitorizar",
 	"music_groupEps": "EPs",
 	"music_groupSingles": "Sencillos",
+	"music_songsCount": "{count} canciones",
+	"music_featuredArtists": "Artistas invitados",
 	"naming_preview": "Vista previa",
 	"naming_reset": "Restablecer",
 	"naming_tokenCategoryAudio": "Audio",

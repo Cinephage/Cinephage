@@ -130,6 +130,8 @@
 		backdropUrl={coverAlbum ? `/api/music/albums/${coverAlbum.id}/cover` : null}
 		albumCount={data.counts.albums}
 		inLibraryCount={data.counts.inLibrary}
+		songCount={data.counts.songs}
+		featured={data.featured}
 		backHref="/library/music"
 		backLabel={m.nav_music()}
 		sourceUrl={artist.mbid ? `https://musicbrainz.org/artist/${artist.mbid}` : null}
@@ -160,28 +162,6 @@
 			{/if}
 		{/snippet}
 	</ArtistHero>
-
-	<!-- Stat strip: the series page's "episodes / files / complete" row, in music terms. -->
-	<div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-		<div class="rounded-xl border border-base-content/10 bg-base-100 px-4 py-3">
-			<p class="text-xs text-base-content/45">{m.music_tabAlbums()}</p>
-			<p class="text-lg font-semibold tabular-nums">{data.counts.albums}</p>
-		</div>
-		<div class="rounded-xl border border-base-content/10 bg-base-100 px-4 py-3">
-			<p class="text-xs text-base-content/45">{m.music_tabSongs()}</p>
-			<p class="text-lg font-semibold tabular-nums">{data.counts.songs}</p>
-		</div>
-		<div class="rounded-xl border border-base-content/10 bg-base-100 px-4 py-3">
-			<p class="text-xs text-base-content/45">{m.common_downloaded()}</p>
-			<p class="text-lg font-semibold tabular-nums text-success">{data.counts.songsWithFile}</p>
-		</div>
-		<div class="rounded-xl border border-base-content/10 bg-base-100 px-4 py-3">
-			<p class="text-xs text-base-content/45">{m.common_missing()}</p>
-			<p class="text-lg font-semibold tabular-nums {data.counts.songs - data.counts.songsWithFile > 0 ? 'text-warning' : ''}">
-				{data.counts.songs - data.counts.songsWithFile}
-			</p>
-		</div>
-	</div>
 
 	<div class="mt-5 flex items-center justify-between gap-3 border-b border-base-content/10">
 		<div class="flex items-center gap-1">

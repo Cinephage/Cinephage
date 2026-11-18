@@ -101,3 +101,32 @@ export interface TrackTableRow {
 	duration: number | null;
 	hasFile: boolean | null;
 }
+
+/**
+ * Collaborators across a discography, most-credited first.
+ *
+ * Track credits are free text ("Chris Webby, Knowledge"), so this is a
+ * deliberate heuristic: split on the separators MusicBrainz actually emits,
+ * drop the artist themselves, and rank by how often a name appears. It feeds a
+ * cast-style row of bubbles, not a data model.
+ */
+export function deriveFeaturedArtists(
+	credits: Array<string | null>,
+	artistName: string,
+	limit = 8
+): string[] {
+	const self = artistName.trim().toLowerCase();
+	const counts = new Map<string, number>();
+	for (const credit of credits) {
+		if (!credit) continue;
+		for (const part of credit.split(/\s*(?:,|&|\bfeat\.|\bft\.|\sx\s)\s*/i)) {
+			const name = part.trim();
+			if (!name || name.toLowerCase() === self) continue;
+			counts.set(name, (counts.get(name) ?? 0) + 1);
+		}
+	}
+	return [...counts.entries()]
+		.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+		.slice(0, limit)
+		.map(([name]) => name);
+}

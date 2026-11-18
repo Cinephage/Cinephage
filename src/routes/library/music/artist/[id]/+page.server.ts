@@ -4,6 +4,7 @@ import { requireAdminPage } from '#lib/server/auth/authorization.js';
 import { musicAlbumService } from '#lib/server/music/MusicAlbumService.js';
 import { musicArtistService } from '#lib/server/music/MusicArtistService.js';
 import { musicTrackService } from '#lib/server/music/MusicTrackService.js';
+import { deriveFeaturedArtists } from '#lib/components/music/music-card.js';
 
 /**
  * One artist's shelf: the artist row, its albums and the songs inside them.
@@ -30,6 +31,10 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		artist,
 		albums: albums.map((album) => ({ ...album, tracks: byAlbum.get(album.id) ?? [] })),
 		songs,
+		featured: deriveFeaturedArtists(
+			songs.map((song) => song.artistCredit),
+			artist.name
+		),
 		counts: {
 			albums: albums.length,
 			inLibrary: albums.filter((album) => album.hasFile).length,
