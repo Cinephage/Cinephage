@@ -96,6 +96,8 @@ export const GET: RequestHandler = async ({ url }) => {
 		season,
 		episode,
 		language,
+		artist,
+		album,
 		enrich,
 		scoringProfileId,
 		matchToTmdb,
@@ -174,6 +176,29 @@ export const GET: RequestHandler = async ({ url }) => {
 			year: effectiveYear,
 			season,
 			episode,
+			language: effectiveLanguage
+		};
+	} else if (searchType === 'music') {
+		// Music: the indexer template consumes artist and album as separate fields
+		// (MusicSearchCriteria), so a joined "artist album" string alone loses the
+		// match quality the Newznab-style `t=music&artist=&album=` query relies on.
+		const musicArtist = artist?.trim() || undefined;
+		const musicAlbum = album?.trim() || undefined;
+		if (!musicArtist && !musicAlbum) {
+			return Response.json(
+				{ error: 'An artist or album is required for a music search' },
+				{ status: 400 }
+			);
+		}
+		criteria = {
+			searchType: 'music',
+			query: [musicArtist, musicAlbum].filter(Boolean).join(' '),
+			artist: musicArtist,
+			album: musicAlbum,
+			year: effectiveYear,
+			categories: effectiveCategories.length > 0 ? effectiveCategories : undefined,
+			indexerIds: indexers,
+			limit: effectiveLimit,
 			language: effectiveLanguage
 		};
 	} else {

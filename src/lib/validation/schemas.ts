@@ -289,6 +289,9 @@ export const searchQuerySchema = z.object({
 	year: z.coerce.number().int().min(1888).max(2100).optional(),
 	season: z.coerce.number().int().min(0).optional(),
 	episode: z.coerce.number().int().min(0).optional(),
+	// Music specific: the indexer template wants artist and album separately, not a joined title
+	artist: z.string().optional(),
+	album: z.string().optional(),
 	// Language preference (ISO 639-1 code)
 	language: z.string().optional(),
 	// Enrichment options
