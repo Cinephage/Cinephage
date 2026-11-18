@@ -4,6 +4,8 @@ import type {
 	MusicArtistDetail,
 	MusicArtistRef,
 	MusicRelease,
+	MusicArtistSearchResult,
+	MusicRecordingHit,
 	MusicReleaseGroup,
 	MusicReleaseSummary,
 	MusicTrack
@@ -91,6 +93,35 @@ interface RawReleaseGroup {
 	'artist-credit'?: ArtistCredit[] | null;
 }
 
+interface RawArtist {
+	id?: string | null;
+	name?: string | null;
+	'sort-name'?: string | null;
+	disambiguation?: string | null;
+	type?: string | null;
+	country?: string | null;
+	score?: number | null;
+}
+
+interface RawRecording {
+	id?: string | null;
+	title?: string | null;
+	length?: number | null;
+	score?: number | null;
+	'artist-credit'?: ArtistCredit[] | null;
+	releases?: Array<{
+		id?: string | null;
+		title?: string | null;
+		status?: string | null;
+		date?: string | null;
+		'release-group'?: {
+			id?: string | null;
+			title?: string | null;
+			'primary-type'?: string | null;
+		} | null;
+	}> | null;
+}
+
 export interface MusicBrainzClientOptions {
 	fetchImpl?: typeof fetch;
 	userAgent?: string;
@@ -130,7 +161,9 @@ function artistOf(credits: ArtistCredit[] | null | undefined): MusicArtistRef | 
 }
 
 function artistCreditOf(credits: ArtistCredit[] | null | undefined): string | null {
-	const names = (credits ?? []).map((credit) => credit.name).filter((name): name is string => !!name);
+	const names = (credits ?? [])
+		.map((credit) => credit.name)
+		.filter((name): name is string => !!name);
 	return names.length > 0 ? names.join(', ') : null;
 }
 
@@ -230,7 +263,11 @@ export class MusicBrainzClient {
 				const error =
 					err instanceof MusicBrainzError
 						? err
-						: new MusicBrainzError(err instanceof Error ? err.message : String(err), undefined, true);
+						: new MusicBrainzError(
+								err instanceof Error ? err.message : String(err),
+								undefined,
+								true
+							);
 				lastError = error;
 				if (!error.retryable || attempt === this.maxAttempts) throw error;
 
@@ -270,6 +307,131 @@ export class MusicBrainzClient {
 				} satisfies MusicReleaseGroup
 			];
 		});
+	}
+
+	/** Artist search, used by "find an artist to add" and by interactive search. */
+	async searchArtists(query: string, limit = 20): Promise<MusicArtistSearchResult[]> {
+		if (!query.trim()) return [];
+		const body = await this.request<{ artists?: RawArtist[] }>('/artist', {
+			query: `artist:"${escapeLucene(query.trim())}"`,
+			limit: String(limit)
+		});
+		return (body.artists ?? []).flatMap((artist) => {
+			if (!artist.id || !artist.name) return [];
+			return [
+				{
+					mbid: artist.id,
+					name: artist.name,
+					sortName: artist['sort-name'] ?? null,
+					disambiguation: artist.disambiguation ?? null,
+					type: artist.type ?? null,
+					country: artist.country ?? null,
+					score: typeof artist.score === 'number' ? artist.score : undefined
+				} satisfies MusicArtistSearchResult
+			];
+		});
+	}
+
+	/**
+	 * Song search. `arid:` in MusicBrainz matches the *artist credit*, so this
+	 * finds a guest appearance as well as the artist's own tracks — measured on
+	 * Chris Webby: 29 of the first 100 credited recordings are features.
+	 *
+	 * Each hit carries the release group it first appeared on, because a song is
+	 * never an importable unit on its own: the album is.
+	 */
+	async searchRecordings(options: {
+		artist?: string;
+		track?: string;
+		limit?: number;
+	}): Promise<MusicRecordingHit[]> {
+		const clauses: string[] = [];
+		if (options.artist?.trim()) clauses.push(`artist:"${escapeLucene(options.artist.trim())}"`);
+		if (options.track?.trim()) clauses.push(`recording:"${escapeLucene(options.track.trim())}"`);
+		if (clauses.length === 0) return [];
+
+		const body = await this.request<{ recordings?: RawRecording[] }>('/recording', {
+			query: clauses.join(' AND '),
+			limit: String(options.limit ?? 25)
+		});
+
+		return (body.recordings ?? []).flatMap((recording) => {
+			if (!recording.id || !recording.title) return [];
+			const artists = (recording['artist-credit'] ?? []).flatMap((credit) => {
+				const ref =
+					credit.artist?.id && credit.artist?.name
+						? {
+								mbid: credit.artist.id,
+								name: credit.artist.name,
+								sortName: credit.artist['sort-name'] ?? null
+							}
+						: null;
+				return ref ? [ref] : [];
+			});
+			// Prefer an official release with a release group: that is the edition
+			// worth importing, and the group is what the album importer needs.
+			const releases = (recording.releases ?? []).filter((release) => release['release-group']?.id);
+			const release = releases.find((entry) => entry.status === 'Official') ?? releases[0] ?? null;
+
+			return [
+				{
+					mbid: recording.id,
+					title: recording.title,
+					duration:
+						typeof recording.length === 'number' ? Math.round(recording.length / 1000) : null,
+					artistCredit: artistCreditOf(recording['artist-credit']) ?? '',
+					artists,
+					releaseGroup: release
+						? {
+								mbid: release['release-group']!.id!,
+								title: release['release-group']!.title ?? '',
+								primaryType: release['release-group']!['primary-type'] ?? null
+							}
+						: null,
+					releaseMbid: release?.id ?? null,
+					score: typeof recording.score === 'number' ? recording.score : undefined
+				} satisfies MusicRecordingHit
+			];
+		});
+	}
+
+	/**
+	 * Every release group an artist owns, paged. Browse (not search) is the right
+	 * endpoint here: it is exact by artist id and pages deterministically, which
+	 * "add this artist" depends on.
+	 */
+	async getArtistReleaseGroups(
+		artistMbid: string,
+		artist: MusicArtistRef,
+		options: { limit?: number; offset?: number } = {}
+	): Promise<{ releaseGroups: MusicReleaseGroup[]; total: number }> {
+		const body = await this.request<{
+			'release-groups'?: RawReleaseGroup[];
+			'release-group-count'?: number;
+		}>(`/release-group`, {
+			artist: artistMbid,
+			limit: String(Math.min(options.limit ?? 100, 100)),
+			offset: String(options.offset ?? 0)
+		});
+
+		const releaseGroups = (body['release-groups'] ?? []).flatMap((group) => {
+			if (!group.id || !group.title) return [];
+			return [
+				{
+					mbid: group.id,
+					title: group.title,
+					primaryType: group['primary-type'] ?? null,
+					secondaryTypes: group['secondary-types'] ?? [],
+					firstReleaseDate: group['first-release-date'] ?? null,
+					year: yearOf(group['first-release-date']),
+					// A browse by artist id often omits the credit; the caller knows
+					// whose page this is, so its ref is the fallback (never a blank name).
+					artist: artistOf(group['artist-credit']) ?? artist
+				} satisfies MusicReleaseGroup
+			];
+		});
+
+		return { releaseGroups, total: body['release-group-count'] ?? releaseGroups.length };
 	}
 
 	/** One release group by MBID — the album's own metadata, without its editions. */
@@ -330,9 +492,12 @@ export class MusicBrainzClient {
 		// A lookup by MBID answers the entity itself; only a *search* wraps its
 		// results in `{ releases: [...] }`. Accept both so callers never have to
 		// know which endpoint produced the release.
-		const body = await this.request<{ releases?: RawRelease[] } & RawRelease>(`/release/${releaseMbid}`, {
-			inc: 'recordings+artist-credits+labels'
-		});
+		const body = await this.request<{ releases?: RawRelease[] } & RawRelease>(
+			`/release/${releaseMbid}`,
+			{
+				inc: 'recordings+artist-credits+labels'
+			}
+		);
 		const release = body.releases?.[0] ?? body;
 		if (!release?.id) throw new MusicBrainzError(`Release ${releaseMbid} not found`, 404, false);
 
@@ -387,7 +552,8 @@ export class MusicBrainzClient {
 			genres?: Array<{ name?: string | null }>;
 		}>(`/artist/${artistMbid}`, { inc: 'genres' });
 
-		if (!body.id || !body.name) throw new MusicBrainzError(`Artist ${artistMbid} not found`, 404, false);
+		if (!body.id || !body.name)
+			throw new MusicBrainzError(`Artist ${artistMbid} not found`, 404, false);
 		return {
 			mbid: body.id,
 			name: body.name,

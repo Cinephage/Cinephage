@@ -35,7 +35,14 @@ const RELEASE_GROUP_HIT = {
 			'first-release-date': '2001-02-26',
 			score: 100,
 			'artist-credit': [
-				{ name: 'Daft Punk', artist: { id: '056e4f3e-d505-4dad-8ec1-d04f521cbb56', name: 'Daft Punk', 'sort-name': 'Daft Punk' } }
+				{
+					name: 'Daft Punk',
+					artist: {
+						id: '056e4f3e-d505-4dad-8ec1-d04f521cbb56',
+						name: 'Daft Punk',
+						'sort-name': 'Daft Punk'
+					}
+				}
 			]
 		},
 		{
@@ -53,41 +60,41 @@ const RELEASE_GROUP_HIT = {
 // and the one that a wrapper-shaped fixture would have hidden.
 const RELEASE_DETAIL = {
 	id: 'ab5ca495-8983-41b9-86b4-46a981d173be',
-			title: 'Discovery',
-			status: 'Official',
-			country: 'JP',
-			barcode: '4988006788367',
-			packaging: 'Jewel Case',
-			date: '2001-03-10',
-			'label-info': [{ label: { name: 'Virgin' }, 'catalog-number': 'VJCP-68283' }],
-			media: [
+	title: 'Discovery',
+	status: 'Official',
+	country: 'JP',
+	barcode: '4988006788367',
+	packaging: 'Jewel Case',
+	date: '2001-03-10',
+	'label-info': [{ label: { name: 'Virgin' }, 'catalog-number': 'VJCP-68283' }],
+	media: [
+		{
+			position: 1,
+			format: 'CD',
+			'track-count': 2,
+			tracks: [
 				{
-					position: 1,
-					format: 'CD',
-					'track-count': 2,
-					tracks: [
-						{
-							number: '1',
-							title: 'One More Time',
-							length: 321400,
-							recording: { id: '60fa767a-d85d-4991-82bc-4294e0b11ae7' },
-							'artist-credit': [{ name: 'Daft Punk' }]
-						},
-						{
-							number: '2',
-							title: 'Aerodynamic',
-							length: 207493,
-							recording: { id: '7c0e11a3-1c7a-4e6d-a14d-6e86d86dbaad' }
-						}
-					]
+					number: '1',
+					title: 'One More Time',
+					length: 321400,
+					recording: { id: '60fa767a-d85d-4991-82bc-4294e0b11ae7' },
+					'artist-credit': [{ name: 'Daft Punk' }]
 				},
 				{
-					position: 2,
-					format: 'CD',
-					'track-count': 1,
-					tracks: [{ number: 'A1', title: 'Bonus', length: 60000 }]
+					number: '2',
+					title: 'Aerodynamic',
+					length: 207493,
+					recording: { id: '7c0e11a3-1c7a-4e6d-a14d-6e86d86dbaad' }
 				}
 			]
+		},
+		{
+			position: 2,
+			format: 'CD',
+			'track-count': 1,
+			tracks: [{ number: 'A1', title: 'Bonus', length: 60000 }]
+		}
+	]
 };
 
 describe('MusicBrainzClient.searchReleaseGroups', () => {
@@ -109,7 +116,9 @@ describe('MusicBrainzClient.searchReleaseGroups', () => {
 			score: 100,
 			artist: { mbid: '056e4f3e-d505-4dad-8ec1-d04f521cbb56', name: 'Daft Punk' }
 		});
-		expect(new URL(requested).searchParams.get('query')).toBe('artist:"Daft Punk" AND releasegroup:"Discovery"');
+		expect(new URL(requested).searchParams.get('query')).toBe(
+			'artist:"Daft Punk" AND releasegroup:"Discovery"'
+		);
 	});
 
 	it('escapes quotes so a title cannot break the Lucene query', async () => {
@@ -124,6 +133,134 @@ describe('MusicBrainzClient.searchReleaseGroups', () => {
 	});
 });
 
+describe('MusicBrainzClient.searchArtists', () => {
+	it('maps artist hits, keeping the disambiguation that separates namesakes', async () => {
+		const client = clientWith((async () =>
+			jsonResponse({
+				artists: [
+					{
+						id: '4771b7f6-f4e8-4d5d-81c4-4fd3c6accc7c',
+						name: 'Chris Webby',
+						'sort-name': 'Webby, Chris',
+						disambiguation: 'US rapper',
+						type: 'Person',
+						country: 'US',
+						score: 100
+					}
+				]
+			})) as typeof fetch);
+
+		const artists = await client.searchArtists('Chris Webby');
+
+		expect(artists).toHaveLength(1);
+		expect(artists[0]).toMatchObject({
+			mbid: '4771b7f6-f4e8-4d5d-81c4-4fd3c6accc7c',
+			name: 'Chris Webby',
+			disambiguation: 'US rapper',
+			type: 'Person',
+			country: 'US'
+		});
+	});
+});
+
+describe('MusicBrainzClient.searchRecordings', () => {
+	it('keeps the release group a song came from, and renders the joined credit', async () => {
+		const client = clientWith((async () =>
+			jsonResponse({
+				recordings: [
+					{
+						id: 'cd5e530c-9c55-4354-97b2-2d1f85b4cffe',
+						title: 'Almost There',
+						length: 277000,
+						score: 100,
+						'artist-credit': [
+							{
+								joinphrase: ' feat. ',
+								name: 'Chris Webby',
+								artist: { id: 'artist-webby', name: 'Chris Webby' }
+							},
+							{ name: 'Miss Daja', artist: { id: 'artist-daja', name: 'Miss Daja' } }
+						],
+						releases: [
+							{
+								id: 'release-1',
+								title: 'Best in the Burbs',
+								status: 'Official',
+								date: '2010-06-01',
+								'release-group': {
+									id: 'rg-best',
+									title: 'Best in the Burbs',
+									'primary-type': 'Album'
+								}
+							}
+						]
+					}
+				]
+			})) as typeof fetch);
+
+		const hits = await client.searchRecordings({ artist: 'Chris Webby', track: 'Almost There' });
+
+		expect(hits).toHaveLength(1);
+		expect(hits[0]).toMatchObject({
+			mbid: 'cd5e530c-9c55-4354-97b2-2d1f85b4cffe',
+			title: 'Almost There',
+			duration: 277,
+			artistCredit: 'Chris Webby, Miss Daja',
+			releaseMbid: 'release-1',
+			releaseGroup: { mbid: 'rg-best', title: 'Best in the Burbs', primaryType: 'Album' }
+		});
+		expect(hits[0].artists.map((artist) => artist.mbid)).toEqual(['artist-webby', 'artist-daja']);
+	});
+
+	it('leaves the release group null when a recording has no release to point at', async () => {
+		const client = clientWith((async () =>
+			jsonResponse({
+				recordings: [{ id: 'rec-x', title: 'Orphan', 'artist-credit': [], releases: [] }]
+			})) as typeof fetch);
+
+		const hits = await client.searchRecordings({ track: 'Orphan' });
+		expect(hits[0].releaseGroup).toBeNull();
+		expect(hits[0].releaseMbid).toBeNull();
+	});
+});
+
+describe('MusicBrainzClient.getArtistReleaseGroups', () => {
+	it('browses by artist id and reports the total, falling back to the caller-supplied artist', async () => {
+		let requested = '';
+		const client = clientWith((async (url: string | URL | Request) => {
+			requested = String(url);
+			return jsonResponse({
+				'release-group-count': 65,
+				'release-groups': [
+					{
+						id: 'rg-1',
+						title: 'Best in the Burbs',
+						'primary-type': 'Album',
+						'secondary-types': ['Mixtape/Street'],
+						'first-release-date': '2010-06-01'
+					}
+				]
+			});
+		}) as typeof fetch);
+
+		const { releaseGroups, total } = await client.getArtistReleaseGroups(
+			'4771b7f6-f4e8-4d5d-81c4-4fd3c6accc7c',
+			{ mbid: '4771b7f6-f4e8-4d5d-81c4-4fd3c6accc7c', name: 'Chris Webby' }
+		);
+
+		const params = new URL(requested).searchParams;
+		expect(params.get('artist')).toBe('4771b7f6-f4e8-4d5d-81c4-4fd3c6accc7c');
+		expect(total).toBe(65);
+		expect(releaseGroups[0]).toMatchObject({
+			mbid: 'rg-1',
+			title: 'Best in the Burbs',
+			year: 2010,
+			secondaryTypes: ['Mixtape/Street'],
+			artist: { name: 'Chris Webby' }
+		});
+	});
+});
+
 describe('MusicBrainzClient.getReleaseGroup', () => {
 	it('asks for artist credits, without which the entity has no artist', async () => {
 		let requested = '';
@@ -135,7 +272,10 @@ describe('MusicBrainzClient.getReleaseGroup', () => {
 				'primary-type': 'Album',
 				'first-release-date': '2001-02-26',
 				'artist-credit': [
-					{ name: 'Daft Punk', artist: { id: '056e4f3e', name: 'Daft Punk', 'sort-name': 'Daft Punk' } }
+					{
+						name: 'Daft Punk',
+						artist: { id: '056e4f3e', name: 'Daft Punk', 'sort-name': 'Daft Punk' }
+					}
 				]
 			});
 		}) as typeof fetch);
@@ -157,7 +297,9 @@ describe('MusicBrainzClient.getRelease', () => {
 		expect(release.trackCount).toBe(3);
 		expect(release.mediaCount).toBe(2);
 		expect(release.duration).toBe(321 + 207 + 60);
-		expect(release.tracks.map((track) => [track.discNumber, track.trackNumber, track.position])).toEqual([
+		expect(
+			release.tracks.map((track) => [track.discNumber, track.trackNumber, track.position])
+		).toEqual([
 			[1, 1, 1],
 			[1, 2, 2],
 			[2, null, 3]
@@ -173,7 +315,9 @@ describe('MusicBrainzClient.getRelease', () => {
 
 	it('treats a 200 with an error body as a retryable failure', async () => {
 		const client = clientWith((async () =>
-			jsonResponse({ error: 'Your requests are exceeding the allowable rate limit' })) as typeof fetch);
+			jsonResponse({
+				error: 'Your requests are exceeding the allowable rate limit'
+			})) as typeof fetch);
 
 		await expect(client.getRelease('x')).rejects.toBeInstanceOf(MusicBrainzError);
 		await expect(client.getRelease('x')).rejects.toMatchObject({ retryable: true });
@@ -251,16 +395,13 @@ describe('MusicBrainzClient rate gate', () => {
 	it('spaces request slots by the interval, not by response time', async () => {
 		const slept: number[] = [];
 		let clock = 0;
-		const client = clientWith(
-			(async () => jsonResponse(RELEASE_GROUP_HIT)) as typeof fetch,
-			{
-				now: () => clock,
-				sleep: async (ms: number) => {
-					slept.push(ms);
-					clock += ms;
-				}
+		const client = clientWith((async () => jsonResponse(RELEASE_GROUP_HIT)) as typeof fetch, {
+			now: () => clock,
+			sleep: async (ms: number) => {
+				slept.push(ms);
+				clock += ms;
 			}
-		);
+		});
 
 		await client.searchReleaseGroups({ album: 'a' });
 		await client.searchReleaseGroups({ album: 'b' });

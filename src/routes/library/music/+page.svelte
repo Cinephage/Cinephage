@@ -1,8 +1,14 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
-	import { Disc3, Search, Plus, LoaderCircle } from '@lucide/svelte';
+	import { Disc3, Search, Plus, LoaderCircle, User, ListMusic } from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
-	import type { MusicReleaseGroup } from '#lib/server/music/types.js';
+	import type {
+		MusicArtistSearchResult,
+		MusicRecordingHit,
+		MusicReleaseGroup
+	} from '#lib/server/music/types.js';
+
+	type Kind = 'artist' | 'album' | 'song';
 
 	let { data } = $props<{
 		data: {
@@ -23,36 +29,71 @@
 				monitored: boolean | null;
 				coverPath: string | null;
 				path: string | null;
+				hasCover: boolean;
 			}>;
 		};
 	}>();
 
+	let kind = $state<Kind>('artist');
 	let artistQuery = $state('');
 	let albumQuery = $state('');
+	let songQuery = $state('');
 	let searching = $state(false);
-	let addingMbid = $state<string | null>(null);
-	let results = $state<MusicReleaseGroup[]>([]);
+	let busy = $state<string | null>(null);
+	let artistResults = $state<MusicArtistSearchResult[]>([]);
+	let albumResults = $state<MusicReleaseGroup[]>([]);
+	let songResults = $state<MusicRecordingHit[]>([]);
 	let message = $state<{ kind: 'error' | 'info'; text: string } | null>(null);
 
-	const canSearch = $derived(artistQuery.trim().length > 0 || albumQuery.trim().length > 0);
+	const canSearch = $derived(
+		kind === 'artist'
+			? artistQuery.trim().length > 0
+			: kind === 'album'
+				? artistQuery.trim().length > 0 || albumQuery.trim().length > 0
+				: artistQuery.trim().length > 0 || songQuery.trim().length > 0
+	);
+
+	function resetResults() {
+		artistResults = [];
+		albumResults = [];
+		songResults = [];
+		message = null;
+	}
+
+	function setKind(next: Kind) {
+		if (kind === next) return;
+		kind = next;
+		resetResults();
+	}
 
 	async function search() {
 		if (!canSearch || searching) return;
 		searching = true;
-		message = null;
+		resetResults();
 		try {
-			const params = new URLSearchParams();
-			if (artistQuery.trim()) params.set('artist', artistQuery.trim());
-			if (albumQuery.trim()) params.set('album', albumQuery.trim());
+			const params = new URLSearchParams({ type: kind });
+			if (kind === 'artist') params.set('q', artistQuery.trim());
+			if (kind === 'album') {
+				if (artistQuery.trim()) params.set('artist', artistQuery.trim());
+				if (albumQuery.trim()) params.set('album', albumQuery.trim());
+			}
+			if (kind === 'song') {
+				if (artistQuery.trim()) params.set('artist', artistQuery.trim());
+				if (songQuery.trim()) params.set('q', songQuery.trim());
+			}
+
 			const response = await fetch(`/api/music/search?${params}`);
 			const body = await response.json();
 			if (!response.ok) {
-				results = [];
 				message = { kind: 'error', text: body.details ?? body.error ?? m.music_searchFailed() };
 				return;
 			}
-			results = body.results ?? [];
-			if (results.length === 0) message = { kind: 'info', text: m.music_noResults() };
+			if (kind === 'artist') artistResults = body.results ?? [];
+			if (kind === 'album') albumResults = body.results ?? [];
+			if (kind === 'song') songResults = body.results ?? [];
+
+			const count = (body.results ?? []).length;
+			if (count === 0) message = { kind: 'info', text: m.music_noResults() };
 		} catch (err) {
 			message = {
 				kind: 'error',
@@ -63,9 +104,9 @@
 		}
 	}
 
-	async function addAlbum(group: MusicReleaseGroup) {
-		if (addingMbid) return;
-		addingMbid = group.mbid;
+	async function addReleaseGroup(group: MusicReleaseGroup | { mbid: string }) {
+		if (busy) return;
+		busy = group.mbid;
 		message = null;
 		try {
 			const response = await fetch('/api/music/albums', {
@@ -78,24 +119,67 @@
 				message = { kind: 'error', text: body.details ?? body.error ?? m.music_addFailed() };
 				return;
 			}
-			results = results.filter((entry) => entry.mbid !== group.mbid);
+			albumResults = albumResults.filter((entry) => entry.mbid !== group.mbid);
+			songResults = songResults.filter((entry) => entry.releaseGroup?.mbid !== group.mbid);
 			message = {
 				kind: 'info',
 				text: body.created
-					? m.music_addedAlbum({ title: group.title })
-					: m.music_alreadyInLibrary({ title: group.title })
+					? m.music_addedAlbum({ title: body.album?.title ?? '' })
+					: m.music_alreadyInLibrary({ title: body.album?.title ?? '' })
 			};
 			await invalidateAll();
 		} catch (err) {
 			message = { kind: 'error', text: err instanceof Error ? err.message : m.music_addFailed() };
 		} finally {
-			addingMbid = null;
+			busy = null;
 		}
 	}
 
-	function minutes(seconds: number | null | undefined): string {
-		if (!seconds) return '';
-		return `${Math.round(seconds / 60)} min`;
+	/**
+	 * A discography is added in batches: each album costs a few MusicBrainz
+	 * requests at ~1.2 s, so the server writes up to 25 and reports what is left.
+	 * We keep calling until it says zero, showing progress rather than hanging.
+	 */
+	async function addArtist(artist: MusicArtistSearchResult) {
+		if (busy) return;
+		busy = artist.mbid;
+		message = null;
+		let added = 0;
+		let batches = 0;
+		try {
+			for (;;) {
+				const response = await fetch('/api/music/artists', {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({
+						artist: { mbid: artist.mbid, name: artist.name, sortName: artist.sortName ?? null },
+						limit: 25,
+						libraryId: data.library?.id ?? null
+					})
+				});
+				const body = await response.json();
+				if (!response.ok) {
+					message = { kind: 'error', text: body.details ?? body.error ?? m.music_addFailed() };
+					return;
+				}
+				batches += 1;
+				added += body.added ?? 0;
+				message = {
+					kind: 'info',
+					text: m.music_addingArtist({
+						artist: artist.name,
+						added,
+						remaining: body.remaining ?? 0
+					})
+				};
+				await invalidateAll();
+				if (!body.remaining || batches >= 12) break;
+			}
+		} catch (err) {
+			message = { kind: 'error', text: err instanceof Error ? err.message : m.music_addFailed() };
+		} finally {
+			busy = null;
+		}
 	}
 </script>
 
@@ -119,7 +203,18 @@
 
 	<section class="card mb-6 bg-base-200">
 		<div class="card-body gap-3">
-			<h2 class="card-title text-base">{m.music_addAlbum()}</h2>
+			<div class="tabs tabs-box w-fit tabs-sm">
+				<button class="tab" class:tab-active={kind === 'artist'} onclick={() => setKind('artist')}>
+					<User class="mr-1 h-3.5 w-3.5" />{m.music_tabArtist()}
+				</button>
+				<button class="tab" class:tab-active={kind === 'album'} onclick={() => setKind('album')}>
+					<Disc3 class="mr-1 h-3.5 w-3.5" />{m.music_tabAlbum()}
+				</button>
+				<button class="tab" class:tab-active={kind === 'song'} onclick={() => setKind('song')}>
+					<ListMusic class="mr-1 h-3.5 w-3.5" />{m.music_tabSong()}
+				</button>
+			</div>
+
 			<div class="flex flex-wrap items-end gap-3">
 				<label class="form-control">
 					<span class="label-text pb-1 text-xs uppercase opacity-60">{m.music_artistLabel()}</span>
@@ -130,15 +225,28 @@
 						onkeydown={(event) => event.key === 'Enter' && search()}
 					/>
 				</label>
-				<label class="form-control">
-					<span class="label-text pb-1 text-xs uppercase opacity-60">{m.music_albumLabel()}</span>
-					<input
-						class="input-bordered input w-56 input-sm"
-						bind:value={albumQuery}
-						placeholder={m.music_albumPlaceholder()}
-						onkeydown={(event) => event.key === 'Enter' && search()}
-					/>
-				</label>
+				{#if kind === 'album'}
+					<label class="form-control">
+						<span class="label-text pb-1 text-xs uppercase opacity-60">{m.music_albumLabel()}</span>
+						<input
+							class="input-bordered input w-56 input-sm"
+							bind:value={albumQuery}
+							placeholder={m.music_albumPlaceholder()}
+							onkeydown={(event) => event.key === 'Enter' && search()}
+						/>
+					</label>
+				{/if}
+				{#if kind === 'song'}
+					<label class="form-control">
+						<span class="label-text pb-1 text-xs uppercase opacity-60">{m.music_songLabel()}</span>
+						<input
+							class="input-bordered input w-56 input-sm"
+							bind:value={songQuery}
+							placeholder={m.music_songPlaceholder()}
+							onkeydown={(event) => event.key === 'Enter' && search()}
+						/>
+					</label>
+				{/if}
 				<button class="btn btn-primary btn-sm" disabled={!canSearch || searching} onclick={search}>
 					{#if searching}
 						<LoaderCircle class="h-4 w-4 animate-spin" />
@@ -152,16 +260,43 @@
 			{#if message}
 				<p
 					class="text-sm"
-					class:opacity-60={message.kind === 'info'}
+					class:opacity-70={message.kind === 'info'}
 					class:text-error={message.kind === 'error'}
 				>
 					{message.text}
 				</p>
 			{/if}
 
-			{#if results.length > 0}
+			{#if artistResults.length > 0}
 				<ul class="mt-2 divide-y divide-base-300">
-					{#each results as group (group.mbid)}
+					{#each artistResults as artist (artist.mbid)}
+						<li class="flex items-center justify-between gap-3 py-2">
+							<div class="min-w-0">
+								<p class="truncate font-medium">{artist.name}</p>
+								<p class="truncate text-sm opacity-60">
+									{[artist.type, artist.country, artist.disambiguation].filter(Boolean).join(' · ')}
+								</p>
+							</div>
+							<button
+								class="btn btn-outline btn-sm"
+								disabled={busy !== null}
+								onclick={() => addArtist(artist)}
+							>
+								{#if busy === artist.mbid}
+									<LoaderCircle class="h-4 w-4 animate-spin" />
+								{:else}
+									<Plus class="h-4 w-4" />
+								{/if}
+								{m.music_addArtist()}
+							</button>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+
+			{#if albumResults.length > 0}
+				<ul class="mt-2 divide-y divide-base-300">
+					{#each albumResults as group (group.mbid)}
 						<li class="flex items-center justify-between gap-3 py-2">
 							<div class="min-w-0">
 								<p class="truncate font-medium">
@@ -176,16 +311,48 @@
 							</div>
 							<button
 								class="btn btn-outline btn-sm"
-								disabled={addingMbid !== null}
-								onclick={() => addAlbum(group)}
+								disabled={busy !== null}
+								onclick={() => addReleaseGroup(group)}
 							>
-								{#if addingMbid === group.mbid}
+								{#if busy === group.mbid}
 									<LoaderCircle class="h-4 w-4 animate-spin" />
 								{:else}
 									<Plus class="h-4 w-4" />
 								{/if}
 								{m.music_add()}
 							</button>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+
+			{#if songResults.length > 0}
+				<ul class="mt-2 divide-y divide-base-300">
+					{#each songResults as song (song.mbid)}
+						<li class="flex items-center justify-between gap-3 py-2">
+							<div class="min-w-0">
+								<p class="truncate font-medium">{song.title}</p>
+								<p class="truncate text-sm opacity-60">
+									{song.artistCredit}
+									{#if song.releaseGroup}· {song.releaseGroup.title}{/if}
+								</p>
+							</div>
+							{#if song.releaseGroup}
+								<button
+									class="btn btn-outline btn-sm"
+									disabled={busy !== null}
+									onclick={() => addReleaseGroup({ mbid: song.releaseGroup!.mbid })}
+								>
+									{#if busy === song.releaseGroup.mbid}
+										<LoaderCircle class="h-4 w-4 animate-spin" />
+									{:else}
+										<Plus class="h-4 w-4" />
+									{/if}
+									{m.music_addAlbumContaining()}
+								</button>
+							{:else}
+								<span class="text-xs opacity-50">{m.music_noAlbumForSong()}</span>
+							{/if}
 						</li>
 					{/each}
 				</ul>

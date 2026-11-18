@@ -7,6 +7,18 @@ import type { MusicArtistRef, MusicRelease, MusicReleaseGroup } from './types.js
 
 const logger = createChildLogger({ module: 'MusicAlbumService', logDomain: 'system' });
 
+export const DEFAULT_ARTIST_PRIMARY_TYPES = ['Album', 'EP'];
+export const DEFAULT_EXCLUDED_SECONDARY_TYPES = [
+	'Compilation',
+	'Live',
+	'Remix',
+	'DJ-mix',
+	'Interview',
+	'Audiobook',
+	'Spokenword',
+	'Field recording'
+];
+
 export interface AddAlbumInput {
 	/** The work: one row per release group. */
 	releaseGroup: MusicReleaseGroup;
@@ -56,6 +68,16 @@ export interface AlbumDetail extends AlbumSummary {
 		duration: number | null;
 		hasFile: boolean | null;
 	}>;
+}
+
+export interface AddArtistPolicy {
+	/** Release-group primary types to take. Default: Album + EP. */
+	primaryTypes?: string[];
+	/** Secondary types to skip. Default: Compilation, Live, Remix, DJ-mix, Interview, Audiobook, Spokenword. */
+	excludeSecondaryTypes?: string[];
+	monitored?: boolean;
+	libraryId?: string | null;
+	rootFolderId?: string | null;
 }
 
 export interface AddAlbumResult {
@@ -188,6 +210,37 @@ export class MusicAlbumService {
 			'[MusicAlbum] album add'
 		);
 		return result;
+	}
+
+	/**
+	 * Which release groups an "add this artist" run should take.
+	 *
+	 * The defaults are the ones that make a discography useful instead of noisy:
+	 * albums and EPs only, no singles by default (an artist can have dozens, and
+	 * each is a separate grab), and compilations/live/remix/secondary-type
+	 * releases skipped unless asked for. Mixtape/Street is *not* excluded by
+	 * default — for hip-hop it is the main body of work.
+	 */
+	filterReleaseGroups(
+		releaseGroups: MusicReleaseGroup[],
+		policy: Pick<AddArtistPolicy, 'primaryTypes' | 'excludeSecondaryTypes'>
+	): MusicReleaseGroup[] {
+		const primary = new Set(policy.primaryTypes ?? DEFAULT_ARTIST_PRIMARY_TYPES);
+		const excluded = new Set(policy.excludeSecondaryTypes ?? DEFAULT_EXCLUDED_SECONDARY_TYPES);
+		return releaseGroups.filter((group) => {
+			if (!primary.has(group.primaryType ?? 'Album')) return false;
+			return !(group.secondaryTypes ?? []).some((type) => excluded.has(type));
+		});
+	}
+
+	/** Release-group ids already stored, so a re-run does not re-fetch them. */
+	existingReleaseGroupMbids(artistId?: string): Set<string> {
+		const rows = (
+			artistId
+				? db.select({ mbid: albums.mbid }).from(albums).where(eq(albums.artistId, artistId))
+				: db.select({ mbid: albums.mbid }).from(albums)
+		).all();
+		return new Set(rows.flatMap((row) => (row.mbid ? [row.mbid] : [])));
 	}
 
 	/** Albums for the library list, artist-major then chronological. */

@@ -84,3 +84,33 @@ export interface MusicArtistDetail extends MusicArtistRef {
 	country?: string | null;
 	genres: string[];
 }
+
+/** An artist search hit (before any album exists). */
+export interface MusicArtistSearchResult {
+	mbid: string;
+	name: string;
+	sortName?: string | null;
+	disambiguation?: string | null;
+	type?: string | null;
+	country?: string | null;
+	score?: number;
+}
+
+/**
+ * One song hit. A recording is not a product: it belongs to a release, and the
+ * release belongs to a release group (the album). `releaseGroup` is what "add
+ * this song" hands to the album importer; `releaseMbid` is the edition it came
+ * from.
+ */
+export interface MusicRecordingHit {
+	mbid: string;
+	title: string;
+	/** Seconds, rounded from MusicBrainz milliseconds. */
+	duration?: number | null;
+	/** Rendered credit, e.g. "Emilio Rojas & Chris Webby". */
+	artistCredit: string;
+	artists: MusicArtistRef[];
+	releaseGroup: { mbid: string; title: string; primaryType?: string | null } | null;
+	releaseMbid: string | null;
+	score?: number;
+}
