@@ -1,0 +1,192 @@
+# RuTracker title corpus + expected parse results
+# (sampled 2026-11-17 from live tracker.php listings)
+#
+# HOW THIS CORPUS WAS BUILT
+# 1. Live titles were sampled from the tracker.php topic listings of 14 series
+#    forums (6 SD: f=9,33,235,242,842,921 and 8 HD: f=81,193,266,625,1171,1669,
+#    1803,2393) - newest 100 + oldest 250 topics per forum. The raw sample is
+#    3207 rows; after removing exact duplicates (71 rows where the same topic
+#    landed in both sampling windows) it holds 3136 unique topics spanning
+#    2005-2026. A further ~290 rows are re-releases of the same show in
+#    different quality - real, distinct topics.
+# 2. The sample was clustered by wording template (title shape: "Сезон: N /
+#    Серии: a-b из N", "(N)" totals, word style "a-b серии из b", etc.).
+# 3. From every template cluster, representative titles were picked across the
+#    2005-2026 spread, plus the template examples quoted in the official
+#    pinned rules topics. Every entry below is a REAL sampled topic title
+#    (except the rules-template examples, which are also real topics).
+# 4. The expected result of every title was written and verified BY HAND.
+#
+# Data file: real topic titles, one per line. A `# expect:` comment DIRECTLY
+# AFTER a title declares what the pipeline SHOULD yield for it:
+#
+#   # expect: seasons=1-5            season range 1..5 (or seasons=1,2 list)
+#   # expect: season=3               single season
+#   # expect: eps=1-32               episode range within the season
+#   # expect: total=32               stated episode total ("из N" / "(N)")
+#
+# What is checked: apply the rutracker.yaml title filters to the title, call
+# parseRelease on the result, and compare against the expect line. For
+# multi-season expectations (seasons with more than one entry) only the
+# seasons aspect is compared - EpisodeInfo holds either a seasons list or a
+# single season + episodes, never both. The companion file
+# rutracker-corpus.test.ts (same folder) does exactly this with the project's
+# own test runner:
+#
+#   npx vitest run rutracker-corpus.test.ts
+#
+# BEHAVIOUR MARKERS (as of 2026-11-17, stock rutracker.yaml + parser):
+#   [BUG-MS]   multi-season collapsed to S1 (YAML PHASE 1 loses the range; the parser alone handles it)
+#   [BUG-EP]   season-less "Серии: a-b из N" loses episodes and season-pack status entirely
+#   [BUG-TOT]  "(N)" / "из N" total not propagated to episode total / isCompleteSeries
+#   [BUG-WORD] word style "a-b серии из b" not parsed at all
+#   [OK]       parses correctly today (regression guard: must keep working)
+
+# BASELINE [OK]: current standard form, dominates 2025-2026 (must keep parsing)
+# f=235 2026-11-09
+Док / DOC / Сезоны: 1-2 / Серии: 1-32 из 32 (Ребекка Томас, Рассел Ли Файн, Дебс Патерсон, Марисоль Торрес, Аманда Роу, Джоно Оливер, Николь Рубио, Майкл Гои) [2025-2026, США, драма, WEB-DLRip-AVC] MVO (Freedom Media)
+# expect: seasons=1-2 eps=1-32 total=32
+# f=242 2025-07-30
+Золото / The Gold / Сезоны: 1-2 / Серии: 1-12 из 12 (Патрик Харкинс / Patrick Harkins, Лоуренс Гоф / Lawrence Gough, Энейл Кария / Aneil Karia) [2023-2025, Великобритания, драма, криминал, история, WEB-DLRip-AVC] MVO (Freedom Media)
+# expect: seasons=1-2 eps=1-12 total=12
+
+# [BUG-MS] multi-season with (N) totals: "Сезоны: 1-7 (7) / Серии: 1-163 (163)"
+# f=235 2026-10-11
+Сабрина - маленькая ведьма / Sabrina, the Teenage Witch / Сезоны: 1-7 (7) / Серии: 1-163 (163) (Гари Хэлворсон, Кеннет Р. Кох, Брайан К. Робертс) [1996-2003, США, фэнтези, комедия, семейный, DVDRemux] MVO (СТС) + Original (Eng) + Sub (Eng)
+# expect: seasons=1-7 eps=1-163 total=163
+
+# [BUG-MS] multi-season singular range "Сезон: 1-5" - the OFFICIAL rules example
+# f=9 2008-05-21
+День рождения Буржуя / Сезон: 1-2 / Серии: 1-30 из 30 (Анатолий Матешко) [1999 2001, Криминал, остросюжетный детектив, DVDRip]
+# expect: seasons=1-2 eps=1-30 total=30
+# f=9 2008-09-02
+Тридцатилетние / Сезон: 1-4 из 4 / Серии 1-32 из 32 (Николай Крутиков) [2007, Комедия, мелодрама, DVDRip]
+# expect: seasons=1-4 eps=1-32 total=32
+# f=9 2008-09-27
+Марш Турецкого / Сезон: 1-4 / Серии: 1-94 из 94 (Михаил Туманишвили, Олег Штром) [2000-2007, Детектив, DVDRip]
+# expect: seasons=1-4 eps=1-94 total=94
+
+# [BUG-MS] multi-season with total: "Сезон: 1-3 из 3" (HD, 2026)
+# f=193 2026-08-10
+Трепет сердца / С замиранием сердца / Heartstopper / Сезон: 1-3 из 3 / Серии: 1-24 из 24 (Элис Осман) [2022-2024, Великобритания, драма, мелодрама, WEB-DL 1080p] MVO (Jaskier) + Ukr Dub (Postmodern) + Original + Sub (Rus, Ukr, Eng)
+# expect: seasons=1-3 eps=1-24 total=24
+
+# [BUG-MS] comma season list "Сезон: 1,2" and the worst case "Сезон: 1,2,3" (breaks cleanTitle)
+# f=9 2026-11-15
+Гражданка начальница / Сезон: 1,2 / Серии: 1-16 из 16 (Михаил Вассербаум, Сергей Виноградов) [2010-2012, драма, криминал, экранизация, WEBRip-AVC]
+# expect: seasons=1,2 eps=1-16 total=16
+# f=9 2026-11-14
+Моя Пречистенка / Сезон: 1,2 / Серии: 1-28 из 28 (Людмила Гладунко, Борис Токарев) [2006-2011, драма, исторический, WEBRip-AVC]
+# expect: seasons=1,2 eps=1-28 total=28
+# f=921 2024-12-23
+Тихая Вода (1-3 сезоны: 1-30 серии из 30) / Stillwater / 2020-2023 / ДБ (Пифагор) / Stillwater / Сезон: 1,2,3 / Серии: 30 из 30 (Джан Фалкенштейн, Эмбер Торнквист Холлингер, Рой Бурдин, Гари Хартл) [2020-2023, США, Франция, Япония, Мультсериал, детский, семейный, WEB-DLRip] Dub (Пифагор)
+# expect: seasons=1-3 eps=30-30 total=30
+
+# [BUG-MS] partial multi-season "Сезоны: 2-5 / Серии: 80 из 80"
+# f=921 2026-03-31
+Подозрительная сова / Сезоны: 2-5 / Серии: 80 из 80 (Евгений Кузнецов, Кирилл Данильченко, Анна Малина) [2016-2025, Россия, Детектив, Комедия, Мультсериалы, WEBRip 1080p, HEVC]
+# expect: seasons=2-5 eps=80-80 total=80
+
+# [BUG-EP] season-less "Серии: a-b из N" - old SD norm 2007-2008, dropped today
+# f=9 2007-02-13
+Бес в ребро, или Великолепная четверка / Серии: 1-12 из 12 [2007, Комедийный сериал, SATRip]
+# expect: season=1 eps=1-12 total=12
+# f=9 2007-02-18
+Гражданин начальник / Серии: 1-15 из 15 (Николай Досталь) [2001, Детектив, TVRip]
+# expect: season=1 eps=1-15 total=15
+# f=9 2007-02-21
+Билет в гарем / Серии: 1-8 из 8 (Владимир Соловьев) [2006, Детектив, SATRip]
+# expect: season=1 eps=1-8 total=8
+
+# [BUG-EP] season-less "Серии: a-b из N" - HD norm 2013-2014 (f=81), dropped today
+# f=81 2013-01-19
+Жажда / Серии: 1-4 из 4 (Алексей Колмогоров) [2011, Военный, HDTV, FULL HD 1080i]
+# expect: season=1 eps=1-4 total=4
+# f=81 2013-01-26
+Виктория / Серии: 1-8 из 8 (Андрей Джунковский) [2012, мелодрама, HDTVRip 720p]
+# expect: season=1 eps=1-8 total=8
+# f=81 2013-01-26
+НЕБО В ОГНЕ / Серии: 1-12 из 12 (Дмитрий Черкасов) [2010, историческая драма, военный, WEBRip 1080p]
+# expect: season=1 eps=1-12 total=12
+
+# [BUG-TOT] "(N)" total - HD norm 2009-2012, still produced in 2026; total lost
+# f=193 2010-02-13
+Молокососы / Skins / Сезон: 2 / Серии: 1-10 (10) (Саймон Мэсси, Чарльз Мартин, Адам Смит) [2008, Великобритания, комедия, драма, HDTVRip 720p] Original + DVO + Sub (Rus, Eng)
+# expect: season=2 eps=1-10 total=10
+# f=193 2010-03-20
+Молокососы / Skins / Сезон: 4 / Серии: 1-8 (8) (Саймон Мэсси, Чарльз Мартин, Адам Смит) [2010, Великобритания, комедия, драма, HDTVRip 720p] rus Sub
+# expect: season=4 eps=1-8 total=8
+# f=193 2010-06-10
+Авария / Collision / Сезон: 1 / Серии: 1-5 (5) (Anthony Horowitz) [2009, Великобритания, детектив, драма, HDTVRip 720p] VO (Kvadrat Malevicha)
+# expect: season=1 eps=1-5 total=5
+# f=193 2010-06-11
+Лютер / Luther / Сезон: 1 / Серии: 1-6 (6) (Сэм Миллер) [2010, Великобритания, драма, криминал, детектив, HDTVRip 720p] rus Sub (Notabenoid)
+# expect: season=1 eps=1-6 total=6
+
+# [BUG-TOT] "(N)" total in a current (2025) release
+# f=242 2025-10-02
+Убийство на пляже / Бродчерч / Broadchurch / Сезон: 3 / Серии: 1-8 (8) (Пол Эндрю Уильямс, Дэниэл Неттхейм, Льюис Арнольд) [2017, Великобритания, драма, криминал, детектив, BDRip-AVC] MVO (Sound Myrza Team / Freedom Media)
+# expect: season=3 eps=1-8 total=8
+# f=242 2025-10-02
+Убийство на пляже / Бродчерч / Broadchurch / Сезоны: 1-2 / Серии: 1-16 (16) (Джеймс Стронг, Эрос Лин, Джесика Хоббс, Джонатан Теплицки, Майк Баркер) [2013-2015, Великобритания, драма, криминал, детектив, BDRip-AVC] MVO
+# expect: seasons=1-2 eps=1-16 total=16
+
+# [BUG-WORD] word style "a-b серии из b" (2007 era) - nothing parses it
+# f=9 2007-02-18
+Гражданин начальник 1-15 серии из 15 (Николай Досталь) [2001, Детектив, TVRip]
+# expect: season=1 eps=1-15 total=15
+
+# [BUG-WORD] word style variant "Солдаты 1 (1-8 серии из 16)"
+# f=9 2006-09-07
+Солдаты 1 (1-8 серии из 16) (Сергей Арланов) [2004, Лирическая Комедия, DVDRip]
+# expect: season=1 eps=1-8 total=16
+# f=9 2006-09-20
+Солдаты 1 (9-16 серии из 16) (Сергей Арланов) [2005, Лирическая Комедия, DVDRip]
+# expect: season=1 eps=9-16 total=16
+
+# [BUG-EP] total-only list "(120)" after a range - the total is the only hint
+# f=9 2008-02-08
+Любовь моя 1-34 (120) (Виталий Бабенко, Леонид Коновалов)[2005, комедийный сериал, SATRip)
+# expect: season=1 eps=1-34 total=120
+
+# [OK] non-colon Мультсериалы template (parses today; guard)
+# f=9 2007-09-18
+Клуб 3 Сезон 1-21 серии из 21 (Весь сезон) (Павел Бардин, Кирилл Кузин, Петро Шекшеев) [2007, комедийный, молодежный R&B сериал, TVRip]
+# expect: season=3 eps=1-21 total=21
+
+# [OK] "Сезон: 1 Серии: ..." without slash (guard)
+# f=9 2026-01-01
+Баязет / Сезон: 1 Серии: 1-12 из 12 (Андрей Черных, Николай Стамбул.) [2003, Драма, WEB-DL 1080p]
+# expect: season=1 eps=1-12 total=12
+
+# [OK] single-episode "Серии: 8" (2006) (guard)
+# f=9 2006-08-04
+Лабиринты разума / Серии: 8 [2005, Россия, TVRip]
+# expect: season=1 eps=8-8
+
+# [BUG-EP] season-less single episode with total "Серии: 8 из 8"
+# f=9 2008-05-24
+Офицеры: Последние Солдаты Империи / Серии: 8 из 8 (Мурад Алиев) [2006, Боевик, TVRip]
+# expect: season=1 eps=8-8 total=8
+
+# BASELINE [OK]: newest standard titles from HD forums (guard)
+# f=625 2026-11-13
+Под наркозом / Anaesthesia / Znieczulenie / Сезон: 1 / Серии: 1-8 из 8 (Лукаш Остальский) [2026, Польша, драма, WEB-DL 2160p, HEVC, SDR] Dub (Videofilm Int.) + Dub Ukr + Original Pol + Dub Eng + Sub (Rus, Ukr, Pol, Eng) + Sub Multilingual
+# expect: season=1 eps=1-8 total=8
+# f=625 2026-11-06
+Паоло / Paolo / Сезон: 1 / Серии: 1-7 из 7 (Себастьян Марньер) [2026, Франция, триллер, SDR, WEB-DL 2160p, 4k] MVO (HBO Max) + Ukr MVO (HBO Max) + Original (Fra) + Sub (Fra)
+# expect: season=1 eps=1-7 total=7
+# f=625 2026-09-20
+Зыбучие пески / Quicksand / Störst av allt / Сезон: 1 / Серии: 1-6 из 6 (Пер-Олав Соренсен, Лиза Фарзанех) [2019, Швеция, Драма, криминал, детектив, SDR, WEB-DL 2160p, 4k] 3 x MVO (NewStudio, TVShows, HDRezka Studio) + DVO (Кубик в Кубе) + Original + Eng + Sub (Rus, Swe, Eng, Heb)
+# expect: season=1 eps=1-6 total=6
+
+# Template examples quoted in pinned rules topics (t=5789892, t=460883)
+# rules: t=5789892 (Русские сериалы, ред. 09.10.2026) - multi-season example
+Агент национальной безопасности / Сезон: 1-5 / Серии: 1-60 из 60 (Дмитрий Светозаров, Виталий Аксёнов, Андрей Черных, Эрнест Ясан, Игорь Москвитин и др.) [1998-2004, боевик, детектив, криминальный фильм, WEBRip]
+# expect: seasons=1-5 eps=1-60 total=60
+# rules: t=5789892 - season-less example
+Триада / Серии: 1-10 из 16 (Дмитрий Дьяченко) [2019, комедия, мелодрама, WEBRip 1080p]
+# expect: season=1 eps=1-10 total=16
+# rules: t=460883 (Мультсериалы) - non-colon template
+Клуб Винкс (Школа Волшебниц) / WinX Club / Сезон 4 / Серии 1-13 из 13 (Иджиньо Страффи / Iginio Straffi) [2009 г., Анимационный, Приключения, Семейный, SATRip]
+# expect: season=4 eps=1-13 total=13
