@@ -10,8 +10,9 @@ import {
 	series
 } from '#lib/server/db/schema.js';
 import { NotFoundError, ValidationError } from '#lib/errors/index.js';
+import type { KindId } from '#lib/media-kinds/registry.js';
 
-export type LibraryMediaType = 'movie' | 'tv' | 'music';
+export type LibraryMediaType = KindId;
 export type LibraryMediaSubType = 'standard' | 'anime';
 
 export interface LibraryRootFolder {

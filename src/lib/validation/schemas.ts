@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { TMDB } from '#lib/config/constants.js';
+import { LIBRARY_KIND_IDS } from '#lib/media-kinds/registry.js';
 import { BUG_REPORT_AREAS, BUG_REPORT_LOG_SCOPES } from '#lib/shared/bug-report.js';
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
@@ -720,7 +721,7 @@ export type DownloadClientTestDiscriminated =
 /**
  * Media type for root folders.
  */
-export const rootFolderMediaTypeSchema = z.enum(['movie', 'tv', 'music']);
+export const rootFolderMediaTypeSchema = z.enum(LIBRARY_KIND_IDS);
 export const rootFolderMediaSubTypeSchema = z.enum(['standard', 'anime']);
 
 /**
@@ -773,7 +774,7 @@ export type RootFolderUpdate = z.infer<typeof rootFolderUpdateSchema>;
 /**
  * Media type and subtype for first-class libraries.
  */
-export const libraryMediaTypeSchema = z.enum(['movie', 'tv', 'music']);
+export const libraryMediaTypeSchema = z.enum(LIBRARY_KIND_IDS);
 export const libraryMediaSubTypeSchema = z.enum(['standard', 'anime']);
 export const metadataProviderSelectionSchema = z.enum(['auto', 'tmdb', 'anilist', 'mal']);
 

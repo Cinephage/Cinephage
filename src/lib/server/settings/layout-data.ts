@@ -1,4 +1,5 @@
 import type { LibraryBreakdownItem } from '#lib/components/storage/utils.js';
+import type { KindId } from '#lib/media-kinds/registry.js';
 import { sql } from 'drizzle-orm';
 import { getRootFolderService } from '#lib/server/downloadClients/RootFolderService.js';
 import { getEffectiveAnimeRootFolderEnforcement } from '#lib/server/library/anime-root-enforcement-settings.js';
@@ -18,7 +19,7 @@ import {
 type StorageBreakdownItem = {
 	id: string;
 	name: string;
-	mediaType: 'movie' | 'tv' | 'music';
+	mediaType: KindId;
 	mediaSubType: 'standard' | 'anime';
 	usedBytes: number;
 	itemCount: number;
