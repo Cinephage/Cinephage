@@ -215,8 +215,12 @@ import {
  * Version 180: music library tables - media_items (shared identity row for the
  *   non-video kinds), artists, albums, tracks, track_files. Additive only: no
  *   existing table is rebuilt, and nothing reads them yet.
+ * Version 181: widen the media_type CHECK to include 'music' on libraries,
+ *   smart_lists, smart_list_items, stream_extraction_cache and
+ *   alternate_titles. SQLite cannot alter a CHECK, so v181 rebuilds those five
+ *   tables from their live DDL.
  */
-export const CURRENT_SCHEMA_VERSION = 180;
+export const CURRENT_SCHEMA_VERSION = 181;
 
 export const SYSTEM_LIBRARY_SEEDS = [
 	{
@@ -409,7 +413,7 @@ const TABLE_DEFINITIONS: string[] = [
 		"id" text PRIMARY KEY NOT NULL,
 		"name" text NOT NULL,
 		"slug" text NOT NULL UNIQUE,
-		"media_type" text NOT NULL CHECK ("media_type" IN ('movie', 'tv')),
+		"media_type" text NOT NULL CHECK ("media_type" IN ('movie', 'tv', 'music')),
 		"media_sub_type" text DEFAULT 'custom' NOT NULL CHECK ("media_sub_type" IN ('standard', 'anime', 'custom')),
 		"is_system" integer DEFAULT false NOT NULL,
 		"system_key" text UNIQUE,
@@ -790,7 +794,7 @@ const TABLE_DEFINITIONS: string[] = [
 
 	`CREATE TABLE IF NOT EXISTS "alternate_titles" (
 		"id" integer PRIMARY KEY AUTOINCREMENT,
-		"media_type" text NOT NULL CHECK ("media_type" IN ('movie', 'series')),
+		"media_type" text NOT NULL CHECK ("media_type" IN ('movie', 'series', 'music')),
 		"media_id" text NOT NULL,
 		"title" text NOT NULL,
 		"clean_title" text NOT NULL,
@@ -1146,7 +1150,7 @@ const TABLE_DEFINITIONS: string[] = [
 		"id" text PRIMARY KEY NOT NULL,
 		"name" text NOT NULL,
 		"description" text,
-		"media_type" text NOT NULL CHECK ("media_type" IN ('movie', 'tv')),
+		"media_type" text NOT NULL CHECK ("media_type" IN ('movie', 'tv', 'music')),
 		"enabled" integer DEFAULT true,
 		"filters" text NOT NULL,
 		"sort_by" text DEFAULT 'popularity.desc',
@@ -1176,7 +1180,7 @@ const TABLE_DEFINITIONS: string[] = [
 	`CREATE TABLE IF NOT EXISTS "smart_list_items" (
 		"id" text PRIMARY KEY NOT NULL,
 		"smart_list_id" text NOT NULL REFERENCES "smart_lists"("id") ON DELETE CASCADE,
-		"media_type" text NOT NULL CHECK ("media_type" IN ('movie', 'tv')),
+		"media_type" text NOT NULL CHECK ("media_type" IN ('movie', 'tv', 'music')),
 		"tmdb_id" integer NOT NULL,
 		"title" text NOT NULL,
 		"original_title" text,
@@ -1224,7 +1228,7 @@ const TABLE_DEFINITIONS: string[] = [
 	`CREATE TABLE IF NOT EXISTS "stream_extraction_cache" (
 		"id" text PRIMARY KEY NOT NULL,
 		"tmdb_id" integer NOT NULL,
-		"media_type" text NOT NULL CHECK ("media_type" IN ('movie', 'tv')),
+		"media_type" text NOT NULL CHECK ("media_type" IN ('movie', 'tv', 'music')),
 		"season_number" integer,
 		"episode_number" integer,
 		"extraction_result" text,
