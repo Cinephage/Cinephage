@@ -71,11 +71,32 @@ interface TaggedFile extends AudioFileRef {
  * result the same way.
  */
 export class MusicImportService {
+	/**
+	 * Imports currently running, by queue id. The monitor can ask for the same
+	 * download from more than one path in a single cycle (a completion event and
+	 * the poll loop both fire), and a second copy of a 1 GB album is real work.
+	 */
+	private readonly inFlight = new Set<string>();
+
 	/** Import the completed download for an album, wherever the client put it. */
 	async importFromQueue(queueId: string): Promise<MusicImportResult> {
 		const queueRow = db.select().from(downloadQueue).where(eq(downloadQueue.id, queueId)).get();
 		if (!queueRow?.mediaItemId) {
 			throw new NotFoundError('Queued music download', queueId);
+		}
+		if (queueRow.status === 'imported') {
+			return {
+				albumId: '',
+				status: 'imported',
+				albumPath: queueRow.importedPath ?? null,
+				filesImported: 0,
+				tracksMatched: 0,
+				unmatchedFiles: [],
+				reason: 'already imported'
+			};
+		}
+		if (this.inFlight.has(queueId)) {
+			throw new ValidationError('This download is already being imported');
 		}
 		const albumRow = db
 			.select({ id: albums.id })
@@ -84,7 +105,12 @@ export class MusicImportService {
 			.get();
 		if (!albumRow) throw new NotFoundError('Album for queue item', queueId);
 
-		return this.importFolder(albumRow.id, this.resolveLocalPath(queueRow), { queueId });
+		this.inFlight.add(queueId);
+		try {
+			return await this.importFolder(albumRow.id, this.resolveLocalPath(queueRow), { queueId });
+		} finally {
+			this.inFlight.delete(queueId);
+		}
 	}
 
 	/** Import the newest queued download for one album (how the UI asks). */
@@ -126,8 +152,29 @@ export class MusicImportService {
 	async importFolder(
 		albumId: string,
 		sourceFolder: string,
-		options: { queueId?: string; dryRun?: boolean } = {}
+		options: { queueId?: string; dryRun?: boolean; force?: boolean } = {}
 	): Promise<MusicImportResult> {
+		// The monitor can ask twice in one cycle, and a person can click import on
+		// something already imported. Both are checked here as well as at the queue
+		// entry point, because this is the function that does the copying.
+		if (options.queueId && !options.force) {
+			const existing = db
+				.select({ status: downloadQueue.status, importedPath: downloadQueue.importedPath })
+				.from(downloadQueue)
+				.where(eq(downloadQueue.id, options.queueId))
+				.get();
+			if (existing?.status === 'imported') {
+				return {
+					albumId,
+					status: 'imported',
+					albumPath: existing.importedPath ?? null,
+					filesImported: 0,
+					tracksMatched: 0,
+					unmatchedFiles: [],
+					reason: 'already imported'
+				};
+			}
+		}
 		const album = db
 			.select({
 				id: albums.id,
