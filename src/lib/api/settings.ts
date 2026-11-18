@@ -23,6 +23,7 @@ import type {
 	BackupImport,
 	FileManagementSettings
 } from '#lib/validation/schemas.js';
+import type { KindId } from '#lib/media-kinds/registry.js';
 
 import type {
 	RootFolder,
@@ -75,7 +76,7 @@ export type LibraryRootFolderRef = {
 	id: string;
 	name: string;
 	path: string;
-	mediaType: 'movie' | 'tv';
+	mediaType: KindId;
 	mediaSubType: 'standard' | 'anime';
 };
 
@@ -84,7 +85,7 @@ export type LibraryResponse = {
 	id: string;
 	name: string;
 	slug: string;
-	mediaType: 'movie' | 'tv';
+	mediaType: KindId;
 	mediaSubType: 'standard' | 'anime';
 	isSystem: boolean;
 	systemKey: string | null;
@@ -1266,7 +1267,7 @@ export async function getBlockedMedia(params?: {
 
 export async function blockMedia(payload: {
 	tmdbId: number;
-	mediaType: 'movie' | 'tv';
+	mediaType: KindId;
 	title: string;
 	posterPath?: string | null;
 	year?: number | null;

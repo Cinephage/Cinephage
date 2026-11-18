@@ -4,6 +4,7 @@
  */
 
 import type { RequestHandler } from './$types';
+import type { KindFilter } from '#lib/media-kinds/registry.js';
 import { db } from '#lib/server/db/index.js';
 import { downloadQueue, movies, series, downloadClients } from '#lib/server/db/schema.js';
 import { eq, not, inArray, and, isNull, isNotNull } from 'drizzle-orm';
@@ -19,7 +20,7 @@ const TERMINAL_STATUSES: QueueStatus[] = ['imported', 'removed'];
 export const GET: RequestHandler = async ({ url }) => {
 	// Parse query params for filtering
 	const statusParam = url.searchParams.get('status') as QueueStatus | 'all' | null;
-	const mediaType = url.searchParams.get('mediaType') as 'movie' | 'tv' | 'all' | null;
+	const mediaType = url.searchParams.get('mediaType') as KindFilter | null;
 	const clientId = url.searchParams.get('clientId');
 	const includeTerminal = url.searchParams.get('includeTerminal') === 'true';
 

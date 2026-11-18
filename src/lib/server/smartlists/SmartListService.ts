@@ -6,6 +6,7 @@
  */
 
 import { db } from '#lib/server/db/index.js';
+import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 import {
 	smartLists,
 	smartListItems,
@@ -412,7 +413,7 @@ export class SmartListService {
 
 			// Fetch from TMDB (paginated to get itemLimit items)
 			const items = await this.fetchDiscoverItems(
-				list.mediaType as 'movie' | 'tv',
+				list.mediaType as SmartListMediaType,
 				params,
 				list.itemLimit
 			);
@@ -442,7 +443,7 @@ export class SmartListService {
 
 					itemsToInsert.push({
 						smartListId: id,
-						mediaType: list.mediaType as 'movie' | 'tv',
+						mediaType: list.mediaType as SmartListMediaType,
 						tmdbId: item.id,
 						title: title ?? 'Unknown',
 						originalTitle: list.mediaType === 'movie' ? item.original_title : item.original_name,
@@ -504,7 +505,7 @@ export class SmartListService {
 			}
 
 			// Update library status for all items
-			await this.updateLibraryStatus(id, list.mediaType as 'movie' | 'tv');
+			await this.updateLibraryStatus(id, list.mediaType as SmartListMediaType);
 
 			// Handle auto-add if enabled
 			let itemsAutoAdded = 0;
@@ -778,7 +779,7 @@ export class SmartListService {
 			return { success: false, error: 'Item already in library' };
 		}
 
-		const blockedIds = await getBlockedTmdbIdSet((item.mediaType as 'movie' | 'tv') ?? 'all');
+		const blockedIds = await getBlockedTmdbIdSet((item.mediaType as SmartListMediaType) ?? 'all');
 		if (blockedIds.has(item.tmdbId)) {
 			return { success: false, error: 'Media is blocked' };
 		}
@@ -1257,7 +1258,7 @@ export class SmartListService {
 	}
 
 	private async fetchDiscoverItems(
-		mediaType: 'movie' | 'tv',
+		mediaType: SmartListMediaType,
 		params: DiscoverParams,
 		limit: number
 	): Promise<DiscoverItem[]> {
@@ -1280,7 +1281,7 @@ export class SmartListService {
 		return items.slice(0, limit);
 	}
 
-	private async updateLibraryStatus(smartListId: string, mediaType: 'movie' | 'tv'): Promise<void> {
+	private async updateLibraryStatus(smartListId: string, mediaType: SmartListMediaType): Promise<void> {
 		const items = await db.query.smartListItems.findMany({
 			where: eq(smartListItems.smartListId, smartListId)
 		});
@@ -1337,7 +1338,7 @@ export class SmartListService {
 			return { added: 0 };
 		}
 
-		const mediaType = list.mediaType as 'movie' | 'tv';
+		const mediaType = list.mediaType as SmartListMediaType;
 
 		// Validate root folder exists and matches media type
 		try {
@@ -1990,7 +1991,7 @@ export class SmartListService {
 			// Resolve external items to TMDB items
 			const resolvedItems = await this.resolveExternalItems(
 				externalResult.items,
-				list.mediaType as 'movie' | 'tv',
+				list.mediaType as SmartListMediaType,
 				id
 			);
 
@@ -2025,7 +2026,7 @@ export class SmartListService {
 					itemsNew++;
 					itemsToInsert.push({
 						smartListId: id,
-						mediaType: list.mediaType as 'movie' | 'tv',
+						mediaType: list.mediaType as SmartListMediaType,
 						tmdbId: item.tmdbId,
 						title: item.title,
 						originalTitle: item.title,
@@ -2085,7 +2086,7 @@ export class SmartListService {
 			}
 
 			// Update library status for all items
-			await this.updateLibraryStatus(id, list.mediaType as 'movie' | 'tv');
+			await this.updateLibraryStatus(id, list.mediaType as SmartListMediaType);
 
 			// Handle auto-add if enabled
 			let itemsAutoAdded = 0;
@@ -2209,7 +2210,7 @@ export class SmartListService {
 	 */
 	private async resolveExternalItems(
 		items: ExternalListItem[],
-		mediaType: 'movie' | 'tv',
+		mediaType: SmartListMediaType,
 		listId: string
 	): Promise<
 		Array<{

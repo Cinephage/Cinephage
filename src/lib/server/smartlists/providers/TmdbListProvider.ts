@@ -5,6 +5,7 @@
  * Uses the TMDb /list/{list_id} endpoint
  */
 import { createChildLogger } from '#lib/logging/index.js';
+import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 
 const logger = createChildLogger({ logDomain: 'monitoring' as const });
 import { tmdb } from '#lib/server/tmdb.js';
@@ -83,7 +84,7 @@ export class TmdbListProvider implements ExternalListProvider {
 		return typeof cfg.listId === 'string' && this.normalizeListId(cfg.listId) !== null;
 	}
 
-	async fetchItems(config: unknown, mediaType: 'movie' | 'tv' | ''): Promise<ExternalListResult> {
+	async fetchItems(config: unknown, mediaType: SmartListMediaType | ''): Promise<ExternalListResult> {
 		const cfg = config as TmdbListConfig;
 		const items: ExternalListItem[] = [];
 		const normalizedListId = this.normalizeListId(cfg.listId);

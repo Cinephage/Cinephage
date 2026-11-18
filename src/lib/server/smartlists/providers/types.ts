@@ -1,3 +1,4 @@
+import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 /**
  * External List Provider Types
  *
@@ -72,7 +73,7 @@ export interface ImdbListConfig {
 	/** IMDb list ID (e.g., 'ls060044601') */
 	listId: string;
 	/** Optional media type filter */
-	mediaType?: 'movie' | 'tv' | '';
+	mediaType?: SmartListMediaType | '';
 }
 
 /**
@@ -159,5 +160,5 @@ export interface ExternalListProvider {
 	 * @param mediaType 'movie', 'tv', or '' (empty string for all types) - used for ID resolution context
 	 * @returns Promise resolving to the list result
 	 */
-	fetchItems(config: unknown, mediaType: 'movie' | 'tv' | ''): Promise<ExternalListResult>;
+	fetchItems(config: unknown, mediaType: SmartListMediaType | ''): Promise<ExternalListResult>;
 }

@@ -8,6 +8,7 @@ import type {
 	SmartListItemRecord,
 	SmartListRefreshHistoryRecord
 } from '#lib/server/db/schema.js';
+import type { DiscoverKindId } from '#lib/media-kinds/registry.js';
 
 // Re-export schema types
 export type {
@@ -32,7 +33,7 @@ export type SmartListSortBy =
 	| 'title.desc';
 
 export type AutoAddBehavior = 'disabled' | 'add_only' | 'add_and_search';
-export type SmartListMediaType = 'movie' | 'tv';
+export type SmartListMediaType = DiscoverKindId;
 export type RefreshStatus = 'running' | 'success' | 'partial' | 'failed';
 export type ListSourceType = 'tmdb-discover' | 'external-json' | 'trakt-list' | 'custom-manual';
 

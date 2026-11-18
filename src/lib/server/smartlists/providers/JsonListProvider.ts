@@ -10,6 +10,7 @@
  */
 
 import { createChildLogger } from '#lib/logging/index.js';
+import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 
 const logger = createChildLogger({ logDomain: 'monitoring' as const });
 import type {
@@ -32,7 +33,7 @@ export class JsonListProvider implements ExternalListProvider {
 		return typeof cfg.url === 'string' && cfg.url.length > 0;
 	}
 
-	async fetchItems(config: unknown, mediaType: 'movie' | 'tv' | ''): Promise<ExternalListResult> {
+	async fetchItems(config: unknown, mediaType: SmartListMediaType | ''): Promise<ExternalListResult> {
 		const cfg = config as ExternalJsonConfig;
 
 		logger.info(

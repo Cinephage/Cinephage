@@ -1,3 +1,4 @@
+import type { KindFilter } from '#lib/media-kinds/registry.js';
 /**
  * Types for download queue and history management
  */
@@ -362,7 +363,7 @@ export interface QueueEvent {
  */
 export interface QueueFilters {
 	status?: QueueStatus | 'all';
-	mediaType?: 'movie' | 'tv' | 'all';
+	mediaType?: KindFilter;
 	downloadClientId?: string;
 }
 
@@ -371,7 +372,7 @@ export interface QueueFilters {
  */
 export interface HistoryFilters {
 	status?: HistoryStatus | 'all';
-	mediaType?: 'movie' | 'tv' | 'all';
+	mediaType?: KindFilter;
 	movieId?: string;
 	seriesId?: string;
 	startDate?: string;

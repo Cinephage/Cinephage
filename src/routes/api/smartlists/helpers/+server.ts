@@ -4,10 +4,11 @@
  */
 
 import type { RequestHandler } from './$types';
+import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 import { tmdb } from '#lib/server/tmdb.js';
 
 export const GET: RequestHandler = async ({ url }) => {
-	const type = url.searchParams.get('type') as 'movie' | 'tv' | null;
+	const type = url.searchParams.get('type') as SmartListMediaType | null;
 	const helper = url.searchParams.get('helper');
 	const query = url.searchParams.get('q') ?? '';
 	const region = url.searchParams.get('region') ?? (await tmdb.getRegion());

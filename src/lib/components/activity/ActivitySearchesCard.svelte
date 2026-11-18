@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+import type { KindFilter } from '#lib/media-kinds/registry.js';
 	import { SvelteSet } from 'svelte/reactivity';
 	import {
 		Search,
@@ -64,7 +65,7 @@
 	function getInitialSearch(): string {
 		return filters.search ?? '';
 	}
-	function getInitialMediaType(): 'all' | 'movie' | 'tv' {
+	function getInitialMediaType(): KindFilter {
 		return filters.mediaType === 'movie' || filters.mediaType === 'tv' ? filters.mediaType : 'all';
 	}
 	function getInitialStartDate(): string | undefined {
@@ -86,7 +87,7 @@
 	let loading = $state(false);
 	let loadError = $state<string | null>(null);
 	let search = $state(getInitialSearch());
-	let mediaType = $state<'all' | 'movie' | 'tv'>(getInitialMediaType());
+	let mediaType = $state<KindFilter>(getInitialMediaType());
 	let status = $state<SearchStatusFilter>(getInitialStatus());
 	let pausedOnly = $state<boolean>(getInitialPausedOnly());
 	let startDate = $state<string | undefined>(getInitialStartDate());
@@ -490,7 +491,7 @@
 		}, 300);
 	}
 
-	function setMediaType(next: 'all' | 'movie' | 'tv'): void {
+	function setMediaType(next: KindFilter): void {
 		mediaType = next;
 		onFiltersChange({ ...filters, mediaType: next });
 		void load(true);

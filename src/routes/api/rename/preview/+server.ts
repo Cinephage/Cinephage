@@ -23,6 +23,7 @@
  */
 
 import type { RequestHandler } from './$types';
+import type { KindFilter } from '#lib/media-kinds/registry.js';
 import { z } from 'zod';
 import {
 	RenamePreviewService,
@@ -160,7 +161,7 @@ function emitResultCategories(
  * The computed results are cached with the current library fingerprint.
  */
 async function streamFullCompute(
-	mediaType: 'movie' | 'tv' | 'all',
+	mediaType: KindFilter,
 	fingerprint: string,
 	filter: StreamFilter | undefined,
 	controller: ReadableStreamDefaultController
@@ -343,7 +344,7 @@ export const GET: RequestHandler = async (event) => {
 	});
 };
 
-function buildMergedResult(mediaType: 'movie' | 'tv' | 'all'): RenamePreviewResult {
+function buildMergedResult(mediaType: KindFilter): RenamePreviewResult {
 	const movieResult = mediaType !== 'tv' ? renamePreviewCache.get('movie') : null;
 	const tvResult = mediaType !== 'movie' ? renamePreviewCache.get('tv') : null;
 

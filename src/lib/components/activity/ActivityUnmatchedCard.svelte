@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import type { KindFilter } from '#lib/media-kinds/registry.js';
 	import { goto } from '$app/navigation';
 	import { SvelteSet } from 'svelte/reactivity';
 	import {
@@ -54,7 +55,15 @@
 	let loading = $state(false);
 	let loadError = $state<string | null>(null);
 	let clientId = $state('');
+	// Unmatched-file matching is a video-only flow; music imports as album
+	// folders, so this card's filter stays the video pair plus 'all'.
 	let mediaType = $state<'all' | 'movie' | 'tv'>('all');
+
+	// The shared activity filters are kind-wide; this card narrows anything
+	// that is not the video pair back to 'all'.
+	function toVideoFilter(value: KindFilter): 'all' | 'movie' | 'tv' {
+		return value === 'movie' || value === 'tv' ? value : 'all';
+	}
 	let search = $state('');
 	let startDate = $state<string | undefined>(undefined);
 	let endDate = $state<string | undefined>(undefined);
@@ -183,7 +192,7 @@
 		}
 	});
 	$effect(() => {
-		const incoming = filters.mediaType ?? 'all';
+		const incoming = toVideoFilter(filters.mediaType ?? 'all');
 		if (incoming !== lastExternalMediaType) {
 			lastExternalMediaType = incoming;
 			mediaType = incoming;
@@ -540,7 +549,7 @@
 
 	onMount(() => {
 		clientId = filters.downloadClientId ?? '';
-		mediaType = filters.mediaType ?? 'all';
+		mediaType = toVideoFilter(filters.mediaType ?? 'all');
 		search = filters.search ?? '';
 		startDate = filters.startDate;
 		endDate = filters.endDate;

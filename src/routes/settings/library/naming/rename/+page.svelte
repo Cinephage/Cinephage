@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+import type { KindFilter } from '#lib/media-kinds/registry.js';
 	import { SvelteSet } from 'svelte/reactivity';
 	import * as m from '#lib/paraglide/messages.js';
 	import { executeRename, reorganizeFolderBatch } from '#lib/api/settings.js';
@@ -46,7 +47,7 @@
 
 	// Filter state
 	let activeTab = $state<'willChange' | 'alreadyCorrect' | 'collisions' | 'errors'>('willChange');
-	let mediaTypeFilter = $state<'all' | 'movie' | 'tv'>('all');
+	let mediaTypeFilter = $state<KindFilter>('all');
 	const hasUnsavedDraft = $derived(page.url.searchParams.get('unsaved') === '1');
 	// returnTo comes from the URL and is bound straight into an href. Svelte
 	// does not filter schemes, so `?returnTo=javascript:...` would run script
@@ -56,7 +57,7 @@
 	);
 
 	// Load preview on mount
-	let previousMediaTypeFilter = $state<'all' | 'movie' | 'tv' | null>(null);
+	let previousMediaTypeFilter = $state<KindFilter | null>(null);
 	$effect(() => {
 		if (previousMediaTypeFilter !== mediaTypeFilter) {
 			previousMediaTypeFilter = mediaTypeFilter;

@@ -4,6 +4,7 @@ import type {
 	SmartListExternalPreviewRequest,
 	SmartListItemsAction
 } from '#lib/validation/schemas.js';
+import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 
 import { apiGet, apiPost, apiPut, apiDelete } from './client.js';
 import type { MonitoringTaskResult } from './monitoring.js';
@@ -57,7 +58,7 @@ export interface SmartListSummary {
 	id: string;
 	name: string;
 	description: string | null;
-	mediaType: 'movie' | 'tv';
+	mediaType: SmartListMediaType;
 	enabled: boolean | null;
 	filters: SmartListFilters;
 	sortBy: string | null;

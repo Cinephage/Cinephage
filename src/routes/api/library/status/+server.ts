@@ -1,4 +1,5 @@
 import type { RequestHandler } from './$types.js';
+import type { KindFilter } from '#lib/media-kinds/registry.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import {
 	getLibraryStatus,
@@ -25,7 +26,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		const body = await request.json();
 		const { tmdbIds, mediaType = 'all' } = body as {
 			tmdbIds: number[];
-			mediaType?: 'movie' | 'tv' | 'all';
+			mediaType?: KindFilter;
 		};
 
 		const statusMap = await getLibraryStatus(tmdbIds, mediaType);
@@ -55,7 +56,7 @@ export const POST: RequestHandler = async ({ request }) => {
 export const GET: RequestHandler = async ({ url }) => {
 	try {
 		const tmdbIdParam = url.searchParams.get('tmdbId');
-		const mediaType = url.searchParams.get('mediaType') as 'movie' | 'tv' | 'all' | null;
+		const mediaType = url.searchParams.get('mediaType') as KindFilter | null;
 
 		if (!tmdbIdParam) {
 			return Response.json({ success: false, error: 'tmdbId is required' }, { status: 400 });

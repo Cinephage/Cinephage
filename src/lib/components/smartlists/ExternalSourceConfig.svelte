@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Database, Globe, Loader2, Check, AlertCircle } from '@lucide/svelte';
+import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 	import * as m from '#lib/paraglide/messages.js';
 	import { onMount } from 'svelte';
 	import { getSmartListPresets, testExternalList } from '#lib/api/smartlists.js';
@@ -36,7 +37,7 @@
 		presetSettings?: Record<string, unknown>;
 		customUrl?: string;
 		customHeaders?: Record<string, string>;
-		mediaType: 'movie' | 'tv';
+		mediaType: SmartListMediaType;
 		onChange?: (data: {
 			sourceType: 'tmdb-discover' | 'external-json';
 			presetId?: string;

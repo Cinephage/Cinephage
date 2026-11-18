@@ -1,4 +1,5 @@
 import { db } from '#lib/server/db/index.js';
+import type { KindFilter, KindId } from '#lib/media-kinds/registry.js';
 import { movies, series, blockedMedia, requests } from '#lib/server/db/schema.js';
 import { inArray, eq, and, desc } from 'drizzle-orm';
 
@@ -9,7 +10,7 @@ export interface LibraryStatus {
 	inLibrary: boolean;
 	hasFile: boolean;
 	monitored?: boolean;
-	mediaType: 'movie' | 'tv' | null;
+	mediaType: KindId | null;
 	libraryId?: string;
 	releaseDate?: string | null;
 	digitalReleaseDate?: string | null;
@@ -31,7 +32,7 @@ export type LibraryStatusMap = Record<number, LibraryStatus>;
  */
 export async function getLibraryStatus(
 	tmdbIds: number[],
-	mediaType: 'movie' | 'tv' | 'all' = 'all'
+	mediaType: KindFilter = 'all'
 ): Promise<LibraryStatusMap> {
 	if (!Array.isArray(tmdbIds) || tmdbIds.length === 0) {
 		return {};
@@ -117,7 +118,7 @@ export async function getLibraryStatus(
  */
 export async function enrichWithLibraryStatus<T extends { id: number }>(
 	items: T[],
-	mediaType: 'movie' | 'tv' | 'all' = 'all'
+	mediaType: KindFilter = 'all'
 ): Promise<
 	(T & {
 		inLibrary: boolean;
@@ -175,7 +176,7 @@ let blockedCache: Record<string, { ids: Set<number>; expiry: number }> = {};
 const BLOCKED_CACHE_TTL = 30_000;
 
 export async function getBlockedTmdbIdSet(
-	mediaType: 'movie' | 'tv' | 'all' = 'all'
+	mediaType: KindFilter = 'all'
 ): Promise<Set<number>> {
 	const now = Date.now();
 	const cached = blockedCache[mediaType];
@@ -234,7 +235,7 @@ const STATE_PRECEDENCE: Record<RequestedState, number> = {
 
 export async function getRequestStateMap(
 	tmdbIds: number[],
-	mediaType: 'movie' | 'tv' | 'all',
+	mediaType: KindFilter,
 	viewerId: string | null
 ): Promise<RequestStateMap> {
 	const uniqueIds = [...new Set(tmdbIds)].slice(0, 500);
@@ -285,7 +286,7 @@ export async function getRequestStateMap(
  */
 export async function annotateRequestState<T extends { id: number }>(
 	items: T[],
-	mediaType: 'movie' | 'tv' | 'all',
+	mediaType: KindFilter,
 	viewerId: string | null
 ): Promise<(T & RequestStateAnnotation)[]> {
 	if (!items || items.length === 0) {
@@ -317,7 +318,7 @@ export async function annotateRequestState<T extends { id: number }>(
  */
 export async function filterBlockedMedia<T extends { id: number; media_type?: string }>(
 	items: T[],
-	mediaType: 'movie' | 'tv' | 'all' = 'all'
+	mediaType: KindFilter = 'all'
 ): Promise<T[]> {
 	if (!items || items.length === 0) {
 		return items ?? [];

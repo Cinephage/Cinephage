@@ -1,4 +1,5 @@
 import type { RenamePreviewItem, RenamePreviewResult } from '#lib/library/naming/types.js';
+import type { KindId } from '#lib/media-kinds/registry.js';
 import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
 
 interface MediaTypeCache {
@@ -29,28 +30,28 @@ class RenamePreviewCacheStore {
 		});
 	}
 
-	isFresh(mediaType: 'movie' | 'tv'): boolean {
+	isFresh(mediaType: KindId): boolean {
 		const c = mediaType === 'movie' ? this.movie : this.tv;
 		return !!c && !c.fullyStale && c.staleIds.size === 0;
 	}
 
-	isPartiallyCached(mediaType: 'movie' | 'tv'): boolean {
+	isPartiallyCached(mediaType: KindId): boolean {
 		const c = mediaType === 'movie' ? this.movie : this.tv;
 		return !!c && !c.fullyStale && c.staleIds.size > 0;
 	}
 
-	get(mediaType: 'movie' | 'tv'): RenamePreviewResult | null {
+	get(mediaType: KindId): RenamePreviewResult | null {
 		const c = mediaType === 'movie' ? this.movie : this.tv;
 		return c ? c.result : null;
 	}
 
-	getStaleIds(mediaType: 'movie' | 'tv'): Set<string> {
+	getStaleIds(mediaType: KindId): Set<string> {
 		const c = mediaType === 'movie' ? this.movie : this.tv;
 		return c ? new Set(c.staleIds) : new Set();
 	}
 
 	set(
-		mediaType: 'movie' | 'tv',
+		mediaType: KindId,
 		result: RenamePreviewResult,
 		fingerprint: string | null = null
 	): void {
@@ -59,7 +60,7 @@ class RenamePreviewCacheStore {
 		else this.tv = entry;
 	}
 
-	getStoredFingerprint(mediaType: 'movie' | 'tv'): string | null {
+	getStoredFingerprint(mediaType: KindId): string | null {
 		const c = mediaType === 'movie' ? this.movie : this.tv;
 		return c ? c.fingerprint : null;
 	}
@@ -82,7 +83,7 @@ class RenamePreviewCacheStore {
 	 * collision detection over the combined willChange set.
 	 */
 	applyPatch(
-		mediaType: 'movie' | 'tv',
+		mediaType: KindId,
 		staleIds: Set<string>,
 		freshResult: RenamePreviewResult
 	): void {

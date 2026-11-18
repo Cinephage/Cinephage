@@ -1,3 +1,4 @@
+import type { KindFilter } from '#lib/media-kinds/registry.js';
 export interface StageResult {
 	accepted: boolean;
 	reason?: string;
@@ -38,7 +39,7 @@ export interface FilterStageRun {
 }
 
 export interface FilterContext {
-	mediaType: 'movie' | 'tv' | 'all';
+	mediaType: KindFilter;
 	excludeInLibrary?: boolean;
 	skipBlockedMedia?: boolean;
 }

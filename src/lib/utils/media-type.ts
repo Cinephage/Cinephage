@@ -1,8 +1,9 @@
 /**
  * Media Type Utilities
  *
- * Canonical media type is 'movie' | 'tv' - used in routes, DB, TMDB, and all server code.
- * This module centralizes the derived mappings so components don't duplicate conversion logic.
+ * The movie/tv pair of the video routes and their API segments. The app-wide kind
+ * vocabulary lives in #lib/media-kinds; this module is the video-route helper, not the
+ * registry, and centralizes the route-segment mappings so components don't duplicate them.
  */
 
 /** Canonical media type used throughout the application */

@@ -75,10 +75,19 @@ export const LIBRARY_KIND_IDS: readonly KindId[] = MEDIA_KIND_IDS.filter(
 	(id) => MEDIA_KINDS.get(id)?.capabilities.library === true
 );
 
-/** Kinds a catalog source can serve to Discover and as-you-type search. */
-export const DISCOVER_KIND_IDS: readonly KindId[] = MEDIA_KIND_IDS.filter(
-	(id) => MEDIA_KINDS.get(id)?.capabilities.discover === true
-);
+/**
+ * Kinds a catalog source can serve to Discover and as-you-type search.
+ * Declared as a literal tuple on purpose: a `.filter()` result types as
+ * `KindId`, which would widen every consumer back to all kinds. The registry
+ * test pins this list, so changing it is a deliberate act.
+ */
+export const DISCOVER_KIND_IDS = ['movie', 'tv'] as const satisfies readonly KindId[];
+
+/** The kind a smart list or Discover row is drawn from — today, the TMDB-backed kinds. */
+export type DiscoverKindId = (typeof DISCOVER_KIND_IDS)[number];
+
+/** A kind selector used by filters and list endpoints: one kind, or all of them. */
+export type KindFilter = KindId | 'all';
 
 export function isKindId(value: string): value is KindId {
 	return MEDIA_KINDS.has(value as KindId);

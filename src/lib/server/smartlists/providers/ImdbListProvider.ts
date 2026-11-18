@@ -5,6 +5,7 @@
  * Uses JSON-LD structured data embedded in the page.
  */
 import { createChildLogger } from '#lib/logging/index.js';
+import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 
 const logger = createChildLogger({ logDomain: 'monitoring' as const });
 import type { ExternalListProvider, ExternalListItem, ExternalListResult } from './types.js';
@@ -13,7 +14,7 @@ export interface ImdbListConfig {
 	/** IMDb list ID (e.g., 'ls060044601') */
 	listId: string;
 	/** Optional media type filter */
-	mediaType?: 'movie' | 'tv' | '';
+	mediaType?: SmartListMediaType | '';
 	/** Maximum pages to fetch (default: 5) */
 	maxPages?: number;
 }
@@ -79,7 +80,7 @@ export class ImdbListProvider implements ExternalListProvider {
 		return typeof cfg.listId === 'string' && this.normalizeListId(cfg.listId) !== null;
 	}
 
-	async fetchItems(config: unknown, mediaType: 'movie' | 'tv' | ''): Promise<ExternalListResult> {
+	async fetchItems(config: unknown, mediaType: SmartListMediaType | ''): Promise<ExternalListResult> {
 		const cfg = config as ImdbListConfig;
 		const items: ExternalListItem[] = [];
 		const normalizedListId = this.normalizeListId(cfg.listId);
@@ -233,7 +234,7 @@ export class ImdbListProvider implements ExternalListProvider {
 	private async fetchPage(
 		listId: string,
 		page: number,
-		mediaType: 'movie' | 'tv' | ''
+		mediaType: SmartListMediaType | ''
 	): Promise<{ items: ExternalListItem[]; totalCount?: number }> {
 		const url = `https://www.imdb.com/list/${listId}/?page=${page}`;
 
@@ -347,7 +348,7 @@ export class ImdbListProvider implements ExternalListProvider {
 		this.lastRequestTime = Date.now();
 	}
 
-	private parseHtml(html: string, mediaType: 'movie' | 'tv' | ''): ExternalListItem[] {
+	private parseHtml(html: string, mediaType: SmartListMediaType | ''): ExternalListItem[] {
 		const items: ExternalListItem[] = [];
 
 		// Find all JSON-LD script tags more efficiently
@@ -409,7 +410,7 @@ export class ImdbListProvider implements ExternalListProvider {
 
 	private parseListItem(
 		listItem: ImdbJsonLdItem,
-		mediaType: 'movie' | 'tv' | ''
+		mediaType: SmartListMediaType | ''
 	): ExternalListItem | null {
 		const item = listItem.item;
 
@@ -460,7 +461,7 @@ export class ImdbListProvider implements ExternalListProvider {
 		};
 	}
 
-	private getMediaType(type: string): 'movie' | 'tv' | null {
+	private getMediaType(type: string): SmartListMediaType | null {
 		switch (type) {
 			case 'Movie':
 				return 'movie';

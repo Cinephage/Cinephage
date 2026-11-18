@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 	import { ArrowLeft, Loader2, Film, Tv, Save } from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import { onMount } from 'svelte';
@@ -49,7 +50,7 @@
 	// Basic info
 	let name = $state('');
 	let description = $state('');
-	let mediaType = $state<'movie' | 'tv'>('movie');
+	let mediaType = $state<SmartListMediaType>('movie');
 	const maxDescriptionLength = 100;
 	const descriptionTooLong = $derived(description.length > maxDescriptionLength);
 
@@ -93,7 +94,7 @@
 		if (list) {
 			name = list.name ?? '';
 			description = list.description ?? '';
-			mediaType = (list.mediaType as 'movie' | 'tv') ?? 'movie';
+			mediaType = (list.mediaType as SmartListMediaType) ?? 'movie';
 			listSourceType = (list.listSourceType as typeof listSourceType) ?? 'tmdb-discover';
 			externalSourceConfig = list.externalSourceConfig ?? {};
 			presetId = list.presetId ?? undefined;
@@ -245,7 +246,7 @@
 	}
 
 	// Handle media type change - reset filters
-	function handleMediaTypeChange(newType: 'movie' | 'tv') {
+	function handleMediaTypeChange(newType: SmartListMediaType) {
 		mediaType = newType;
 		// Reset genre filters since movie/tv have different genres
 		filters = {

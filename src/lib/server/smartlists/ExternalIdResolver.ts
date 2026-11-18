@@ -6,6 +6,7 @@
  */
 
 import { tmdb } from '#lib/server/tmdb.js';
+import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'monitoring' as const });
@@ -34,7 +35,7 @@ export class ExternalIdResolver {
 	/**
 	 * Resolve an IMDB ID to a TMDB ID
 	 */
-	async resolveByImdbId(imdbId: string, mediaType: 'movie' | 'tv'): Promise<IdResolutionResult> {
+	async resolveByImdbId(imdbId: string, mediaType: SmartListMediaType): Promise<IdResolutionResult> {
 		logger.info({ imdbId, mediaType }, '[ExternalIdResolver] Resolving IMDB ID');
 
 		try {
@@ -157,7 +158,7 @@ export class ExternalIdResolver {
 	async resolveByTitle(
 		title: string,
 		year: number | undefined,
-		mediaType: 'movie' | 'tv'
+		mediaType: SmartListMediaType
 	): Promise<IdResolutionResult> {
 		logger.info({ title, year, mediaType }, '[ExternalIdResolver] Resolving by title');
 
@@ -238,7 +239,7 @@ export class ExternalIdResolver {
 			title: string;
 			year?: number;
 		},
-		mediaType: 'movie' | 'tv'
+		mediaType: SmartListMediaType
 	): Promise<IdResolutionResult> {
 		// Strategy 1: Already have TMDB ID
 		if (item.tmdbId) {
@@ -347,7 +348,7 @@ export class ExternalIdResolver {
 			title: string;
 			year?: number;
 		}>,
-		mediaType: 'movie' | 'tv',
+		mediaType: SmartListMediaType,
 		concurrency: number = 10
 	): Promise<IdResolutionResult[]> {
 		if (items.length === 0) {

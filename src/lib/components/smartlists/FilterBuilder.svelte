@@ -1,5 +1,6 @@
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
+import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 	import type { SmartListFilters } from '#lib/server/db/schema.js';
 	import { page } from '$app/state';
 	import { TMDB } from '#lib/config/constants.js';
@@ -13,7 +14,7 @@
 	import KeywordSelector from './KeywordSelector.svelte';
 
 	interface Props {
-		mediaType: 'movie' | 'tv';
+		mediaType: SmartListMediaType;
 		filters: SmartListFilters;
 		forceCloseSignal?: number;
 		onSortByChange?: (data: { sortBy: string }) => void;
@@ -58,7 +59,7 @@
 		description: string;
 		filters: Partial<SmartListFilters>;
 		sortBy: string;
-		appliesTo: ('movie' | 'tv')[];
+		appliesTo: (SmartListMediaType)[];
 	}
 
 	const filterPresets: FilterPreset[] = [

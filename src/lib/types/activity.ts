@@ -4,6 +4,7 @@
  */
 
 import type { QueueQualityInfo } from './queue';
+import type { KindFilter } from '#lib/media-kinds/registry.js';
 
 /**
  * Activity status values
@@ -230,7 +231,7 @@ export interface UnifiedActivity {
  */
 export interface ActivityFilters {
 	status?: ActivityStatus | 'success' | 'all';
-	mediaType?: 'movie' | 'tv' | 'all';
+	mediaType?: KindFilter;
 	search?: string;
 	startDate?: string;
 	endDate?: string;

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
+import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 	import {
 		AlertCircle,
 		Check,
@@ -65,7 +66,7 @@
 		page: number;
 		totalResults: number;
 		totalPages: number;
-		mediaType: 'movie' | 'tv';
+		mediaType: SmartListMediaType;
 		itemLimit: number;
 		unfilteredTotal: number;
 		onPageChange: (page: number) => void;

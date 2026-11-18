@@ -1,5 +1,6 @@
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
+import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 	import { Settings, Zap } from '@lucide/svelte';
 	import type { RootFolderBasic as RootFolder } from '#lib/types/downloadClient.js';
 
@@ -17,7 +18,7 @@
 		rootFolderId: string;
 		scoringProfileId: string;
 		autoAddMonitored: boolean;
-		mediaType: 'movie' | 'tv';
+		mediaType: SmartListMediaType;
 		rootFolders: RootFolder[];
 		scoringProfiles: ScoringProfile[];
 		listSourceType?: 'tmdb-discover' | 'external-json';

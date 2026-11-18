@@ -1,17 +1,18 @@
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
+import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 	import { Sparkles } from '@lucide/svelte';
 
 	interface FilterPreset {
 		id: string;
 		name: string;
 		description: string;
-		appliesTo: ('movie' | 'tv')[];
+		appliesTo: (SmartListMediaType)[];
 	}
 
 	interface Props {
 		presets: FilterPreset[];
-		mediaType: 'movie' | 'tv';
+		mediaType: SmartListMediaType;
 		selectedPresetId: string;
 		onApplyPreset: (presetId: string) => void;
 		onClearPreset: () => void;
