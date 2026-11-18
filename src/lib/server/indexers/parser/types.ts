@@ -158,6 +158,8 @@ export interface EpisodeInfo {
 	seasons?: number[];
 	/** Episode numbers within season (1-based) */
 	episodes?: number[];
+	/** Stated episode total ("of N" / "из N" / "(N)"), when the release declares one */
+	episodeTotal?: number;
 	/** Absolute episode number for anime */
 	absoluteEpisode?: number;
 	/** Whether this is a full season pack */

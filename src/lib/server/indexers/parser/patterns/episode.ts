@@ -96,6 +96,7 @@ function extractExplicitEpisodeRange(match: RegExpMatchArray): Partial<EpisodeIn
 		season,
 		episodes: episodes.length > 0 ? episodes : [startEpisode],
 		isSeasonPack: true,
+		...(totalEpisodes !== undefined ? { episodeTotal: totalEpisodes } : {}),
 		...inferCompleteFromEpisodeRange(season, startEpisode, endEpisode, totalEpisodes)
 	};
 }
@@ -218,6 +219,100 @@ const EPISODE_PATTERNS: EpisodePattern[] = [
 			return { seasons: [startSeason, endSeason], isSeasonPack: true };
 		}
 	},
+	// Russian comma season list: "Сезон: 1,2" / "Сезон: 1,2,3" (RuTracker
+	// template "Сезон: 1,2 / Серии: 1-16 из 16"). Captures the whole comma
+	// list (any length). The COLON is required: without it, word forms like
+	// "3 сезон 4,5,6 серия" (comma numbers = episodes) would be swallowed.
+	// The lookahead keeps the seasons-only reading ONLY when the episode spec
+	// that follows uses the colon form too ("Сезон: 1,2 Серии: 1-16 из 16").
+	// "Сезон: 1,2 Серии 1-16 из 16" (no colon after Серии) is rejected here so
+	// the combined season+episode pattern below captures season AND episodes
+	// instead of a seasons-only match that would drop them.
+	// Must precede the Russian range pattern below: comma lists have no dash
+	// for it, but without this pattern first, later comma lists would be
+	// missed entirely.
+	{
+		pattern: /Сезоны?\s*:\s*(\d{1,2}(?:\s*,\s*\d{1,2})+)(?!\s*[Сс]ери[йия](?![А-Яа-яЁё])\s*[^:])/i,
+		skipInMovieMode: true,
+		extract: (match) => {
+			const seasons = match[1].split(/\s*,\s*/).map((s) => parseInt(s, 10));
+			// "1,2,3" covering 1..N without gaps is the full series
+			const complete = seasons[0] === 1 && seasons.every((n, i) => n === seasons[0] + i);
+			return { seasons, isSeasonPack: true, isCompleteSeries: complete };
+		}
+	},
+
+	// Russian word style (2005-2009 norm): "Гражданин начальник 1-15 серии из 15",
+	// "Солдаты 1 (1-8 серии из 16)", "Клуб 3 Сезон 1-21 серии из 21". The season
+	// marker, when present, precedes the range as a bare word ("3 Сезон") and the
+	// numbers directly after it are EPISODES, not a season range - so this must
+	// precede the Russian season-range pattern below.
+	{
+		pattern:
+			/(?:(\d{1,2})\s+сезоны?[\s:._-]*)?(\d{1,3})\s*[-–—]\s*(\d{1,3})\s*сери[ия]\s*из\s*(\d{1,3})/i,
+		skipInMovieMode: true,
+		extract: (match) => {
+			const season = match[1] ? parseInt(match[1], 10) : 1;
+			const startEpisode = parseInt(match[2], 10);
+			const endEpisode = parseInt(match[3], 10);
+			const total = parseInt(match[4], 10);
+			const episodes: number[] = [];
+			if (endEpisode >= startEpisode && endEpisode - startEpisode < 300) {
+				for (let ep = startEpisode; ep <= endEpisode; ep++) {
+					episodes.push(ep);
+				}
+			}
+			return {
+				season,
+				episodes: episodes.length > 0 ? episodes : [startEpisode],
+				isSeasonPack: true,
+				episodeTotal: total,
+				...inferCompleteFromEpisodeRange(season, startEpisode, endEpisode, total)
+			};
+		}
+	},
+
+	// Word style with the season marker but NO "сери" token:
+	// "Говорящая с призраками 1 сезон 1-22", "Клуб 3 Сезон 1-21 серии ..." is
+	// taken by the pattern above; here the numbers after "N сезон" are episodes.
+	{
+		pattern: /(?:^|[\s(/,])(\d{1,2})\s+сезоны?[\s:._-]*(\d{1,3})\s*[-–—]\s*(\d{1,3})(?!\s*сери)/i,
+		skipInMovieMode: true,
+		extract: (match) => {
+			const season = parseInt(match[1], 10);
+			const startEpisode = parseInt(match[2], 10);
+			const endEpisode = parseInt(match[3], 10);
+			const episodes: number[] = [];
+			if (endEpisode >= startEpisode && endEpisode - startEpisode < 300) {
+				for (let ep = startEpisode; ep <= endEpisode; ep++) {
+					episodes.push(ep);
+				}
+			}
+			return {
+				season,
+				episodes: episodes.length > 0 ? episodes : [startEpisode],
+				isSeasonPack: true
+			};
+		}
+	},
+
+	// Word style single count, no range: "Торгаши (4 серии из 4)",
+	// "Колдовская любовь 62 серии из 62", "Гончие / Легавые (12 серии из 12)".
+	{
+		pattern: /(?:^|[\s(,])(\d{1,3})\s+сери[йия]\s+из\s+(\d{1,3})\b/i,
+		skipInMovieMode: true,
+		extract: (match) => {
+			const episode = parseInt(match[1], 10);
+			const total = parseInt(match[2], 10);
+			return {
+				season: 1,
+				episodes: [episode],
+				isSeasonPack: true,
+				episodeTotal: total
+			};
+		}
+	},
+
 	{
 		pattern: /Сезоны?[\s:._-]*(\d{1,2})\s*(?:[-–—]|до)\s*(\d{1,2})(?:\s*(?:из|of|\/)\s*\d{1,2})?/i,
 		skipInMovieMode: true,
@@ -232,6 +327,68 @@ const EPISODE_PATTERNS: EpisodePattern[] = [
 				return { seasons, isSeasonPack: true, isCompleteSeries: startSeason === 1 };
 			}
 			return { seasons: [startSeason, endSeason], isSeasonPack: true };
+		}
+	},
+
+	// Russian season + episode range: "Сезон: 3 / Серии: 1-8 из 8",
+	// "Сезон: 1 Серии: 1-12 из 12" — plus the season-less RuTracker default
+	// "Серии: 1-10 из 16" (single-season shows omit the Сезон block; this is
+	// the official rules example). Season marker variants: "Сезон: N" (before)
+	// and the word style "N сезон /" (number precedes the word). Must come
+	// AFTER the Russian season-range pattern (ranges win) but BEFORE the bare
+	// Russian season-pack pattern, which would otherwise consume "Сезон: 3"
+	// and drop the episodes. Captures the stated total ("из N" / "(N)") as
+	// episodeTotal.
+	{
+		pattern:
+			/(?:(?:Сезоны?[\s:._-]*(\d{1,2})|(\d{1,2})\s+сезоны?)(?:\s*\(\d{1,2}\))?[\s/|,._-]*)?[СС]ери[ия][\s:._-]*(\d{1,3})(?:\s*[-–—]\s*(\d{1,3}))?(?:\s*(?:из|\()[\s.]*(\d{1,3}))?/i,
+		skipInMovieMode: true,
+		extract: (match) => {
+			const season = match[1] ? parseInt(match[1], 10) : match[2] ? parseInt(match[2], 10) : 1;
+			const startEpisode = parseInt(match[3], 10);
+			const endEpisode = match[4] ? parseInt(match[4], 10) : startEpisode;
+			const total = match[5] ? parseInt(match[5], 10) : undefined;
+			const episodes: number[] = [];
+			if (endEpisode >= startEpisode && endEpisode - startEpisode < 300) {
+				for (let ep = startEpisode; ep <= endEpisode; ep++) {
+					episodes.push(ep);
+				}
+			}
+			return {
+				season,
+				episodes: episodes.length > 0 ? episodes : [startEpisode],
+				isSeasonPack: true,
+				...(total !== undefined ? { episodeTotal: total } : {}),
+				...inferCompleteFromEpisodeRange(season, startEpisode, endEpisode, total)
+			};
+		}
+	},
+
+	// Total-only list: "Любовь моя 1-34 (120) (Виталий Бабенко...) [2005, ...]"
+	// — a bare range whose episode count appears in parens with no Сери token
+	// at all. Anchored on the following "[" (the genre/year bracket), skipping
+	// any intermediate parenthesised credits, so ordinary "(...)" groups in
+	// release names never trigger it.
+	{
+		pattern: /(\d{1,3})\s*[-–—]\s*(\d{1,3})(?=\s*\((\d{1,3})\)(?:\s*\([^)]*\))*\s*\[)/,
+		skipInMovieMode: true,
+		extract: (match) => {
+			const season = 1;
+			const startEpisode = parseInt(match[1], 10);
+			const endEpisode = parseInt(match[2], 10);
+			const total = parseInt(match[3], 10);
+			const episodes: number[] = [];
+			if (endEpisode >= startEpisode && endEpisode - startEpisode < 300) {
+				for (let ep = startEpisode; ep <= endEpisode; ep++) {
+					episodes.push(ep);
+				}
+			}
+			return {
+				season,
+				episodes: episodes.length > 0 ? episodes : [startEpisode],
+				isSeasonPack: true,
+				episodeTotal: total
+			};
 		}
 	},
 
@@ -445,6 +602,21 @@ const EPISODE_PATTERNS: EpisodePattern[] = [
 	},
 	{
 		pattern: /\bS(\d{1,2})\b(?![\s._-]?E)/i,
+		extract: (match) => ({
+			season: parseInt(match[1], 10),
+			isSeasonPack: true
+		})
+	},
+
+	// Word style season marker: "Клиника (4 Сезон)", "Баффи (1 сезон)",
+	// "24 часа, ПОЛНЫЙ 4 СЕЗОН", "Гражданин начальник / 3 Сезона". The number
+	// PRECEDES the word, unlike the bare pack form "Сезон 2" below. Range and
+	// episode word forms above must win first (they are earlier in this list).
+	{
+		// NOTE: \b is useless around Cyrillic (JS \w is ASCII-only), so the word
+		// boundary is expressed as a "no following Cyrillic letter" lookahead
+		pattern: /(?:^|[\s(/,])(\d{1,2})\s+сезон(?:ы|а|ов|е)?(?![А-Яа-яЁё])/i,
+		skipInMovieMode: true,
 		extract: (match) => ({
 			season: parseInt(match[1], 10),
 			isSeasonPack: true

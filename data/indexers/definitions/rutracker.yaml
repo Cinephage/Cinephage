@@ -442,13 +442,11 @@ search:
     title:
       selector: td.t-title-col div.t-title a.tLink
       filters:
-        # PHASE 1: Extract season/episode info FIRST (preserve this data)
-        - name: re_replace
-          args: ["(?i)\\s*[СС]езоны?:?\\s*(\\d+).+?[СС]ери[ия]:?\\s*(\\d+-?\\d*)", ' S$1E$2']
-        - name: re_replace
-          args: ["(?i)\\s*[СС]езоны?:?\\s*(\\d+)", ' S$1']
-        - name: re_replace
-          args: ["(?i)\\s*[СС]ери[ия]:?\\s*(\\d+-?\\d*)", ' E$1']
+        # PHASE 1: season/episode handling is now done natively by the release
+        # parser (episode.ts Russian patterns: season ranges, comma lists,
+        # "Сери[ия]" episode ranges with totals, word style). The former
+        # collapse filters (Сезон→S$1, Сери→E$1) destroyed multi-season ranges
+        # and season-less episode ranges before the parser ever saw them.
         - name: re_replace
           args: ["(?i)\\s*ТВ-?(\\d+)", ' S$1']
         - name: re_replace
@@ -509,11 +507,11 @@ search:
               ''
             ]
 
-        # PHASE 3: Clean up metadata after slash (CONTEXT-AWARE)
-        # Only removes if contains season/episode/metadata keywords
-        # FIX: Previously stripped everything after last slash - now specific to metadata
-        - name: re_replace
-          args: ["(?i)\\s*/\\s*(?:Сезон|Сезоны|Season|Серии|Серия|Episode|Эпизод)[^/]{0,80}$", '']
+        # PHASE 3 (removed): the old "/ Сезон|Серии …$" tail strip destroyed the
+        # very season/episode data the parser now reads natively (it only ever
+        # worked because PHASE 1 converted the Cyrillic to S/E tokens first).
+        # Title cleanup is handled by extractTitleBeforeEpisode, which cuts
+        # before the earliest episode marker - including the Russian patterns.
 
         # PHASE 4: Normalize quality tags (preserve these at end)
         - name: re_replace
