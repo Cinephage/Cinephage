@@ -79,6 +79,7 @@ function createQueueRecord(
 		id,
 		downloadClientId: 'client-1',
 		downloadId: 'queue-download-id',
+		mediaItemId: null,
 		infoHash: 'queue-info-hash',
 		title: 'Example.Movie.2025.1080p.WEB-DL-GRP',
 		indexerId: null,

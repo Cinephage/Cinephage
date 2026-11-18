@@ -177,6 +177,7 @@ import { migration_v178 } from './178-notification-connections.js';
 import { migration_v179 } from './179-notification-delivery-message.js';
 import { migration_v180 } from './180-music-library.js';
 import { migration_v181 } from './181-widen-media-type-check.js';
+import { migration_v182 } from './182-download-queue-media-item.js';
 
 export const MIGRATIONS: MigrationDefinition[] = [
 	migration_v002,
@@ -356,5 +357,6 @@ export const MIGRATIONS: MigrationDefinition[] = [
 	migration_v178,
 	migration_v179,
 	migration_v180,
-	migration_v181
+	migration_v181,
+	migration_v182
 ];

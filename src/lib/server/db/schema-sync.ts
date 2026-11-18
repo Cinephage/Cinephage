@@ -219,8 +219,11 @@ import {
  *   smart_lists, smart_list_items, stream_extraction_cache and
  *   alternate_titles. SQLite cannot alter a CHECK, so v181 rebuilds those five
  *   tables from their live DDL.
+ * Version 182: download_queue.media_item_id - a music (and later book) grab is
+ *   stored against the spine identity instead of growing another movie/series
+ *   column pair. Additive ALTER, no rebuild.
  */
-export const CURRENT_SCHEMA_VERSION = 181;
+export const CURRENT_SCHEMA_VERSION = 182;
 
 /**
  * Seed rows for the *legacy* backfill in migration 078 only.
@@ -897,6 +900,7 @@ const TABLE_DEFINITIONS: string[] = [
 		"download_url" text,
 		"magnet_url" text,
 		"protocol" text DEFAULT 'torrent' NOT NULL,
+		"media_item_id" text REFERENCES "media_items"("id") ON DELETE SET NULL,
 		"movie_id" text REFERENCES "movies"("id") ON DELETE SET NULL,
 		"series_id" text REFERENCES "series"("id") ON DELETE SET NULL,
 		"episode_ids" text,
@@ -1901,6 +1905,7 @@ const INDEX_DEFINITIONS: string[] = [
 	`CREATE INDEX IF NOT EXISTS "idx_media_items_kind" ON "media_items" ("kind")`,
 	`CREATE INDEX IF NOT EXISTS "idx_media_items_library" ON "media_items" ("library_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_media_items_monitored" ON "media_items" ("monitored")`,
+	`CREATE INDEX IF NOT EXISTS "idx_download_queue_media_item" ON "download_queue" ("media_item_id")`,
 	`CREATE UNIQUE INDEX IF NOT EXISTS "idx_artists_mbid" ON "artists" ("mbid")`,
 	`CREATE INDEX IF NOT EXISTS "idx_artists_library" ON "artists" ("library_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_artists_monitored" ON "artists" ("monitored")`,

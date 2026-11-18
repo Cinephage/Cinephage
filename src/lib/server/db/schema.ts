@@ -1389,6 +1389,11 @@ export const downloadQueue = sqliteTable(
 			.references(() => downloadClients.id, { onDelete: 'cascade' }),
 		// Hash/ID from the download client (torrent hash, NZB ID, etc.)
 		downloadId: text('download_id').notNull(),
+		/**
+		 * The spine identity for kinds that have no movie/series row (albums today,
+		 * books next). Nullable: movie and TV grabs keep using their own columns.
+		 */
+		mediaItemId: text('media_item_id').references(() => mediaItems.id, { onDelete: 'set null' }),
 		// Info hash from the release/magnet (reliable identifier)
 		infoHash: text('info_hash'),
 
