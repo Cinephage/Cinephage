@@ -16,6 +16,12 @@
 		onSelectChange?: (id: string, selected: boolean) => void;
 		/** Set when the item about to be shown is missing its root folder. */
 		missingRootFolder?: boolean;
+		/**
+		 * Overrides navigation: the handler does its own work and navigates with
+		 * `goto`. Used when the destination is not known until it is resolved
+		 * (Discover's provider rows).
+		 */
+		onActivate?: (event: MouseEvent) => void;
 	}
 
 	let {
@@ -23,7 +29,8 @@
 		selectable = false,
 		selected = false,
 		onSelectChange,
-		missingRootFolder = false
+		missingRootFolder = false,
+		onActivate
 	}: Props = $props();
 
 	const FALLBACK_ICON: Record<LibraryKind, typeof Clapperboard> = {
@@ -56,6 +63,11 @@
 		if (selectable) {
 			e.preventDefault();
 			onSelectChange?.(view.id, !selected);
+			return;
+		}
+		if (onActivate) {
+			e.preventDefault();
+			onActivate(e);
 		}
 	}
 </script>
@@ -104,6 +116,7 @@
 
 	<!-- Top-right badges: Monitored + kind -->
 	<div class="absolute top-2 right-2 z-10 flex max-w-[48%] flex-col items-end gap-1">
+		{#if !view.hideMonitored}
 		<div
 			class="badge border-none badge-sm shadow-sm {view.monitored
 				? view.partiallyMonitored
@@ -122,6 +135,7 @@
 				<EyeOff class="h-3 w-3" />
 			{/if}
 		</div>
+		{/if}
 
 		<div
 			class="badge truncate border-none badge-xs font-semibold shadow-sm sm:badge-sm {TYPE_TONE[

@@ -772,8 +772,8 @@
 			</div>
 
 			<div class="flex flex-1 items-center justify-end gap-3">
-				<!-- Multi-select toggle (admins only, matching the add action) -->
-				{#if isAdminUser}
+				<!-- Multi-select toggle (admins only, matching the add action; music adds per album) -->
+				{#if isAdminUser && type !== 'music'}
 					<button
 						class="btn btn-circle btn-sm {selectMode
 							? 'btn-primary'
@@ -790,6 +790,7 @@
 					</button>
 				{/if}
 
+				{#if type !== 'music'}
 				<!-- Hide In Library Toggle -->
 				<button
 					class="btn btn-circle btn-sm {excludeInLibrary
@@ -818,6 +819,9 @@
 					<Bug class="h-4 w-4" />
 				</button>
 
+				{/if}
+
+				{#if type !== 'music'}
 				<button
 					class="btn gap-2 shadow-lg shadow-primary/20 btn-primary btn-sm"
 					onclick={() => (isFilterOpen = true)}
@@ -838,6 +842,7 @@
 					</svg>
 					{m.discover_filtersButton()}
 				</button>
+				{/if}
 			</div>
 		</div>
 
@@ -1192,7 +1197,8 @@
 		{/if}
 	</main>
 
-	<!-- Filter Drawer -->
+	<!-- Filter Drawer: TMDB facets, meaningless for music -->
+	{#if type !== 'music'}
 	<FilterDrawer
 		bind:isOpen={isFilterOpen}
 		{type}
@@ -1228,6 +1234,7 @@
 		onReset={resetFilters}
 		onApply={applyFilters}
 	/>
+	{/if}
 
 	<!-- Add to Library Modal -->
 	{#if selectedItem}
@@ -1244,7 +1251,7 @@
 	{/if}
 
 	<!-- Multi-select: floating bar + bulk add modal -->
-	{#if isAdminUser}
+	{#if isAdminUser && type !== 'music'}
 		<SelectionActionBar
 			selectedCount={selection.size}
 			loading={false}

@@ -29,6 +29,8 @@ export interface MediaCardView {
 	typeLabel: string;
 	typeTone: 'primary' | 'secondary' | 'accent';
 	monitored: boolean;
+	/** Surfaces with no monitoring concept (Discover) hide the badge entirely. */
+	hideMonitored: boolean;
 	partiallyMonitored: boolean;
 	/** Top-left state badge: a file tick/cross, or a child-count "n/n". */
 	state: { icon: 'file' | 'cross' | 'count'; label: string; tone: 'success' | 'error' | 'neutral' } | null;
@@ -62,6 +64,7 @@ export function movieCardView(
 		typeLabel: m.common_movie(),
 		typeTone: 'primary',
 		monitored: Boolean(movie.monitored),
+		hideMonitored: false,
 		partiallyMonitored: false,
 		state: movie.hasFile
 			? { icon: 'file', label: m.library_mediaCard_fileAvailable(), tone: 'success' }
@@ -89,6 +92,7 @@ export function seriesCardView(
 		typeLabel: m.common_tvShow(),
 		typeTone: 'secondary',
 		monitored: Boolean(series.monitored),
+		hideMonitored: false,
 		partiallyMonitored: series.partiallyMonitored === true,
 		state: {
 			icon: 'count',
@@ -106,17 +110,22 @@ export function seriesCardView(
 }
 
 export function albumCardView(
-album: AlbumCardData,
-options: { artUrl?: string | null; href?: string } = {}
+	album: AlbumCardData,
+	options: {
+		artUrl?: string | null;
+		href?: string;
+		hideState?: boolean;
+		hideMonitored?: boolean;
+	} = {}
 ): MediaCardView {
-const art: MediaArt | null =
-options.artUrl === undefined
-? album.hasCover
-? { source: 'url', url: `/api/music/albums/${album.id}/cover` }
-: null
-: options.artUrl
-? { source: 'url', url: options.artUrl }
-: null;
+	const art: MediaArt | null =
+		options.artUrl === undefined
+			? album.hasCover
+				? { source: 'url', url: `/api/music/albums/${album.id}/cover` }
+				: null
+			: options.artUrl
+				? { source: 'url', url: options.artUrl }
+				: null;
 return {
 		id: album.id,
 		kind: 'album',
@@ -127,11 +136,14 @@ return {
 		square: true,
 		typeLabel: album.primaryType ?? m.music_tabAlbum(),
 		typeTone: 'accent',
-		monitored: Boolean(album.monitored),
+		monitored: options.hideMonitored ? false : Boolean(album.monitored),
+		hideMonitored: options.hideMonitored ?? false,
 		partiallyMonitored: false,
-		state: album.hasFile
-			? { icon: 'file', label: m.library_mediaCard_fileAvailable(), tone: 'success' }
-			: { icon: 'cross', label: m.library_mediaCard_missingFile(), tone: 'error' },
+		state: options.hideState
+			? null
+			: album.hasFile
+				? { icon: 'file', label: m.library_mediaCard_fileAvailable(), tone: 'success' }
+				: { icon: 'cross', label: m.library_mediaCard_missingFile(), tone: 'error' },
 		detail: album.trackCount ? m.music_tracksShort({ count: album.trackCount }) : null,
 		progress: null,
 		subtitle: album.artistName,
@@ -139,26 +151,43 @@ return {
 	};
 }
 
-export function artistCardView(artist: ArtistCardData): MediaCardView {
+export function artistCardView(
+	artist: ArtistCardData,
+	options: {
+		artUrl?: string | null;
+		href?: string;
+		hideState?: boolean;
+		hideMonitored?: boolean;
+	} = {}
+): MediaCardView {
+	const art: MediaArt | null =
+		options.artUrl === undefined
+			? artist.coverAlbumId
+				? { source: 'url', url: `/api/music/albums/${artist.coverAlbumId}/cover` }
+				: null
+			: options.artUrl
+				? { source: 'url', url: options.artUrl }
+				: null;
 	return {
 		id: artist.id,
 		kind: 'artist',
-		href: `/library/music/artist/${artist.id}`,
+		href: options.href ?? `/library/music/artist/${artist.id}`,
 		title: artist.name,
 		year: null,
-		art: artist.coverAlbumId
-			? { source: 'url', url: `/api/music/albums/${artist.coverAlbumId}/cover` }
-			: null,
+		art,
 		square: true,
 		typeLabel: m.music_tabArtist(),
 		typeTone: 'accent',
-		monitored: Boolean(artist.monitored),
+		monitored: options.hideMonitored ? false : Boolean(artist.monitored),
+		hideMonitored: options.hideMonitored ?? false,
 		partiallyMonitored: false,
-		state: {
-			icon: 'count',
-			label: `${artist.inLibraryCount}/${artist.albumCount}`,
-			tone: 'neutral'
-		},
+		state: options.hideState
+			? null
+			: {
+					icon: 'count',
+					label: `${artist.inLibraryCount}/${artist.albumCount}`,
+					tone: 'neutral'
+				},
 		detail: null,
 		progress: artist.albumCount > 0 ? Math.round((artist.inLibraryCount / artist.albumCount) * 100) : 0,
 		subtitle: m.music_albumsCount({ count: artist.albumCount }),

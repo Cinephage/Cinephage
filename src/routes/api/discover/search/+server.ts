@@ -1,5 +1,6 @@
 import type { RequestHandler } from './$types';
 import { tmdb } from '#lib/server/tmdb.js';
+import { searchMusic } from '#lib/server/catalog/deezerSearch.js';
 import { musicBrainz } from '#lib/server/music/musicbrainz.js';
 import { contentFilterPipeline } from '#lib/server/filters/ContentFilterPipeline.js';
 import { enrichWithReleaseDates } from '#lib/server/release-enrichment.js';
@@ -28,9 +29,41 @@ interface MusicRow {
 	primary_type?: string | null;
 }
 
+/**
+ * The music leg, Deezer first.
+ *
+ * MusicBrainz is gated at 1.2 s per request, so a one-box search there made
+ * Discover crawl. Deezer answers in a few hundred milliseconds and carries
+ * covers; MusicBrainz is kept as the fallback so an upstream outage degrades
+ * to slow results rather than none. Rows from Deezer carry no MusicBrainz id
+ * and resolve one on the detail page.
+ */
 async function musicRows(query: string): Promise<MusicRow[]> {
+	try {
+		const rows = await searchMusic(query);
+		if (rows.length > 0) {
+			return rows.map((row) => ({
+				id: row.id,
+				media_type: 'music' as const,
+				musicKind: row.musicKind,
+				title: row.title,
+				subtitle: row.subtitle,
+				image_url: row.imageUrl,
+				year: row.year,
+				primary_type: null
+			}));
+		}
+	} catch (err) {
+		logger.warn(
+			{ err: err instanceof Error ? err.message : String(err) },
+			'[DiscoverSearch] Deezer music search failed, falling back to MusicBrainz'
+		);
+	}
+	return musicBrainzRows(query);
+}
+
+async function musicBrainzRows(query: string): Promise<MusicRow[]> {
 	const [albumHits, artistHits] = await Promise.all([
-		// One-box search: artist OR title, ranked by MusicBrainz relevance.
 		musicBrainz.searchReleaseGroups({ artist: query, album: query, matchAny: true, limit: 10 }),
 		musicBrainz.searchArtists(query, 4)
 	]);
@@ -158,8 +191,8 @@ export const GET: RequestHandler = async ({ url }) => {
 		let musicMerged: MusicRow[] = [];
 		if (type === 'all' && query.trim().length >= 3) {
 			try {
-				// Two gated MusicBrainz requests cost ~2.5 s; the cap bounds the
-				// wait without routinely dropping music from the merged results.
+				// Deezer answers in ~0.4 s; the cap is the fallback path's guard
+				// (MusicBrainz is gated and can queue), not the normal budget.
 				musicMerged = await withTimeout(musicRows(query.trim()), 4000);
 			} catch {
 				// Music is additive; a rate-gated miss only omits the rows.
@@ -178,7 +211,8 @@ export const GET: RequestHandler = async ({ url }) => {
 			pagination: {
 				page,
 				total_pages: totalPages,
-				total_results: totalResults
+				// Music rows ride in front of the TMDB page, so they count too.
+				total_results: totalResults + musicMerged.length
 			}
 		});
 	} catch (e) {
