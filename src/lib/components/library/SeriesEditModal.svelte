@@ -3,6 +3,7 @@
 	import { X, FolderOpen, Info } from '@lucide/svelte';
 	import { FolderBrowser } from '#lib/components/library/index.js';
 	import { ModalWrapper, ModalFooter } from '#lib/components/ui/modal/index.js';
+	import EditMetadataSection from '#lib/components/library/edit/EditMetadataSection.svelte';
 	import { sortRootFoldersForMediaType } from '#lib/utils/root-folders.js';
 	import { isLikelyAnimeMedia } from '#lib/shared/anime-classification.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
@@ -147,30 +148,6 @@
 	/** Subtitle profile override; '' = inherit (no per-item override). */
 	let languageProfileOverride = $state('');
 
-	const LOCALE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-		{ value: 'ar-SA', label: 'Arabic' },
-		{ value: 'zh-CN', label: 'Chinese (zh-CN)' },
-		{ value: 'zh-TW', label: 'Chinese (zh-TW)' },
-		{ value: 'da-DK', label: 'Danish' },
-		{ value: 'nl-NL', label: 'Dutch' },
-		{ value: 'en-US', label: 'English' },
-		{ value: 'fi-FI', label: 'Finnish' },
-		{ value: 'fr-FR', label: 'French' },
-		{ value: 'de-DE', label: 'German' },
-		{ value: 'he-IL', label: 'Hebrew' },
-		{ value: 'hi-IN', label: 'Hindi' },
-		{ value: 'it-IT', label: 'Italian' },
-		{ value: 'ja-JP', label: 'Japanese' },
-		{ value: 'ko-KR', label: 'Korean' },
-		{ value: 'no-NO', label: 'Norwegian' },
-		{ value: 'pl-PL', label: 'Polish' },
-		{ value: 'pt-BR', label: 'Portuguese' },
-		{ value: 'ru-RU', label: 'Russian' },
-		{ value: 'es-ES', label: 'Spanish' },
-		{ value: 'sv-SE', label: 'Swedish' },
-		{ value: 'th-TH', label: 'Thai' },
-		{ value: 'tr-TR', label: 'Turkish' }
-	];
 
 	/**
 	 * Read the metadata language pair, falling back to the deprecated legacy
@@ -719,71 +696,12 @@
 			</div>
 		</section>
 
-		<!-- Metadata -->
-		<section>
-			<h4
-				class="mb-3 border-b border-base-300 pb-1.5 text-xs font-semibold tracking-wider text-base-content/50 uppercase"
-			>
-				{m.library_metadata_section()}
-			</h4>
-			<div class="grid grid-cols-2 gap-3">
-				<div class="form-control w-full">
-					<label class="label py-0.5" for="series-metadata-language-mode">
-						<span class="label-text text-xs text-base-content/80"
-							>{m.library_metadata_languageLabel()}</span
-						>
-					</label>
-					<select
-						id="series-metadata-language-mode"
-						bind:value={metadataLanguageMode}
-						class="select-bordered select w-full select-sm"
-					>
-						<option value="inherit">{m.library_metadata_inheritGlobal()}</option>
-						<option value="original">{m.library_metadata_originalLanguage()}</option>
-						<option value="explicit">{m.library_metadata_explicitLocale()}</option>
-					</select>
-				</div>
-				<div class="form-control w-full">
-					<label class="label py-0.5" for="series-metadata-language-value">
-						<span class="label-text text-xs text-base-content/80"
-							>{m.library_metadata_locale()}</span
-						>
-					</label>
-					<select
-						id="series-metadata-language-value"
-						bind:value={metadataLanguageValue}
-						disabled={metadataLanguageMode !== 'explicit'}
-						class="select-bordered select w-full select-sm"
-					>
-						{#each LOCALE_OPTIONS as option (option.value)}
-							<option value={option.value}>{option.label}</option>
-						{/each}
-					</select>
-				</div>
-				<div class="flex items-center justify-between gap-2">
-					<label class="label cursor-pointer">
-						<span class="label-text text-xs text-base-content/80"
-							>{m.library_metadata_preferOriginalTitle()}</span
-						>
-						<input
-							type="checkbox"
-							class="toggle toggle-primary toggle-sm"
-							checked={preferOriginalTitle === true}
-							onchange={(event) => (preferOriginalTitle = event.currentTarget.checked)}
-						/>
-					</label>
-					{#if preferOriginalTitle !== null}
-						<button
-							type="button"
-							class="btn btn-ghost btn-xs"
-							onclick={() => (preferOriginalTitle = null)}
-						>
-							{m.library_subtitleRequirements_reset()}
-						</button>
-					{/if}
-				</div>
-			</div>
-		</section>
+		<EditMetadataSection
+			idPrefix="series"
+			bind:mode={metadataLanguageMode}
+			bind:value={metadataLanguageValue}
+			bind:preferOriginalTitle
+		/>
 	</div>
 
 	<!-- Actions -->
