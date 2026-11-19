@@ -56,6 +56,13 @@ export interface DiscoverParams {
 const NO_FILTER_MARKERS = new Set(['any', 'all']);
 
 /**
+ * Unlike `any`/`all` (which mean "not specified" and fall through to the
+ * stored filter), `none` is an explicit override: the viewer asked for every
+ * language on this view. The panel's language control clears to this value.
+ */
+const EXPLICIT_NONE = 'none';
+
+/**
  * Resolve the effective discover `with_original_language` content-origin filter.
  *
  * Order: explicit URL param (passed through unchanged) →
@@ -72,6 +79,7 @@ export function resolveWithOriginalLanguage(
 	storedFilter: string | null | undefined
 ): string | null {
 	const fromUrl = typeof urlParam === 'string' ? urlParam.trim() : '';
+	if (fromUrl.toLowerCase() === EXPLICIT_NONE) return null;
 	if (fromUrl && !NO_FILTER_MARKERS.has(fromUrl.toLowerCase())) {
 		// Normalize at the boundary too: `en-US` → `en`; junk → null (fall
 		// through to the stored filter).

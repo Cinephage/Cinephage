@@ -22,6 +22,12 @@ export interface MediaKindCapabilities {
 	import: boolean;
 	/** The requests surface accepts this kind. */
 	requests: boolean;
+	/** Discover can hide rows already in the library — needs an id the library can match. */
+	libraryExclusion: boolean;
+	/** Discover can add several selected rows in one action. */
+	bulkAdd: boolean;
+	/** Rows pass through the content-filter pipeline (keyword blocklist, library state). */
+	contentFiltering: boolean;
 }
 
 export interface MediaKind {

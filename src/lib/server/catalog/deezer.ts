@@ -15,6 +15,7 @@ import {
 	type DeezerApiOptions
 } from './deezerApi.js';
 import type { CatalogItem, CatalogPage, CatalogSource } from './types.js';
+import { mergeById } from './rows.js';
 
 const ROWS_PER_PAGE = 24;
 const CHART_FETCH_ROWS = 100;
@@ -59,6 +60,15 @@ export function chartAlbumItem(album: DeezerAlbum): CatalogItem {
 	};
 }
 
+/** `with_genres=132,116` (the shared facet parameter) or the legacy bare `genre`. */
+function parseGenreIds(raw: string | number | null | undefined): number[] {
+	if (raw === null || raw === undefined || raw === '') return [];
+	return String(raw)
+		.split(/[|,]/)
+		.map(Number)
+		.filter((id) => Number.isFinite(id) && id > 0);
+}
+
 export function createDeezerChartSource(options: DeezerChartOptions = {}): CatalogSource {
 	const api = options.api ?? createDeezerApi(options);
 
@@ -67,11 +77,21 @@ export function createDeezerChartSource(options: DeezerChartOptions = {}): Catal
 		kinds: ['music'],
 		facets: [],
 		async discover(raw): Promise<CatalogPage | null> {
-			const params = raw as { page?: number; genre?: number | string };
+			const params = raw as {
+				page?: number;
+				genre?: number | string;
+				withGenres?: string | number | null;
+			};
 			const page = Math.max(1, Number(params.page ?? 1));
-			const genreId = params.genre ? Number(params.genre) || undefined : undefined;
-			const { rows, total } = await api.chartAlbums(genreId, CHART_FETCH_ROWS);
+			const genreIds = parseGenreIds(params.withGenres ?? params.genre);
+			const charts = await Promise.all(
+				genreIds.length > 0
+					? genreIds.map((genreId) => api.chartAlbums(genreId, CHART_FETCH_ROWS))
+					: [api.chartAlbums(undefined, CHART_FETCH_ROWS)]
+			);
+			const rows = mergeById(charts.map((chart) => chart.rows));
 			if (rows.length === 0) return null;
+			const total = charts.reduce((sum, chart) => sum + chart.total, 0);
 			const start = (page - 1) * ROWS_PER_PAGE;
 			const items = rows.slice(start, start + ROWS_PER_PAGE).map(chartAlbumItem);
 			return {

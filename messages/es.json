@@ -648,6 +648,8 @@
 	"discover_filter_groupAvailability": "Disponibilidad",
 	"discover_filter_mediaType": "Tipo de medio",
 	"discover_filter_minRating": "Puntuación mín.",
+	"discover_filter_keywords": "Palabras clave",
+	"discover_filter_moviesOnly": "Solo películas",
 	"discover_filter_networks": "Cadenas",
 	"discover_filter_noMatches": "Sin coincidencias",
 	"discover_filter_originalLanguage": "Idioma original",

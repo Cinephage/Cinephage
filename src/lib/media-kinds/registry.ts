@@ -23,7 +23,10 @@ const MOVIE: MediaKind = {
 		calendar: false,
 		discover: true,
 		import: true,
-		requests: true
+		requests: true,
+		libraryExclusion: true,
+		bulkAdd: true,
+		contentFiltering: true
 	}
 };
 
@@ -39,7 +42,10 @@ const TV: MediaKind = {
 		calendar: true,
 		discover: true,
 		import: true,
-		requests: true
+		requests: true,
+		libraryExclusion: true,
+		bulkAdd: true,
+		contentFiltering: true
 	}
 };
 
@@ -57,7 +63,10 @@ const MUSIC: MediaKind = {
 		calendar: false,
 		discover: false,
 		import: true,
-		requests: false
+		requests: false,
+		libraryExclusion: false,
+		bulkAdd: false,
+		contentFiltering: false
 	}
 };
 

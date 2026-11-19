@@ -1,4 +1,4 @@
-<script lang="ts" generics="T extends { id: number }">
+<script lang="ts" generics="T extends { id: number | string }">
 	import MediaCard from '#lib/components/tmdb/MediaCard.svelte';
 	import type { TmdbMediaItem } from '#lib/types/tmdb.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';

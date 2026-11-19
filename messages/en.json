@@ -764,6 +764,8 @@
 	"discover_filter_groupAvailability": "Availability",
 	"discover_filter_mediaType": "Media Type",
 	"discover_filter_minRating": "Min Rating",
+	"discover_filter_keywords": "Keywords",
+	"discover_filter_moviesOnly": "Movies only",
 	"discover_filter_networks": "Networks",
 	"discover_filter_noMatches": "No matches",
 	"discover_filter_originalLanguage": "Original Language",

@@ -43,6 +43,17 @@ describe('isDefaultView', () => {
 		const search = new URLSearchParams('with_networks=56');
 		expect(isDefaultView(search, paramsFrom('with_networks=56'))).toBe(false);
 	});
+
+	it('keeps the default view for an explicit "no origin language" marker', () => {
+		const search = new URLSearchParams('with_original_language=none');
+		expect(isDefaultView(search, paramsFrom('with_original_language=none'))).toBe(true);
+		expect(
+			isDefaultView(
+				new URLSearchParams('with_original_language=en'),
+				paramsFrom('with_original_language=en')
+			)
+		).toBe(false);
+	});
 });
 
 describe('hasActiveDiscoverFilters', () => {

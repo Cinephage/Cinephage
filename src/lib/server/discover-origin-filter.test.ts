@@ -50,6 +50,11 @@ describe('resolveWithOriginalLanguage (discover origin filter)', () => {
 		expect(resolveWithOriginalLanguage('!!', 'ja')).toBe('ja');
 	});
 
+	it('lets an explicit none override the stored filter', () => {
+		expect(resolveWithOriginalLanguage('none', 'ja')).toBeNull();
+		expect(resolveWithOriginalLanguage('NONE', 'ja')).toBeNull();
+	});
+
 	it('treats a whitespace-only URL param as absent', () => {
 		expect(resolveWithOriginalLanguage('   ', 'ko')).toBe('ko');
 	});

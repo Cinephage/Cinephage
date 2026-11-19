@@ -54,6 +54,7 @@ export function parseDiscoverParams(searchParams: URLSearchParams): DiscoverPara
  * Check if the current params represent the default view (dashboard).
  */
 export function isDefaultView(searchParams: URLSearchParams, params: DiscoverParams): boolean {
+	const originLanguage = searchParams.get('with_original_language');
 	return (
 		!searchParams.has('trending') &&
 		!searchParams.has('top_rated') &&
@@ -64,7 +65,8 @@ export function isDefaultView(searchParams: URLSearchParams, params: DiscoverPar
 		!searchParams.has('with_genres') &&
 		!searchParams.has('with_keywords') &&
 		!searchParams.has('without_keywords') &&
-		!searchParams.has('with_original_language') &&
+		// `none` is an explicit "no origin filter", so it leaves the view at its default.
+		(originLanguage === null || originLanguage.toLowerCase() === 'none') &&
 		!searchParams.has('primary_release_date.gte') &&
 		!searchParams.has('primary_release_date.lte') &&
 		!searchParams.has('vote_average.gte') &&
@@ -99,7 +101,7 @@ export function hasActiveDiscoverFilters(
 		!!params.withGenres ||
 		!!params.withKeywords ||
 		!!params.withoutKeywords ||
-		!!params.withOriginalLanguage ||
+		(!!params.withOriginalLanguage && params.withOriginalLanguage.toLowerCase() !== 'none') ||
 		!!params.minDate ||
 		!!params.maxDate ||
 		Number(params.minRating ?? 0) > 0 ||

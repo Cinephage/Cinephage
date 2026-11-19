@@ -648,6 +648,8 @@
 	"discover_filter_groupAvailability": "Verfügbarkeit",
 	"discover_filter_mediaType": "Medientyp",
 	"discover_filter_minRating": "Min. Bewertung",
+	"discover_filter_keywords": "Schlagwörter",
+	"discover_filter_moviesOnly": "Nur Filme",
 	"discover_filter_networks": "Sender",
 	"discover_filter_noMatches": "Keine Treffer",
 	"discover_filter_originalLanguage": "Originalsprache",

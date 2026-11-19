@@ -71,6 +71,11 @@
 		};
 	});
 
+	/**
+	 * Called from `onclick`, not `onchange`: re-picking an already-selected
+	 * radio fires no change event, and a single-select facet must be clearable
+	 * by clicking its active option again.
+	 */
 	function choose(optionId: string) {
 		onToggle(optionId);
 		if (mode === 'single') open = false;
@@ -131,7 +136,7 @@
 						type={mode === 'single' ? 'radio' : 'checkbox'}
 						class="checkbox checkbox-sm checkbox-primary"
 						checked={selected.includes(option.id)}
-						onchange={() => choose(option.id)}
+						onclick={() => choose(option.id)}
 					/>
 					<span class="truncate" title={option.title ?? option.label}>{option.label}</span>
 				</label>

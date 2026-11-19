@@ -2,7 +2,7 @@ import { tmdb } from '#lib/server/tmdb.js';
 import { getDiscoverResults, resolveWithOriginalLanguage } from '#lib/server/discover.js';
 import { catalogSourceForKind } from '#lib/server/catalog/registry.js';
 import { musicLegacyRows } from '#lib/server/catalog/deezer.js';
-import { musicLanding } from '#lib/server/catalog/musicLanding.js';
+import { musicGenreOptions, musicLanding } from '#lib/server/catalog/musicLanding.js';
 import { contentFilterPipeline } from '#lib/server/filters/ContentFilterPipeline.js';
 import type { WatchProvider } from '#lib/types/tmdb.js';
 import type { TmdbCertificationsResponse } from '#lib/server/tmdb.js';
@@ -13,6 +13,10 @@ import {
 	isDefaultView as checkDefaultView,
 	hasActiveDiscoverFilters
 } from '#lib/utils/discoverParams.js';
+import { idsFrom, readSelection } from '#lib/filters/index.js';
+import { EMPTY_FACET_OPTIONS, buildFacetGroups } from '#lib/server/filters/facets.js';
+import { isKindId, type KindFilter } from '#lib/media-kinds/registry.js';
+import type { MusicRowItem } from '#lib/components/discover/music-row-item.js';
 import { TMDB } from '#lib/config/constants.js';
 import { enrichWithReleaseDates } from '#lib/server/release-enrichment.js';
 import { db } from '#lib/server/db/index.js';
@@ -47,6 +51,11 @@ export const load: PageServerLoad = async ({ url }) => {
 	} = params;
 	const { nowPlaying } = params;
 
+	// The tab decides which facets exist; the selection is read with the same
+	// codec the client uses, so both sides agree on what is selected.
+	const kind: KindFilter = isKindId(type) ? type : 'all';
+	const selection = readSelection(url.searchParams, kind);
+
 	// Resolve the content-origin filter. Order: explicit URL param →
 	// language_settings.discover_original_filter (canonical base tag) → none.
 	// The response locale is deliberately NOT used here - localization and
@@ -70,6 +79,14 @@ export const load: PageServerLoad = async ({ url }) => {
 	// one is active, or the stored setting would silently do nothing.
 	const originFilterActive = Boolean(withOriginalLanguage);
 
+	// The panel must show the origin filter that is actually applied, including
+	// the instance-level stored one, or it would claim "any language" over a
+	// filtered grid.
+	const effectiveSelection =
+		withOriginalLanguage && !selection.language
+			? { ...selection, language: { kind: 'scalar' as const, value: withOriginalLanguage } }
+			: selection;
+
 	const { withKeywords } = params;
 	const { withoutKeywords } = params;
 
@@ -86,6 +103,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			genres: [],
 			certifications: [],
 			languages: [],
+			facetGroups: [],
 			filters: {
 				type,
 				sort_by: sortBy,
@@ -143,6 +161,7 @@ export const load: PageServerLoad = async ({ url }) => {
 				genres: [],
 				certifications: [],
 				languages: [],
+				facetGroups: [],
 				filters: {
 					type,
 					sort_by: sortBy,
@@ -174,6 +193,17 @@ export const load: PageServerLoad = async ({ url }) => {
 			meaning: c.meaning,
 			order: c.order
 		}));
+
+		// The panel is built from the tab's own data: the same declarations
+		// render every kind, only the options differ.
+		const facetGroups = buildFacetGroups(kind, effectiveSelection, {
+			genres,
+			providers,
+			networks,
+			certifications: usCertifications,
+			languages,
+			musicGenres: []
+		});
 
 		// Type for paginated TMDB results
 		interface TmdbPaginatedResult {
@@ -227,6 +257,7 @@ export const load: PageServerLoad = async ({ url }) => {
 				genres,
 				certifications: usCertifications,
 				languages,
+				facetGroups,
 				filters: {
 					type,
 					sort_by: sortBy,
@@ -287,6 +318,7 @@ export const load: PageServerLoad = async ({ url }) => {
 					genres,
 					certifications: usCertifications,
 					languages,
+					facetGroups,
 					filters: {
 						type,
 						sort_by: sortBy,
@@ -322,6 +354,7 @@ export const load: PageServerLoad = async ({ url }) => {
 				genres,
 				certifications: usCertifications,
 				languages,
+				facetGroups,
 				filters: {
 					type,
 					sort_by: sortBy,
@@ -359,6 +392,7 @@ export const load: PageServerLoad = async ({ url }) => {
 				genres,
 				certifications: usCertifications,
 				languages,
+				facetGroups,
 				filters: {
 					type,
 					sort_by: sortBy,
@@ -377,6 +411,20 @@ export const load: PageServerLoad = async ({ url }) => {
 			// Popular/top-rated use /discover/ endpoints so the keyword blocklist
 			// injection in tmdb.fetch() fires. Trending and now-playing don't
 			// support without_keywords so they remain as dedicated endpoints.
+			//
+			// Music rides along as a curated shelf — the tab row promises it, so
+			// the default view has to show it. The race is deliberate: Deezer's
+			// own client waits 8 s, and a slow chart must not hold the dashboard.
+			const musicShelfPromise = Promise.race([
+				musicLanding()
+					.then(
+						(landing) =>
+							landing?.shelves.find((shelf) => shelf.id === 'topAlbums')?.rows ?? []
+					)
+					.catch(() => []),
+				new Promise<MusicRowItem[]>((resolve) => setTimeout(() => resolve([]), 1200))
+			]);
+
 			const [trendingWeek, popularMovies, popularTV, topRatedMovies, topRatedTV, nowPlayingData] =
 				(await Promise.all([
 					tmdb.fetch('/trending/all/week'),
@@ -428,6 +476,8 @@ export const load: PageServerLoad = async ({ url }) => {
 					enrichWithReleaseDates(filteredNowPlaying.results, systemRegion)
 				]);
 
+			const topAlbums = await musicShelfPromise;
+
 			return {
 				viewType: 'dashboard',
 				tmdbConfigured: true,
@@ -437,13 +487,15 @@ export const load: PageServerLoad = async ({ url }) => {
 					popularTV: filteredPopularTV.results,
 					topRatedMovies: enrichedTopRatedMovies,
 					topRatedTV: filteredTopRatedTV.results,
-					nowPlaying: enrichedNowPlaying
+					nowPlaying: enrichedNowPlaying,
+					topAlbums
 				},
 				providers,
 				networks,
 				genres,
 				certifications: usCertifications,
 				languages,
+				facetGroups,
 				filters: {
 					type,
 					sort_by: sortBy,
@@ -457,14 +509,13 @@ export const load: PageServerLoad = async ({ url }) => {
 			};
 		} else {
 			// Music has no TMDB grammar — and no single grid: the landing is chart
-			// shelves (albums, artists, tracks) with genre chips, all answered by
-			// one Deezer request. A genre is the same chart with an id, so the
-			// chips are a view over the browse source, not a second query path.
+			// shelves (albums, artists, tracks) with the genre facet as its only
+			// filter. A genre is the same chart with an id, so the panel writes
+			// the same `with_genres` parameter every other kind uses.
 			if (type === 'music') {
-				const requestedGenre = Number(url.searchParams.get('genre') ?? '');
-				const landing = await musicLanding(
-					Number.isFinite(requestedGenre) && requestedGenre > 0 ? requestedGenre : undefined
-				);
+				const genreIds = idsFrom(selection.music_genre);
+				const landing = await musicLanding(genreIds);
+				const musicGenres = landing?.genres ?? (await musicGenreOptions());
 
 				// Deezer unreachable: keep the old chart grid rather than an empty
 				// landing. The source carries its own last-good cache, so this only
@@ -474,7 +525,10 @@ export const load: PageServerLoad = async ({ url }) => {
 				if (!landing) {
 					const musicSource = catalogSourceForKind('music');
 					if (musicSource) {
-						const music = await musicSource.discover({ page: parseInt(page) });
+						const music = await musicSource.discover({
+							page: parseInt(page),
+							withGenres: genreIds.join(',')
+						});
 						if (music) {
 							musicRows = musicLegacyRows(music.items);
 							musicPagination = music.pagination;
@@ -482,12 +536,15 @@ export const load: PageServerLoad = async ({ url }) => {
 					}
 				}
 
+				const musicFacets = buildFacetGroups(kind, effectiveSelection, {
+					...EMPTY_FACET_OPTIONS,
+					musicGenres
+				});
+
 				return {
 					viewType: landing ? ('music' as const) : ('grid' as const),
 					tmdbConfigured: true,
 					shelves: landing?.shelves ?? [],
-					musicGenres: landing?.genres ?? [],
-					activeGenreId: landing?.activeGenreId ?? null,
 					activeGenreName: landing?.activeGenreName ?? null,
 					results: musicRows,
 					pagination: musicPagination,
@@ -496,6 +553,7 @@ export const load: PageServerLoad = async ({ url }) => {
 					genres: [],
 					certifications: [],
 					languages: [],
+					facetGroups: musicFacets,
 					filters: {
 						type,
 						sort_by: sortBy,
@@ -545,6 +603,7 @@ export const load: PageServerLoad = async ({ url }) => {
 				genres,
 				certifications: usCertifications,
 				languages,
+				facetGroups,
 				filters: {
 					type,
 					sort_by: sortBy,
@@ -568,6 +627,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			genres: [],
 			certifications: [],
 			languages: [],
+			facetGroups: [],
 			filters: {
 				type,
 				sort_by: sortBy,

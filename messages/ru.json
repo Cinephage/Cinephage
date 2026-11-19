@@ -648,6 +648,8 @@
 	"discover_filter_groupAvailability": "Доступность",
 	"discover_filter_mediaType": "Тип медиа",
 	"discover_filter_minRating": "Мин. рейтинг",
+	"discover_filter_keywords": "Ключевые слова",
+	"discover_filter_moviesOnly": "Только фильмы",
 	"discover_filter_networks": "Телеканалы",
 	"discover_filter_noMatches": "Ничего не найдено",
 	"discover_filter_originalLanguage": "Оригинальный язык",

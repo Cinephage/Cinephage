@@ -2,7 +2,6 @@
 	import * as m from '#lib/paraglide/messages.js';
 	import { page } from '$app/state';
 	import { goto, refreshAll } from '$app/navigation';
-	import { resolve } from '$app/paths';
 	import { resolvePath } from '#lib/utils/routing.js';
 	import type { TmdbMediaItem } from '#lib/types/tmdb.js';
 	import { tick } from 'svelte';
@@ -10,7 +9,7 @@
 	import MediaCard from '#lib/components/tmdb/MediaCard.svelte';
 	import MusicRowCard from '#lib/components/discover/MusicRowCard.svelte';
 	import type { MusicRowItem } from '#lib/components/discover/music-row-item.js';
-	import FilterDrawer from '#lib/components/discover/FilterDrawer.svelte';
+	import FilterDrawer from '#lib/components/filters/FilterDrawer.svelte';
 	import SectionRow from '#lib/components/discover/SectionRow.svelte';
 	import SelectionActionBar from '#lib/components/discover/SelectionActionBar.svelte';
 	import BulkAddToLibraryModal from '#lib/components/discover/BulkAddToLibraryModal.svelte';
@@ -18,17 +17,16 @@
 	import TmdbConfigRequired from '#lib/components/ui/TmdbConfigRequired.svelte';
 	import { UI } from '#lib/config/constants.js';
 	import {
-		SEASONAL_PRESETS,
-		findActiveSeasonalPreset,
-		seasonalUrlChanges,
-		type SeasonalPreset
-	} from '#lib/config/seasonal.js';
-	import {
-		parseProviderIds,
-		parseGenreIds,
-		parseKeywordIds,
-		extractYear
-	} from '#lib/utils/discoverParams.js';
+		activeFilters,
+		hasActiveFilters as selectionHasFilters,
+		pruneSelection,
+		readSelection,
+		writeSelection,
+		type ActiveFilterView,
+		type FacetSelection,
+		type FacetValue
+	} from '#lib/filters/index.js';
+	import { MEDIA_KINDS, isKindId, type KindFilter } from '#lib/media-kinds/registry.js';
 	import {
 		discoverSelectionKey,
 		toDiscoverSelectionEntry,
@@ -37,7 +35,7 @@
 	import { Search, Eye, EyeOff, X, Loader2, Bug, CheckSquare, XSquare } from '@lucide/svelte';
 	import { getMediaTypeLabel } from '#lib/types/tmdb-guards.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
-	import { searchTmdb, getDiscover, getDiscoverUnfiltered, getKeyword } from '#lib/api/index.js';
+	import { searchTmdb, getDiscover, getDiscoverUnfiltered } from '#lib/api/index.js';
 
 	/** Music rows arrive as loose fetch JSON; their media_type field is untyped there. */
 	function isMusicRow(item: { media_type?: unknown }): boolean {
@@ -58,8 +56,6 @@
 	 *  view, and this page's data type is a union of every view. */
 	type MusicShelfView = { id: string; rows: MusicRowItem[] };
 	const musicShelves = $derived((data.shelves ?? []) as MusicShelfView[]);
-	const musicGenres = $derived((data.musicGenres ?? []) as { id: number; name: string }[]);
-	const activeGenreId = $derived((data.activeGenreId ?? null) as number | null);
 	const activeGenreName = $derived((data.activeGenreName ?? null) as string | null);
 
 	// Only admins add content; viewers browse Discover without the add actions.
@@ -238,219 +234,85 @@
 	// Derived state from URL params
 	let type = $derived(page.url.searchParams.get('type') || 'all');
 	let sortBy = $derived(page.url.searchParams.get('sort_by') || 'popularity.desc');
-	let selectedProviders = $derived(
-		parseProviderIds(page.url.searchParams.get('with_watch_providers'))
-	);
-	let selectedGenres = $derived(parseGenreIds(page.url.searchParams.get('with_genres')));
-	let selectedLanguage = $derived(
-		page.url.searchParams.get('with_original_language') ||
-			data.filters?.with_original_language ||
-			''
-	);
-	let minYear = $derived(extractYear(page.url.searchParams.get('primary_release_date.gte')));
-	let maxYear = $derived(extractYear(page.url.searchParams.get('primary_release_date.lte')));
-	let minRating = $derived(Number(page.url.searchParams.get('vote_average.gte')) || 0);
-	let selectedCertification = $derived(page.url.searchParams.get('certification') || '');
-	let selectedNetworks = $derived(parseProviderIds(page.url.searchParams.get('with_networks')));
-	let selectedKeywords = $derived(parseKeywordIds(page.url.searchParams.get('with_keywords')));
-	let selectedExcludedKeywords = $derived(
-		parseKeywordIds(page.url.searchParams.get('without_keywords'))
-	);
-	// SvelteMap, not $state(new Map()): $state does not proxy Map, so a plain
-	// map's set() would not re-render the chips (names only showed up when
-	// something else, like a URL change, forced a re-read).
-	let keywordNames = new SvelteMap<number, string>();
+	const kind: KindFilter = $derived(isKindId(type) ? type : 'all');
 
-	// A keyword that arrives by URL — a seasonal preset, a shared link — has no
-	// label until something names it, so the chip would read as a bare id.
-	$effect(() => {
-		const missing = [...selectedKeywords, ...selectedExcludedKeywords].filter(
-			(id) => !keywordNames.has(id)
-		);
-		for (const id of missing) {
-			void getKeyword(id)
-				.then((keyword) => {
-					if (keyword) keywordNames.set(keyword.id, keyword.name);
-				})
-				// The chip already falls back to the raw id: a failed lookup
-				// costs a label, not the filter.
-				.catch(() => {});
+	/**
+	 * The whole filter state, read through the same codec the server uses.
+	 * Nothing below knows a parameter name: a filter is a declaration, and the
+	 * panel renders whatever the current tab declares.
+	 */
+	const filters: FacetSelection = $derived(readSelection(page.url.searchParams, kind));
+	const facetGroups = $derived(data.facetGroups ?? []);
+	const activeFilterChips = $derived(activeFilters(facetGroups));
+
+	/** Badge copy: bespoke wording when the facet declares it, otherwise its value. */
+	function filterBadge(chip: ActiveFilterView): string {
+		if (chip.badgeKey) {
+			const catalogue = m as unknown as Record<
+				string,
+				((args: { count: number }) => string) | undefined
+			>;
+			const text = catalogue[chip.badgeKey]?.({ count: chip.count ?? 0 });
+			if (text) return text;
 		}
+		return chip.text ?? `${chip.count ?? 0} ${chip.label}`;
+	}
+	let excludeInLibrary = $derived(page.url.searchParams.get('exclude_in_library') === 'true');
+	const capabilities = $derived.by(() => {
+		const ids = kind === 'all' ? (['movie', 'tv'] as const) : [kind];
+		const supports = (bit: 'libraryExclusion' | 'bulkAdd' | 'contentFiltering') =>
+			ids.every((id) => MEDIA_KINDS.get(id)?.capabilities[bit] === true);
+		return {
+			libraryExclusion: supports('libraryExclusion'),
+			bulkAdd: supports('bulkAdd'),
+			contentFiltering: supports('contentFiltering')
+		};
 	});
 
-	let displayKeywords = $derived(
-		selectedKeywords.map((id) => ({
-			id,
-			name: keywordNames.get(id) || String(id),
-			exclude: false
-		}))
-	);
-	let displayExcludedKeywords = $derived(
-		selectedExcludedKeywords.map((id) => ({
-			id,
-			name: keywordNames.get(id) || String(id),
-			exclude: true
-		}))
-	);
-
-	let excludeInLibrary = $derived(page.url.searchParams.get('exclude_in_library') === 'true');
 	let isFilteredTrending = $derived(
 		(page.url.searchParams.get('trending') === 'day' ||
 			page.url.searchParams.get('trending') === 'week') &&
-			(type !== 'all' ||
-				sortBy !== 'popularity.desc' ||
-				selectedProviders.length > 0 ||
-				selectedNetworks.length > 0 ||
-				selectedGenres.length > 0 ||
-				selectedKeywords.length > 0 ||
-				selectedExcludedKeywords.length > 0 ||
-				!!selectedLanguage ||
-				!!minYear ||
-				!!maxYear ||
-				minRating > 0 ||
-				!!selectedCertification)
+			(type !== 'all' || sortBy !== 'popularity.desc' || selectionHasFilters(filters))
 	);
 
-	let hasActiveFilters = $derived(
-		type !== 'all' ||
-			selectedProviders.length > 0 ||
-			selectedNetworks.length > 0 ||
-			selectedGenres.length > 0 ||
-			selectedKeywords.length > 0 ||
-			selectedExcludedKeywords.length > 0 ||
-			!!selectedLanguage ||
-			!!minYear ||
-			!!maxYear ||
-			minRating > 0 ||
-			!!selectedCertification
-	);
-
-	function updateFilter(key: string, value: string | null) {
+	/** Apply one facet value and rewrite every facet parameter from the result. */
+	function setFacet(facetId: string, value: FacetValue | null) {
 		const url = new URL(page.url.href);
-		if (value) {
-			url.searchParams.set(key, value);
-		} else {
-			url.searchParams.delete(key);
-		}
-		// Reset page on filter change
-		if (key !== 'page') {
-			url.searchParams.set('page', '1');
-		}
-		goto(resolvePath(url.pathname + url.search), { reset: false });
-	}
-
-	function updateYear(min: string, max: string) {
-		const url = new URL(page.url.href);
-
-		if (min) url.searchParams.set('primary_release_date.gte', `${min}-01-01`);
-		else url.searchParams.delete('primary_release_date.gte');
-		if (max) url.searchParams.set('primary_release_date.lte', `${max}-12-31`);
-		else url.searchParams.delete('primary_release_date.lte');
-
+		const next: FacetSelection = { ...filters };
+		if (value) next[facetId] = value;
+		else delete next[facetId];
+		writeSelection(url.searchParams, next);
 		url.searchParams.set('page', '1');
 		goto(resolvePath(url.pathname + url.search), { reset: false });
-	}
-
-	function toggleProvider(providerId: number) {
-		const current = new SvelteSet(selectedProviders);
-		if (current.has(providerId)) {
-			current.delete(providerId);
-		} else {
-			current.add(providerId);
-		}
-		updateFilter('with_watch_providers', Array.from(current).join(','));
-	}
-
-	function toggleNetwork(networkId: number) {
-		const current = new SvelteSet(selectedNetworks);
-		if (current.has(networkId)) {
-			current.delete(networkId);
-		} else {
-			current.add(networkId);
-		}
-		updateFilter('with_networks', Array.from(current).join(','));
 	}
 
 	/**
-	 * Switching type drops filters the target type cannot express, rather than
-	 * leaving them to silently blank the results (a certification plus TV
-	 * returns nothing, and networks only exist for TV).
+	 * Switching tabs keeps every facet the target kind understands and drops
+	 * the rest — the rule lives in the declarations, not in a list of deletes.
 	 */
 	function handleTypeChange(nextType: string) {
 		const url = new URL(page.url.href);
-		if (nextType === 'all') {
-			url.searchParams.delete('type');
-		} else {
-			url.searchParams.set('type', nextType);
-		}
-		if (nextType === 'tv') url.searchParams.delete('certification');
-		if (nextType === 'movie') url.searchParams.delete('with_networks');
+		if (nextType === 'all') url.searchParams.delete('type');
+		else url.searchParams.set('type', nextType);
+		const nextKind: KindFilter = isKindId(nextType) ? nextType : 'all';
+		writeSelection(url.searchParams, pruneSelection(filters, nextKind));
 		url.searchParams.set('page', '1');
 		goto(resolvePath(url.pathname + url.search), { reset: false });
 	}
 
-	function toggleGenre(genreId: number) {
-		const current = new SvelteSet(selectedGenres);
-		if (current.has(genreId)) {
-			current.delete(genreId);
-		} else {
-			current.add(genreId);
-		}
-		updateFilter('with_genres', Array.from(current).join(','));
-	}
-
-	function toggleCertification(cert: string) {
-		updateFilter('certification', cert || null);
-	}
-
-	function handleKeywordAdd(keyword: { id: number; name: string }, exclude: boolean) {
-		keywordNames.set(keyword.id, keyword.name);
-		const paramKey = exclude ? 'without_keywords' : 'with_keywords';
-		const current = new SvelteSet(parseKeywordIds(page.url.searchParams.get(paramKey)));
-		current.add(keyword.id);
-		// Pipe = OR on TMDB. A comma would require every tag at once, so adding
-		// one keyword to a preset shelf would empty it.
-		updateFilter(paramKey, Array.from(current).join('|'));
-	}
-
-	function handleKeywordRemove(keywordId: number, exclude: boolean) {
-		const paramKey = exclude ? 'without_keywords' : 'with_keywords';
-		const current = new SvelteSet(parseKeywordIds(page.url.searchParams.get(paramKey)));
-		current.delete(keywordId);
-		updateFilter(paramKey, current.size > 0 ? Array.from(current).join('|') : null);
-	}
-
-	// Seasonal presets are keyword sets, so their active state is derived from
-	// the URL like every other filter — nothing stored, nothing to sync.
-	let activeSeasonal = $derived(
-		findActiveSeasonalPreset(page.url.searchParams.get('with_keywords'))
-	);
-
-	/** The select is explicit: a choice applies that preset, None unwinds it. */
-	function handleSeasonalChange(id: string | null) {
-		const next = id ? (SEASONAL_PRESETS.find((preset) => preset.id === id) ?? null) : null;
-		if (!next) {
-			if (activeSeasonal) toggleSeasonal(activeSeasonal);
-			return;
-		}
-		if (next.id !== activeSeasonal?.id) toggleSeasonal(next);
-	}
-
-	function toggleSeasonal(seasonal: SeasonalPreset) {
+	function resetFilters() {
 		const url = new URL(page.url.href);
-		const { set, remove } = seasonalUrlChanges(seasonal, {
-			type,
-			withKeywords: page.url.searchParams.get('with_keywords'),
-			minRating: page.url.searchParams.get('vote_average.gte')
-		});
-		for (const key of remove) url.searchParams.delete(key);
-		for (const [key, value] of Object.entries(set)) url.searchParams.set(key, value);
-		url.searchParams.set('page', '1');
+		writeSelection(url.searchParams, {});
+		url.searchParams.delete('page');
 		goto(resolvePath(url.pathname + url.search), { reset: false });
 	}
 
 	function toggleExcludeInLibrary() {
-		updateFilter('exclude_in_library', excludeInLibrary ? null : 'true');
+		const url = new URL(page.url.href);
+		if (excludeInLibrary) url.searchParams.delete('exclude_in_library');
+		else url.searchParams.set('exclude_in_library', 'true');
+		url.searchParams.set('page', '1');
+		goto(resolvePath(url.pathname + url.search), { reset: false });
 	}
 
 	let isFilterOpen = $state(false);
@@ -538,22 +400,6 @@
 		if (e.key === 'Escape' && selectMode && !bulkModalOpen) {
 			toggleSelectMode();
 		}
-	}
-
-	function resetFilters() {
-		goto(resolve('discover'));
-	}
-
-	function applyFilters() {
-		// Filters are applied instantly via URL, so this is just for closing the drawer if needed
-		// But the drawer applies changes via the bound props which call updateFilter
-		// Wait, the props are derived from URL, so we need to update URL.
-		// The FilterPanel calls the callbacks which update URL.
-		// So "Apply" button in drawer might just close it, or we can make the drawer state local and only apply on "Apply".
-		// For now, let's keep the instant update pattern as it's more responsive,
-		// but the drawer has an "Apply" button which implies batching.
-		// Let's stick to instant updates for now as implemented in the callbacks.
-		isFilterOpen = false;
 	}
 
 	type MediaItemWithLibraryStatus = TmdbMediaItem & {
@@ -788,8 +634,8 @@
 			</div>
 
 			<div class="flex flex-1 items-center justify-end gap-3">
-				<!-- Multi-select toggle (admins only, matching the add action; music adds per album) -->
-				{#if isAdminUser && type !== 'music'}
+				<!-- Multi-select: only kinds whose rows the bulk-add path understands. -->
+				{#if isAdminUser && capabilities.bulkAdd}
 					<button
 						class="btn btn-circle btn-sm {selectMode
 							? 'btn-primary'
@@ -806,38 +652,38 @@
 					</button>
 				{/if}
 
-				{#if type !== 'music'}
-				<!-- Hide In Library Toggle -->
-				<button
-					class="btn btn-circle btn-sm {excludeInLibrary
-						? 'btn-primary'
-						: 'border border-base-300 btn-ghost'}"
-					onclick={toggleExcludeInLibrary}
-					title={excludeInLibrary
-						? m.discover_showItemsInLibrary()
-						: m.discover_hideItemsInLibrary()}
-				>
-					{#if excludeInLibrary}
-						<EyeOff class="h-4 w-4" />
-					{:else}
-						<Eye class="h-4 w-4" />
-					{/if}
-				</button>
-
-				<!-- Debug Toggle -->
-				<button
-					class="btn btn-circle btn-sm {debugMode
-						? 'btn-warning'
-						: 'border border-base-300 btn-ghost'}"
-					onclick={toggleDebug}
-					title={debugMode ? 'Hide filtered items' : 'Show filtered items (debug)'}
-				>
-					<Bug class="h-4 w-4" />
-				</button>
-
+				{#if capabilities.libraryExclusion}
+					<!-- Hide In Library Toggle -->
+					<button
+						class="btn btn-circle btn-sm {excludeInLibrary
+							? 'btn-primary'
+							: 'border border-base-300 btn-ghost'}"
+						onclick={toggleExcludeInLibrary}
+						title={excludeInLibrary
+							? m.discover_showItemsInLibrary()
+							: m.discover_hideItemsInLibrary()}
+					>
+						{#if excludeInLibrary}
+							<EyeOff class="h-4 w-4" />
+						{:else}
+							<Eye class="h-4 w-4" />
+						{/if}
+					</button>
 				{/if}
 
-				{#if type !== 'music'}
+				{#if capabilities.contentFiltering}
+					<!-- Debug Toggle -->
+					<button
+						class="btn btn-circle btn-sm {debugMode
+							? 'btn-warning'
+							: 'border border-base-300 btn-ghost'}"
+						onclick={toggleDebug}
+						title={debugMode ? 'Hide filtered items' : 'Show filtered items (debug)'}
+					>
+						<Bug class="h-4 w-4" />
+					</button>
+				{/if}
+
 				<button
 					class="btn gap-2 shadow-lg shadow-primary/20 btn-primary btn-sm"
 					onclick={() => (isFilterOpen = true)}
@@ -858,7 +704,6 @@
 					</svg>
 					{m.discover_filtersButton()}
 				</button>
-				{/if}
 			</div>
 		</div>
 
@@ -881,41 +726,10 @@
 			</div>
 
 			<div class="hidden flex-wrap items-center justify-end gap-2 md:flex">
-				{#if selectedGenres.length > 0}
-					<div class="badge badge-outline badge-sm">
-						{m.discover_filterBadgeGenres({ count: selectedGenres.length })}
-					</div>
-				{/if}
-				{#if selectedNetworks.length > 0}
-					<div class="badge badge-outline badge-sm">
-						{m.discover_filterBadgeNetworks({ count: selectedNetworks.length })}
-					</div>
-				{/if}
-				{#if selectedProviders.length > 0}
-					<div class="badge badge-outline badge-sm">
-						{m.discover_filterBadgeProviders({ count: selectedProviders.length })}
-					</div>
-				{/if}
-				{#if selectedKeywords.length + selectedExcludedKeywords.length > 0}
-					<div class="badge badge-outline badge-sm">
-						{m.discover_filterBadgeKeywords({
-							count: selectedKeywords.length + selectedExcludedKeywords.length
-						})}
-					</div>
-				{/if}
-				{#if selectedLanguage}
-					<div class="badge badge-outline badge-sm">{m.discover_filterBadgeLanguage()}</div>
-				{/if}
-				{#if minYear || maxYear}
-					<div class="badge badge-outline badge-sm">{minYear || '…'} - {maxYear || '…'}</div>
-				{/if}
-				{#if minRating > 0}
-					<div class="badge badge-outline badge-sm">{minRating}+</div>
-				{/if}
-				{#if selectedCertification}
-					<div class="badge badge-outline badge-sm">{selectedCertification}</div>
-				{/if}
-				{#if hasActiveFilters}
+				{#each activeFilterChips as chip (chip.id)}
+					<div class="badge badge-outline badge-sm">{filterBadge(chip)}</div>
+				{/each}
+				{#if activeFilterChips.length > 0}
 					<button class="btn btn-ghost text-error btn-xs" onclick={resetFilters}
 						>{m.action_clear()}</button
 					>
@@ -1038,30 +852,9 @@
 				</div>
 			</div>
 		{:else if data.viewType === 'music'}
-			<!-- Music View: one chart request feeds three shelves, and a genre is the
-			     same chart with an id, so the chips are a view over it. -->
+			<!-- Music View: one chart request per selected genre feeds three shelves.
+			     Genres are a facet in the drawer, not a control row on the page. -->
 			<div class="animate-in fade-in space-y-10 duration-500">
-				{#if musicGenres.length > 0}
-					<div class="flex flex-wrap items-center gap-2">
-						<a
-							href="/discover?type=music"
-							class="btn rounded-full btn-sm {activeGenreId ? 'btn-ghost' : 'btn-primary'}"
-						>
-							{m.common_all()}
-						</a>
-						{#each musicGenres as genre (genre.id)}
-							<a
-								href={`/discover?type=music&genre=${genre.id}`}
-								class="btn rounded-full btn-sm {activeGenreId === genre.id
-									? 'btn-primary'
-									: 'btn-ghost'}"
-							>
-								{genre.name}
-							</a>
-						{/each}
-					</div>
-				{/if}
-
 				{#each musicShelves as shelf (shelf.id)}
 					<section class="space-y-4">
 						<h2 class="text-lg font-bold">
@@ -1101,6 +894,18 @@
 					isSelected={isItemSelected}
 					onToggleSelect={toggleItemSelect}
 				/>
+				{#if data.sections.topAlbums.length > 0}
+					<SectionRow
+						title={m.music_topAlbums()}
+						items={data.sections.topAlbums}
+						link="/discover?type=music"
+						onAddToLibrary={addHandler}
+					>
+						{#snippet cardSnippet(item)}
+							<MusicRowCard {item} onAdded={() => refreshAll()} />
+						{/snippet}
+					</SectionRow>
+				{/if}
 				<SectionRow
 					title={m.discover_popularMovies()}
 					items={data.sections.popularMovies}
@@ -1252,44 +1057,13 @@
 		{/if}
 	</main>
 
-	<!-- Filter Drawer: TMDB facets, meaningless for music -->
-	{#if type !== 'music'}
+	<!-- Filter Drawer: one panel, built from whatever facets the current tab declares. -->
 	<FilterDrawer
 		bind:isOpen={isFilterOpen}
-		{type}
-		{sortBy}
-		{selectedProviders}
-		genres={data.genres}
-		{selectedGenres}
-		{selectedLanguage}
-		{minYear}
-		{maxYear}
-		{minRating}
-		certifications={data.certifications}
-		{selectedCertification}
-		providers={data.providers}
-		networks={data.networks ?? []}
-		{selectedNetworks}
-		languages={data.languages ?? []}
-		onSortChange={(s) => updateFilter('sort_by', s)}
-		onProviderToggle={toggleProvider}
-		onNetworkToggle={toggleNetwork}
-		onGenreToggle={toggleGenre}
-		onGenreClear={() => updateFilter('with_genres', null)}
-		onLanguageChange={(lang) => updateFilter('with_original_language', lang || null)}
-		onYearChange={updateYear}
-		onRatingChange={(r) => updateFilter('vote_average.gte', String(r))}
-		onCertificationChange={toggleCertification}
-		activeSeasonalId={activeSeasonal?.id ?? null}
-		onSeasonalChange={handleSeasonalChange}
-		selectedKeywords={displayKeywords}
-		selectedExcludedKeywords={displayExcludedKeywords}
-		onKeywordAdd={handleKeywordAdd}
-		onKeywordRemove={handleKeywordRemove}
+		groups={facetGroups}
+		onchange={setFacet}
 		onReset={resetFilters}
-		onApply={applyFilters}
 	/>
-	{/if}
 
 	<!-- Add to Library Modal -->
 	{#if selectedItem}
@@ -1306,7 +1080,7 @@
 	{/if}
 
 	<!-- Multi-select: floating bar + bulk add modal -->
-	{#if isAdminUser && type !== 'music'}
+	{#if isAdminUser && capabilities.bulkAdd}
 		<SelectionActionBar
 			selectedCount={selection.size}
 			loading={false}
