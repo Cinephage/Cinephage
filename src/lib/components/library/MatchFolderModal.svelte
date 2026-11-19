@@ -1,34 +1,19 @@
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
-	import { untrack } from 'svelte';
-	import {
-		Search,
-		X,
-		Clapperboard,
-		Tv,
-		Check,
-		Loader2,
-		ChevronRight,
-		Folder
-	} from '@lucide/svelte';
+	import { X, Clapperboard, Tv, Check, Loader2, Folder } from '@lucide/svelte';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
 	import TmdbImage from '#lib/components/tmdb/TmdbImage.svelte';
 	import { getFileName } from '#lib/utils/format.js';
 	import { batchUnmatchedMatch } from '#lib/api/library.js';
-	import { searchTmdb } from '#lib/api/discover.js';
 
 	import type { UnmatchedFolder } from '#lib/types/unmatched.js';
-
-	interface TmdbSearchResult {
-		id: number;
-		name?: string;
-		title?: string;
-		poster_path: string | null;
-		first_air_date?: string;
-		release_date?: string;
-		overview?: string;
-	}
+	import {
+		createTmdbMatchSearch,
+		type TmdbMatchResult
+	} from '#lib/components/library/match/match-search.svelte.js';
+	import MatchSearchField from '#lib/components/library/match/MatchSearchField.svelte';
+	import MatchResultList from '#lib/components/library/match/MatchResultList.svelte';
 
 	interface Props {
 		open: boolean;
@@ -42,10 +27,15 @@
 	// Form state
 	let searchQuery = $state('');
 	let searchType = $state<'movie' | 'tv'>('movie');
-	let searchResults = $state<TmdbSearchResult[]>([]);
-	let isSearching = $state(false);
 	let isMatching = $state(false);
-	let selectedMedia = $state<TmdbSearchResult | null>(null);
+	let selectedMedia = $state<TmdbMatchResult | null>(null);
+
+	const search = createTmdbMatchSearch({
+		query: () => searchQuery,
+		type: () => searchType,
+		enabled: () => !selectedMedia,
+		failureMessage: m.library_matchFolder_searchFailed
+	});
 	let matchPreview = $state<Array<{ file: string; season?: number; episode?: number }>>([]);
 	let seasonOverride = $state<number | null>(null);
 
@@ -58,7 +48,7 @@
 			searchQuery = folder.commonParsedTitle || folder.folderName || '';
 			searchType = folder.mediaType === 'tv' ? 'tv' : 'movie';
 			selectedMedia = null;
-			searchResults = [];
+			search.reset();
 			matchPreview = [];
 			seasonOverride = null;
 		}
@@ -78,50 +68,17 @@
 		}
 	});
 
-	// Debounced search-as-you-type (400 ms)
-	let debounceTimer: ReturnType<typeof setTimeout>;
-	$effect(() => {
-		const q = searchQuery;
-		clearTimeout(debounceTimer);
-		if (q.trim() && !selectedMedia) {
-			debounceTimer = setTimeout(() => untrack(() => search()), 400);
-		}
-		return () => clearTimeout(debounceTimer);
-	});
-
 	const hasMissingSeasons = $derived(
 		searchType === 'tv' && matchPreview.some((item) => item.season === undefined)
 	);
 
-	// Search TMDB
-	async function search() {
-		if (!searchQuery.trim()) return;
-
-		isSearching = true;
-		try {
-			const data = (await searchTmdb({
-				query: searchQuery,
-				type: searchType
-			})) as unknown as { results?: TmdbSearchResult[] };
-			searchResults = data.results || [];
-		} catch {
-			toasts.error(m.library_matchFolder_searchFailed());
-			searchResults = [];
-		} finally {
-			isSearching = false;
-		}
-	}
-
-	// Keep Enter as an immediate search escape hatch
-	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter') {
-			clearTimeout(debounceTimer);
-			untrack(() => search());
-		}
-	}
+	// Typing debounce and the Enter escape hatch live in the shared search.
+	$effect(() => {
+		return search.schedule();
+	});
 
 	// Select media
-	function selectMedia(media: TmdbSearchResult) {
+	function selectMedia(media: TmdbMatchResult) {
 		selectedMedia = media;
 	}
 
@@ -350,80 +307,29 @@
 			</div>
 		{/if}
 
-		<!-- Search Input -->
-		<div class="group relative mt-1">
-			{#if isSearching}
-				<Loader2
-					class="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 animate-spin text-base-content/40"
-				/>
-			{:else}
-				<Search
-					class="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-base-content/40 transition-colors group-focus-within:text-primary"
-				/>
-			{/if}
-			<input
-				type="text"
-				class="input w-full rounded-full border-base-content/20 bg-base-200/60 pr-4 pl-10 transition-all duration-200 placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
-				placeholder={m.library_matchFolder_searchPlaceholder()}
-				bind:value={searchQuery}
-				onkeydown={handleKeydown}
-			/>
-		</div>
+		<MatchSearchField
+			bind:value={searchQuery}
+			placeholder={m.library_matchFolder_searchPlaceholder()}
+			searching={search.searching}
+			onEnter={() => search.run()}
+			class="mt-1"
+		/>
 
 		<!-- Search Results -->
-		{#if searchResults.length > 0}
+		{#if search.results.length > 0}
 			<p class="mt-3 text-xs text-base-content/40">
-				{searchResults.length === 1
+				{search.results.length === 1
 					? m.library_matchFolder_resultCountSingular()
-					: m.library_matchFolder_resultCount({ count: searchResults.length })}
+					: m.library_matchFolder_resultCount({ count: search.results.length })}
 			</p>
-			<div class="mt-1.5 max-h-80 space-y-1 overflow-y-auto">
-				{#each searchResults as result (result.id)}
-					<button
-						class="group flex w-full cursor-pointer items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-base-300"
-						onclick={() => selectMedia(result)}
-					>
-						<div class="h-16 w-12 shrink-0 overflow-hidden rounded bg-base-300">
-							{#if result.poster_path}
-								<TmdbImage
-									path={result.poster_path}
-									size="w92"
-									alt={result.title || result.name || 'Media poster'}
-									class="h-full w-full object-cover"
-								/>
-							{:else}
-								<div class="flex h-full w-full items-center justify-center">
-									{#if searchType === 'movie'}
-										<Clapperboard class="h-6 w-6 text-base-content/30" />
-									{:else}
-										<Tv class="h-6 w-6 text-base-content/30" />
-									{/if}
-								</div>
-							{/if}
-						</div>
-						<div class="min-w-0 flex-1">
-							<p class="font-medium wrap-break-word sm:truncate">{result.title || result.name}</p>
-							<p class="text-sm text-base-content/60">
-								{(result.release_date || result.first_air_date)?.substring(0, 4) ||
-									m.common_unknownYear()}
-							</p>
-							{#if result.overview}
-								<p class="mt-0.5 line-clamp-1 text-xs text-base-content/40">{result.overview}</p>
-							{/if}
-						</div>
-						<div class="shrink-0">
-							<ChevronRight
-								class="h-4 w-4 text-base-content/20 transition-all group-hover:translate-x-0.5 group-hover:text-base-content/60"
-							/>
-						</div>
-					</button>
-				{/each}
+			<div class="mt-1.5 max-h-80 overflow-y-auto">
+				<MatchResultList results={search.results} mediaType={searchType} onpick={selectMedia} />
 			</div>
-		{:else if searchQuery && !isSearching}
+		{:else if searchQuery && !search.searching}
 			<div class="mt-4 py-8 text-center text-base-content/50">
 				<p>{m.common_noResults()}</p>
 			</div>
-		{:else if !isSearching}
+		{:else if !search.searching}
 			<p class="mt-4 py-8 text-center text-base-content/50">
 				{m.library_matchFolder_searchHint({
 					type:

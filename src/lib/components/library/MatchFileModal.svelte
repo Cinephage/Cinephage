@@ -1,14 +1,18 @@
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
-	import { untrack } from 'svelte';
-	import { Search, X, Clapperboard, Tv, Check, Loader2, ChevronRight } from '@lucide/svelte';
+	import { X, Clapperboard, Tv, Check, Loader2 } from '@lucide/svelte';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
 	import TmdbImage from '#lib/components/tmdb/TmdbImage.svelte';
 	import { getFileName } from '#lib/utils/format.js';
-	import { searchTmdb } from '#lib/api/discover.js';
 	import { matchUnmatched } from '#lib/api/library.js';
 	import { extractSearchYear } from '#lib/utils/search-query.js';
+	import {
+		createTmdbMatchSearch,
+		type TmdbMatchResult
+	} from '#lib/components/library/match/match-search.svelte.js';
+	import MatchSearchField from '#lib/components/library/match/MatchSearchField.svelte';
+	import MatchResultList from '#lib/components/library/match/MatchResultList.svelte';
 
 	interface UnmatchedFile {
 		id: string;
@@ -19,16 +23,6 @@
 		parsedSeason: number | null;
 		parsedEpisode: number | null;
 		suggestedMatches: unknown;
-	}
-
-	interface TmdbSearchResult {
-		id: number;
-		name?: string;
-		title?: string;
-		poster_path?: string | null;
-		first_air_date?: string | null;
-		release_date?: string | null;
-		overview?: string;
 	}
 
 	interface Props {
@@ -43,13 +37,17 @@
 	// Form state (defaults only, effect syncs from props)
 	let searchQuery = $state('');
 	let searchType = $state<'movie' | 'tv'>('movie');
-	let searchResults = $state<TmdbSearchResult[]>([]);
-	let isSearching = $state(false);
 	let isMatching = $state(false);
 	let matchingId = $state<number | null>(null);
 
+	const search = createTmdbMatchSearch({
+		query: () => searchQuery,
+		type: () => searchType,
+		failureMessage: m.library_matchFile_searchFailed
+	});
+
 	// For TV shows - season/episode selection
-	let selectedShow = $state<TmdbSearchResult | null>(null);
+	let selectedShow = $state<TmdbMatchResult | null>(null);
 	let season = $state(1);
 	let episode = $state(1);
 
@@ -62,47 +60,17 @@
 			selectedShow = null;
 			season = file.parsedSeason ?? 1;
 			episode = file.parsedEpisode ?? 1;
-			searchResults = [];
+			search.reset();
 		}
 	});
 
-	// Search TMDB
-	async function search() {
-		if (!searchQuery.trim()) return;
-
-		isSearching = true;
-		try {
-			const data = await searchTmdb({ query: searchQuery, type: searchType });
-			searchResults = data.results || [];
-		} catch {
-			toasts.error(m.library_matchFile_searchFailed());
-			searchResults = [];
-		} finally {
-			isSearching = false;
-		}
-	}
-
-	// Debounced search-as-you-type (400ms)
-	let debounceTimer: ReturnType<typeof setTimeout>;
+	// Typing debounce and the Enter escape hatch live in the shared search.
 	$effect(() => {
-		const q = searchQuery;
-		clearTimeout(debounceTimer);
-		if (q.trim()) {
-			debounceTimer = setTimeout(() => untrack(() => search()), 400);
-		}
-		return () => clearTimeout(debounceTimer);
+		return search.schedule();
 	});
-
-	// Keep Enter as an immediate search escape hatch
-	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter') {
-			clearTimeout(debounceTimer);
-			untrack(() => search());
-		}
-	}
 
 	// Match to a movie
-	async function matchToMovie(movie: TmdbSearchResult) {
+	async function matchToMovie(movie: TmdbMatchResult) {
 		isMatching = true;
 		matchingId = movie.id;
 		try {
@@ -127,7 +95,7 @@
 	}
 
 	// Select a TV show (step 1)
-	function selectShow(show: TmdbSearchResult) {
+	function selectShow(show: TmdbMatchResult) {
 		selectedShow = show;
 		matchingId = null;
 	}
@@ -259,100 +227,38 @@
 			</button>
 		</div>
 	{:else}
-		<!-- Search Input -->
-		<div class="group relative mt-4">
-			{#if isSearching}
-				<Loader2
-					class="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 animate-spin text-base-content/40"
-				/>
-			{:else}
-				<Search
-					class="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-base-content/40 transition-colors group-focus-within:text-primary"
-				/>
-			{/if}
-			<input
-				type="text"
-				class="input w-full rounded-full border-base-content/20 bg-base-200/60 pr-4 pl-10 transition-all duration-200 placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
-				placeholder={m.library_matchFile_searchPlaceholder({
-					type:
-						searchType === 'movie'
-							? m.common_movies().toLowerCase()
-							: m.common_tvShows().toLowerCase()
-				})}
-				bind:value={searchQuery}
-				onkeydown={handleKeydown}
-			/>
-		</div>
+		<MatchSearchField
+			bind:value={searchQuery}
+			placeholder={m.library_matchFile_searchPlaceholder({
+				type:
+					searchType === 'movie'
+						? m.common_movies().toLowerCase()
+						: m.common_tvShows().toLowerCase()
+			})}
+			searching={search.searching}
+			onEnter={() => search.run()}
+			class="mt-4"
+		/>
 
 		<!-- Search Results -->
-		{#if searchResults.length > 0}
+		{#if search.results.length > 0}
 			<p class="mt-3 text-xs text-base-content/40">
-				{searchResults.length === 1
+				{search.results.length === 1
 					? m.library_matchFile_resultCountSingular()
-					: m.library_matchFile_resultCount({ count: searchResults.length })}
+					: m.library_matchFile_resultCount({ count: search.results.length })}
 			</p>
-			<div class="mt-1.5 max-h-80 space-y-1 overflow-y-auto">
-				{#each searchResults as result (result.id)}
-					{@const isLoadingThis = matchingId === result.id}
-					<button
-						class="group flex w-full cursor-pointer items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-base-300 disabled:opacity-60"
-						onclick={() => (searchType === 'movie' ? matchToMovie(result) : selectShow(result))}
-						disabled={isMatching}
-					>
-						<div class="h-16 w-12 shrink-0 overflow-hidden rounded bg-base-300">
-							{#if result.poster_path}
-								<TmdbImage
-									path={result.poster_path}
-									alt={result.title ?? result.name ?? 'Poster'}
-									size="w92"
-									class="h-full w-full object-cover"
-								/>
-							{:else}
-								<div class="flex h-full w-full items-center justify-center">
-									{#if searchType === 'movie'}
-										<Clapperboard class="h-6 w-6 text-base-content/30" />
-									{:else}
-										<Tv class="h-6 w-6 text-base-content/30" />
-									{/if}
-								</div>
-							{/if}
-						</div>
-						<div class="min-w-0 flex-1">
-							<p class="font-medium wrap-break-word sm:truncate">{result.title || result.name}</p>
-							<p class="text-sm text-base-content/60">
-								{(result.release_date || result.first_air_date)?.substring(0, 4) ||
-									m.common_unknownYear()}
-							</p>
-							{#if result.overview}
-								<p class="mt-0.5 line-clamp-1 text-xs text-base-content/40">{result.overview}</p>
-							{/if}
-						</div>
-						<div class="shrink-0">
-							{#if isLoadingThis}
-								<Loader2 class="h-4 w-4 animate-spin text-base-content/40" />
-							{:else}
-								<ChevronRight
-									class="h-4 w-4 text-base-content/20 transition-all group-hover:translate-x-0.5 group-hover:text-base-content/60"
-								/>
-							{/if}
-						</div>
-					</button>
-				{/each}
+			<div class="mt-1.5 max-h-80 overflow-y-auto">
+				<MatchResultList
+					results={search.results}
+					mediaType={searchType}
+					busyId={matchingId}
+					disabled={isMatching}
+					onpick={(result) => (searchType === 'movie' ? matchToMovie(result) : selectShow(result))}
+				/>
 			</div>
-		{:else if searchQuery && !isSearching}
+		{:else if searchQuery && !search.searching}
 			<div class="mt-4 py-8 text-center text-base-content/50">
-				{#if searchResults.length === 0 && searchQuery}
-					<p>{m.common_noResults()}</p>
-				{:else}
-					<p>
-						{m.library_matchFile_searchHint({
-							type:
-								searchType === 'movie'
-									? m.common_movie().toLowerCase()
-									: m.common_tvShow().toLowerCase()
-						})}
-					</p>
-				{/if}
+				<p>{m.common_noResults()}</p>
 			</div>
 		{/if}
 	{/if}
