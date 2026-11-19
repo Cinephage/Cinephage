@@ -116,6 +116,8 @@ export function albumCardView(
 		href?: string;
 		hideState?: boolean;
 		hideMonitored?: boolean;
+		/** Overrides the kind badge (Discover's song rows read "Song"). */
+		label?: string;
 	} = {}
 ): MediaCardView {
 	const art: MediaArt | null =
@@ -134,7 +136,7 @@ return {
 		year: album.year ?? null,
 		art,
 		square: true,
-		typeLabel: album.primaryType ?? m.music_tabAlbum(),
+		typeLabel: options.label ?? album.primaryType ?? m.music_tabAlbum(),
 		typeTone: 'accent',
 		monitored: options.hideMonitored ? false : Boolean(album.monitored),
 		hideMonitored: options.hideMonitored ?? false,

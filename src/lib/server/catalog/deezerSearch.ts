@@ -15,8 +15,9 @@
 const SEARCH_URL = 'https://api.deezer.com/search';
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const CACHE_MAX = 100;
-const ALBUM_LIMIT = 12;
+const ALBUM_LIMIT = 10;
 const ARTIST_LIMIT = 4;
+const TRACK_LIMIT = 10;
 
 export interface DeezerMusicRow {
 	/** Stable per provider, so the grid key never collides with a TMDB id. */
@@ -27,7 +28,9 @@ export interface DeezerMusicRow {
 	year: number | null;
 	/** MusicBrainz id: never present on a search row. */
 	mbid: null;
-	musicKind: 'album' | 'artist';
+	musicKind: 'album' | 'artist' | 'song';
+	/** For a song row: the album whose page resolves `mbid`. */
+	albumTitle: string | null;
 }
 
 interface DeezerArtist {
@@ -35,6 +38,13 @@ interface DeezerArtist {
 	name: string;
 	picture_big?: string;
 	picture_medium?: string;
+}
+
+interface DeezerTrack {
+	id: number;
+	title: string;
+	album?: { id?: number; title?: string; cover_big?: string; cover_medium?: string };
+	artist?: { name?: string };
 }
 
 interface DeezerAlbum {
@@ -52,7 +62,7 @@ export interface DeezerSearchOptions {
 }
 
 async function search<T>(
-	kind: 'album' | 'artist',
+	kind: 'album' | 'artist' | 'track',
 	query: string,
 	limit: number,
 	fetchImpl: typeof fetch
@@ -76,11 +86,13 @@ export function createDeezerSearch(options: DeezerSearchOptions = {}) {
 		const hit = cache.get(key);
 		if (hit && now() - hit.at < CACHE_TTL_MS) return hit.rows;
 
-		// Both legs at once: an artist match usually explains the query, an album
-		// match is what gets added, and the grid shows both.
-		const [artists, albums] = await Promise.all([
+		// Three legs at once: an artist match explains the query, an album is what
+		// gets added, and a song is often what was typed. A song row points at its
+		// album, because that is the unit acquisition and import act on.
+		const [artists, albums, tracks] = await Promise.all([
 			search<DeezerArtist>('artist', key, ARTIST_LIMIT, fetchImpl).catch(() => []),
-			search<DeezerAlbum>('album', key, ALBUM_LIMIT, fetchImpl).catch(() => [])
+			search<DeezerAlbum>('album', key, ALBUM_LIMIT, fetchImpl).catch(() => []),
+			search<DeezerTrack>('track', key, TRACK_LIMIT, fetchImpl).catch(() => [])
 		]);
 
 		const rows: DeezerMusicRow[] = [
@@ -91,7 +103,8 @@ export function createDeezerSearch(options: DeezerSearchOptions = {}) {
 				imageUrl: artist.picture_big ?? artist.picture_medium ?? null,
 				year: null,
 				mbid: null,
-				musicKind: 'artist' as const
+				musicKind: 'artist' as const,
+				albumTitle: null
 			})),
 			...albums.map((album) => ({
 				id: `deezer-album-${album.id}`,
@@ -100,7 +113,18 @@ export function createDeezerSearch(options: DeezerSearchOptions = {}) {
 				imageUrl: album.cover_big ?? album.cover_medium ?? null,
 				year: album.release_date ? Number(album.release_date.slice(0, 4)) || null : null,
 				mbid: null,
-				musicKind: 'album' as const
+				musicKind: 'album' as const,
+				albumTitle: album.title
+			})),
+			...tracks.map((track) => ({
+				id: `deezer-track-${track.id}`,
+				title: track.title,
+				subtitle: track.artist?.name ?? null,
+				imageUrl: track.album?.cover_big ?? track.album?.cover_medium ?? null,
+				year: null,
+				mbid: null,
+				musicKind: 'song' as const,
+				albumTitle: track.album?.title ?? null
 			}))
 		];
 

@@ -8,31 +8,43 @@ const json = (body: unknown) =>
 	});
 
 describe('deezer music search', () => {
-	it('asks for artists and albums at once and maps both to Discover rows', async () => {
-		const fetchImpl = vi.fn(async (url: string) =>
-			url.includes('/search/artist')
-				? json({
-						data: [
-							{ id: 27, name: 'Daft Punk', picture_big: 'https://x/artist.jpg' }
-						]
-					})
-				: json({
-						data: [
-							{
-								id: 302127,
-								title: 'Discovery',
-								cover_big: 'https://x/album.jpg',
-								release_date: '2001-03-07',
-								artist: { name: 'Daft Punk' }
-							}
-						]
-					})
-		);
+	it('asks for artists, albums and songs at once and maps all three to Discover rows', async () => {
+		const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+			const url = String(input);
+			if (url.includes('/search/artist')) {
+				return json({
+					data: [{ id: 27, name: 'Daft Punk', picture_big: 'https://x/artist.jpg' }]
+				});
+			}
+			if (url.includes('/search/track')) {
+				return json({
+					data: [
+						{
+							id: 3135556,
+							title: 'One More Time',
+							artist: { name: 'Daft Punk' },
+							album: { id: 302127, title: 'Discovery', cover_big: 'https://x/album.jpg' }
+						}
+					]
+				});
+			}
+			return json({
+				data: [
+					{
+						id: 302127,
+						title: 'Discovery',
+						cover_big: 'https://x/album.jpg',
+						release_date: '2001-03-07',
+						artist: { name: 'Daft Punk' }
+					}
+				]
+			});
+		});
 		const search = createDeezerSearch({ fetchImpl });
 		const rows = await search('daft punk');
 
-		expect(fetchImpl).toHaveBeenCalledTimes(2);
-		expect(rows).toHaveLength(2);
+		expect(fetchImpl).toHaveBeenCalledTimes(3);
+		expect(rows).toHaveLength(3);
 		expect(rows[0]).toMatchObject({
 			id: 'deezer-artist-27',
 			title: 'Daft Punk',
@@ -48,6 +60,13 @@ describe('deezer music search', () => {
 			musicKind: 'album',
 			imageUrl: 'https://x/album.jpg'
 		});
+		expect(rows[2]).toMatchObject({
+			id: 'deezer-track-3135556',
+			title: 'One More Time',
+			subtitle: 'Daft Punk',
+			musicKind: 'song',
+			albumTitle: 'Discovery'
+		});
 	});
 
 	it('memoises a query for its TTL and expires it after', async () => {
@@ -57,11 +76,11 @@ describe('deezer music search', () => {
 
 		await search('ecco2k');
 		await search('ECCO2K');
-		expect(fetchImpl).toHaveBeenCalledTimes(2); // one artist leg, one album leg
+		expect(fetchImpl).toHaveBeenCalledTimes(3); // artist, album and song legs
 
 		clock += 10 * 60 * 1000 + 1;
 		await search('ecco2k');
-		expect(fetchImpl).toHaveBeenCalledTimes(4);
+		expect(fetchImpl).toHaveBeenCalledTimes(6);
 	});
 
 	it('returns nothing for an empty query without calling upstream', async () => {
@@ -72,12 +91,13 @@ describe('deezer music search', () => {
 	});
 
 	it('survives one leg failing', async () => {
-		const fetchImpl = vi.fn(async (url: string) => {
+		const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+			const url = String(input);
 			if (url.includes('/artist')) throw new Error('deezer down');
 			return json({ data: [{ id: 1, title: 'Homework', artist: { name: 'Daft Punk' } }] });
 		});
 		const rows = await createDeezerSearch({ fetchImpl })('daft punk');
-		expect(rows).toHaveLength(1);
-		expect(rows[0].musicKind).toBe('album');
+		expect(rows.filter((row) => row.musicKind === 'album')).toHaveLength(1);
+		expect(rows.some((row) => row.musicKind === 'artist')).toBe(false);
 	});
 });

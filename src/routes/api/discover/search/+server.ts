@@ -21,8 +21,10 @@ const searchQuerySchema = z.object({
 interface MusicRow {
 	id: string;
 	media_type: 'music';
-	musicKind: 'album' | 'artist';
+	musicKind: 'album' | 'artist' | 'song';
 	title: string;
+	/** Song rows open their album, so they carry its title. */
+	album_title?: string | null;
 	subtitle?: string | null;
 	image_url?: string | null;
 	year?: number | null;
@@ -50,7 +52,8 @@ async function musicRows(query: string): Promise<MusicRow[]> {
 				subtitle: row.subtitle,
 				image_url: row.imageUrl,
 				year: row.year,
-				primary_type: null
+				primary_type: null,
+				album_title: row.albumTitle
 			}));
 		}
 	} catch (err) {
@@ -89,6 +92,21 @@ async function musicBrainzRows(query: string): Promise<MusicRow[]> {
 		});
 	}
 	return rows;
+}
+
+/**
+ * The All tab shows music beside video, so it gets a balanced slice: a query
+ * like "one more time" returns ten songs, and prepending all of them would
+ * bury the movie results. The Music tab keeps the full list.
+ */
+function balancedMusicRows(rows: MusicRow[], perKind = 4): MusicRow[] {
+	const counts = new Map<string, number>();
+	return rows.filter((row) => {
+		const seen = counts.get(row.musicKind) ?? 0;
+		if (seen >= perKind) return false;
+		counts.set(row.musicKind, seen + 1);
+		return true;
+	});
 }
 
 /** The shared MusicBrainz rate gate can hold a search behind an add; video
@@ -193,7 +211,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			try {
 				// Deezer answers in ~0.4 s; the cap is the fallback path's guard
 				// (MusicBrainz is gated and can queue), not the normal budget.
-				musicMerged = await withTimeout(musicRows(query.trim()), 4000);
+				musicMerged = balancedMusicRows(await withTimeout(musicRows(query.trim()), 4000));
 			} catch {
 				// Music is additive; a rate-gated miss only omits the rows.
 			}

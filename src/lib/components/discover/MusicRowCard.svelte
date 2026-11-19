@@ -20,6 +20,9 @@
 	const title = $derived(item.title ?? '');
 	const done = $derived(addState === 'added' || addState === 'exists');
 	const isArtist = $derived(item.musicKind === 'artist');
+	const isSong = $derived(item.musicKind === 'song');
+	/** A song opens and adds its album — that is the unit acquisition acts on. */
+	const albumLabel = $derived(isSong ? (item.album_title ?? item.title ?? '') : title);
 
 	// Search rows resolve a MusicBrainz id on open; chart rows do not carry one
 	// until the resolver runs, so the card navigates through this handler.
@@ -62,7 +65,8 @@
 						artUrl: item.image_url ?? null,
 						href: target ?? '/discover?type=music',
 						hideState: true,
-						hideMonitored: true
+						hideMonitored: true,
+						label: isSong ? m.music_tabSong() : undefined
 					}
 				)
 	);
@@ -70,7 +74,8 @@
 	async function resolveTarget(): Promise<string | null> {
 		const params = new URLSearchParams({ type: 'album' });
 		if (item.subtitle && !isArtist) params.set('artist', item.subtitle);
-		if (item.title) params.set('album', item.title);
+		// A song resolves through the album it sits on, never its own title.
+		if (albumLabel) params.set('album', albumLabel);
 		const search = await fetch(`/api/music/search?${params}`).then((r) => r.json());
 		const group = (search.results ?? [])[0] as { mbid?: string } | undefined;
 		return group?.mbid ?? null;
