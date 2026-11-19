@@ -11,7 +11,7 @@
 	import { createSSE } from '#lib/sse/index.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 
-	import { page } from '$app/state';
+	import { page, navigating } from '$app/state';
 	import { resolvePath } from '#lib/utils/routing.js';
 	import { authClient } from '#lib/auth/client.js';
 	import { getSystemStatus } from '#lib/api/settings.js';
@@ -544,6 +544,15 @@
 {#if useFocusedLayout}
 	{@render children()}
 {:else}
+	<!-- A client navigation waits for its data, which on a music page means the
+	     MusicBrainz gate and on a detail page a TMDB round trip. Without this the
+	     click reads as dead for as long as that takes. -->
+	{#if navigating.to}
+		<div class="fixed inset-x-0 top-0 z-[100] h-0.5 overflow-hidden bg-primary/20">
+			<div class="h-full w-1/3 animate-[nav-progress_1.2s_ease-in-out_infinite] rounded-full bg-primary"></div>
+		</div>
+	{/if}
+
 	<div class="drawer lg:drawer-open">
 		<input
 			id="main-drawer"
