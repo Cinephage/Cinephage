@@ -13,6 +13,8 @@
 	import TrackList from '#lib/components/music/TrackList.svelte';
 	import TrackSearchModal from '#lib/components/music/TrackSearchModal.svelte';
 	import { ConfirmationModal, ModalWrapper } from '#lib/components/ui/modal/index.js';
+	import Panel from '#lib/components/ui/Panel.svelte';
+	import FactRow from '#lib/components/ui/FactRow.svelte';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { SvelteSet } from 'svelte/reactivity';
 
@@ -397,77 +399,51 @@
 			</div>
 		</div>
 
-		<!-- Sidebar: the movie detail page's Details panel. -->
+		<!-- Sidebar: the same details grammar as the movie and series pages. -->
 		<div class="min-w-0 space-y-4 md:space-y-6">
-			<div class="rounded-xl bg-base-200 p-4 md:p-6">
-				<h3 class="mb-3 font-semibold">{m.common_details()}</h3>
+			<Panel title={m.common_details()}>
 				<dl class="space-y-2 text-sm">
-					<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-						<dt class="text-base-content/60">{m.music_tabArtist()}</dt>
-						<dd class="sm:text-right">
-							<a class="link link-primary" href={`/library/music/artist/${album.artistId}`}>
-								{album.artistName}
-							</a>
-						</dd>
-					</div>
+					<FactRow label={m.music_tabArtist()}>
+						<a class="link link-primary" href={`/library/music/artist/${album.artistId}`}>
+							{album.artistName}
+						</a>
+					</FactRow>
 					{#if album.primaryType}
-						<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-							<dt class="text-base-content/60">{m.music_typeLabel()}</dt>
-							<dd class="sm:text-right">{[album.primaryType, ...(album.secondaryTypes ?? [])].join(', ')}</dd>
-						</div>
+						<FactRow
+							label={m.music_typeLabel()}
+							value={[album.primaryType, ...(album.secondaryTypes ?? [])].join(', ')}
+						/>
 					{/if}
 					{#if album.status}
-						<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-							<dt class="text-base-content/60">{m.common_status()}</dt>
-							<dd class="capitalize sm:text-right">{album.status.toLowerCase()}</dd>
-						</div>
+						<FactRow label={m.common_status()}>
+							<span class="capitalize">{album.status.toLowerCase()}</span>
+						</FactRow>
 					{/if}
 					{#if album.labelName}
-						<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-							<dt class="text-base-content/60">{m.music_labelLabel()}</dt>
-							<dd class="sm:text-right">{album.labelName}</dd>
-						</div>
+						<FactRow label={m.music_labelLabel()} value={album.labelName} />
 					{/if}
 					{#if album.catalogNumber}
-						<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-							<dt class="text-base-content/60">{m.music_catalogNumber()}</dt>
-							<dd class="font-mono text-xs sm:text-right">{album.catalogNumber}</dd>
-						</div>
+						<FactRow label={m.music_catalogNumber()} value={album.catalogNumber} mono />
 					{/if}
 					{#if album.barcode}
-						<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-							<dt class="text-base-content/60">{m.music_barcode()}</dt>
-							<dd class="font-mono text-xs sm:text-right">{album.barcode}</dd>
-						</div>
+						<FactRow label={m.music_barcode()} value={album.barcode} mono />
 					{/if}
 					{#if album.country}
-						<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-							<dt class="text-base-content/60">{m.music_country()}</dt>
-							<dd class="sm:text-right">{album.country}</dd>
-						</div>
+						<FactRow label={m.music_country()} value={album.country} />
 					{/if}
 					{#if album.mbid}
-						<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-							<dt class="text-base-content/60">MusicBrainz</dt>
-							<dd class="sm:text-right">
-								<a
-									class="link link-primary font-mono text-xs"
-									href={`https://musicbrainz.org/release-group/${album.mbid}`}
-									target="_blank"
-									rel="noopener noreferrer">{album.mbid}</a>
-							</dd>
-						</div>
+						<FactRow
+							label="MusicBrainz"
+							value={album.mbid}
+							href={`https://musicbrainz.org/release-group/${album.mbid}`}
+							mono
+						/>
 					{/if}
 					{#if album.path}
-						<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-							<dt class="text-base-content/60">{m.common_path()}</dt>
-							<dd class="truncate font-mono text-[11px] text-base-content/60 sm:text-right" title={album.path}>
-								{album.path}
-							</dd>
-						</div>
+						<FactRow label={m.common_path()} variant="block" mono>{album.path}</FactRow>
 					{/if}
 				</dl>
-			</div>
+			</Panel>
 		</div>
 	</div>
 </div>

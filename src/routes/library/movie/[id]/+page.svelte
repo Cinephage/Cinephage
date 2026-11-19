@@ -21,6 +21,8 @@
 		ModalHeader,
 		ModalFooter
 	} from '#lib/components/ui/modal/index.js';
+	import Panel from '#lib/components/ui/Panel.svelte';
+	import FactRow from '#lib/components/ui/FactRow.svelte';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { autoSearchSubtitles, syncSubtitle } from '#lib/api/subtitles.js';
 	import {
@@ -1333,86 +1335,60 @@
 		<!-- Sidebar -->
 		<div class="min-w-0 space-y-4 md:space-y-6">
 			<!-- Details -->
-			<div class="rounded-xl bg-base-200 p-4 md:p-6">
-				<h3 class="mb-3 font-semibold">{m.library_movieDetail_detailsHeading()}</h3>
+			<Panel title={m.library_movieDetail_detailsHeading()}>
 				<dl class="space-y-2 text-sm">
 					{#if movie.originalTitle && movie.originalTitle !== movie.title}
-						<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-							<dt class="text-base-content/60">{m.library_movieDetail_originalTitle()}</dt>
-							<dd class="sm:text-right">{movie.originalTitle}</dd>
-						</div>
+						<FactRow
+							label={m.library_movieDetail_originalTitle()}
+							value={movie.originalTitle}
+						/>
 					{/if}
 					{#if usesAnimeMetadataProvider && movie.studios && movie.studios.length > 0}
-						<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-							<dt class="text-base-content/60">Studios</dt>
-							<dd class="sm:text-right">{movie.studios.join(', ')}</dd>
-						</div>
+						<FactRow label="Studios" value={movie.studios.join(', ')} />
 					{/if}
-					<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-						<dt class="text-base-content/60">{m.library_movieHeader_qualityProfileLabel()}</dt>
-						<dd>{qualityProfileName || m.common_default()}</dd>
-					</div>
+					<FactRow
+						label={m.library_movieHeader_qualityProfileLabel()}
+						value={qualityProfileName || m.common_default()}
+					/>
 					{#if movie.imdbId}
-						<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-							<dt class="text-base-content/60">{m.library_movieDetail_imdb()}</dt>
-							<dd>
+						<FactRow
+							label={m.library_movieDetail_imdb()}
+							value={movie.imdbId}
+							href={`https://www.imdb.com/title/${movie.imdbId}`}
+						/>
+					{/if}
+					<FactRow
+						label={m.library_movieDetail_tmdbId()}
+						value={movie.tmdbId}
+						href={`https://www.themoviedb.org/movie/${movie.tmdbId}`}
+					/>
+					{#each providerLinkRows as row (row.label)}
+						<FactRow label={row.label}>
+							{#if row.resolved}
 								<a
-									href="https://www.imdb.com/title/{movie.imdbId}"
+									href={row.href}
 									target="_blank"
 									rel="noopener noreferrer"
 									class="link link-primary"
 								>
-									{movie.imdbId}
+									{row.value}
 								</a>
-							</dd>
-						</div>
-					{/if}
-					<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-						<dt class="text-base-content/60">{m.library_movieDetail_tmdbId()}</dt>
-						<dd>
-							<a
-								href="https://www.themoviedb.org/movie/{movie.tmdbId}"
-								target="_blank"
-								rel="noopener noreferrer"
-								class="link link-primary"
-							>
-								{movie.tmdbId}
-							</a>
-						</dd>
-					</div>
-					{#each providerLinkRows as row (row.label)}
-						<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-							<dt class="text-base-content/60">{row.label}</dt>
-							<dd>
-								{#if row.resolved}
-									<a
-										href={row.href}
-										target="_blank"
-										rel="noopener noreferrer"
-										class="link link-primary"
-									>
-										{row.value}
-									</a>
-								{:else}
-									<button
-										type="button"
-										class="link link-warning"
-										onclick={() => openProviderLinkModal(row.provider)}
-									>
-										{row.value}
-									</button>
-								{/if}
-							</dd>
-						</div>
+							{:else}
+								<button
+									type="button"
+									class="link link-warning"
+									onclick={() => openProviderLinkModal(row.provider)}
+								>
+									{row.value}
+								</button>
+							{/if}
+						</FactRow>
 					{/each}
-					<div class="border-t border-base-content/10 pt-2">
-						<dt class="text-base-content/60">{m.library_movieDetail_path()}</dt>
-						<dd class="mt-1 font-mono text-xs break-all">
-							{movieStoragePath}
-						</dd>
-					</div>
+					<FactRow label={m.library_movieDetail_path()} variant="block" mono>
+						{movieStoragePath}
+					</FactRow>
 				</dl>
-			</div>
+			</Panel>
 
 			{#if data.collection}
 				{@const col = data.collection}

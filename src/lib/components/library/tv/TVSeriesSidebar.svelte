@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { LibrarySeries } from '#lib/types/library.js';
 	import * as m from '#lib/paraglide/messages.js';
+	import Panel from '#lib/components/ui/Panel.svelte';
+	import FactRow from '#lib/components/ui/FactRow.svelte';
 
 	interface Props {
 		series: LibrarySeries;
@@ -86,97 +88,63 @@
 
 <div class="space-y-4 md:space-y-6">
 	<!-- Details -->
-	<div class="rounded-xl bg-base-200 p-4 md:p-6">
-		<h3 class="mb-3 font-semibold">{m.common_details()}</h3>
+	<Panel title={m.common_details()}>
 		<dl class="space-y-2 text-sm">
 			{#if series.originalTitle && series.originalTitle !== series.title}
-				<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-					<dt class="text-base-content/60">{m.library_movieDetail_originalTitle()}</dt>
-					<dd class="sm:text-right">{series.originalTitle}</dd>
-				</div>
+				<FactRow label={m.library_movieDetail_originalTitle()} value={series.originalTitle} />
 			{/if}
-			<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-				<dt class="text-base-content/60">{m.library_seriesHeader_qualityProfileLabel()}</dt>
-				<dd>{qualityProfileName || m.common_default()}</dd>
-			</div>
+			<FactRow
+				label={m.library_seriesHeader_qualityProfileLabel()}
+				value={qualityProfileName || m.common_default()}
+			/>
 			{#if series.imdbId}
-				<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-					<dt class="text-base-content/60">{m.library_movieDetail_imdb()}</dt>
-					<dd>
-						<a
-							href="https://www.imdb.com/title/{series.imdbId}"
-							target="_blank"
-							rel="noopener noreferrer"
-							class="link link-primary"
-						>
-							{series.imdbId}
-						</a>
-					</dd>
-				</div>
+				<FactRow
+					label={m.library_movieDetail_imdb()}
+					value={series.imdbId}
+					href={`https://www.imdb.com/title/${series.imdbId}`}
+				/>
 			{/if}
-			<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-				<dt class="text-base-content/60">{m.library_movieDetail_tmdbId()}</dt>
-				<dd>
-					<a
-						href="https://www.themoviedb.org/tv/{series.tmdbId}"
-						target="_blank"
-						rel="noopener noreferrer"
-						class="link link-primary"
-					>
-						{series.tmdbId}
-					</a>
-				</dd>
-			</div>
+			<FactRow
+				label={m.library_movieDetail_tmdbId()}
+				value={series.tmdbId}
+				href={`https://www.themoviedb.org/tv/${series.tmdbId}`}
+			/>
 			{#if series.tvdbId}
-				<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-					<dt class="text-base-content/60">{m.library_tvDetail_tvdbId()}</dt>
-					<dd>
-						<a
-							href="https://thetvdb.com/dereferrer/series/{series.tvdbId}"
-							target="_blank"
-							rel="noopener noreferrer"
-							class="link link-primary"
-						>
-							{series.tvdbId}
-						</a>
-					</dd>
-				</div>
+				<FactRow
+					label={m.library_tvDetail_tvdbId()}
+					value={series.tvdbId}
+					href={`https://thetvdb.com/dereferrer/series/${series.tvdbId}`}
+				/>
 			{/if}
 			{#each providerLinkRows as row (row.label)}
-				<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-					<dt class="text-base-content/60">{row.label}</dt>
-					<dd>
-						{#if row.resolved}
-							<a
-								href={row.href}
-								target="_blank"
-								rel="noopener noreferrer"
-								class="link link-primary"
-							>
-								{row.value}
-							</a>
-						{:else}
-							<button
-								type="button"
-								class="link link-warning"
-								onclick={() => onResolveProviderRef?.(row.provider)}
-							>
-								{row.value}
-							</button>
-						{/if}
-					</dd>
-				</div>
+				<FactRow label={row.label}>
+					{#if row.resolved}
+						<a
+							href={row.href}
+							target="_blank"
+							rel="noopener noreferrer"
+							class="link link-primary"
+						>
+							{row.value}
+						</a>
+					{:else}
+						<button
+							type="button"
+							class="link link-warning"
+							onclick={() => onResolveProviderRef?.(row.provider)}
+						>
+							{row.value}
+						</button>
+					{/if}
+				</FactRow>
 			{/each}
-			<div class="border-t border-base-content/10 pt-2">
-				<dt class="text-base-content/60">{m.common_path()}</dt>
-				<dd class="mt-1 font-mono text-xs break-all">
-					{seriesStoragePath}
-				</dd>
-			</div>
-			<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-				<dt class="text-base-content/60">{m.library_tvDetail_seasonFolders()}</dt>
-				<dd>{series.seasonFolder ? m.common_yes() : m.common_no()}</dd>
-			</div>
+			<FactRow label={m.common_path()} variant="block" mono>
+				{seriesStoragePath}
+			</FactRow>
+			<FactRow
+				label={m.library_tvDetail_seasonFolders()}
+				value={series.seasonFolder ? m.common_yes() : m.common_no()}
+			/>
 		</dl>
-	</div>
+	</Panel>
 </div>

@@ -11,6 +11,8 @@
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { ConfirmationModal, ModalWrapper } from '#lib/components/ui/modal/index.js';
+	import Panel from '#lib/components/ui/Panel.svelte';
+	import FactRow from '#lib/components/ui/FactRow.svelte';
 
 	let { data }: { data: PageData } = $props();
 
@@ -420,47 +422,28 @@
 
 		<!-- Sidebar -->
 		<div class="min-w-0 space-y-4 md:space-y-6">
-			<div class="rounded-xl bg-base-200 p-4 md:p-6">
-				<h3 class="mb-3 font-semibold">{m.common_details()}</h3>
+			<Panel title={m.common_details()}>
 				<dl class="space-y-2 text-sm">
 					{#if artist.genres && artist.genres.length > 0}
-						<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-							<dt class="text-base-content/60">{m.music_genreLabel()}</dt>
-							<dd class="flex flex-wrap gap-1 sm:justify-end">
+						<FactRow label={m.music_genreLabel()}>
+							<span class="flex flex-wrap gap-1 sm:justify-end">
 								{#each artist.genres as genre (genre)}
 									<span class="badge badge-sm badge-ghost">{genre}</span>
 								{/each}
-							</dd>
-						</div>
+							</span>
+						</FactRow>
 					{/if}
 					{#if artist.country}
-						<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-							<dt class="text-base-content/60">{m.music_country()}</dt>
-							<dd class="sm:text-right">{artist.country}</dd>
-						</div>
+						<FactRow label={m.music_country()} value={artist.country} />
 					{/if}
-					<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-						<dt class="text-base-content/60">{m.music_tabAlbums()}</dt>
-						<dd class="sm:text-right">{data.counts.albums}</dd>
-					</div>
-					<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-						<dt class="text-base-content/60">{m.music_inLibrary()}</dt>
-						<dd class="sm:text-right">{data.counts.inLibrary}</dd>
-					</div>
-					<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-						<dt class="text-base-content/60">{m.music_tabSongs()}</dt>
-						<dd class="sm:text-right">{data.counts.songs}</dd>
-					</div>
+					<FactRow label={m.music_tabAlbums()} value={data.counts.albums} />
+					<FactRow label={m.music_inLibrary()} value={data.counts.inLibrary} />
+					<FactRow label={m.music_tabSongs()} value={data.counts.songs} />
 					{#if artist.mbid}
-						<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-							<dt class="text-base-content/60">MusicBrainz</dt>
-							<dd class="truncate font-mono text-[11px] text-base-content/60 sm:text-right" title={artist.mbid}>
-								{artist.mbid}
-							</dd>
-						</div>
+						<FactRow label="MusicBrainz" value={artist.mbid} mono title={artist.mbid} />
 					{/if}
 				</dl>
-			</div>
+			</Panel>
 		</div>
 	</div>
 </div>
