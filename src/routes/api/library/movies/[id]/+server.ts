@@ -16,13 +16,11 @@ import { getLanguageProfileService } from '#lib/server/subtitles/services/Langua
 import { searchSubtitlesForNewMedia } from '#lib/server/subtitles/services/SubtitleImportService.js';
 import { monitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.js';
 import { monitoringSearchService } from '#lib/server/monitoring/search/MonitoringSearchService.js';
-import { getDownloadClientManager } from '#lib/server/downloadClients/DownloadClientManager.js';
 import { deleteAllAlternateTitles } from '#lib/server/services/index.js';
 import {
-	deleteDirectoryWithinRoot,
-	deleteFilesWithinRoot,
-	namesRootItself
-} from '#lib/server/filesystem/delete-helpers.js';
+	cancelQueuedDownloads,
+	removeEntityFromDisk
+} from '#lib/server/library/library-removal.js';
 import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
 import { tmdb } from '#lib/server/tmdb.js';
 import { movieUpdateSchema } from '#lib/validation/schemas.js';
@@ -747,24 +745,14 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 			);
 		}
 
-		// Delete files from disk if requested. A movie whose tracked path IS the
-		// root folder (a loose file at the top of the library) must remove its
-		// own files, never the directory: that would take every other title in
-		// the root with it.
-		if (deleteFiles && movie.rootFolderPath && movie.path) {
-			if (namesRootItself(movie.rootFolderPath, movie.path)) {
-				const removed = await deleteFilesWithinRoot(
-					movie.rootFolderPath,
-					files.map((file) => join(movie.path!, file.relativePath))
-				);
-				logger.debug(
-					{ count: removed.length },
-					'[API] Removed root-level movie files without deleting the library root'
-				);
-			} else {
-				const movieFolder = await deleteDirectoryWithinRoot(movie.rootFolderPath, movie.path);
-				logger.debug({ movieFolder }, '[API] Removed movie folder and all contents');
-			}
+		// An entity tracked at the root removes its own files, never the root.
+		if (deleteFiles) {
+			await removeEntityFromDisk({
+				kind: 'movie',
+				rootFolderPath: movie.rootFolderPath,
+				entityPath: movie.path,
+				relativePaths: files.map((file) => file.relativePath)
+			});
 		}
 
 		// Delete movie file records from database
@@ -779,36 +767,7 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 				.from(downloadQueue)
 				.where(eq(downloadQueue.movieId, params.id));
 
-			for (const queueItem of activeQueueItems) {
-				if (queueItem.downloadClientId) {
-					try {
-						const isTorrent = queueItem.protocol === 'torrent';
-						const clientDownloadId = isTorrent
-							? queueItem.infoHash || queueItem.downloadId
-							: queueItem.downloadId || queueItem.infoHash;
-						if (clientDownloadId) {
-							const clientInstance = await getDownloadClientManager().getClientInstance(
-								queueItem.downloadClientId
-							);
-							if (clientInstance) {
-								await clientInstance.removeDownload(clientDownloadId, true);
-							}
-						}
-					} catch (err) {
-						logger.warn(
-							{
-								queueItemId: queueItem.id,
-								error: err instanceof Error ? err.message : 'Unknown'
-							},
-							'[API] Failed to remove download from client'
-						);
-					}
-				}
-				// Delete queue record - cancel the acquisition intent first so the
-				// slot is released rather than leaking until restart.
-				acquisitionService.cancelByQueueId(queueItem.id, 'media removed from library');
-				await db.delete(downloadQueue).where(eq(downloadQueue.id, queueItem.id));
-			}
+			await cancelQueuedDownloads(activeQueueItems);
 
 			// Preserve activity audit trail after media row is deleted (FKs become null on delete)
 			await db

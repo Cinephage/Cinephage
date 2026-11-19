@@ -13,11 +13,6 @@ import {
 	subtitles
 } from '#lib/server/db/schema.js';
 import { and, eq, inArray } from 'drizzle-orm';
-import {
-	deleteDirectoryWithinRoot,
-	deleteFilesWithinRoot,
-	namesRootItself
-} from '#lib/server/filesystem/delete-helpers.js';
 import { todayDateString } from '#lib/utils/format.js';
 import { getLanguageProfileService } from '#lib/server/subtitles/services/LanguageProfileService.js';
 import { searchSubtitlesForMediaBatch } from '#lib/server/subtitles/services/SubtitleImportService.js';
@@ -25,7 +20,10 @@ import { searchOnAdd } from '#lib/server/library/searchOnAdd.js';
 import { monitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.js';
 import { monitoringSearchService } from '#lib/server/monitoring/search/MonitoringSearchService.js';
 import { deleteAllAlternateTitles } from '#lib/server/services/index.js';
-import { getDownloadClientManager } from '#lib/server/downloadClients/DownloadClientManager.js';
+import {
+	cancelQueuedDownloads,
+	removeEntityFromDisk
+} from '#lib/server/library/library-removal.js';
 import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
 import {
 	validateRootFolder,
@@ -849,26 +847,14 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 			);
 		}
 
-		// Delete files from disk if requested. A series tracked at the root itself
-		// only removes its own files; deleting the directory would take the whole
-		// library with it.
-		if (deleteFiles && seriesItem.rootFolderPath && seriesItem.path) {
-			if (namesRootItself(seriesItem.rootFolderPath, seriesItem.path)) {
-				await deleteFilesWithinRoot(
-					seriesItem.rootFolderPath,
-					files.map((file) => join(seriesItem.path!, file.relativePath))
-				);
-				logger.debug(
-					{ count: files.length },
-					'[API] Removed root-level series files without deleting the library root'
-				);
-			} else {
-				const seriesFolder = await deleteDirectoryWithinRoot(
-					seriesItem.rootFolderPath,
-					seriesItem.path
-				);
-				logger.debug({ seriesFolder }, '[API] Removed series folder and all contents');
-			}
+		// An entity tracked at the root removes its own files, never the root.
+		if (deleteFiles) {
+			await removeEntityFromDisk({
+				kind: 'series',
+				rootFolderPath: seriesItem.rootFolderPath,
+				entityPath: seriesItem.path,
+				relativePaths: files.map((file) => file.relativePath)
+			});
 		}
 
 		// Delete all episode file records from database
@@ -883,35 +869,7 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 				.from(downloadQueue)
 				.where(eq(downloadQueue.seriesId, params.id));
 
-			for (const queueItem of activeQueueItems) {
-				if (queueItem.downloadClientId) {
-					try {
-						const isTorrent = queueItem.protocol === 'torrent';
-						const clientDownloadId = isTorrent
-							? queueItem.infoHash || queueItem.downloadId
-							: queueItem.downloadId || queueItem.infoHash;
-						if (clientDownloadId) {
-							const clientInstance = await getDownloadClientManager().getClientInstance(
-								queueItem.downloadClientId
-							);
-							if (clientInstance) {
-								await clientInstance.removeDownload(clientDownloadId, true);
-							}
-						}
-					} catch (err) {
-						logger.warn(
-							{
-								queueItemId: queueItem.id,
-								error: err instanceof Error ? err.message : 'Unknown'
-							},
-							'[API] Failed to remove download from client'
-						);
-					}
-				}
-				// Delete queue record
-				acquisitionService.cancelByQueueId(queueItem.id, 'media removed from library');
-				await db.delete(downloadQueue).where(eq(downloadQueue.id, queueItem.id));
-			}
+			await cancelQueuedDownloads(activeQueueItems);
 
 			// Preserve activity audit trail after media row is deleted (FKs become null on delete)
 			await db
