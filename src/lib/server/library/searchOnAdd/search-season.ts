@@ -1,14 +1,12 @@
 import { db } from '#lib/server/db/index.js';
 import { series, episodes } from '#lib/server/db/schema.js';
 import { eq, and } from 'drizzle-orm';
-import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
-import { evaluateIndexerSearchAvailability } from '#lib/server/indexers/search/availability.js';
 import { resolveAllowedIndexerIds } from '#lib/server/indexers/search/profile-indexer-filter.js';
-import type { SearchCriteria } from '#lib/server/indexers/types/index.js';
 import { grabService } from '#lib/server/downloads/GrabService.js';
 import type { SearchForSeasonParams, GrabResult } from './types.js';
 import type { AltTitleRefresher } from './alt-titles.js';
-import { AUTO_GRAB_MIN_SCORE } from './search-utils.js';
+import { preflightIndexerSearch, buildSearchCriteria, searchReleases } from './search-request.js';
+import { toGrabRelease } from './grab-release.js';
 import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'SearchSeason', logDomain: 'scans' });
@@ -45,56 +43,41 @@ export async function searchForSeason(
 			where: and(eq(episodes.seriesId, seriesId), eq(episodes.seasonNumber, seasonNumber))
 		});
 
-		const indexerManager = await getIndexerManager();
 		const searchSource: 'interactive' | 'automatic' = 'automatic';
-		const allowedIndexerIds = await resolveAllowedIndexerIds(seriesData.scoringProfileId);
-		const indexerAvailability = evaluateIndexerSearchAvailability(
-			await indexerManager.getIndexers(),
-			{
-				searchType: 'tv',
-				searchSource,
-				allowedIndexerIds,
-				scoringProfileId: seriesData.scoringProfileId ?? undefined,
-				getDefinitionCapabilities: (definitionId) =>
-					indexerManager.getDefinitionCapabilities(definitionId)
-			}
-		);
+		const gate = await preflightIndexerSearch({
+			searchType: 'tv',
+			searchSource,
+			scoringProfileId: seriesData.scoringProfileId,
+			allowedIndexerIds: await resolveAllowedIndexerIds(seriesData.scoringProfileId)
+		});
 
-		if (!indexerAvailability.ok) {
-			const errorMessage = indexerAvailability.message || 'No indexers are available';
+		if (!gate.ok) {
 			logger.info(
-				{
-					seriesId,
-					seasonNumber,
-					code: indexerAvailability.code,
-					message: errorMessage
-				},
+				{ seriesId, seasonNumber, code: gate.code, message: gate.error },
 				'[SearchOnAdd] Season search blocked by indexer availability'
 			);
-			return { success: false, error: errorMessage };
+			return { success: false, error: gate.error };
 		}
+
+		const { indexerManager } = gate;
 
 		const seriesSearchTitles = await altTitles.getSeriesSearchTitlesWithRefresh(
 			seriesData.id,
 			seriesData.tmdbId
 		);
-		const criteria: SearchCriteria = {
+		const criteria = buildSearchCriteria({
 			searchType: 'tv',
-			query: seriesData.title,
+			title: seriesData.title,
 			tmdbId: seriesData.tmdbId,
-			tvdbId: seriesData.tvdbId ?? undefined,
-			imdbId: seriesData.imdbId ?? undefined,
+			tvdbId: seriesData.tvdbId,
+			imdbId: seriesData.imdbId,
 			season: seasonNumber,
-			searchTitles: seriesSearchTitles.length > 0 ? seriesSearchTitles : [seriesData.title]
-		};
+			searchTitles: seriesSearchTitles
+		});
 
-		const searchResult = await indexerManager.searchEnhanced(criteria, {
+		const searchResult = await searchReleases(indexerManager, criteria, {
 			searchSource,
-			enrichment: {
-				scoringProfileId: seriesData.scoringProfileId ?? undefined,
-				filterRejected: true,
-				minScore: AUTO_GRAB_MIN_SCORE
-			}
+			scoringProfileId: seriesData.scoringProfileId
 		});
 
 		logger.info(
@@ -123,19 +106,7 @@ export async function searchForSeason(
 
 		for (const release of searchResult.releases) {
 			const grabResult = await grabService.grab({
-				release: {
-					title: release.title,
-					infoHash: release.infoHash,
-					magnetUrl: release.magnetUrl,
-					downloadUrl: release.downloadUrl,
-					indexerId: release.indexerId,
-					indexerName: release.indexerName,
-					size: release.size,
-					protocol: release.protocol as 'torrent' | 'usenet' | 'streaming' | undefined,
-					tmdbId: release.tmdbId,
-					imdbId: release.imdbId,
-					tvdbId: release.tvdbId
-				},
+				release: toGrabRelease(release),
 				target: {
 					type: 'season' as const,
 					seriesId: seriesData.id,

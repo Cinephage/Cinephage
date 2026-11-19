@@ -1,5 +1,4 @@
-import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
-import { evaluateIndexerSearchAvailability } from '#lib/server/indexers/search/availability.js';
+import { preflightIndexerSearch } from './search-request.js';
 import { db } from '#lib/server/db/index.js';
 import { episodes, series } from '#lib/server/db/schema.js';
 import { eq, inArray } from 'drizzle-orm';
@@ -31,32 +30,17 @@ export async function searchBulkEpisodes(
 	}
 
 	try {
-		const indexerManager = await getIndexerManager();
-		const indexerAvailability = evaluateIndexerSearchAvailability(
-			await indexerManager.getIndexers(),
-			{
-				searchType: 'tv',
-				searchSource: 'interactive',
-				scoringProfileId: undefined,
-				getDefinitionCapabilities: (definitionId) =>
-					indexerManager.getDefinitionCapabilities(definitionId)
-			}
-		);
+		const gate = await preflightIndexerSearch({ searchType: 'tv', searchSource: 'interactive' });
 
-		if (!indexerAvailability.ok) {
-			const errorMessage = indexerAvailability.message || 'No indexers are available';
+		if (!gate.ok) {
 			logger.info(
-				{
-					count: episodeIds.length,
-					code: indexerAvailability.code,
-					message: errorMessage
-				},
+				{ count: episodeIds.length, code: gate.code, message: gate.error },
 				'[SearchOnAdd] Bulk episode search blocked by indexer availability'
 			);
 			return {
 				results: [],
 				summary: { searched: 0, found: 0, grabbed: 0 },
-				error: errorMessage
+				error: gate.error
 			};
 		}
 

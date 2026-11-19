@@ -2,16 +2,15 @@
  * Search On Add - Series search logic
  */
 
-import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
-import { evaluateIndexerSearchAvailability } from '#lib/server/indexers/search/availability.js';
 import { resolveAllowedIndexerIds } from '#lib/server/indexers/search/profile-indexer-filter.js';
 import { grabService } from '#lib/server/downloads/GrabService.js';
 import { db } from '#lib/server/db/index.js';
 import { episodes } from '#lib/server/db/schema.js';
 import { and, eq, ne } from 'drizzle-orm';
-import type { SearchForSeriesParams, GrabResult, SearchCriteria } from './types.js';
+import type { SearchForSeriesParams, GrabResult } from './types.js';
 import type { AltTitleRefresher } from './alt-titles.js';
-import { AUTO_GRAB_MIN_SCORE } from './search-utils.js';
+import { preflightIndexerSearch, buildSearchCriteria, searchReleases } from './search-request.js';
+import { toGrabRelease } from './grab-release.js';
 import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'SearchSeries', logDomain: 'scans' });
@@ -49,51 +48,37 @@ export async function searchForSeries(
 	}
 
 	try {
-		const indexerManager = await getIndexerManager();
 		const searchSource: 'interactive' | 'automatic' = 'automatic';
-		const allowedIndexerIds = await resolveAllowedIndexerIds(scoringProfileId);
-		const indexerAvailability = evaluateIndexerSearchAvailability(
-			await indexerManager.getIndexers(),
-			{
-				searchType: 'tv',
-				searchSource,
-				allowedIndexerIds,
-				scoringProfileId: scoringProfileId ?? undefined,
-				getDefinitionCapabilities: (definitionId) =>
-					indexerManager.getDefinitionCapabilities(definitionId)
-			}
-		);
+		const gate = await preflightIndexerSearch({
+			searchType: 'tv',
+			searchSource,
+			scoringProfileId,
+			allowedIndexerIds: await resolveAllowedIndexerIds(scoringProfileId)
+		});
 
-		if (!indexerAvailability.ok) {
-			const errorMessage = indexerAvailability.message || 'No indexers are available';
+		if (!gate.ok) {
 			logger.info(
-				{
-					seriesId,
-					code: indexerAvailability.code,
-					message: errorMessage
-				},
+				{ seriesId, code: gate.code, message: gate.error },
 				'[SearchOnAdd] Series search blocked by indexer availability'
 			);
-			return { success: false, error: errorMessage };
+			return { success: false, error: gate.error };
 		}
 
-		const seriesSearchTitles = await altTitles.getSeriesSearchTitlesWithRefresh(seriesId, tmdbId);
-		const criteria: SearchCriteria = {
-			searchType: 'tv',
-			query: title,
-			tmdbId,
-			tvdbId: tvdbId ?? undefined,
-			imdbId: imdbId ?? undefined,
-			searchTitles: seriesSearchTitles.length > 0 ? seriesSearchTitles : [title]
-		};
+		const { indexerManager } = gate;
 
-		const searchResult = await indexerManager.searchEnhanced(criteria, {
+		const seriesSearchTitles = await altTitles.getSeriesSearchTitlesWithRefresh(seriesId, tmdbId);
+		const criteria = buildSearchCriteria({
+			searchType: 'tv',
+			title,
+			tmdbId,
+			tvdbId,
+			imdbId,
+			searchTitles: seriesSearchTitles
+		});
+
+		const searchResult = await searchReleases(indexerManager, criteria, {
 			searchSource,
-			enrichment: {
-				scoringProfileId,
-				filterRejected: true,
-				minScore: AUTO_GRAB_MIN_SCORE
-			}
+			scoringProfileId
 		});
 
 		logger.info(
@@ -145,19 +130,7 @@ export async function searchForSeries(
 
 		for (const release of searchResult.releases) {
 			const grabResult = await grabService.grab({
-				release: {
-					title: release.title,
-					size: release.size,
-					infoHash: release.infoHash,
-					magnetUrl: release.magnetUrl,
-					downloadUrl: release.downloadUrl,
-					indexerId: release.indexerId,
-					indexerName: release.indexerName,
-					protocol: release.protocol as 'torrent' | 'usenet' | 'streaming' | undefined,
-					tmdbId: release.tmdbId,
-					imdbId: release.imdbId,
-					tvdbId: release.tvdbId
-				},
+				release: toGrabRelease(release),
 				target: {
 					type: 'series' as const,
 					seriesId,

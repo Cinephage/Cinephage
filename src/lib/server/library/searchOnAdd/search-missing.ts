@@ -6,8 +6,7 @@ import { todayDateString } from '#lib/utils/format.js';
 import { db } from '#lib/server/db/index.js';
 import { series, episodes } from '#lib/server/db/schema.js';
 import { eq, and, ne } from 'drizzle-orm';
-import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
-import { evaluateIndexerSearchAvailability } from '#lib/server/indexers/search/availability.js';
+import { preflightIndexerSearch } from './search-request.js';
 import { resolveAllowedIndexerIds } from '#lib/server/indexers/search/profile-indexer-filter.js';
 import { type EpisodeToSearch } from '#lib/server/downloads/index.js';
 import type {
@@ -63,34 +62,26 @@ export async function searchForMissingEpisodes(
 			};
 		}
 
-		const indexerManager = await getIndexerManager();
-		const indexerConfigs = await indexerManager.getIndexers();
-		const allowedIndexerIds = await resolveAllowedIndexerIds(seriesData.scoringProfileId);
-		const indexerAvailability = evaluateIndexerSearchAvailability(indexerConfigs, {
+		const gate = await preflightIndexerSearch({
 			searchType: 'tv',
 			searchSource,
-			allowedIndexerIds,
-			scoringProfileId: seriesData.scoringProfileId ?? undefined,
-			getDefinitionCapabilities: (definitionId) =>
-				indexerManager.getDefinitionCapabilities(definitionId)
+			scoringProfileId: seriesData.scoringProfileId,
+			allowedIndexerIds: await resolveAllowedIndexerIds(seriesData.scoringProfileId)
 		});
 
-		if (!indexerAvailability.ok) {
-			const errorMessage = indexerAvailability.message || 'No indexers are available';
+		if (!gate.ok) {
 			logger.info(
-				{
-					seriesId,
-					code: indexerAvailability.code,
-					message: errorMessage
-				},
+				{ seriesId, code: gate.code, message: gate.error },
 				'[SearchOnAdd] Missing episodes search blocked by indexer availability'
 			);
 			return {
 				results: [],
 				summary: { searched: 0, found: 0, grabbed: 0 },
-				error: errorMessage
+				error: gate.error
 			};
 		}
+
+		const { indexerManager, indexers: indexerConfigs } = gate;
 
 		const effectiveSearchStrategy =
 			searchStrategy === 'auto'

@@ -2,8 +2,6 @@ import { eq } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
 import { movieFiles, movies, scoringProfiles } from '#lib/server/db/schema.js';
 import { grabService } from '#lib/server/downloads/GrabService.js';
-import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
-import { evaluateIndexerSearchAvailability } from '#lib/server/indexers/search/availability.js';
 import { resolveAllowedIndexerIds } from '#lib/server/indexers/search/profile-indexer-filter.js';
 import {
 	effectiveBuckets,
@@ -12,8 +10,9 @@ import {
 	isMultiQualityMode
 } from '#lib/server/quality/buckets.js';
 import type { Resolution } from '#lib/server/indexers/parser/types.js';
-import type { SearchCriteria, EnhancedReleaseResult } from '#lib/server/indexers/types/index.js';
-import { AUTO_GRAB_MIN_SCORE } from './search-utils.js';
+import type { EnhancedReleaseResult } from '#lib/server/indexers/types/index.js';
+import { preflightIndexerSearch, buildSearchCriteria, searchReleases } from './search-request.js';
+import { toGrabRelease } from './grab-release.js';
 import { summarizeRejections } from '#lib/server/downloads/rejection-summary.js';
 import type { AltTitleRefresher } from './alt-titles.js';
 import type { SearchForMovieParams, GrabResult } from './types.js';
@@ -27,19 +26,7 @@ const logger = createChildLogger({ module: 'SearchMovie', logDomain: 'scans' });
  */
 function grabRelease(release: EnhancedReleaseResult, movieId: string, isUpgrade: boolean) {
 	return grabService.grab({
-		release: {
-			title: release.title,
-			infoHash: release.infoHash,
-			magnetUrl: release.magnetUrl,
-			downloadUrl: release.downloadUrl,
-			indexerId: release.indexerId,
-			indexerName: release.indexerName,
-			size: release.size,
-			protocol: release.protocol as 'torrent' | 'usenet' | 'streaming' | undefined,
-			tmdbId: release.tmdbId,
-			imdbId: release.imdbId,
-			tvdbId: release.tvdbId
-		},
+		release: toGrabRelease(release),
 		target: { type: 'movie' as const, movieId },
 		options: {
 			force: false,
@@ -97,56 +84,42 @@ export async function searchForMovie(
 			'[SearchOnAdd] Movie file status'
 		);
 
-		const indexerManager = await getIndexerManager();
 		const searchSource: 'interactive' | 'automatic' = 'automatic';
-		const allowedIndexerIds = await resolveAllowedIndexerIds(scoringProfileId);
-		const indexerAvailability = evaluateIndexerSearchAvailability(
-			await indexerManager.getIndexers(),
-			{
-				searchType: 'movie',
-				searchSource,
-				allowedIndexerIds,
-				scoringProfileId,
-				getDefinitionCapabilities: (definitionId) =>
-					indexerManager.getDefinitionCapabilities(definitionId)
-			}
-		);
+		const gate = await preflightIndexerSearch({
+			searchType: 'movie',
+			searchSource,
+			scoringProfileId,
+			allowedIndexerIds: await resolveAllowedIndexerIds(scoringProfileId)
+		});
 
-		if (!indexerAvailability.ok) {
-			const errorMessage = indexerAvailability.message || 'No indexers are available';
+		if (!gate.ok) {
 			logger.info(
-				{
-					movieId,
-					code: indexerAvailability.code,
-					message: errorMessage
-				},
+				{ movieId, code: gate.code, message: gate.error },
 				'[SearchOnAdd] Movie search blocked by indexer availability'
 			);
-			onProgress?.('error', errorMessage, { current: 100, total: 100 });
-			return { success: false, error: errorMessage };
+			onProgress?.('error', gate.error, { current: 100, total: 100 });
+			return { success: false, error: gate.error };
 		}
+
+		const { indexerManager } = gate;
 
 		// Build search criteria
 		const movieSearchTitles = await altTitles.getMovieSearchTitlesWithRefresh(movieId, tmdbId);
-		const criteria: SearchCriteria = {
+		const criteria = buildSearchCriteria({
 			searchType: 'movie',
-			query: title,
+			title,
 			tmdbId,
-			imdbId: imdbId ?? undefined,
+			imdbId,
 			year,
-			searchTitles: movieSearchTitles.length > 0 ? movieSearchTitles : [title]
-		};
+			searchTitles: movieSearchTitles
+		});
 
 		// Perform enriched search to get scored releases (automatic - on add)
 		onProgress?.('searching', 'Querying indexers for releases...', { current: 10, total: 100 });
 
-		const searchResult = await indexerManager.searchEnhanced(criteria, {
+		const searchResult = await searchReleases(indexerManager, criteria, {
 			searchSource,
-			enrichment: {
-				scoringProfileId,
-				filterRejected: true,
-				minScore: AUTO_GRAB_MIN_SCORE
-			}
+			scoringProfileId
 		});
 
 		logger.info(
