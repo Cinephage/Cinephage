@@ -4,6 +4,7 @@
 	import type { LibraryMovie, DesiredQuality } from '#lib/types/library.js';
 	import { ModalWrapper, ModalFooter } from '#lib/components/ui/modal/index.js';
 	import EditMetadataSection from '#lib/components/library/edit/EditMetadataSection.svelte';
+	import EditMonitoringToggles from '#lib/components/library/edit/EditMonitoringToggles.svelte';
 	import { sortRootFoldersForMediaType } from '#lib/utils/root-folders.js';
 	import { isLikelyAnimeMedia } from '#lib/shared/anime-classification.js';
 	import { effectiveResolutions, redundantMovieFileIds } from '#lib/shared/best-file.js';
@@ -443,26 +444,11 @@
 				Monitoring
 			</h4>
 			<div class="space-y-3">
-				<div class="grid grid-cols-2 gap-3">
-					<label class="label cursor-pointer">
-						<span class="label-text text-xs text-base-content/80">{m.common_monitored()}</span>
-						<input
-							type="checkbox"
-							class="toggle toggle-primary toggle-sm"
-							bind:checked={monitored}
-						/>
-					</label>
-					<label class="label cursor-pointer">
-						<span class="label-text text-xs text-base-content/80"
-							>{m.library_editMovie_autoDownloadSubtitles()}</span
-						>
-						<input
-							type="checkbox"
-							class="toggle toggle-primary toggle-sm"
-							bind:checked={wantsSubtitles}
-						/>
-					</label>
-				</div>
+				<EditMonitoringToggles
+					bind:monitored
+					bind:wantsSubtitles
+					autoSubtitlesLabel={m.library_editMovie_autoDownloadSubtitles()}
+				/>
 				<div class="grid grid-cols-2 gap-3">
 					<div class="form-control w-full">
 						<label class="label py-0.5" for="movie-quality-profile">
