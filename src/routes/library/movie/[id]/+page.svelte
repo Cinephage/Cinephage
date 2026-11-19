@@ -21,8 +21,7 @@
 		ModalHeader,
 		ModalFooter
 	} from '#lib/components/ui/modal/index.js';
-	import Panel from '#lib/components/ui/Panel.svelte';
-	import FactRow from '#lib/components/ui/FactRow.svelte';
+	import MovieDetailsPanel from '#lib/components/library/MovieDetailsPanel.svelte';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { autoSearchSubtitles, syncSubtitle } from '#lib/api/subtitles.js';
 	import {
@@ -362,80 +361,6 @@
 		const defaultProfile = data.qualityProfiles.find((p) => p.isDefault);
 		return defaultProfile ? m.library_movies_profileDefault({ name: defaultProfile.name }) : null;
 	});
-
-	const movieStoragePath = $derived.by(() => {
-		const rootPath = movie.rootFolderPath ?? '';
-		const relativePath = movie.path ?? '';
-
-		if (!rootPath) {
-			return relativePath;
-		}
-
-		if (!relativePath) {
-			return rootPath;
-		}
-
-		const normalizedRoot = rootPath.endsWith('/') ? rootPath.slice(0, -1) : rootPath;
-		const normalizedRelative = relativePath.startsWith('/') ? relativePath.slice(1) : relativePath;
-
-		return `${normalizedRoot}/${normalizedRelative}`;
-	});
-
-	const providerLinkRows = $derived.by(() => {
-		const isAnimeItem =
-			(movie.rootFolderPath ?? '').toLowerCase().includes('/anime/') ||
-			Boolean(movie.providerRefs?.anilist) ||
-			Boolean(movie.providerRefs?.mal);
-		if (!isAnimeItem) return [];
-
-		const refs = movie.providerRefs ?? {};
-		const rows: Array<
-			{ label: string; value: string } & (
-				| { resolved: true; href: string; provider: 'anilist' | 'mal' }
-				| { resolved: false; provider: 'anilist' | 'mal' }
-			)
-		> = [];
-		if (data.configuredMetadataProviders.anilist) {
-			if (refs.anilist) {
-				rows.push({
-					label: 'AniList',
-					href: `https://anilist.co/anime/${refs.anilist}`,
-					value: refs.anilist,
-					resolved: true,
-					provider: 'anilist'
-				});
-			} else {
-				rows.push({
-					label: 'AniList',
-					value: 'N/A',
-					resolved: false,
-					provider: 'anilist'
-				});
-			}
-		}
-		if (data.configuredMetadataProviders.mal) {
-			if (refs.mal) {
-				rows.push({
-					label: 'MAL',
-					href: `https://myanimelist.net/anime/${refs.mal}`,
-					value: refs.mal,
-					resolved: true,
-					provider: 'mal'
-				});
-			} else {
-				rows.push({
-					label: 'MAL',
-					value: 'N/A',
-					resolved: false,
-					provider: 'mal'
-				});
-			}
-		}
-		return rows;
-	});
-	const usesAnimeMetadataProvider = $derived(
-		Boolean(movie.providerRefs?.anilist) || Boolean(movie.providerRefs?.mal)
-	);
 
 	function buildProviderSearchLink(provider: 'anilist' | 'mal'): string {
 		// Title only - AniList/MAL's own search often returns nothing when the
@@ -1334,61 +1259,12 @@
 
 		<!-- Sidebar -->
 		<div class="min-w-0 space-y-4 md:space-y-6">
-			<!-- Details -->
-			<Panel title={m.library_movieDetail_detailsHeading()}>
-				<dl class="space-y-2 text-sm">
-					{#if movie.originalTitle && movie.originalTitle !== movie.title}
-						<FactRow
-							label={m.library_movieDetail_originalTitle()}
-							value={movie.originalTitle}
-						/>
-					{/if}
-					{#if usesAnimeMetadataProvider && movie.studios && movie.studios.length > 0}
-						<FactRow label="Studios" value={movie.studios.join(', ')} />
-					{/if}
-					<FactRow
-						label={m.library_movieHeader_qualityProfileLabel()}
-						value={qualityProfileName || m.common_default()}
-					/>
-					{#if movie.imdbId}
-						<FactRow
-							label={m.library_movieDetail_imdb()}
-							value={movie.imdbId}
-							href={`https://www.imdb.com/title/${movie.imdbId}`}
-						/>
-					{/if}
-					<FactRow
-						label={m.library_movieDetail_tmdbId()}
-						value={movie.tmdbId}
-						href={`https://www.themoviedb.org/movie/${movie.tmdbId}`}
-					/>
-					{#each providerLinkRows as row (row.label)}
-						<FactRow label={row.label}>
-							{#if row.resolved}
-								<a
-									href={row.href}
-									target="_blank"
-									rel="noopener noreferrer"
-									class="link link-primary"
-								>
-									{row.value}
-								</a>
-							{:else}
-								<button
-									type="button"
-									class="link link-warning"
-									onclick={() => openProviderLinkModal(row.provider)}
-								>
-									{row.value}
-								</button>
-							{/if}
-						</FactRow>
-					{/each}
-					<FactRow label={m.library_movieDetail_path()} variant="block" mono>
-						{movieStoragePath}
-					</FactRow>
-				</dl>
-			</Panel>
+			<MovieDetailsPanel
+				{movie}
+				{qualityProfileName}
+				configuredProviders={data.configuredMetadataProviders}
+				onResolveProviderRef={openProviderLinkModal}
+			/>
 
 			{#if data.collection}
 				{@const col = data.collection}

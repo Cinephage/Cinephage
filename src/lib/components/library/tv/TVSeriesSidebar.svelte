@@ -3,11 +3,16 @@
 	import * as m from '#lib/paraglide/messages.js';
 	import Panel from '#lib/components/ui/Panel.svelte';
 	import FactRow from '#lib/components/ui/FactRow.svelte';
+	import {
+		animeProviderRows,
+		mediaStoragePath,
+		type ProviderVisibility
+	} from '#lib/shared/media-details.js';
 
 	interface Props {
 		series: LibrarySeries;
 		qualityProfileName?: string | null;
-		configuredProviders?: { anilist: boolean; mal: boolean };
+		configuredProviders?: ProviderVisibility;
 		onResolveProviderRef?: (provider: 'anilist' | 'mal') => void;
 	}
 
@@ -18,72 +23,8 @@
 		onResolveProviderRef
 	}: Props = $props();
 
-	const seriesStoragePath = $derived.by(() => {
-		const rootPath = series.rootFolderPath ?? '';
-		const relativePath = series.path ?? '';
-
-		if (!rootPath) {
-			return relativePath;
-		}
-
-		if (!relativePath) {
-			return rootPath;
-		}
-
-		const normalizedRoot = rootPath.endsWith('/') ? rootPath.slice(0, -1) : rootPath;
-		const normalizedRelative = relativePath.startsWith('/') ? relativePath.slice(1) : relativePath;
-
-		return `${normalizedRoot}/${normalizedRelative}`;
-	});
-
-	const providerLinkRows = $derived.by(() => {
-		const isAnimeItem =
-			(series.rootFolderPath ?? '').toLowerCase().includes('/anime/') ||
-			Boolean(series.providerRefs?.anilist) ||
-			Boolean(series.providerRefs?.mal);
-		if (!isAnimeItem) return [];
-
-		const refs = series.providerRefs ?? {};
-		const rows: Array<
-			{ label: string; value: string } & (
-				| { resolved: true; href: string; provider: 'anilist' | 'mal' }
-				| { resolved: false; provider: 'anilist' | 'mal' }
-			)
-		> = [];
-		if (configuredProviders.anilist && refs.anilist) {
-			rows.push({
-				label: 'AniList ID',
-				href: `https://anilist.co/anime/${refs.anilist}`,
-				value: refs.anilist,
-				resolved: true,
-				provider: 'anilist'
-			});
-		} else if (configuredProviders.anilist) {
-			rows.push({
-				label: 'AniList ID',
-				value: 'N/A',
-				resolved: false,
-				provider: 'anilist'
-			});
-		}
-		if (configuredProviders.mal && refs.mal) {
-			rows.push({
-				label: 'MAL ID',
-				href: `https://myanimelist.net/anime/${refs.mal}`,
-				value: refs.mal,
-				resolved: true,
-				provider: 'mal'
-			});
-		} else if (configuredProviders.mal) {
-			rows.push({
-				label: 'MAL ID',
-				value: 'N/A',
-				resolved: false,
-				provider: 'mal'
-			});
-		}
-		return rows;
-	});
+	const seriesStoragePath = $derived(mediaStoragePath(series.rootFolderPath, series.path));
+	const providerLinkRows = $derived(animeProviderRows(series, configuredProviders));
 </script>
 
 <div class="space-y-4 md:space-y-6">
