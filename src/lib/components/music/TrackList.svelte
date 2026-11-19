@@ -79,9 +79,6 @@
 					<th class="w-12 text-right font-medium">#</th>
 					<th class="font-medium">{m.common_title()}</th>
 					<th class="w-20 text-right font-medium">{m.music_durationLabel()}</th>
-					{#if showFileState}
-						<th class="w-10"></th>
-					{/if}
 					{#if onAutoSearch || onOpenSearch}
 						<th class="w-10"></th>
 					{/if}
@@ -99,19 +96,23 @@
 							{#if track.artistCredit && track.artistCredit !== artistName}
 								<p class="truncate text-xs text-base-content/50">{track.artistCredit}</p>
 							{/if}
+							{#if showFileState}
+								<span
+									class="mt-1 inline-flex items-center gap-1 badge badge-sm border-none {track.hasFile
+										? 'bg-success/15 text-success'
+										: 'bg-warning/15 text-warning'}"
+								>
+									{#if track.hasFile}
+										<CircleCheck class="h-3 w-3" />{m.common_downloaded()}
+									{:else}
+										<CircleDashed class="h-3 w-3" />{m.common_missing()}
+									{/if}
+								</span>
+							{/if}
 						</td>
 						<td class="w-20 text-right font-mono text-xs text-base-content/50 tabular-nums">
 							{clock(track.duration)}
 						</td>
-						{#if showFileState}
-							<td class="w-10">
-								{#if track.hasFile}
-									<CircleCheck class="h-4 w-4 text-success" />
-								{:else}
-									<CircleDashed class="h-4 w-4 text-base-content/25" />
-								{/if}
-							</td>
-						{/if}
 						{#if onAutoSearch || onOpenSearch}
 							<td class="w-10">
 								<!-- The episode row's search control: auto-grab or pick a release. -->

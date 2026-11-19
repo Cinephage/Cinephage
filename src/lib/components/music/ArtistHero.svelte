@@ -133,6 +133,14 @@
 		...extraActions
 	]);
 
+	/** The phone bar carries Edit as its own slot, like the series bar. */
+	const mobileActions = $derived<DetailAction[]>([
+		...actions,
+		...(readOnly || !onEdit
+			? []
+			: [{ key: 'edit', icon: Pencil, label: m.action_edit(), onSelect: onEdit }])
+	]);
+
 	const menu = $derived<DetailAction[]>([
 		...(onEdit
 			? [{ key: 'edit', icon: Pencil, label: m.action_edit(), onSelect: onEdit }]
@@ -345,4 +353,4 @@
 	</div>
 </div>
 
-<DetailMobileBar {actions} {menu} />
+<DetailMobileBar actions={mobileActions} {menu} />
