@@ -29,6 +29,11 @@ interface MusicRow {
 	image_url?: string | null;
 	year?: number | null;
 	primary_type?: string | null;
+	/** MusicBrainz id when the row came from the fallback, null for Deezer rows. */
+	mbid?: string | null;
+	/** Deezer's own ids: the tile links straight to a page Deezer can answer. */
+	deezerId?: number | null;
+	deezerAlbumId?: number | null;
 }
 
 /**
@@ -53,7 +58,10 @@ async function musicRows(query: string): Promise<MusicRow[]> {
 				image_url: row.imageUrl,
 				year: row.year,
 				primary_type: null,
-				album_title: row.albumTitle
+				album_title: row.albumTitle,
+				mbid: null,
+				deezerId: row.deezerId,
+				deezerAlbumId: row.deezerAlbumId
 			}));
 		}
 	} catch (err) {
@@ -77,7 +85,8 @@ async function musicBrainzRows(query: string): Promise<MusicRow[]> {
 		title: artist.name,
 		subtitle: artist.disambiguation ?? null,
 		image_url: null,
-		primary_type: artist.type ?? null
+		primary_type: artist.type ?? null,
+		mbid: artist.mbid
 	}));
 	for (const group of albumHits) {
 		rows.push({
@@ -88,7 +97,8 @@ async function musicBrainzRows(query: string): Promise<MusicRow[]> {
 			subtitle: group.artist.name,
 			image_url: `https://coverartarchive.org/release-group/${group.mbid}/front-250`,
 			year: group.year ?? null,
-			primary_type: group.primaryType ?? null
+			primary_type: group.primaryType ?? null,
+			mbid: group.mbid
 		});
 	}
 	return rows;
@@ -148,7 +158,10 @@ export const GET: RequestHandler = async ({ url }) => {
 		} catch (e) {
 			const message = e instanceof Error ? e.message : 'Unknown error';
 			logger.error({ err: e, ...{ errorMessage: message, query } }, 'Music search failed');
-			return Response.json({ results: [], pagination: { page: 1, total_pages: 0, total_results: 0 } });
+			return Response.json({
+				results: [],
+				pagination: { page: 1, total_pages: 0, total_results: 0 }
+			});
 		}
 	}
 

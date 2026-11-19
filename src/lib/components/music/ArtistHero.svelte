@@ -41,6 +41,8 @@
 		backHref?: string | null;
 		backLabel?: string;
 		sourceUrl?: string | null;
+		/** The provider behind `sourceUrl`: the link says where it goes. */
+		sourceLabel?: string;
 		readOnly?: boolean;
 		onMonitorToggle?: (next: boolean) => void;
 		monitorBusy?: boolean;
@@ -65,6 +67,7 @@
 		backHref = null,
 		backLabel = m.nav_music(),
 		sourceUrl = null,
+		sourceLabel = 'MusicBrainz',
 		readOnly = false,
 		onMonitorToggle,
 		monitorBusy = false,
@@ -86,7 +89,8 @@
 			// the artist, not a field to confuse with genre.
 			artist.artistType,
 			m.music_albumsCount({ count: albumCount }),
-			m.music_songsCount({ count: songCount })
+			// A catalog page has no songs of its own; only a library artist does.
+			artist.added ? m.music_songsCount({ count: songCount }) : null
 		].filter(Boolean) as string[]
 	);
 
@@ -265,16 +269,19 @@
 						class="flex flex-col gap-2 border-t border-base-content/10 pt-3 sm:flex-row sm:items-center sm:justify-between"
 					>
 						<div class="flex flex-wrap items-center gap-2">
-							{#if artist.monitored}
-								<span class="inline-flex items-center gap-2 rounded-lg bg-success/10 px-3 py-1.5 text-sm text-success">
-									<Eye size={16} />
-									{m.common_monitored()}
-								</span>
-							{:else}
-								<span class="inline-flex items-center gap-2 rounded-lg bg-base-content/5 px-3 py-1.5 text-sm text-base-content/50">
-									<EyeOff size={16} />
-									{m.common_unmonitored()}
-								</span>
+							<!-- Only a library artist has a monitored state; a catalog page does not. -->
+							{#if artist.added}
+								{#if artist.monitored}
+									<span class="inline-flex items-center gap-2 rounded-lg bg-success/10 px-3 py-1.5 text-sm text-success">
+										<Eye size={16} />
+										{m.common_monitored()}
+									</span>
+								{:else}
+									<span class="inline-flex items-center gap-2 rounded-lg bg-base-content/5 px-3 py-1.5 text-sm text-base-content/50">
+										<EyeOff size={16} />
+										{m.common_unmonitored()}
+									</span>
+								{/if}
 							{/if}
 						</div>
 						<div
@@ -287,7 +294,7 @@
 									rel="noopener noreferrer"
 									class="btn shrink-0 gap-1 btn-ghost btn-xs"
 								>
-									MusicBrainz<ExternalLink size={12} />
+									{sourceLabel}<ExternalLink size={12} />
 								</a>
 							{/if}
 						</div>

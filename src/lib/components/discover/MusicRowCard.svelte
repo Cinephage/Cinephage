@@ -22,27 +22,25 @@
 	/** A song opens and adds its album — that is the unit acquisition acts on. */
 	const albumLabel = $derived(isSong ? (item.album_title ?? item.title ?? '') : title);
 
-	// Search rows carry a MusicBrainz id; chart rows do not. A row without one
-	// links to the resolver, so the tile is a real link the moment it renders —
-	// the server pays the rate gate, not the click.
+	// A row links to the page its provider can render: a MusicBrainz id opens the
+	// canonical page, a Deezer row opens the provider-backed one. There is no
+	// resolver hop any more — that used to cost a rate-gated lookup per click
+	// before anything painted (2.8 s for an album, 3.4 s for an artist).
 	const target = $derived.by(() => {
-		const mbid = item.mbid;
-		if (!mbid) return null;
-		return isArtist ? `/discover/music/artist/${mbid}` : `/discover/music/${mbid}`;
+		if (item.mbid) {
+			return isArtist ? `/discover/music/artist/${item.mbid}` : `/discover/music/${item.mbid}`;
+		}
+		const deezerId = isSong ? item.deezerAlbumId : item.deezerId;
+		if (typeof deezerId === 'number') {
+			return isArtist
+				? `/discover/music/artist/deezer-artist-${deezerId}`
+				: `/discover/music/deezer-album-${deezerId}`;
+		}
+		return null;
 	});
 
 	/** The same tile the library uses — music's grid is a grid, not a row list. */
-	const fallbackHref = $derived.by(() => {
-		const params = new URLSearchParams({
-			kind: isArtist ? 'artist' : 'album',
-			title
-		});
-		if (!isArtist) {
-			if (item.subtitle) params.set('artist', item.subtitle);
-			params.set('album', albumLabel);
-		}
-		return `/discover/music/resolve?${params}`;
-	});
+	const href = $derived(target ?? '/discover?type=music');
 
 	const view = $derived(
 		isArtist
@@ -57,7 +55,7 @@
 					},
 					{
 						artUrl: item.image_url ?? null,
-						href: target ?? fallbackHref,
+						href,
 						hideState: true,
 						hideMonitored: true
 					}
@@ -75,7 +73,7 @@
 					},
 					{
 						artUrl: item.image_url ?? null,
-						href: target ?? fallbackHref,
+						href,
 						hideState: true,
 						hideMonitored: true,
 						label: isSong ? m.music_tabSong() : undefined
@@ -140,7 +138,7 @@
 
 	{#if !isArtist}
 		<button
-			class="absolute right-2 bottom-2 z-20 btn btn-circle btn-xs shadow-lg {done
+			class="btn absolute right-2 bottom-2 z-20 btn-circle shadow-lg btn-xs {done
 				? 'btn-success'
 				: 'btn-primary'}"
 			onclick={add}
@@ -157,5 +155,4 @@
 			{/if}
 		</button>
 	{/if}
-
 </div>

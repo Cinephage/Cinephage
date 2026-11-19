@@ -273,10 +273,14 @@
 						class="flex flex-col gap-2 border-t border-base-content/10 pt-3 sm:flex-row sm:items-center sm:justify-between"
 					>
 						<div class="flex flex-wrap items-center gap-2">
-							<StatusIndicator
-								status={album.hasFile ? 'downloaded' : 'missing'}
-								qualityText={album.primaryType}
-							/>
+							<!-- Null means "not in the library", which is not "missing": a
+							     catalog album was never added, so it carries no file state. -->
+							{#if album.hasFile !== null && album.hasFile !== undefined}
+								<StatusIndicator
+									status={album.hasFile ? 'downloaded' : 'missing'}
+									qualityText={album.primaryType}
+								/>
+							{/if}
 							{#if album.hasFile && album.trackCount}
 								<span class="badge badge-sm badge-outline">
 									{m.music_tracksShort({ count: album.trackCount })}

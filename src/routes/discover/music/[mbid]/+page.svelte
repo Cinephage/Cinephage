@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { Check, LoaderCircle, Plus } from '@lucide/svelte';
+	import { Check, Plus } from '@lucide/svelte';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import * as m from '#lib/paraglide/messages.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import AlbumHero from '#lib/components/music/AlbumHero.svelte';
@@ -33,17 +34,21 @@
 	}: {
 		data: {
 			group: {
-				mbid: string;
+				/** Null when the page came from Deezer; the id is then `deezerId`. */
+				mbid: string | null;
+				deezerId: number | null;
 				title: string;
 				primaryType?: string | null;
 				secondaryTypes: string[];
 				firstReleaseDate?: string | null;
 				year?: number | null;
-				artist: { mbid: string; name: string };
+				artist: { mbid: string | null; deezerId: number | null; name: string };
 			};
 			release: Release;
 			libraryAlbumId: string | null;
 			featured: string[];
+			/** Deezer cover; null on a MusicBrainz page, which uses the archive. */
+			artworkUrl: string | null;
 		};
 	} = $props();
 
@@ -52,7 +57,7 @@
 	// The release group is the album. Missing edition details simply drop out of
 	// the hero rather than blanking the page.
 	const album = $derived<AlbumHeroAlbum>({
-		id: group.mbid,
+		id: group.mbid ?? `deezer-album-${group.deezerId ?? ''}`,
 		title: group.title,
 		artistName: group.artist.name,
 		artistMbid: group.artist.mbid,
@@ -67,9 +72,23 @@
 		mediaCount: release?.mediaCount ?? null,
 		trackCount: release?.trackCount ?? null,
 		duration: release?.duration ?? null,
-		hasFile: Boolean(data.libraryAlbumId),
+		// Null on a catalog page: no library row means no file state to report.
+		hasFile: data.libraryAlbumId ? true : null,
 		mbid: group.mbid
 	});
+
+	/** The provider that answered this page owns the art and the artist link. */
+	const coverUrl = $derived(
+		data.artworkUrl ??
+			(group.mbid ? `https://coverartarchive.org/release-group/${group.mbid}/front-500` : null)
+	);
+	const artistHref = $derived(
+		group.artist.mbid
+			? `/discover/music/artist/${group.artist.mbid}`
+			: typeof group.artist.deezerId === 'number'
+				? `/discover/music/artist/deezer-artist-${group.artist.deezerId}`
+				: null
+	);
 
 	const tracks = $derived<TrackListTrack[]>(
 		(release?.tracks ?? []).map((track, index) => ({
@@ -85,15 +104,34 @@
 
 	let busy = $state(false);
 
+	/**
+	 * A Deezer page carries no MusicBrainz id, and adding is the one action that
+	 * needs it. Resolve here, behind the spinner — never in the page load, which
+	 * is what made every click wait on the rate gate.
+	 */
+	async function resolveMbid(): Promise<string | null> {
+		if (group.mbid) return group.mbid;
+		const params = new SvelteURLSearchParams({ type: 'album', album: group.title });
+		if (group.artist.name) params.set('artist', group.artist.name);
+		const body = await fetch(`/api/music/search?${params}`).then((r) => r.json());
+		const hit = (body.results ?? [])[0] as { mbid?: string } | undefined;
+		return hit?.mbid ?? null;
+	}
+
 	/** Same contract as the library page: one POST, idempotent server-side. */
 	async function addToLibrary() {
 		if (busy) return;
 		busy = true;
 		try {
+			const mbid = await resolveMbid();
+			if (!mbid) {
+				toasts.error(m.music_addFailed());
+				return;
+			}
 			const response = await fetch('/api/music/albums', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ releaseGroupMbid: group.mbid, libraryId: null })
+				body: JSON.stringify({ releaseGroupMbid: mbid, libraryId: null })
 			});
 			const body = await response.json();
 			if (!response.ok) {
@@ -123,8 +161,8 @@
 <div class="w-full px-4 pt-4 pb-20 md:px-6 lg:px-8">
 	<AlbumHero
 		{album}
-		coverUrl={`https://coverartarchive.org/release-group/${group.mbid}/front-500`}
-		artistHref={`/discover/music/artist/${group.artist.mbid}`}
+		{coverUrl}
+		{artistHref}
 		backHref="/discover?type=music"
 		backLabel={m.nav_music()}
 		readOnly

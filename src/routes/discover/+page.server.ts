@@ -2,6 +2,7 @@ import { tmdb } from '#lib/server/tmdb.js';
 import { getDiscoverResults, resolveWithOriginalLanguage } from '#lib/server/discover.js';
 import { catalogSourceForKind } from '#lib/server/catalog/registry.js';
 import { musicLegacyRows } from '#lib/server/catalog/deezer.js';
+import { musicLanding } from '#lib/server/catalog/musicLanding.js';
 import { contentFilterPipeline } from '#lib/server/filters/ContentFilterPipeline.js';
 import type { WatchProvider } from '#lib/types/tmdb.js';
 import type { TmdbCertificationsResponse } from '#lib/server/tmdb.js';
@@ -455,22 +456,39 @@ export const load: PageServerLoad = async ({ url }) => {
 				}
 			};
 		} else {
-			// Music has no TMDB grammar: its rows come from the music catalog
-			// source and the video filter/enrichment pipelines skip it.
+			// Music has no TMDB grammar — and no single grid: the landing is chart
+			// shelves (albums, artists, tracks) with genre chips, all answered by
+			// one Deezer request. A genre is the same chart with an id, so the
+			// chips are a view over the browse source, not a second query path.
 			if (type === 'music') {
-				const musicSource = catalogSourceForKind('music');
+				const requestedGenre = Number(url.searchParams.get('genre') ?? '');
+				const landing = await musicLanding(
+					Number.isFinite(requestedGenre) && requestedGenre > 0 ? requestedGenre : undefined
+				);
+
+				// Deezer unreachable: keep the old chart grid rather than an empty
+				// landing. The source carries its own last-good cache, so this only
+				// fires on a cold failure.
 				let musicRows: Record<string, unknown>[] = [];
 				let musicPagination = { page: parseInt(page), total_pages: 0, total_results: 0 };
-				if (musicSource) {
-					const music = await musicSource.discover({ page: parseInt(page) });
-					if (music) {
-						musicRows = musicLegacyRows(music.items);
-						musicPagination = music.pagination;
+				if (!landing) {
+					const musicSource = catalogSourceForKind('music');
+					if (musicSource) {
+						const music = await musicSource.discover({ page: parseInt(page) });
+						if (music) {
+							musicRows = musicLegacyRows(music.items);
+							musicPagination = music.pagination;
+						}
 					}
 				}
+
 				return {
-					viewType: 'grid',
+					viewType: landing ? ('music' as const) : ('grid' as const),
 					tmdbConfigured: true,
+					shelves: landing?.shelves ?? [],
+					musicGenres: landing?.genres ?? [],
+					activeGenreId: landing?.activeGenreId ?? null,
+					activeGenreName: landing?.activeGenreName ?? null,
 					results: musicRows,
 					pagination: musicPagination,
 					providers: [],

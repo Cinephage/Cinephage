@@ -44,7 +44,23 @@
 		return item.media_type === 'music';
 	}
 
+	/** A music shelf is identified, not labelled, by the server, so the heading
+	 *  is translated here and a genre can prefix it. */
+	function shelfLabel(id: string): string {
+		if (id === 'topArtists') return m.music_topArtists();
+		if (id === 'topTracks') return m.music_topTracks();
+		return m.music_topAlbums();
+	}
+
 	let { data } = $props();
+
+	/** The music landing payload, narrowed once: it exists only on the music
+	 *  view, and this page's data type is a union of every view. */
+	type MusicShelfView = { id: string; rows: MusicRowItem[] };
+	const musicShelves = $derived((data.shelves ?? []) as MusicShelfView[]);
+	const musicGenres = $derived((data.musicGenres ?? []) as { id: number; name: string }[]);
+	const activeGenreId = $derived((data.activeGenreId ?? null) as number | null);
+	const activeGenreName = $derived((data.activeGenreName ?? null) as string | null);
 
 	// Only admins add content; viewers browse Discover without the add actions.
 	const isAdminUser = $derived(data.user?.role === 'admin');
@@ -1021,7 +1037,46 @@
 					{/if}
 				</div>
 			</div>
+		{:else if data.viewType === 'music'}
+			<!-- Music View: one chart request feeds three shelves, and a genre is the
+			     same chart with an id, so the chips are a view over it. -->
+			<div class="animate-in fade-in space-y-10 duration-500">
+				{#if musicGenres.length > 0}
+					<div class="flex flex-wrap items-center gap-2">
+						<a
+							href="/discover?type=music"
+							class="btn rounded-full btn-sm {activeGenreId ? 'btn-ghost' : 'btn-primary'}"
+						>
+							{m.common_all()}
+						</a>
+						{#each musicGenres as genre (genre.id)}
+							<a
+								href={`/discover?type=music&genre=${genre.id}`}
+								class="btn rounded-full btn-sm {activeGenreId === genre.id
+									? 'btn-primary'
+									: 'btn-ghost'}"
+							>
+								{genre.name}
+							</a>
+						{/each}
+					</div>
+				{/if}
+
+				{#each musicShelves as shelf (shelf.id)}
+					<section class="space-y-4">
+						<h2 class="text-lg font-bold">
+							{activeGenreName ? `${activeGenreName} · ${shelfLabel(shelf.id)}` : shelfLabel(shelf.id)}
+						</h2>
+						<div class="grid grid-cols-3 gap-2 sm:gap-4 lg:grid-cols-9">
+							{#each shelf.rows as item (item.id)}
+								<MusicRowCard {item} onAdded={() => refreshAll()} />
+							{/each}
+						</div>
+					</section>
+				{/each}
+			</div>
 		{:else if data.viewType === 'dashboard' && data.sections}
+
 			<!-- Dashboard View -->
 			<div class="animate-in fade-in space-y-12 duration-500">
 				<SectionRow
