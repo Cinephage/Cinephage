@@ -21,8 +21,9 @@
 		mbid?: string | null;
 		sortName?: string | null;
 		artistType?: string | null;
-		country?: string | null;
+		/** MusicBrainz genres — an array; artists drift between them. */
 		genres?: string[] | null;
+		country?: string | null;
 		overview?: string | null;
 		disambiguation?: string | null;
 		added?: string | null;
@@ -81,10 +82,15 @@
 	const artUrl = $derived(backdropUrl && !artFailed ? backdropUrl : null);
 	const stats = $derived(
 		[
+			// The MusicBrainz entity type (Person / Group) reads as a fact about
+			// the artist, not a field to confuse with genre.
+			artist.artistType,
 			m.music_albumsCount({ count: albumCount }),
 			m.music_songsCount({ count: songCount })
 		].filter(Boolean) as string[]
 	);
+
+	const genres = $derived((artist.genres ?? []).filter(Boolean));
 
 	/** The page's controls, described once and rendered by the shared bars. */
 	const actions = $derived<DetailAction[]>([
@@ -206,23 +212,6 @@
 							</div>
 						{/if}
 					</div>
-					{#if !readOnly}
-						<button
-							class="flex w-full items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-colors {artist.monitored
-								? 'bg-success/10 text-success hover:bg-success/20'
-								: 'bg-base-content/5 text-base-content/40 hover:bg-base-content/10'}"
-							disabled={monitorBusy}
-							onclick={() => onMonitorToggle?.(!artist.monitored)}
-						>
-							{#if artist.monitored}
-								<Eye size={13} />
-								{m.common_monitored()}
-							{:else}
-								<EyeOff size={13} />
-								{m.common_unmonitored()}
-							{/if}
-						</button>
-					{/if}
 				</div>
 
 				<!-- Main info -->
@@ -326,10 +315,14 @@
 							<div class="text-xs text-base-content/50">{m.music_tabSongs()}</div>
 							<div class="font-medium">{songCount}</div>
 						</div>
-						{#if artist.artistType}
-							<div>
-								<div class="text-xs text-base-content/50">{m.music_typeLabel()}</div>
-								<div class="font-medium">{artist.artistType}</div>
+						{#if genres.length > 0}
+							<div class="col-span-2">
+								<div class="text-xs text-base-content/50">{m.music_genreLabel()}</div>
+								<div class="mt-1 flex flex-wrap gap-1">
+									{#each genres as genre (genre)}
+										<span class="badge badge-sm badge-ghost">{genre}</span>
+									{/each}
+								</div>
 							</div>
 						{/if}
 						{#if artist.country}

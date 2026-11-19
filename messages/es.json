@@ -2408,7 +2408,6 @@
 	"music_albumColumn": "Álbum",
 	"music_noSongs": "Aún no hay canciones.",
 	"music_monitorAction": "Monitorizar",
-	"music_typeLabel": "Tipo",
 	"music_unmonitorAction": "Dejar de monitorizar",
 	"music_groupEps": "EPs",
 	"music_groupSingles": "Sencillos",
@@ -5434,5 +5433,7 @@
 	"profile_passwordMismatch": "Las contraseñas nuevas no coinciden",
 	"requestsSettings_userQuotaOverrideReset": "Restablecer anulaciones de cuota",
 	"requestsSettings_quotaPer": "por",
-	"requestsSettings_lifetime": "Ciclo de vida"
+	"requestsSettings_lifetime": "Ciclo de vida",
+	"music_genreLabel": "Género",
+	"music_typeLabel": "Tipo"
 }

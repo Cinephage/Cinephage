@@ -17,8 +17,19 @@ import { deriveFeaturedArtists } from '#lib/components/music/music-card.js';
 export const load: PageServerLoad = async ({ locals, params }) => {
 	requireAdminPage(locals);
 
-	const artist = musicArtistService.getArtist(params.id);
+	let artist = musicArtistService.getArtist(params.id);
 	if (!artist) error(404, 'Artist not found');
+
+	// Type, country and genres are MusicBrainz fields the row is created
+	// without. Fill them once, but never let a slow upstream hold the page: the
+	// lookup gets a bounded wait and the page renders from what is stored.
+	if (artist.mbid && (!artist.artistType || (artist.genres?.length ?? 0) === 0)) {
+		await Promise.race([
+			musicArtistService.ensureMetadata(artist.id, artist.mbid).catch(() => undefined),
+			new Promise((resolve) => setTimeout(resolve, 1500))
+		]);
+		artist = musicArtistService.getArtist(params.id) ?? artist;
+	}
 
 	const albums = musicAlbumService.listAlbums({ artistId: artist.id });
 	const songs = musicTrackService.listTracks({ artistId: artist.id });

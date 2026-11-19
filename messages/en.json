@@ -2499,7 +2499,6 @@
 	"music_albumColumn": "Album",
 	"music_noSongs": "No songs here yet.",
 	"music_monitorAction": "Monitor",
-	"music_typeLabel": "Type",
 	"music_unmonitorAction": "Unmonitor",
 	"music_groupEps": "EPs",
 	"music_groupSingles": "Singles",
@@ -5778,5 +5777,7 @@
 	"notifications_retryFailed": "Retry failed: {error}",
 	"notifications_enabledToast": "{name} enabled",
 	"notifications_disabledToast": "{name} disabled",
-	"notifications_event_task_failed": "Task failed"
+	"notifications_event_task_failed": "Task failed",
+	"music_genreLabel": "Genre",
+	"music_typeLabel": "Type"
 }

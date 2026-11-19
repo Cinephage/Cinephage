@@ -2408,7 +2408,6 @@
 	"music_albumColumn": "Альбом",
 	"music_noSongs": "Здесь пока нет песен.",
 	"music_monitorAction": "Отслеживать",
-	"music_typeLabel": "Тип",
 	"music_unmonitorAction": "Не отслеживать",
 	"music_groupEps": "EP",
 	"music_groupSingles": "Синглы",
@@ -5434,5 +5433,7 @@
 	"profile_passwordMismatch": "Новые пароли не совпадают",
 	"requestsSettings_userQuotaOverrideReset": "Сбросить переопределения квот",
 	"requestsSettings_quotaPer": "в",
-	"requestsSettings_lifetime": "Срок жизни"
+	"requestsSettings_lifetime": "Срок жизни",
+	"music_genreLabel": "Жанр",
+	"music_typeLabel": "Тип"
 }

@@ -423,10 +423,16 @@
 			<div class="rounded-xl bg-base-200 p-4 md:p-6">
 				<h3 class="mb-3 font-semibold">{m.common_details()}</h3>
 				<dl class="space-y-2 text-sm">
-					<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
-						<dt class="text-base-content/60">{m.music_typeLabel()}</dt>
-						<dd class="sm:text-right">{artist.artistType ?? m.common_unknown()}</dd>
-					</div>
+					{#if artist.genres && artist.genres.length > 0}
+						<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
+							<dt class="text-base-content/60">{m.music_genreLabel()}</dt>
+							<dd class="flex flex-wrap gap-1 sm:justify-end">
+								{#each artist.genres as genre (genre)}
+									<span class="badge badge-sm badge-ghost">{genre}</span>
+								{/each}
+							</dd>
+						</div>
+					{/if}
 					{#if artist.country}
 						<div class="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
 							<dt class="text-base-content/60">{m.music_country()}</dt>

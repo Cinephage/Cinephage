@@ -153,6 +153,42 @@ export class MusicArtistService {
 		return true;
 	}
 
+	/**
+	 * Fill in the MusicBrainz fields an artist row is created without.
+	 *
+	 * `ensureArtist` runs inside a synchronous transaction and only knows the
+	 * ref from a release group's credit, so type, country and genres stayed
+	 * null — which is why the artist page had nothing to show beside "Type".
+	 * One gated lookup fixes the row for good; callers tolerate its absence.
+	 */
+	async ensureMetadata(artistId: string, mbid: string): Promise<void> {
+		const row = db
+			.select({
+				artistType: artists.artistType,
+				country: artists.country,
+				genres: artists.genres
+			})
+			.from(artists)
+			.where(eq(artists.id, artistId))
+			.get();
+		if (!row) return;
+		if (row.artistType && row.country && (row.genres?.length ?? 0) > 0) return;
+
+		const detail = await musicBrainz.getArtist(mbid);
+		db.update(artists)
+			.set({
+				artistType: detail.type ?? row.artistType ?? null,
+				country: detail.country ?? row.country ?? null,
+				genres: detail.genres.length > 0 ? detail.genres : (row.genres ?? null)
+			})
+			.where(eq(artists.id, artistId))
+			.run();
+		logger.info(
+			{ artistId, genres: detail.genres.length },
+			'[MusicArtist] filled MusicBrainz metadata'
+		);
+	}
+
 	/** One artist row, for the artist page hero and its card. */
 	getArtist(artistId: string): ArtistRecord | null {
 		return (

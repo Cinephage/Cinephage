@@ -2408,7 +2408,6 @@
 	"music_albumColumn": "Album",
 	"music_noSongs": "Noch keine Titel vorhanden.",
 	"music_monitorAction": "Überwachen",
-	"music_typeLabel": "Typ",
 	"music_unmonitorAction": "Nicht mehr überwachen",
 	"music_groupEps": "EPs",
 	"music_groupSingles": "Singles",
@@ -5434,5 +5433,7 @@
 	"profile_passwordMismatch": "Die neuen Passwörter stimmen nicht überein",
 	"requestsSettings_userQuotaOverrideReset": "Kontingent-Overrides zurücksetzen",
 	"requestsSettings_quotaPer": "pro",
-	"requestsSettings_lifetime": "Lebenszyklus"
+	"requestsSettings_lifetime": "Lebenszyklus",
+	"music_genreLabel": "Genre",
+	"music_typeLabel": "Typ"
 }
