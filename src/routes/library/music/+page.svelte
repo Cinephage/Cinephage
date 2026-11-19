@@ -6,10 +6,6 @@
 		Eye,
 		EyeOff,
 		Search,
-		SlidersHorizontal,
-		X,
-		LayoutGrid,
-		List,
 		ChevronDown,
 		Plus,
 		Mic2,
@@ -18,6 +14,7 @@
 	import * as m from '#lib/paraglide/messages.js';
 	import LibraryMediaCard from '#lib/components/library/LibraryMediaCard.svelte';
 	import LibraryMediaTable from '#lib/components/library/LibraryMediaTable.svelte';
+	import LibraryListHeader from '#lib/components/library/list/LibraryListHeader.svelte';
 	import LibraryDrawer from '#lib/components/library/LibraryDrawer.svelte';
 	import {
 		albumCardView,
@@ -371,171 +368,104 @@
 <svelte:head><title>{m.nav_music()} · Cinephage</title></svelte:head>
 
 <div class="min-h-screen bg-base-100 pb-20">
-	<!-- Header: the movie and TV libraries' toolbar, same shape. -->
-	<div
-		class="sticky top-16 z-30 -mx-4 border-b border-base-200 bg-base-100/80 backdrop-blur-md lg:top-0 lg:mx-0"
+	<LibraryListHeader
+		title={m.nav_music()}
+		total={browseCount}
+		totalUnfiltered={browseCount}
+		ofTotalLabel=""
+		searchPlaceholder={m.music_searchEverything()}
+		clearSearchLabel={m.library_movies_clearSearch()}
+		bind:searchQuery
+		viewMode={viewPreferences.viewMode}
+		switchToGridLabel={m.library_movies_switchToGrid()}
+		switchToListLabel={m.library_movies_switchToList()}
+		onToggleView={() => viewPreferences.toggleViewMode()}
+		activeFilterCount={activeFilterCount}
+		filterLabel={m.library_drawer_title()}
+		onOpenFilters={() => (drawerOpen = true)}
 	>
-		<div class="flex h-16 items-center gap-3 px-4 lg:px-8">
-			<div class="flex min-w-0 items-center gap-2 sm:gap-3">
-				<h1
-					class="min-w-0 bg-linear-to-r from-primary to-secondary bg-clip-text text-xl font-bold text-transparent sm:text-2xl"
+		{#snippet notice()}
+			{#if data.library && data.library.rootFolderCount === 0}
+				<span class="hidden text-xs text-warning sm:inline">{m.music_noRootFolder()}</span>
+			{/if}
+		{/snippet}
+
+		{#snippet actions()}
+			{#if isAdminUser}
+				<button class="btn gap-1.5 btn-primary btn-xs sm:btn-sm" onclick={() => (addOpen = true)}>
+					<Plus class="h-4 w-4" />
+					<span class="hidden xl:inline">{m.music_addMusic()}</span>
+				</button>
+			{/if}
+
+			<div class="dropdown dropdown-end">
+				<div
+					tabindex="0"
+					role="button"
+					class="btn gap-1.5 btn-ghost btn-xs sm:btn-sm"
+					aria-label={m.music_typeLabel()}
 				>
-					{m.nav_music()}
-				</h1>
-				<span class="badge badge-ghost badge-sm sm:badge-lg">{browseCount}</span>
-				{#if data.library && data.library.rootFolderCount === 0}
-					<span class="hidden text-xs text-warning sm:inline">{m.music_noRootFolder()}</span>
-				{/if}
-			</div>
-
-			<div class="hidden flex-1 items-center justify-center gap-2 md:flex">
-				<div class="group relative w-full max-w-lg">
-					<Search
-						class="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-base-content/40 transition-colors group-focus-within:text-primary"
-					/>
-					<input
-						type="text"
-						placeholder={m.music_searchEverything()}
-						class="input w-full rounded-full border-base-content/20 bg-base-200/60 pr-9 pl-10 transition-all duration-200 input-md placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
-						bind:value={searchQuery}
-					/>
-					{#if searchQuery}
-						<button
-							class="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-0.5 text-base-content/40 transition-colors hover:bg-base-300 hover:text-base-content"
-							onclick={() => (searchQuery = '')}
-							aria-label={m.library_movies_clearSearch()}
-						>
-							<X class="h-3.5 w-3.5" />
-						</button>
+					{#if browse === 'albums'}
+						<Disc3 class="h-4 w-4" />
+					{:else if browse === 'songs'}
+						<Music class="h-4 w-4" />
+					{:else}
+						<Mic2 class="h-4 w-4" />
 					{/if}
+					<span class="hidden xl:inline">{browseLabel}</span>
+					<ChevronDown class="hidden h-3 w-3 sm:block" />
 				</div>
+				<ul
+					class="menu dropdown-content z-50 mt-2 w-44 rounded-box border border-base-300 bg-base-100 p-2 shadow-xl"
+				>
+					{#each [{ value: 'artists', label: m.music_tabArtists() }, { value: 'albums', label: m.music_tabAlbums() }, { value: 'songs', label: m.music_tabSongs() }] as option (option.value)}
+						<li>
+							<button
+								class={browse === option.value ? 'menu-active' : ''}
+								onclick={() => {
+									browse = option.value as Browse;
+									sortField = defaultSort(option.value as Browse);
+								}}
+							>
+								{option.label}
+							</button>
+						</li>
+					{/each}
+				</ul>
 			</div>
 
-			<div class="ml-auto flex shrink-0 items-center gap-1.5">
+			<div class="dropdown dropdown-end">
 				{#if isAdminUser}
-					<button class="btn gap-1.5 btn-primary btn-xs sm:btn-sm" onclick={() => (addOpen = true)}>
-						<Plus class="h-4 w-4" />
-						<span class="hidden xl:inline">{m.music_addMusic()}</span>
-					</button>
-				{/if}
-
-				<div class="dropdown dropdown-end">
 					<div
 						tabindex="0"
 						role="button"
 						class="btn gap-1.5 btn-ghost btn-xs sm:btn-sm"
-						aria-label={m.music_typeLabel()}
+						aria-label="Monitoring actions"
 					>
-						{#if browse === 'albums'}
-							<Disc3 class="h-4 w-4" />
-						{:else if browse === 'songs'}
-							<Music class="h-4 w-4" />
-						{:else}
-							<Mic2 class="h-4 w-4" />
-						{/if}
-						<span class="hidden xl:inline">{browseLabel}</span>
+						<Eye class="h-4 w-4" />
+						<span class="hidden xl:inline">Monitoring</span>
 						<ChevronDown class="hidden h-3 w-3 sm:block" />
 					</div>
 					<ul
 						class="menu dropdown-content z-50 mt-2 w-44 rounded-box border border-base-300 bg-base-100 p-2 shadow-xl"
 					>
-						{#each [{ value: 'artists', label: m.music_tabArtists() }, { value: 'albums', label: m.music_tabAlbums() }, { value: 'songs', label: m.music_tabSongs() }] as option (option.value)}
-							<li>
-								<button
-									class={browse === option.value ? 'menu-active' : ''}
-									onclick={() => {
-										browse = option.value as Browse;
-										sortField = defaultSort(option.value as Browse);
-									}}
-								>
-									{option.label}
-								</button>
-							</li>
-						{/each}
+						<li>
+							<button onclick={() => handleMonitorAll(true)}>
+								<Eye class="h-4 w-4" />
+								{m.library_movies_monitorAll()}
+							</button>
+						</li>
+						<li>
+							<button onclick={() => handleMonitorAll(false)}>
+								<EyeOff class="h-4 w-4" />
+								{m.library_movies_unmonitorAll()}
+							</button>
+						</li>
 					</ul>
-				</div>
-
-				<div class="dropdown dropdown-end">
-					{#if isAdminUser}
-						<div
-							tabindex="0"
-							role="button"
-							class="btn gap-1.5 btn-ghost btn-xs sm:btn-sm"
-							aria-label="Monitoring actions"
-						>
-							<Eye class="h-4 w-4" />
-							<span class="hidden xl:inline">Monitoring</span>
-							<ChevronDown class="hidden h-3 w-3 sm:block" />
-						</div>
-						<ul
-							class="menu dropdown-content z-50 mt-2 w-44 rounded-box border border-base-300 bg-base-100 p-2 shadow-xl"
-						>
-							<li>
-								<button onclick={() => handleMonitorAll(true)}>
-									<Eye class="h-4 w-4" />
-									{m.library_movies_monitorAll()}
-								</button>
-							</li>
-							<li>
-								<button onclick={() => handleMonitorAll(false)}>
-									<EyeOff class="h-4 w-4" />
-									{m.library_movies_unmonitorAll()}
-								</button>
-							</li>
-						</ul>
-					{/if}
-				</div>
-
-				<button
-					class="btn btn-ghost btn-sm"
-					onclick={() => viewPreferences.toggleViewMode()}
-					aria-label={viewPreferences.viewMode === 'grid'
-						? m.library_movies_switchToList()
-						: m.library_movies_switchToGrid()}
-				>
-					{#if viewPreferences.viewMode === 'grid'}
-						<List class="h-4 w-4" />
-					{:else}
-						<LayoutGrid class="h-4 w-4" />
-					{/if}
-				</button>
-
-				<button
-					class="btn gap-1.5 btn-sm {activeFilterCount > 0 ? 'btn-primary' : 'btn-ghost'}"
-					onclick={() => (drawerOpen = true)}
-					aria-label={m.library_drawer_title()}
-				>
-					<SlidersHorizontal class="h-4 w-4" />
-					{#if activeFilterCount > 0}
-						<span class="badge badge-sm">{activeFilterCount}</span>
-					{/if}
-				</button>
-			</div>
-		</div>
-
-		<div class="flex items-center gap-2 border-t border-base-200/50 px-4 py-2 md:hidden">
-			<div class="group relative w-full">
-				<Search
-					class="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-base-content/40 transition-colors group-focus-within:text-primary"
-				/>
-				<input
-					type="text"
-					placeholder={m.music_searchEverything()}
-					class="input w-full rounded-full border-base-content/20 bg-base-200/60 pr-9 pl-10 transition-all duration-200 input-md placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
-					bind:value={searchQuery}
-				/>
-				{#if searchQuery}
-					<button
-						class="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-0.5 text-base-content/40 transition-colors hover:bg-base-300 hover:text-base-content"
-						onclick={() => (searchQuery = '')}
-						aria-label={m.library_movies_clearSearch()}
-					>
-						<X class="h-3.5 w-3.5" />
-					</button>
 				{/if}
 			</div>
-		</div>
-	</div>
+		{/snippet}
+	</LibraryListHeader>
 
 	<!-- Main content -->
 	<main class="w-full px-4 py-8 lg:px-8">

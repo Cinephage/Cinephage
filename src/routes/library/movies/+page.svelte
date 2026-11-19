@@ -6,27 +6,22 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import LibraryMediaCard from '#lib/components/library/LibraryMediaCard.svelte';
 	import { movieCardView, movieRowView } from '#lib/components/library/media-view.js';
-	import LibraryMediaTable from '#lib/components/library/LibraryMediaTable.svelte';
+	import LibraryListHeader from '#lib/components/library/list/LibraryListHeader.svelte';
+	import LibraryListEmptyState from '#lib/components/library/list/LibraryListEmptyState.svelte';
+	import LibraryListBody from '#lib/components/library/list/LibraryListBody.svelte';
+	import LibraryBulkActions from '#lib/components/library/list/LibraryBulkActions.svelte';
+	import { createListSelection } from '#lib/components/library/list/list-selection.svelte.js';
 	import LibraryDrawer from '#lib/components/library/LibraryDrawer.svelte';
-	import LibraryBulkActionBar from '#lib/components/library/LibraryBulkActionBar.svelte';
-	import BulkQualityProfileModal from '#lib/components/library/BulkQualityProfileModal.svelte';
-	import BulkLanguageProfileModal from '#lib/components/library/BulkLanguageProfileModal.svelte';
-	import BulkDeleteModal from '#lib/components/library/BulkDeleteModal.svelte';
-	import DeleteConfirmationModal from '#lib/components/ui/modal/DeleteConfirmationModal.svelte';
 	import { MediaSearchModal } from '#lib/components/search/index.js';
 	import {
 		Clapperboard,
 		X,
-		LayoutGrid,
-		List,
-		Search,
-		SlidersHorizontal,
-		CheckSquare,
-		XSquare,
 		Layers,
 		Eye,
 		EyeOff,
 		ChevronDown,
+		CheckSquare,
+		XSquare,
 		HardDrive,
 		Captions,
 		Loader2
@@ -92,9 +87,9 @@
 		}
 	});
 
-	// Selection state
-	let selectedMovies = new SvelteSet<string>();
-	let showCheckboxes = $state(false);
+	// Selection state — the same implementation the TV and music lists use.
+	const selection = createListSelection();
+	const selectedMovies = selection.ids;
 	let searchQuery = $state(page.url.searchParams.get('q') ?? '');
 
 	// Keep the title search in the URL so refresh/back-navigation restores it and
@@ -171,47 +166,7 @@
 	let autoSearchingIds = new SvelteSet<string>();
 	const searchProgress = createSearchProgress();
 
-	const selectedCount = $derived(selectedMovies.size);
-
-	function toggleSelectionMode() {
-		showCheckboxes = !showCheckboxes;
-		if (!showCheckboxes) {
-			selectedMovies.clear();
-		}
-	}
-
-	function handleItemSelectChange(id: string, selected: boolean) {
-		if (selected) {
-			selectedMovies.add(id);
-		} else {
-			selectedMovies.delete(id);
-		}
-	}
-
-	function selectAll() {
-		for (const movie of filteredMovies) {
-			selectedMovies.add(movie.id);
-		}
-	}
-
-	function clearSelection() {
-		selectedMovies.clear();
-	}
-
-	const allSelected = $derived(
-		showCheckboxes && selectedMovies.size > 0 && selectedMovies.size === filteredMovies.length
-	);
-
-	function handleSelectToggle() {
-		if (!showCheckboxes) {
-			showCheckboxes = true;
-		} else if (!allSelected) {
-			selectAll();
-		} else {
-			showCheckboxes = false;
-			selectedMovies.clear();
-		}
-	}
+	const selectedCount = $derived(selection.count);
 
 	async function handleBulkMonitor(monitored: boolean) {
 		bulkLoading = true;
@@ -298,8 +253,7 @@
 					data = { ...data, movies: updatedMovies };
 					toasts.success(m.toast_library_movies_deletedFilesCount({ count: result.deletedCount }));
 				}
-				selectedMovies.clear();
-				showCheckboxes = false;
+				selection.clear();
 				isDeleteModalOpen = false;
 			} else {
 				toasts.error(result.error || m.toast_library_movies_failedToDelete());
@@ -418,12 +372,6 @@
 		if (!movie) return;
 		selectedMovieForSearch = movie;
 		isSearchModalOpen = true;
-	}
-
-	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape' && showCheckboxes) {
-			toggleSelectionMode();
-		}
 	}
 
 	async function handleDeleteConfirm(deleteFiles: boolean, removeFromLibrary: boolean) {
@@ -623,204 +571,99 @@
 			.length
 	);
 	const downloadingMovieIdSet = $derived(new Set(data.downloadingMovieIds));
-	const deleteModalCount = $derived(pendingDeleteMovieId ? 1 : selectedCount);
 	const pendingDeleteMovie = $derived(
 		pendingDeleteMovieId ? data.movies.find((mv) => mv.id === pendingDeleteMovieId) : null
 	);
-	const pendingDeleteMovieTitle = $derived(pendingDeleteMovie?.title ?? '');
-	const pendingDeleteMovieHasFiles = $derived(pendingDeleteMovie?.hasFile ?? false);
-	const pendingDeleteMovieHasActiveDownload = $derived(
-		pendingDeleteMovieId ? downloadingMovieIdSet.has(pendingDeleteMovieId) : false
-	);
-	const bulkActiveDownloadCount = $derived(
-		pendingDeleteMovieId
-			? 0
-			: [...selectedMovies].filter((movieId) => downloadingMovieIdSet.has(movieId)).length
-	);
-	const bulkHasActiveDownloads = $derived(bulkActiveDownloadCount > 0);
 </script>
 
 <svelte:head><title>{m.library_movies_pageTitle()}</title></svelte:head>
-<svelte:window onkeydown={handleKeydown} />
+<svelte:window onkeydown={selection.handleKeydown} />
 
 <div class="min-h-screen bg-base-100 pb-20">
-	<!-- Header -->
-	<div
-		class="sticky top-16 z-30 -mx-4 border-b border-base-200 bg-base-100/80 backdrop-blur-md lg:top-0 lg:mx-0"
+	<LibraryListHeader
+		title={m.library_movies_heading()}
+		total={data.total}
+		totalUnfiltered={data.totalUnfiltered}
+		ofTotalLabel={m.library_movies_ofTotal({ total: data.totalUnfiltered })}
+		searchPlaceholder={m.library_movies_searchPlaceholder()}
+		clearSearchLabel={m.library_movies_clearSearch()}
+		bind:searchQuery
+		searchMatches={filteredMovies.length}
+		searchSource={data.movies.length}
+		viewMode={viewPreferences.viewMode}
+		switchToGridLabel={m.library_movies_switchToGrid()}
+		switchToListLabel={m.library_movies_switchToList()}
+		onToggleView={() => viewPreferences.toggleViewMode()}
+		activeFilterCount={activeFilterCount}
+		filterLabel={m.library_drawer_title()}
+		onOpenFilters={() => (drawerOpen = true)}
 	>
-		<div class="flex h-16 items-center gap-3 px-4 lg:px-8">
-			<!-- Left: Title -->
-			<div class="flex min-w-0 items-center gap-2 sm:gap-3">
-				<h1
-					class="min-w-0 bg-linear-to-r from-primary to-secondary bg-clip-text text-xl font-bold text-transparent sm:text-2xl"
-				>
-					{m.library_movies_heading()}
-				</h1>
-				<span class="badge badge-ghost badge-sm sm:badge-lg">{data.total}</span>
-				{#if data.total !== data.totalUnfiltered}
-					<span class="hidden text-sm text-base-content/50 sm:inline">
-						{m.library_movies_ofTotal({ total: data.totalUnfiltered })}
-					</span>
-				{/if}
-			</div>
-
-			<!-- Center: Search (desktop) -->
-			<div class="hidden flex-1 items-center justify-center gap-2 md:flex">
-				<div class="group relative w-full max-w-lg">
-					<Search
-						class="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-base-content/40 transition-colors group-focus-within:text-primary"
-					/>
-					<input
-						type="text"
-						placeholder={m.library_movies_searchPlaceholder()}
-						class="input w-full rounded-full border-base-content/20 bg-base-200/60 pr-9 pl-10 transition-all duration-200 input-md placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
-						bind:value={searchQuery}
-					/>
-					{#if searchQuery}
-						<button
-							class="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-0.5 text-base-content/40 transition-colors hover:bg-base-300 hover:text-base-content"
-							onclick={() => (searchQuery = '')}
-							aria-label={m.library_movies_clearSearch()}
-						>
-							<X class="h-3.5 w-3.5" />
-						</button>
-					{/if}
-				</div>
-				{#if searchQuery && filteredMovies.length !== data.movies.length}
-					<span class="shrink-0 text-xs text-base-content/50">
-						{filteredMovies.length}/{data.movies.length}
-					</span>
-				{/if}
-			</div>
-
-			<!-- Right: Quick Actions -->
-			<div class="flex shrink-0 items-center gap-1.5">
-				{#if data.uniqueCollections.length > 0}
-					<button
-						class="btn gap-1.5 btn-xs sm:btn-sm {viewPreferences.groupByCollection
-							? 'btn-primary'
-							: 'btn-ghost'}"
-						onclick={() => viewPreferences.toggleGroupByCollection()}
-						aria-pressed={viewPreferences.groupByCollection}
-						aria-label={viewPreferences.groupByCollection ? 'Hide collections' : 'Show collections'}
-						title={viewPreferences.groupByCollection ? 'Hide collections' : 'Show collections'}
-					>
-						{#if viewPreferences.groupByCollection}
-							<Layers class="h-4 w-4" />
-						{:else}
-							<Layers class="h-4 w-4" />
-						{/if}
-						<span class="hidden xl:inline">Collections</span>
-					</button>
-				{/if}
-
-				<div class="dropdown dropdown-end">
-					{#if isAdminUser}
-						<div
-							tabindex="0"
-							role="button"
-							class="btn gap-1.5 btn-ghost btn-xs sm:btn-sm"
-							aria-label="Monitoring actions"
-						>
-							<Eye class="h-4 w-4" />
-							<span class="hidden xl:inline">Monitoring</span>
-							<ChevronDown class="hidden h-3 w-3 sm:block" />
-						</div>
-						<ul
-							class="menu dropdown-content z-50 mt-2 w-44 rounded-box border border-base-300 bg-base-100 p-2 shadow-xl"
-						>
-							<li>
-								<button onclick={handleMonitorAll}>
-									<Eye class="h-4 w-4" />
-									{m.library_movies_monitorAll()}
-								</button>
-							</li>
-							<li>
-								<button onclick={handleUnmonitorAll}>
-									<EyeOff class="h-4 w-4" />
-									{m.library_movies_unmonitorAll()}
-								</button>
-							</li>
-						</ul>
-					{/if}
-				</div>
-
-				{#if isAdminUser}
-					<button
-						class="btn gap-1.5 btn-ghost btn-xs sm:btn-sm {showCheckboxes ? 'btn-primary' : ''}"
-						onclick={handleSelectToggle}
-					>
-						{#if !showCheckboxes}
-							<CheckSquare class="h-4 w-4" />
-							<span class="hidden sm:inline">{m.library_movies_select()}</span>
-						{:else if !allSelected}
-							<CheckSquare class="h-4 w-4" />
-							<span class="hidden sm:inline">{m.library_movies_selectAll()}</span>
-						{:else}
-							<XSquare class="h-4 w-4" />
-							<span class="hidden sm:inline">{m.library_movies_done()}</span>
-						{/if}
-					</button>
-				{/if}
-
-				<!-- View Toggle -->
+		{#snippet actions()}
+			{#if data.uniqueCollections.length > 0}
 				<button
-					class="btn btn-ghost btn-sm"
-					onclick={() => viewPreferences.toggleViewMode()}
-					aria-label={viewPreferences.viewMode === 'grid'
-						? m.library_movies_switchToList()
-						: m.library_movies_switchToGrid()}
+					class="btn gap-1.5 btn-xs sm:btn-sm {viewPreferences.groupByCollection
+						? 'btn-primary'
+						: 'btn-ghost'}"
+					onclick={() => viewPreferences.toggleGroupByCollection()}
+					aria-pressed={viewPreferences.groupByCollection}
+					aria-label={viewPreferences.groupByCollection ? 'Hide collections' : 'Show collections'}
+					title={viewPreferences.groupByCollection ? 'Hide collections' : 'Show collections'}
 				>
-					{#if viewPreferences.viewMode === 'grid'}
-						<List class="h-4 w-4" />
-					{:else}
-						<LayoutGrid class="h-4 w-4" />
-					{/if}
+					<Layers class="h-4 w-4" />
+					<span class="hidden xl:inline">Collections</span>
 				</button>
-
-				<!-- Options Drawer Button -->
-				<button
-					class="btn gap-1.5 btn-sm {activeFilterCount > 0 ? 'btn-primary' : 'btn-ghost'}"
-					onclick={() => (drawerOpen = true)}
-					aria-label={m.library_drawer_title()}
-				>
-					<SlidersHorizontal class="h-4 w-4" />
-					{#if activeFilterCount > 0}
-						<span class="badge badge-sm">{activeFilterCount}</span>
-					{/if}
-				</button>
-			</div>
-		</div>
-
-		<!-- Search (mobile) -->
-		<div class="flex items-center gap-2 border-t border-base-200/50 px-4 py-2 md:hidden">
-			<div class="group relative w-full">
-				<Search
-					class="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-base-content/40 transition-colors group-focus-within:text-primary"
-				/>
-				<input
-					type="text"
-					placeholder={m.library_movies_searchPlaceholder()}
-					class="input w-full rounded-full border-base-content/20 bg-base-200/60 pr-9 pl-10 transition-all duration-200 input-md placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
-					bind:value={searchQuery}
-				/>
-				{#if searchQuery}
-					<button
-						class="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-0.5 text-base-content/40 transition-colors hover:bg-base-300 hover:text-base-content"
-						onclick={() => (searchQuery = '')}
-						aria-label={m.library_movies_clearSearch()}
-					>
-						<X class="h-3.5 w-3.5" />
-					</button>
-				{/if}
-			</div>
-			{#if searchQuery && filteredMovies.length !== data.movies.length}
-				<span class="shrink-0 text-xs text-base-content/50">
-					{filteredMovies.length}/{data.movies.length}
-				</span>
 			{/if}
-		</div>
-	</div>
+
+			<div class="dropdown dropdown-end">
+				{#if isAdminUser}
+					<div
+						tabindex="0"
+						role="button"
+						class="btn gap-1.5 btn-ghost btn-xs sm:btn-sm"
+						aria-label="Monitoring actions"
+					>
+						<Eye class="h-4 w-4" />
+						<span class="hidden xl:inline">Monitoring</span>
+						<ChevronDown class="hidden h-3 w-3 sm:block" />
+					</div>
+					<ul
+						class="menu dropdown-content z-50 mt-2 w-44 rounded-box border border-base-300 bg-base-100 p-2 shadow-xl"
+					>
+						<li>
+							<button onclick={handleMonitorAll}>
+								<Eye class="h-4 w-4" />
+								{m.library_movies_monitorAll()}
+							</button>
+						</li>
+						<li>
+							<button onclick={handleUnmonitorAll}>
+								<EyeOff class="h-4 w-4" />
+								{m.library_movies_unmonitorAll()}
+							</button>
+						</li>
+					</ul>
+				{/if}
+			</div>
+
+			{#if isAdminUser}
+				<button
+					class="btn gap-1.5 btn-ghost btn-xs sm:btn-sm {selection.mode ? 'btn-primary' : ''}"
+					onclick={() => selection.cycle(filteredMovies)}
+				>
+					{#if !selection.mode}
+						<CheckSquare class="h-4 w-4" />
+						<span class="hidden sm:inline">{m.library_movies_select()}</span>
+					{:else if !selection.allSelected(filteredMovies)}
+						<CheckSquare class="h-4 w-4" />
+						<span class="hidden sm:inline">{m.library_movies_selectAll()}</span>
+					{:else}
+						<XSquare class="h-4 w-4" />
+						<span class="hidden sm:inline">{m.library_movies_done()}</span>
+					{/if}
+				</button>
+			{/if}
+		{/snippet}
+	</LibraryListHeader>
 
 	<!-- Main Content -->
 	<main class="w-full px-4 py-8 lg:px-8">
@@ -841,67 +684,33 @@
 				</button>
 			</div>
 		{/if}
-		{#if data.error}
-			<div role="alert" class="alert alert-error">
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					class="h-6 w-6 shrink-0 stroke-current"
-					fill="none"
-					viewBox="0 0 24 24"
-				>
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
-					></path>
-				</svg>
-				<span>{data.error}</span>
-			</div>
-		{:else if filteredMovies.length === 0 && searchQuery}
-			<!-- Search Empty State -->
-			<div class="flex flex-col items-center justify-center py-20 text-center">
-				<div class="opacity-50">
-					<Search class="mx-auto mb-4 h-16 w-16" />
-					<p class="text-2xl font-bold">{m.library_movies_noSearchMatch({ query: searchQuery })}</p>
-					<p class="mt-2">{m.library_movies_tryDifferentSearch()}</p>
-				</div>
-				<div class="mt-6 flex gap-3">
-					<button class="btn btn-ghost" onclick={() => (searchQuery = '')}
-						>{m.library_movies_clearSearchBtn()}</button
-					>
-
-					<a
-						href={resolvePath(`/discover?type=movie&q=${encodeURIComponent(searchQuery)}`)}
-						class="btn btn-primary"
-					>
-						Search in Discover
-					</a>
-				</div>
-			</div>
-		{:else if data.movies.length === 0}
-			<!-- Empty State -->
-			<div class="flex flex-col items-center justify-center py-20 text-center opacity-50">
+		<LibraryListEmptyState
+			error={data.error}
+			{searchQuery}
+			filteredCount={filteredMovies.length}
+			sourceCount={data.movies.length}
+			totalUnfiltered={data.totalUnfiltered}
+			discoverHref={resolvePath('/discover?type=movie')}
+			discoverLabel={m.library_movies_discoverMovies()}
+			searchDiscoverHref={resolvePath(`/discover?type=movie&q=${encodeURIComponent(searchQuery)}`)}
+			searchDiscoverLabel="Search in Discover"
+			noSearchTitle={m.library_movies_noSearchMatch({ query: searchQuery })}
+			noSearchHint={m.library_movies_tryDifferentSearch()}
+			clearSearchLabel={m.library_movies_clearSearchBtn()}
+			emptyTitle={m.library_movies_emptyLibrary()}
+			emptyHint={m.library_movies_emptyLibraryHint()}
+			noMatchTitle={m.library_movies_noFilterMatch()}
+			noMatchHint={m.library_movies_noFilterMatchHint()}
+			clearFiltersLabel={m.library_movies_clearFilters()}
+			onClearSearch={() => (searchQuery = '')}
+			onClearFilters={clearFilters}
+		>
+			{#snippet icon()}
 				<Clapperboard class="mb-4 h-20 w-20" />
-				{#if data.totalUnfiltered === 0}
-					<p class="text-2xl font-bold">{m.library_movies_emptyLibrary()}</p>
-					<p class="mt-2">{m.library_movies_emptyLibraryHint()}</p>
-					<a href={resolvePath('/discover?type=movie')} class="btn mt-6 btn-primary">
-						{m.library_movies_discoverMovies()}
-					</a>
-				{:else}
-					<p class="text-2xl font-bold">{m.library_movies_noFilterMatch()}</p>
-					<p class="mt-2">{m.library_movies_noFilterMatchHint()}</p>
-					<button class="btn mt-6 btn-primary" onclick={clearFilters}
-						>{m.library_movies_clearFilters()}</button
-					>
-				{/if}
-			</div>
-		{:else}
-			<!-- Movies Grid or List -->
-			{#if !viewPreferences.isReady}
-				<!-- Defer until client resolves view preference to avoid grid flash -->
-			{:else}
+			{/snippet}
+
+			<!-- Defer until the client resolves the view preference to avoid a grid flash -->
+			{#if viewPreferences.isReady}
 				<div class="animate-in fade-in slide-in-from-bottom-4 duration-500">
 					{#if data.uniqueCollections.length > 0 && viewPreferences.groupByCollection}
 						{@const collectionGroups = groupMoviesByCollection(filteredMovies)}
@@ -968,72 +777,50 @@
 									{/if}
 								</div>
 								{#if !collapsedGroups.has(group.name ?? '__none__')}
-									{#if viewPreferences.viewMode === 'grid'}
-										<div
-											class="grid grid-cols-3 gap-3 pt-2 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-9"
-										>
-											{#each group.movies as movie (movie.id)}
-												<LibraryMediaCard
-													view={movieCardView(movie, data.preferOriginalTitleDefault)}
-													selectable={showCheckboxes}
-													selected={selectedMovies.has(movie.id)}
-													onSelectChange={handleItemSelectChange}
-												/>
-											{/each}
-										</div>
-									{:else}
-										<div class="pt-2">
-											<LibraryMediaTable
-												rows={group.movies.map((movie) =>
-													movieRowView(movie, data.preferOriginalTitleDefault)
-												)}
-												kind="movie"
-												selectedItems={selectedMovies}
-												selectable={showCheckboxes}
-												downloadingIds={downloadingMovieIdSet}
-												{autoSearchingIds}
-												onSelectChange={handleItemSelectChange}
-												onMonitorToggle={isAdminUser ? handleMonitorToggle : undefined}
-												onDelete={isAdminUser ? handleDeleteMovie : undefined}
-												onAutoGrab={isAdminUser ? handleAutoGrab : undefined}
-												onManualGrab={isAdminUser ? handleManualGrab : undefined}
-											/>
-										</div>
-									{/if}
+									<div class="pt-2">
+										<LibraryListBody
+											cards={group.movies.map((movie) =>
+												movieCardView(movie, data.preferOriginalTitleDefault)
+											)}
+											rows={group.movies.map((movie) =>
+												movieRowView(movie, data.preferOriginalTitleDefault)
+											)}
+											kind="movie"
+											viewMode={viewPreferences.viewMode}
+											selectable={selection.mode}
+											selectedIds={selectedMovies}
+											onSelectChange={selection.toggle}
+											downloadingIds={downloadingMovieIdSet}
+											{autoSearchingIds}
+											onMonitorToggle={isAdminUser ? handleMonitorToggle : undefined}
+											onDelete={isAdminUser ? handleDeleteMovie : undefined}
+											onAutoGrab={isAdminUser ? handleAutoGrab : undefined}
+											onManualGrab={isAdminUser ? handleManualGrab : undefined}
+										/>
+									</div>
 								{/if}
 							</div>
 						{/each}
 					{:else}
-						{#if viewPreferences.viewMode === 'grid'}
-							<div
-								class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-9"
-							>
-								{#each renderer.visible as movie (movie.id)}
-									<LibraryMediaCard
-										view={movieCardView(movie, data.preferOriginalTitleDefault)}
-										selectable={showCheckboxes}
-										selected={selectedMovies.has(movie.id)}
-										onSelectChange={handleItemSelectChange}
-									/>
-								{/each}
-							</div>
-						{:else}
-							<LibraryMediaTable
-								rows={renderer.visible.map((movie) =>
-									movieRowView(movie, data.preferOriginalTitleDefault)
-								)}
-								kind="movie"
-								selectedItems={selectedMovies}
-								selectable={showCheckboxes}
-								downloadingIds={downloadingMovieIdSet}
-								{autoSearchingIds}
-								onSelectChange={handleItemSelectChange}
-								onMonitorToggle={isAdminUser ? handleMonitorToggle : undefined}
-								onDelete={isAdminUser ? handleDeleteMovie : undefined}
-								onAutoGrab={isAdminUser ? handleAutoGrab : undefined}
-								onManualGrab={isAdminUser ? handleManualGrab : undefined}
-							/>
-						{/if}
+						<LibraryListBody
+							cards={renderer.visible.map((movie) =>
+								movieCardView(movie, data.preferOriginalTitleDefault)
+							)}
+							rows={renderer.visible.map((movie) =>
+								movieRowView(movie, data.preferOriginalTitleDefault)
+							)}
+							kind="movie"
+							viewMode={viewPreferences.viewMode}
+							selectable={selection.mode}
+							selectedIds={selectedMovies}
+							onSelectChange={selection.toggle}
+							downloadingIds={downloadingMovieIdSet}
+							{autoSearchingIds}
+							onMonitorToggle={isAdminUser ? handleMonitorToggle : undefined}
+							onDelete={isAdminUser ? handleDeleteMovie : undefined}
+							onAutoGrab={isAdminUser ? handleAutoGrab : undefined}
+							onManualGrab={isAdminUser ? handleManualGrab : undefined}
+						/>
 
 						<!-- Progressive rendering sentinel -->
 						{#if renderer.hasMore}
@@ -1044,7 +831,7 @@
 					{/if}
 				</div>
 			{/if}
-		{/if}
+		</LibraryListEmptyState>
 	</main>
 
 	<!-- Hidden forms for monitor actions -->
@@ -1085,69 +872,37 @@
 	/>
 </div>
 
-<!-- Bulk Action Bar (admin only) -->
-{#if isAdminUser}
-	<LibraryBulkActionBar
-		{selectedCount}
-		loading={bulkLoading}
-		currentAction={currentBulkAction}
-		mediaType="movie"
-		onMonitor={() => handleBulkMonitor(true)}
-		onUnmonitor={() => handleBulkMonitor(false)}
-		onChangeQuality={() => (isQualityModalOpen = true)}
-		onLanguage={() => (isLanguageModalOpen = true)}
-		onDelete={() => (isDeleteModalOpen = true)}
-		onClear={clearSelection}
-	/>
-{/if}
-
-<!-- Bulk Quality Profile Modal -->
-<BulkQualityProfileModal
-	open={isQualityModalOpen}
+<LibraryBulkActions
+	show={isAdminUser}
 	{selectedCount}
-	qualityProfiles={data.qualityProfiles}
-	saving={bulkLoading && currentBulkAction === 'quality'}
-	mediaType="movie"
-	onSave={handleBulkQualityChange}
-	onCancel={() => (isQualityModalOpen = false)}
-/>
-
-<!-- Bulk Language Profile Modal -->
-<BulkLanguageProfileModal
-	open={isLanguageModalOpen}
-	mediaType="movie"
 	selectedIds={[...selectedMovies]}
-	onClose={() => (isLanguageModalOpen = false)}
-	onApplied={handleBulkLanguageApplied}
-/>
-
-<!-- Single Item Delete Modal -->
-<DeleteConfirmationModal
-	open={isDeleteModalOpen && pendingDeleteMovieId !== null}
-	title={m.library_movies_deleteMovieTitle()}
-	itemName={pendingDeleteMovieTitle}
-	hasFiles={pendingDeleteMovieHasFiles}
-	hasActiveDownload={pendingDeleteMovieHasActiveDownload}
-	loading={bulkLoading && currentBulkAction === 'delete'}
-	onConfirm={handleDeleteConfirm}
-	onCancel={() => {
+	mediaType="movie"
+	qualityProfiles={data.qualityProfiles}
+	loading={bulkLoading}
+	currentAction={currentBulkAction}
+	downloadingIds={downloadingMovieIdSet}
+	pendingItem={pendingDeleteMovie
+		? { id: pendingDeleteMovie.id, title: pendingDeleteMovie.title, hasFile: pendingDeleteMovie.hasFile }
+		: null}
+	qualityOpen={isQualityModalOpen}
+	languageOpen={isLanguageModalOpen}
+	deleteOpen={isDeleteModalOpen}
+	onMonitor={() => handleBulkMonitor(true)}
+	onUnmonitor={() => handleBulkMonitor(false)}
+	onChangeQuality={() => (isQualityModalOpen = true)}
+	onQualitySave={handleBulkQualityChange}
+	onQualityCancel={() => (isQualityModalOpen = false)}
+	onLanguage={() => (isLanguageModalOpen = true)}
+	onLanguageClose={() => (isLanguageModalOpen = false)}
+	onLanguageApplied={handleBulkLanguageApplied}
+	onDelete={() => (isDeleteModalOpen = true)}
+	onDeleteConfirm={handleDeleteConfirm}
+	onDeleteCancel={() => {
 		isDeleteModalOpen = false;
 		pendingDeleteMovieId = null;
 	}}
-/>
-
-<!-- Bulk Delete Modal -->
-<BulkDeleteModal
-	open={isDeleteModalOpen && pendingDeleteMovieId === null}
-	selectedCount={deleteModalCount}
-	mediaType="movie"
-	hasActiveDownloads={bulkHasActiveDownloads}
-	activeDownloadCount={bulkActiveDownloadCount}
-	loading={bulkLoading && currentBulkAction === 'delete'}
-	onConfirm={handleDeleteConfirm}
-	onCancel={() => {
-		isDeleteModalOpen = false;
-	}}
+	onClear={selection.clear}
+	deleteTitle={m.library_movies_deleteMovieTitle()}
 />
 
 <!-- Interactive Search Modal -->
