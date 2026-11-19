@@ -16,6 +16,11 @@
 	// scope and breaks the TS transform for the whole file.
 	let addState = $state<AddState>('idle');
 	let resolving = $state(false);
+	// Only a click shows the spinner; a hover resolves quietly behind the card.
+	let opening = $state(false);
+	// A chart row has no MusicBrainz id. Resolving it on hover means a click
+	// lands immediately instead of waiting on the 1.2 s rate gate.
+	let resolvedMbid = $state<string | null>(null);
 
 	const title = $derived(item.title ?? '');
 	const done = $derived(addState === 'added' || addState === 'exists');
@@ -27,8 +32,9 @@
 	// Search rows resolve a MusicBrainz id on open; chart rows do not carry one
 	// until the resolver runs, so the card navigates through this handler.
 	const target = $derived.by(() => {
-		if (!item.mbid) return null;
-		return isArtist ? `/discover/music/artist/${item.mbid}` : `/discover/music/${item.mbid}`;
+		const mbid = item.mbid ?? resolvedMbid;
+		if (!mbid) return null;
+		return isArtist ? `/discover/music/artist/${mbid}` : `/discover/music/${mbid}`;
 	});
 
 	/** The same tile the library uses — music's grid is a grid, not a row list. */
@@ -72,13 +78,30 @@
 	);
 
 	async function resolveTarget(): Promise<string | null> {
-		const params = new URLSearchParams({ type: 'album' });
-		if (item.subtitle && !isArtist) params.set('artist', item.subtitle);
-		// A song resolves through the album it sits on, never its own title.
-		if (albumLabel) params.set('album', albumLabel);
+		// An artist row resolves as an artist; albums and songs resolve through
+		// the album — a song's own title is not a release group.
+		const params = isArtist
+			? new URLSearchParams({ type: 'artist', q: title })
+			: new URLSearchParams({ type: 'album' });
+		if (!isArtist) {
+			if (item.subtitle) params.set('artist', item.subtitle);
+			if (albumLabel) params.set('album', albumLabel);
+		}
 		const search = await fetch(`/api/music/search?${params}`).then((r) => r.json());
-		const group = (search.results ?? [])[0] as { mbid?: string } | undefined;
-		return group?.mbid ?? null;
+		const hit = (search.results ?? [])[0] as { mbid?: string } | undefined;
+		return hit?.mbid ?? null;
+	}
+
+	async function prefetch() {
+		if (target || resolving) return;
+		resolving = true;
+		try {
+			resolvedMbid = await resolveTarget();
+		} catch {
+			// The click path reports the failure; a hover must stay silent.
+		} finally {
+			resolving = false;
+		}
 	}
 
 	async function open(event: MouseEvent) {
@@ -86,6 +109,7 @@
 		event.preventDefault();
 		if (resolving) return;
 		resolving = true;
+		opening = true;
 		try {
 			const mbid = await resolveTarget();
 			if (!mbid) {
@@ -97,6 +121,7 @@
 			toasts.error(m.music_noResults());
 		} finally {
 			resolving = false;
+			opening = false;
 		}
 	}
 
@@ -137,7 +162,9 @@
 	}
 </script>
 
-<div class="relative">
+<!-- A hover prefetch, not an interaction: the card's own link does the work. -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="relative" onpointerenter={prefetch}>
 	<LibraryMediaCard {view} onActivate={open} />
 
 	{#if !isArtist}
@@ -160,7 +187,7 @@
 		</button>
 	{/if}
 
-	{#if resolving}
+	{#if opening}
 		<div class="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-base-100/60">
 			<LoaderCircle class="h-6 w-6 animate-spin text-primary" />
 		</div>

@@ -43,6 +43,7 @@
 			};
 			release: Release;
 			libraryAlbumId: string | null;
+			featured: string[];
 		};
 	} = $props();
 
@@ -127,6 +128,7 @@
 		backHref="/discover?type=music"
 		backLabel={m.nav_music()}
 		readOnly
+		featured={data.featured}
 		extraActions={data.libraryAlbumId
 			? [
 					{

@@ -459,6 +459,51 @@ export class MusicBrainzClient {
 		};
 	}
 
+	/**
+	 * The release group and its editions in one request. A release-group lookup
+	 * accepts `releases` as a subquery, so a page that needs both does not pay
+	 * the rate gate twice. Track counts come back empty here — callers that draw
+	 * an edition list use `getReleaseGroupReleases`.
+	 */
+	async getReleaseGroupWithReleases(releaseGroupMbid: string): Promise<{
+		group: MusicReleaseGroup;
+		releases: MusicReleaseSummary[];
+	}> {
+		const body = await this.request<RawReleaseGroup & { releases?: RawRelease[] }>(
+			`/release-group/${releaseGroupMbid}`,
+			{ inc: 'artist-credits+releases' }
+		);
+		const artist = artistOf(body['artist-credit']);
+		if (!body.id || !body.title || !artist) {
+			throw new MusicBrainzError(`Release group ${releaseGroupMbid} not found`, 404, false);
+		}
+		return {
+			group: {
+				mbid: body.id,
+				title: body.title,
+				primaryType: body['primary-type'] ?? null,
+				secondaryTypes: body['secondary-types'] ?? [],
+				firstReleaseDate: body['first-release-date'] ?? null,
+				year: yearOf(body['first-release-date']),
+				artist
+			},
+			releases: (body.releases ?? []).flatMap((release) => {
+				if (!release.id) return [];
+				return [
+					{
+						mbid: release.id,
+						title: release.title ?? 'Untitled',
+						status: release.status ?? null,
+						date: release.date ?? null,
+						year: yearOf(release.date),
+						country: release.country ?? null,
+						trackCount: 0
+					} satisfies MusicReleaseSummary
+				];
+			})
+		};
+	}
+
 	/** Every edition that belongs to a release group, in MusicBrainz order. */
 	async getReleaseGroupReleases(releaseGroupMbid: string): Promise<MusicReleaseSummary[]> {
 		const body = await this.request<{ releases?: RawRelease[] }>('/release', {
