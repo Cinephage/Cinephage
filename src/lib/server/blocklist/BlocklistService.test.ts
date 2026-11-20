@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../test/db-helper.js';
-import { blocklist, movies, series } from '#lib/server/db/schema.js';
+import { albums, artists, blocklist, mediaItems, movies, series } from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 
@@ -58,10 +58,6 @@ describe('BlocklistService.getBlockedIdentifiers', () => {
 			.insert(series)
 			.values({ id: SERIES_ID, tmdbId: 201, title: 'Series One', path: '/media/series-one' })
 			.run();
-	});
-
-	afterAll(() => {
-		destroyTestDb(testDb);
 	});
 
 	it('returns hashes and titles scoped to the given movie', async () => {
@@ -158,4 +154,57 @@ describe('BlocklistService.getBlockedIdentifiers', () => {
 		expect(blockedHashes.size).toBe(0);
 		expect(blockedTitles.size).toBe(0);
 	});
+});
+
+describe('BlocklistService album scope', () => {
+	beforeEach(() => {
+		testDb.db.delete(blocklist).run();
+		testDb.db.delete(albums).run();
+		testDb.db.delete(mediaItems).run();
+		testDb.db.delete(artists).run();
+		testDb.db
+			.insert(mediaItems)
+			.values([
+				{ id: 'mi-album-1', kind: 'album', title: 'Album One' },
+				{ id: 'mi-album-2', kind: 'album', title: 'Album Two' }
+			])
+			.run();
+		testDb.db.insert(artists).values({ id: 'ar-1', name: 'Artist One' }).run();
+		testDb.db
+			.insert(albums)
+			.values([
+				{ id: 'album-1', mediaItemId: 'mi-album-1', artistId: 'ar-1', title: 'Album One' },
+				{ id: 'album-2', mediaItemId: 'mi-album-2', artistId: 'ar-1', title: 'Album Two' }
+			])
+			.run();
+	});
+
+	it('records and scopes an album rejection by album id', async () => {
+		blocklistService.addToBlocklist(
+			{ title: 'Album.One.FLAC', infoHash: 'HASH_ALBUM' },
+			{ albumId: 'album-1', reason: 'import_failed', message: 'bad tags' }
+		);
+
+		const sameAlbum = await blocklistService.isBlocklisted(
+			{ title: 'Album.One.FLAC', infoHash: 'HASH_ALBUM' },
+			{ albumId: 'album-1' }
+		);
+		expect(sameAlbum.blocked).toBe(true);
+
+		const otherAlbum = await blocklistService.isBlocklisted(
+			{ title: 'Album.One.FLAC', infoHash: 'HASH_ALBUM' },
+			{ albumId: 'album-2' }
+		);
+		expect(otherAlbum.blocked).toBe(false);
+
+		const identifiers = await blocklistService.getBlockedIdentifiers(undefined, undefined, 'album-1');
+		expect(identifiers.blockedHashes.has('HASH_ALBUM')).toBe(true);
+
+		await blocklistService.clearAlbumBlocklist('album-1');
+		expect((await blocklistService.getBlockedIdentifiers(undefined, undefined, 'album-1')).blockedHashes.size).toBe(0);
+	});
+});
+
+afterAll(() => {
+	destroyTestDb(testDb);
 });

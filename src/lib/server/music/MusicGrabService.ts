@@ -10,6 +10,7 @@ import { musicSearchService, type MusicReleaseCandidate } from './MusicSearchSer
 import { musicStreamGrabService } from './MusicStreamGrabService.js';
 import { parseMusicStreamUrl } from './stream-url.js';
 import { publishGrab } from '#lib/server/notifications/core/app-events.js';
+import { blocklistService } from '#lib/server/blocklist/BlocklistService.js';
 
 const logger = createChildLogger({ module: 'MusicGrabService', logDomain: 'system' });
 
@@ -83,6 +84,18 @@ export class MusicGrabService {
 		const chosen = this.choose(candidates, options.releaseGuid);
 		if (!chosen) {
 			throw new ValidationError('No release passed the quality profile for this album');
+		}
+
+		const blocked = await blocklistService.isBlocklisted(
+			{
+				title: chosen.title,
+				infoHash: chosen.infoHash ?? undefined,
+				indexerId: chosen.indexerId ?? undefined
+			},
+			{ albumId: album.id }
+		);
+		if (blocked.blocked) {
+			throw new ValidationError(blocked.reason ?? 'That release is blocklisted for this album');
 		}
 
 		// The Streamer releases the album to a source instead of a download

@@ -231,8 +231,10 @@ import {
  * Version 188: download_history.media_item_id - finished music grabs need the
  *   same spine identity the queue row already carries, or Activity cannot name
  *   the album after import. Additive ALTER, no rebuild.
+ * Version 191: blocklist.album_id - a failed album import's release can be
+ *   remembered per album and skipped by the music search.
  */
-export const CURRENT_SCHEMA_VERSION = 190;
+export const CURRENT_SCHEMA_VERSION = 191;
 
 /**
  * Seed rows for the *legacy* backfill in migration 078 only.
@@ -1047,6 +1049,7 @@ const TABLE_DEFINITIONS: string[] = [
 		"indexer_id" text REFERENCES "indexers"("id") ON DELETE SET NULL,
 		"movie_id" text REFERENCES "movies"("id") ON DELETE CASCADE,
 		"series_id" text REFERENCES "series"("id") ON DELETE CASCADE,
+		"album_id" text REFERENCES "albums"("id") ON DELETE CASCADE,
 		"episode_ids" text,
 		"reason" text NOT NULL,
 		"message" text,
@@ -2003,6 +2006,7 @@ const INDEX_DEFINITIONS: string[] = [
 	// v150 (dedupe first). Creating it here would fail on legacy DBs with
 	// duplicate rows, because INDEX_DEFINITIONS run before migrations.
 	`CREATE INDEX IF NOT EXISTS "idx_blocklist_movie" ON "blocklist" ("movie_id")`,
+	`CREATE INDEX IF NOT EXISTS "idx_blocklist_album" ON "blocklist" ("album_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_blocklist_series" ON "blocklist" ("series_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_blocklist_infohash" ON "blocklist" ("info_hash")`,
 	`CREATE INDEX IF NOT EXISTS "idx_cinephage_api_modules_enabled" ON "cinephage_api_modules" ("enabled")`,

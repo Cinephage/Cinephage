@@ -1880,6 +1880,7 @@ export const blocklist = sqliteTable(
 		// Associated content (at least one must be set)
 		movieId: text('movie_id').references(() => movies.id, { onDelete: 'cascade' }),
 		seriesId: text('series_id').references(() => series.id, { onDelete: 'cascade' }),
+		albumId: text('album_id').references(() => albums.id, { onDelete: 'cascade' }),
 		episodeIds: text('episode_ids', { mode: 'json' }).$type<string[]>(),
 		// Why it was blocked
 		reason: text('reason').notNull(), // 'download_failed', 'import_failed', 'quality_mismatch', 'manual'
@@ -1903,6 +1904,7 @@ export const blocklist = sqliteTable(
 	(table) => [
 		index('idx_blocklist_movie').on(table.movieId),
 		index('idx_blocklist_series').on(table.seriesId),
+		index('idx_blocklist_album').on(table.albumId),
 		index('idx_blocklist_infohash').on(table.infoHash)
 	]
 );

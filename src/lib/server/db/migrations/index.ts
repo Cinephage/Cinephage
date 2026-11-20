@@ -186,6 +186,7 @@ import { migration_v187 } from './187-music-profile-fallback-and-size.js';
 import { migration_v188 } from './188-download-history-media-item.js';
 import { migration_v189 } from './189-track-stream-video.js';
 import { migration_v190 } from './190-track-stream-cache.js';
+import { migration_v191 } from './191-blocklist-album.js';
 
 export const MIGRATIONS: MigrationDefinition[] = [
 	migration_v002,
@@ -374,5 +375,6 @@ export const MIGRATIONS: MigrationDefinition[] = [
 	migration_v187,
 	migration_v188,
 	migration_v189,
-	migration_v190
+	migration_v190,
+	migration_v191
 ];

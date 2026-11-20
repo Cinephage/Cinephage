@@ -31,6 +31,7 @@ export interface BlocklistCheckRelease {
 export interface BlocklistCheckOptions {
 	movieId?: string;
 	seriesId?: string;
+	albumId?: string;
 }
 
 export interface BlocklistCheckResult {
@@ -55,6 +56,7 @@ export interface BlocklistAddRelease {
 export interface BlocklistAddOptions {
 	movieId?: string;
 	seriesId?: string;
+	albumId?: string;
 	episodeIds?: string[];
 	reason: BlocklistReason;
 	message?: string;
@@ -64,6 +66,7 @@ export interface BlocklistAddOptions {
 export interface BlocklistQueryOptions {
 	movieId?: string;
 	seriesId?: string;
+	albumId?: string;
 	reason?: string;
 	protocol?: string;
 	activeOnly?: boolean;
@@ -75,6 +78,7 @@ export interface BlocklistQueryOptions {
 export interface BlocklistCountOptions {
 	movieId?: string;
 	seriesId?: string;
+	albumId?: string;
 	reason?: string;
 	protocol?: string;
 	activeOnly?: boolean;
@@ -116,6 +120,7 @@ class BlocklistService {
 				or(...conditions),
 				options.movieId ? eq(blocklist.movieId, options.movieId) : undefined,
 				options.seriesId ? eq(blocklist.seriesId, options.seriesId) : undefined,
+				options.albumId ? eq(blocklist.albumId, options.albumId) : undefined,
 				or(isNull(blocklist.expiresAt), gt(blocklist.expiresAt, now)),
 				release.indexerId
 					? or(isNull(blocklist.indexerId), eq(blocklist.indexerId, release.indexerId))
@@ -137,7 +142,8 @@ class BlocklistService {
 
 	async getBlockedIdentifiers(
 		movieId?: string,
-		seriesId?: string
+		seriesId?: string,
+		albumId?: string
 	): Promise<{ blockedHashes: Set<string>; blockedTitles: Set<string> }> {
 		const now = new Date().toISOString();
 
@@ -145,6 +151,7 @@ class BlocklistService {
 			where: and(
 				movieId ? eq(blocklist.movieId, movieId) : undefined,
 				seriesId ? eq(blocklist.seriesId, seriesId) : undefined,
+				albumId ? eq(blocklist.albumId, albumId) : undefined,
 				or(isNull(blocklist.expiresAt), gt(blocklist.expiresAt, now))
 			),
 			columns: { infoHash: true, sourceTitle: true }
@@ -164,6 +171,7 @@ class BlocklistService {
 		const dedupConditions = [eq(blocklist.title, release.title)];
 		if (options.movieId) dedupConditions.push(eq(blocklist.movieId, options.movieId));
 		if (options.seriesId) dedupConditions.push(eq(blocklist.seriesId, options.seriesId));
+		if (options.albumId) dedupConditions.push(eq(blocklist.albumId, options.albumId));
 		if (release.infoHash) dedupConditions.push(eq(blocklist.infoHash, release.infoHash));
 		else if (release.indexerId)
 			dedupConditions.push(
@@ -182,6 +190,7 @@ class BlocklistService {
 				indexerId: release.indexerId ?? null,
 				movieId: options.movieId ?? null,
 				seriesId: options.seriesId ?? null,
+				albumId: options.albumId ?? null,
 				episodeIds: options.episodeIds ?? null,
 				reason: options.reason,
 				message: options.message ?? null,
@@ -209,11 +218,16 @@ class BlocklistService {
 		await db.delete(blocklist).where(eq(blocklist.seriesId, seriesId));
 	}
 
+	async clearAlbumBlocklist(albumId: string): Promise<void> {
+		await db.delete(blocklist).where(eq(blocklist.albumId, albumId));
+	}
+
 	async getBlocklist(options?: BlocklistQueryOptions): Promise<(typeof blocklist.$inferSelect)[]> {
 		const conditions = [];
 
 		if (options?.movieId) conditions.push(eq(blocklist.movieId, options.movieId));
 		if (options?.seriesId) conditions.push(eq(blocklist.seriesId, options.seriesId));
+		if (options?.albumId) conditions.push(eq(blocklist.albumId, options.albumId));
 		if (options?.reason) conditions.push(eq(blocklist.reason, options.reason));
 		if (options?.protocol) conditions.push(eq(blocklist.protocol, options.protocol));
 		if (options?.activeOnly) {

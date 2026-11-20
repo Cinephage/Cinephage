@@ -14,6 +14,7 @@ import {
 	type MusicQualityProfile
 } from './parse-release.js';
 import { musicProfileService } from './MusicProfileService.js';
+import { blocklistService } from '#lib/server/blocklist/BlocklistService.js';
 
 const logger = createChildLogger({ module: 'MusicSearchService', logDomain: 'system' });
 
@@ -203,6 +204,14 @@ export class MusicSearchService {
 		);
 
 		const relevant = relevantAlbumCandidates(candidates);
+		// A release this album already rejected must not come back on the next
+		// search. The grab path checks again, so a direct guid grab cannot skip it.
+		const blocked = await blocklistService.getBlockedIdentifiers(undefined, undefined, albumId);
+		const allowed = relevant.filter(
+			(candidate) =>
+				!(candidate.infoHash && blocked.blockedHashes.has(candidate.infoHash)) &&
+				!blocked.blockedTitles.has(candidate.title)
+		);
 
 		logger.info(
 			{
@@ -220,7 +229,7 @@ export class MusicSearchService {
 			title: row.title,
 			artist: row.artist,
 			profile: { id: profile.id, name: profile.name },
-			candidates: rankCandidates(relevant)
+			candidates: rankCandidates(allowed)
 		};
 	}
 

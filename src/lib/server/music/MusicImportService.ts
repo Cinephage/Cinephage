@@ -21,6 +21,7 @@ import { AUDIO_EXTENSIONS, collectAudioFiles, type TaggedAudioFile } from './aud
 import { musicStrmService } from './MusicStrmService.js';
 import { sanitizeMusicSegment } from './paths.js';
 import { publishImport } from '#lib/server/notifications/core/app-events.js';
+import { blocklistService } from '#lib/server/blocklist/BlocklistService.js';
 
 const logger = createChildLogger({ module: 'MusicImportService', logDomain: 'imports' });
 
@@ -82,8 +83,44 @@ export class MusicImportService {
 		this.inFlight.add(queueId);
 		try {
 			return await this.importFolder(albumRow.id, this.resolveLocalPath(queueRow), { queueId });
+		} catch (error) {
+			this.recordImportFailure(albumRow.id, queueRow, error);
+			throw error;
 		} finally {
 			this.inFlight.delete(queueId);
+		}
+	}
+
+	/**
+	 * A failed album import is a release this album must not grab again. The
+	 * video importer records the same way; without it a mislabelled torrent
+	 * would be retried every search cycle.
+	 */
+	private recordImportFailure(
+		albumId: string,
+		queueRow: typeof downloadQueue.$inferSelect,
+		error: unknown
+	): void {
+		try {
+			blocklistService.addToBlocklist(
+				{
+					title: queueRow.title,
+					infoHash: queueRow.infoHash ?? undefined,
+					indexerId: queueRow.indexerId ?? undefined,
+					size: queueRow.size ?? undefined,
+					protocol: queueRow.protocol ?? undefined
+				},
+				{
+					albumId,
+					reason: 'import_failed',
+					message: error instanceof Error ? error.message : String(error)
+				}
+			);
+		} catch (blocklistError) {
+			logger.warn(
+				{ albumId, err: blocklistError instanceof Error ? blocklistError.message : String(blocklistError) },
+				'[MusicImport] could not record the failed release in the blocklist'
+			);
 		}
 	}
 
@@ -110,10 +147,15 @@ export class MusicImportService {
 		const row = db.select().from(downloadQueue).where(eq(downloadQueue.id, queueRow.id)).get();
 		if (!row) throw new NotFoundError('Queued download for album', albumId);
 
-		return this.importFolder(albumId, this.resolveLocalPath(row), {
-			queueId: queueRow.id,
-			dryRun: options.dryRun
-		});
+		try {
+			return await this.importFolder(albumId, this.resolveLocalPath(row), {
+				queueId: queueRow.id,
+				dryRun: options.dryRun
+			});
+		} catch (error) {
+			this.recordImportFailure(albumId, row, error);
+			throw error;
+		}
 	}
 
 	/**
