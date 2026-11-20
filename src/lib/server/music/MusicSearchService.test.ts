@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
 	isAudioCategory,
 	rankCandidates,
+	relevantAlbumCandidates,
 	type MusicReleaseCandidate
 } from './MusicSearchService.js';
 
@@ -68,6 +69,32 @@ describe('rankCandidates relevance', () => {
 		]);
 
 		expect(ranked[0].title).toBe('Daft Punk Discovery 2001 FLAC 88');
+	});
+});
+
+describe('relevantAlbumCandidates', () => {
+	it('keeps the album and drops a one-word match from another artist', () => {
+		// Measured on "Chris Webby Asylum": the two real 320 kbps releases scored
+		// 1.0; "Chris Stassy" and "Chris Isaak" scored 0.05-0.11.
+		const kept = relevantAlbumCandidates([
+			candidate({ title: 'Chris Webby - Asylum (2026) 320', relevance: 1 }),
+			candidate({ title: 'Chris Stassy - Dangerous (2026 House) FLAC', relevance: 0.11 }),
+			candidate({ title: 'Chris Isaak - Silvertone [1985] FLAC', relevance: 0.06 })
+		]);
+
+		expect(kept.map((entry) => entry.title)).toEqual(['Chris Webby - Asylum (2026) 320']);
+	});
+
+	it('keeps a reordered or partly spelled album above the floor', () => {
+		const kept = relevantAlbumCandidates([
+			candidate({ title: 'Discovery 2001 Daft Punk FLAC', relevance: 0.62 })
+		]);
+
+		expect(kept).toHaveLength(1);
+	});
+
+	it('drops candidates with no relevance at all', () => {
+		expect(relevantAlbumCandidates([candidate({ title: 'unknown' })])).toHaveLength(0);
 	});
 });
 

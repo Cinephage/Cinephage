@@ -1,13 +1,7 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
 	import type { PageData } from './$types.js';
-	import {
-		Download,
-		HardDriveDownload,
-		LoaderCircle,
-		Search,
-		Trash2
-	} from '@lucide/svelte';
+	import { Download, HardDriveDownload, LoaderCircle, Search, Trash2 } from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import AlbumHero from '#lib/components/music/AlbumHero.svelte';
 	import TrackList from '#lib/components/music/TrackList.svelte';
@@ -368,7 +362,10 @@
 												{gib(candidate.size)}
 											</td>
 											<td>
-												<span class="badge badge-sm" class:badge-ghost={candidate.accepted === false}>
+												<span
+													class="badge badge-sm"
+													class:badge-ghost={candidate.accepted === false}
+												>
 													{qualityLabel(candidate)}
 												</span>
 											</td>
@@ -376,7 +373,7 @@
 											<td class="text-right">
 												<button
 													class="btn btn-ghost btn-xs"
-													disabled={grabbingGuid !== null || candidate.accepted === false}
+													disabled={grabbingGuid !== null}
 													title={candidate.accepted === false
 														? (candidate.reasons?.[0] ?? m.music_grabFailed())
 														: (candidate.tierLabel ?? '')}
@@ -467,12 +464,16 @@
 		}}
 	>
 		<input
-			class="input w-full input-sm font-mono"
+			class="input w-full font-mono input-sm"
 			bind:value={importPath}
 			placeholder="/media/Music/Artist/Album"
 			aria-label={m.common_path()}
 		/>
-		<button class="btn gap-1.5 btn-primary btn-sm" type="submit" disabled={importing || !importPath.trim()}>
+		<button
+			class="btn gap-1.5 btn-primary btn-sm"
+			type="submit"
+			disabled={importing || !importPath.trim()}
+		>
 			{#if importing}
 				<LoaderCircle class="h-4 w-4 animate-spin" />
 			{:else}

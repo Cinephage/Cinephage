@@ -112,6 +112,21 @@ export function albumRelevance(releaseTitle: string, albumTitle: string): number
 }
 
 /**
+ * Below this a hit is a different album — the indexer matched one word of
+ * "artist album" and returned the rest of its music catalogue. Measured on
+ * "Chris Webby Asylum": 28 of 30 rows were other artists (relevance 0.05-0.11)
+ * and drowned the two real releases (1.0).
+ */
+export const MIN_ALBUM_RELEVANCE = 0.5;
+
+/** Drop the noise before it reaches the UI or the candidate count. */
+export function relevantAlbumCandidates(
+	candidates: MusicReleaseCandidate[]
+): MusicReleaseCandidate[] {
+	return candidates.filter((candidate) => (candidate.relevance ?? 0) >= MIN_ALBUM_RELEVANCE);
+}
+
+/**
  * Interactive release search for one stored album.
  *
  * This is the music counterpart of the movie/TV interactive search: it resolves
@@ -186,8 +201,16 @@ export class MusicSearchService {
 			} satisfies MusicReleaseCandidate;
 		});
 
+		const relevant = relevantAlbumCandidates(candidates);
+
 		logger.info(
-			{ albumId, artist: row.artist, album: row.title, found: candidates.length },
+			{
+				albumId,
+				artist: row.artist,
+				album: row.title,
+				found: candidates.length,
+				kept: relevant.length
+			},
 			'[MusicSearch] album release search'
 		);
 
@@ -196,7 +219,7 @@ export class MusicSearchService {
 			title: row.title,
 			artist: row.artist,
 			profile: { id: profile.id, name: profile.name },
-			candidates: rankCandidates(candidates)
+			candidates: rankCandidates(relevant)
 		};
 	}
 }

@@ -74,7 +74,9 @@ export function parseMusicRelease(title: string): ParsedMusicRelease {
 
 	// A bare 320 next to a codec is the normal spelling ("Mp3 320"); years are
 	// four digits so they cannot collide with this list.
-	const bitrate = /\b(128|160|192|224|256|320)\s*kbps\b|\b(128|160|192|224|256|320)\b/i.exec(title);
+	const bitrate = /\b(128|160|192|224|256|320)[\s._-]*kbps\b|\b(128|160|192|224|256|320)\b/i.exec(
+		title
+	);
 	const vbr = /\bv(0|2)\b/i.exec(title);
 
 	return {
@@ -198,7 +200,9 @@ export function gradeMusicRelease(
 
 	let accepted = tierIndex >= 0;
 	if (!tier) {
-		reasons.push(`no quality tier matches a ${parsed.format} release`);
+		reasons.push(
+			`no quality tier matches ${parsed.format === 'unknown' ? 'an' : 'a'} ${parsed.format} release`
+		);
 	} else if (!profile.allowFallback && tierIndex > 0) {
 		accepted = false;
 		reasons.push(`only matches "${tier.label}"; fallback is off`);

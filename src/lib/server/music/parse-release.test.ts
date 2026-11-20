@@ -21,6 +21,15 @@ describe('parseMusicRelease', () => {
 		expect(parsed).toMatchObject({ format: 'flac', bitDepth: 24, sampleRateKhz: 96, year: 2001 });
 	});
 
+	it('reads a bitrate written with an underscore or dash separator', () => {
+		// Live title from TheRARBG: "… Asylum  Rap  Hip-Hop  (2026) 320_kbps Beats".
+		const parsed = parseMusicRelease(
+			'Inpatient (Chris Webby) - Asylum Rap Hip-Hop (2026) 320_kbps Beats'
+		);
+
+		expect(parsed.bitrateKbps).toBe(320);
+	});
+
 	it('reads a lossy bitrate without mistaking a year for one', () => {
 		const parsed = parseMusicRelease('Daft Punk Discography 1997 2013 Mp3 320 88');
 

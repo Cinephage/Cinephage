@@ -59,9 +59,8 @@
 	const visible = $derived(
 		candidates.filter(
 			(candidate) =>
-				candidate.accepted !== false &&
-				(containsAll(candidate.title, albumTitle) ||
-					(track ? containsAll(candidate.title, track.title) : false))
+				containsAll(candidate.title, albumTitle) ||
+				(track ? containsAll(candidate.title, track.title) : false)
 		)
 	);
 
@@ -78,7 +77,6 @@
 				return;
 			}
 			candidates = body.candidates ?? [];
-			if (visible.length === 0) error = m.music_noReleases();
 		} catch (err) {
 			error = err instanceof Error ? err.message : m.music_searchFailed();
 		} finally {
@@ -152,7 +150,7 @@
 	}
 </script>
 
-<ModalWrapper {open} onClose={onClose} maxWidth="xl">
+<ModalWrapper {open} {onClose} maxWidth="xl">
 	<div class="flex flex-wrap items-center justify-between gap-2">
 		<div class="min-w-0">
 			<h2 class="truncate text-lg font-bold">{track?.title ?? albumTitle}</h2>
@@ -161,7 +159,11 @@
 			</p>
 		</div>
 		<div class="flex items-center gap-1">
-			<button class="btn gap-1.5 btn-primary btn-sm" disabled={grabbing !== null} onclick={autoGrab}>
+			<button
+				class="btn gap-1.5 btn-primary btn-sm"
+				disabled={grabbing !== null}
+				onclick={autoGrab}
+			>
 				{#if grabbing === 'best'}
 					<LoaderCircle class="h-4 w-4 animate-spin" />
 				{:else}
@@ -205,19 +207,27 @@
 							<tr class="border-base-content/5">
 								<td class="max-w-0 truncate" title={candidate.title}>
 									<span class="font-medium">{candidate.title}</span>
+									{#if candidate.accepted === false && candidate.reasons?.length}
+										<span class="ml-2 text-xs text-warning">{candidate.reasons[0]}</span>
+									{/if}
 								</td>
 								<td class="text-xs text-base-content/55">{candidate.indexerName ?? '–'}</td>
 								<td class="text-right font-mono text-xs text-base-content/60 tabular-nums">
 									{gib(candidate.size)}
 								</td>
 								<td>
-									<span class="badge badge-sm">{qualityLabel(candidate)}</span>
+									<span class="badge badge-sm" class:badge-ghost={candidate.accepted === false}>
+										{qualityLabel(candidate)}
+									</span>
 								</td>
 								<td class="text-right tabular-nums">{candidate.seeders ?? '–'}</td>
 								<td class="text-right">
 									<button
 										class="btn gap-1 btn-ghost btn-xs"
 										disabled={grabbing !== null}
+										title={candidate.accepted === false
+											? (candidate.reasons?.[0] ?? m.music_grabFailed())
+											: (candidate.tierLabel ?? '')}
 										onclick={() => grab(candidate)}
 									>
 										{#if grabbing === candidate.guid}
