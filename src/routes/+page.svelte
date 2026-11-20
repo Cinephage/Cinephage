@@ -17,6 +17,7 @@
 		QuickActions,
 		RecentlyAddedMovies,
 		RecentlyAddedSeries,
+		RecentlyAddedMusic,
 		MissingEpisodesList,
 		ComingUpList,
 		RecentHistorySidebar,
@@ -33,7 +34,7 @@
 		'dashboard:upcoming': UpcomingItem[];
 	};
 
-	let recentlyAddedResolved = $state<RecentlyAddedData>({ movies: [], series: [] });
+	let recentlyAddedResolved = $state<RecentlyAddedData>({ movies: [], series: [], albums: [] });
 	let missingEpisodesResolved = $state<MissingEpisode[]>([]);
 	let recentActivityResolved = $state<UnifiedActivity[]>([]);
 	let upcomingResolved = $state<UpcomingItem[]>([]);
@@ -167,7 +168,9 @@
 
 	<QuickActions
 		config={stats.config}
-		hasLibraryContent={stats.movies.total > 0 || stats.series.total > 0}
+		hasLibraryContent={stats.movies.total > 0 ||
+			stats.series.total > 0 ||
+			stats.albums.total > 0}
 		hasMissingEpisodes={stats.episodes.missing > 0}
 	/>
 
@@ -175,10 +178,14 @@
 		<div class="space-y-6 lg:col-span-2">
 			<RecentlyAddedMovies movies={recentlyAdded.movies} isLoading={isRecentlyAddedLoading} />
 			<RecentlyAddedSeries series={recentlyAdded.series} isLoading={isRecentlyAddedLoading} />
+			<RecentlyAddedMusic albums={recentlyAdded.albums} isLoading={isRecentlyAddedLoading} />
 			<MissingEpisodesList episodes={missingEpisodes} isLoading={isMissingEpisodesLoading} />
 			<ComingUpList items={upcoming} isLoading={isUpcomingLoading} />
 
-			{#if !isRecentlyAddedLoading && recentlyAdded.movies.length === 0 && recentlyAdded.series.length === 0}
+			{#if !isRecentlyAddedLoading &&
+				recentlyAdded.movies.length === 0 &&
+				recentlyAdded.series.length === 0 &&
+				recentlyAdded.albums.length === 0}
 				<DashboardEmptyState />
 			{/if}
 		</div>

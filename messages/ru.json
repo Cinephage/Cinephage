@@ -575,6 +575,7 @@
 	"dashboard_recentTvShows_episodes": "{fileCount}/{totalCount} эпизодов",
 	"dashboard_recentTvShows_missingCount": "{count} отсутствует",
 	"dashboard_recentTvShows_title": "Недавно добавленные сериалы",
+	"dashboard_recentMusic_title": "Недавно добавленная музыка",
 	"dashboard_recentTvShows_viewAll": "Показать все",
 	"dashboard_relativeTime_daysAgo": "{count} дн. назад",
 	"dashboard_relativeTime_hoursAgo": "{count} ч. назад",

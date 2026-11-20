@@ -2,11 +2,14 @@ import { stat, statfs } from 'node:fs/promises';
 import { db } from '#lib/server/db/index.js';
 import { toDateString, todayDateString } from '#lib/utils/format.js';
 import {
+	albums,
+	artists,
 	movies,
 	series,
 	episodes,
 	episodeFiles,
 	movieFiles,
+	trackFiles,
 	downloadQueue,
 	downloadHistory,
 	unmatchedFiles,
@@ -50,6 +53,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 		[unmatchedCount],
 		[movieSizeResult],
 		[episodeSizeResult],
+		[trackSizeResult],
+		[albumStats],
 		missingMovieRoots,
 		missingSeriesRoots,
 		rootFolderPathsResult,
@@ -159,6 +164,14 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 		db.select({ count: count() }).from(unmatchedFiles),
 		db.select({ total: sql<number>`COALESCE(SUM(${movieFiles.size}), 0)` }).from(movieFiles),
 		db.select({ total: sql<number>`COALESCE(SUM(${episodeFiles.size}), 0)` }).from(episodeFiles),
+		db.select({ total: sql<number>`COALESCE(SUM(${trackFiles.sizeBytes}), 0)` }).from(trackFiles),
+		db
+			.select({
+				total: count(),
+				withFile: count(sql`CASE WHEN ${albums.hasFile} = 1 THEN 1 END`),
+				monitored: count(sql`CASE WHEN ${albums.monitored} = 1 THEN 1 END`)
+			})
+			.from(albums),
 		// Missing root folders (2 queries)
 		db.select({ count: count() }).from(movies).where(sql`
 			${movies.rootFolderId} IS NULL
@@ -221,6 +234,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
 	const movieStorageBytes = Number(movieSizeResult?.total || 0);
 	const tvStorageBytes = Number(episodeSizeResult?.total || 0);
+	const musicStorageBytes = Number(trackSizeResult?.total || 0);
 
 	return {
 		movies: {
@@ -235,6 +249,12 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 		series: {
 			total: seriesStats?.total || 0,
 			monitored: seriesStats?.monitored || 0
+		},
+		albums: {
+			total: albumStats?.total || 0,
+			withFile: albumStats?.withFile || 0,
+			missing: Math.max(0, (albumStats?.total || 0) - (albumStats?.withFile || 0)),
+			monitored: albumStats?.monitored || 0
 		},
 		episodes: {
 			total: episodeStats?.total || 0,
@@ -261,7 +281,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 		storage: {
 			movieBytes: movieStorageBytes,
 			tvBytes: tvStorageBytes,
-			totalBytes: movieStorageBytes + tvStorageBytes,
+			musicBytes: musicStorageBytes,
+			totalBytes: movieStorageBytes + tvStorageBytes + musicStorageBytes,
 			freeBytes: totalFreeBytes
 		},
 		config: {
@@ -277,7 +298,7 @@ export async function getRecentlyAdded(): Promise<RecentlyAddedData> {
 	const today = todayDateString();
 
 	// Run movie and series branches in parallel - they are independent
-	const [recentMovies, recentSeries] = await Promise.all([
+	const [recentMovies, recentSeries, recentAlbums] = await Promise.all([
 		// Movie branch: fetch recent movies, then enrich with TMDB availability
 		(async () => {
 			const recentlyAddedMovies = await db
@@ -399,12 +420,40 @@ export async function getRecentlyAdded(): Promise<RecentlyAddedData> {
 				episodeFileCount: recentEpisodeFilesBySeries.get(show.id)?.size ?? 0,
 				airedMissingCount: missingMap.get(show.id) ?? 0
 			}));
+		})(),
+		// Albums: the music shelf. Cover art is served by the album endpoint when
+		// a local file or a MusicBrainz edition exists, so `hasCover` is the
+		// same rule the library card uses.
+		(async () => {
+			const rows = await db
+				.select({
+					id: albums.id,
+					title: albums.title,
+					year: albums.year,
+					artistName: artists.name,
+					hasFile: albums.hasFile,
+					monitored: albums.monitored,
+					trackCount: albums.trackCount,
+					coverPath: albums.coverPath,
+					releaseMbid: albums.releaseMbid,
+					added: albums.added
+				})
+				.from(albums)
+				.innerJoin(artists, eq(albums.artistId, artists.id))
+				.orderBy(desc(albums.added))
+				.limit(6);
+
+			return rows.map(({ coverPath, releaseMbid, ...row }) => ({
+				...row,
+				hasCover: Boolean(coverPath ?? releaseMbid)
+			}));
 		})()
 	]);
 
 	return {
 		movies: recentMovies,
-		series: recentSeries
+		series: recentSeries,
+		albums: recentAlbums
 	};
 }
 

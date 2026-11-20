@@ -30,7 +30,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 				{ err: error, component: 'DashboardPage' },
 				'[Dashboard] Error fetching recently added'
 			);
-			return { movies: [], series: [] };
+			return { movies: [], series: [], albums: [] };
 		});
 
 		const missingEpisodesPromise = getMissingEpisodes().catch((error) => {
@@ -98,6 +98,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 					monitored: 0
 				},
 				series: { total: 0, monitored: 0 },
+				albums: { total: 0, withFile: 0, missing: 0, monitored: 0 },
 				episodes: {
 					total: 0,
 					withFile: 0,
@@ -119,6 +120,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 				storage: {
 					movieBytes: 0,
 					tvBytes: 0,
+					musicBytes: 0,
 					totalBytes: 0,
 					freeBytes: 0
 				},
@@ -129,7 +131,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 					tmdbConfigured: false
 				}
 			} satisfies DashboardStats,
-			recentlyAdded: { movies: [], series: [] },
+			recentlyAdded: { movies: [], series: [], albums: [] },
 			missingEpisodes: [],
 			recentActivity: [],
 			upcoming: []

@@ -575,6 +575,7 @@
 	"dashboard_recentTvShows_episodes": "{fileCount}/{totalCount} episodios",
 	"dashboard_recentTvShows_missingCount": "{count} faltantes",
 	"dashboard_recentTvShows_title": "Series añadidas recientemente",
+	"dashboard_recentMusic_title": "Música añadida recientemente",
 	"dashboard_recentTvShows_viewAll": "Ver todo",
 	"dashboard_relativeTime_daysAgo": "hace {count}d",
 	"dashboard_relativeTime_hoursAgo": "hace {count}h",

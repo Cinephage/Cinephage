@@ -39,9 +39,23 @@ export interface MissingEpisode {
 	} | null;
 }
 
+export interface RecentlyAddedAlbum {
+	id: string;
+	title: string;
+	artistName: string;
+	year: number | null;
+	hasFile: boolean | null;
+	monitored: boolean | null;
+	trackCount: number | null;
+	/** True when a local cover or a MusicBrainz edition can serve the art. */
+	hasCover: boolean;
+	added: string | null;
+}
+
 export interface RecentlyAddedData {
 	movies: RecentlyAddedMovie[];
 	series: RecentlyAddedSeries[];
+	albums: RecentlyAddedAlbum[];
 }
 
 export interface DashboardConfig {
@@ -73,6 +87,13 @@ export interface DashboardStats {
 		unmonitoredMissing: number;
 		monitored: number;
 	};
+	/** Albums are music's acquisition unit, so its library counts are album counts. */
+	albums: {
+		total: number;
+		withFile: number;
+		missing: number;
+		monitored: number;
+	};
 	activeDownloads: number;
 	queuedDownloads: number;
 	stalledDownloads: number;
@@ -86,6 +107,7 @@ export interface DashboardStats {
 	storage: {
 		movieBytes: number;
 		tvBytes: number;
+		musicBytes: number;
 		totalBytes: number;
 		freeBytes: number;
 	};

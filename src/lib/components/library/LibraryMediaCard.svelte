@@ -41,6 +41,11 @@
 	};
 	const FallbackIcon = $derived(FALLBACK_ICON[view.kind]);
 
+	// A cover URL can 404 (an album whose release has no Cover Art Archive
+	// image). Without this the tile shows the browser's broken-image glyph
+	// forever; the kind icon is the honest fallback.
+	let artFailed = $state(false);
+
 	const TYPE_TONE: Record<MediaCardView['typeTone'], string> = {
 		primary: 'bg-primary/80 text-primary-content',
 		secondary: 'bg-secondary/80 text-secondary-content',
@@ -89,8 +94,14 @@
 			alt={view.title}
 			class="h-full w-full object-cover"
 		/>
-	{:else if view.art?.source === 'url'}
-		<img src={view.art.url} alt={view.title} class="h-full w-full object-cover" loading="lazy" />
+	{:else if view.art?.source === 'url' && !artFailed}
+		<img
+			src={view.art.url}
+			alt={view.title}
+			class="h-full w-full object-cover"
+			loading="lazy"
+			onerror={() => (artFailed = true)}
+		/>
 	{:else}
 		<div class="flex h-full w-full items-center justify-center bg-base-300">
 			<FallbackIcon class="h-10 w-10 text-base-content/25" />

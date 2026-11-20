@@ -3,6 +3,7 @@
 	import {
 		Clapperboard,
 		Tv,
+		Disc3,
 		Download,
 		AlertCircle,
 		CheckCircle,
@@ -50,6 +51,13 @@
 		return parts.join(' · ');
 	});
 
+	const albumSummary = $derived.by(() => {
+		const parts: string[] = [m.dashboard_stats_filesCount({ count: stats.albums.withFile })];
+		if (stats.albums.missing > 0)
+			parts.push(m.dashboard_stats_missingCount({ count: stats.albums.missing }));
+		return parts.join(' · ');
+	});
+
 	const episodeDetails = $derived.by(() => {
 		const parts: string[] = [];
 		if (stats.episodes.unaired > 0)
@@ -80,6 +88,9 @@
 	);
 	const storageTvBytes = $derived(
 		stats.storage.tvBytes > 0 ? formatBytes(stats.storage.tvBytes) : null
+	);
+	const storageMusicBytes = $derived(
+		stats.storage.musicBytes > 0 ? formatBytes(stats.storage.musicBytes) : null
 	);
 	const storageFreeSpace = $derived(
 		stats.storage.freeBytes > 0
@@ -245,6 +256,33 @@
 
 	<div class="card relative bg-base-200 transition-colors hover:bg-base-300">
 		<a
+			href={resolve('library/music')}
+			class="absolute inset-0 z-0"
+			aria-label={m.nav_music()}
+		></a>
+		<div class="card-body gap-1.5 p-3">
+			<div class="flex items-center gap-2">
+				<div class="shrink-0 rounded-lg bg-accent/10 p-1.5">
+					<Disc3 class="h-5 w-5 text-accent" />
+				</div>
+				<span class="text-xl font-bold">{stats.albums.total}</span>
+				<span class="text-sm text-base-content/60">{m.nav_music()}</span>
+			</div>
+			<div class="truncate text-xs text-base-content/50">{albumSummary}</div>
+			{#if stats.albums.total > 0}
+				<progress
+					class="progress h-1 progress-accent"
+					value={stats.albums.withFile}
+					max={stats.albums.total}
+				></progress>
+			{:else}
+				<div class="h-1"></div>
+			{/if}
+		</div>
+	</div>
+
+	<div class="card relative bg-base-200 transition-colors hover:bg-base-300">
+		<a
 			href={resolve('activity')}
 			class="absolute inset-0 z-0"
 			aria-label={m.dashboard_stats_downloads()}
@@ -387,13 +425,21 @@
 							<Tv class="h-3 w-3 shrink-0" /><span>{storageTvBytes}</span>
 						</span>
 					{/if}
-					{#if storageFreeSpace}
+					{#if storageMusicBytes}
 						{#if storageMovieBytes || storageTvBytes}<span class="shrink-0 text-base-content/30"
 								>·</span
 							>{/if}
+						<span class="flex shrink-0 items-center gap-0.5">
+							<Disc3 class="h-3 w-3 shrink-0" /><span>{storageMusicBytes}</span>
+						</span>
+					{/if}
+					{#if storageFreeSpace}
+						{#if storageMovieBytes || storageTvBytes || storageMusicBytes}<span
+								class="shrink-0 text-base-content/30">·</span
+							>{/if}
 						<span class="shrink-0">{storageFreeSpace}</span>
 					{/if}
-					{#if !storageMovieBytes && !storageTvBytes}
+					{#if !storageMovieBytes && !storageTvBytes && !storageMusicBytes}
 						{m.dashboard_stats_noFilesOnDisk()}
 					{/if}
 				</span>

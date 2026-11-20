@@ -1,6 +1,15 @@
 import { describe, it, expect, afterAll, beforeEach, vi } from 'vitest';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../test/db-helper.js';
-import { indexers, downloadClients, rootFolders, settings } from '#lib/server/db/schema.js';
+import {
+	indexers,
+	downloadClients,
+	rootFolders,
+	settings,
+	albums,
+	artists,
+	mediaItems,
+	trackFiles
+} from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 
@@ -30,18 +39,45 @@ vi.mock('#lib/server/db/index.js', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-import { getDashboardStats } from './queries.js';
+import { getDashboardStats, getRecentlyAdded } from './queries.js';
 
 afterAll(() => {
 	destroyTestDb(testDb);
 });
 
 beforeEach(() => {
+	testDb.db.delete(trackFiles).run();
+	testDb.db.delete(albums).run();
+	testDb.db.delete(mediaItems).run();
+	testDb.db.delete(artists).run();
 	testDb.db.delete(indexers).run();
 	testDb.db.delete(downloadClients).run();
 	testDb.db.delete(rootFolders).run();
 	testDb.db.delete(settings).run();
 });
+
+function seedAlbum(options: { hasCover?: boolean } = {}) {
+	testDb.db.insert(mediaItems).values({ id: 'mi-1', kind: 'album', title: 'Test Album' }).run();
+	testDb.db.insert(artists).values({ id: 'ar-1', name: 'Test Artist' }).run();
+	testDb.db
+		.insert(albums)
+		.values({
+			id: 'al-1',
+			mediaItemId: 'mi-1',
+			artistId: 'ar-1',
+			title: 'Test Album',
+			year: 2024,
+			hasFile: true,
+			monitored: true,
+			trackCount: 2,
+			releaseMbid: options.hasCover ? 'release-1' : null
+		})
+		.run();
+	testDb.db
+		.insert(trackFiles)
+		.values({ id: 'tf-1', albumId: 'al-1', relativePath: '01 - One.flac', sizeBytes: 1234 })
+		.run();
+}
 
 describe('getDashboardStats config and storage', () => {
 	it('reports zeroed config and free space when nothing is configured', async () => {
@@ -92,5 +128,33 @@ describe('getDashboardStats config and storage', () => {
 		const stats = await getDashboardStats();
 
 		expect(stats.config.tmdbConfigured).toBe(false);
+	});
+});
+
+describe('music on the dashboard', () => {
+	it('counts albums and their audio bytes as music', async () => {
+		seedAlbum();
+
+		const stats = await getDashboardStats();
+
+		expect(stats.albums).toEqual({ total: 1, withFile: 1, missing: 0, monitored: 1 });
+		expect(stats.storage.musicBytes).toBe(1234);
+		expect(stats.storage.totalBytes).toBe(1234);
+	});
+
+	it('puts the newest albums on the recently-added shelf with their artist', async () => {
+		seedAlbum({ hasCover: true });
+
+		const recent = await getRecentlyAdded();
+
+		expect(recent.albums).toHaveLength(1);
+		expect(recent.albums[0]).toMatchObject({
+			title: 'Test Album',
+			artistName: 'Test Artist',
+			year: 2024,
+			hasFile: true,
+			monitored: true,
+			hasCover: true
+		});
 	});
 });
