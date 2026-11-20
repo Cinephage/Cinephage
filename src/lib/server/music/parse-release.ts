@@ -201,7 +201,9 @@ export function gradeMusicRelease(
 	let accepted = tierIndex >= 0;
 	if (!tier) {
 		reasons.push(
-			`no quality tier matches ${parsed.format === 'unknown' ? 'an' : 'a'} ${parsed.format} release`
+			parsed.format === 'unknown' && parsed.bitrateKbps
+				? `the name states ${parsed.bitrateKbps} kbps but no codec, so no quality tier can grade it`
+				: `no quality tier matches ${parsed.format === 'unknown' ? 'an' : 'a'} ${parsed.format} release`
 		);
 	} else if (!profile.allowFallback && tierIndex > 0) {
 		accepted = false;

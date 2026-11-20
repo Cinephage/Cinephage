@@ -108,6 +108,10 @@ search:
   fields:
     title:
       selector: 'td:nth-child(2) a[href^="/post-detail/"]'
+      # The site stores titles with HTML entities already escaped ("Ren &amp; JP"),
+      # so cheerio's text() hands them back encoded; decode them once here.
+      filters:
+        - name: htmldecode
 
     details:
       selector: 'td:nth-child(2) a[href^="/post-detail/"]'

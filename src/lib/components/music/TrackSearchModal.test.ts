@@ -20,6 +20,7 @@ function candidate(overrides: Record<string, unknown> = {}) {
 		size: 146_905_498,
 		seeders: 17,
 		format: 'mp3',
+		bitrateKbps: 320,
 		accepted: true,
 		reasons: [],
 		...overrides
@@ -36,7 +37,7 @@ describe('TrackSearchModal', () => {
 		fetchMock.mockResolvedValue(
 			new Response(
 				JSON.stringify({
-					candidates: [candidate({ accepted: false, reasons: ['Below profile'] })]
+					candidates: [candidate({ accepted: false, format: 'unknown', reasons: ['Below profile'] })]
 				}),
 				{
 					status: 200
@@ -63,6 +64,10 @@ describe('TrackSearchModal', () => {
 		// decides what "Grab best" would choose.
 		expect(grab.disabled).toBe(false);
 		expect(grab.title).toBe('Below profile');
+
+		// The live title says 320 kbps without a codec; the row must say that,
+		// not UNKNOWN.
+		expect(screen.getByText('320 kbps · codec?')).toBeTruthy();
 	});
 
 	it('keeps only releases that name the album or the track', async () => {

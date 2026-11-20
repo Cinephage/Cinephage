@@ -3,6 +3,7 @@
 	import * as m from '#lib/paraglide/messages.js';
 	import { ModalWrapper } from '#lib/components/ui/modal/index.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { musicQualityLabel } from './release-quality.js';
 
 	export type TrackSearchCandidate = {
 		guid: string | null;
@@ -13,6 +14,7 @@
 		format?: string;
 		bitDepth?: number | null;
 		sampleRateKhz?: number | null;
+		bitrateKbps?: number | null;
 		accepted?: boolean;
 		tierLabel?: string | null;
 		reasons?: string[];
@@ -93,13 +95,6 @@
 		}
 		if (!open) lastTrackId = null;
 	});
-
-	function qualityLabel(candidate: TrackSearchCandidate): string {
-		const format = (candidate.format ?? 'unknown').toUpperCase();
-		const depth = candidate.bitDepth ? ` ${candidate.bitDepth}-bit` : '';
-		const rate = candidate.sampleRateKhz ? `/${candidate.sampleRateKhz}` : '';
-		return `${format}${depth}${rate}`;
-	}
 
 	function gib(bytes: number | null): string {
 		if (!bytes) return '–';
@@ -217,7 +212,7 @@
 								</td>
 								<td>
 									<span class="badge badge-sm" class:badge-ghost={candidate.accepted === false}>
-										{qualityLabel(candidate)}
+										{musicQualityLabel(candidate)}
 									</span>
 								</td>
 								<td class="text-right tabular-nums">{candidate.seeders ?? '–'}</td>

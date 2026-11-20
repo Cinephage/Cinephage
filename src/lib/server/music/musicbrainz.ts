@@ -49,6 +49,8 @@ export class MusicBrainzError extends Error {
 
 interface ArtistCredit {
 	name?: string | null;
+	/** How MusicBrainz joins this credit to the next one (comma, ampersand, ...). */
+	joinphrase?: string | null;
 	artist?: { id?: string | null; name?: string | null; 'sort-name'?: string | null } | null;
 }
 
@@ -164,10 +166,19 @@ function artistOf(credits: ArtistCredit[] | null | undefined): MusicArtistRef | 
 }
 
 function artistCreditOf(credits: ArtistCredit[] | null | undefined): string | null {
-	const names = (credits ?? [])
-		.map((credit) => credit.name)
-		.filter((name): name is string => !!name);
-	return names.length > 0 ? names.join(', ') : null;
+	const named = (credits ?? []).filter(
+		(credit): credit is ArtistCredit & { name: string } => !!credit.name
+	);
+	if (named.length === 0) return null;
+	// Respect the credit as written: three collaborators are one credit, not
+	// three artists comma-joined into a different-looking string.
+	return named
+		.map((credit, index) => {
+			const join = credit.joinphrase ?? (index < named.length - 1 ? ', ' : '');
+			return `${credit.name}${join}`;
+		})
+		.join('')
+		.trim();
 }
 
 /**

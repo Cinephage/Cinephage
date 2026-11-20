@@ -40,6 +40,8 @@ export interface MusicReleaseCandidate {
 	/** Parsed format (flac/mp3/…) so the UI can say what the release actually is. */
 	format?: string;
 	bitDepth?: number | null;
+	/** Stated kbps, when the name gives one (often without a codec). */
+	bitrateKbps?: number | null;
 	sampleRateKhz?: number | null;
 	/** Profile score, 0-1000, same scale as video profiles. */
 	score?: number;
@@ -192,6 +194,7 @@ export class MusicSearchService {
 				relevance: albumRelevance(release.title, row.title),
 				format: grade.parsed.format,
 				bitDepth: grade.parsed.bitDepth,
+				bitrateKbps: grade.parsed.bitrateKbps,
 				sampleRateKhz: grade.parsed.sampleRateKhz,
 				score: grade.score,
 				accepted: grade.accepted,

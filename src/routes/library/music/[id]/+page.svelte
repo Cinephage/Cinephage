@@ -3,6 +3,7 @@
 	import type { PageData } from './$types.js';
 	import { Download, HardDriveDownload, LoaderCircle, Search, Trash2 } from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
+	import { musicQualityLabel } from '#lib/components/music/release-quality.js';
 	import AlbumHero from '#lib/components/music/AlbumHero.svelte';
 	import TrackList from '#lib/components/music/TrackList.svelte';
 	import TrackSearchModal from '#lib/components/music/TrackSearchModal.svelte';
@@ -24,6 +25,7 @@
 		isAudioCategory: boolean;
 		format?: string;
 		bitDepth?: number | null;
+		bitrateKbps?: number | null;
 		sampleRateKhz?: number | null;
 		score?: number;
 		accepted?: boolean;
@@ -58,13 +60,6 @@
 	let importing = $state(false);
 	let deleteOpen = $state(false);
 	let deleting = $state(false);
-
-	function qualityLabel(candidate: Candidate): string {
-		const format = (candidate.format ?? 'unknown').toUpperCase();
-		const depth = candidate.bitDepth ? ` ${candidate.bitDepth}-bit` : '';
-		const rate = candidate.sampleRateKhz ? `/${candidate.sampleRateKhz}` : '';
-		return `${format}${depth}${rate}`;
-	}
 
 	function gib(bytes: number | null): string {
 		if (!bytes) return '–';
@@ -366,7 +361,7 @@
 													class="badge badge-sm"
 													class:badge-ghost={candidate.accepted === false}
 												>
-													{qualityLabel(candidate)}
+													{musicQualityLabel(candidate)}
 												</span>
 											</td>
 											<td class="text-right tabular-nums">{candidate.seeders ?? '–'}</td>

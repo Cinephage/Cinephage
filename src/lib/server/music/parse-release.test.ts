@@ -30,6 +30,17 @@ describe('parseMusicRelease', () => {
 		expect(parsed.bitrateKbps).toBe(320);
 	});
 
+	it('says the codec is missing when only a bitrate is stated', () => {
+		const grade = gradeMusicRelease(DEFAULT_MUSIC_PROFILE, {
+			title: 'Inpatient - Asylum Rap Hip-Hop (2026) 320_kbps Beats'
+		});
+
+		expect(grade.accepted).toBe(false);
+		expect(grade.reasons[0]).toBe(
+			'the name states 320 kbps but no codec, so no quality tier can grade it'
+		);
+	});
+
 	it('reads a lossy bitrate without mistaking a year for one', () => {
 		const parsed = parseMusicRelease('Daft Punk Discography 1997 2013 Mp3 320 88');
 

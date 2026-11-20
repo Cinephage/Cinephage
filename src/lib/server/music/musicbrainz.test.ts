@@ -205,11 +205,37 @@ describe('MusicBrainzClient.searchRecordings', () => {
 			mbid: 'cd5e530c-9c55-4354-97b2-2d1f85b4cffe',
 			title: 'Almost There',
 			duration: 277,
-			artistCredit: 'Chris Webby, Miss Daja',
+			artistCredit: 'Chris Webby feat. Miss Daja',
 			releaseMbid: 'release-1',
 			releaseGroup: { mbid: 'rg-best', title: 'Best in the Burbs', primaryType: 'Album' }
 		});
 		expect(hits[0].artists.map((artist) => artist.mbid)).toEqual(['artist-webby', 'artist-daja']);
+	});
+
+	it('keeps the artist credit joins as MusicBrainz writes them', async () => {
+		const client = clientWith((async () =>
+			jsonResponse({
+				recordings: [
+					{
+						id: 'rec-madhouse',
+						title: 'Madhouse',
+						'artist-credit': [
+							{ name: 'Inpatient', joinphrase: ', ', artist: { id: 'a1', name: 'Inpatient' } },
+							{ name: 'Ren', joinphrase: ' & ', artist: { id: 'a2', name: 'Ren' } },
+							{
+								name: 'Chris Webby',
+								joinphrase: '',
+								artist: { id: 'a3', name: 'Chris Webby' }
+							}
+						],
+						releases: []
+					}
+				]
+			})) as typeof fetch);
+
+		const hits = await client.searchRecordings({ track: 'Madhouse' });
+
+		expect(hits[0].artistCredit).toBe('Inpatient, Ren & Chris Webby');
 	});
 
 	it('leaves the release group null when a recording has no release to point at', async () => {
