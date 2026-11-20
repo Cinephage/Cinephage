@@ -51,7 +51,6 @@
 	"action_moveUp": "Nach oben",
 	"action_next": "Weiter",
 	"action_pause": "Pausieren",
-	"action_play": "Abspielen",
 	"action_previous": "Zurück",
 	"action_refresh": "Aktualisieren",
 	"action_reject": "Ablehnen",
@@ -5441,7 +5440,5 @@
 	"requestsSettings_quotaPer": "pro",
 	"requestsSettings_lifetime": "Lebenszyklus",
 	"music_genreLabel": "Genre",
-	"music_typeLabel": "Typ",
-	"music_playAlbum": "Album abspielen",
-	"music_playerUnavailable": "Dieser Titel konnte nicht abgespielt werden"
+	"music_typeLabel": "Typ"
 }

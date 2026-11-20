@@ -1,15 +1,5 @@
 <script lang="ts">
-	import {
-		ChevronDown,
-		CircleCheck,
-		CircleDashed,
-		Clock,
-		LoaderCircle,
-		Pause,
-		Play,
-		Search,
-		Zap
-	} from '@lucide/svelte';
+	import { ChevronDown, CircleCheck, CircleDashed, Clock, LoaderCircle, Search, Zap } from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import type { TrackListTrack } from './music-card.js';
 
@@ -23,10 +13,6 @@
 		onAutoSearch?: (track: TrackListTrack) => void;
 		/** Row action: open the interactive search for this track. */
 		onOpenSearch?: (track: TrackListTrack) => void;
-		/** Row action: play this track. The queue is the album, not one song. */
-		onPlay?: (track: TrackListTrack) => void;
-		/** The track already playing, so its row offers pause. */
-		playingTrackId?: string | null;
 		/** Track ids with a request in flight. */
 		busyTrackIds?: Set<string>;
 	};
@@ -37,8 +23,6 @@
 		showFileState = true,
 		onAutoSearch,
 		onOpenSearch,
-		onPlay,
-		playingTrackId = null,
 		busyTrackIds = new Set()
 	}: Props = $props();
 
@@ -72,16 +56,6 @@
 				<span class="text-base-content/45"> · {clock(totalRuntime)}</span>
 			{/if}
 		</p>
-		{#if onPlay && tracks.length > 0}
-			<button
-				type="button"
-				class="btn gap-1 btn-ghost btn-xs"
-				onclick={() => onPlay(tracks[0])}
-			>
-				<Play class="h-3.5 w-3.5" />
-				{m.music_playAlbum()}
-			</button>
-		{/if}
 		{#if showFileState}
 			<p class="flex items-center gap-3 text-xs text-base-content/45">
 				<span class="flex items-center gap-1"><CircleCheck class="h-3.5 w-3.5 text-success" />{m.common_downloaded()}</span>
@@ -115,28 +89,7 @@
 					{@const busy = busyTrackIds.has(track.id)}
 					<tr class="group border-none hover:bg-base-200/50">
 						<td class="w-12 text-right font-mono text-xs text-base-content/40">
-							{#if onPlay}
-								<div class="group/play relative flex h-6 items-center justify-end">
-									<span class="hidden transition-opacity md:inline md:group-hover/play:opacity-0">
-										{track.trackNumber ?? '–'}
-									</span>
-									<button
-										type="button"
-										class="absolute inset-0 flex items-center justify-end opacity-100 transition-opacity focus-visible:opacity-100 md:opacity-0 md:group-hover/play:opacity-100"
-										title={playingTrackId === track.id ? m.action_pause() : m.action_play()}
-										aria-label={playingTrackId === track.id ? m.action_pause() : m.action_play()}
-										onclick={() => onPlay(track)}
-									>
-										{#if playingTrackId === track.id}
-											<Pause class="h-3.5 w-3.5" />
-										{:else}
-											<Play class="h-3.5 w-3.5" />
-										{/if}
-									</button>
-								</div>
-							{:else}
-								{track.trackNumber ?? '–'}
-							{/if}
+							{track.trackNumber ?? '–'}
 						</td>
 						<td class="min-w-0 py-2">
 							<p class="truncate font-medium">{track.title}</p>

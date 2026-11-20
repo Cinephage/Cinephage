@@ -51,7 +51,6 @@
 	"action_moveUp": "Mover arriba",
 	"action_next": "Siguiente",
 	"action_pause": "Pausar",
-	"action_play": "Reproducir",
 	"action_previous": "Anterior",
 	"action_refresh": "Actualizar",
 	"action_reject": "Rechazar",
@@ -5441,7 +5440,5 @@
 	"requestsSettings_quotaPer": "por",
 	"requestsSettings_lifetime": "Ciclo de vida",
 	"music_genreLabel": "Género",
-	"music_typeLabel": "Tipo",
-	"music_playAlbum": "Reproducir álbum",
-	"music_playerUnavailable": "No se pudo reproducir esta pista"
+	"music_typeLabel": "Tipo"
 }

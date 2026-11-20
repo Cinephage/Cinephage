@@ -129,6 +129,11 @@ const customHandler: Handle = async ({ event, resolve }) => {
 				if (path.startsWith('/api/streaming/library/')) {
 					return true;
 				}
+				// The track endpoint is what a music `.strm` names; media servers
+				// fetch it with the streaming key in the query string.
+				if (path.startsWith('/api/streaming/music/')) {
+					return true;
+				}
 				return false;
 			}
 

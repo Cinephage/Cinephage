@@ -51,7 +51,6 @@
 	"action_moveUp": "Вверх",
 	"action_next": "Далее",
 	"action_pause": "Пауза",
-	"action_play": "Воспроизвести",
 	"action_previous": "Предыдущий",
 	"action_refresh": "Обновить",
 	"action_reject": "Отклонить",
@@ -5441,7 +5440,5 @@
 	"requestsSettings_quotaPer": "в",
 	"requestsSettings_lifetime": "Срок жизни",
 	"music_genreLabel": "Жанр",
-	"music_typeLabel": "Тип",
-	"music_playAlbum": "Воспроизвести альбом",
-	"music_playerUnavailable": "Не удалось воспроизвести этот трек"
+	"music_typeLabel": "Тип"
 }

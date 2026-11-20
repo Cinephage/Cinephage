@@ -62,6 +62,7 @@ export class MusicGrabService {
 				id: albums.id,
 				title: albums.title,
 				mediaItemId: albums.mediaItemId,
+				hasFile: albums.hasFile,
 				artist: artists.name
 			})
 			.from(albums)
@@ -166,10 +167,6 @@ export class MusicGrabService {
 			size: chosen.size ?? undefined,
 			mediaItemId: album.mediaItemId
 		});
-
-		// A download supersedes a stream marker: the album's source is whatever
-		// the newest grab chose.
-		db.update(albums).set({ streamSource: null }).where(eq(albums.id, album.id)).run();
 
 		logger.info(
 			{

@@ -17,6 +17,8 @@ import { mapClientPathToLocal } from '#lib/server/downloadClients/monitoring/Pat
 import { createChildLogger } from '#lib/logging/index.js';
 import { NotFoundError, ValidationError } from '#lib/errors/index.js';
 import { matchFilesToTracks, type AudioFileRef } from './track-matching.js';
+import { musicStrmService } from './MusicStrmService.js';
+import { sanitizeMusicSegment } from './paths.js';
 
 const logger = createChildLogger({ module: 'MusicImportService', logDomain: 'imports' });
 
@@ -286,9 +288,13 @@ export class MusicImportService {
 			.where(and(eq(tracks.albumId, albumId), eq(tracks.hasFile, false)))
 			.run();
 		db.update(albums)
-			.set({ path: destinationFolder, hasFile: true })
+			.set({ path: destinationFolder, hasFile: true, streamSource: null })
 			.where(eq(albums.id, albumId))
 			.run();
+
+		// The album is owned now: stream shortcuts left beside the real files
+		// would make the media server show every track twice.
+		await musicStrmService.removeShortcutsInFolder(destinationFolder);
 		if (album.mediaItemId) {
 			db.update(mediaItems)
 				.set({ path: destinationFolder })
@@ -431,13 +437,7 @@ export class MusicImportService {
 
 	/** Path-safe segment: no separators, no leading dots, no trailing spaces. */
 	private sanitize(value: string): string {
-		const cleaned = value
-			.replace(/[/\\]/g, '-')
-			.replace(/[\u0000-\u001f]/g, '')
-			.replace(/^\.+/, '')
-			.trim()
-			.replace(/[. ]+$/, '');
-		return cleaned || 'Unknown';
+		return sanitizeMusicSegment(value);
 	}
 
 	/** The same, segment by segment, so a disc subfolder survives. */
