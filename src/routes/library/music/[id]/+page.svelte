@@ -39,6 +39,13 @@
 	let monitoredOverride = $state<boolean | null>(null);
 	const monitored = $derived(monitoredOverride ?? Boolean(data.album.monitored));
 	let monitorBusy = $state(false);
+	// The profile select is optimistic like the monitor toggle: undefined means
+	// "whatever the server sent", and a failure restores it.
+	let profileOverride = $state<string | null | undefined>(undefined);
+	let profileBusy = $state(false);
+	const activeProfile = $derived(
+		profileOverride !== undefined ? profileOverride : album.qualityProfileId
+	);
 
 	let searchingReleases = $state(false);
 	let grabError = $state<string | null>(null);
@@ -87,6 +94,30 @@
 			toasts.error(err instanceof Error ? err.message : m.common_failedToSave());
 		} finally {
 			monitorBusy = false;
+		}
+	}
+
+	async function saveQualityProfile(next: string | null) {
+		if (profileBusy || next === activeProfile) return;
+		profileBusy = true;
+		const previous = profileOverride;
+		profileOverride = next;
+		try {
+			const response = await fetch(`/api/music/albums/${album.id}`, {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ qualityProfileId: next })
+			});
+			if (!response.ok) {
+				const body = await response.json().catch(() => ({}));
+				profileOverride = previous;
+				toasts.error(body.details ?? body.error ?? m.common_failedToSave());
+			}
+		} catch (err) {
+			profileOverride = previous;
+			toasts.error(err instanceof Error ? err.message : m.common_failedToSave());
+		} finally {
+			profileBusy = false;
 		}
 	}
 
@@ -399,6 +430,19 @@
 						<a class="link link-primary" href={`/library/music/artist/${album.artistId}`}>
 							{album.artistName}
 						</a>
+					</FactRow>
+					<FactRow label={m.music_qualityProfile()}>
+						<select
+							class="select select-xs select-bordered"
+							value={activeProfile ?? ''}
+							disabled={profileBusy}
+							onchange={(event) => saveQualityProfile(event.currentTarget.value || null)}
+						>
+							<option value="">{m.music_qualityProfileDefault()}</option>
+							{#each data.qualityProfiles as profile (profile.id)}
+								<option value={profile.id}>{profile.name}</option>
+							{/each}
+						</select>
 					</FactRow>
 					{#if album.primaryType}
 						<FactRow

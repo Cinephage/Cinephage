@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { db } from '#lib/server/db/index.js';
 import { albums, artists, mediaItems, tracks } from '#lib/server/db/schema.js';
 import { createChildLogger } from '#lib/logging/index.js';
+import { ValidationError } from '#lib/errors/index.js';
+import { isMusicProfileId } from './profiles.js';
 import type { MusicArtistRef, MusicRelease, MusicReleaseGroup } from './types.js';
 
 const logger = createChildLogger({ module: 'MusicAlbumService', logDomain: 'system' });
@@ -55,6 +57,8 @@ export interface AlbumDetail extends AlbumSummary {
 	mbid: string | null;
 	/** Non-null when the album is served by a streaming source, not files. */
 	streamSource: string | null;
+	/** Chosen music quality profile; null means the built-in default. */
+	qualityProfileId: string | null;
 	primaryType: string | null;
 	secondaryTypes: string[] | null;
 	status: string | null;
@@ -259,6 +263,24 @@ export class MusicAlbumService {
 	}
 
 	/**
+	 * The album's quality ladder. `null` is a real value — "use the default" —
+	 * and an unknown id is rejected instead of being stored and silently
+	 * ignored at search time.
+	 */
+	setQualityProfile(albumId: string, profileId: string | null): boolean {
+		if (profileId !== null && !isMusicProfileId(profileId)) {
+			throw new ValidationError(`Unknown music quality profile: ${profileId}`);
+		}
+
+		const result = db
+			.update(albums)
+			.set({ qualityProfileId: profileId })
+			.where(eq(albums.id, albumId))
+			.run();
+		return result.changes > 0;
+	}
+
+	/**
 	 * Remove an album and its tracklist. The `media_items` identity row is
 	 * deleted with it — that row exists only to carry this album's cross-cutting
 	 * links, and leaving it behind would strand them on a subject that no longer
@@ -337,6 +359,7 @@ export class MusicAlbumService {
 				trackCount: albums.trackCount,
 				hasFile: albums.hasFile,
 				streamSource: albums.streamSource,
+				qualityProfileId: albums.qualityProfileId,
 				monitored: albums.monitored,
 				coverPath: albums.coverPath,
 				path: albums.path,

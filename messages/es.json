@@ -5440,5 +5440,7 @@
 	"requestsSettings_quotaPer": "por",
 	"requestsSettings_lifetime": "Ciclo de vida",
 	"music_genreLabel": "Género",
-	"music_typeLabel": "Tipo"
+	"music_typeLabel": "Tipo",
+	"music_qualityProfile": "Perfil de calidad",
+	"music_qualityProfileDefault": "Predeterminado (Lossless primero)"
 }

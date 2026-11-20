@@ -4871,6 +4871,11 @@ export const albums = sqliteTable(
 		 * earlier download, so this records intent, not `has_file`.
 		 */
 		streamSource: text('stream_source'),
+		/**
+		 * Chosen music quality profile id; null means the built-in default.
+		 * Profiles are code-defined (`music/profiles.ts`), so there is no FK.
+		 */
+		qualityProfileId: text('quality_profile_id'),
 		added: text('added').$defaultFn(() => new Date().toISOString()),
 		refreshedAt: text('refreshed_at'),
 		lastSearchedAt: text('last_searched_at')

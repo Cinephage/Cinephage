@@ -14,6 +14,7 @@ import {
 	gradeMusicRelease,
 	type MusicQualityProfile
 } from './parse-release.js';
+import { resolveMusicProfile } from './profiles.js';
 
 const logger = createChildLogger({ module: 'MusicSearchService', logDomain: 'system' });
 
@@ -169,14 +170,21 @@ export class MusicSearchService {
 		profile: { id: string; name: string };
 		candidates: MusicReleaseCandidate[];
 	}> {
-		const profile = options.profile ?? DEFAULT_MUSIC_PROFILE;
 		const row = db
-			.select({ title: albums.title, year: albums.year, artist: artists.name })
+			.select({
+				title: albums.title,
+				year: albums.year,
+				artist: artists.name,
+				qualityProfileId: albums.qualityProfileId
+			})
 			.from(albums)
 			.innerJoin(artists, eq(albums.artistId, artists.id))
 			.where(eq(albums.id, albumId))
 			.get();
 		if (!row) throw new NotFoundError('Album', albumId);
+
+		// The album's own ladder, set on its detail page; null is the default.
+		const profile = options.profile ?? resolveMusicProfile(row.qualityProfileId);
 
 		const manager = await getIndexerManager();
 		const result = await manager.search(
@@ -234,13 +242,13 @@ export class MusicSearchService {
 		profile: { id: string; name: string };
 		candidates: MusicReleaseCandidate[];
 	}> {
-		const profile = options.profile ?? DEFAULT_MUSIC_PROFILE;
 		const row = db
 			.select({
 				title: tracks.title,
 				albumTitle: albums.title,
 				year: albums.year,
-				artist: artists.name
+				artist: artists.name,
+				qualityProfileId: albums.qualityProfileId
 			})
 			.from(tracks)
 			.innerJoin(albums, eq(tracks.albumId, albums.id))
@@ -248,6 +256,8 @@ export class MusicSearchService {
 			.where(eq(tracks.id, trackId))
 			.get();
 		if (!row) throw new NotFoundError('Track', trackId);
+
+		const profile = options.profile ?? resolveMusicProfile(row.qualityProfileId);
 
 		const manager = await getIndexerManager();
 		const result = await manager.search(

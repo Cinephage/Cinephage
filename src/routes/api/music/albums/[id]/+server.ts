@@ -2,11 +2,17 @@ import { z } from 'zod';
 import type { RequestHandler } from './$types.js';
 import { requireAdmin, requireAuth } from '#lib/server/auth/authorization.js';
 import { parseBody } from '#lib/server/api/validate.js';
+import { isAppError } from '#lib/errors/index.js';
 import { musicAlbumService } from '#lib/server/music/MusicAlbumService.js';
 
-const patchAlbumSchema = z.object({
-	monitored: z.boolean()
-});
+const patchAlbumSchema = z
+	.object({
+		monitored: z.boolean().optional(),
+		qualityProfileId: z.string().trim().min(1).nullable().optional()
+	})
+	.refine((value) => value.monitored !== undefined || value.qualityProfileId !== undefined, {
+		message: 'Nothing to update'
+	});
 
 /** GET /api/music/albums/[id] — one album with its tracklist. */
 export const GET: RequestHandler = async (event) => {
@@ -40,10 +46,27 @@ export const PATCH: RequestHandler = async (event) => {
 		);
 	}
 
-	const updated = musicAlbumService.setMonitored(event.params.id, input.monitored);
-	if (!updated) return Response.json({ error: 'Album not found' }, { status: 404 });
+	try {
+		let updated = true;
+		if (input.monitored !== undefined) {
+			updated = musicAlbumService.setMonitored(event.params.id, input.monitored) && updated;
+		}
+		if (input.qualityProfileId !== undefined) {
+			updated = musicAlbumService.setQualityProfile(event.params.id, input.qualityProfileId) && updated;
+		}
 
-	return Response.json({ success: true, album: musicAlbumService.getAlbum(event.params.id) });
+		if (!updated) return Response.json({ error: 'Album not found' }, { status: 404 });
+
+		return Response.json({ success: true, album: musicAlbumService.getAlbum(event.params.id) });
+	} catch (error) {
+		if (isAppError(error)) {
+			return Response.json(
+				{ error: error.message, errorCode: error.code },
+				{ status: error.statusCode }
+			);
+		}
+		throw error;
+	}
 };
 
 /** DELETE /api/music/albums/[id] — remove the album from the library. */

@@ -5440,5 +5440,7 @@
 	"requestsSettings_quotaPer": "в",
 	"requestsSettings_lifetime": "Срок жизни",
 	"music_genreLabel": "Жанр",
-	"music_typeLabel": "Тип"
+	"music_typeLabel": "Тип",
+	"music_qualityProfile": "Профиль качества",
+	"music_qualityProfileDefault": "По умолчанию (Lossless сначала)"
 }
