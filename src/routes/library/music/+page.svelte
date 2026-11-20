@@ -9,7 +9,9 @@
 		ChevronDown,
 		Plus,
 		Mic2,
-		Music
+		Music,
+		CheckSquare,
+		XSquare
 	} from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import LibraryMediaCard from '#lib/components/library/LibraryMediaCard.svelte';
@@ -27,7 +29,10 @@
 	import MusicAddModal from '#lib/components/music/MusicAddModal.svelte';
 	import { viewPreferences } from '#lib/stores/view-preferences.svelte.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
-	import { SvelteSet } from 'svelte/reactivity';
+	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
+	import LibraryBulkActionBar from '#lib/components/library/LibraryBulkActionBar.svelte';
+	import { createListSelection } from '#lib/components/library/list/list-selection.svelte.js';
+	import ConfirmationModal from '#lib/components/ui/modal/ConfirmationModal.svelte';
 	import type { TrackTableRow } from '#lib/components/music/music-card.js';
 
 	let { data }: { data: PageData } = $props();
@@ -56,13 +61,7 @@
 	 * matching kind decides how a result is drawn. An empty query is the browse
 	 * state, which shows one level at a time.
 	 */
-	const needles = $derived(
-		searchQuery
-			.trim()
-			.toLowerCase()
-			.split(/\s+/)
-			.filter(Boolean)
-	);
+	const needles = $derived(searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean));
 
 	function matches(text: string): boolean {
 		if (needles.length === 0) return true;
@@ -206,21 +205,31 @@
 	});
 
 	const activeFilterCount = $derived(
-		(browse === 'artists' ? 0 : 1) + (fileFilter === 'all' ? 0 : 1) + (monitorFilter === 'all' ? 0 : 1)
+		(browse === 'artists' ? 0 : 1) +
+			(fileFilter === 'all' ? 0 : 1) +
+			(monitorFilter === 'all' ? 0 : 1)
 	);
 
 	const browseLabel = $derived(
-		browse === 'albums' ? m.music_tabAlbums() : browse === 'songs' ? m.music_tabSongs() : m.music_tabArtists()
+		browse === 'albums'
+			? m.music_tabAlbums()
+			: browse === 'songs'
+				? m.music_tabSongs()
+				: m.music_tabArtists()
 	);
 	const browseCount = $derived(
-		browse === 'albums' ? data.counts.albums : browse === 'songs' ? data.counts.songs : data.counts.artists
+		browse === 'albums'
+			? data.counts.albums
+			: browse === 'songs'
+				? data.counts.songs
+				: data.counts.artists
 	);
 
 	// Keep the view in the URL so a reload and the detail page's back link land on
 	// the same slice. `replaceState`, not `goto`: filtering is not navigation.
 	$effect(() => {
 		if (typeof window === 'undefined') return;
-		const params = new URLSearchParams();
+		const params = new SvelteURLSearchParams();
 		if (browse !== 'artists') params.set('type', browse);
 		if (searchQuery.trim()) params.set('q', searchQuery.trim());
 		if (fileFilter !== 'all') params.set('file', fileFilter);
@@ -360,12 +369,74 @@
 		await invalidateAll();
 	}
 
-	const selectedIds = new SvelteSet<string>();
+	const selection = createListSelection();
+	const selectedIds = selection.ids;
 
 	const emptyLibrary = $derived(data.counts.albums === 0);
+
+	/** The list selection acts on artists or albums, never on song rows. */
+	const selectionItems = $derived(browse === 'artists' ? artists : albums);
+	const selectable = $derived(browse !== 'songs' && isAdminUser);
+	const bulkItemLabel = $derived(
+		browse === 'artists'
+			? selection.count === 1
+				? m.music_tabArtist().toLowerCase()
+				: m.music_tabArtists().toLowerCase()
+			: selection.count === 1
+				? m.music_tabAlbum().toLowerCase()
+				: m.music_tabAlbums().toLowerCase()
+	);
+
+	let bulkLoading = $state(false);
+	let bulkAction = $state<'monitor' | 'unmonitor' | 'delete' | null>(null);
+	let removeSelectedOpen = $state(false);
+
+	async function bulkMonitor(monitored: boolean) {
+		if (selection.count === 0) return;
+		bulkLoading = true;
+		bulkAction = monitored ? 'monitor' : 'unmonitor';
+		try {
+			const ids = [...selection.ids];
+			await (browse === 'artists'
+				? setArtistsMonitored(ids, monitored)
+				: setMonitored(ids, monitored));
+			selection.clear();
+		} finally {
+			bulkLoading = false;
+			bulkAction = null;
+		}
+	}
+
+	async function bulkRemoveSelected() {
+		const ids = [...selection.ids];
+		if (ids.length === 0) return;
+		bulkLoading = true;
+		bulkAction = 'delete';
+		try {
+			let removed = 0;
+			for (const id of ids) {
+				const endpoint =
+					browse === 'artists' ? `/api/music/artists/${id}` : `/api/music/albums/${id}`;
+				const response = await fetch(endpoint, { method: 'DELETE' });
+				if (response.ok) removed += 1;
+			}
+			removeSelectedOpen = false;
+			selection.clear();
+			if (removed === ids.length) {
+				toasts.success(m.music_removedSelected({ count: removed }));
+			} else {
+				toasts.error(m.common_failedToSave());
+			}
+			await invalidateAll();
+		} finally {
+			bulkLoading = false;
+			bulkAction = null;
+		}
+	}
 </script>
 
 <svelte:head><title>{m.nav_music()} · Cinephage</title></svelte:head>
+<svelte:window onkeydown={selection.handleKeydown} />
 
 <div class="min-h-screen bg-base-100 pb-20">
 	<LibraryListHeader
@@ -380,7 +451,7 @@
 		switchToGridLabel={m.library_movies_switchToGrid()}
 		switchToListLabel={m.library_movies_switchToList()}
 		onToggleView={() => viewPreferences.toggleViewMode()}
-		activeFilterCount={activeFilterCount}
+		{activeFilterCount}
 		filterLabel={m.library_drawer_title()}
 		onOpenFilters={() => (drawerOpen = true)}
 	>
@@ -395,6 +466,24 @@
 				<button class="btn gap-1.5 btn-primary btn-xs sm:btn-sm" onclick={() => (addOpen = true)}>
 					<Plus class="h-4 w-4" />
 					<span class="hidden xl:inline">{m.music_addMusic()}</span>
+				</button>
+			{/if}
+
+			{#if selectable}
+				<button
+					class="btn gap-1.5 btn-ghost btn-xs sm:btn-sm {selection.mode ? 'btn-primary' : ''}"
+					onclick={() => selection.cycle(selectionItems)}
+				>
+					{#if !selection.mode}
+						<CheckSquare class="h-4 w-4" />
+						<span class="hidden sm:inline">{m.library_movies_select()}</span>
+					{:else if !selection.allSelected(selectionItems)}
+						<CheckSquare class="h-4 w-4" />
+						<span class="hidden sm:inline">{m.library_movies_selectAll()}</span>
+					{:else}
+						<XSquare class="h-4 w-4" />
+						<span class="hidden sm:inline">{m.library_movies_done()}</span>
+					{/if}
 				</button>
 			{/if}
 
@@ -425,6 +514,7 @@
 								onclick={() => {
 									browse = option.value as Browse;
 									sortField = defaultSort(option.value as Browse);
+									selection.clear();
 								}}
 							>
 								{option.label}
@@ -484,13 +574,20 @@
 				<section class="mb-8">
 					<div class="mb-3 flex items-center gap-2">
 						<h2 class="font-semibold">{m.music_tabArtists()}</h2>
-						<span class="badge badge-sm badge-ghost">{artists.length}</span>
+						<span class="badge badge-ghost badge-sm">{artists.length}</span>
 					</div>
 					{#if viewPreferences.viewMode === 'grid'}
-						<ul class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-9">
+						<ul
+							class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-9"
+						>
 							{#each artists as artist (artist.id)}
 								<li>
-									<LibraryMediaCard view={artistCardView(artist)} />
+									<LibraryMediaCard
+										view={artistCardView(artist)}
+										selectable={selectable && selection.mode}
+										selected={selectedIds.has(artist.id)}
+										onSelectChange={selection.toggle}
+									/>
 								</li>
 							{/each}
 						</ul>
@@ -499,7 +596,8 @@
 							rows={artists.map((artist) => artistRowView(artist))}
 							kind="artist"
 							selectedItems={selectedIds}
-							selectable={false}
+							selectable={selectable && selection.mode}
+							onSelectChange={selection.toggle}
 							onMonitorToggle={isAdminUser ? toggleArtistMonitored : undefined}
 							onAutoGrab={isAdminUser ? searchDiscography : undefined}
 							onDelete={isAdminUser ? removeArtist : undefined}
@@ -512,13 +610,20 @@
 				<section class="mb-8">
 					<div class="mb-3 flex items-center gap-2">
 						<h2 class="font-semibold">{m.music_tabAlbums()}</h2>
-						<span class="badge badge-sm badge-ghost">{albums.length}</span>
+						<span class="badge badge-ghost badge-sm">{albums.length}</span>
 					</div>
 					{#if viewPreferences.viewMode === 'grid'}
-						<ul class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-9">
+						<ul
+							class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-9"
+						>
 							{#each albums as album (album.id)}
 								<li>
-									<LibraryMediaCard view={albumCardView(album)} />
+									<LibraryMediaCard
+										view={albumCardView(album)}
+										selectable={selectable && selection.mode}
+										selected={selectedIds.has(album.id)}
+										onSelectChange={selection.toggle}
+									/>
 								</li>
 							{/each}
 						</ul>
@@ -527,7 +632,8 @@
 							rows={albums.map((album) => albumRowView(album))}
 							kind="album"
 							selectedItems={selectedIds}
-							selectable={false}
+							selectable={selectable && selection.mode}
+							onSelectChange={selection.toggle}
 							columnLabels={{ quality: m.music_typeLabel(), size: m.music_tracksLabel() }}
 							onMonitorToggle={isAdminUser ? toggleAlbumMonitored : undefined}
 							onDelete={isAdminUser ? removeAlbum : undefined}
@@ -540,7 +646,7 @@
 				<section class="mb-8">
 					<div class="mb-3 flex items-center gap-2">
 						<h2 class="font-semibold">{m.music_tabSongs()}</h2>
-						<span class="badge badge-sm badge-ghost">{songs.length}</span>
+						<span class="badge badge-ghost badge-sm">{songs.length}</span>
 					</div>
 					<TrackTable
 						tracks={songs as TrackTableRow[]}
@@ -613,10 +719,17 @@
 			{:else}
 				<div class="animate-in fade-in slide-in-from-bottom-4 duration-500">
 					{#if viewPreferences.viewMode === 'grid'}
-						<ul class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-9">
+						<ul
+							class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-9"
+						>
 							{#each albums as album (album.id)}
 								<li>
-									<LibraryMediaCard view={albumCardView(album)} />
+									<LibraryMediaCard
+										view={albumCardView(album)}
+										selectable={selectable && selection.mode}
+										selected={selectedIds.has(album.id)}
+										onSelectChange={selection.toggle}
+									/>
 								</li>
 							{/each}
 						</ul>
@@ -625,7 +738,8 @@
 							rows={albums.map((album) => albumRowView(album))}
 							kind="album"
 							selectedItems={selectedIds}
-							selectable={false}
+							selectable={selectable && selection.mode}
+							onSelectChange={selection.toggle}
 							columnLabels={{ quality: m.music_typeLabel(), size: m.music_tracksLabel() }}
 							onMonitorToggle={isAdminUser ? toggleAlbumMonitored : undefined}
 							onDelete={isAdminUser ? removeAlbum : undefined}
@@ -646,10 +760,17 @@
 			{:else}
 				<div class="animate-in fade-in slide-in-from-bottom-4 duration-500">
 					{#if viewPreferences.viewMode === 'grid'}
-						<ul class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-9">
+						<ul
+							class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-9"
+						>
 							{#each artists as artist (artist.id)}
 								<li>
-									<LibraryMediaCard view={artistCardView(artist)} />
+									<LibraryMediaCard
+										view={artistCardView(artist)}
+										selectable={selectable && selection.mode}
+										selected={selectedIds.has(artist.id)}
+										onSelectChange={selection.toggle}
+									/>
 								</li>
 							{/each}
 						</ul>
@@ -658,7 +779,8 @@
 							rows={artists.map((artist) => artistRowView(artist))}
 							kind="artist"
 							selectedItems={selectedIds}
-							selectable={false}
+							selectable={selectable && selection.mode}
+							onSelectChange={selection.toggle}
 							onMonitorToggle={isAdminUser ? toggleArtistMonitored : undefined}
 							onAutoGrab={isAdminUser ? searchDiscography : undefined}
 							onDelete={isAdminUser ? removeArtist : undefined}
@@ -668,6 +790,28 @@
 			{/if}
 		{/if}
 	</main>
+
+	<LibraryBulkActionBar
+		selectedCount={selection.count}
+		loading={bulkLoading}
+		currentAction={bulkAction}
+		itemLabel={bulkItemLabel}
+		onMonitor={() => bulkMonitor(true)}
+		onUnmonitor={() => bulkMonitor(false)}
+		onDelete={() => (removeSelectedOpen = true)}
+		onClear={selection.clear}
+	/>
+
+	<ConfirmationModal
+		open={removeSelectedOpen}
+		title={m.action_remove()}
+		message={m.music_removeSelectedConfirm({ count: selection.count })}
+		confirmLabel={m.action_remove()}
+		confirmVariant="error"
+		loading={bulkLoading}
+		onConfirm={bulkRemoveSelected}
+		onCancel={() => (removeSelectedOpen = false)}
+	/>
 
 	<LibraryDrawer
 		isOpen={drawerOpen}
@@ -682,6 +826,7 @@
 			if (key === 'type') {
 				browse = value as Browse;
 				sortField = defaultSort(value as Browse);
+				selection.clear();
 			}
 			if (key === 'file') fileFilter = value as FileFilter;
 			if (key === 'monitor') monitorFilter = value as MonitorFilter;
@@ -700,4 +845,8 @@
 	/>
 {/if}
 
-<MusicAddModal open={addOpen} onClose={() => (addOpen = false)} libraryId={data.library?.id ?? null} />
+<MusicAddModal
+	open={addOpen}
+	onClose={() => (addOpen = false)}
+	libraryId={data.library?.id ?? null}
+/>

@@ -1,16 +1,17 @@
 <script lang="ts">
 	import { X, Eye, EyeOff, Sliders, Trash2, Loader2, Languages } from '@lucide/svelte';
-	import { mediaTypeCountLabel, type MediaType } from '#lib/utils/media-type.js';
 	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
 		selectedCount: number;
 		loading: boolean;
 		currentAction: 'monitor' | 'unmonitor' | 'quality' | 'delete' | 'language' | null;
-		mediaType: MediaType;
+		/** Count-aware noun for the sentence, e.g. "movies" or "albums". */
+		itemLabel: string;
 		onMonitor: () => void;
 		onUnmonitor: () => void;
-		onChangeQuality: () => void;
+		/** Video-only: music grades on bitrate, not a quality profile. */
+		onChangeQuality?: () => void;
 		/** Optional bulk language profile action. */
 		onLanguage?: () => void;
 		onDelete: () => void;
@@ -21,7 +22,7 @@
 		selectedCount,
 		loading,
 		currentAction,
-		mediaType,
+		itemLabel,
 		onMonitor,
 		onUnmonitor,
 		onChangeQuality,
@@ -29,8 +30,6 @@
 		onDelete,
 		onClear
 	}: Props = $props();
-
-	const itemLabel = $derived(mediaTypeCountLabel(mediaType, selectedCount));
 </script>
 
 {#if selectedCount > 0}
@@ -76,19 +75,21 @@
 					<span class="hidden sm:inline">{m.action_unmonitor()}</span>
 				</button>
 
-				<button
-					class="btn gap-1.5 btn-ghost btn-sm"
-					onclick={onChangeQuality}
-					disabled={loading}
-					title={m.library_bulkActionBar_titleQuality()}
-				>
-					{#if loading && currentAction === 'quality'}
-						<Loader2 size={16} class="animate-spin" />
-					{:else}
-						<Sliders size={16} />
-					{/if}
-					<span class="hidden sm:inline">{m.common_quality()}</span>
-				</button>
+				{#if onChangeQuality}
+					<button
+						class="btn gap-1.5 btn-ghost btn-sm"
+						onclick={onChangeQuality}
+						disabled={loading}
+						title={m.library_bulkActionBar_titleQuality()}
+					>
+						{#if loading && currentAction === 'quality'}
+							<Loader2 size={16} class="animate-spin" />
+						{:else}
+							<Sliders size={16} />
+						{/if}
+						<span class="hidden sm:inline">{m.common_quality()}</span>
+					</button>
+				{/if}
 
 				{#if onLanguage}
 					<button

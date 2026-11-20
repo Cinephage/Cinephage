@@ -13,6 +13,7 @@
 	import BulkDeleteModal from '#lib/components/library/BulkDeleteModal.svelte';
 	import DeleteConfirmationModal from '#lib/components/ui/modal/DeleteConfirmationModal.svelte';
 	import type { QualityProfileOption } from '#lib/types/profile.js';
+	import { mediaTypeCountLabel } from '#lib/utils/media-type.js';
 
 	interface Props {
 		/** Admin only — the whole block is hidden for viewer accounts. */
@@ -96,7 +97,7 @@
 		{selectedCount}
 		{loading}
 		{currentAction}
-		{mediaType}
+		itemLabel={mediaTypeCountLabel(mediaType, selectedCount)}
 		{onMonitor}
 		{onUnmonitor}
 		{onChangeQuality}
