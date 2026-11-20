@@ -12,7 +12,7 @@
 
 id: cinephage-stream
 name: Cinephage Library
-description: Stream content from your local media library via .strm files
+description: Stream content from your local library — .strm for video, stream sources for music
 type: private
 protocol: streaming
 language: en-US
@@ -40,13 +40,19 @@ caps:
     search: [q]
     movie-search: [q, tmdbid, imdbid]
     tv-search: [q, tmdbid, tvdbid, imdbid, season, ep]
+    music-search: [q, artist, album, year]
   categories:
     '2000': Movies
+    '3000': Audio
     '5000': TV
   categorymappings:
     - id: Movies
       cat: '2000'
       desc: Movies
+      default: true
+    - id: Audio
+      cat: '3000'
+      desc: Music
       default: true
     - id: TV
       cat: '5000'
@@ -54,7 +60,7 @@ caps:
       default: true
 
 # Search configuration (uses DatabaseQueryExecutor defaults)
-# The executor handles movie/TV queries against the local database
+# The executor handles movie/TV/music queries against the local database
 search:
   response:
     type: json

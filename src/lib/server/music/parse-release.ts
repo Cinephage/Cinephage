@@ -190,9 +190,26 @@ function matchesTier(tier: MusicTier, parsed: ParsedMusicRelease): boolean {
  */
 export function gradeMusicRelease(
 	profile: MusicQualityProfile,
-	release: { title: string; size?: number | null }
+	release: { title: string; size?: number | null; protocol?: string | null }
 ): MusicGrade {
 	const parsed = parseMusicRelease(release.title);
+
+	// A streaming release has no codec or bitrate in its name — the source
+	// decides those at playback. Accept it as a rung below the ladder: a real
+	// download always outranks it, and an album with nothing else still plays.
+	// Rejecting it instead would make an explicit pick read "no quality tier
+	// matches an unknown release".
+	if (release.protocol === 'streaming') {
+		return {
+			score: 1,
+			accepted: true,
+			tierIndex: -1,
+			tierLabel: 'Streaming',
+			reasons: [],
+			parsed
+		};
+	}
+
 	const reasons: string[] = [];
 
 	const tierIndex = profile.tiers.findIndex((tier) => matchesTier(tier, parsed));

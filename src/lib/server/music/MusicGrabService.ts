@@ -7,12 +7,16 @@ import { createChildLogger } from '#lib/logging/index.js';
 import { NotFoundError, ValidationError } from '#lib/errors/index.js';
 import { getDownloadResolutionService } from '#lib/server/downloads/DownloadResolutionService.js';
 import { musicSearchService, type MusicReleaseCandidate } from './MusicSearchService.js';
+import { musicStreamGrabService } from './MusicStreamGrabService.js';
+import { parseMusicStreamUrl } from './stream-url.js';
 
 const logger = createChildLogger({ module: 'MusicGrabService', logDomain: 'system' });
 
 export interface MusicGrabResult {
-	queueId: string;
-	downloadId: string;
+	/** Null for a stream grab: only a download client hands back a queue id. */
+	queueId: string | null;
+	/** Null for a stream grab, for the same reason. */
+	downloadId: string | null;
 	title: string;
 	indexerName: string | null;
 	size: number | null;
@@ -78,6 +82,20 @@ export class MusicGrabService {
 		if (!chosen) {
 			throw new ValidationError('No release passed the quality profile for this album');
 		}
+
+		// The Streamer releases the album to a source instead of a download
+		// client. It is the same decision the movie streamer profile makes, and
+		// the reason no torrent client is required for this branch.
+		if (chosen.protocol === 'streaming') {
+			const parsed = parseMusicStreamUrl(chosen.downloadUrl ?? '');
+			if (!parsed || parsed.albumId !== album.id) {
+				throw new ValidationError('The streaming release does not point at this album');
+			}
+
+			const result = await musicStreamGrabService.grabAlbumStream(album, chosen);
+			return { queueId: null, downloadId: null, ...result };
+		}
+
 		if (!chosen.magnetUrl && !chosen.downloadUrl && !chosen.infoHash) {
 			throw new ValidationError('The chosen release has no magnet, torrent URL or info hash');
 		}
@@ -148,6 +166,10 @@ export class MusicGrabService {
 			size: chosen.size ?? undefined,
 			mediaItemId: album.mediaItemId
 		});
+
+		// A download supersedes a stream marker: the album's source is whatever
+		// the newest grab chose.
+		db.update(albums).set({ streamSource: null }).where(eq(albums.id, album.id)).run();
 
 		logger.info(
 			{

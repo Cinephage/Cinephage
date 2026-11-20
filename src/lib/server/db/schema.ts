@@ -4864,6 +4864,13 @@ export const albums = sqliteTable(
 		monitored: integer('monitored', { mode: 'boolean' }).default(true),
 		/** Cached: does this album have at least one file? Mirrors movies.has_file. */
 		hasFile: integer('has_file', { mode: 'boolean' }).default(false),
+		/**
+		 * Non-null when the album is served by a streaming source instead of a
+		 * local file: the indexer that owns it (`cinephage-stream`). Set by a
+		 * stream grab and cleared by a download grab; files may exist from an
+		 * earlier download, so this records intent, not `has_file`.
+		 */
+		streamSource: text('stream_source'),
 		added: text('added').$defaultFn(() => new Date().toISOString()),
 		refreshedAt: text('refreshed_at'),
 		lastSearchedAt: text('last_searched_at')

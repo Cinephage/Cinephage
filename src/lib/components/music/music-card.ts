@@ -58,6 +58,8 @@ export interface AlbumHeroAlbum {
 	trackCount?: number | null;
 	duration?: number | null;
 	hasFile?: boolean | null;
+	/** Non-null when the album is served by a streaming source, not files. */
+	streamSource?: string | null;
 	monitored?: boolean | null;
 	path?: string | null;
 	releaseMbid?: string | null;

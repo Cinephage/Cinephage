@@ -118,8 +118,14 @@ export class StreamingProtocolHandler extends BaseProtocolHandler implements ISt
 			}
 
 			const contentType = parts[0];
-			if (contentType !== 'movie' && contentType !== 'tv') {
+			if (contentType !== 'movie' && contentType !== 'tv' && contentType !== 'music') {
 				return false;
+			}
+
+			// Music names the album it resolves, never a track: the album is the
+			// grab unit and playback resolves tracks lazily.
+			if (contentType === 'music') {
+				return parts[1] === 'album' && parts.length === 3 && parts[2].length > 0;
 			}
 
 			return true;

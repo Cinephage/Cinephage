@@ -286,6 +286,11 @@
 									{m.music_tracksShort({ count: album.trackCount })}
 								</span>
 							{/if}
+							{#if album.streamSource}
+								<span class="badge badge-sm badge-outline">
+									{m.library_fileCard_streaming()}
+								</span>
+							{/if}
 						</div>
 						<div
 							class="flex w-full items-center gap-1 overflow-x-auto border-t border-base-content/10 pt-2 pb-0.5 sm:w-auto sm:shrink-0 sm:overflow-x-visible sm:border-0 sm:pt-0 sm:pb-0"

@@ -85,7 +85,12 @@ export function rankCandidates<T extends MusicReleaseCandidate>(candidates: T[])
 		// tie-break score inside that rung. Seeders never outrank quality — a
 		// fallback to a lower rung is `allowFallback` on the profile, not a
 		// well-seeded worse copy.
-		const tier = (a.tierIndex ?? 99) - (b.tierIndex ?? 99);
+		// `-1` means "no rung matched" everywhere else; a streaming release is
+		// accepted without a rung, so both must sit below every real tier
+		// rather than sorting first.
+		const tierA = a.tierIndex !== undefined && a.tierIndex >= 0 ? a.tierIndex : 99;
+		const tierB = b.tierIndex !== undefined && b.tierIndex >= 0 ? b.tierIndex : 99;
+		const tier = tierA - tierB;
 		if (tier !== 0) return tier;
 		const score = (b.score ?? 0) - (a.score ?? 0);
 		if (score !== 0) return score;
@@ -390,7 +395,8 @@ function toCandidates(
 		const categories = (release.categories ?? []).map(Number);
 		const grade = gradeMusicRelease(profile, {
 			title: release.title,
-			size: release.size ?? null
+			size: release.size ?? null,
+			protocol: release.protocol ?? null
 		});
 		return {
 			title: release.title,

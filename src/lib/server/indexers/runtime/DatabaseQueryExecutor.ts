@@ -26,11 +26,12 @@ import type {
 	ReleaseResult,
 	IndexerProtocol,
 	MovieSearchCriteria,
-	TvSearchCriteria
+	TvSearchCriteria,
+	MusicSearchCriteria
 } from '../types';
 import { Category } from '../types/category';
 import { db } from '#lib/server/db/index.js';
-import { movies, series, episodes } from '#lib/server/db/schema.js';
+import { movies, series, episodes, albums, artists } from '#lib/server/db/schema.js';
 import { eq, and, like, sql } from 'drizzle-orm';
 import { createChildLogger } from '#lib/logging/index.js';
 
@@ -75,6 +76,8 @@ export class DatabaseQueryExecutor {
 				return this.executeMovieQuery(criteria as unknown as MovieSearchCriteria, context);
 			case 'tv':
 				return this.executeTvQuery(criteria as unknown as TvSearchCriteria, context);
+			case 'music':
+				return this.executeMusicQuery(criteria as unknown as MusicSearchCriteria, context);
 			default: {
 				// For basic search, try both movie and TV
 				const movieResults = await this.executeMovieQuery(
@@ -167,6 +170,83 @@ export class DatabaseQueryExecutor {
 
 		// Map results to ReleaseResult using output mapping
 		return this.mapResults(results, queryDef, context, contentType);
+	}
+
+	/**
+	 * Execute the default music query.
+	 *
+	 * An album is the unit that searches and grabs, exactly like a movie, so a
+	 * hit is one album — not one track. Playback resolves the tracks lazily;
+	 * generating a release per track would turn a twelve-song album into twelve
+	 * "downloads" the queue cannot model.
+	 *
+	 * Artist and album are separate conditions on purpose: a one-box
+	 * "artist album" string matches bootlegs whose title happens to contain the
+	 * artist's name, and the music search already sends both fields.
+	 */
+	private async executeMusicQuery(
+		criteria: MusicSearchCriteria,
+		context: DatabaseQueryContext
+	): Promise<ReleaseResult[]> {
+		const conditions = [];
+		const isInteractive = criteria.searchSource === 'interactive';
+
+		if (criteria.album) {
+			conditions.push(like(albums.title, `%${criteria.album}%`));
+		} else if (criteria.query) {
+			conditions.push(like(albums.title, `%${criteria.query}%`));
+		}
+		if (criteria.artist) {
+			conditions.push(like(artists.name, `%${criteria.artist}%`));
+		}
+		if (criteria.year) {
+			conditions.push(eq(albums.year, criteria.year));
+		}
+		if (!isInteractive) {
+			conditions.push(eq(albums.monitored, true));
+		}
+
+		const rows =
+			conditions.length > 0
+				? await db
+						.select({ album: albums, artistName: artists.name })
+						.from(albums)
+						.innerJoin(artists, eq(albums.artistId, artists.id))
+						.where(and(...conditions))
+						.limit(100)
+				: await db
+						.select({ album: albums, artistName: artists.name })
+						.from(albums)
+						.innerJoin(artists, eq(albums.artistId, artists.id))
+						.limit(100);
+
+		this.log.info(
+			{
+				indexer: context.indexerName,
+				artist: criteria.artist,
+				album: criteria.album,
+				year: criteria.year,
+				searchSource: criteria.searchSource,
+				resultsCount: rows.length
+			},
+			'[DatabaseQueryExecutor] Music query results'
+		);
+
+		return rows.map(({ album, artistName }) => ({
+			guid: `stream-music-${album.id}`,
+			title: `${artistName} - ${album.title} (${album.year ?? 'N/A'}) [Streaming]`,
+			downloadUrl: `stream://music/album/${album.id}`,
+			size: this.STREAMING_FILE_SIZE,
+			publishDate: album.added ? new Date(album.added) : new Date(),
+			indexerId: context.indexerId,
+			indexerName: context.indexerName,
+			protocol: 'streaming',
+			categories: [Category.AUDIO],
+			streaming: {
+				providerName: 'Cinephage',
+				verified: true
+			}
+		}));
 	}
 
 	/**

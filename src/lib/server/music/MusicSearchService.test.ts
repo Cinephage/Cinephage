@@ -55,6 +55,21 @@ describe('rankCandidates', () => {
 
 		expect(ranked[0].title).toBe('known');
 	});
+
+	it('keeps a streaming fallback below a real quality tier', () => {
+		const ranked = rankCandidates([
+			candidate({
+				title: 'Streaming',
+				protocol: 'streaming',
+				accepted: true,
+				tierIndex: -1,
+				score: 1
+			}),
+			candidate({ title: 'FLAC', accepted: true, tierIndex: 1, score: 50 })
+		]);
+
+		expect(ranked.map((entry) => entry.title)).toEqual(['FLAC', 'Streaming']);
+	});
 });
 
 describe('rankCandidates relevance', () => {

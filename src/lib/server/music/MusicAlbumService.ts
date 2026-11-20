@@ -53,6 +53,8 @@ export interface AlbumSummary {
 export interface AlbumDetail extends AlbumSummary {
 	releaseMbid: string | null;
 	mbid: string | null;
+	/** Non-null when the album is served by a streaming source, not files. */
+	streamSource: string | null;
 	primaryType: string | null;
 	secondaryTypes: string[] | null;
 	status: string | null;
@@ -334,6 +336,7 @@ export class MusicAlbumService {
 				year: albums.year,
 				trackCount: albums.trackCount,
 				hasFile: albums.hasFile,
+				streamSource: albums.streamSource,
 				monitored: albums.monitored,
 				coverPath: albums.coverPath,
 				path: albums.path,

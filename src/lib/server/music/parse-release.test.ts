@@ -110,4 +110,25 @@ describe('gradeMusicRelease — tiers, not seeders', () => {
 		expect(vinyl.tierIndex).toBe(web.tierIndex);
 		expect(vinyl.score).toBeGreaterThan(web.score);
 	});
+
+	it('accepts a streaming release without inventing a codec', () => {
+		const grade = gradeMusicRelease(DEFAULT_MUSIC_PROFILE, {
+			title: 'Daft Punk - Discovery (2001) [Streaming]',
+			protocol: 'streaming'
+		});
+
+		expect(grade.accepted).toBe(true);
+		expect(grade.tierLabel).toBe('Streaming');
+		expect(grade.score).toBeLessThan(
+			gradeMusicRelease(DEFAULT_MUSIC_PROFILE, { title: 'Album FLAC' }).score
+		);
+	});
+
+	it('still rejects an unparseable name when the protocol is not streaming', () => {
+		const grade = gradeMusicRelease(DEFAULT_MUSIC_PROFILE, {
+			title: 'Daft Punk - Discovery (2001) [Streaming]'
+		});
+
+		expect(grade.accepted).toBe(false);
+	});
 });
