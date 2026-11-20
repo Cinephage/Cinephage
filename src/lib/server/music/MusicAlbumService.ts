@@ -1,7 +1,7 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { db } from '#lib/server/db/index.js';
-import { albums, artists, mediaItems, tracks } from '#lib/server/db/schema.js';
+import { albums, artists, mediaItems, trackFiles, tracks } from '#lib/server/db/schema.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { ValidationError } from '#lib/errors/index.js';
 import { isMusicProfileId } from './profiles.js';
@@ -52,11 +52,37 @@ export interface AlbumSummary {
 	hasCover: boolean;
 }
 
+/** One audio file on disk, as the album page's Files block lists it. */
+export interface AlbumFile {
+	id: string;
+	trackId: string | null;
+	trackTitle: string | null;
+	relativePath: string;
+	sizeBytes: number | null;
+	format: string | null;
+	bitrateKbps: number | null;
+	bitDepth: number | null;
+	sampleRateHz: number | null;
+	duration: number | null;
+}
+
+export interface AlbumMetadataUpdate {
+	title?: string;
+	year?: number | null;
+	primaryType?: string | null;
+	labelName?: string | null;
+	catalogNumber?: string | null;
+	barcode?: string | null;
+	country?: string | null;
+}
+
 export interface AlbumDetail extends AlbumSummary {
 	releaseMbid: string | null;
 	mbid: string | null;
 	/** Non-null when the album is served by a streaming source, not files. */
 	streamSource: string | null;
+	/** The album's actual audio files, the way a movie page lists its files. */
+	files: AlbumFile[];
 	/** Chosen music quality profile; null means the built-in default. */
 	qualityProfileId: string | null;
 	primaryType: string | null;
@@ -281,6 +307,32 @@ export class MusicAlbumService {
 	}
 
 	/**
+	 * Edit the metadata a person can actually know better than MusicBrainz:
+	 * the release title and its edition facts. Identifiers (MBIDs) are not here
+	 * — changing those is a re-match, not an edit.
+	 */
+	updateMetadata(albumId: string, patch: AlbumMetadataUpdate): boolean {
+		const values: Partial<typeof albums.$inferInsert> = {};
+
+		if (patch.title !== undefined) {
+			const title = patch.title.trim();
+			if (!title) throw new ValidationError('Album title cannot be empty');
+			values.title = title;
+		}
+		if (patch.year !== undefined) values.year = patch.year;
+		if (patch.primaryType !== undefined) values.primaryType = patch.primaryType;
+		if (patch.labelName !== undefined) values.labelName = patch.labelName;
+		if (patch.catalogNumber !== undefined) values.catalogNumber = patch.catalogNumber;
+		if (patch.barcode !== undefined) values.barcode = patch.barcode;
+		if (patch.country !== undefined) values.country = patch.country;
+
+		if (Object.keys(values).length === 0) return false;
+
+		const result = db.update(albums).set(values).where(eq(albums.id, albumId)).run();
+		return result.changes > 0;
+	}
+
+	/**
 	 * Remove an album and its tracklist. The `media_items` identity row is
 	 * deleted with it — that row exists only to carry this album's cross-cutting
 	 * links, and leaving it behind would strand them on a subject that no longer
@@ -397,7 +449,30 @@ export class MusicAlbumService {
 			.orderBy(asc(tracks.position))
 			.all();
 
-		return { ...row, hasCover: Boolean(row.coverPath ?? row.releaseMbid), tracks: trackRows };
+		const fileRows = db
+			.select({
+				id: trackFiles.id,
+				trackId: trackFiles.trackId,
+				trackTitle: tracks.title,
+				relativePath: trackFiles.relativePath,
+				sizeBytes: trackFiles.sizeBytes,
+				format: trackFiles.format,
+				bitrateKbps: trackFiles.bitrateKbps,
+				bitDepth: trackFiles.bitDepth,
+				sampleRateHz: trackFiles.sampleRateHz,
+				duration: trackFiles.duration
+			})
+			.from(trackFiles)
+			.leftJoin(tracks, eq(trackFiles.trackId, tracks.id))
+			.where(eq(trackFiles.albumId, albumId))
+			.all();
+
+		return {
+			...row,
+			hasCover: Boolean(row.coverPath ?? row.releaseMbid),
+			tracks: trackRows,
+			files: fileRows
+		};
 	}
 }
 

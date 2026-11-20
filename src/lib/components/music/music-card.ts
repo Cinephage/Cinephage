@@ -132,3 +132,14 @@ export function deriveFeaturedArtists(
 		.slice(0, limit)
 		.map(([name]) => name);
 }
+
+/** The editable release facts, shared by the album page and its edit modal. */
+export interface AlbumEditData {
+	title: string;
+	year: number | null;
+	primaryType: string | null;
+	labelName: string | null;
+	catalogNumber: string | null;
+	barcode: string | null;
+	country: string | null;
+}

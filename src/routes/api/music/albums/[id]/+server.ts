@@ -8,9 +8,16 @@ import { musicAlbumService } from '#lib/server/music/MusicAlbumService.js';
 const patchAlbumSchema = z
 	.object({
 		monitored: z.boolean().optional(),
-		qualityProfileId: z.string().trim().min(1).nullable().optional()
+		qualityProfileId: z.string().trim().min(1).nullable().optional(),
+		title: z.string().trim().min(1).max(300).optional(),
+		year: z.number().int().min(1900).max(2100).nullable().optional(),
+		primaryType: z.string().trim().max(50).nullable().optional(),
+		labelName: z.string().trim().max(200).nullable().optional(),
+		catalogNumber: z.string().trim().max(100).nullable().optional(),
+		barcode: z.string().trim().max(64).nullable().optional(),
+		country: z.string().trim().max(100).nullable().optional()
 	})
-	.refine((value) => value.monitored !== undefined || value.qualityProfileId !== undefined, {
+	.refine((value) => Object.keys(value).length > 0, {
 		message: 'Nothing to update'
 	});
 
@@ -53,6 +60,19 @@ export const PATCH: RequestHandler = async (event) => {
 		}
 		if (input.qualityProfileId !== undefined) {
 			updated = musicAlbumService.setQualityProfile(event.params.id, input.qualityProfileId) && updated;
+		}
+
+		const metadata = {
+			title: input.title,
+			year: input.year,
+			primaryType: input.primaryType,
+			labelName: input.labelName,
+			catalogNumber: input.catalogNumber,
+			barcode: input.barcode,
+			country: input.country
+		};
+		if (Object.values(metadata).some((value) => value !== undefined)) {
+			updated = musicAlbumService.updateMetadata(event.params.id, metadata) && updated;
 		}
 
 		if (!updated) return Response.json({ error: 'Album not found' }, { status: 404 });

@@ -5442,5 +5442,9 @@
 	"music_genreLabel": "Género",
 	"music_typeLabel": "Tipo",
 	"music_qualityProfile": "Perfil de calidad",
-	"music_qualityProfileDefault": "Predeterminado (Lossless primero)"
+	"music_qualityProfileDefault": "Predeterminado (Lossless primero)",
+	"music_editAlbumTitle": "Editar álbum",
+	"music_yearInvalid": "Introduce un año entre 1900 y 2100",
+	"music_deleteFileTitle": "Eliminar archivo",
+	"music_deleteFileMessage": "¿Eliminar {file}? El archivo de audio se eliminará del disco."
 }

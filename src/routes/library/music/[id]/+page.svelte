@@ -1,10 +1,13 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
 	import type { PageData } from './$types.js';
-	import { Download, HardDriveDownload, LoaderCircle, Search, Trash2 } from '@lucide/svelte';
+	import { Download, FileAudio, HardDriveDownload, LoaderCircle, Search, Trash2 } from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import { musicQualityLabel } from '#lib/components/music/release-quality.js';
 	import AlbumHero from '#lib/components/music/AlbumHero.svelte';
+	import AlbumEditModal from '#lib/components/music/AlbumEditModal.svelte';
+	import type { AlbumEditData } from '#lib/components/music/music-card.js';
+	import { formatBytes } from '#lib/utils/format.js';
 	import TrackList from '#lib/components/music/TrackList.svelte';
 	import TrackSearchModal from '#lib/components/music/TrackSearchModal.svelte';
 	import { ConfirmationModal, ModalWrapper } from '#lib/components/ui/modal/index.js';
@@ -43,6 +46,10 @@
 	// "whatever the server sent", and a failure restores it.
 	let profileOverride = $state<string | null | undefined>(undefined);
 	let profileBusy = $state(false);
+	let editOpen = $state(false);
+	let editSaving = $state(false);
+	let fileToDelete = $state<{ id: string; name: string } | null>(null);
+	let deletingFile = $state(false);
 	const activeProfile = $derived(
 		profileOverride !== undefined ? profileOverride : album.qualityProfileId
 	);
@@ -118,6 +125,48 @@
 			toasts.error(err instanceof Error ? err.message : m.common_failedToSave());
 		} finally {
 			profileBusy = false;
+		}
+	}
+
+	async function saveAlbumEdit(patch: AlbumEditData) {
+		if (editSaving) return;
+		editSaving = true;
+		try {
+			const response = await fetch(`/api/music/albums/${album.id}`, {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(patch)
+			});
+			const body = await response.json().catch(() => ({}));
+			if (!response.ok) {
+				toasts.error(body.details ?? body.error ?? m.common_failedToSave());
+				return;
+			}
+			editOpen = false;
+			await invalidateAll();
+		} catch (err) {
+			toasts.error(err instanceof Error ? err.message : m.common_failedToSave());
+		} finally {
+			editSaving = false;
+		}
+	}
+
+	async function removeFile() {
+		if (!fileToDelete || deletingFile) return;
+		deletingFile = true;
+		try {
+			const response = await fetch(`/api/music/files/${fileToDelete.id}`, { method: 'DELETE' });
+			const body = await response.json().catch(() => ({}));
+			if (!response.ok) {
+				toasts.error(body.details ?? body.error ?? m.common_failedToSave());
+				return;
+			}
+			fileToDelete = null;
+			await invalidateAll();
+		} catch (err) {
+			toasts.error(err instanceof Error ? err.message : m.common_failedToSave());
+		} finally {
+			deletingFile = false;
 		}
 	}
 
@@ -262,6 +311,7 @@
 		onGrabBest={hasAccepted ? () => grab(null) : null}
 		grabBusy={grabbingGuid !== null}
 		onImport={() => (importOpen = true)}
+		onEdit={() => (editOpen = true)}
 		onRemove={() => (deleteOpen = true)}
 	/>
 
@@ -419,10 +469,63 @@
 						</div>
 					{/if}
 				</div>
-			</div>
-		</div>
 
-		<!-- Sidebar: the same details grammar as the movie and series pages. -->
+			</div>
+			<!-- Files: the audio half of the movie page's file management block. -->
+			{#if album.files.length > 0}
+				<div class="mt-4 rounded-xl bg-base-200 md:mt-6">
+					<div class="flex flex-wrap items-center justify-between gap-3 p-4 pb-3 md:p-6">
+						<div class="flex items-center gap-2">
+							<FileAudio class="h-4 w-4 shrink-0 text-primary" />
+							<h2 class="text-lg font-semibold">
+								{m.common_files()}
+								<span class="ml-1 badge badge-ghost badge-sm">{album.files.length}</span>
+							</h2>
+						</div>
+					</div>
+					<div class="px-4 pb-4 md:px-6">
+						<div class="overflow-hidden rounded-lg bg-base-100">
+							{#each album.files as file (file.id)}
+								<div class="flex items-center gap-3 border-b border-base-300/60 px-3 py-2 last:border-b-0">
+									<div class="min-w-0 flex-1">
+										<p class="truncate text-sm font-medium">
+											{file.trackTitle ?? file.relativePath}
+										</p>
+										<p class="truncate text-xs text-base-content/55">{file.relativePath}</p>
+									</div>
+									<span class="badge badge-ghost badge-sm whitespace-nowrap">
+										{[
+											file.format?.toUpperCase(),
+											file.bitDepth ? `${file.bitDepth}-bit` : null,
+											file.bitrateKbps ? `${file.bitrateKbps} kbps` : null
+										]
+											.filter(Boolean)
+											.join(' · ') || '—'}
+									</span>
+									<span class="text-xs text-base-content/60 tabular-nums">
+										{formatBytes(file.sizeBytes)}
+									</span>
+									<button
+										class="btn btn-ghost btn-xs btn-square text-error"
+										title={m.common_delete()}
+										aria-label={m.common_delete()}
+										onclick={() =>
+											(fileToDelete = {
+												id: file.id,
+												name: file.trackTitle ?? file.relativePath
+											})}
+									>
+										<Trash2 class="h-3.5 w-3.5" />
+									</button>
+								</div>
+							{/each}
+						</div>
+					</div>
+				</div>
+			{/if}
+			</div>
+
+			<!-- Sidebar: the same details grammar as the movie and series pages. -->
 		<div class="min-w-0 space-y-4 md:space-y-6">
 			<Panel title={m.common_details()}>
 				<dl class="space-y-2 text-sm">
@@ -522,6 +625,25 @@
 		</button>
 	</form>
 </ModalWrapper>
+
+<AlbumEditModal
+	open={editOpen}
+	{album}
+	saving={editSaving}
+	onClose={() => (editOpen = false)}
+	onSave={saveAlbumEdit}
+/>
+
+<ConfirmationModal
+	open={fileToDelete !== null}
+	title={m.music_deleteFileTitle()}
+	message={m.music_deleteFileMessage({ file: fileToDelete?.name ?? '' })}
+	confirmLabel={m.common_delete()}
+	confirmVariant="error"
+	loading={deletingFile}
+	onConfirm={removeFile}
+	onCancel={() => (fileToDelete = null)}
+/>
 
 <ConfirmationModal
 	open={deleteOpen}

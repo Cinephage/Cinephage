@@ -5789,5 +5789,9 @@
 	"music_removedSelected": "Removed {count} items",
 	"music_noTrackReleases": "No releases found for this track.",
 	"music_qualityProfile": "Quality profile",
-	"music_qualityProfileDefault": "Default (Lossless first)"
+	"music_qualityProfileDefault": "Default (Lossless first)",
+	"music_editAlbumTitle": "Edit Album",
+	"music_yearInvalid": "Enter a year between 1900 and 2100",
+	"music_deleteFileTitle": "Delete file",
+	"music_deleteFileMessage": "Delete {file}? The audio file is removed from disk."
 }
