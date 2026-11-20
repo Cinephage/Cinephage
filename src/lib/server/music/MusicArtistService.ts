@@ -54,6 +54,8 @@ export interface ArtistRecord {
 	overview: string | null;
 	imagePath: string | null;
 	monitored: boolean | null;
+	/** Null = inherit the default music quality profile. */
+	qualityProfileId: string | null;
 	added: string | null;
 }
 
@@ -116,12 +118,18 @@ export class MusicArtistService {
 	 */
 	updateArtist(
 		artistId: string,
-		patch: { name?: string; sortName?: string | null; monitored?: boolean }
+		patch: {
+			name?: string;
+			sortName?: string | null;
+			monitored?: boolean;
+			qualityProfileId?: string | null;
+		}
 	): boolean {
 		const values: Record<string, unknown> = {};
 		if (patch.name !== undefined) values.name = patch.name;
 		if (patch.sortName !== undefined) values.sortName = patch.sortName;
 		if (patch.monitored !== undefined) values.monitored = patch.monitored;
+		if (patch.qualityProfileId !== undefined) values.qualityProfileId = patch.qualityProfileId;
 		if (Object.keys(values).length === 0) return false;
 		const result = db.update(artists).set(values).where(eq(artists.id, artistId)).run();
 		return result.changes > 0;
@@ -205,6 +213,7 @@ export class MusicArtistService {
 					overview: artists.overview,
 					imagePath: artists.imagePath,
 					monitored: artists.monitored,
+					qualityProfileId: artists.qualityProfileId,
 					added: artists.added
 				})
 				.from(artists)
@@ -233,6 +242,7 @@ export class MusicArtistService {
 				overview: artists.overview,
 				imagePath: artists.imagePath,
 				monitored: artists.monitored,
+				qualityProfileId: artists.qualityProfileId,
 				added: artists.added
 			})
 			.from(artists)

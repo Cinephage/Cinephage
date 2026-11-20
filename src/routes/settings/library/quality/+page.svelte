@@ -13,6 +13,7 @@
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { Sliders, Layers, Clock } from '@lucide/svelte';
 	import { DelayProfileList } from '#lib/components/delayProfiles/index.js';
+	import MusicProfilesManager from '#lib/components/settings/MusicProfilesManager.svelte';
 	import {
 		createScoringProfile,
 		updateScoringProfile,
@@ -305,6 +306,8 @@
 			onDelete={confirmProfileDelete}
 			onSetDefault={handleSetDefault}
 		/>
+		<div class="divider my-6"></div>
+		<MusicProfilesManager profiles={data.musicProfiles} defaultId={data.musicDefaultId} />
 	{:else if activeTab === 'formats'}
 		<div class="-mt-2">
 			<p class="text-sm text-base-content/60">

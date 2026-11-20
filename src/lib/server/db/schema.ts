@@ -379,9 +379,26 @@ export const scoringProfiles = sqliteTable('scoring_profiles', {
 	 * to those indexers. Never persisted as an empty array.
 	 */
 	allowedIndexerIds: text('allowed_indexers', { mode: 'json' }).$type<string[] | null>(),
+	/**
+	 * Which media this profile grades. Video profiles are the historical rows
+	 * and default to 'video'; music profiles store their ladder in
+	 * `music_tiers` and are skipped by every video profile list.
+	 */
+	mediaKind: text('media_kind').default('video'),
+	/** Ordered music ladder; null for video profiles. */
+	musicTiers: text('music_tiers', { mode: 'json' }).$type<MusicProfileTierRow[]>(),
 	createdAt: text('created_at').$defaultFn(() => new Date().toISOString()),
 	updatedAt: text('updated_at').$defaultFn(() => new Date().toISOString())
 });
+
+/** One rung of a music quality ladder, stored on a `scoring_profiles` row. */
+export interface MusicProfileTierRow {
+	kind: 'lossless' | 'lossy' | 'streaming';
+	label: string;
+	formats?: string[];
+	minBitrateKbps?: number;
+	minBitDepth?: number;
+}
 
 /**
  * Profile Size Limits - User-configured overrides for built-in profiles
@@ -4809,6 +4826,10 @@ export const artists = sqliteTable(
 		monitored: integer('monitored', { mode: 'boolean' }).default(true),
 		libraryId: text('library_id').references(() => libraries.id, { onDelete: 'set null' }),
 		rootFolderId: text('root_folder_id').references(() => rootFolders.id, { onDelete: 'set null' }),
+		/** Null = inherit the default music profile. */
+		qualityProfileId: text('quality_profile_id').references(() => scoringProfiles.id, {
+			onDelete: 'set null'
+		}),
 		added: text('added').$defaultFn(() => new Date().toISOString()),
 		refreshedAt: text('refreshed_at')
 	},

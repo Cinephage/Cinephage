@@ -3,12 +3,14 @@ import type { RequestHandler } from './$types.js';
 import { requireAdmin, requireAuth } from '#lib/server/auth/authorization.js';
 import { parseBody } from '#lib/server/api/validate.js';
 import { musicArtistService } from '#lib/server/music/MusicArtistService.js';
+import { musicProfileService } from '#lib/server/music/MusicProfileService.js';
 
 const patchArtistSchema = z
 	.object({
 		name: z.string().trim().min(1).max(300).optional(),
 		sortName: z.string().trim().max(300).nullable().optional(),
-		monitored: z.boolean().optional()
+		monitored: z.boolean().optional(),
+		qualityProfileId: z.string().trim().min(1).nullable().optional()
 	})
 	.refine((value) => Object.keys(value).length > 0, { message: 'Nothing to update' });
 
@@ -40,6 +42,13 @@ export const PATCH: RequestHandler = async (event) => {
 	} catch (err) {
 		return Response.json(
 			{ error: 'Invalid request', details: err instanceof Error ? err.message : String(err) },
+			{ status: 400 }
+		);
+	}
+
+	if (input.qualityProfileId && !musicProfileService.get(input.qualityProfileId)) {
+		return Response.json(
+			{ error: `Unknown music quality profile: ${input.qualityProfileId}` },
 			{ status: 400 }
 		);
 	}

@@ -226,7 +226,7 @@ import {
  *   JSON, backfilled from movie_category/tv_category, so a new media kind reads
  *   the map instead of gaining another column.
  */
-export const CURRENT_SCHEMA_VERSION = 185;
+export const CURRENT_SCHEMA_VERSION = 186;
 
 /**
  * Seed rows for the *legacy* backfill in migration 078 only.
@@ -335,6 +335,8 @@ const TABLE_DEFINITIONS: string[] = [
 		"required_formats" text,
 		"prevent_downgrades" integer DEFAULT 0,
 		"allowed_indexers" text,
+		"media_kind" text DEFAULT 'video',
+		"music_tiers" text,
 		"created_at" text,
 		"updated_at" text
 	)`,
@@ -1827,6 +1829,7 @@ const TABLE_DEFINITIONS: string[] = [
 		"monitored" integer DEFAULT true,
 		"library_id" text REFERENCES "libraries"("id") ON DELETE SET NULL,
 		"root_folder_id" text REFERENCES "root_folders"("id") ON DELETE SET NULL,
+		"quality_profile_id" text,
 		"added" text,
 		"refreshed_at" text
 	)`,

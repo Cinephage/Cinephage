@@ -95,7 +95,11 @@ export function parseMusicRelease(title: string): ParsedMusicRelease {
  * One rung of the quality ladder. A release matches when every stated condition
  * holds; omitted conditions are ignored.
  */
+export type MusicTierKind = 'lossless' | 'lossy' | 'streaming';
+
 export interface MusicTier {
+	/** Installed tiers say what they are; code-defined profiles may omit it. */
+	kind?: MusicTierKind;
 	label: string;
 	formats?: MusicFormat[];
 	lossless?: boolean;
@@ -141,12 +145,20 @@ export const DEFAULT_MUSIC_PROFILE: MusicQualityProfile = {
 	name: 'Lossless first',
 	allowFallback: true,
 	tiers: [
-		{ label: 'Lossless 24-bit', lossless: true, minBitDepth: 24 },
-		{ label: 'Lossless', lossless: true },
-		{ label: 'High-bitrate lossy', formats: ['mp3', 'aac'], lossless: false, minBitrateKbps: 256 },
+		{ kind: 'lossless', label: 'Lossless 24-bit', lossless: true, minBitDepth: 24 },
+		{ kind: 'lossless', label: 'Lossless', lossless: true },
+		{
+			kind: 'lossy',
+			label: 'High-bitrate lossy',
+			formats: ['mp3', 'aac'],
+			lossless: false,
+			minBitrateKbps: 256
+		},
 		// Explicit formats: an unparseable name is "unknown", and accepting it as
 		// lossy would let a release nobody could identify rank as real audio.
-		{ label: 'Lossy', formats: ['mp3', 'aac', 'ogg', 'opus'], lossless: false }
+		{ kind: 'lossy', label: 'Lossy', formats: ['mp3', 'aac', 'ogg', 'opus'], lossless: false },
+		// The fallback that makes an album with no torrent playable at all.
+		{ kind: 'streaming', label: 'Streaming' }
 	],
 	formatScores: {
 		'format-flac': 40,
@@ -173,6 +185,9 @@ export function releaseSizeMb(sizeBytes: number | null | undefined): number | nu
 }
 
 function matchesTier(tier: MusicTier, parsed: ParsedMusicRelease): boolean {
+	// A streaming rung never matches a torrent/usenet release: it is selected by
+	// protocol, not by a codec in the name.
+	if (tier.kind === 'streaming') return false;
 	if (tier.formats && !tier.formats.includes(parsed.format)) return false;
 	if (tier.lossless !== undefined && tier.lossless !== parsed.lossless) return false;
 	if (tier.minBitDepth !== undefined && (parsed.bitDepth ?? 0) < tier.minBitDepth) return false;
@@ -195,16 +210,29 @@ export function gradeMusicRelease(
 	const parsed = parseMusicRelease(release.title);
 
 	// A streaming release has no codec or bitrate in its name — the source
-	// decides those at playback. Accept it as a rung below the ladder: a real
-	// download always outranks it, and an album with nothing else still plays.
-	// Rejecting it instead would make an explicit pick read "no quality tier
-	// matches an unknown release".
+	// decides those at playback. It is a rung of its own: a profile that lists a
+	// streaming tier accepts it at that rung, and a profile that does not (FLAC
+	// only) rejects it outright. That is the difference between "all FLAC" and
+	// "just streaming".
 	if (release.protocol === 'streaming') {
+		const streamingIndex = profile.tiers.findIndex((tier) => tier.kind === 'streaming');
+		if (streamingIndex < 0) {
+			return {
+				score: 0,
+				accepted: false,
+				tierIndex: -1,
+				tierLabel: null,
+				reasons: [`"${profile.name}" does not allow streaming`],
+				parsed
+			};
+		}
+
+		const rung = profile.tiers[streamingIndex];
 		return {
-			score: 1,
+			score: Math.max(1, (profile.tiers.length - streamingIndex) * 10),
 			accepted: true,
-			tierIndex: -1,
-			tierLabel: 'Streaming',
+			tierIndex: streamingIndex,
+			tierLabel: rung.label,
 			reasons: [],
 			parsed
 		};

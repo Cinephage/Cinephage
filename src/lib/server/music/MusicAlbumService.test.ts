@@ -185,7 +185,7 @@ describe('MusicAlbumService.updateMetadata', () => {
 			})
 		).toBe(true);
 
-		const album = musicAlbumService.getAlbum(albumId);
+		const album = musicAlbumService.getAlbum(albumId)!;
 		expect(album.title).toBe('Discovery (Remaster)');
 		expect(album.year).toBe(2002);
 		expect(album.labelName).toBe('Parlophone');
@@ -204,12 +204,21 @@ describe('MusicAlbumService.updateMetadata', () => {
 describe('MusicAlbumService.setQualityProfile', () => {
 	it('stores, clears and rejects unknown profile ids', () => {
 		const { albumId } = musicAlbumService.addAlbum({ releaseGroup: RELEASE_GROUP, release: RELEASE });
+		testDb.db
+			.insert(schema.scoringProfiles)
+			.values({
+				id: 'music-lossy',
+				name: 'Lossy first',
+				mediaKind: 'music',
+				musicTiers: [{ kind: 'lossy', label: 'Lossy' }]
+			})
+			.run();
 
-		expect(musicAlbumService.getAlbum(albumId).qualityProfileId).toBeNull();
+		expect(musicAlbumService.getAlbum(albumId)!.qualityProfileId).toBeNull();
 		expect(musicAlbumService.setQualityProfile(albumId, 'music-lossy')).toBe(true);
-		expect(musicAlbumService.getAlbum(albumId).qualityProfileId).toBe('music-lossy');
+		expect(musicAlbumService.getAlbum(albumId)!.qualityProfileId).toBe('music-lossy');
 		expect(musicAlbumService.setQualityProfile(albumId, null)).toBe(true);
-		expect(musicAlbumService.getAlbum(albumId).qualityProfileId).toBeNull();
+		expect(musicAlbumService.getAlbum(albumId)!.qualityProfileId).toBeNull();
 		expect(() => musicAlbumService.setQualityProfile(albumId, 'nope')).toThrow(/Unknown/);
 	});
 });

@@ -541,7 +541,11 @@
 							disabled={profileBusy}
 							onchange={(event) => saveQualityProfile(event.currentTarget.value || null)}
 						>
-							<option value="">{m.music_qualityProfileDefault()}</option>
+							<option value="">
+								{data.inheritedProfileName
+									? m.music_inheritDefault({ name: data.inheritedProfileName })
+									: m.music_inheritProfile()}
+							</option>
 							{#each data.qualityProfiles as profile (profile.id)}
 								<option value={profile.id}>{profile.name}</option>
 							{/each}

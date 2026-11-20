@@ -183,6 +183,37 @@
 	const monitored = $derived(monitoredOverride ?? Boolean(data.artist.monitored));
 	let monitorBusy = $state(false);
 	let addingMissing = $state(false);
+	// Profile assignment: null = inherit the default; override follows the same
+	// optimistic pattern as the monitor toggle.
+	let profileOverride = $state<string | null | undefined>(undefined);
+	let profileBusy = $state(false);
+	const activeProfile = $derived(
+		profileOverride !== undefined ? profileOverride : artist.qualityProfileId
+	);
+
+	async function saveProfile(next: string | null) {
+		if (profileBusy || next === activeProfile) return;
+		profileBusy = true;
+		const previous = profileOverride;
+		profileOverride = next;
+		try {
+			const response = await fetch(`/api/music/artists/${artist.id}`, {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ qualityProfileId: next })
+			});
+			if (!response.ok) {
+				const body = await response.json().catch(() => ({}));
+				profileOverride = previous;
+				toasts.error(body.details ?? body.error ?? m.common_failedToSave());
+			}
+		} catch (err) {
+			profileOverride = previous;
+			toasts.error(err instanceof Error ? err.message : m.common_failedToSave());
+		} finally {
+			profileBusy = false;
+		}
+	}
 
 	async function toggleMonitor(next: boolean) {
 		if (monitorBusy) return;
@@ -446,6 +477,23 @@
 					{#if artist.country}
 						<FactRow label={m.music_country()} value={artist.country} />
 					{/if}
+					<FactRow label={m.music_qualityProfile()}>
+						<select
+							class="select select-xs select-bordered"
+							value={activeProfile ?? ''}
+							disabled={profileBusy}
+							onchange={(event) => saveProfile(event.currentTarget.value || null)}
+						>
+							<option value="">
+								{data.defaultProfileName
+									? m.music_inheritDefault({ name: data.defaultProfileName })
+									: m.music_inheritProfile()}
+							</option>
+							{#each data.qualityProfiles as profile (profile.id)}
+								<option value={profile.id}>{profile.name}</option>
+							{/each}
+						</select>
+					</FactRow>
 					<FactRow label={m.music_tabAlbums()} value={data.counts.albums} />
 					<FactRow label={m.music_inLibrary()} value={data.counts.inLibrary} />
 					<FactRow label={m.music_tabSongs()} value={data.counts.songs} />

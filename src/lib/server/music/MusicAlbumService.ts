@@ -4,7 +4,7 @@ import { db } from '#lib/server/db/index.js';
 import { albums, artists, mediaItems, trackFiles, tracks } from '#lib/server/db/schema.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { ValidationError } from '#lib/errors/index.js';
-import { isMusicProfileId } from './profiles.js';
+import { musicProfileService } from './MusicProfileService.js';
 import type { MusicArtistRef, MusicRelease, MusicReleaseGroup } from './types.js';
 
 const logger = createChildLogger({ module: 'MusicAlbumService', logDomain: 'system' });
@@ -294,7 +294,7 @@ export class MusicAlbumService {
 	 * ignored at search time.
 	 */
 	setQualityProfile(albumId: string, profileId: string | null): boolean {
-		if (profileId !== null && !isMusicProfileId(profileId)) {
+		if (profileId !== null && !musicProfileService.get(profileId)) {
 			throw new ValidationError(`Unknown music quality profile: ${profileId}`);
 		}
 

@@ -4,6 +4,7 @@ import { requireAdminPage } from '#lib/server/auth/authorization.js';
 import { musicAlbumService } from '#lib/server/music/MusicAlbumService.js';
 import { musicArtistService } from '#lib/server/music/MusicArtistService.js';
 import { musicTrackService } from '#lib/server/music/MusicTrackService.js';
+import { musicProfileService } from '#lib/server/music/MusicProfileService.js';
 import { deriveFeaturedArtists } from '#lib/components/music/music-card.js';
 
 /**
@@ -40,6 +41,11 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 
 	return {
 		artist,
+		qualityProfiles: musicProfileService.list().map((profile) => ({
+			id: profile.id,
+			name: profile.name
+		})),
+		defaultProfileName: musicProfileService.getDefault()?.name ?? null,
 		albums: albums.map((album) => ({ ...album, tracks: byAlbum.get(album.id) ?? [] })),
 		songs,
 		featured: deriveFeaturedArtists(

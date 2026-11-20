@@ -181,6 +181,7 @@ import { migration_v182 } from './182-download-queue-media-item.js';
 import { migration_v183 } from './183-download-client-category-map.js';
 import { migration_v184 } from './184-album-stream-source.js';
 import { migration_v185 } from './185-album-quality-profile.js';
+import { migration_v186 } from './186-music-quality-profiles.js';
 
 export const MIGRATIONS: MigrationDefinition[] = [
 	migration_v002,
@@ -364,5 +365,6 @@ export const MIGRATIONS: MigrationDefinition[] = [
 	migration_v182,
 	migration_v183,
 	migration_v184,
-	migration_v185
+	migration_v185,
+	migration_v186
 ];

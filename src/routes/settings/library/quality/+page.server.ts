@@ -10,6 +10,7 @@ import {
 import { toNullableNumber } from '#lib/utils/number.js';
 import { delayProfileService } from '#lib/server/monitoring/specifications/DelaySpecification.js';
 import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
+import { musicProfileService } from '#lib/server/music/MusicProfileService.js';
 
 // Built-in profile IDs - derived from DEFAULT_PROFILES for single source of truth
 const BUILT_IN_PROFILE_IDS = DEFAULT_PROFILES.map((p) => p.id);
@@ -22,7 +23,11 @@ export const load: PageServerLoad = async ({ url }) => {
 	// Load Profiles
 	// ===================
 
-	const dbProfiles = await db.select().from(scoringProfiles);
+	// Music profiles share this table but have their own section and editor;
+	// keep them out of every video profile list.
+	const dbProfiles = (await db.select().from(scoringProfiles)).filter(
+		(p) => p.mediaKind !== 'music'
+	);
 	const customProfiles = dbProfiles.filter((p) => !BUILT_IN_PROFILE_IDS.includes(p.id));
 	const builtInDbMap = new Map(
 		dbProfiles.filter((p) => BUILT_IN_PROFILE_IDS.includes(p.id)).map((p) => [p.id, p])
@@ -138,6 +143,9 @@ export const load: PageServerLoad = async ({ url }) => {
 		// Profiles data
 		profiles: allProfiles,
 		defaultProfileId,
+		// Music profiles live on their own tab; same page, same assignment idea.
+		musicProfiles: musicProfileService.list(),
+		musicDefaultId: musicProfileService.getDefault()?.id ?? null,
 		// Indexer picker data
 		indexers: indexerList,
 		// Formats data

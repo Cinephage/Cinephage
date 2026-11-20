@@ -90,7 +90,9 @@ async function resolveAllowedIndexerIds(
 }
 
 export const GET: RequestHandler = async () => {
-	const dbProfiles = await db.select().from(scoringProfiles);
+	const dbProfiles = (await db.select().from(scoringProfiles)).filter(
+		(p) => p.mediaKind !== 'music'
+	);
 	const builtInRows = dbProfiles.filter((p) => p.isBuiltIn);
 	const customRows = dbProfiles.filter((p) => !p.isBuiltIn);
 
@@ -231,6 +233,8 @@ export const POST: RequestHandler = async (event) => {
 				formatScores,
 				requiredFormats: data.requiredFormats,
 				allowedIndexerIds: allowedIndexerIds ?? null,
+				mediaKind: data.mediaKind ?? 'video',
+				musicTiers: data.musicTiers ?? null,
 				movieMinSizeGb: data.movieMinSizeGb,
 				movieMaxSizeGb: data.movieMaxSizeGb,
 				episodeMinSizeMb: data.episodeMinSizeMb,
@@ -378,6 +382,8 @@ export const PUT: RequestHandler = async (event) => {
 		if (updateData.minScoreIncrement !== undefined)
 			updateFields.minScoreIncrement = updateData.minScoreIncrement;
 		if (updateData.formatScores !== undefined) updateFields.formatScores = updateData.formatScores;
+		if (updateData.mediaKind !== undefined) updateFields.mediaKind = updateData.mediaKind;
+		if (updateData.musicTiers !== undefined) updateFields.musicTiers = updateData.musicTiers;
 		if (updateData.requiredFormats !== undefined)
 			updateFields.requiredFormats = updateData.requiredFormats;
 		if (updateData.allowedIndexerIds !== undefined)

@@ -10,11 +10,10 @@ import {
 	normalizeTitleForMatch
 } from '#lib/server/library/title-matching.js';
 import {
-	DEFAULT_MUSIC_PROFILE,
 	gradeMusicRelease,
 	type MusicQualityProfile
 } from './parse-release.js';
-import { resolveMusicProfile } from './profiles.js';
+import { musicProfileService } from './MusicProfileService.js';
 
 const logger = createChildLogger({ module: 'MusicSearchService', logDomain: 'system' });
 
@@ -174,8 +173,7 @@ export class MusicSearchService {
 			.select({
 				title: albums.title,
 				year: albums.year,
-				artist: artists.name,
-				qualityProfileId: albums.qualityProfileId
+				artist: artists.name
 			})
 			.from(albums)
 			.innerJoin(artists, eq(albums.artistId, artists.id))
@@ -183,8 +181,8 @@ export class MusicSearchService {
 			.get();
 		if (!row) throw new NotFoundError('Album', albumId);
 
-		// The album's own ladder, set on its detail page; null is the default.
-		const profile = options.profile ?? resolveMusicProfile(row.qualityProfileId);
+		// The album's own ladder, else its artist's, else the install default.
+		const profile = options.profile ?? musicProfileService.resolveForAlbum(albumId);
 
 		const manager = await getIndexerManager();
 		const result = await manager.search(
@@ -248,7 +246,7 @@ export class MusicSearchService {
 				albumTitle: albums.title,
 				year: albums.year,
 				artist: artists.name,
-				qualityProfileId: albums.qualityProfileId
+				albumId: albums.id
 			})
 			.from(tracks)
 			.innerJoin(albums, eq(tracks.albumId, albums.id))
@@ -257,7 +255,7 @@ export class MusicSearchService {
 			.get();
 		if (!row) throw new NotFoundError('Track', trackId);
 
-		const profile = options.profile ?? resolveMusicProfile(row.qualityProfileId);
+		const profile = options.profile ?? musicProfileService.resolveForAlbum(row.albumId);
 
 		const manager = await getIndexerManager();
 		const result = await manager.search(
@@ -314,7 +312,7 @@ export class MusicSearchService {
 		artist: string;
 		candidates: Array<MusicReleaseCandidate & { albumId: string; albumTitle: string }>;
 	}> {
-		const profile = options.profile ?? DEFAULT_MUSIC_PROFILE;
+		const profile = options.profile ?? musicProfileService.resolveForArtist(artistId);
 		const artistRow = db
 			.select({ name: artists.name })
 			.from(artists)

@@ -132,3 +132,38 @@ describe('gradeMusicRelease — tiers, not seeders', () => {
 		expect(grade.accepted).toBe(false);
 	});
 });
+
+describe('gradeMusicRelease — streaming is a tier, not a free pass', () => {
+	const base = {
+		id: 'p',
+		name: 'Test',
+		allowFallback: true,
+		formatScores: {}
+	};
+
+	it('accepts streaming when the ladder has a streaming rung', () => {
+		const grade = gradeMusicRelease(
+			{ ...base, tiers: [{ kind: 'lossless', label: 'Lossless' }, { kind: 'streaming', label: 'Streaming' }] },
+			{ title: 'Album [Streaming]', protocol: 'streaming' }
+		);
+		expect(grade.accepted).toBe(true);
+		expect(grade.tierIndex).toBe(1);
+	});
+
+	it('refuses streaming when the ladder has none', () => {
+		const grade = gradeMusicRelease(
+			{ ...base, tiers: [{ kind: 'lossless', label: 'FLAC', formats: ['flac'] }] },
+			{ title: 'Album [Streaming]', protocol: 'streaming' }
+		);
+		expect(grade.accepted).toBe(false);
+		expect(grade.reasons[0]).toMatch(/does not allow streaming/i);
+	});
+
+	it('never matches a torrent against the streaming rung', () => {
+		const grade = gradeMusicRelease(
+			{ ...base, tiers: [{ kind: 'streaming', label: 'Streaming' }] },
+			{ title: 'Daft Punk Discovery 2001 FLAC', protocol: 'torrent' }
+		);
+		expect(grade.accepted).toBe(false);
+	});
+});

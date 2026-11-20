@@ -2395,6 +2395,15 @@ export type CustomFormatDelete = z.infer<typeof customFormatDeleteSchema>;
 // Scoring Profile Schemas
 // ============================================================================
 
+/** One rung of a music quality ladder (stored on a scoring_profiles row). */
+export const musicTierSchema = z.object({
+	kind: z.enum(['lossless', 'lossy', 'streaming']),
+	label: z.string().min(1).max(80),
+	formats: z.array(z.string().min(1).max(20)).max(20).optional(),
+	minBitrateKbps: z.number().int().min(1).max(10000).optional(),
+	minBitDepth: z.number().int().min(1).max(64).optional()
+});
+
 export const scoringProfileCreateSchema = z.object({
 	id: z.string().min(1).max(50).optional(),
 	name: z.string().min(1).max(100),
@@ -2414,7 +2423,10 @@ export const scoringProfileCreateSchema = z.object({
 	movieMaxSizeGb: z.number().nullable().optional(),
 	episodeMinSizeMb: z.number().nullable().optional(),
 	episodeMaxSizeMb: z.number().nullable().optional(),
-	isDefault: z.boolean().optional()
+	isDefault: z.boolean().optional(),
+	// Music profiles are rows in this same table, tagged by media kind.
+	mediaKind: z.enum(['video', 'music']).optional(),
+	musicTiers: z.array(musicTierSchema).min(1).max(20).optional()
 });
 
 export const scoringProfileUpdateSchema = scoringProfileCreateSchema.required().partial();
