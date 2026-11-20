@@ -5797,10 +5797,6 @@
 	"music_deleteFileMessage": "Delete {file}? The audio file is removed from disk.",
 	"music_profilesTitle": "Music quality profiles",
 	"music_profilesDescription": "One ladder per profile. The default applies to every album and artist that does not name one. A streaming tier accepts Streamer playback; without it, streaming is refused.",
-	"music_addProfile": "Add profile",
-	"music_editProfile": "Edit profile",
-	"music_profileName": "Name",
-	"music_profileDescription": "Description",
 	"music_allowFallback": "Accept lower tiers when nothing higher matches",
 	"music_profileTiers": "Quality ladder (best first)",
 	"music_addTier": "Add tier",
@@ -5811,8 +5807,6 @@
 	"music_tierMinBitDepth": "Min bit depth",
 	"music_profileSizeFloor": "Minimum album size (MB, blank = no floor)",
 	"music_profileSizeCeiling": "Maximum album size (MB, blank = no ceiling)",
-	"music_profileSetDefault": "Set as default",
-	"music_profileDefaultBadge": "Default",
 	"music_inheritProfile": "Inherit from artist",
 	"music_inheritDefault": "Inherit ({name})",
 	"music_useDefaultProfile": "Default ({name})",
@@ -5822,7 +5816,5 @@
 	"music_copyFromHelpZero": "Start from scratch; the ladder below is what the profile will use.",
 	"music_tierLossless": "Lossless",
 	"music_tierLossy": "Lossy",
-	"music_tierStreaming": "Streaming",
-	"music_deleteProfileTitle": "Delete profile",
-	"music_deleteProfileMessage": "Delete {name}? Albums and artists using it fall back to the default."
+	"music_tierStreaming": "Streaming"
 }
