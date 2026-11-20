@@ -25,6 +25,15 @@ export interface RecentlyAddedSeries {
 	added: string | null;
 }
 
+export interface MissingAlbum {
+	id: string;
+	title: string;
+	artistName: string;
+	year: number | null;
+	trackCount: number | null;
+	hasCover: boolean;
+}
+
 export interface MissingEpisode {
 	id: string;
 	seriesId: string;

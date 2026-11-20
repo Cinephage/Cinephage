@@ -6,6 +6,7 @@ import { activityService } from '#lib/server/activity/index.js';
 import {
 	getDashboardStats,
 	getRecentlyAdded,
+	getMissingAlbums,
 	getMissingEpisodes
 } from '#lib/server/dashboard/queries.js';
 import { getUpcomingItems } from '#lib/server/calendar/queries.js';
@@ -37,6 +38,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 			logger.error(
 				{ err: error, component: 'DashboardPage' },
 				'[Dashboard] Error fetching missing episodes'
+			);
+			return [];
+		});
+
+		const missingAlbumsPromise = getMissingAlbums().catch((error) => {
+			logger.error(
+				{ err: error, component: 'DashboardPage' },
+				'[Dashboard] Error fetching missing albums'
 			);
 			return [];
 		});
@@ -78,6 +87,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			stats,
 			recentlyAdded: recentlyAddedPromise,
 			missingEpisodes: missingEpisodesPromise,
+			missingAlbums: missingAlbumsPromise,
 			recentActivity: activityPromise,
 			upcoming: upcomingPromise
 		};
@@ -133,6 +143,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			} satisfies DashboardStats,
 			recentlyAdded: { movies: [], series: [], albums: [] },
 			missingEpisodes: [],
+			missingAlbums: [],
 			recentActivity: [],
 			upcoming: []
 		};

@@ -7,6 +7,7 @@ import { activityService } from '#lib/server/activity/index.js';
 import {
 	getDashboardStats,
 	getRecentlyAdded,
+	getMissingAlbums,
 	getMissingEpisodes
 } from '#lib/server/dashboard/queries.js';
 import type { RequestHandler } from '@sveltejs/kit';
@@ -31,15 +32,17 @@ export const GET: RequestHandler = async () => {
 		// Send updated dashboard data (stats, recentlyAdded, missingEpisodes)
 		const sendDashboardUpdate = async () => {
 			try {
-				const [stats, recentlyAdded, missingEpisodes] = await Promise.all([
+				const [stats, recentlyAdded, missingEpisodes, missingAlbums] = await Promise.all([
 					getDashboardStats(),
 					getRecentlyAdded(),
-					getMissingEpisodes()
+					getMissingEpisodes(),
+					getMissingAlbums()
 				]);
 
 				send('dashboard:stats', stats);
 				send('dashboard:recentlyAdded', recentlyAdded);
 				send('dashboard:missingEpisodes', missingEpisodes);
+				send('dashboard:missingAlbums', missingAlbums);
 			} catch (error) {
 				logger.error(
 					{ err: error, component: 'DashboardStream', logDomain: 'http' },

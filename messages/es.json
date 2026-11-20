@@ -549,6 +549,7 @@
 	"dashboard_emptyState_discoverContent": "Descubrir contenido",
 	"dashboard_emptyState_title": "Sin contenido aún",
 	"dashboard_missingEpisodes_title": "Episodios faltantes",
+	"dashboard_missingAlbums_title": "Álbumes faltantes",
 	"dashboard_missingEpisodes_unknownSeries": "Serie desconocida",
 	"dashboard_pageTitle": "Panel - Cinephage",
 	"dashboard_quickActions_addDownloadClient": "Añadir cliente",

@@ -6,6 +6,7 @@
 	import type { UnifiedActivity } from '#lib/types/activity.js';
 	import type {
 		RecentlyAddedData,
+		MissingAlbum,
 		MissingEpisode,
 		UpcomingItem,
 		DashboardStats
@@ -19,6 +20,7 @@
 		RecentlyAddedSeries,
 		RecentlyAddedMusic,
 		MissingEpisodesList,
+		MissingAlbumsList,
 		ComingUpList,
 		RecentHistorySidebar,
 		DashboardEmptyState
@@ -30,12 +32,14 @@
 		'dashboard:stats': DashboardStats;
 		'dashboard:recentlyAdded': RecentlyAddedData;
 		'dashboard:missingEpisodes': MissingEpisode[];
+		'dashboard:missingAlbums': MissingAlbum[];
 		'dashboard:recentActivity': UnifiedActivity[];
 		'dashboard:upcoming': UpcomingItem[];
 	};
 
 	let recentlyAddedResolved = $state<RecentlyAddedData>({ movies: [], series: [], albums: [] });
 	let missingEpisodesResolved = $state<MissingEpisode[]>([]);
+	let missingAlbumsResolved = $state<MissingAlbum[]>([]);
 	let recentActivityResolved = $state<UnifiedActivity[]>([]);
 	let upcomingResolved = $state<UpcomingItem[]>([]);
 	let isRecentlyAddedLoading = $state(true);
@@ -47,12 +51,14 @@
 	let recentActivityState = $state<UnifiedActivity[] | null>(null);
 	let recentlyAddedState = $state<typeof recentlyAddedResolved | null>(null);
 	let missingEpisodesState = $state<typeof missingEpisodesResolved | null>(null);
+	let missingAlbumsState = $state<typeof missingAlbumsResolved | null>(null);
 	let upcomingState = $state<UpcomingItem[] | null>(null);
 
 	const stats = $derived(statsState ?? data.stats);
 	const recentActivity = $derived(recentActivityState ?? recentActivityResolved);
 	const recentlyAdded = $derived(recentlyAddedState ?? recentlyAddedResolved);
 	const missingEpisodes = $derived(missingEpisodesState ?? missingEpisodesResolved);
+	const missingAlbums = $derived(missingAlbumsState ?? missingAlbumsResolved);
 	const upcoming = $derived(upcomingState ?? upcomingResolved);
 
 	$effect(() => {
@@ -68,6 +74,16 @@
 		} else {
 			recentlyAddedResolved = data.recentlyAdded;
 			isRecentlyAddedLoading = false;
+		}
+
+		if (data.missingAlbums instanceof Promise) {
+			data.missingAlbums
+				.then((result: MissingAlbum[]) => {
+					missingAlbumsResolved = result;
+				})
+				.catch(() => {});
+		} else {
+			missingAlbumsResolved = data.missingAlbums;
 		}
 
 		if (data.missingEpisodes instanceof Promise) {
@@ -127,6 +143,9 @@
 		'dashboard:missingEpisodes': (newMissingEpisodes) => {
 			missingEpisodesState = newMissingEpisodes;
 		},
+		'dashboard:missingAlbums': (newMissingAlbums) => {
+			missingAlbumsState = newMissingAlbums;
+		},
 		'dashboard:recentActivity': (newRecentActivity) => {
 			recentActivityState = newRecentActivity;
 		},
@@ -180,6 +199,7 @@
 			<RecentlyAddedSeries series={recentlyAdded.series} isLoading={isRecentlyAddedLoading} />
 			<RecentlyAddedMusic albums={recentlyAdded.albums} isLoading={isRecentlyAddedLoading} />
 			<MissingEpisodesList episodes={missingEpisodes} isLoading={isMissingEpisodesLoading} />
+			<MissingAlbumsList albums={missingAlbums} isLoading={isMissingEpisodesLoading} />
 			<ComingUpList items={upcoming} isLoading={isUpcomingLoading} />
 
 			{#if !isRecentlyAddedLoading &&

@@ -39,7 +39,7 @@ vi.mock('#lib/server/db/index.js', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
-import { getDashboardStats, getRecentlyAdded } from './queries.js';
+import { getDashboardStats, getMissingAlbums, getRecentlyAdded } from './queries.js';
 
 afterAll(() => {
 	destroyTestDb(testDb);
@@ -156,5 +156,29 @@ describe('music on the dashboard', () => {
 			monitored: true,
 			hasCover: true
 		});
+	});
+});
+
+describe('missing albums', () => {
+	it('lists monitored albums with no files', async () => {
+		seedAlbum();
+		testDb.db.update(albums).set({ hasFile: false }).run();
+
+		const missing = await getMissingAlbums();
+
+		expect(missing).toHaveLength(1);
+		expect(missing[0]).toMatchObject({
+			title: 'Test Album',
+			artistName: 'Test Artist',
+			year: 2024,
+			hasCover: false
+		});
+	});
+
+	it('leaves an unmonitored album out', async () => {
+		seedAlbum();
+		testDb.db.update(albums).set({ hasFile: false, monitored: false }).run();
+
+		expect(await getMissingAlbums()).toHaveLength(0);
 	});
 });

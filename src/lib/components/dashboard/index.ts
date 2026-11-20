@@ -4,6 +4,7 @@ export { default as RecentlyAddedMovies } from './RecentlyAddedMovies.svelte';
 export { default as RecentlyAddedSeries } from './RecentlyAddedSeries.svelte';
 export { default as RecentlyAddedMusic } from './RecentlyAddedMusic.svelte';
 export { default as MissingEpisodesList } from './MissingEpisodesList.svelte';
+export { default as MissingAlbumsList } from './MissingAlbumsList.svelte';
 export { default as ComingUpList } from './ComingUpList.svelte';
 export { default as RecentHistorySidebar } from './RecentHistorySidebar.svelte';
 export { default as DashboardEmptyState } from './DashboardEmptyState.svelte';

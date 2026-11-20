@@ -18,12 +18,12 @@ import {
 	downloadClients,
 	settings
 } from '#lib/server/db/schema.js';
-import { count, eq, desc, and, inArray, sql, gte, ne } from 'drizzle-orm';
+import { count, eq, desc, and, inArray, sql, gte, ne, asc } from 'drizzle-orm';
 import {
 	computeMissingMovieAvailabilityCounts,
 	enrichMoviesWithAvailability
 } from './movie-availability.js';
-import type { DashboardStats, RecentlyAddedData } from '#lib/types/dashboard.js';
+import type { DashboardStats, MissingAlbum, RecentlyAddedData } from '#lib/types/dashboard.js';
 
 /**
  * Shared dashboard query functions used by both the page server loader
@@ -455,6 +455,35 @@ export async function getRecentlyAdded(): Promise<RecentlyAddedData> {
 		series: recentSeries,
 		albums: recentAlbums
 	};
+}
+
+/**
+ * Monitored albums with nothing on disk, newest first.
+ *
+ * The album is music's acquisition unit, so this is the Missing Episodes row's
+ * counterpart — not a track list, which would repeat one album per missing song.
+ */
+export async function getMissingAlbums(): Promise<MissingAlbum[]> {
+	return db
+		.select({
+			id: albums.id,
+			title: albums.title,
+			artistName: artists.name,
+			year: albums.year,
+			trackCount: albums.trackCount,
+			coverPath: albums.coverPath,
+			releaseMbid: albums.releaseMbid
+		})
+		.from(albums)
+		.innerJoin(artists, eq(albums.artistId, artists.id))
+		.where(and(eq(albums.monitored, true), eq(albums.hasFile, false), eq(artists.monitored, true)))
+		.orderBy(desc(albums.year), asc(artists.name))
+		.limit(10)
+		.all()
+		.map(({ coverPath, releaseMbid, ...row }) => ({
+			...row,
+			hasCover: Boolean(coverPath ?? releaseMbid)
+		}));
 }
 
 export async function getMissingEpisodes() {

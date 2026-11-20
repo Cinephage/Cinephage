@@ -665,6 +665,7 @@
 	"dashboard_emptyState_discoverContent": "Discover Content",
 	"dashboard_emptyState_title": "No Content Yet",
 	"dashboard_missingEpisodes_title": "Missing Episodes",
+	"dashboard_missingAlbums_title": "Missing Albums",
 	"dashboard_missingEpisodes_unknownSeries": "Unknown Series",
 	"dashboard_pageTitle": "Dashboard - Cinephage",
 	"dashboard_quickActions_addDownloadClient": "Add Client",

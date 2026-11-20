@@ -549,6 +549,7 @@
 	"dashboard_emptyState_discoverContent": "Обзор контента",
 	"dashboard_emptyState_title": "Пока нет контента",
 	"dashboard_missingEpisodes_title": "Отсутствующие эпизоды",
+	"dashboard_missingAlbums_title": "Недостающие альбомы",
 	"dashboard_missingEpisodes_unknownSeries": "Неизвестный сериал",
 	"dashboard_pageTitle": "Панель - Cinephage",
 	"dashboard_quickActions_addDownloadClient": "Добавить клиент",
