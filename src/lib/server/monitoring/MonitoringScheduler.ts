@@ -90,6 +90,8 @@ export interface MonitoringSettings {
 	cutoffUnmetSearchIntervalHours: number;
 	autoReplaceEnabled: boolean;
 	searchOnMonitorEnabled: boolean;
+	/** Search monitored albums with the missing-content task (default true). */
+	musicSearchEnabled: boolean;
 	// Subtitle monitoring settings
 	missingSubtitlesIntervalHours: number;
 	subtitleUpgradeIntervalHours: number;
@@ -314,6 +316,7 @@ export class MonitoringScheduler extends EventEmitter implements BackgroundServi
 			),
 			autoReplaceEnabled: settingsMap.get('auto_replace_enabled') !== 'false',
 			searchOnMonitorEnabled: settingsMap.get('search_on_monitor_enabled') !== 'false',
+			musicSearchEnabled: settingsMap.get('music_search_enabled') !== 'false',
 			// Subtitle settings
 			missingSubtitlesIntervalHours: parseFloat(
 				settingsMap.get('missing_subtitles_interval_hours') ||
@@ -376,6 +379,12 @@ export class MonitoringScheduler extends EventEmitter implements BackgroundServi
 			updates.push({
 				key: 'search_on_monitor_enabled',
 				value: String(settings.searchOnMonitorEnabled)
+			});
+		}
+		if (settings.musicSearchEnabled !== undefined) {
+			updates.push({
+				key: 'music_search_enabled',
+				value: String(settings.musicSearchEnabled)
 			});
 		}
 		// Subtitle settings
@@ -818,7 +827,8 @@ export class MonitoringScheduler extends EventEmitter implements BackgroundServi
 				const { executeMissingContentTask } = await import('./tasks/MissingContentTask.js');
 				return await executeMissingContentTask(ctx, {
 					ignoreCooldown: executionMode === 'manual',
-					cooldownHours: settings.missingSearchIntervalHours
+					cooldownHours: settings.missingSearchIntervalHours,
+					musicSearchEnabled: settings.musicSearchEnabled
 				});
 			}
 			case 'upgrade': {

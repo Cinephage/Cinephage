@@ -30,6 +30,7 @@ const settings: MonitoringSettings = {
 	cutoffUnmetSearchIntervalHours: 9,
 	autoReplaceEnabled: true,
 	searchOnMonitorEnabled: true,
+	musicSearchEnabled: true,
 	missingSubtitlesIntervalHours: 6,
 	subtitleUpgradeIntervalHours: 24,
 	subtitleSearchOnImportEnabled: true,
@@ -68,7 +69,8 @@ describe('MonitoringScheduler cooldown propagation', () => {
 
 		expect(executeMissingContentTaskMock).toHaveBeenCalledWith(null, {
 			ignoreCooldown: false,
-			cooldownHours: settings.missingSearchIntervalHours
+			cooldownHours: settings.missingSearchIntervalHours,
+			musicSearchEnabled: true
 		});
 		expect(executeUpgradeMonitorTaskMock).toHaveBeenCalledWith(null, {
 			ignoreCooldown: false,
@@ -92,7 +94,8 @@ describe('MonitoringScheduler cooldown propagation', () => {
 
 		expect(executeMissingContentTaskMock).toHaveBeenCalledWith(null, {
 			ignoreCooldown: true,
-			cooldownHours: settings.missingSearchIntervalHours
+			cooldownHours: settings.missingSearchIntervalHours,
+			musicSearchEnabled: true
 		});
 		expect(executeUpgradeMonitorTaskMock).toHaveBeenCalledWith(null, {
 			ignoreCooldown: true,

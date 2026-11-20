@@ -26,6 +26,8 @@ interface MissingContentTaskOptions {
 	 * Typically derived from scheduled interval.
 	 */
 	cooldownHours?: number;
+	/** Music is opt-out per instance; disabled means monitored albums are left alone. */
+	musicSearchEnabled?: boolean;
 }
 
 /**
@@ -224,6 +226,30 @@ export async function executeMissingContentTask(
 					executedAt: executedAt.toISOString()
 				});
 			}
+		}
+
+		if (options.musicSearchEnabled) {
+			ctx?.checkCancelled();
+			logger.info('[MissingContentTask] Searching for missing albums');
+			const { searchMissingMusic } = await import('#lib/server/music/MusicMonitoringSearch.js');
+			const musicResults = await searchMissingMusic(ctx?.abortSignal, {
+				ignoreCooldown: options.ignoreCooldown,
+				cooldownHours: options.cooldownHours
+			});
+
+			itemsProcessed += musicResults.summary.searched;
+			itemsGrabbed += musicResults.summary.grabbed;
+			errors += musicResults.summary.errors;
+
+			logger.info(
+				{
+					searched: musicResults.summary.searched,
+					grabbed: musicResults.summary.grabbed,
+					errors: musicResults.summary.errors,
+					skipped: musicResults.summary.skipped
+				},
+				'[MissingContentTask] Missing albums search completed'
+			);
 		}
 
 		logger.info(

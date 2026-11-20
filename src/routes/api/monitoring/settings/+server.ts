@@ -26,6 +26,7 @@ export const GET: RequestHandler = async (event) => {
 				upgradeSearchIntervalHours: status.tasks.upgrade.intervalHours,
 				newEpisodeCheckIntervalHours: status.tasks.newEpisode.intervalHours,
 				cutoffUnmetSearchIntervalHours: status.tasks.cutoffUnmet.intervalHours,
+				musicSearchEnabled: fullSettings.musicSearchEnabled,
 				stalledDownloadTimeoutMinutes: fullSettings.stalledDownloadTimeoutMinutes,
 				stalledDownloadProgressThreshold: fullSettings.stalledDownloadProgressThreshold,
 				stalledDownloadBlocklistHours: fullSettings.stalledDownloadBlocklistHours
@@ -90,6 +91,7 @@ export const PUT: RequestHandler = async (event) => {
 				upgradeSearchIntervalHours: status.tasks.upgrade.intervalHours,
 				newEpisodeCheckIntervalHours: status.tasks.newEpisode.intervalHours,
 				cutoffUnmetSearchIntervalHours: status.tasks.cutoffUnmet.intervalHours,
+				musicSearchEnabled: fullUpdatedSettings.musicSearchEnabled,
 				stalledDownloadTimeoutMinutes: fullUpdatedSettings.stalledDownloadTimeoutMinutes,
 				stalledDownloadProgressThreshold: fullUpdatedSettings.stalledDownloadProgressThreshold,
 				stalledDownloadBlocklistHours: fullUpdatedSettings.stalledDownloadBlocklistHours

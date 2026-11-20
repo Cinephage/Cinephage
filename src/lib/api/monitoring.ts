@@ -42,6 +42,7 @@ export interface MonitoringSettings {
 	upgradeSearchIntervalHours: number;
 	newEpisodeCheckIntervalHours: number;
 	cutoffUnmetSearchIntervalHours: number;
+	musicSearchEnabled: boolean;
 	stalledDownloadTimeoutMinutes: number;
 	stalledDownloadProgressThreshold: number;
 	stalledDownloadBlocklistHours: number;
