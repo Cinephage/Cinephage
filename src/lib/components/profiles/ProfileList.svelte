@@ -6,13 +6,14 @@
 
 	interface Props {
 		profiles: ScoringProfile[];
+		mediaKind?: 'video' | 'music';
 		onAdd?: () => void;
 		onEdit?: (profile: ScoringProfile) => void;
 		onDelete?: (profile: ScoringProfile) => void;
 		onSetDefault?: (profile: ScoringProfile) => void;
 	}
 
-	let { profiles, onAdd, onEdit, onDelete, onSetDefault }: Props = $props();
+	let { profiles, mediaKind = 'video', onAdd, onEdit, onDelete, onSetDefault }: Props = $props();
 
 	// Sort profiles: built-in first (sorted by name), then custom (sorted by name)
 	const sortedProfiles = $derived(() => {
@@ -40,6 +41,7 @@
 		<div class="card-body p-0">
 			<ProfileTable
 				profiles={sortedProfiles()}
+				{mediaKind}
 				onEdit={onEdit ?? (() => {})}
 				onDelete={onDelete ?? (() => {})}
 				onSetDefault={onSetDefault ?? (() => {})}

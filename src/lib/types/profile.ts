@@ -65,6 +65,23 @@ export interface ScoringProfile {
 	episodeMaxSizeMb?: number | null;
 	createdAt?: string;
 	updatedAt?: string;
+	/** Music profiles are rows in the same table, tagged by media kind. */
+	mediaKind?: 'video' | 'music';
+	/** Ordered ladder for a music profile; absent on video profiles. */
+	musicTiers?: ProfileMusicTier[];
+	/** Music's fallback switch; distinct from video's upgradesAllowed. */
+	allowFallback?: boolean;
+	musicMinSizeMb?: number | null;
+	musicMaxSizeMb?: number | null;
+}
+
+/** One rung of a music quality ladder, as the shared profile UI edits it. */
+export interface ProfileMusicTier {
+	kind: 'lossless' | 'lossy' | 'streaming';
+	label: string;
+	formats?: string[];
+	minBitrateKbps?: number;
+	minBitDepth?: number;
 }
 
 /**
@@ -100,4 +117,10 @@ export interface ScoringProfileFormData {
 	movieMaxSizeGb?: number | null;
 	episodeMinSizeMb?: number | null;
 	episodeMaxSizeMb?: number | null;
+	/** Music rows carry their kind and ladder through the same form. */
+	mediaKind?: 'video' | 'music';
+	musicTiers?: ProfileMusicTier[];
+	musicAllowFallback?: boolean;
+	musicMinSizeMb?: number | null;
+	musicMaxSizeMb?: number | null;
 }

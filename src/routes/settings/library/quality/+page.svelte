@@ -13,7 +13,6 @@
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { Sliders, Layers, Clock } from '@lucide/svelte';
 	import { DelayProfileList } from '#lib/components/delayProfiles/index.js';
-	import MusicProfilesManager from '#lib/components/settings/MusicProfilesManager.svelte';
 	import {
 		createScoringProfile,
 		updateScoringProfile,
@@ -29,6 +28,33 @@
 
 	let { data }: { data: PageData } = $props();
 
+	/**
+	 * Music rows wear the same ScoringProfile shape the table and dialog already
+	 * speak, so both kinds share one list and one editor instead of a parallel UI.
+	 */
+	const musicProfiles = $derived<ScoringProfile[]>(
+		data.musicProfiles.map((profile) => ({
+			id: profile.id,
+			name: profile.name,
+			description: profile.description ?? '',
+			tags: [],
+			upgradesAllowed: true,
+			preventDowngrades: false,
+			minScore: 0,
+			upgradeUntilScore: -1,
+			minScoreIncrement: 0,
+			resolutionOrder: [],
+			formatScores: {},
+			isDefault: profile.isDefault,
+			isBuiltIn: profile.isBuiltIn,
+			mediaKind: 'music' as const,
+			musicTiers: profile.tiers,
+			allowFallback: profile.allowFallback,
+			musicMinSizeMb: profile.minSizeMb,
+			musicMaxSizeMb: profile.maxSizeMb
+		}))
+	);
+
 	// Tab state - derived from URL
 	const activeTab = $derived(page.url.searchParams.get('tab') || 'profiles');
 
@@ -43,6 +69,7 @@
 	// ===================
 	let profileModalOpen = $state(false);
 	let profileModalMode = $state<'add' | 'edit' | 'view'>('add');
+	let profileModalMediaKind = $state<'video' | 'music'>('video');
 	let selectedProfile = $state<ScoringProfile | null>(null);
 	let profileSaving = $state(false);
 	let profileError = $state<string | null>(null);
@@ -54,9 +81,34 @@
 	let profileDeleteConfirmOpen = $state(false);
 	let profileDeleteTarget = $state<ScoringProfile | null>(null);
 
-	function openAddProfileModal() {
-		profileModalMode = 'add';
-		selectedProfile = null;
+	/** The dialog copies only from profiles of the kind it is editing. */
+	const modalAllProfiles = $derived.by(() => {
+		if (profileModalMediaKind === 'music') {
+			return musicProfiles.map((profile) => ({
+				id: profile.id,
+				name: profile.name,
+				isBuiltIn: profile.isBuiltIn,
+				musicTiers: profile.musicTiers,
+				allowFallback: profile.allowFallback,
+				musicMinSizeMb: profile.musicMinSizeMb,
+				musicMaxSizeMb: profile.musicMaxSizeMb
+			}));
+		}
+		return data.profiles.map((profile) => ({
+			id: profile.id,
+			name: profile.name,
+			isBuiltIn: profile.isBuiltIn
+		}));
+	});
+
+	function openProfileModal(
+		mode: 'add' | 'edit' | 'view',
+		mediaKind: 'video' | 'music',
+		profile: ScoringProfile | null
+	) {
+		profileModalMode = mode;
+		profileModalMediaKind = mediaKind;
+		selectedProfile = profile;
 		profileError = null;
 		profileErrorPrefix = null;
 		profileErrorEmphasis = null;
@@ -64,14 +116,16 @@
 		profileModalOpen = true;
 	}
 
+	function openAddProfileModal() {
+		openProfileModal('add', 'video', null);
+	}
+
+	function openAddMusicProfileModal() {
+		openProfileModal('add', 'music', null);
+	}
+
 	function openEditProfileModal(profile: ScoringProfile) {
-		profileModalMode = 'edit';
-		selectedProfile = profile;
-		profileError = null;
-		profileErrorPrefix = null;
-		profileErrorEmphasis = null;
-		profileErrorSuffix = null;
-		profileModalOpen = true;
+		openProfileModal('edit', profile.mediaKind ?? 'video', profile);
 	}
 
 	function closeProfileModal() {
@@ -91,7 +145,39 @@
 		profileErrorSuffix = null;
 
 		try {
-			if (profileModalMode === 'add') {
+			if (formData.mediaKind === 'music') {
+				const payload = {
+					name: formData.name ?? '',
+					description: formData.description ?? '',
+					mediaKind: 'music' as const,
+					musicTiers: formData.musicTiers ?? [],
+					musicAllowFallback: formData.musicAllowFallback ?? true,
+					musicMinSizeMb: formData.musicMinSizeMb ?? null,
+					musicMaxSizeMb: formData.musicMaxSizeMb ?? null
+				};
+				let profileId = selectedProfile?.id ?? null;
+				if (profileModalMode === 'add') {
+					const created = await createScoringProfile(payload as ScoringProfileCreate);
+					profileId = created.id;
+				} else if (profileId) {
+					await updateScoringProfile({ id: profileId, ...payload } as {
+						id: string;
+					} & ScoringProfileUpdate);
+				}
+
+				// The music default is a settings key, not scoring_profiles.is_default.
+				if (formData.isDefault && profileId) {
+					const response = await fetch('/api/music/settings', {
+						method: 'PATCH',
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({ defaultProfileId: profileId })
+					});
+					if (!response.ok) {
+						const body = (await response.json().catch(() => ({}))) as { error?: string };
+						throw new Error(body.error ?? 'Could not set the default music profile');
+					}
+				}
+			} else if (profileModalMode === 'add') {
 				await createScoringProfile(formData as ScoringProfileCreate);
 			} else {
 				await updateScoringProfile({ id: selectedProfile?.id, ...formData } as {
@@ -151,10 +237,22 @@
 
 	async function handleSetDefault(profile: ScoringProfile) {
 		try {
-			await updateScoringProfile({
-				id: profile.id,
-				isDefault: true
-			});
+			if (profile.mediaKind === 'music') {
+				const response = await fetch('/api/music/settings', {
+					method: 'PATCH',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ defaultProfileId: profile.id })
+				});
+				if (!response.ok) {
+					const body = (await response.json().catch(() => ({}))) as { error?: string };
+					throw new Error(body.error ?? 'Could not set the default music profile');
+				}
+			} else {
+				await updateScoringProfile({
+					id: profile.id,
+					isDefault: true
+				});
+			}
 
 			await refreshAll();
 		} catch (e) {
@@ -307,7 +405,22 @@
 			onSetDefault={handleSetDefault}
 		/>
 		<div class="divider my-6"></div>
-		<MusicProfilesManager profiles={data.musicProfiles} defaultId={data.musicDefaultId} />
+		<div class="space-y-4">
+			<div>
+				<h2 class="text-lg font-semibold">{m.music_profilesTitle()}</h2>
+				<p class="mt-1 max-w-3xl text-sm text-base-content/60">
+					{m.music_profilesDescription()}
+				</p>
+			</div>
+			<ProfileList
+				profiles={musicProfiles}
+				mediaKind="music"
+				onAdd={openAddMusicProfileModal}
+				onEdit={openEditProfileModal}
+				onDelete={confirmProfileDelete}
+				onSetDefault={handleSetDefault}
+			/>
+		</div>
 	{:else if activeTab === 'formats'}
 		<div class="-mt-2">
 			<p class="text-sm text-base-content/60">
@@ -330,11 +443,14 @@
 <ProfileModal
 	open={profileModalOpen}
 	mode={profileModalMode}
+	mediaKind={profileModalMediaKind}
 	profile={selectedProfile}
-	allProfiles={data.profiles.map((p) => ({ id: p.id, name: p.name, isBuiltIn: p.isBuiltIn }))}
+	allProfiles={modalAllProfiles}
 	allFormats={data.formats.map((f) => ({ id: f.id, name: f.name, category: f.category }))}
 	indexers={data.indexers}
-	defaultCopyFromId={data.defaultProfileId}
+	defaultCopyFromId={profileModalMediaKind === 'music'
+		? (data.musicDefaultId ?? '')
+		: data.defaultProfileId}
 	saving={profileSaving}
 	error={profileError}
 	errorPrefix={profileErrorPrefix}

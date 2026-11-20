@@ -2,12 +2,26 @@
 	import type {
 		ScoringProfile,
 		ScoringProfileFormData,
-		RequiredFormatEntry
+		RequiredFormatEntry,
+		ProfileMusicTier
 	} from '#lib/types/profile.js';
 	import type { FormatCategory } from '#lib/types/format.js';
 	import * as m from '#lib/paraglide/messages.js';
 	import { groupFormatScoresByCategory, FORMAT_CATEGORY_LABELS } from '#lib/types/format.js';
-	import { X, Save, Info, Loader2, Settings, Layers, Search, Server } from '@lucide/svelte';
+	import {
+		X,
+		Save,
+		Info,
+		Loader2,
+		Settings,
+		Layers,
+		Search,
+		Server,
+		ArrowDown,
+		ArrowUp,
+		Plus,
+		Trash2
+	} from '@lucide/svelte';
 	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
 	import { SectionHeader } from '#lib/components/ui/modal/index.js';
 	import FormatScoreAccordion from './FormatScoreAccordion.svelte';
@@ -23,9 +37,19 @@
 	interface Props {
 		open: boolean;
 		mode: 'add' | 'edit' | 'view';
+		/** Which kind of profile this dialog edits. Music uses the same shell. */
+		mediaKind?: 'video' | 'music';
 		profile?: ScoringProfile | null;
 		/** All profiles available to copy from (built-in + custom) */
-		allProfiles: { id: string; name: string; isBuiltIn?: boolean }[];
+		allProfiles: {
+			id: string;
+			name: string;
+			isBuiltIn?: boolean;
+			musicTiers?: ProfileMusicTier[];
+			allowFallback?: boolean;
+			musicMinSizeMb?: number | null;
+			musicMaxSizeMb?: number | null;
+		}[];
 		/** All available formats for score editing */
 		allFormats?: { id: string; name: string; category: FormatCategory }[];
 		/** Configured indexers available for the profile's indexer allowlist */
@@ -45,6 +69,7 @@
 	let {
 		open,
 		mode,
+		mediaKind = 'video',
 		profile = null,
 		allProfiles,
 		allFormats = [],
@@ -89,6 +114,97 @@
 	// Format scores state
 	let formatScores = $state<Record<string, number>>({});
 
+	// --- Music ladder (same dialog, music mode) ---
+	const isMusic = $derived(mediaKind === 'music');
+	type TierDraft = {
+		kind: ProfileMusicTier['kind'];
+		label: string;
+		formats: string;
+		minBitrateKbps: string;
+		minBitDepth: string;
+	};
+	let musicTiers = $state<TierDraft[]>([]);
+	let allowFallback = $state(true);
+	let musicMinSizeMbInput = $state('');
+	let musicMaxSizeMbInput = $state('');
+
+	function toTierDraft(tier: ProfileMusicTier): TierDraft {
+		return {
+			kind: tier.kind,
+			label: tier.label,
+			formats: (tier.formats ?? []).join(', '),
+			minBitrateKbps: tier.minBitrateKbps ? String(tier.minBitrateKbps) : '',
+			minBitDepth: tier.minBitDepth ? String(tier.minBitDepth) : ''
+		};
+	}
+
+	function blankTier(kind: TierDraft['kind'] = 'lossless'): TierDraft {
+		return { kind, label: '', formats: '', minBitrateKbps: '', minBitDepth: '' };
+	}
+
+	function addTier() {
+		musicTiers = [...musicTiers, blankTier('lossy')];
+	}
+
+	function removeTier(index: number) {
+		musicTiers = musicTiers.filter((_, i) => i !== index);
+	}
+
+	function moveTier(index: number, direction: -1 | 1) {
+		const next = [...musicTiers];
+		const target = index + direction;
+		if (target < 0 || target >= next.length) return;
+		[next[index], next[target]] = [next[target], next[index]];
+		musicTiers = next;
+	}
+
+	function validOptionalInteger(value: string): boolean {
+		const trimmed = value.trim();
+		return trimmed === '' || /^\d+$/.test(trimmed);
+	}
+
+	function musicTierPayload(): ProfileMusicTier[] {
+		return musicTiers.map((tier) => ({
+			kind: tier.kind,
+			label: tier.label.trim(),
+			...(tier.kind !== 'streaming' && tier.formats.trim()
+				? {
+						formats: tier.formats
+							.split(',')
+							.map((format) => format.trim().toLowerCase())
+							.filter(Boolean)
+					}
+				: {}),
+			...(tier.kind === 'lossy' && tier.minBitrateKbps.trim()
+				? { minBitrateKbps: Number.parseInt(tier.minBitrateKbps, 10) }
+				: {}),
+			...(tier.kind === 'lossless' && tier.minBitDepth.trim()
+				? { minBitDepth: Number.parseInt(tier.minBitDepth, 10) }
+				: {})
+		}));
+	}
+
+	const musicTiersValid = $derived(
+		musicTiers.length > 0 &&
+			musicTiers.every(
+				(tier) =>
+					tier.label.trim().length > 0 &&
+					(tier.kind !== 'lossy' || validOptionalInteger(tier.minBitrateKbps)) &&
+					(tier.kind !== 'lossless' || validOptionalInteger(tier.minBitDepth))
+			)
+	);
+
+	/** The same "Copy from" control as video; for music it seeds the ladder. */
+	function applyCopyFrom() {
+		if (!isMusic || !copyFromId) return;
+		const source = allProfiles.find((candidate) => candidate.id === copyFromId);
+		if (!source) return;
+		musicTiers = (source.musicTiers ?? []).map(toTierDraft);
+		allowFallback = source.allowFallback ?? true;
+		musicMinSizeMbInput = source.musicMinSizeMb ? String(source.musicMinSizeMb) : '';
+		musicMaxSizeMbInput = source.musicMaxSizeMb ? String(source.musicMaxSizeMb) : '';
+	}
+
 	function coerceLimit(value: number | string | null | undefined): number | null {
 		if (value === null || value === undefined) return null;
 		if (typeof value === 'number') return Number.isFinite(value) ? value : null;
@@ -111,7 +227,29 @@
 	// Initialize form when profile changes
 	$effect(() => {
 		if (open) {
-			if (profile) {
+			if (isMusic) {
+				if (profile) {
+					name = profile.name;
+					description = profile.description || '';
+					copyFromId = '';
+					musicTiers = (profile.musicTiers ?? []).map(toTierDraft);
+					allowFallback = profile.allowFallback ?? true;
+					musicMinSizeMbInput = stringifyLimit(coerceLimit(profile.musicMinSizeMb));
+					musicMaxSizeMbInput = stringifyLimit(coerceLimit(profile.musicMaxSizeMb));
+					isDefault = profile.isDefault;
+				} else {
+					name = '';
+					description = '';
+					copyFromId = defaultCopyFromId || '';
+					musicTiers = [blankTier('lossless')];
+					allowFallback = true;
+					musicMinSizeMbInput = '';
+					musicMaxSizeMbInput = '';
+					isDefault = false;
+					// Same starting point as a video profile: copy the default.
+					if (copyFromId) applyCopyFrom();
+				}
+			} else if (profile) {
 				name = profile.name;
 				description = profile.description || '';
 				copyFromId = ''; // No copy when editing existing profile
@@ -332,6 +470,20 @@
 			return;
 		}
 
+		if (isMusic) {
+			onSave({
+				mediaKind: 'music',
+				name,
+				description: description || undefined,
+				musicTiers: musicTierPayload(),
+				musicAllowFallback: allowFallback,
+				musicMinSizeMb: normalizeMbLimit(parseNumberInput(musicMinSizeMbInput)),
+				musicMaxSizeMb: normalizeMbLimit(parseNumberInput(musicMaxSizeMbInput)),
+				isDefault
+			});
+			return;
+		}
+
 		const filteredFormatScores = Object.fromEntries(
 			Object.entries(formatScores).filter(([, score]) => score !== 0)
 		);
@@ -373,15 +525,14 @@
 		});
 	}
 
-	const isCoreReadonly = $derived(mode === 'view' || (profile?.isBuiltIn ?? false));
+	const isCoreReadonly = $derived(mode === 'view' || (!isMusic && (profile?.isBuiltIn ?? false)));
 	const isFullyReadonly = $derived(mode === 'view');
 	const isNewProfile = $derived(mode === 'add');
 	const isStreamerProfile = $derived(profile?.id === 'streamer');
 
-	// Show Format Scores tab for all profiles except when in view mode
-	const showFormatsTab = $derived(mode !== 'view' && allFormats.length > 0);
-	// Show the Indexers tab whenever indexers exist, so the setting is discoverable.
-	const showIndexersTab = $derived(indexers.length > 0 || restrictIndexers);
+	// Music has one tab: the ladder and its bounds. Video keeps its three.
+	const showFormatsTab = $derived(!isMusic && mode !== 'view' && allFormats.length > 0);
+	const showIndexersTab = $derived(!isMusic && (indexers.length > 0 || restrictIndexers));
 	const showTabBar = $derived(showFormatsTab || showIndexersTab);
 
 	// Separate built-in and custom profiles for the dropdown
@@ -450,6 +601,258 @@
 
 	<!-- Tab Content -->
 	{#if activeTab === 'general'}
+		{#if isMusic}
+			<!-- Music: same dialog grammar as video, with a ladder instead of scores -->
+			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6">
+				<div class="space-y-4">
+					<SectionHeader title={m.profiles_section_profile()} />
+
+					<div class="form-control">
+						<label class="label py-1" for="profile-name">
+							<span class="label-text">{m.common_name()}</span>
+						</label>
+						<input
+							id="profile-name"
+							type="text"
+							class="input-bordered input input-sm"
+							bind:value={name}
+							disabled={isFullyReadonly}
+							placeholder="My Music Profile"
+						/>
+					</div>
+
+					<div class="form-control">
+						<label class="label py-1" for="profile-description">
+							<span class="label-text">{m.common_description()}</span>
+						</label>
+						<textarea
+							id="profile-description"
+							class="textarea-bordered textarea h-20 resize-none textarea-sm"
+							bind:value={description}
+							disabled={isFullyReadonly}
+							maxlength={maxDescriptionLength}
+							placeholder="Describe what this profile is for..."></textarea>
+						{#if !isFullyReadonly}
+							<div class="label py-1">
+								<span class="label-text-alt text-xs {descriptionTooLong ? 'text-error' : ''}">
+									{description.length}/{maxDescriptionLength}
+								</span>
+							</div>
+						{/if}
+					</div>
+
+					{#if isNewProfile}
+						<div class="form-control">
+							<label class="label py-1" for="copy-from">
+								<span class="label-text">{m.profiles_copyFrom_label()}</span>
+							</label>
+							<select
+								id="copy-from"
+								class="select-bordered select select-sm"
+								value={copyFromId}
+								onchange={(event) => {
+									copyFromId = event.currentTarget.value;
+									applyCopyFrom();
+								}}
+							>
+								<option value="">{m.profiles_copyFrom_scratch()}</option>
+								{#if builtInProfiles.length > 0}
+									<optgroup label={m.profiles_copyFrom_builtInLabel()}>
+										{#each builtInProfiles as builtIn (builtIn.id)}
+											<option value={builtIn.id}>{builtIn.name}</option>
+										{/each}
+									</optgroup>
+								{/if}
+								{#if customProfiles.length > 0}
+									<optgroup label={m.profiles_copyFrom_customLabel()}>
+										{#each customProfiles as custom (custom.id)}
+											<option value={custom.id}>{custom.name}</option>
+										{/each}
+									</optgroup>
+								{/if}
+							</select>
+							<div class="label py-1">
+								<span class="label-text-alt text-xs">
+									{copyFromId
+										? m.music_copyFromHelp()
+										: m.music_copyFromHelpZero()}
+								</span>
+							</div>
+						</div>
+					{/if}
+
+					<div class="flex flex-wrap gap-x-4 gap-y-1 pt-2">
+						<label class="label cursor-pointer gap-2">
+							<input
+								type="checkbox"
+								class="checkbox checkbox-sm checkbox-primary"
+								bind:checked={allowFallback}
+								disabled={isFullyReadonly}
+							/>
+							<span class="label-text">{m.music_allowFallback()}</span>
+						</label>
+						<label class="label cursor-pointer gap-2">
+							<input
+								type="checkbox"
+								class="checkbox checkbox-sm checkbox-primary"
+								bind:checked={isDefault}
+								disabled={isFullyReadonly}
+							/>
+							<span class="label-text">{m.profiles_setAsDefault()}</span>
+						</label>
+					</div>
+				</div>
+
+				<div class="space-y-4">
+					<SectionHeader title={m.profiles_section_sizeLimits()} />
+
+					<div class="grid grid-cols-2 gap-2 sm:gap-3">
+						<div class="form-control">
+							<label class="label py-1" for="music-min-size">
+								<span class="label-text">{m.music_profileSizeFloor()}</span>
+							</label>
+							<input
+								id="music-min-size"
+								type="text"
+								inputmode="numeric"
+								class="input-bordered input input-sm"
+								value={musicMinSizeMbInput}
+								oninput={(event) => {
+									musicMinSizeMbInput = sanitizeDecimalInput(event.currentTarget.value, 0);
+								}}
+								disabled={isFullyReadonly}
+								placeholder="No floor"
+							/>
+						</div>
+						<div class="form-control">
+							<label class="label py-1" for="music-max-size">
+								<span class="label-text">{m.music_profileSizeCeiling()}</span>
+							</label>
+							<input
+								id="music-max-size"
+								type="text"
+								inputmode="numeric"
+								class="input-bordered input input-sm"
+								value={musicMaxSizeMbInput}
+								oninput={(event) => {
+									musicMaxSizeMbInput = sanitizeDecimalInput(event.currentTarget.value, 0);
+								}}
+								disabled={isFullyReadonly}
+								placeholder="No ceiling"
+							/>
+						</div>
+					</div>
+
+					<div class="rounded-lg bg-base-200 p-3 text-xs text-base-content/70">
+						<Info class="mr-1 inline h-3 w-3" />
+						{m.music_profileSizeHint()}
+					</div>
+				</div>
+			</div>
+
+			<div class="mt-4 space-y-3">
+				<SectionHeader title={m.music_profileTiers()} />
+				<div class="space-y-2">
+					{#each musicTiers as tier, index (index)}
+						<div class="flex flex-wrap items-end gap-2 rounded-lg bg-base-200 p-2">
+							<label class="form-control w-28">
+								<span class="mb-1 text-xs text-base-content/60">{m.music_tierKind()}</span>
+								<select
+									class="select w-full select-bordered select-xs"
+									bind:value={tier.kind}
+									disabled={isFullyReadonly}
+								>
+									<option value="lossless">{m.music_tierLossless()}</option>
+									<option value="lossy">{m.music_tierLossy()}</option>
+									<option value="streaming">{m.music_tierStreaming()}</option>
+								</select>
+							</label>
+							<label class="form-control min-w-32 flex-1">
+								<span class="mb-1 text-xs text-base-content/60">{m.music_tierLabel()}</span>
+								<input
+									class="input w-full input-bordered input-xs"
+									bind:value={tier.label}
+									disabled={isFullyReadonly}
+								/>
+							</label>
+							{#if tier.kind !== 'streaming'}
+								<label class="form-control w-40">
+									<span class="mb-1 text-xs text-base-content/60">{m.music_tierFormats()}</span>
+									<input
+										class="input w-full input-bordered input-xs"
+										bind:value={tier.formats}
+										placeholder="flac, mp3"
+										disabled={isFullyReadonly}
+									/>
+								</label>
+							{/if}
+							{#if tier.kind === 'lossy'}
+								<label class="form-control w-24">
+									<span class="mb-1 text-xs text-base-content/60">{m.music_tierMinBitrate()}</span>
+									<input
+										class="input w-full input-bordered input-xs"
+										bind:value={tier.minBitrateKbps}
+										inputmode="numeric"
+										placeholder="256"
+										disabled={isFullyReadonly}
+									/>
+								</label>
+							{/if}
+							{#if tier.kind === 'lossless'}
+								<label class="form-control w-24">
+									<span class="mb-1 text-xs text-base-content/60">{m.music_tierMinBitDepth()}</span>
+									<input
+										class="input w-full input-bordered input-xs"
+										bind:value={tier.minBitDepth}
+										inputmode="numeric"
+										placeholder="24"
+										disabled={isFullyReadonly}
+									/>
+								</label>
+							{/if}
+							<div class="flex items-center gap-0.5">
+								<button
+									type="button"
+									class="btn btn-ghost btn-xs btn-square"
+									disabled={index === 0 || isFullyReadonly}
+									onclick={() => moveTier(index, -1)}
+									aria-label="Up"
+								>
+									<ArrowUp class="h-3.5 w-3.5" />
+								</button>
+								<button
+									type="button"
+									class="btn btn-ghost btn-xs btn-square"
+									disabled={index === musicTiers.length - 1 || isFullyReadonly}
+									onclick={() => moveTier(index, 1)}
+									aria-label="Down"
+								>
+									<ArrowDown class="h-3.5 w-3.5" />
+								</button>
+								<button
+									type="button"
+									class="btn btn-ghost btn-xs btn-square text-error"
+									disabled={musicTiers.length === 1 || isFullyReadonly}
+									onclick={() => removeTier(index)}
+									aria-label={m.common_delete()}
+								>
+									<Trash2 class="h-3.5 w-3.5" />
+								</button>
+							</div>
+						</div>
+					{/each}
+				</div>
+				<button
+					type="button"
+					class="btn gap-1 btn-ghost btn-xs"
+					onclick={addTier}
+					disabled={isFullyReadonly}
+				>
+					<Plus class="h-3.5 w-3.5" />
+					{m.music_addTier()}
+				</button>
+			</div>
+		{:else}
 		<!-- Main Form - Responsive Two Column Layout -->
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6">
 			<!-- Left Column: Profile Details -->
@@ -769,6 +1172,7 @@
 				{/if}
 			</button>
 		{/if}
+		{/if}
 	{:else if activeTab === 'formats'}
 		<div class="space-y-5 py-2">
 			{#if isNewProfile && copyFromId}
@@ -1001,7 +1405,7 @@
 
 	<!-- Footer -->
 	<div class="modal-action mt-6 border-t border-base-300 pt-4">
-		{#if profile?.isBuiltIn && mode !== 'view' && onReset}
+		{#if !isMusic && profile?.isBuiltIn && mode !== 'view' && onReset}
 			<button
 				class="btn btn-ghost text-error"
 				onclick={() => onReset(profile.id)}
@@ -1018,7 +1422,7 @@
 			<button
 				class="btn gap-2 btn-primary"
 				onclick={handleSave}
-				disabled={saving || !name || descriptionTooLong || indexerSelectionInvalid}
+				disabled={saving || !name || descriptionTooLong || indexerSelectionInvalid || (isMusic && !musicTiersValid)}
 			>
 				{#if saving}
 					<Loader2 class="h-4 w-4 animate-spin" />

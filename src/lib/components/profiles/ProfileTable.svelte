@@ -6,12 +6,14 @@
 
 	interface Props {
 		profiles: ScoringProfile[];
+		mediaKind?: 'video' | 'music';
 		onEdit: (profile: ScoringProfile) => void;
 		onDelete: (profile: ScoringProfile) => void;
 		onSetDefault: (profile: ScoringProfile) => void;
 	}
 
-	let { profiles, onEdit, onDelete, onSetDefault }: Props = $props();
+	let { profiles, mediaKind = 'video', onEdit, onDelete, onSetDefault }: Props = $props();
+	const isMusic = $derived(mediaKind === 'music');
 
 	/** Human-readable indexer scope: "All indexers" or "N indexers". */
 	function formatIndexerScope(profile: ScoringProfile): string {
@@ -99,6 +101,26 @@
 		if (max !== null) return `< ${formatValue(max)}`;
 		return '-';
 	}
+
+	/** Music has a ladder, not resolutions: show its rungs in the size column. */
+	function formatTierSummary(profile: ScoringProfile): string {
+		const tiers = profile.musicTiers ?? [];
+		if (tiers.length === 0) return '—';
+		return tiers.map((tier) => tier.label).join(' → ');
+	}
+
+	function formatMusicSize(profile: ScoringProfile): string {
+		const min = toNullableNumber(profile.musicMinSizeMb);
+		const max = toNullableNumber(profile.musicMaxSizeMb);
+		const formatValue = (value: number) => {
+			const label = Number.isInteger(value) ? String(value) : value.toFixed(0);
+			return `${label} MB`;
+		};
+		if (min !== null && max !== null) return `${formatValue(min)} - ${formatValue(max)}`;
+		if (min !== null) return `${formatValue(min)}+`;
+		if (max !== null) return `< ${formatValue(max)}`;
+		return '-';
+	}
 </script>
 
 {#if profiles.length === 0}
@@ -172,12 +194,20 @@
 
 					<div class="grid grid-cols-2 gap-3 text-sm">
 						<div>
-							<div class="text-xs tracking-wide text-base-content/50 uppercase">Movie Size</div>
-							<div class="font-mono">{formatMovieSize(profile)}</div>
+							<div class="text-xs tracking-wide text-base-content/50 uppercase">
+								{isMusic ? 'Tiers' : 'Movie Size'}
+							</div>
+							<div class="font-mono">
+								{isMusic ? formatTierSummary(profile) : formatMovieSize(profile)}
+							</div>
 						</div>
 						<div>
-							<div class="text-xs tracking-wide text-base-content/50 uppercase">Episode Size</div>
-							<div class="font-mono">{formatEpisodeSize(profile)}</div>
+							<div class="text-xs tracking-wide text-base-content/50 uppercase">
+								{isMusic ? 'Album Size' : 'Episode Size'}
+							</div>
+							<div class="font-mono">
+								{isMusic ? formatMusicSize(profile) : formatEpisodeSize(profile)}
+							</div>
 						</div>
 					</div>
 
@@ -204,14 +234,22 @@
 					<th>Type</th>
 					<th>
 						<div class="flex items-center gap-1">
-							<Film class="h-3.5 w-3.5" />
-							Movie Size
+							{#if isMusic}
+								Tiers
+							{:else}
+								<Film class="h-3.5 w-3.5" />
+								Movie Size
+							{/if}
 						</div>
 					</th>
 					<th>
 						<div class="flex items-center gap-1">
-							<Tv class="h-3.5 w-3.5" />
-							Episode Size
+							{#if isMusic}
+								Album Size
+							{:else}
+								<Tv class="h-3.5 w-3.5" />
+								Episode Size
+							{/if}
 						</div>
 					</th>
 					<th>Default</th>
@@ -254,10 +292,14 @@
 							</span>
 						</td>
 						<td>
-							<span class="font-mono text-sm">{formatMovieSize(profile)}</span>
+							<span class="font-mono text-sm"
+								>{isMusic ? formatTierSummary(profile) : formatMovieSize(profile)}</span
+							>
 						</td>
 						<td>
-							<span class="font-mono text-sm">{formatEpisodeSize(profile)}</span>
+							<span class="font-mono text-sm"
+								>{isMusic ? formatMusicSize(profile) : formatEpisodeSize(profile)}</span
+							>
 						</td>
 						<td>
 							{#if profile.isDefault}
