@@ -4,6 +4,7 @@ import { albums, downloadHistory } from '#lib/server/db/schema.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { ValidationError } from '#lib/errors/index.js';
 import { musicStrmService } from './MusicStrmService.js';
+import { warmAlbum } from './playback/warmer.js';
 import type { MusicReleaseCandidate } from './MusicSearchService.js';
 
 const logger = createChildLogger({ module: 'MusicStreamGrabService', logDomain: 'system' });
@@ -98,6 +99,11 @@ export class MusicStreamGrabService {
 			},
 			'[MusicStreamGrab] album is stream-backed'
 		);
+
+		// The shortcuts are only a contact sheet until the provider picks exist.
+		// Warming starts now, while the owner walks to Jellyfin and presses play,
+		// so the first track is not the one that pays the resolver's seconds.
+		warmAlbum(album.id);
 
 		return {
 			title: candidate.title,

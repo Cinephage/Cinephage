@@ -4947,6 +4947,14 @@ export const tracks = sqliteTable(
 		duration: integer('duration'),
 		explicit: integer('explicit', { mode: 'boolean' }).default(false),
 		hasFile: integer('has_file', { mode: 'boolean' }).default(false),
+		/**
+		 * The provider upload this track plays from, once one has been chosen.
+		 *
+		 * Matching a title against a YouTube search costs seconds, so the pick is
+		 * kept: every later playback resolves the same upload directly, and the
+		 * album's other tracks can be warmed from it.
+		 */
+		streamVideoId: text('stream_video_id'),
 		added: text('added').$defaultFn(() => new Date().toISOString())
 	},
 	(table) => [
@@ -4995,6 +5003,29 @@ export const trackFiles = sqliteTable(
 		index('idx_track_files_album').on(table.albumId),
 		index('idx_track_files_track').on(table.trackId)
 	]
+);
+
+/**
+ * A resolved provider URL, kept until it expires.
+ *
+ * A googlevideo link is good for hours but is not something to hand out, so it
+ * lives here rather than in the media-server shortcuts: playback reads it,
+ * proxies the bytes, and re-resolves only when the link is gone. The in-memory
+ * cache in `music/playback/resolver.ts` is the hot copy; this is what survives
+ * a restart.
+ */
+export const trackStreamCache = sqliteTable(
+	'track_stream_cache',
+	{
+		trackId: text('track_id')
+			.primaryKey()
+			.references(() => tracks.id, { onDelete: 'cascade' }),
+		url: text('url').notNull(),
+		contentType: text('content_type').notNull(),
+		/** Epoch milliseconds, from the provider URL's own expiry. */
+		expiresAt: integer('expires_at').notNull()
+	},
+	(table) => [index('idx_track_stream_cache_expiry').on(table.expiresAt)]
 );
 
 export type MediaItemRecord = typeof mediaItems.$inferSelect;

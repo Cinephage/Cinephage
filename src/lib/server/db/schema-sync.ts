@@ -232,7 +232,7 @@ import {
  *   same spine identity the queue row already carries, or Activity cannot name
  *   the album after import. Additive ALTER, no rebuild.
  */
-export const CURRENT_SCHEMA_VERSION = 188;
+export const CURRENT_SCHEMA_VERSION = 190;
 
 /**
  * Seed rows for the *legacy* backfill in migration 078 only.
@@ -1888,6 +1888,7 @@ const TABLE_DEFINITIONS: string[] = [
 		"duration" integer,
 		"explicit" integer DEFAULT false,
 		"has_file" integer DEFAULT false,
+		"stream_video_id" text,
 		"added" text
 	)`,
 
@@ -1904,6 +1905,13 @@ const TABLE_DEFINITIONS: string[] = [
 		"channels" integer,
 		"duration" integer,
 		"added" text
+	)`,
+
+	`CREATE TABLE IF NOT EXISTS "track_stream_cache" (
+		"track_id" text PRIMARY KEY NOT NULL REFERENCES "tracks"("id") ON DELETE CASCADE,
+		"url" text NOT NULL,
+		"content_type" text NOT NULL,
+		"expires_at" integer NOT NULL
 	)`
 ];
 

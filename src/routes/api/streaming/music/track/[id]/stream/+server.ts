@@ -6,6 +6,7 @@ import {
 	resolveTrackStream,
 	type TrackStream
 } from '#lib/server/music/playback/resolver.js';
+import { warmAlbum } from '#lib/server/music/playback/warmer.js';
 import { serveLocalFile } from '#lib/server/streaming/local-file.js';
 import { createChildLogger } from '#lib/logging/index.js';
 
@@ -25,20 +26,40 @@ function authorized(event: RequestEvent): boolean {
 	return Boolean(event.locals.apiKey || event.locals.user);
 }
 
-function forwardRange(request: Request): Headers {
+interface UpstreamRequest {
+	headers: Headers;
+	/** We asked for a range the client never did, so the reply must look like a plain 200. */
+	syntheticRange: boolean;
+}
+
+/**
+ * Provider URLs must be fetched with a range.
+ *
+ * googlevideo answers a plain GET with 200 and then throttles the body to
+ * ~30 KB/s; the same file requested as `bytes=0-` returns 206 at line speed.
+ * Jellyfin's `.strm` audio plugin never sends a Range header, so a proxied
+ * track used to arrive at roughly realtime bitrate — seconds of buffering
+ * before the music starts, and a fresh wait on every skip.
+ */
+function upstreamRequest(request: Request): UpstreamRequest {
 	const headers = new Headers();
 	const range = request.headers.get('range');
-	if (range) headers.set('Range', range);
-	const ifRange = request.headers.get('if-range');
-	if (ifRange) headers.set('If-Range', ifRange);
-	return headers;
+	if (range) {
+		headers.set('Range', range);
+		const ifRange = request.headers.get('if-range');
+		if (ifRange) headers.set('If-Range', ifRange);
+		return { headers, syntheticRange: false };
+	}
+
+	headers.set('Range', 'bytes=0-');
+	return { headers, syntheticRange: true };
 }
 
-async function fetchUpstream(stream: TrackStream, request: Request): Promise<Response> {
-	return fetch(stream.url, { headers: forwardRange(request), redirect: 'follow' });
+async function fetchUpstream(stream: TrackStream, request: UpstreamRequest): Promise<Response> {
+	return fetch(stream.url, { headers: request.headers, redirect: 'follow' });
 }
 
-function proxyResponse(upstream: Response): Response {
+function proxyResponse(upstream: Response, syntheticRange: boolean): Response {
 	if (!upstream.ok && upstream.status !== 206) {
 		return new Response('Upstream rejected the stream', { status: 502 });
 	}
@@ -49,6 +70,13 @@ function proxyResponse(upstream: Response): Response {
 		if (value) headers.set(name, value);
 	}
 	headers.set('Cache-Control', 'no-cache');
+
+	// A 206 answers a request nobody made. The client asked for the whole file,
+	// so drop the partial-content marker and let the full length stand.
+	if (syntheticRange && upstream.status === 206) {
+		headers.delete('content-range');
+		return new Response(upstream.body, { status: 200, headers });
+	}
 
 	return new Response(upstream.body, { status: upstream.status, headers });
 }
@@ -84,20 +112,25 @@ export const GET: RequestHandler = async (event) => {
 		}
 	}
 
-	let upstream = await fetchUpstream(outcome.stream, event.request);
-	if (upstream.status === 403 || upstream.status === 410) {
+	// Playing one track of a streaming album is the signal to get the rest
+	// ready: the next skip should not pay the resolver's seconds again.
+	warmAlbum(outcome.albumId);
+
+	const upstream = upstreamRequest(event.request);
+	let response = await fetchUpstream(outcome.stream, upstream);
+	if (response.status === 403 || response.status === 410) {
 		logger.info(
-			{ trackId: event.params.id, status: upstream.status },
+			{ trackId: event.params.id, status: response.status },
 			'[MusicStream] Provider URL expired, re-resolving'
 		);
 		invalidateTrackStream(event.params.id);
 		const retry = await resolveTrackStream(event.params.id);
 		if (retry.status === 'ok' && retry.stream.source === 'youtube') {
-			upstream = await fetchUpstream(retry.stream, event.request);
+			response = await fetchUpstream(retry.stream, upstream);
 		}
 	}
 
-	return proxyResponse(upstream);
+	return proxyResponse(response, upstream.syntheticRange);
 };
 
 /** HEAD stays cheap: no provider call just to answer a metadata question. */
