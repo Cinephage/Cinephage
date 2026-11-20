@@ -11,6 +11,8 @@ type QueueMediaInfo = Pick<
 	| 'seriesTitle'
 	| 'seasonNumber'
 	| 'episodeNumber'
+	| 'artistId'
+	| 'artistName'
 >;
 
 interface QueueActivityProjectionInput {
@@ -148,6 +150,8 @@ export function projectQueueActivity(
 		seriesTitle: mediaInfo.seriesTitle,
 		seasonNumber: mediaInfo.seasonNumber,
 		episodeNumber: mediaInfo.episodeNumber,
+		artistId: mediaInfo.artistId,
+		artistName: mediaInfo.artistName,
 		episodeIds: download.episodeIds ?? undefined,
 		releaseTitle: download.title,
 		quality: download.quality ?? null,

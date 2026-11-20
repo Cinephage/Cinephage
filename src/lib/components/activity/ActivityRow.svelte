@@ -7,6 +7,7 @@
 	} from '#lib/types/activity.js';
 	import {
 		Clapperboard,
+		Disc3,
 		Tv,
 		ChevronRight,
 		Pause,
@@ -130,13 +131,22 @@
 			>
 				{#if activity.mediaType === 'movie'}
 					<Clapperboard class="h-4 w-4 shrink-0" />
+				{:else if activity.mediaType === 'album'}
+					<Disc3 class="h-4 w-4 shrink-0" />
 				{:else}
 					<Tv class="h-4 w-4 shrink-0" />
 				{/if}
-				<span class="max-w-20 truncate sm:max-w-48" title={activity.mediaTitle}>
-					{activity.mediaTitle}
-					{#if activity.mediaYear}
-						<span class="text-base-content/60">({activity.mediaYear})</span>
+				<span class="min-w-0 max-w-20 sm:max-w-48">
+					<span class="block truncate" title={activity.mediaTitle}>
+						{activity.mediaTitle}
+						{#if activity.mediaYear}
+							<span class="text-base-content/60">({activity.mediaYear})</span>
+						{/if}
+					</span>
+					{#if activity.mediaType === 'album' && activity.artistName}
+						<span class="block truncate text-[11px] text-base-content/55">
+							{activity.artistName}
+						</span>
 					{/if}
 				</span>
 			</a>
@@ -144,13 +154,22 @@
 			<div class="flex items-center gap-1.5">
 				{#if activity.mediaType === 'movie'}
 					<Clapperboard class="h-4 w-4 shrink-0" />
+				{:else if activity.mediaType === 'album'}
+					<Disc3 class="h-4 w-4 shrink-0" />
 				{:else}
 					<Tv class="h-4 w-4 shrink-0" />
 				{/if}
-				<span class="max-w-20 truncate sm:max-w-48" title={activity.mediaTitle}>
-					{activity.mediaTitle}
-					{#if activity.mediaYear}
-						<span class="text-base-content/60">({activity.mediaYear})</span>
+				<span class="min-w-0 max-w-20 sm:max-w-48">
+					<span class="block truncate" title={activity.mediaTitle}>
+						{activity.mediaTitle}
+						{#if activity.mediaYear}
+							<span class="text-base-content/60">({activity.mediaYear})</span>
+						{/if}
+					</span>
+					{#if activity.mediaType === 'album' && activity.artistName}
+						<span class="block truncate text-[11px] text-base-content/55">
+							{activity.artistName}
+						</span>
 					{/if}
 				</span>
 			</div>

@@ -48,6 +48,7 @@ function createHistoryRecord(
 		indexerId: null,
 		indexerName: null,
 		protocol: 'usenet',
+		mediaItemId: null,
 		movieId: null,
 		seriesId: null,
 		episodeIds: null,
@@ -218,7 +219,7 @@ describe('ActivityService fallback media resolution', () => {
 
 		const activity = service.transformHistoryItem(
 			history,
-			{ movies: new Map(), series: new Map(), episodes: new Map() },
+			{ movies: new Map(), series: new Map(), episodes: new Map(), albums: new Map() },
 			[]
 		);
 
@@ -239,7 +240,7 @@ describe('ActivityService fallback media resolution', () => {
 
 		const activity = service.transformHistoryItem(
 			history,
-			{ movies: new Map(), series: new Map(), episodes: new Map() },
+			{ movies: new Map(), series: new Map(), episodes: new Map(), albums: new Map() },
 			[]
 		);
 
@@ -261,7 +262,7 @@ describe('ActivityService failed activity retry linking', () => {
 
 		const activity = service.transformHistoryItem(
 			history,
-			{ movies: new Map(), series: new Map(), episodes: new Map() },
+			{ movies: new Map(), series: new Map(), episodes: new Map(), albums: new Map() },
 			[],
 			new Map([['download:download-123', 'queue-abc']])
 		);
@@ -293,7 +294,7 @@ describe('ActivityService failed activity retry linking', () => {
 
 		const activity = service.transformHistoryItem(
 			history,
-			{ movies: new Map(), series: new Map(), episodes: new Map() },
+			{ movies: new Map(), series: new Map(), episodes: new Map(), albums: new Map() },
 			[activeQueue],
 			new Map([['download:old-download-id', 'queue-failed-stale']])
 		);
@@ -322,7 +323,7 @@ describe('ActivityService failed activity retry linking', () => {
 
 		const activity = service.transformHistoryItem(
 			history,
-			{ movies: new Map(), series: new Map(), episodes: new Map() },
+			{ movies: new Map(), series: new Map(), episodes: new Map(), albums: new Map() },
 			[activeQueue]
 		);
 
@@ -350,7 +351,7 @@ describe('ActivityService failed activity retry linking', () => {
 
 		const activity = service.transformHistoryItem(
 			history,
-			{ movies: new Map(), series: new Map(), episodes: new Map() },
+			{ movies: new Map(), series: new Map(), episodes: new Map(), albums: new Map() },
 			[activeQueue]
 		);
 
@@ -377,7 +378,7 @@ describe('ActivityService failed activity retry linking', () => {
 
 		const activity = service.transformHistoryItem(
 			history,
-			{ movies: new Map(), series: new Map(), episodes: new Map() },
+			{ movies: new Map(), series: new Map(), episodes: new Map(), albums: new Map() },
 			[activeQueue]
 		);
 
@@ -405,7 +406,7 @@ describe('ActivityService failed activity retry linking', () => {
 
 		const activity = service.transformHistoryItem(
 			history,
-			{ movies: new Map(), series: new Map(), episodes: new Map() },
+			{ movies: new Map(), series: new Map(), episodes: new Map(), albums: new Map() },
 			[activeQueue]
 		);
 
@@ -435,7 +436,7 @@ describe('ActivityService blocklist surfacing (issue #618)', () => {
 
 		const activity = service.transformHistoryItem(
 			history,
-			{ movies: new Map(), series: new Map(), episodes: new Map() },
+			{ movies: new Map(), series: new Map(), episodes: new Map(), albums: new Map() },
 			[],
 			undefined,
 			blocklistIndex
@@ -468,7 +469,7 @@ describe('ActivityService blocklist surfacing (issue #618)', () => {
 
 		const activity = service.transformHistoryItem(
 			history,
-			{ movies: new Map(), series: new Map(), episodes: new Map() },
+			{ movies: new Map(), series: new Map(), episodes: new Map(), albums: new Map() },
 			[],
 			undefined,
 			blocklistIndex
@@ -498,7 +499,7 @@ describe('ActivityService blocklist surfacing (issue #618)', () => {
 
 		const activity = service.transformHistoryItem(
 			history,
-			{ movies: new Map(), series: new Map(), episodes: new Map() },
+			{ movies: new Map(), series: new Map(), episodes: new Map(), albums: new Map() },
 			[],
 			undefined,
 			blocklistIndex

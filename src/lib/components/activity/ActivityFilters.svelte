@@ -14,7 +14,8 @@
 		ArrowUpCircle,
 		Search,
 		ChevronDown,
-		ChevronUp
+		ChevronUp,
+		Disc3
 	} from '@lucide/svelte';
 	import { toDateString } from '#lib/utils/format.js';
 
@@ -232,6 +233,13 @@
 				onclick={() => updateFilter('mediaType', 'tv')}
 			>
 				{m.common_tvShows()}
+			</button>
+			<button
+				class="btn join-item btn-sm {filters.mediaType === 'music' ? 'btn-primary' : 'btn-ghost'}"
+				onclick={() => updateFilter('mediaType', 'music')}
+			>
+				<Disc3 class="h-3.5 w-3.5 sm:mr-1" />
+				<span class="hidden sm:inline">{m.nav_music()}</span>
 			</button>
 		</div>
 

@@ -7,6 +7,7 @@ import {
 	albums,
 	artists,
 	downloadClients,
+	downloadHistory,
 	downloadQueue,
 	mediaItems,
 	rootFolders,
@@ -310,6 +311,7 @@ export class MusicImportService {
 				})
 				.where(eq(downloadQueue.id, options.queueId))
 				.run();
+			this.recordImportedHistory(options.queueId, destinationFolder);
 		}
 
 		logger.info(
@@ -331,6 +333,61 @@ export class MusicImportService {
 			tracksMatched: matches.length,
 			unmatchedFiles: unmatched.map((file) => file.fileName)
 		};
+	}
+
+	/**
+	 * A finished album import is a history event like any movie import. The
+	 * queue row is the source (title, client, protocol, size); `media_item_id`
+	 * is what lets Activity name the album after the queue row is gone.
+	 */
+	private recordImportedHistory(queueId: string, importedPath: string): void {
+		const row = db.select().from(downloadQueue).where(eq(downloadQueue.id, queueId)).get();
+		if (!row?.mediaItemId) return;
+
+		const existing = db
+			.select({ id: downloadHistory.id })
+			.from(downloadHistory)
+			.where(
+				and(
+					eq(downloadHistory.mediaItemId, row.mediaItemId),
+					eq(downloadHistory.title, row.title),
+					eq(downloadHistory.status, 'imported')
+				)
+			)
+			.get();
+		if (existing) return;
+
+		let downloadTimeSeconds: number | undefined;
+		if (row.startedAt && row.completedAt) {
+			const start = new Date(row.startedAt).getTime();
+			const end = new Date(row.completedAt).getTime();
+			downloadTimeSeconds = Math.max(0, Math.floor((end - start) / 1000));
+		}
+
+		db.insert(downloadHistory)
+			.values({
+				downloadClientId: row.downloadClientId,
+				downloadClientName: null,
+				downloadId: row.downloadId,
+				infoHash: row.infoHash,
+				title: row.title,
+				indexerId: row.indexerId,
+				indexerName: row.indexerName,
+				protocol: row.protocol,
+				mediaItemId: row.mediaItemId,
+				status: 'imported',
+				size: row.size,
+				downloadTimeSeconds,
+				finalRatio: row.ratio,
+				quality: row.quality,
+				releaseGroup: row.releaseGroup,
+				importedPath,
+				transferMode: row.transferMode,
+				grabbedAt: row.addedAt,
+				completedAt: row.completedAt,
+				importedAt: new Date().toISOString()
+			})
+			.run();
 	}
 
 	/**

@@ -228,8 +228,11 @@ import {
  * Version 187: scoring_profiles.music_allow_fallback / music_min_size_mb /
  *   music_max_size_mb - a music profile's own fallback switch and size bounds.
  *   `upgrades_allowed` is video semantics and stays video-only.
+ * Version 188: download_history.media_item_id - finished music grabs need the
+ *   same spine identity the queue row already carries, or Activity cannot name
+ *   the album after import. Additive ALTER, no rebuild.
  */
-export const CURRENT_SCHEMA_VERSION = 187;
+export const CURRENT_SCHEMA_VERSION = 188;
 
 /**
  * Seed rows for the *legacy* backfill in migration 078 only.
@@ -1017,6 +1020,7 @@ const TABLE_DEFINITIONS: string[] = [
 		"indexer_id" text,
 		"indexer_name" text,
 		"protocol" text,
+		"media_item_id" text REFERENCES "media_items"("id") ON DELETE SET NULL,
 		"movie_id" text REFERENCES "movies"("id") ON DELETE SET NULL,
 		"series_id" text REFERENCES "series"("id") ON DELETE SET NULL,
 		"episode_ids" text,

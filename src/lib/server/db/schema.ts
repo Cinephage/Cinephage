@@ -1767,6 +1767,7 @@ export const downloadHistory = sqliteTable('download_history', {
 	protocol: text('protocol'),
 
 	// Linked media
+	mediaItemId: text('media_item_id').references(() => mediaItems.id, { onDelete: 'set null' }),
 	movieId: text('movie_id').references(() => movies.id, { onDelete: 'set null' }),
 	seriesId: text('series_id').references(() => series.id, { onDelete: 'set null' }),
 	episodeIds: text('episode_ids', { mode: 'json' }).$type<string[]>(),

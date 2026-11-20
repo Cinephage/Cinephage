@@ -33,7 +33,11 @@
 					? m.status_success()
 					: String(value).charAt(0).toUpperCase() + String(value).slice(1);
 			case 'mediaType':
-				return value === 'tv' ? m.common_tvShows() : m.common_movies();
+				return value === 'tv'
+					? m.common_tvShows()
+					: value === 'music'
+						? m.nav_music()
+						: m.common_movies();
 			case 'protocol':
 			case 'unmatchedStatus':
 			case 'searchStatus':

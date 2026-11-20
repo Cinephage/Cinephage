@@ -39,10 +39,20 @@ export interface MediaMaps {
 	movies: Map<string, MovieInfo>;
 	series: Map<string, SeriesInfo>;
 	episodes: Map<string, EpisodeInfo>;
+	/** Keyed by `media_items.id`, which is what a music queue row carries. */
+	albums: Map<string, AlbumInfo>;
+}
+
+export interface AlbumInfo {
+	id: string;
+	title: string;
+	year: number | null;
+	artistId: string;
+	artistName: string;
 }
 
 export interface ResolvedMediaInfo {
-	mediaType: 'movie' | 'episode';
+	mediaType: 'movie' | 'episode' | 'album';
 	mediaId: string;
 	mediaTitle: string;
 	mediaYear: number | null;
@@ -50,6 +60,8 @@ export interface ResolvedMediaInfo {
 	seriesTitle?: string;
 	seasonNumber?: number;
 	episodeNumber?: number;
+	artistId?: string;
+	artistName?: string;
 }
 
 /** Raw monitoringHistory.status values a search-attempt row can carry. */
@@ -187,6 +199,18 @@ export function resolveMediaInfo(
 	item: DownloadQueueRecord | DownloadHistoryRecord,
 	mediaMaps: MediaMaps
 ): ResolvedMediaInfo {
+	if (item.mediaItemId && mediaMaps.albums.has(item.mediaItemId)) {
+		const album = mediaMaps.albums.get(item.mediaItemId)!;
+		return {
+			mediaType: 'album',
+			mediaId: album.id,
+			mediaTitle: album.title,
+			mediaYear: album.year,
+			artistId: album.artistId,
+			artistName: album.artistName
+		};
+	}
+
 	if (item.movieId && mediaMaps.movies.has(item.movieId)) {
 		const movie = mediaMaps.movies.get(item.movieId)!;
 		return {

@@ -4109,6 +4109,7 @@ export class ImportService extends EventEmitter {
 			indexerId: queueItem.indexerId,
 			indexerName: queueItem.indexerName,
 			protocol: queueItem.protocol,
+			mediaItemId: queueItem.mediaItemId,
 			movieId: queueItem.movieId,
 			seriesId: queueItem.seriesId,
 			episodeIds: queueItem.episodeIds ?? undefined,

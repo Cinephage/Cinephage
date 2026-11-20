@@ -20,6 +20,7 @@ export function getMediaLink(activity: {
 	seriesId?: number | string | null;
 }): string {
 	if (activity.mediaType === 'movie') return resolvePath(`/library/movie/${activity.mediaId}`);
+	if (activity.mediaType === 'album') return resolvePath(`/library/music/${activity.mediaId}`);
 	return resolvePath(`/library/tv/${activity.seriesId || activity.mediaId}`);
 }
 
@@ -30,6 +31,8 @@ export function canLinkToMedia(activity: {
 	seriesId?: number | string | null;
 }): boolean {
 	if (activity.status === 'removed') return false;
-	if (activity.mediaType === 'movie') return Boolean(activity.mediaId);
+	if (activity.mediaType === 'movie' || activity.mediaType === 'album') {
+		return Boolean(activity.mediaId);
+	}
 	return Boolean(activity.seriesId || activity.mediaId);
 }

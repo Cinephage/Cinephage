@@ -98,10 +98,17 @@ export function normalizeActivity(activity: Partial<UnifiedActivity>): UnifiedAc
 		id: activity.id,
 		activitySource,
 		taskType: activity.taskType,
-		mediaType: activity.mediaType === 'episode' ? 'episode' : 'movie',
+		mediaType:
+			activity.mediaType === 'episode'
+				? 'episode'
+				: activity.mediaType === 'album'
+					? 'album'
+					: 'movie',
 		mediaId: activity.mediaId ?? '',
 		mediaTitle: activity.mediaTitle ?? 'Unknown',
 		mediaYear: activity.mediaYear ?? null,
+		artistId: activity.artistId,
+		artistName: activity.artistName,
 		seriesId: activity.seriesId,
 		seriesTitle: activity.seriesTitle,
 		seasonNumber: activity.seasonNumber,
@@ -298,6 +305,7 @@ export function matchesActivityFilters(
 
 	if (filters.mediaType === 'movie' && activity.mediaType !== 'movie') return false;
 	if (filters.mediaType === 'tv' && activity.mediaType !== 'episode') return false;
+	if (filters.mediaType === 'music' && activity.mediaType !== 'album') return false;
 
 	if (filters.protocol && filters.protocol !== 'all' && activity.protocol !== filters.protocol) {
 		return false;

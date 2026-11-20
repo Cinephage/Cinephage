@@ -172,7 +172,7 @@ export interface UnifiedActivity {
 	taskType?: string; // monitoring task type (e.g., 'missing', 'upgrade')
 
 	// Media info
-	mediaType: 'movie' | 'episode';
+	mediaType: 'movie' | 'episode' | 'album';
 	mediaId: string;
 	mediaTitle: string;
 	mediaYear: number | null;
@@ -181,6 +181,9 @@ export interface UnifiedActivity {
 	seasonNumber?: number;
 	episodeNumber?: number;
 	episodeIds?: string[]; // for multi-episode packs
+	/** For albums: the artist the album belongs to. */
+	artistId?: string;
+	artistName?: string;
 
 	// Release info
 	releaseTitle: string | null;

@@ -7,6 +7,8 @@ import {
 	movies,
 	series,
 	episodes,
+	albums,
+	artists,
 	settings,
 	blocklist,
 	scoringProfiles
@@ -833,6 +835,8 @@ export class ActivityService {
 			seriesTitle: mediaInfo.seriesTitle,
 			seasonNumber: mediaInfo.seasonNumber,
 			episodeNumber: mediaInfo.episodeNumber,
+			artistId: mediaInfo.artistId,
+			artistName: mediaInfo.artistName,
 			episodeIds: history.episodeIds ?? undefined,
 			releaseTitle: history.title,
 			quality: history.quality ?? null,
@@ -903,6 +907,8 @@ export class ActivityService {
 			seriesTitle: mediaInfo.seriesTitle,
 			seasonNumber: mediaInfo.seasonNumber,
 			episodeNumber: mediaInfo.episodeNumber,
+			artistId: mediaInfo.artistId,
+			artistName: mediaInfo.artistName,
 			releaseTitle: null,
 			quality: null,
 			releaseGroup: null,
@@ -972,6 +978,8 @@ export class ActivityService {
 			conditions.push(sql`${downloadQueue.movieId} IS NOT NULL`);
 		} else if (filters.mediaType === 'tv') {
 			conditions.push(sql`${downloadQueue.seriesId} IS NOT NULL`);
+		} else if (filters.mediaType === 'music') {
+			conditions.push(sql`${downloadQueue.mediaItemId} IS NOT NULL`);
 		}
 
 		// Date filters (use addedAt for queue items)
@@ -992,6 +1000,7 @@ export class ActivityService {
 				indexerId: downloadQueue.indexerId,
 				indexerName: downloadQueue.indexerName,
 				protocol: downloadQueue.protocol,
+				mediaItemId: downloadQueue.mediaItemId,
 				movieId: downloadQueue.movieId,
 				seriesId: downloadQueue.seriesId,
 				episodeIds: downloadQueue.episodeIds,
@@ -1090,6 +1099,8 @@ export class ActivityService {
 			conditions.push(sql`${downloadHistory.movieId} IS NOT NULL`);
 		} else if (filters.mediaType === 'tv') {
 			conditions.push(sql`${downloadHistory.seriesId} IS NOT NULL`);
+		} else if (filters.mediaType === 'music') {
+			conditions.push(sql`${downloadHistory.mediaItemId} IS NOT NULL`);
 		}
 
 		// Date filters
@@ -1116,6 +1127,7 @@ export class ActivityService {
 				indexerId: downloadHistory.indexerId,
 				indexerName: downloadHistory.indexerName,
 				protocol: downloadHistory.protocol,
+				mediaItemId: downloadHistory.mediaItemId,
 				movieId: downloadHistory.movieId,
 				seriesId: downloadHistory.seriesId,
 				episodeIds: downloadHistory.episodeIds,
@@ -1176,6 +1188,8 @@ export class ActivityService {
 			conditions.push(sql`${downloadHistory.movieId} IS NOT NULL`);
 		} else if (filters.mediaType === 'tv') {
 			conditions.push(sql`${downloadHistory.seriesId} IS NOT NULL`);
+		} else if (filters.mediaType === 'music') {
+			conditions.push(sql`${downloadHistory.mediaItemId} IS NOT NULL`);
 		}
 		if (filters.startDate) {
 			conditions.push(gte(downloadHistory.createdAt, filters.startDate));
@@ -1237,6 +1251,10 @@ export class ActivityService {
 			conditions.push(sql`${monitoringHistory.movieId} IS NOT NULL`);
 		} else if (filters.mediaType === 'tv') {
 			conditions.push(sql`${monitoringHistory.seriesId} IS NOT NULL`);
+		} else if (filters.mediaType === 'music') {
+			// Music monitoring history does not exist yet; never show video rows
+			// under the music filter.
+			conditions.push(sql`1 = 0`);
 		}
 
 		// Date filters
@@ -1335,6 +1353,8 @@ export class ActivityService {
 			conditions.push(sql`${monitoringHistory.movieId} IS NOT NULL`);
 		} else if (params.mediaType === 'tv') {
 			conditions.push(sql`${monitoringHistory.seriesId} IS NOT NULL`);
+		} else if (params.mediaType === 'music') {
+			conditions.push(sql`1 = 0`);
 		}
 
 		if (params.startDate) {
@@ -1549,7 +1569,7 @@ export class ActivityService {
 			id: item.id,
 			taskType: item.taskType,
 			status: item.status as SearchActivityStatus,
-			mediaType: mediaInfo.mediaType,
+			mediaType: mediaInfo.mediaType === 'movie' ? 'movie' : 'episode',
 			movieId: item.movieId ?? undefined,
 			seriesId: item.seriesId ?? undefined,
 			episodeId: item.episodeId ?? undefined,
@@ -1779,6 +1799,10 @@ export class ActivityService {
 			conditions.push(sql`${monitoringHistory.movieId} IS NOT NULL`);
 		} else if (filters.mediaType === 'tv') {
 			conditions.push(sql`${monitoringHistory.seriesId} IS NOT NULL`);
+		} else if (filters.mediaType === 'music') {
+			// Music monitoring history does not exist yet; never show video rows
+			// under the music filter.
+			conditions.push(sql`1 = 0`);
 		}
 		if (filters.startDate) {
 			conditions.push(gte(monitoringHistory.executedAt, filters.startDate));
@@ -1810,6 +1834,8 @@ export class ActivityService {
 			conditions.push(sql`${taskHistory.taskId} LIKE 'media-move:movie:%'`);
 		} else if (filters.mediaType === 'tv') {
 			conditions.push(sql`${taskHistory.taskId} LIKE 'media-move:series:%'`);
+		} else if (filters.mediaType === 'music') {
+			conditions.push(sql`1 = 0`);
 		}
 
 		if (filters.protocol && filters.protocol !== 'all') {
@@ -1858,6 +1884,8 @@ export class ActivityService {
 			conditions.push(sql`${taskHistory.taskId} LIKE 'media-move:movie:%'`);
 		} else if (filters.mediaType === 'tv') {
 			conditions.push(sql`${taskHistory.taskId} LIKE 'media-move:series:%'`);
+		} else if (filters.mediaType === 'music') {
+			conditions.push(sql`1 = 0`);
 		}
 
 		if (filters.protocol && filters.protocol !== 'all') {
@@ -1975,6 +2003,12 @@ export class ActivityService {
 		monitoringItems: MonitoringHistoryRecord[]
 	): Promise<MediaMaps> {
 		// Collect all IDs
+		const mediaItemIds = new Set<string>(
+			[...activeDownloads, ...historyItems].flatMap((item) =>
+				item.mediaItemId ? [item.mediaItemId] : []
+			)
+		);
+
 		const movieIds = new Set<string>([
 			...activeDownloads.filter((d) => d.movieId).map((d) => d.movieId!),
 			...historyItems.filter((h) => h.movieId).map((h) => h.movieId!),
@@ -1994,7 +2028,7 @@ export class ActivityService {
 		]);
 
 		// Fetch movies and episodes in parallel first so we can bridge episode → series
-		const [moviesData, episodesData] = await Promise.all([
+		const [moviesData, episodesData, albumsData] = await Promise.all([
 			movieIds.size > 0
 				? db
 						.select({
@@ -2024,6 +2058,21 @@ export class ActivityService {
 						.from(episodes)
 						.where(inArray(episodes.id, Array.from(episodeIds)))
 						.all()
+				: Promise.resolve([]),
+			mediaItemIds.size > 0
+				? db
+						.select({
+							mediaItemId: albums.mediaItemId,
+							id: albums.id,
+							title: albums.title,
+							year: albums.year,
+							artistId: artists.id,
+							artistName: artists.name
+						})
+						.from(albums)
+						.innerJoin(artists, eq(albums.artistId, artists.id))
+						.where(inArray(albums.mediaItemId, Array.from(mediaItemIds)))
+						.all()
 				: Promise.resolve([])
 		]);
 
@@ -2050,6 +2099,7 @@ export class ActivityService {
 		return {
 			movies: new Map(moviesData.map((m) => [m.id, m])),
 			series: new Map(seriesData.map((s) => [s.id, s])),
+			albums: new Map(albumsData.map((a) => [a.mediaItemId, a])),
 			episodes: new Map(
 				episodesData.map((e) => [
 					e.id,
@@ -2153,6 +2203,8 @@ export class ActivityService {
 			seriesTitle: mediaInfo.seriesTitle,
 			seasonNumber: mediaInfo.seasonNumber,
 			episodeNumber: mediaInfo.episodeNumber,
+			artistId: mediaInfo.artistId,
+			artistName: mediaInfo.artistName,
 			episodeIds: history.episodeIds ?? undefined,
 			releaseTitle: history.title,
 			quality: history.quality ?? null,
