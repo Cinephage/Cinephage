@@ -53,26 +53,16 @@
 		return tokens.every((token) => normalizedHaystack.includes(token));
 	}
 
-	/**
-	 * A song can be taken from two places: the album it sits on, or a single
-	 * release named after the song. Anything else on the artist's shelf is not
-	 * this song, so it is not offered here — same rule the album row applies.
-	 */
-	const visible = $derived(
-		candidates.filter(
-			(candidate) =>
-				containsAll(candidate.title, albumTitle) ||
-				(track ? containsAll(candidate.title, track.title) : false)
-		)
-	);
-
 	async function load() {
 		if (!track || loading) return;
 		loading = true;
 		error = null;
 		candidates = [];
 		try {
-			const response = await fetch(`/api/music/albums/${albumId}/search`, { method: 'POST' });
+			const endpoint = track
+				? `/api/music/tracks/${track.id}/search`
+				: `/api/music/albums/${albumId}/search`;
+			const response = await fetch(endpoint, { method: 'POST' });
 			const body = await response.json().catch(() => ({}));
 			if (!response.ok) {
 				error = body.details ?? body.error ?? m.music_searchFailed();
@@ -182,8 +172,10 @@
 			<p class="py-4 text-sm text-base-content/55">{error}</p>
 		{:else if loading}
 			<p class="py-4 text-sm text-base-content/55">{m.common_searching()}</p>
-		{:else if visible.length === 0}
-			<p class="py-4 text-sm text-base-content/55">{m.common_noResults()}</p>
+		{:else if candidates.length === 0}
+			<p class="py-4 text-sm text-base-content/55">
+				{track ? m.music_noTrackReleases() : m.music_noReleases()}
+			</p>
 		{:else}
 			<div class="overflow-hidden rounded-lg bg-base-200">
 				<table class="table table-sm">
@@ -198,7 +190,7 @@
 						</tr>
 					</thead>
 					<tbody>
-						{#each visible as candidate (candidate.title + (candidate.indexerName ?? ''))}
+						{#each candidates as candidate (candidate.title + (candidate.indexerName ?? ''))}
 							<tr class="border-base-content/5">
 								<td class="max-w-0 truncate" title={candidate.title}>
 									<span class="font-medium">{candidate.title}</span>

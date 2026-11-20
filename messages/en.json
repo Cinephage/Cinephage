@@ -5786,5 +5786,6 @@
 	"music_genreLabel": "Genre",
 	"music_typeLabel": "Type",
 	"music_removeSelectedConfirm": "Remove {count} selected from the library? Files on disk are not deleted.",
-	"music_removedSelected": "Removed {count} items"
+	"music_removedSelected": "Removed {count} items",
+	"music_noTrackReleases": "No releases found for this track."
 }

@@ -37,7 +37,9 @@ describe('TrackSearchModal', () => {
 		fetchMock.mockResolvedValue(
 			new Response(
 				JSON.stringify({
-					candidates: [candidate({ accepted: false, format: 'unknown', reasons: ['Below profile'] })]
+					candidates: [
+						candidate({ accepted: false, format: 'unknown', reasons: ['Below profile'] })
+					]
 				}),
 				{
 					status: 200
@@ -57,6 +59,9 @@ describe('TrackSearchModal', () => {
 
 		await waitFor(() => expect(screen.getByText(/Asylum \(2026\) 320/)).toBeTruthy());
 
+		// The search is scoped to the track, not the whole album.
+		expect(fetchMock).toHaveBeenCalledWith('/api/music/tracks/t-1/search', { method: 'POST' });
+
 		expect(screen.getByText('Below profile')).toBeTruthy();
 		expect(screen.queryByText('No releases found for this album.')).toBeNull();
 		const grab = screen.getByRole('button', { name: 'Grab' }) as HTMLButtonElement;
@@ -68,34 +73,6 @@ describe('TrackSearchModal', () => {
 		// The live title says 320 kbps without a codec; the row must say that,
 		// not UNKNOWN.
 		expect(screen.getByText('320 kbps · codec?')).toBeTruthy();
-	});
-
-	it('keeps only releases that name the album or the track', async () => {
-		fetchMock.mockResolvedValue(
-			new Response(
-				JSON.stringify({
-					candidates: [
-						candidate({ title: 'Chris Webby - Asylum (2026) 320' }),
-						candidate({ title: 'Chris Isaak - Silvertone [1985] FLAC', guid: '/post/2' })
-					]
-				}),
-				{ status: 200 }
-			)
-		);
-
-		render(TrackSearchModal, {
-			props: {
-				open: true,
-				track: { id: 't-1', title: 'Madhouse' },
-				albumId: 'a-1',
-				albumTitle: 'Asylum',
-				onClose: vi.fn()
-			}
-		});
-
-		await waitFor(() => expect(screen.getByText(/Asylum \(2026\) 320/)).toBeTruthy());
-
-		expect(screen.queryByText(/Silvertone/)).toBeNull();
 	});
 
 	it('says no results only when the search returned none', async () => {
@@ -111,6 +88,6 @@ describe('TrackSearchModal', () => {
 			}
 		});
 
-		await waitFor(() => expect(screen.getByText('No results found')).toBeTruthy());
+		await waitFor(() => expect(screen.getByText('No releases found for this track.')).toBeTruthy());
 	});
 });

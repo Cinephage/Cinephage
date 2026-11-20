@@ -3,6 +3,7 @@ import {
 	isAudioCategory,
 	rankCandidates,
 	relevantAlbumCandidates,
+	trackRelevance,
 	type MusicReleaseCandidate
 } from './MusicSearchService.js';
 
@@ -69,6 +70,22 @@ describe('rankCandidates relevance', () => {
 		]);
 
 		expect(ranked[0].title).toBe('Daft Punk Discovery 2001 FLAC 88');
+	});
+});
+
+describe('trackRelevance', () => {
+	it('takes a single that names the song', () => {
+		expect(trackRelevance('Chris Webby - Madhouse (2026) 320', 'Madhouse', 'Asylum')).toBe(1);
+	});
+
+	it('takes the album that contains the song', () => {
+		expect(trackRelevance('Chris Webby - Asylum (2026) FLAC', 'Madhouse', 'Asylum')).toBe(0.9);
+	});
+
+	it('rejects another album by the same artist', () => {
+		expect(
+			trackRelevance('Chris Webby - Human After All 2005 FLAC', 'Madhouse', 'Asylum')
+		).toBeLessThan(0.5);
 	});
 });
 

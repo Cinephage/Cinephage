@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
-import { albums, artists } from '#lib/server/db/schema.js';
+import { albums, artists, tracks } from '#lib/server/db/schema.js';
 import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
 import { getCategoriesForSearchType } from '#lib/server/indexers/types/index.js';
 import { createChildLogger } from '#lib/logging/index.js';
@@ -121,6 +121,22 @@ export function albumRelevance(releaseTitle: string, albumTitle: string): number
  */
 export const MIN_ALBUM_RELEVANCE = 0.5;
 
+/** What a track-release title is allowed to contain to count as this song. */
+export function trackRelevance(
+	releaseTitle: string,
+	trackTitle: string,
+	albumTitle: string
+): number {
+	const hay = normalizeTitleForMatch(releaseTitle);
+	const song = normalizeTitleForMatch(trackTitle);
+	const album = normalizeTitleForMatch(albumTitle);
+	if (!hay || !song) return 0;
+	// A single names the song; an album rip names the album that contains it.
+	if (song.length >= 3 && hay.includes(song)) return 1;
+	if (album.length >= 3 && hay.includes(album)) return 0.9;
+	return calculateTitleSimilarity(hay, song);
+}
+
 /** Drop the noise before it reaches the UI or the candidate count. */
 export function relevantAlbumCandidates(
 	candidates: MusicReleaseCandidate[]
@@ -171,38 +187,9 @@ export class MusicSearchService {
 			{ searchSource: 'interactive', timeout: INTERACTIVE_SEARCH_TIMEOUT_MS }
 		);
 
-		const candidates = (result.releases ?? []).map((release) => {
-			const categories = (release.categories ?? []).map(Number);
-			const grade = gradeMusicRelease(profile, {
-				title: release.title,
-				size: release.size ?? null
-			});
-			return {
-				title: release.title,
-				guid: release.guid ?? null,
-				indexerId: release.indexerId ?? null,
-				indexerName: release.indexerName ?? null,
-				protocol: release.protocol ?? null,
-				size: release.size ?? null,
-				seeders: release.seeders ?? null,
-				leechers: release.leechers ?? null,
-				categories,
-				downloadUrl: release.downloadUrl ?? null,
-				magnetUrl: release.magnetUrl ?? null,
-				infoHash: release.infoHash ?? null,
-				isAudioCategory: categories.some(isAudioCategory),
-				relevance: albumRelevance(release.title, row.title),
-				format: grade.parsed.format,
-				bitDepth: grade.parsed.bitDepth,
-				bitrateKbps: grade.parsed.bitrateKbps,
-				sampleRateKhz: grade.parsed.sampleRateKhz,
-				score: grade.score,
-				accepted: grade.accepted,
-				tierIndex: grade.tierIndex,
-				tierLabel: grade.tierLabel,
-				reasons: grade.reasons
-			} satisfies MusicReleaseCandidate;
-		});
+		const candidates = toCandidates(result.releases ?? [], profile, (release) =>
+			albumRelevance(release.title, row.title)
+		);
 
 		const relevant = relevantAlbumCandidates(candidates);
 
@@ -225,6 +212,131 @@ export class MusicSearchService {
 			candidates: rankCandidates(relevant)
 		};
 	}
+
+	/**
+	 * Interactive release search for one track — the music counterpart of the
+	 * per-episode search. A song comes from a single that names it or from the
+	 * album that contains it; both are matches, nothing else is.
+	 */
+	async searchForTrack(
+		trackId: string,
+		options: { limit?: number; profile?: MusicQualityProfile } = {}
+	): Promise<{
+		trackId: string;
+		title: string;
+		albumTitle: string;
+		artist: string;
+		profile: { id: string; name: string };
+		candidates: MusicReleaseCandidate[];
+	}> {
+		const profile = options.profile ?? DEFAULT_MUSIC_PROFILE;
+		const row = db
+			.select({
+				title: tracks.title,
+				albumTitle: albums.title,
+				year: albums.year,
+				artist: artists.name
+			})
+			.from(tracks)
+			.innerJoin(albums, eq(tracks.albumId, albums.id))
+			.innerJoin(artists, eq(albums.artistId, artists.id))
+			.where(eq(tracks.id, trackId))
+			.get();
+		if (!row) throw new NotFoundError('Track', trackId);
+
+		const manager = await getIndexerManager();
+		const result = await manager.search(
+			{
+				searchType: 'music',
+				query: `${row.artist} ${row.title}`,
+				artist: row.artist,
+				album: row.albumTitle,
+				year: row.year ?? undefined,
+				categories: getCategoriesForSearchType('music'),
+				limit: options.limit ?? 30
+			},
+			{ searchSource: 'interactive', timeout: INTERACTIVE_SEARCH_TIMEOUT_MS }
+		);
+
+		const candidates = toCandidates(result.releases ?? [], profile, (release) =>
+			trackRelevance(release.title, row.title, row.albumTitle)
+		);
+		const relevant = relevantAlbumCandidates(candidates);
+
+		logger.info(
+			{
+				trackId,
+				artist: row.artist,
+				track: row.title,
+				album: row.albumTitle,
+				found: candidates.length,
+				kept: relevant.length
+			},
+			'[MusicSearch] track release search'
+		);
+
+		return {
+			trackId,
+			title: row.title,
+			albumTitle: row.albumTitle,
+			artist: row.artist,
+			profile: { id: profile.id, name: profile.name },
+			candidates: rankCandidates(relevant)
+		};
+	}
+}
+
+/** One mapping from an indexer hit to what the interactive rows render. */
+function toCandidates(
+	releases: Array<{
+		title: string;
+		guid?: string | null;
+		indexerId?: string | null;
+		indexerName?: string | null;
+		protocol?: string | null;
+		size?: number | null;
+		seeders?: number | null;
+		leechers?: number | null;
+		categories?: number[] | null;
+		downloadUrl?: string | null;
+		magnetUrl?: string | null;
+		infoHash?: string | null;
+	}>,
+	profile: MusicQualityProfile,
+	relevanceOf: (release: { title: string }) => number
+): MusicReleaseCandidate[] {
+	return releases.map((release) => {
+		const categories = (release.categories ?? []).map(Number);
+		const grade = gradeMusicRelease(profile, {
+			title: release.title,
+			size: release.size ?? null
+		});
+		return {
+			title: release.title,
+			guid: release.guid ?? null,
+			indexerId: release.indexerId ?? null,
+			indexerName: release.indexerName ?? null,
+			protocol: release.protocol ?? null,
+			size: release.size ?? null,
+			seeders: release.seeders ?? null,
+			leechers: release.leechers ?? null,
+			categories,
+			downloadUrl: release.downloadUrl ?? null,
+			magnetUrl: release.magnetUrl ?? null,
+			infoHash: release.infoHash ?? null,
+			isAudioCategory: categories.some(isAudioCategory),
+			relevance: relevanceOf(release),
+			format: grade.parsed.format,
+			bitDepth: grade.parsed.bitDepth,
+			bitrateKbps: grade.parsed.bitrateKbps,
+			sampleRateKhz: grade.parsed.sampleRateKhz,
+			score: grade.score,
+			accepted: grade.accepted,
+			tierIndex: grade.tierIndex,
+			tierLabel: grade.tierLabel,
+			reasons: grade.reasons
+		} satisfies MusicReleaseCandidate;
+	});
 }
 
 export const musicSearchService = new MusicSearchService();
