@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { invalidateAll, replaceState } from '$app/navigation';
+	import { invalidateAll, replaceState, goto } from '$app/navigation';
 	import type { PageData } from './$types.js';
 	import {
 		Disc3,
@@ -353,6 +353,29 @@
 		}
 	}
 
+	async function searchAlbum(id: string) {
+		try {
+			const response = await fetch(`/api/music/albums/${id}/auto-search`, { method: 'POST' });
+			const body = await response.json().catch(() => ({}));
+			if (body.grabbed) {
+				toasts.success(m.music_grabbed({ title: body.release ?? albumTitle(id) }));
+				await invalidateAll();
+			} else {
+				toasts.info(body.error ?? m.music_noReleases());
+			}
+		} catch (err) {
+			toasts.error(err instanceof Error ? err.message : m.music_searchFailed());
+		}
+	}
+
+	function albumTitle(id: string): string {
+		return albums.find((album) => album.id === id)?.title ?? '';
+	}
+
+	function openAlbumSearch(id: string) {
+		void goto(`/library/music/${id}?search=1`);
+	}
+
 	async function searchDiscography(id: string) {
 		for (;;) {
 			const response = await fetch(`/api/music/artists/${id}/search`, {
@@ -668,6 +691,8 @@
 							onSelectChange={selection.toggle}
 							columnLabels={{ quality: m.music_typeLabel(), size: m.music_tracksLabel() }}
 							onMonitorToggle={isAdminUser ? toggleAlbumMonitored : undefined}
+							onAutoGrab={isAdminUser ? searchAlbum : undefined}
+							onManualGrab={isAdminUser ? openAlbumSearch : undefined}
 							onDelete={isAdminUser ? removeAlbum : undefined}
 						/>
 					{/if}
@@ -774,6 +799,8 @@
 							onSelectChange={selection.toggle}
 							columnLabels={{ quality: m.music_typeLabel(), size: m.music_tracksLabel() }}
 							onMonitorToggle={isAdminUser ? toggleAlbumMonitored : undefined}
+							onAutoGrab={isAdminUser ? searchAlbum : undefined}
+							onManualGrab={isAdminUser ? openAlbumSearch : undefined}
 							onDelete={isAdminUser ? removeAlbum : undefined}
 						/>
 					{/if}

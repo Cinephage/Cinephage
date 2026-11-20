@@ -1,5 +1,17 @@
 <script lang="ts">
-	import { Disc3, Download, ExternalLink, Eye, EyeOff, Search, Settings, Trash2, Zap } from '@lucide/svelte';
+	import {
+		Disc3,
+		Download,
+		ExternalLink,
+		Eye,
+		EyeOff,
+		RefreshCw,
+		Replace,
+		Search,
+		Settings,
+		Trash2,
+		Zap
+	} from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import { resolvePath } from '#lib/utils/routing.js';
 	import StatusIndicator from '#lib/components/library/StatusIndicator.svelte';
@@ -30,6 +42,9 @@
 		onImport?: (() => void) | null;
 		onEdit?: (() => void) | null;
 		onRemove?: (() => void) | null;
+		onRefresh?: (() => void) | null;
+		refreshing?: boolean;
+		onChangeMatch?: (() => void) | null;
 		/** Page-level controls that ride in the same bars (Discover's add button). */
 		extraActions?: DetailAction[];
 	};
@@ -51,6 +66,9 @@
 		onImport = null,
 		onEdit = null,
 		onRemove = null,
+		onRefresh = null,
+		refreshing = false,
+		onChangeMatch = null,
 		extraActions = []
 	}: Props = $props();
 
@@ -135,6 +153,27 @@
 		...(sourceUrl
 			? [{ key: 'musicbrainz', icon: ExternalLink, label: 'MusicBrainz', href: sourceUrl }]
 			: []),
+		...(onRefresh
+			? [
+					{
+						key: 'refresh',
+						icon: RefreshCw,
+						label: refreshing ? m.common_loading() : m.music_refreshMetadata(),
+						busy: refreshing,
+						onSelect: onRefresh
+					}
+				]
+			: []),
+		...(onChangeMatch
+			? [
+					{
+						key: 'change-match',
+						icon: Replace,
+						label: m.library_changeMatch_menuLabel(),
+						onSelect: onChangeMatch
+					}
+				]
+			: []),
 		...(onEdit ? [{ key: 'edit', icon: Settings, label: m.action_edit(), onSelect: onEdit }] : []),
 		...(onRemove
 			? [
@@ -151,12 +190,7 @@
 </script>
 
 <div class="flex flex-col gap-4">
-	<DetailActionBar
-		backHref={backHref ?? '/library/music'}
-		backLabel={backLabel}
-		{actions}
-		{menu}
-	/>
+	<DetailActionBar backHref={backHref ?? '/library/music'} {backLabel} {actions} {menu} />
 
 	<!-- Hero card -->
 	<div class="relative w-full overflow-hidden rounded-xl bg-base-200 shadow-xl">
@@ -171,9 +205,11 @@
 					onerror={() => (coverFailed = true)}
 				/>
 			{/if}
-			<div class="absolute inset-0 bg-linear-to-t from-base-200 via-base-200/60 to-transparent"
+			<div
+				class="absolute inset-0 bg-linear-to-t from-base-200 via-base-200/60 to-transparent"
 			></div>
-			<div class="absolute inset-0 bg-linear-to-r from-base-200 via-base-200/60 to-transparent"
+			<div
+				class="absolute inset-0 bg-linear-to-r from-base-200 via-base-200/60 to-transparent"
 			></div>
 		</div>
 
@@ -223,7 +259,9 @@
 								<span class="font-normal text-base-content/60">({album.year})</span>
 							{/if}
 						</h1>
-						<div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-base-content/70">
+						<div
+							class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-base-content/70"
+						>
 							{#each stats as fact, index (fact)}
 								{#if index > 0}<span class="hidden sm:inline">•</span>{/if}
 								<span>{fact}</span>
@@ -282,12 +320,12 @@
 								/>
 							{/if}
 							{#if album.hasFile && album.trackCount}
-								<span class="badge badge-sm badge-outline">
+								<span class="badge badge-outline badge-sm">
 									{m.music_tracksShort({ count: album.trackCount })}
 								</span>
 							{/if}
 							{#if album.streamSource}
-								<span class="badge badge-sm badge-outline">
+								<span class="badge badge-outline badge-sm">
 									{m.library_fileCard_streaming()}
 								</span>
 							{/if}
@@ -310,7 +348,9 @@
 				</div>
 
 				<!-- Right metadata panel: the movie hero's, with edition facts. -->
-				<div class="hidden w-56 shrink-0 rounded-lg bg-base-100/30 p-4 backdrop-blur-sm md:block lg:w-64 lg:p-5">
+				<div
+					class="hidden w-56 shrink-0 rounded-lg bg-base-100/30 p-4 backdrop-blur-sm md:block lg:w-64 lg:p-5"
+				>
 					<div class="grid grid-cols-2 gap-x-4 gap-y-3">
 						{#if album.status}
 							<div class="col-span-2">

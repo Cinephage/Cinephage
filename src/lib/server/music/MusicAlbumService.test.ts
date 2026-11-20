@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import * as schema from '#lib/server/db/schema.js';
 import {
@@ -8,6 +8,7 @@ import {
 	type TestDatabase
 } from '../../../test/db-helper.js';
 import { musicAlbumService } from './MusicAlbumService.js';
+import { musicBrainz } from './musicbrainz.js';
 import type { MusicRelease, MusicReleaseGroup } from './types.js';
 
 const testDb: TestDatabase = createTestDb();
@@ -171,7 +172,10 @@ describe('MusicAlbumService.addAlbum', () => {
 
 describe('MusicAlbumService.updateMetadata', () => {
 	it('edits and clears the release facts the page shows', () => {
-		const { albumId } = musicAlbumService.addAlbum({ releaseGroup: RELEASE_GROUP, release: RELEASE });
+		const { albumId } = musicAlbumService.addAlbum({
+			releaseGroup: RELEASE_GROUP,
+			release: RELEASE
+		});
 
 		expect(
 			musicAlbumService.updateMetadata(albumId, {
@@ -194,7 +198,10 @@ describe('MusicAlbumService.updateMetadata', () => {
 	});
 
 	it('rejects an empty title and reports a no-op patch', () => {
-		const { albumId } = musicAlbumService.addAlbum({ releaseGroup: RELEASE_GROUP, release: RELEASE });
+		const { albumId } = musicAlbumService.addAlbum({
+			releaseGroup: RELEASE_GROUP,
+			release: RELEASE
+		});
 
 		expect(() => musicAlbumService.updateMetadata(albumId, { title: '   ' })).toThrow(/empty/i);
 		expect(musicAlbumService.updateMetadata(albumId, {})).toBe(false);
@@ -203,7 +210,10 @@ describe('MusicAlbumService.updateMetadata', () => {
 
 describe('MusicAlbumService.setQualityProfile', () => {
 	it('stores, clears and rejects unknown profile ids', () => {
-		const { albumId } = musicAlbumService.addAlbum({ releaseGroup: RELEASE_GROUP, release: RELEASE });
+		const { albumId } = musicAlbumService.addAlbum({
+			releaseGroup: RELEASE_GROUP,
+			release: RELEASE
+		});
 		testDb.db
 			.insert(schema.scoringProfiles)
 			.values({
@@ -220,5 +230,118 @@ describe('MusicAlbumService.setQualityProfile', () => {
 		expect(musicAlbumService.setQualityProfile(albumId, null)).toBe(true);
 		expect(musicAlbumService.getAlbum(albumId)!.qualityProfileId).toBeNull();
 		expect(() => musicAlbumService.setQualityProfile(albumId, 'nope')).toThrow(/Unknown/);
+	});
+});
+
+describe('MusicAlbumService.refreshAlbum', () => {
+	it('writes the provider facts back and keeps track ids for the same positions', async () => {
+		const { albumId } = musicAlbumService.addAlbum({
+			releaseGroup: RELEASE_GROUP,
+			release: RELEASE
+		});
+		const before = testDb.db
+			.select()
+			.from(schema.tracks)
+			.where(eq(schema.tracks.albumId, albumId))
+			.all();
+
+		vi.spyOn(musicBrainz, 'getReleaseGroupWithReleases').mockResolvedValue({
+			group: { ...RELEASE_GROUP, title: 'Discovery (Remastered)' },
+			releases: [
+				{
+					mbid: RELEASE.mbid,
+					title: 'Discovery',
+					status: 'Official',
+					date: '2001-03-10',
+					year: 2001,
+					country: 'JP',
+					trackCount: 2
+				}
+			]
+		});
+		vi.spyOn(musicBrainz, 'getRelease').mockResolvedValue({
+			...RELEASE,
+			tracks: [{ ...RELEASE.tracks[0], title: 'One More Time (Remastered)' }, RELEASE.tracks[1]]
+		});
+
+		const album = await musicAlbumService.refreshAlbum(albumId);
+
+		expect(album.title).toBe('Discovery (Remastered)');
+		expect(album.tracks.map((track) => track.id)).toEqual(before.map((track) => track.id));
+		expect(album.tracks[0].title).toBe('One More Time (Remastered)');
+	});
+});
+
+describe('MusicAlbumService.rematchAlbum', () => {
+	afterEach(() => vi.restoreAllMocks());
+
+	it('refuses a release group that belongs to another artist', async () => {
+		const { albumId } = musicAlbumService.addAlbum({
+			releaseGroup: RELEASE_GROUP,
+			release: RELEASE
+		});
+		vi.spyOn(musicBrainz, 'getReleaseGroupWithReleases').mockResolvedValue({
+			group: {
+				...RELEASE_GROUP,
+				mbid: 'rg-other',
+				artist: { mbid: 'artist-other', name: 'Another Artist' }
+			},
+			releases: []
+		});
+
+		await expect(musicAlbumService.rematchAlbum(albumId, 'rg-other')).rejects.toThrow(
+			/belongs to Another Artist/
+		);
+	});
+
+	it('replaces the identity and keeps a track that has a file', async () => {
+		const { albumId } = musicAlbumService.addAlbum({
+			releaseGroup: RELEASE_GROUP,
+			release: RELEASE
+		});
+		testDb.db
+			.update(schema.tracks)
+			.set({ hasFile: true })
+			.where(eq(schema.tracks.trackNumber, 1))
+			.run();
+
+		vi.spyOn(musicBrainz, 'getReleaseGroupWithReleases').mockResolvedValue({
+			group: { ...RELEASE_GROUP, mbid: 'rg-new', title: 'The New Album', year: 2020 },
+			releases: [
+				{
+					mbid: 'rel-new',
+					title: 'The New Album',
+					status: 'Official',
+					date: '2020-01-01',
+					year: 2020,
+					country: 'US',
+					trackCount: 1
+				}
+			]
+		});
+		vi.spyOn(musicBrainz, 'getRelease').mockResolvedValue({
+			...RELEASE,
+			mbid: 'rel-new',
+			title: 'The New Album',
+			year: 2020,
+			country: 'US',
+			trackCount: 1,
+			tracks: [{ ...RELEASE.tracks[1], title: 'Aerodynamic (New)' }]
+		});
+
+		const album = await musicAlbumService.rematchAlbum(albumId, 'rg-new');
+
+		expect(album).toMatchObject({
+			mbid: 'rg-new',
+			releaseMbid: 'rel-new',
+			title: 'The New Album',
+			year: 2020
+		});
+		expect(album.tracks).toHaveLength(2);
+		expect(album.tracks.find((track) => track.trackNumber === 1)).toMatchObject({
+			title: 'One More Time',
+			hasFile: true
+		});
+		expect(album.tracks.find((track) => track.trackNumber === 2)?.title).toBe('Aerodynamic (New)');
 	});
 });

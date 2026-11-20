@@ -1,7 +1,14 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
 	import type { PageData } from './$types.js';
-	import { Download, FileAudio, HardDriveDownload, LoaderCircle, Search, Trash2 } from '@lucide/svelte';
+	import {
+		Download,
+		FileAudio,
+		HardDriveDownload,
+		LoaderCircle,
+		Search,
+		Trash2
+	} from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import { musicQualityLabel } from '#lib/components/music/release-quality.js';
 	import AlbumHero from '#lib/components/music/AlbumHero.svelte';
@@ -10,6 +17,7 @@
 	import { formatBytes } from '#lib/utils/format.js';
 	import TrackList from '#lib/components/music/TrackList.svelte';
 	import TrackSearchModal from '#lib/components/music/TrackSearchModal.svelte';
+	import MusicMatchModal from '#lib/components/music/MusicMatchModal.svelte';
 	import { ConfirmationModal, ModalWrapper } from '#lib/components/ui/modal/index.js';
 	import Panel from '#lib/components/ui/Panel.svelte';
 	import FactRow from '#lib/components/ui/FactRow.svelte';
@@ -62,6 +70,16 @@
 	let releaseError = $state<string | null>(null);
 	let searched = $state(false);
 
+	// The library list's manual-search button lands here with ?search=1: run the
+	// interactive release search once, the way the movie row's manual action does.
+	let autoSearchHandled = false;
+	$effect(() => {
+		if (autoSearchHandled) return;
+		if (new URLSearchParams(window.location.search).get('search') !== '1') return;
+		autoSearchHandled = true;
+		void findReleases();
+	});
+
 	let trackFilter = $state('');
 	const visibleTracks = $derived.by(() => {
 		const needle = trackFilter.trim().toLowerCase();
@@ -74,6 +92,8 @@
 	let importing = $state(false);
 	let deleteOpen = $state(false);
 	let deleting = $state(false);
+	let refreshing = $state(false);
+	let matchOpen = $state(false);
 
 	function gib(bytes: number | null): string {
 		if (!bytes) return '–';
@@ -148,6 +168,24 @@
 			toasts.error(err instanceof Error ? err.message : m.common_failedToSave());
 		} finally {
 			editSaving = false;
+		}
+	}
+
+	async function refreshAlbum() {
+		if (refreshing) return;
+		refreshing = true;
+		try {
+			const response = await fetch(`/api/music/albums/${album.id}/refresh`, { method: 'POST' });
+			const body = (await response.json().catch(() => ({}))) as { error?: string };
+			if (!response.ok) throw new Error(body.error ?? m.music_refreshFailed());
+			toasts.success(m.music_refreshSuccess());
+			await invalidateAll();
+		} catch (error) {
+			toasts.error(m.music_refreshFailed(), {
+				description: error instanceof Error ? error.message : undefined
+			});
+		} finally {
+			refreshing = false;
 		}
 	}
 
@@ -313,6 +351,9 @@
 		onImport={() => (importOpen = true)}
 		onEdit={() => (editOpen = true)}
 		onRemove={() => (deleteOpen = true)}
+		onRefresh={refreshAlbum}
+		{refreshing}
+		onChangeMatch={() => (matchOpen = true)}
 	/>
 
 	<!-- Main content: the movie detail page's grid, with tracks for files. -->
@@ -469,7 +510,6 @@
 						</div>
 					{/if}
 				</div>
-
 			</div>
 			<!-- Files: the audio half of the movie page's file management block. -->
 			{#if album.files.length > 0}
@@ -486,7 +526,9 @@
 					<div class="px-4 pb-4 md:px-6">
 						<div class="overflow-hidden rounded-lg bg-base-100">
 							{#each album.files as file (file.id)}
-								<div class="flex items-center gap-3 border-b border-base-300/60 px-3 py-2 last:border-b-0">
+								<div
+									class="flex items-center gap-3 border-b border-base-300/60 px-3 py-2 last:border-b-0"
+								>
 									<div class="min-w-0 flex-1">
 										<p class="truncate text-sm font-medium">
 											{file.trackTitle ?? file.relativePath}
@@ -506,7 +548,7 @@
 										{formatBytes(file.sizeBytes)}
 									</span>
 									<button
-										class="btn btn-ghost btn-xs btn-square text-error"
+										class="btn btn-square btn-ghost text-error btn-xs"
 										title={m.common_delete()}
 										aria-label={m.common_delete()}
 										onclick={() =>
@@ -523,9 +565,9 @@
 					</div>
 				</div>
 			{/if}
-			</div>
+		</div>
 
-			<!-- Sidebar: the same details grammar as the movie and series pages. -->
+		<!-- Sidebar: the same details grammar as the movie and series pages. -->
 		<div class="min-w-0 space-y-4 md:space-y-6">
 			<Panel title={m.common_details()}>
 				<dl class="space-y-2 text-sm">
@@ -536,7 +578,7 @@
 					</FactRow>
 					<FactRow label={m.music_qualityProfile()}>
 						<select
-							class="select select-xs select-bordered"
+							class="select-bordered select select-xs"
 							value={activeProfile ?? ''}
 							disabled={profileBusy}
 							onchange={(event) => saveQualityProfile(event.currentTarget.value || null)}
@@ -629,6 +671,18 @@
 		</button>
 	</form>
 </ModalWrapper>
+
+<MusicMatchModal
+	open={matchOpen}
+	kind="album"
+	mediaId={album.id}
+	currentTitle={album.title}
+	artistName={album.artistName}
+	onClose={() => (matchOpen = false)}
+	onSuccess={async () => {
+		await invalidateAll();
+	}}
+/>
 
 <AlbumEditModal
 	open={editOpen}

@@ -8,6 +8,7 @@
 	import TrackTable from '#lib/components/music/TrackTable.svelte';
 	import TrackSearchModal from '#lib/components/music/TrackSearchModal.svelte';
 	import ArtistReleasesModal from '#lib/components/music/ArtistReleasesModal.svelte';
+	import MusicMatchModal from '#lib/components/music/MusicMatchModal.svelte';
 	import type { AlbumWithTracks } from '#lib/components/music/music-card.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -25,6 +26,8 @@
 	);
 	const coverAlbum = $derived(albums.find((album) => album.hasCover) ?? null);
 	let releasesOpen = $state(false);
+	let refreshing = $state(false);
+	let matchOpen = $state(false);
 
 	/**
 	 * Discography grouped the way a series page groups seasons: the primary type
@@ -124,6 +127,24 @@
 			toasts.error(err instanceof Error ? err.message : m.common_failedToSave());
 		} finally {
 			savingEdit = false;
+		}
+	}
+
+	async function refreshArtist() {
+		if (refreshing) return;
+		refreshing = true;
+		try {
+			const response = await fetch(`/api/music/artists/${artist.id}/refresh`, { method: 'POST' });
+			const body = (await response.json().catch(() => ({}))) as { error?: string };
+			if (!response.ok) throw new Error(body.error ?? m.music_refreshFailed());
+			toasts.success(m.music_refreshSuccess());
+			await invalidateAll();
+		} catch (error) {
+			toasts.error(m.music_refreshFailed(), {
+				description: error instanceof Error ? error.message : undefined
+			});
+		} finally {
+			refreshing = false;
 		}
 	}
 
@@ -392,6 +413,9 @@
 		{addingMissing}
 		onEdit={openEdit}
 		onRemove={() => (deleteOpen = true)}
+		onRefresh={refreshArtist}
+		{refreshing}
+		onChangeMatch={() => (matchOpen = true)}
 	/>
 
 	<!-- Main content: the series page's Seasons panel plus its sidebar. -->
@@ -482,7 +506,7 @@
 					{/if}
 					<FactRow label={m.music_qualityProfile()}>
 						<select
-							class="select select-xs select-bordered"
+							class="select-bordered select select-xs"
 							value={activeProfile ?? ''}
 							disabled={profileBusy}
 							onchange={(event) => saveProfile(event.currentTarget.value || null)}
@@ -528,7 +552,7 @@
 		</label>
 		<label class="form-control">
 			<span class="mb-1 text-xs text-base-content/50 uppercase">{m.common_qualityProfile()}</span>
-			<select class="select w-full select-sm select-bordered" bind:value={editQualityProfileId}>
+			<select class="select-bordered select w-full select-sm" bind:value={editQualityProfileId}>
 				<option value="">
 					{data.defaultProfileName
 						? m.music_inheritDefault({ name: data.defaultProfileName })
@@ -581,6 +605,17 @@
 	loading={removingAlbum}
 	onConfirm={removeAlbumRow}
 	onCancel={() => (removeAlbumTarget = null)}
+/>
+
+<MusicMatchModal
+	open={matchOpen}
+	kind="artist"
+	mediaId={artist.id}
+	currentTitle={artist.name}
+	onClose={() => (matchOpen = false)}
+	onSuccess={async () => {
+		await invalidateAll();
+	}}
 />
 
 <ConfirmationModal

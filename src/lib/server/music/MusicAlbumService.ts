@@ -1,11 +1,12 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { db } from '#lib/server/db/index.js';
 import { albums, artists, mediaItems, trackFiles, tracks } from '#lib/server/db/schema.js';
 import { createChildLogger } from '#lib/logging/index.js';
-import { ValidationError } from '#lib/errors/index.js';
+import { NotFoundError, ValidationError } from '#lib/errors/index.js';
 import { musicProfileService } from './MusicProfileService.js';
-import type { MusicArtistRef, MusicRelease, MusicReleaseGroup } from './types.js';
+import { musicBrainz, pickPrimaryRelease } from './musicbrainz.js';
+import type { MusicArtistRef, MusicRelease, MusicReleaseGroup, MusicTrack } from './types.js';
 
 const logger = createChildLogger({ module: 'MusicAlbumService', logDomain: 'system' });
 
@@ -346,6 +347,216 @@ export class MusicAlbumService {
 	}
 
 	/**
+	 * Re-read the release group and the chosen edition from MusicBrainz and
+	 * write their facts back. The tracklist is reconciled by disc/track
+	 * position so existing rows (and the files attached to them) keep their
+	 * ids; an edition that shrank loses only rows with no file.
+	 */
+	async refreshAlbum(albumId: string): Promise<AlbumDetail> {
+		const row = db
+			.select({ id: albums.id, mbid: albums.mbid, releaseMbid: albums.releaseMbid })
+			.from(albums)
+			.where(eq(albums.id, albumId))
+			.get();
+		if (!row) throw new NotFoundError('Album', albumId);
+		if (!row.mbid) throw new ValidationError('This album has no MusicBrainz match to refresh');
+
+		const { group, releases } = await musicBrainz.getReleaseGroupWithReleases(row.mbid);
+		const chosen =
+			releases.find((release) => release.mbid === row.releaseMbid) ?? pickPrimaryRelease(releases);
+		if (!chosen) throw new ValidationError('MusicBrainz has no editions for this album');
+		const release = await musicBrainz.getRelease(chosen.mbid);
+
+		this.writeReleaseMetadata(albumId, group, release);
+		logger.info({ albumId, releaseMbid: release.mbid }, '[MusicAlbum] album refreshed');
+		return this.getAlbum(albumId)!;
+	}
+
+	/**
+	 * Point the album at a different release group. The row and its files stay;
+	 * the new group's identity and its primary edition's tracklist replace the
+	 * old facts. The group must belong to this album's artist — moving an album
+	 * between artists is an add, not a re-match.
+	 */
+	async rematchAlbum(albumId: string, releaseGroupMbid: string): Promise<AlbumDetail> {
+		const row = db
+			.select({
+				id: albums.id,
+				artistId: albums.artistId,
+				artistMbid: artists.mbid,
+				mbid: albums.mbid
+			})
+			.from(albums)
+			.innerJoin(artists, eq(albums.artistId, artists.id))
+			.where(eq(albums.id, albumId))
+			.get();
+		if (!row) throw new NotFoundError('Album', albumId);
+		if (row.mbid === releaseGroupMbid) {
+			throw new ValidationError("That is already this album's match");
+		}
+
+		const { group, releases } = await musicBrainz.getReleaseGroupWithReleases(releaseGroupMbid);
+		if (row.artistMbid && group.artist.mbid !== row.artistMbid) {
+			throw new ValidationError(
+				`That release group belongs to ${group.artist.name}, not this album's artist`
+			);
+		}
+		const chosen = pickPrimaryRelease(releases);
+		if (!chosen) throw new ValidationError('That release group has no editions');
+		const release = await musicBrainz.getRelease(chosen.mbid);
+
+		const clash = db
+			.select({ id: albums.id })
+			.from(albums)
+			.where(and(eq(albums.mbid, group.mbid), eq(albums.artistId, row.artistId)))
+			.get();
+		if (clash && clash.id !== albumId) {
+			throw new ValidationError('Another album in this library already has that match');
+		}
+
+		this.writeReleaseMetadata(albumId, group, release, { resetCover: true });
+		logger.info(
+			{ albumId, mbid: group.mbid, releaseMbid: release.mbid },
+			'[MusicAlbum] album re-matched'
+		);
+		return this.getAlbum(albumId)!;
+	}
+
+	/** Write the group/edition facts and reconcile the tracklist in one place. */
+	private writeReleaseMetadata(
+		albumId: string,
+		group: MusicReleaseGroup,
+		release: MusicRelease,
+		options: { resetCover?: boolean } = {}
+	): void {
+		const row = db
+			.select({ mediaItemId: albums.mediaItemId })
+			.from(albums)
+			.where(eq(albums.id, albumId))
+			.get();
+		if (!row) throw new NotFoundError('Album', albumId);
+
+		db.transaction((tx) => {
+			tx.update(albums)
+				.set({
+					mbid: group.mbid,
+					releaseMbid: release.mbid,
+					title: group.title,
+					year: group.year ?? release.year ?? null,
+					primaryType: group.primaryType ?? null,
+					secondaryTypes: group.secondaryTypes,
+					status: release.status ?? null,
+					labelName: release.labelName ?? null,
+					catalogNumber: release.catalogNumber ?? null,
+					barcode: release.barcode ?? null,
+					country: release.country ?? null,
+					mediaCount: release.mediaCount,
+					trackCount: release.trackCount,
+					duration: release.duration,
+					...(options.resetCover ? { coverPath: null } : {}),
+					refreshedAt: new Date().toISOString()
+				})
+				.where(eq(albums.id, albumId))
+				.run();
+
+			const identity = tx
+				.select({ providerRefs: mediaItems.providerRefs })
+				.from(mediaItems)
+				.where(eq(mediaItems.id, row.mediaItemId))
+				.get();
+			tx.update(mediaItems)
+				.set({
+					title: group.title,
+					year: group.year ?? release.year ?? null,
+					providerRefs: { ...(identity?.providerRefs ?? {}), musicbrainz: group.mbid }
+				})
+				.where(eq(mediaItems.id, row.mediaItemId))
+				.run();
+		});
+
+		this.reconcileTracklist(albumId, release.tracks);
+	}
+
+	/**
+	 * Keep track ids stable across a re-read: the same disc/track position is
+	 * the same row, so `track_files.track_id` survives. Rows the new edition no
+	 * longer has are deleted only when nothing on disk points at them.
+	 */
+	private reconcileTracklist(albumId: string, nextTracks: MusicTrack[]): void {
+		const existing = db
+			.select({
+				id: tracks.id,
+				discNumber: tracks.discNumber,
+				trackNumber: tracks.trackNumber,
+				hasFile: tracks.hasFile
+			})
+			.from(tracks)
+			.where(eq(tracks.albumId, albumId))
+			.all();
+		const byPosition = new Map(
+			existing.map((track) => [`${track.discNumber ?? 1}:${track.trackNumber ?? 0}`, track])
+		);
+		const kept = new Set<string>();
+
+		db.transaction((tx) => {
+			for (const track of nextTracks) {
+				const match = byPosition.get(`${track.discNumber}:${track.trackNumber ?? 0}`);
+				if (match) {
+					kept.add(match.id);
+					tx.update(tracks)
+						.set({
+							recordingMbid: track.recordingMbid ?? null,
+							title: track.title,
+							artistCredit: track.artistCredit ?? null,
+							position: track.position,
+							duration: track.duration ?? null
+						})
+						.where(eq(tracks.id, match.id))
+						.run();
+					continue;
+				}
+				tx.insert(tracks)
+					.values({
+						albumId,
+						recordingMbid: track.recordingMbid ?? null,
+						title: track.title,
+						artistCredit: track.artistCredit ?? null,
+						discNumber: track.discNumber,
+						trackNumber: track.trackNumber,
+						position: track.position,
+						duration: track.duration ?? null
+					})
+					.run();
+			}
+
+			const leftovers = existing.filter((track) => !kept.has(track.id));
+			if (leftovers.length === 0) return;
+			const referenced = new Set(
+				tx
+					.select({ trackId: trackFiles.trackId })
+					.from(trackFiles)
+					.where(
+						inArray(
+							trackFiles.trackId,
+							leftovers.map((track) => track.id)
+						)
+					)
+					.all()
+					.flatMap((file) => (file.trackId ? [file.trackId] : []))
+			);
+			for (const leftover of leftovers) {
+				if (leftover.hasFile || referenced.has(leftover.id)) continue;
+				tx.delete(tracks).where(eq(tracks.id, leftover.id)).run();
+			}
+		});
+
+		logger.info(
+			{ albumId, tracks: nextTracks.length, kept: kept.size },
+			'[MusicAlbum] tracklist reconciled'
+		);
+	}
+
+	/**
 	 * Remove an album and its tracklist. The `media_items` identity row is
 	 * deleted with it — that row exists only to carry this album's cross-cutting
 	 * links, and leaving it behind would strand them on a subject that no longer
@@ -372,7 +583,9 @@ export class MusicAlbumService {
 	 * Albums for the library list, artist-major then chronological. `artistId`
 	 * narrows it to one artist's discography for the artist page.
 	 */
-	listAlbums(options: { libraryId?: string | null; artistId?: string | null } = {}): AlbumSummary[] {
+	listAlbums(
+		options: { libraryId?: string | null; artistId?: string | null } = {}
+	): AlbumSummary[] {
 		const base = db
 			.select({
 				id: albums.id,

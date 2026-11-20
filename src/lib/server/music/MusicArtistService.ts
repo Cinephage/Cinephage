@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { db } from '#lib/server/db/index.js';
 import { albums, artists, mediaItems } from '#lib/server/db/schema.js';
 import { createChildLogger } from '#lib/logging/index.js';
+import { NotFoundError, ValidationError } from '#lib/errors/index.js';
 import { musicBrainz, MusicBrainzError, pickPrimaryRelease } from './musicbrainz.js';
 import {
 	musicAlbumService,
@@ -153,13 +154,97 @@ export class MusicArtistService {
 	}
 
 	/**
+	 * Re-read the artist from MusicBrainz. Hand-edited names and sort names are
+	 * replaced, which is the point of a refresh: the provider is the source.
+	 */
+	async refreshArtist(artistId: string): Promise<ArtistRecord> {
+		const row = db
+			.select({ id: artists.id, mbid: artists.mbid })
+			.from(artists)
+			.where(eq(artists.id, artistId))
+			.get();
+		if (!row) throw new NotFoundError('Artist', artistId);
+		if (!row.mbid) throw new ValidationError('This artist has no MusicBrainz match to refresh');
+
+		const detail = await musicBrainz.getArtist(row.mbid);
+		db.update(artists)
+			.set({
+				name: detail.name,
+				sortName: detail.sortName ?? null,
+				disambiguation: detail.disambiguation ?? null,
+				artistType: detail.type ?? null,
+				country: detail.country ?? null,
+				genres: detail.genres,
+				refreshedAt: new Date().toISOString()
+			})
+			.where(eq(artists.id, artistId))
+			.run();
+
+		logger.info({ artistId, mbid: row.mbid }, '[MusicArtist] artist refreshed');
+		return this.getArtist(artistId)!;
+	}
+
+	/**
+	 * Point the artist at a different MusicBrainz id. Albums already attached
+	 * stay attached and keep their own release-group matches: re-matching an
+	 * artist changes the artist identity, not the discography.
+	 */
+	async rematchArtist(
+		artistId: string,
+		mbid: string
+	): Promise<{ artist: ArtistRecord; albums: number }> {
+		const row = db
+			.select({ id: artists.id, mbid: artists.mbid })
+			.from(artists)
+			.where(eq(artists.id, artistId))
+			.get();
+		if (!row) throw new NotFoundError('Artist', artistId);
+		if (row.mbid === mbid) throw new ValidationError("That is already this artist's match");
+
+		const clash = db.select({ id: artists.id }).from(artists).where(eq(artists.mbid, mbid)).get();
+		if (clash && clash.id !== artistId) {
+			throw new ValidationError('Another artist in this library already has that match');
+		}
+
+		const detail = await musicBrainz.getArtist(mbid);
+		db.update(artists)
+			.set({
+				mbid,
+				name: detail.name,
+				sortName: detail.sortName ?? null,
+				disambiguation: detail.disambiguation ?? null,
+				artistType: detail.type ?? null,
+				country: detail.country ?? null,
+				genres: detail.genres,
+				refreshedAt: new Date().toISOString()
+			})
+			.where(eq(artists.id, artistId))
+			.run();
+
+		const attached = db
+			.select({ id: albums.id })
+			.from(albums)
+			.where(eq(albums.artistId, artistId))
+			.all();
+		logger.info(
+			{ artistId, mbid, albums: attached.length },
+			'[MusicArtist] artist re-matched; attached albums left untouched'
+		);
+		return { artist: this.getArtist(artistId)!, albums: attached.length };
+	}
+
+	/**
 	 * Remove an artist and the albums under it. `albums` cascades on the artist
 	 * foreign key, but each album's `media_items` identity row does not — those
 	 * are deleted explicitly, the same way the single-album path does it. Files
 	 * on disk are never touched.
 	 */
 	deleteArtist(artistId: string): boolean {
-		const artist = db.select({ id: artists.id }).from(artists).where(eq(artists.id, artistId)).get();
+		const artist = db
+			.select({ id: artists.id })
+			.from(artists)
+			.where(eq(artists.id, artistId))
+			.get();
 		if (!artist) return false;
 
 		const owned = db
