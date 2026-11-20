@@ -13,7 +13,7 @@ export type RenameStatus = 'will_change' | 'already_correct' | 'collision' | 'er
  */
 export interface RenamePreviewItem {
 	fileId: string;
-	mediaType: 'movie' | 'episode';
+	mediaType: 'movie' | 'episode' | 'music';
 	mediaId: string;
 	mediaTitle: string;
 
@@ -64,7 +64,7 @@ export interface RenameExecuteResult {
 	failed: number;
 	results: Array<{
 		fileId: string;
-		mediaType: 'movie' | 'episode';
+		mediaType: 'movie' | 'episode' | 'music';
 		success: boolean;
 		oldPath: string;
 		newPath: string;

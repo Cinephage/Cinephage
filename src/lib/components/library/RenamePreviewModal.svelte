@@ -1,13 +1,23 @@
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { X, RefreshCw, CheckCircle, AlertTriangle, ArrowRight, Film, Tv } from '@lucide/svelte';
+	import {
+		X,
+		RefreshCw,
+		CheckCircle,
+		AlertTriangle,
+		ArrowRight,
+		Film,
+		Tv,
+		Disc3
+	} from '@lucide/svelte';
 	import type { RenamePreviewResult } from '#lib/server/library/naming/RenamePreviewService.js';
 	import { createFocusTrap, lockBodyScroll } from '#lib/utils/focus.js';
 	import { mediaTypeLabel, type MediaType } from '#lib/utils/media-type.js';
 	import {
 		getMovieRenamePreview,
 		getSeriesRenamePreview,
+		getAlbumRenamePreview,
 		executeRename
 	} from '#lib/api/settings.js';
 	import { chunkFileIds } from '#lib/library/naming/batch-rename.js';
@@ -15,7 +25,7 @@
 
 	interface Props {
 		open: boolean;
-		mediaType: MediaType;
+		mediaType: MediaType | 'music';
 		mediaId: string;
 		mediaTitle: string;
 		onClose: () => void;
@@ -57,7 +67,9 @@
 		try {
 			const previewResult = (mediaType === 'movie'
 				? await getMovieRenamePreview(mediaId)
-				: await getSeriesRenamePreview(mediaId)) as unknown as RenamePreviewResult | null;
+				: mediaType === 'music'
+					? await getAlbumRenamePreview(mediaId)
+					: await getSeriesRenamePreview(mediaId)) as unknown as RenamePreviewResult | null;
 
 			preview = previewResult;
 
@@ -77,7 +89,11 @@
 		refreshing = true;
 		error = null;
 		try {
-			const res = await fetch(`/api/library/movies/${mediaId}/refresh`, { method: 'POST' });
+			const refreshUrl =
+				mediaType === 'music'
+					? `/api/music/albums/${mediaId}/refresh`
+					: `/api/library/movies/${mediaId}/refresh`;
+			const res = await fetch(refreshUrl, { method: 'POST' });
 			if (!res.ok) throw new Error(await res.text());
 			await loadPreview();
 		} catch (e) {
@@ -105,7 +121,10 @@
 			const chunks = chunkFileIds(Array.from(selectedIds));
 
 			for (const chunk of chunks) {
-				const response = await executeRename(chunk, mediaType === 'movie' ? 'movie' : 'episode');
+				const response = await executeRename(
+					chunk,
+					mediaType === 'music' ? 'music' : mediaType === 'movie' ? 'movie' : 'episode'
+				);
 
 				if (!response.success) {
 					throw new Error(response.error || m.library_renamePreview_failedToExecute());
@@ -275,6 +294,8 @@
 				<div class="flex items-center gap-3">
 					{#if mediaType === 'movie'}
 						<Film class="h-5 w-5 text-primary" />
+					{:else if mediaType === 'music'}
+						<Disc3 class="h-5 w-5 text-accent" />
 					{:else}
 						<Tv class="h-5 w-5 text-secondary" />
 					{/if}
@@ -363,7 +384,9 @@
 
 					{#if preview.totalFiles === 0}
 						<div class="py-10 text-center text-base-content/60">
-							{m.library_renamePreview_noFilesFound({ type: mediaTypeLabel(mediaType) })}.
+							{m.library_renamePreview_noFilesFound({
+								type: mediaType === 'music' ? 'album' : mediaTypeLabel(mediaType)
+							})}.
 						</div>
 					{:else if !hasChanges}
 						<div class="py-10 text-center text-base-content/60">

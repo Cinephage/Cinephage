@@ -5,6 +5,7 @@
 		ExternalLink,
 		Eye,
 		EyeOff,
+		FilePenLine,
 		RefreshCw,
 		Replace,
 		Search,
@@ -43,6 +44,7 @@
 		onEdit?: (() => void) | null;
 		onRemove?: (() => void) | null;
 		onRefresh?: (() => void) | null;
+		onRename?: (() => void) | null;
 		refreshing?: boolean;
 		onChangeMatch?: (() => void) | null;
 		/** Page-level controls that ride in the same bars (Discover's add button). */
@@ -67,6 +69,7 @@
 		onEdit = null,
 		onRemove = null,
 		onRefresh = null,
+		onRename = null,
 		refreshing = false,
 		onChangeMatch = null,
 		extraActions = []
@@ -171,6 +174,16 @@
 						icon: Replace,
 						label: m.library_changeMatch_menuLabel(),
 						onSelect: onChangeMatch
+					}
+				]
+			: []),
+		...(onRename
+			? [
+					{
+						key: 'rename',
+						icon: FilePenLine,
+						label: m.library_renamePreview_title(),
+						onSelect: onRename
 					}
 				]
 			: []),

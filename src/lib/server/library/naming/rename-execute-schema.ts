@@ -11,5 +11,5 @@ export const renameExecuteSchema = z.object({
 		.array(z.string())
 		.min(1, 'fileIds array is required and must not be empty')
 		.max(500, 'A maximum of 500 files can be renamed per batch'),
-	mediaType: z.enum(['movie', 'episode', 'mixed']).optional().default('mixed')
+	mediaType: z.enum(['movie', 'episode', 'music', 'mixed']).optional().default('mixed')
 });

@@ -903,6 +903,10 @@ export async function getSeriesRenamePreview(seriesId: string) {
 	return apiGet<RenamePreviewResult>(`/api/rename/preview/series/${seriesId}`);
 }
 
+export async function getAlbumRenamePreview(albumId: string) {
+	return apiGet<RenamePreviewResult>(`/api/rename/preview/album/${albumId}`);
+}
+
 export async function executeRename(fileIds: string[], mediaType?: string) {
 	return apiPost<RenameExecuteResult>('/api/rename/execute', { fileIds, mediaType });
 }

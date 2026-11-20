@@ -18,6 +18,7 @@
 	import TrackList from '#lib/components/music/TrackList.svelte';
 	import TrackSearchModal from '#lib/components/music/TrackSearchModal.svelte';
 	import MusicMatchModal from '#lib/components/music/MusicMatchModal.svelte';
+	import RenamePreviewModal from '#lib/components/library/RenamePreviewModal.svelte';
 	import { ConfirmationModal, ModalWrapper } from '#lib/components/ui/modal/index.js';
 	import Panel from '#lib/components/ui/Panel.svelte';
 	import FactRow from '#lib/components/ui/FactRow.svelte';
@@ -95,6 +96,7 @@
 	let deleteOpen = $state(false);
 	let deleting = $state(false);
 	let refreshing = $state(false);
+	let renameOpen = $state(false);
 	let matchOpen = $state(false);
 
 	function gib(bytes: number | null): string {
@@ -355,6 +357,7 @@
 		onRemove={() => (deleteOpen = true)}
 		onRefresh={refreshAlbum}
 		{refreshing}
+		onRename={() => (renameOpen = true)}
 		onChangeMatch={() => (matchOpen = true)}
 	/>
 
@@ -661,6 +664,15 @@
 		</section>
 	{/if}
 </div>
+
+<RenamePreviewModal
+		open={renameOpen}
+		mediaType="music"
+		mediaId={album.id}
+		mediaTitle={`${album.artistName} - ${album.title}`}
+		onClose={() => (renameOpen = false)}
+		onRenamed={() => invalidateAll()}
+	/>
 
 <TrackSearchModal
 	open={searchTrack !== null}

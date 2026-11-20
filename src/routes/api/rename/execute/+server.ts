@@ -1,5 +1,6 @@
 import type { RequestHandler } from './$types';
 import { RenamePreviewService } from '#lib/server/library/naming/RenamePreviewService.js';
+import { musicRenameService } from '#lib/server/music/MusicRenameService.js';
 import { requireAdmin } from '#lib/server/auth/authorization.js';
 import { parseBody } from '#lib/server/api/validate.js';
 import { ValidationError } from '#lib/errors/index.js';
@@ -34,8 +35,10 @@ export const POST: RequestHandler = async (event) => {
 			'[RenameExecute API] Starting rename execution'
 		);
 
-		const service = new RenamePreviewService();
-		const result = await service.executeRenames(fileIds, mediaType);
+		const result =
+			mediaType === 'music'
+				? await musicRenameService.executeRenames(fileIds)
+				: await new RenamePreviewService().executeRenames(fileIds, mediaType);
 
 		logger.info(
 			{
@@ -48,7 +51,7 @@ export const POST: RequestHandler = async (event) => {
 
 		if (result.succeeded > 0) {
 			libraryMediaEvents.emitLibraryDataChanged({
-				source: mediaType === 'episode' ? 'series' : 'movie',
+				source: mediaType === 'music' ? 'library' : mediaType === 'episode' ? 'series' : 'movie',
 				reason: 'renames-executed'
 			});
 			// Invalidate preview cache: paths have changed on disk and in the DB.

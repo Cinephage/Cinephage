@@ -55,6 +55,18 @@ import type { RenameStreamEvent } from '#lib/library/naming/types.js';
 // Bounds open file handles and OS I/O queue depth.
 const EXECUTE_GROUP_BATCH_SIZE = 20;
 
+/**
+ * This service only ever builds movie and episode items; music renames are
+ * `MusicRenameService`'s job. Widen-safe accessor for the helpers that still
+ * take the narrower video union.
+ */
+function videoMediaType(item: RenamePreviewItem): 'movie' | 'episode' {
+	if (item.mediaType === 'music') {
+		throw new Error('Music renames are handled by MusicRenameService');
+	}
+	return item.mediaType;
+}
+
 function yieldToEventLoop(): Promise<void> {
 	return new Promise<void>((resolve) => setImmediate(resolve));
 }
@@ -789,7 +801,7 @@ export class RenamePreviewService {
 					await this.writeRenameHistory(item, failResult.success, failResult.error);
 					recordRenamingFailure({
 						fileId: item.fileId,
-						fileType: item.mediaType,
+						fileType: videoMediaType(item),
 						sourcePath: item.currentFullPath,
 						intendedPath: item.newFullPath,
 						reason: 'collision',
@@ -813,7 +825,7 @@ export class RenamePreviewService {
 					await this.writeRenameHistory(item, failResult.success, failResult.error);
 					recordRenamingFailure({
 						fileId: item.fileId,
-						fileType: item.mediaType,
+						fileType: videoMediaType(item),
 						sourcePath: item.currentFullPath,
 						intendedPath: item.newFullPath,
 						reason: 'preview_error',
@@ -830,7 +842,7 @@ export class RenamePreviewService {
 				if (!renameResult.success) {
 					recordRenamingFailure({
 						fileId: item.fileId,
-						fileType: item.mediaType,
+						fileType: videoMediaType(item),
 						sourcePath: item.currentFullPath,
 						intendedPath: item.newFullPath,
 						reason: 'io_error',
@@ -1714,7 +1726,7 @@ export class RenamePreviewService {
 			// Carry stem-matched sibling subtitles along on in-place renames so
 			// external subs stay associated with the renamed video.
 			await this.renameSubtitleCompanions(item.currentFullPath, item.newFullPath, warnings, {
-				mediaType: item.mediaType,
+				mediaType: videoMediaType(item),
 				mediaId: item.mediaId
 			});
 
