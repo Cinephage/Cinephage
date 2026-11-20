@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+	bestAlbumMatch,
 	isAudioCategory,
 	rankCandidates,
 	relevantAlbumCandidates,
@@ -86,6 +87,23 @@ describe('trackRelevance', () => {
 		expect(
 			trackRelevance('Chris Webby - Human After All 2005 FLAC', 'Madhouse', 'Asylum')
 		).toBeLessThan(0.5);
+	});
+});
+
+describe('bestAlbumMatch', () => {
+	it('files a release under the album it names', () => {
+		const match = bestAlbumMatch('Chris Webby - Asylum (2026) 320', [
+			{ id: 'a1', title: 'Asylum' },
+			{ id: 'a2', title: 'The White Noise LP' }
+		]);
+
+		expect(match).toMatchObject({ albumId: 'a1', albumTitle: 'Asylum', relevance: 1 });
+	});
+
+	it('drops a release that names none of the artist albums', () => {
+		expect(
+			bestAlbumMatch('Chris Isaak - Silvertone [1985] FLAC', [{ id: 'a1', title: 'Asylum' }])
+		).toBeNull();
 	});
 });
 

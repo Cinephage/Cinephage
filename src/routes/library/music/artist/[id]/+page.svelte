@@ -7,6 +7,7 @@
 	import AlbumAccordion from '#lib/components/music/AlbumAccordion.svelte';
 	import TrackTable from '#lib/components/music/TrackTable.svelte';
 	import TrackSearchModal from '#lib/components/music/TrackSearchModal.svelte';
+	import ArtistReleasesModal from '#lib/components/music/ArtistReleasesModal.svelte';
 	import type { AlbumWithTracks } from '#lib/components/music/music-card.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -18,9 +19,12 @@
 
 	const artist = $derived(data.artist);
 	const albums = $derived<AlbumWithTracks[]>(
-		[...data.albums].sort((a, b) => (a.year ?? 9999) - (b.year ?? 9999) || a.title.localeCompare(b.title))
+		[...data.albums].sort(
+			(a, b) => (a.year ?? 9999) - (b.year ?? 9999) || a.title.localeCompare(b.title)
+		)
 	);
 	const coverAlbum = $derived(albums.find((album) => album.hasCover) ?? null);
+	let releasesOpen = $state(false);
 
 	/**
 	 * Discography grouped the way a series page groups seasons: the primary type
@@ -42,13 +46,7 @@
 	let searchProgress = $state<{ done: number; total: number } | null>(null);
 	let openAlbumId = $state<string | null>(null);
 
-	const needles = $derived(
-		filter
-			.trim()
-			.toLowerCase()
-			.split(/\s+/)
-			.filter(Boolean)
-	);
+	const needles = $derived(filter.trim().toLowerCase().split(/\s+/).filter(Boolean));
 
 	function matches(text: string): boolean {
 		if (needles.length === 0) return true;
@@ -57,7 +55,9 @@
 	}
 
 	const visibleAlbums = $derived(
-		albums.filter((album) => matches(`${album.title} ${album.primaryType ?? ''} ${album.year ?? ''}`))
+		albums.filter((album) =>
+			matches(`${album.title} ${album.primaryType ?? ''} ${album.year ?? ''}`)
+		)
 	);
 
 	/**
@@ -235,7 +235,9 @@
 				}
 				batches += 1;
 				added += body.added ?? 0;
-				toasts.info(m.music_addingArtist({ artist: artist.name, added, remaining: body.remaining ?? 0 }));
+				toasts.info(
+					m.music_addingArtist({ artist: artist.name, added, remaining: body.remaining ?? 0 })
+				);
 				await invalidateAll();
 				if (!body.remaining || batches >= 12) break;
 			}
@@ -339,6 +341,14 @@
 		sourceUrl={artist.mbid ? `https://musicbrainz.org/artist/${artist.mbid}` : null}
 		onMonitorToggle={toggleMonitor}
 		{monitorBusy}
+		extraActions={[
+			{
+				key: 'releases',
+				icon: Search,
+				label: m.music_findReleases(),
+				onSelect: () => (releasesOpen = true)
+			}
+		]}
 		onSearchDiscography={searchDiscography}
 		searching={searchingDiscography}
 		searchProgressText={searchProgress
@@ -385,7 +395,7 @@
 							<h3 class="text-xs font-semibold tracking-wide text-base-content/45 uppercase">
 								{groupLabel(type)}
 							</h3>
-							<span class="badge badge-xs badge-ghost">{groupAlbums.length}</span>
+							<span class="badge badge-ghost badge-xs">{groupAlbums.length}</span>
 						</div>
 						<AlbumAccordion
 							albums={groupAlbums}
@@ -413,7 +423,7 @@
 						<h3 class="text-xs font-semibold tracking-wide text-base-content/45 uppercase">
 							{m.music_tabSongs()}
 						</h3>
-						<span class="badge badge-xs badge-ghost">{visibleSongs.length}</span>
+						<span class="badge badge-ghost badge-xs">{visibleSongs.length}</span>
 					</div>
 					<TrackTable tracks={visibleSongs} showArtist={false} />
 				</section>
@@ -428,7 +438,7 @@
 						<FactRow label={m.music_genreLabel()}>
 							<span class="flex flex-wrap gap-1 sm:justify-end">
 								{#each artist.genres as genre (genre)}
-									<span class="badge badge-sm badge-ghost">{genre}</span>
+									<span class="badge badge-ghost badge-sm">{genre}</span>
 								{/each}
 							</span>
 						</FactRow>
@@ -469,7 +479,11 @@
 			<button type="button" class="btn btn-ghost btn-sm" onclick={() => (editOpen = false)}>
 				{m.action_cancel()}
 			</button>
-			<button type="submit" class="btn btn-primary btn-sm" disabled={savingEdit || !editName.trim()}>
+			<button
+				type="submit"
+				class="btn btn-primary btn-sm"
+				disabled={savingEdit || !editName.trim()}
+			>
 				{#if savingEdit}<LoaderCircle class="h-4 w-4 animate-spin" />{/if}
 				{m.action_save()}
 			</button>
@@ -484,6 +498,13 @@
 		albumId={searchTrack.albumId}
 		albumTitle={searchTrack.albumTitle}
 		onClose={() => (searchTrack = null)}
+	/>
+
+	<ArtistReleasesModal
+		open={releasesOpen}
+		artistId={artist.id}
+		artistName={artist.name}
+		onClose={() => (releasesOpen = false)}
 	/>
 {/if}
 

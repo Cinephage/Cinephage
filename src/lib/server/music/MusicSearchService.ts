@@ -284,6 +284,87 @@ export class MusicSearchService {
 			candidates: rankCandidates(relevant)
 		};
 	}
+
+	/**
+	 * Interactive release search for a whole discography — the music counterpart
+	 * of the multi-season pack search. One query for the artist, then every hit
+	 * is filed under the album it names; hits that name no album of theirs are
+	 * noise and dropped.
+	 */
+	async searchForArtist(
+		artistId: string,
+		options: { limit?: number; profile?: MusicQualityProfile } = {}
+	): Promise<{
+		artistId: string;
+		artist: string;
+		candidates: Array<MusicReleaseCandidate & { albumId: string; albumTitle: string }>;
+	}> {
+		const profile = options.profile ?? DEFAULT_MUSIC_PROFILE;
+		const artistRow = db
+			.select({ name: artists.name })
+			.from(artists)
+			.where(eq(artists.id, artistId))
+			.get();
+		if (!artistRow) throw new NotFoundError('Artist', artistId);
+
+		const albumRows = db
+			.select({ id: albums.id, title: albums.title })
+			.from(albums)
+			.where(eq(albums.artistId, artistId))
+			.all();
+		if (albumRows.length === 0) {
+			return { artistId, artist: artistRow.name, candidates: [] };
+		}
+
+		const manager = await getIndexerManager();
+		const result = await manager.search(
+			{
+				searchType: 'music',
+				query: artistRow.name,
+				artist: artistRow.name,
+				categories: getCategoriesForSearchType('music'),
+				limit: options.limit ?? 60
+			},
+			{ searchSource: 'interactive', timeout: INTERACTIVE_SEARCH_TIMEOUT_MS }
+		);
+
+		const filed: Array<MusicReleaseCandidate & { albumId: string; albumTitle: string }> = [];
+		for (const release of result.releases ?? []) {
+			const match = bestAlbumMatch(release.title, albumRows);
+			if (!match) continue;
+			const [candidate] = toCandidates([release], profile, () => match.relevance);
+			if (candidate)
+				filed.push({ ...candidate, albumId: match.albumId, albumTitle: match.albumTitle });
+		}
+
+		logger.info(
+			{
+				artistId,
+				artist: artistRow.name,
+				albums: albumRows.length,
+				found: (result.releases ?? []).length,
+				kept: filed.length
+			},
+			'[MusicSearch] artist release search'
+		);
+
+		return { artistId, artist: artistRow.name, candidates: rankCandidates(filed) };
+	}
+}
+
+/** The album a release belongs to, if any — the filing rule for a discography search. */
+export function bestAlbumMatch(
+	releaseTitle: string,
+	albums: Array<{ id: string; title: string }>
+): { albumId: string; albumTitle: string; relevance: number } | null {
+	let best: { albumId: string; albumTitle: string; relevance: number } | null = null;
+	for (const album of albums) {
+		const relevance = albumRelevance(releaseTitle, album.title);
+		if (!best || relevance > best.relevance) {
+			best = { albumId: album.id, albumTitle: album.title, relevance };
+		}
+	}
+	return best && best.relevance >= MIN_ALBUM_RELEVANCE ? best : null;
 }
 
 /** One mapping from an indexer hit to what the interactive rows render. */
