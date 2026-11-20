@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { db } from '#lib/server/db/index.js';
 import { albums, artists, mediaItems, trackFiles, tracks } from '#lib/server/db/schema.js';
@@ -51,6 +51,12 @@ export interface AlbumSummary {
 	monitored: boolean | null;
 	coverPath: string | null;
 	path: string | null;
+	/** Library this album belongs to; null for an add that resolved no library. */
+	libraryId: string | null;
+	/** The album's own profile, null when it inherits the artist/library/default. */
+	qualityProfileId: string | null;
+	/** Sum of its files' bytes, 0 when nothing is on disk. */
+	sizeBytes: number;
 	/** True when the cover can be served: a local file, or a MusicBrainz edition to proxy. */
 	hasCover: boolean;
 }
@@ -600,10 +606,14 @@ export class MusicAlbumService {
 				monitored: albums.monitored,
 				coverPath: albums.coverPath,
 				path: albums.path,
-				releaseMbid: albums.releaseMbid
+				releaseMbid: albums.releaseMbid,
+				libraryId: albums.libraryId,
+				qualityProfileId: albums.qualityProfileId,
+				sizeBytes: sql<number>`COALESCE(SUM(${trackFiles.sizeBytes}), 0)`
 			})
 			.from(albums)
-			.innerJoin(artists, eq(albums.artistId, artists.id));
+			.innerJoin(artists, eq(albums.artistId, artists.id))
+			.leftJoin(trackFiles, eq(trackFiles.albumId, albums.id));
 
 		const rows = (
 			options.libraryId || options.artistId
@@ -615,11 +625,13 @@ export class MusicAlbumService {
 					)
 				: base
 		)
+			.groupBy(albums.id)
 			.orderBy(asc(artists.name), asc(albums.year), asc(albums.title))
 			.all();
 
 		return rows.map(({ releaseMbid, ...row }) => ({
 			...row,
+			sizeBytes: Number(row.sizeBytes),
 			hasCover: Boolean(row.coverPath ?? releaseMbid)
 		}));
 	}
@@ -638,6 +650,7 @@ export class MusicAlbumService {
 				hasFile: albums.hasFile,
 				streamSource: albums.streamSource,
 				qualityProfileId: albums.qualityProfileId,
+				libraryId: albums.libraryId,
 				monitored: albums.monitored,
 				coverPath: albums.coverPath,
 				path: albums.path,
@@ -695,6 +708,7 @@ export class MusicAlbumService {
 
 		return {
 			...row,
+			sizeBytes: fileRows.reduce((sum, file) => sum + (file.sizeBytes ?? 0), 0),
 			hasCover: Boolean(row.coverPath ?? row.releaseMbid),
 			tracks: trackRows,
 			files: fileRows

@@ -21,13 +21,27 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const libraries = await getLibraryEntityService().listLibraries({ mediaType: 'music' });
 	const library = libraries.find((entry) => entry.isDefault) ?? libraries[0] ?? null;
-	const libraryId = library?.id ?? null;
 
-	const albums = musicAlbumService.listAlbums({ libraryId });
-	const songs = musicTrackService.listTracks({ libraryId });
+	// The list is every music library, like the movie list. The default library
+	// still supplies the header/root-folder facts and the fallback profile.
+	const albums = musicAlbumService.listAlbums();
+	const songs = musicTrackService.listTracks();
 	const artistRows = musicArtistService.listArtists([
 		...new Set(albums.map((album) => album.artistId))
 	]);
+	const artistProfile = new Map(artistRows.map((artist) => [artist.id, artist.qualityProfileId]));
+	const libraryProfile = new Map(libraries.map((entry) => [entry.id, entry.qualityProfileId]));
+
+	// Filtering by profile has to mean the profile a grab would actually use,
+	// not only an explicit override: album -> artist -> library -> default.
+	const albumsWithProfile = albums.map((album) => ({
+		...album,
+		effectiveProfileId: musicProfileService.resolve(
+			album.qualityProfileId,
+			artistProfile.get(album.artistId) ?? null,
+			libraryProfile.get(album.libraryId ?? '') ?? null
+		).id
+	}));
 
 	const artists: ArtistCardData[] = artistRows.map((artist) => {
 		const owned = albums.filter((album) => album.artistId === artist.id);
@@ -53,9 +67,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 					rootFolderCount: library.rootFolders.length
 				}
 			: null,
-		albums,
+		albums: albumsWithProfile,
 		artists,
 		songs,
+		libraries: libraries.map((entry) => ({
+			id: entry.id,
+			name: entry.name,
+			isDefault: entry.isDefault
+		})),
 		qualityProfiles: musicProfileService.list().map((profile) => ({
 			id: profile.id,
 			name: profile.name,

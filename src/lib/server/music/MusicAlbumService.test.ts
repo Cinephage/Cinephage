@@ -345,3 +345,30 @@ describe('MusicAlbumService.rematchAlbum', () => {
 		expect(album.tracks.find((track) => track.trackNumber === 2)?.title).toBe('Aerodynamic (New)');
 	});
 });
+
+describe('MusicAlbumService.listAlbums', () => {
+	it('carries library, profile and the summed file size for list filters', () => {
+		const added = musicAlbumService.addAlbum({
+			releaseGroup: RELEASE_GROUP,
+			release: RELEASE,
+			libraryId: null,
+			rootFolderId: null,
+			monitored: true,
+			qualityProfileId: null
+		});
+		testDb.db
+			.insert(schema.trackFiles)
+			.values([
+				{ albumId: added.albumId, relativePath: '01.flac', sizeBytes: 100 },
+				{ albumId: added.albumId, relativePath: '02.flac', sizeBytes: 250 }
+			])
+			.run();
+
+		const row = musicAlbumService.listAlbums().find((album) => album.id === added.albumId);
+
+		expect(row).toBeDefined();
+		expect(row?.libraryId).toBeNull();
+		expect(row?.qualityProfileId).toBeNull();
+		expect(row?.sizeBytes).toBe(350);
+	});
+});

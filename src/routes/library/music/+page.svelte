@@ -50,6 +50,8 @@
 	let searchQuery = $state(initial.get('q') ?? '');
 	let fileFilter = $state<FileFilter>((initial.get('file') as FileFilter) ?? 'all');
 	let monitorFilter = $state<MonitorFilter>((initial.get('monitor') as MonitorFilter) ?? 'all');
+	let libraryFilter = $state(initial.get('library') ?? 'all');
+	let qualityFilter = $state(initial.get('quality') ?? 'all');
 	let sortField = $state(initial.get('sort') ?? 'name-asc');
 	let drawerOpen = $state(false);
 	let addOpen = $state(false);
@@ -90,7 +92,9 @@
 					keepMonitor(artist.monitored) &&
 					(fileFilter === 'all' ||
 						(fileFilter === 'downloaded' && artist.inLibraryCount > 0) ||
-						(fileFilter === 'missing' && artist.inLibraryCount < artist.albumCount))
+						(fileFilter === 'missing' && artist.inLibraryCount < artist.albumCount)) &&
+					((libraryFilter === 'all' && qualityFilter === 'all') ||
+						scopedArtistIds.has(artist.id))
 			)
 			.sort((a, b) => {
 				if (sortField === 'name-desc') return b.name.localeCompare(a.name);
@@ -101,19 +105,30 @@
 			})
 	);
 
+	const matchesScope = (album: (typeof data.albums)[number]) =>
+		(libraryFilter === 'all' || album.libraryId === libraryFilter) &&
+		(qualityFilter === 'all' || album.effectiveProfileId === qualityFilter);
+	const scopedAlbumIds = $derived(new Set(data.albums.filter(matchesScope).map((album) => album.id)));
+	const scopedArtistIds = $derived(
+		new Set(data.albums.filter(matchesScope).map((album) => album.artistId))
+	);
+
 	const albums = $derived(
 		[...data.albums]
 			.filter(
 				(album) =>
 					matches(`${album.title} ${album.artistName}`) &&
 					keepFile(album.hasFile) &&
-					keepMonitor(album.monitored)
+					keepMonitor(album.monitored) &&
+					matchesScope(album)
 			)
 			.sort((a, b) => {
 				if (sortField === 'title-asc') return a.title.localeCompare(b.title);
 				if (sortField === 'year-desc') return (b.year ?? 0) - (a.year ?? 0);
 				if (sortField === 'year-asc') return (a.year ?? 9999) - (b.year ?? 9999);
 				if (sortField === 'tracks-desc') return (b.trackCount ?? 0) - (a.trackCount ?? 0);
+				if (sortField === 'size-desc') return (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0);
+				if (sortField === 'size-asc') return (a.sizeBytes ?? 0) - (b.sizeBytes ?? 0);
 				return (
 					a.artistName.localeCompare(b.artistName) ||
 					(a.year ?? 0) - (b.year ?? 0) ||
@@ -126,7 +141,11 @@
 		data.songs
 			.filter(
 				(song) =>
-					matches(`${song.title} ${song.artistName} ${song.albumTitle}`) && keepFile(song.hasFile)
+					matches(`${song.title} ${song.artistName} ${song.albumTitle}`) &&
+					keepFile(song.hasFile) &&
+					(libraryFilter === 'all' && qualityFilter === 'all'
+						? true
+						: scopedAlbumIds.has(song.albumId))
 			)
 			.sort((a, b) => {
 				if (sortField === 'artist-asc') return a.artistName.localeCompare(b.artistName);
@@ -159,7 +178,9 @@
 				{ value: 'title-asc', label: m.music_sortTitleAsc() },
 				{ value: 'year-desc', label: m.music_sortYearDesc() },
 				{ value: 'year-asc', label: m.music_sortYearAsc() },
-				{ value: 'tracks-desc', label: m.music_sortTracksDesc() }
+				{ value: 'tracks-desc', label: m.music_sortTracksDesc() },
+				{ value: 'size-desc', label: m.library_movies_sortSizeDesc() },
+				{ value: 'size-asc', label: m.library_movies_sortSizeAsc() }
 			];
 		}
 		return [
@@ -170,8 +191,13 @@
 		];
 	});
 
-	const filterOptions = $derived.by(() => {
-		const options = [
+	const filterOptions = $derived.by(
+		(): Array<{ key: string; label: string; options: { value: string; label: string }[] }> => {
+		const options: Array<{
+			key: string;
+			label: string;
+			options: { value: string; label: string }[];
+		}> = [
 			{
 				key: 'type',
 				label: m.music_typeLabel(),
@@ -191,6 +217,27 @@
 				]
 			}
 		];
+		if (data.libraries.length > 1) {
+			options.push({
+				key: 'library',
+				label: m.library_movies_filterLibrary(),
+				options: [
+					{ value: 'all', label: m.common_all() },
+					...data.libraries.map((entry) => ({ value: entry.id, label: entry.name }))
+				]
+			});
+		}
+		options.push({
+			key: 'quality',
+			label: m.library_movies_filterQualityProfile(),
+			options: [
+				{ value: 'all', label: m.common_all() },
+				...data.qualityProfiles.map((profile) => ({
+					value: profile.id,
+					label: profile.isDefault ? m.library_movies_profileDefault({ name: profile.name }) : profile.name
+				}))
+			]
+		});
 		if (browse !== 'songs') {
 			options.push({
 				key: 'monitor',
@@ -203,12 +250,15 @@
 			});
 		}
 		return options;
-	});
+		}
+	);
 
 	const activeFilterCount = $derived(
 		(browse === 'artists' ? 0 : 1) +
 			(fileFilter === 'all' ? 0 : 1) +
-			(monitorFilter === 'all' ? 0 : 1)
+			(monitorFilter === 'all' ? 0 : 1) +
+			(libraryFilter === 'all' ? 0 : 1) +
+			(qualityFilter === 'all' ? 0 : 1)
 	);
 
 	const browseLabel = $derived(
@@ -235,6 +285,8 @@
 		if (searchQuery.trim()) params.set('q', searchQuery.trim());
 		if (fileFilter !== 'all') params.set('file', fileFilter);
 		if (monitorFilter !== 'all') params.set('monitor', monitorFilter);
+		if (libraryFilter !== 'all') params.set('library', libraryFilter);
+		if (qualityFilter !== 'all') params.set('quality', qualityFilter);
 		if (sortField !== sortOptions[0]?.value) params.set('sort', sortField);
 		const next = params.toString();
 		const current = window.location.search.replace(/^\?/, '');
@@ -244,6 +296,8 @@
 	function clearFilters() {
 		fileFilter = 'all';
 		monitorFilter = 'all';
+		libraryFilter = 'all';
+		qualityFilter = 'all';
 	}
 
 	async function setMonitored(ids: string[], monitored: boolean) {
@@ -888,7 +942,13 @@
 		{sortOptions}
 		{filterOptions}
 		currentSort={sortField}
-		currentFilters={{ type: browse, file: fileFilter, monitor: monitorFilter }}
+		currentFilters={{
+			type: browse,
+			file: fileFilter,
+			monitor: monitorFilter,
+			library: libraryFilter,
+			quality: qualityFilter
+		}}
 		hiddenActiveFilterKeys={[]}
 		onClose={() => (drawerOpen = false)}
 		onSortChange={(value) => (sortField = value)}
@@ -900,6 +960,8 @@
 			}
 			if (key === 'file') fileFilter = value as FileFilter;
 			if (key === 'monitor') monitorFilter = value as MonitorFilter;
+			if (key === 'library') libraryFilter = value;
+			if (key === 'quality') qualityFilter = value;
 		}}
 		onClearFilters={clearFilters}
 	/>
