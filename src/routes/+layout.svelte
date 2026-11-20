@@ -6,6 +6,8 @@
 	import { ThemeSelector, LanguageSelector, UserAvatar } from '#lib/components/ui/index.js';
 	import { NotificationBell } from '#lib/components/requests/index.js';
 	import Toasts from '#lib/components/ui/Toasts.svelte';
+	import MusicPlayer from '#lib/components/music/MusicPlayer.svelte';
+	import { musicPlayer } from '#lib/components/music/player.svelte.js';
 	import { layoutState, type ScanProgressPayload } from '#lib/layout.svelte.js';
 	import * as m from '#lib/paraglide/messages.js';
 	import { createSSE } from '#lib/sse/index.js';
@@ -617,7 +619,10 @@
 			</header>
 
 			<!-- Page Content -->
-			<main class="w-full grow p-4">
+			<main
+				class="w-full grow p-4"
+				style:padding-bottom={musicPlayer.current ? '6rem' : undefined}
+			>
 				{@render children()}
 			</main>
 		</div>
@@ -1055,6 +1060,7 @@
 
 <!-- Global Toast Notifications -->
 <Toasts />
+<MusicPlayer />
 
 <!-- Global bug-report modal (admin entry points: sidebar bug icon, error page) -->
 {#if isAdminUser}

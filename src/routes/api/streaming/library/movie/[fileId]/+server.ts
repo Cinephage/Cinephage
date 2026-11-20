@@ -8,15 +8,15 @@
  * Auth: API key (x-api-key header or ?api_key= query param).
  */
 
-import { createReadStream, statSync } from 'node:fs';
+import { statSync } from 'node:fs';
 import { join } from 'node:path';
-import { Readable } from 'node:stream';
 import type { RequestHandler } from './$types';
 import { db } from '#lib/server/db/index.js';
 import { movieFiles, movies, rootFolders } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { isPathInsideManagedRoot } from '#lib/server/filesystem/path-guard.js';
-import { getContentType, parseRangeHeader } from '#lib/server/streaming/usenet/types.js';
+import { getContentType } from '#lib/server/streaming/usenet/types.js';
+import { serveLocalFile } from '#lib/server/streaming/local-file.js';
 import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'streams' as const, component: 'LocalMovieStream' });
@@ -80,45 +80,7 @@ export const GET: RequestHandler = async (event) => {
 		return new Response('Not found', { status: 404 });
 	}
 
-	const rangeHeader = request.headers.get('range');
-	const range = parseRangeHeader(rangeHeader, file.size);
-
-	const headers: Record<string, string> = {
-		'Content-Type': file.contentType,
-		'Accept-Ranges': 'bytes',
-		'Cache-Control': 'no-cache',
-		Connection: 'keep-alive'
-	};
-
-	if (rangeHeader && !range) {
-		// Malformed / unsatisfiable range
-		headers['Content-Range'] = `bytes */${file.size}`;
-		return new Response('Range Not Satisfiable', { status: 416, headers });
-	}
-
-	if (range) {
-		const startByte = range.start;
-		const endByte = range.end === -1 ? file.size - 1 : range.end;
-		const contentLength = endByte - startByte + 1;
-
-		headers['Content-Range'] = `bytes ${startByte}-${endByte}/${file.size}`;
-		headers['Content-Length'] = String(contentLength);
-
-		logger.debug(
-			{ fileId, startByte, endByte, totalSize: file.size },
-			'[LocalMovieStream] Serving partial content'
-		);
-
-		const nodeStream = createReadStream(file.absolutePath, { start: startByte, end: endByte });
-		return new Response(Readable.toWeb(nodeStream) as ReadableStream, { status: 206, headers });
-	}
-
-	headers['Content-Length'] = String(file.size);
-
-	logger.debug({ fileId, totalSize: file.size }, '[LocalMovieStream] Serving full content');
-
-	const nodeStream = createReadStream(file.absolutePath);
-	return new Response(Readable.toWeb(nodeStream) as ReadableStream, { status: 200, headers });
+	return serveLocalFile(request, file);
 };
 
 export const HEAD: RequestHandler = async (event) => {

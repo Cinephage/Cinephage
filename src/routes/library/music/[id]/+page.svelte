@@ -6,6 +6,7 @@
 	import { musicQualityLabel } from '#lib/components/music/release-quality.js';
 	import AlbumHero from '#lib/components/music/AlbumHero.svelte';
 	import TrackList from '#lib/components/music/TrackList.svelte';
+	import { musicPlayer } from '#lib/components/music/player.svelte.js';
 	import TrackSearchModal from '#lib/components/music/TrackSearchModal.svelte';
 	import { ConfirmationModal, ModalWrapper } from '#lib/components/ui/modal/index.js';
 	import Panel from '#lib/components/ui/Panel.svelte';
@@ -34,6 +35,27 @@
 	};
 
 	const album = $derived(data.album);
+
+	/**
+	 * Play a track in album order. The queue is every track, not the one song,
+	 * so "next" continues the record; the filtered list only decides which row
+	 * the person clicked.
+	 */
+	function playTrack(track: { id: string; title: string; duration?: number | null }) {
+		if (musicPlayer.current?.id === track.id) {
+			musicPlayer.toggle();
+			return;
+		}
+
+		const queue = album.tracks.map((entry) => ({
+			id: entry.id,
+			title: entry.title,
+			artist: album.artistName,
+			duration: entry.duration
+		}));
+		const index = queue.findIndex((entry) => entry.id === track.id);
+		if (index >= 0) musicPlayer.play(queue, index);
+	}
 	// The toggle is optimistic: null means "whatever the server sent", and a
 	// failure puts the override back rather than leaving the UI lying.
 	let monitoredOverride = $state<boolean | null>(null);
@@ -268,6 +290,8 @@
 						artistName={album.artistName}
 						onAutoSearch={autoSearchFromTrack}
 						onOpenSearch={(track) => (searchTrack = { id: track.id, title: track.title })}
+						onPlay={playTrack}
+						playingTrackId={musicPlayer.playing ? (musicPlayer.current?.id ?? null) : null}
 						{busyTrackIds}
 					/>
 				{/if}
