@@ -14,6 +14,7 @@
 		XSquare
 	} from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
+	import { resolve } from '$app/paths';
 	import LibraryMediaCard from '#lib/components/library/LibraryMediaCard.svelte';
 	import LibraryMediaTable from '#lib/components/library/LibraryMediaTable.svelte';
 	import LibraryListHeader from '#lib/components/library/list/LibraryListHeader.svelte';
@@ -567,6 +568,13 @@
 		{#snippet notice()}
 			{#if data.library && data.library.rootFolderCount === 0}
 				<span class="hidden text-xs text-warning sm:inline">{m.music_noRootFolder()}</span>
+			{/if}
+			{#if data.scanIssueCount > 0}
+				<a
+					class="text-xs text-warning hover:underline"
+					href={resolve('library/music/scan-issues')}
+				>{m.music_scanIssuesBanner({ count: data.scanIssueCount })}</a
+				>
 			{/if}
 		{/snippet}
 

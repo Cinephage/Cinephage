@@ -5471,5 +5471,11 @@
 	"music_tierLossy": "Con pérdida",
 	"music_tierStreaming": "Streaming",
 	"music_deleteProfileTitle": "Eliminar perfil",
-	"music_deleteProfileMessage": "¿Eliminar {name}? Los álbumes y artistas que lo usan volverán al predeterminado."
+	"music_deleteProfileMessage": "¿Eliminar {name}? Los álbumes y artistas que lo usan volverán al predeterminado.",
+	"music_scanIssuesTitle": "Carpetas que necesitan atención",
+	"music_scanIssuesHint": "Un escaneo no pudo identificar estas carpetas de álbum en MusicBrainz. Busca una para añadirla o descártala.",
+	"music_scanIssuesEmpty": "No hay carpetas sin identificar",
+	"music_scanIssuesSearch": "Buscar",
+	"music_scanIssuesIgnore": "Descartar",
+	"music_scanIssuesBanner": "Carpetas escaneadas por revisar: {count}"
 }

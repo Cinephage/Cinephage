@@ -235,8 +235,10 @@ import {
  *   remembered per album and skipped by the music search.
  * Version 192: albums.genres - MusicBrainz release-group genres for the album
  *   page, refreshed with the release group.
+ * Version 193: music_scan_issues - folders a music scan could not identify, so
+ *   they get a review queue like unmatched video files.
  */
-export const CURRENT_SCHEMA_VERSION = 192;
+export const CURRENT_SCHEMA_VERSION = 193;
 
 /**
  * Seed rows for the *legacy* backfill in migration 078 only.
@@ -1913,6 +1915,19 @@ const TABLE_DEFINITIONS: string[] = [
 		"added" text
 	)`,
 
+	`CREATE TABLE IF NOT EXISTS "music_scan_issues" (
+		"id" text PRIMARY KEY NOT NULL,
+		"root_folder_id" text REFERENCES "root_folders"("id") ON DELETE CASCADE,
+		"folder" text NOT NULL UNIQUE,
+		"album_title" text,
+		"artist_name" text,
+		"reason" text NOT NULL,
+		"status" text NOT NULL DEFAULT 'pending',
+		"first_seen_at" text NOT NULL,
+		"last_seen_at" text NOT NULL,
+		"resolved_at" text
+	)`,
+
 	`CREATE TABLE IF NOT EXISTS "track_stream_cache" (
 		"track_id" text PRIMARY KEY NOT NULL REFERENCES "tracks"("id") ON DELETE CASCADE,
 		"url" text NOT NULL,
@@ -2010,6 +2025,7 @@ const INDEX_DEFINITIONS: string[] = [
 	// duplicate rows, because INDEX_DEFINITIONS run before migrations.
 	`CREATE INDEX IF NOT EXISTS "idx_blocklist_movie" ON "blocklist" ("movie_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_blocklist_album" ON "blocklist" ("album_id")`,
+	`CREATE INDEX IF NOT EXISTS "idx_music_scan_issues_status" ON "music_scan_issues" ("status")`,
 	`CREATE INDEX IF NOT EXISTS "idx_blocklist_series" ON "blocklist" ("series_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_blocklist_infohash" ON "blocklist" ("info_hash")`,
 	`CREATE INDEX IF NOT EXISTS "idx_cinephage_api_modules_enabled" ON "cinephage_api_modules" ("enabled")`,

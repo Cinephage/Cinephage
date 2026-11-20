@@ -5471,5 +5471,11 @@
 	"music_tierLossy": "Lossy",
 	"music_tierStreaming": "Streaming",
 	"music_deleteProfileTitle": "Profil löschen",
-	"music_deleteProfileMessage": "{name} löschen? Alben und Künstler mit diesem Profil fallen auf den Standard zurück."
+	"music_deleteProfileMessage": "{name} löschen? Alben und Künstler mit diesem Profil fallen auf den Standard zurück.",
+	"music_scanIssuesTitle": "Ordner, die Aufmerksamkeit brauchen",
+	"music_scanIssuesHint": "Ein Scan konnte diese Albumordner nicht bei MusicBrainz zuordnen. Suche einen, um ihn hinzuzufügen, oder verwerfe ihn.",
+	"music_scanIssuesEmpty": "Keine nicht zugeordneten Ordner",
+	"music_scanIssuesSearch": "Suchen",
+	"music_scanIssuesIgnore": "Verwerfen",
+	"music_scanIssuesBanner": "Zu prüfende gescannte Ordner: {count}"
 }

@@ -6,6 +6,7 @@ import { musicArtistService } from '#lib/server/music/MusicArtistService.js';
 import { musicTrackService } from '#lib/server/music/MusicTrackService.js';
 import { musicProfileService } from '#lib/server/music/MusicProfileService.js';
 import type { ArtistCardData } from '#lib/components/music/music-card.js';
+import { musicScanIssueService } from '#lib/server/music/MusicScanIssueService.js';
 
 /**
  * The music library list, artist-first.
@@ -84,6 +85,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		})),
 		/** What an unassigned album inherits here: the library's profile first. */
 		defaultProfileName: musicProfileService.resolve(null, null, library?.qualityProfileId).name,
+		scanIssueCount: musicScanIssueService.countPending(),
 		counts: {
 			albums: albums.length,
 			artists: artists.length,

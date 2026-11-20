@@ -5018,6 +5018,32 @@ export const trackFiles = sqliteTable(
  * cache in `music/playback/resolver.ts` is the hot copy; this is what survives
  * a restart.
  */
+/**
+ * A folder the music scanner could not identify.
+ *
+ * Music has no `unmatched_files` shape to reuse — that table is keyed by movie
+ * and episode ids — so a scan issue is its own small queue: the folder, the
+ * tags it carried, why the match was refused, and whether someone dismissed it.
+ */
+export const musicScanIssues = sqliteTable(
+	'music_scan_issues',
+	{
+		id: text('id')
+			.primaryKey()
+			.$defaultFn(() => randomUUID()),
+		rootFolderId: text('root_folder_id').references(() => rootFolders.id, { onDelete: 'cascade' }),
+		folder: text('folder').notNull().unique(),
+		albumTitle: text('album_title'),
+		artistName: text('artist_name'),
+		reason: text('reason').notNull(),
+		status: text('status', { enum: ['pending', 'ignored', 'resolved'] }).notNull().default('pending'),
+		firstSeenAt: text('first_seen_at').notNull(),
+		lastSeenAt: text('last_seen_at').notNull(),
+		resolvedAt: text('resolved_at')
+	},
+	(table) => [index('idx_music_scan_issues_status').on(table.status)]
+);
+
 export const trackStreamCache = sqliteTable(
 	'track_stream_cache',
 	{

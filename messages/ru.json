@@ -5471,5 +5471,11 @@
 	"music_tierLossy": "С потерями",
 	"music_tierStreaming": "Стриминг",
 	"music_deleteProfileTitle": "Удалить профиль",
-	"music_deleteProfileMessage": "Удалить {name}? Альбомы и исполнители с ним вернутся к профилю по умолчанию."
+	"music_deleteProfileMessage": "Удалить {name}? Альбомы и исполнители с ним вернутся к профилю по умолчанию.",
+	"music_scanIssuesTitle": "Папки, требующие внимания",
+	"music_scanIssuesHint": "Сканирование не смогло сопоставить эти папки альбомов с MusicBrainz. Найдите альбом, чтобы добавить его, или отклоните папку.",
+	"music_scanIssuesEmpty": "Нет несопоставленных папок",
+	"music_scanIssuesSearch": "Поиск",
+	"music_scanIssuesIgnore": "Отклонить",
+	"music_scanIssuesBanner": "Отсканированные папки для проверки: {count}"
 }

@@ -5835,5 +5835,11 @@
 	"music_copyFromHelpZero": "Start from scratch; the ladder below is what the profile will use.",
 	"music_tierLossless": "Lossless",
 	"music_tierLossy": "Lossy",
-	"music_tierStreaming": "Streaming"
+	"music_tierStreaming": "Streaming",
+	"music_scanIssuesTitle": "Folders needing attention",
+	"music_scanIssuesHint": "A scan could not identify these album folders on MusicBrainz. Search for one to add it, or dismiss it.",
+	"music_scanIssuesEmpty": "No unmatched folders",
+	"music_scanIssuesSearch": "Search",
+	"music_scanIssuesIgnore": "Ignore",
+	"music_scanIssuesBanner": "Scanned folders to review: {count}"
 }

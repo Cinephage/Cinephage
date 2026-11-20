@@ -24,6 +24,7 @@ import { pickReleaseGroup, type AlbumCandidate } from './release-match.js';
 import { musicBrainz, pickPrimaryRelease } from './musicbrainz.js';
 import { musicAlbumService } from './MusicAlbumService.js';
 import { musicImportService } from './MusicImportService.js';
+import { musicScanIssueService } from './MusicScanIssueService.js';
 
 const logger = createChildLogger({ module: 'MusicDiskScan', logDomain: 'scans' });
 
@@ -232,5 +233,6 @@ export async function scanMusicRootFolder(options: MusicScanOptions): Promise<Mu
 		}
 	}
 
+	musicScanIssueService.record(options.rootFolderId, summary.results);
 	return summary;
 }

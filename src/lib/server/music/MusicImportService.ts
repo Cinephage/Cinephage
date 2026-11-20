@@ -22,6 +22,7 @@ import { musicStrmService } from './MusicStrmService.js';
 import { sanitizeMusicSegment } from './paths.js';
 import { publishImport } from '#lib/server/notifications/core/app-events.js';
 import { blocklistService } from '#lib/server/blocklist/BlocklistService.js';
+import { musicScanIssueService } from './MusicScanIssueService.js';
 
 const logger = createChildLogger({ module: 'MusicImportService', logDomain: 'imports' });
 
@@ -414,6 +415,8 @@ export class MusicImportService {
 			.set({ path: folder, hasFile: true, streamSource: null })
 			.where(eq(albums.id, albumId))
 			.run();
+
+		musicScanIssueService.resolveFolder(folder);
 
 		// The album is owned now: stream shortcuts left beside the real files
 		// would make the media server show every track twice.
