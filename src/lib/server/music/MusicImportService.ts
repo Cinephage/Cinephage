@@ -1,6 +1,5 @@
 import { promises as fs, constants } from 'node:fs';
 import path from 'node:path';
-import { parseFile } from 'music-metadata';
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
 import {
@@ -17,27 +16,12 @@ import {
 import { mapClientPathToLocal } from '#lib/server/downloadClients/monitoring/PathMapping.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { NotFoundError, ValidationError } from '#lib/errors/index.js';
-import { matchFilesToTracks, type AudioFileRef } from './track-matching.js';
+import { matchFilesToTracks } from './track-matching.js';
+import { AUDIO_EXTENSIONS, collectAudioFiles, type TaggedAudioFile } from './audio-folder.js';
 import { musicStrmService } from './MusicStrmService.js';
 import { sanitizeMusicSegment } from './paths.js';
 
 const logger = createChildLogger({ module: 'MusicImportService', logDomain: 'imports' });
-
-const AUDIO_EXTENSIONS = new Set([
-	'.flac',
-	'.mp3',
-	'.m4a',
-	'.aac',
-	'.ogg',
-	'.opus',
-	'.wav',
-	'.wv',
-	'.ape'
-]);
-/** Directories and files that are never album content. */
-const SKIP_NAMES = /^(sample|samples|scans|covers?|artwork|\.)/i;
-/** A file this small is a cue stub or a failed download, not audio. */
-const MIN_AUDIO_BYTES = 64 * 1024;
 
 export interface MusicImportResult {
 	albumId: string;
@@ -47,20 +31,6 @@ export interface MusicImportResult {
 	tracksMatched: number;
 	unmatchedFiles: string[];
 	reason?: string;
-}
-
-interface TaggedFile extends AudioFileRef {
-	absolutePath: string;
-	/** Path relative to the folder being imported; unique, and kept on copy. */
-	relativePath: string;
-	fileName: string;
-	sizeBytes: number;
-	format: string | null;
-	bitrateKbps: number | null;
-	bitDepth: number | null;
-	sampleRateHz: number | null;
-	channels: number | null;
-	durationSeconds: number | null;
 }
 
 /**
@@ -207,32 +177,10 @@ export class MusicImportService {
 		const stats = await fs.stat(source).catch(() => null);
 		if (!stats?.isDirectory()) throw new ValidationError(`Not a folder: ${sourceFolder}`);
 
-		const files = await this.collectAudioFiles(source, source);
+		const files = await collectAudioFiles(source);
 		if (files.length === 0) throw new ValidationError(`No audio files found under ${sourceFolder}`);
 
-		const albumTracks = db
-			.select({
-				id: tracks.id,
-				discNumber: tracks.discNumber,
-				trackNumber: tracks.trackNumber,
-				title: tracks.title
-			})
-			.from(tracks)
-			.where(eq(tracks.albumId, albumId))
-			.all();
-
-		// `fileName` carries the relative path here: it is the unique key across
-		// disc folders, and a bare name can repeat between them.
-		const { matches, unmatched } = matchFilesToTracks(
-			files.map((file) => ({
-				discNumber: file.discNumber,
-				trackNumber: file.trackNumber,
-				title: file.title,
-				fileName: file.relativePath
-			})),
-			albumTracks
-		);
-		const trackIdByPath = new Map(matches.map((match) => [match.file.fileName, match.trackId]));
+		const { matches, unmatched, trackIdByPath } = this.matchFiles(albumId, files);
 
 		const destinationFolder = path.join(
 			rootFolder.path,
@@ -265,43 +213,18 @@ export class MusicImportService {
 				if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
 			}
 			imported += 1;
-
-			const values = {
-				albumId,
-				trackId: trackIdByPath.get(file.relativePath) ?? null,
-				relativePath,
-				sizeBytes: file.sizeBytes,
-				format: file.format,
-				bitrateKbps: file.bitrateKbps,
-				bitDepth: file.bitDepth,
-				sampleRateHz: file.sampleRateHz,
-				channels: file.channels,
-				duration: file.durationSeconds
-			};
-			db.insert(trackFiles)
-				.values(values)
-				.onConflictDoUpdate({ target: [trackFiles.albumId, trackFiles.relativePath], set: values })
-				.run();
 		}
 
-		db.update(tracks)
-			.set({ hasFile: true })
-			.where(and(eq(tracks.albumId, albumId), eq(tracks.hasFile, false)))
-			.run();
-		db.update(albums)
-			.set({ path: destinationFolder, hasFile: true, streamSource: null })
-			.where(eq(albums.id, albumId))
-			.run();
-
-		// The album is owned now: stream shortcuts left beside the real files
-		// would make the media server show every track twice.
-		await musicStrmService.removeShortcutsInFolder(destinationFolder);
-		if (album.mediaItemId) {
-			db.update(mediaItems)
-				.set({ path: destinationFolder })
-				.where(eq(mediaItems.id, album.mediaItemId))
-				.run();
-		}
+		await this.indexFiles(
+			albumId,
+			destinationFolder,
+			files.map((file) => ({
+				file,
+				relativePath: this.sanitizeRelativePath(file.relativePath)
+			})),
+			trackIdByPath,
+			album.mediaItemId
+		);
 		if (options.queueId) {
 			db.update(downloadQueue)
 				.set({
@@ -333,6 +256,131 @@ export class MusicImportService {
 			tracksMatched: matches.length,
 			unmatchedFiles: unmatched.map((file) => file.fileName)
 		};
+	}
+
+	/**
+	 * Adopt audio that is already inside a library folder.
+	 *
+	 * The download path copies files into place; a library scan must not, or
+	 * every scanned album would exist twice under the same root. What happens
+	 * after placement is shared, so an adopted album is indistinguishable from
+	 * a downloaded one: same track links, same `has_file`, same folder path.
+	 */
+	async adoptFolder(albumId: string, folder: string): Promise<MusicImportResult> {
+		const album = db
+			.select({ id: albums.id, mediaItemId: albums.mediaItemId })
+			.from(albums)
+			.where(eq(albums.id, albumId))
+			.get();
+		if (!album) throw new NotFoundError('Album', albumId);
+
+		const source = path.resolve(folder);
+		const stats = await fs.stat(source).catch(() => null);
+		if (!stats?.isDirectory()) throw new ValidationError(`Not a folder: ${folder}`);
+
+		const files = await collectAudioFiles(source);
+		if (files.length === 0) throw new ValidationError(`No audio files found under ${folder}`);
+
+		const { matches, unmatched, trackIdByPath } = this.matchFiles(albumId, files);
+		await this.indexFiles(
+			albumId,
+			source,
+			files.map((file) => ({ file, relativePath: file.relativePath })),
+			trackIdByPath,
+			album.mediaItemId
+		);
+
+		logger.info(
+			{ albumId, files: files.length, matched: matches.length, folder: source },
+			'[MusicImport] album adopted from disk'
+		);
+
+		return {
+			albumId,
+			status: 'imported',
+			albumPath: source,
+			filesImported: files.length,
+			tracksMatched: matches.length,
+			unmatchedFiles: unmatched.map((file) => file.fileName)
+		};
+	}
+
+	/** Match a folder's files to the album's tracklist, once for both entry paths. */
+	private matchFiles(albumId: string, files: TaggedAudioFile[]) {
+		const albumTracks = db
+			.select({
+				id: tracks.id,
+				discNumber: tracks.discNumber,
+				trackNumber: tracks.trackNumber,
+				title: tracks.title
+			})
+			.from(tracks)
+			.where(eq(tracks.albumId, albumId))
+			.all();
+
+		// `fileName` carries the relative path here: it is the unique key across
+		// disc folders, and a bare name can repeat between them.
+		const { matches, unmatched } = matchFilesToTracks(
+			files.map((file) => ({
+				discNumber: file.discNumber,
+				trackNumber: file.trackNumber,
+				title: file.title,
+				fileName: file.relativePath
+			})),
+			albumTracks
+		);
+		const trackIdByPath = new Map(matches.map((match) => [match.file.fileName, match.trackId]));
+		return { matches, unmatched, trackIdByPath };
+	}
+
+	/**
+	 * Record files against an album and mark it owned. Shared by copy-import and
+	 * adopt; the only difference between them is whether bytes moved first.
+	 */
+	private async indexFiles(
+		albumId: string,
+		folder: string,
+		files: Array<{ file: TaggedAudioFile; relativePath: string }>,
+		trackIdByPath: Map<string, string>,
+		mediaItemId: string | null
+	): Promise<void> {
+		for (const { file, relativePath } of files) {
+			const values = {
+				albumId,
+				trackId: trackIdByPath.get(file.relativePath) ?? null,
+				relativePath,
+				sizeBytes: file.sizeBytes,
+				format: file.format,
+				bitrateKbps: file.bitrateKbps,
+				bitDepth: file.bitDepth,
+				sampleRateHz: file.sampleRateHz,
+				channels: file.channels,
+				duration: file.durationSeconds
+			};
+			db.insert(trackFiles)
+				.values(values)
+				.onConflictDoUpdate({ target: [trackFiles.albumId, trackFiles.relativePath], set: values })
+				.run();
+		}
+
+		db.update(tracks)
+			.set({ hasFile: true })
+			.where(and(eq(tracks.albumId, albumId), eq(tracks.hasFile, false)))
+			.run();
+		db.update(albums)
+			.set({ path: folder, hasFile: true, streamSource: null })
+			.where(eq(albums.id, albumId))
+			.run();
+
+		// The album is owned now: stream shortcuts left beside the real files
+		// would make the media server show every track twice.
+		await musicStrmService.removeShortcutsInFolder(folder);
+		if (mediaItemId) {
+			db.update(mediaItems)
+				.set({ path: folder })
+				.where(eq(mediaItems.id, mediaItemId))
+				.run();
+		}
 	}
 
 	/**
@@ -416,80 +464,6 @@ export class MusicImportService {
 			client.tempPathLocal,
 			client.tempPathRemote
 		);
-	}
-
-	/** Every audio file under a folder, tagged. Hidden and scan folders skipped. */
-	private async collectAudioFiles(root: string, current: string, depth = 0): Promise<TaggedFile[]> {
-		if (depth > 4) return [];
-
-		const entries = await fs.readdir(current, { withFileTypes: true });
-		const files: TaggedFile[] = [];
-
-		for (const entry of entries) {
-			if (SKIP_NAMES.test(entry.name)) continue;
-			const full = path.join(current, entry.name);
-
-			if (entry.isDirectory()) {
-				files.push(...(await this.collectAudioFiles(root, full, depth + 1)));
-				continue;
-			}
-			if (!AUDIO_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) continue;
-
-			const stats = await fs.stat(full).catch(() => null);
-			if (!stats || stats.size < MIN_AUDIO_BYTES) continue;
-
-			files.push(await this.readTags(full, path.relative(root, full), entry.name, stats.size));
-		}
-
-		return files;
-	}
-
-	private async readTags(
-		absolutePath: string,
-		relativePath: string,
-		fileName: string,
-		sizeBytes: number
-	): Promise<TaggedFile> {
-		const base: TaggedFile = {
-			absolutePath,
-			relativePath,
-			fileName,
-			discNumber: null,
-			trackNumber: null,
-			title: null,
-			sizeBytes,
-			format: null,
-			bitrateKbps: null,
-			bitDepth: null,
-			sampleRateHz: null,
-			channels: null,
-			durationSeconds: null
-		};
-
-		try {
-			const metadata = await parseFile(absolutePath, { duration: true, skipCovers: true });
-			const { common, format } = metadata;
-			return {
-				...base,
-				discNumber: common.disk?.no ?? null,
-				trackNumber: common.track?.no ?? null,
-				title: common.title ?? null,
-				format: format.container ?? format.codec ?? null,
-				bitrateKbps: format.bitrate ? Math.round(format.bitrate / 1000) : null,
-				bitDepth: format.bitsPerSample ?? null,
-				sampleRateHz: format.sampleRate ?? null,
-				channels: format.numberOfChannels ?? null,
-				durationSeconds: format.duration ? Math.round(format.duration) : null
-			};
-		} catch (error) {
-			// An unreadable tag block must not lose the file: the matcher falls back
-			// to the file name, which is what it does when tags are absent anyway.
-			logger.warn(
-				{ file: fileName, err: error instanceof Error ? error.message : String(error) },
-				'[MusicImport] could not read tags'
-			);
-			return base;
-		}
 	}
 
 	/** Path-safe segment: no separators, no leading dots, no trailing spaces. */

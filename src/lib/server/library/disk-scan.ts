@@ -439,6 +439,10 @@ export class DiskScanService extends EventEmitter {
 			this.emit('progress', progress);
 			await this.assertNoRootFolderOverlap(rootFolderId, rootFolder.path);
 
+			if (rootFolder.mediaType === 'music') {
+				return await this.scanMusicFolder(rootFolder, scanRecord.id, progress, startTime);
+			}
+
 			const customPatterns = rootFolder.skipFolderPatterns
 				? (JSON.parse(rootFolder.skipFolderPatterns) as string[])
 				: [];
@@ -640,63 +644,10 @@ export class DiskScanService extends EventEmitter {
 
 			await this.reconcileMediaPresence(rootFolderId, rootFolder.mediaType);
 
-			await db
-				.update(libraryScanHistory)
-				.set({
-					status: 'completed',
-					completedAt: new Date().toISOString(),
-					filesScanned: progress.filesFound,
-					filesAdded: progress.filesAdded,
-					filesUpdated: progress.filesUpdated,
-					filesRemoved: progress.filesRemoved,
-					unmatchedFiles: progress.unmatchedCount
-				})
-				.where(eq(libraryScanHistory.id, scanRecord.id));
-
-			progress.phase = 'complete';
-			this.emit('progress', progress);
-
-			return {
-				success: true,
-				scanId: scanRecord.id,
-				rootFolderId,
-				rootFolderPath: rootFolder.path,
-				filesScanned: progress.filesFound,
-				filesAdded: progress.filesAdded,
-				filesUpdated: progress.filesUpdated,
-				filesRemoved: progress.filesRemoved,
-				unmatchedFiles: progress.unmatchedCount,
-				duration: Date.now() - startTime
-			};
+			return await this.completeScan(scanRecord.id, rootFolderId, progress, startTime);
 		} catch (error) {
-			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-
-			await db
-				.update(libraryScanHistory)
-				.set({
-					status: 'failed',
-					completedAt: new Date().toISOString(),
-					errorMessage
-				})
-				.where(eq(libraryScanHistory.id, scanRecord.id));
-
-			progress.phase = 'complete';
-			progress.error = errorMessage;
-			this.emit('progress', progress);
-
-			return {
-				success: false,
-				scanId: scanRecord.id,
-				rootFolderId,
-				rootFolderPath: rootFolder.path,
-				filesScanned: progress.filesFound,
-				filesAdded: progress.filesAdded,
-				filesUpdated: progress.filesUpdated,
-				filesRemoved: progress.filesRemoved,
-				unmatchedFiles: progress.unmatchedCount,
-				duration: Date.now() - startTime,
-				error: errorMessage
-			};
+			if (this.scanAborted) error = new Error('Scan was cancelled');
+			return await this.failScan(scanRecord.id, rootFolderId, progress, startTime, error);
 		} finally {
 			this.isScanning = false;
 			this.currentScanId = null;
@@ -1082,6 +1033,142 @@ export class DiskScanService extends EventEmitter {
 		if (linked > 0) {
 			logger.info({ rootFolderId, linked }, '[DiskScan] Re-linked previously unmatched TV files');
 		}
+	}
+
+	/**
+	 * A music root is scanned by album-folder identity, not file-to-row
+	 * matching: tags identify the album, MusicBrainz confirms it, and the files
+	 * are adopted where they lie. History and progress stay in this class so
+	 * every scan type reports the same shape to the UI.
+	 */
+	private async scanMusicFolder(
+		rootFolder: typeof rootFolders.$inferSelect,
+		scanRecordId: string,
+		progress: ScanProgress,
+		startTime: number
+	): Promise<ScanResult> {
+		try {
+			const [{ getLibraryEntityService }, { scanMusicRootFolder }] = await Promise.all([
+				import('#lib/server/library/LibraryEntityService.js'),
+				import('#lib/server/music/MusicDiskScan.js')
+			]);
+			const library = await getLibraryEntityService().resolveOwningLibraryForRootFolder(
+				rootFolder.id,
+				'music'
+			);
+
+			const summary = await scanMusicRootFolder({
+				rootFolderId: rootFolder.id,
+				rootPath: rootFolder.path,
+				libraryId: library.id,
+				isAborted: () => this.scanAborted,
+				onProgress: (music) => {
+					progress.filesFound = music.filesSeen;
+					progress.filesProcessed = music.filesSeen;
+					progress.currentFile = music.currentFolder;
+					progress.phase = 'matching';
+					this.emit('progress', progress);
+				}
+			});
+
+			// The walker stops between folders; the scan as a whole was cancelled.
+			if (this.scanAborted) throw new Error('Scan was cancelled');
+
+			progress.filesFound = summary.filesScanned;
+			progress.filesProcessed = summary.filesScanned;
+			progress.filesAdded = summary.filesImported;
+			progress.unmatchedCount = summary.unmatched + summary.failed;
+			logger.info(
+				{
+					root: rootFolder.path,
+					folders: summary.folders,
+					imported: summary.imported,
+					skipped: summary.skipped,
+					unmatched: summary.unmatched,
+					failed: summary.failed,
+					files: summary.filesImported
+				},
+				'[DiskScan] Music library scan finished'
+			);
+			return await this.completeScan(scanRecordId, rootFolder.id, progress, startTime);
+		} catch (error) {
+			if (this.scanAborted) error = new Error('Scan was cancelled');
+			return await this.failScan(scanRecordId, rootFolder.id, progress, startTime, error);
+		}
+	}
+
+	/** One completion path for every kind: history row, final event, result. */
+	private async completeScan(
+		scanRecordId: string,
+		rootFolderId: string,
+		progress: ScanProgress,
+		startTime: number
+	): Promise<ScanResult> {
+		await db
+			.update(libraryScanHistory)
+			.set({
+				status: 'completed',
+				completedAt: new Date().toISOString(),
+				filesScanned: progress.filesFound,
+				filesAdded: progress.filesAdded,
+				filesUpdated: progress.filesUpdated,
+				filesRemoved: progress.filesRemoved,
+				unmatchedFiles: progress.unmatchedCount
+			})
+			.where(eq(libraryScanHistory.id, scanRecordId));
+
+		progress.phase = 'complete';
+		this.emit('progress', progress);
+
+		return {
+			success: true,
+			scanId: scanRecordId,
+			rootFolderId,
+			rootFolderPath: progress.rootFolderPath,
+			filesScanned: progress.filesFound,
+			filesAdded: progress.filesAdded,
+			filesUpdated: progress.filesUpdated,
+			filesRemoved: progress.filesRemoved,
+			unmatchedFiles: progress.unmatchedCount,
+			duration: Date.now() - startTime
+		};
+	}
+
+	private async failScan(
+		scanRecordId: string,
+		rootFolderId: string,
+		progress: ScanProgress,
+		startTime: number,
+		error: unknown
+	): Promise<ScanResult> {
+		const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+		await db
+			.update(libraryScanHistory)
+			.set({
+				status: 'failed',
+				completedAt: new Date().toISOString(),
+				errorMessage
+			})
+			.where(eq(libraryScanHistory.id, scanRecordId));
+
+		progress.phase = 'complete';
+		progress.error = errorMessage;
+		this.emit('progress', progress);
+
+		return {
+			success: false,
+			scanId: scanRecordId,
+			rootFolderId,
+			rootFolderPath: progress.rootFolderPath,
+			filesScanned: progress.filesFound,
+			filesAdded: progress.filesAdded,
+			filesUpdated: progress.filesUpdated,
+			filesRemoved: progress.filesRemoved,
+			unmatchedFiles: progress.unmatchedCount,
+			duration: Date.now() - startTime,
+			error: errorMessage
+		};
 	}
 
 	private async getExistingFiles(
