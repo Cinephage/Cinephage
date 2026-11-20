@@ -20,6 +20,7 @@ import { matchFilesToTracks } from './track-matching.js';
 import { AUDIO_EXTENSIONS, collectAudioFiles, type TaggedAudioFile } from './audio-folder.js';
 import { musicStrmService } from './MusicStrmService.js';
 import { sanitizeMusicSegment } from './paths.js';
+import { publishImport } from '#lib/server/notifications/core/app-events.js';
 
 const logger = createChildLogger({ module: 'MusicImportService', logDomain: 'imports' });
 
@@ -410,6 +411,20 @@ export class MusicImportService {
 			const start = new Date(row.startedAt).getTime();
 			const end = new Date(row.completedAt).getTime();
 			downloadTimeSeconds = Math.max(0, Math.floor((end - start) / 1000));
+		}
+
+		const album = db
+			.select({ id: albums.id })
+			.from(albums)
+			.where(eq(albums.mediaItemId, row.mediaItemId))
+			.get();
+		if (album) {
+			publishImport({
+				mediaType: 'album',
+				mediaId: album.id,
+				releaseName: row.title,
+				quality: null
+			});
 		}
 
 		db.insert(downloadHistory)

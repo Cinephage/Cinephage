@@ -33,13 +33,15 @@ export const SUBSCRIBABLE_EVENTS = NOTIFICATION_EVENTS.filter(
 export type NotificationEventKey = (typeof NOTIFICATION_EVENTS)[number];
 
 export interface NotificationMediaRef {
-	type: 'movie' | 'series';
+	type: 'movie' | 'series' | 'album';
 	title: string;
 	year?: number | null;
 	tmdbId?: number | null;
 	tvdbId?: number | null;
 	/** Absolute poster URL, when the provider gave us a path. */
 	posterUrl?: string | null;
+	/** MusicBrainz id for an album; video refs leave it null. */
+	mbid?: string | null;
 }
 
 export interface NotificationEpisodeRef {

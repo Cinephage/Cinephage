@@ -9,6 +9,7 @@ import { getDownloadResolutionService } from '#lib/server/downloads/DownloadReso
 import { musicSearchService, type MusicReleaseCandidate } from './MusicSearchService.js';
 import { musicStreamGrabService } from './MusicStreamGrabService.js';
 import { parseMusicStreamUrl } from './stream-url.js';
+import { publishGrab } from '#lib/server/notifications/core/app-events.js';
 
 const logger = createChildLogger({ module: 'MusicGrabService', logDomain: 'system' });
 
@@ -166,6 +167,12 @@ export class MusicGrabService {
 			protocol: chosen.protocol ?? 'torrent',
 			size: chosen.size ?? undefined,
 			mediaItemId: album.mediaItemId
+		});
+
+		publishGrab({
+			albumId: album.id,
+			releaseName: chosen.title,
+			indexerName: chosen.indexerName ?? null
 		});
 
 		logger.info(

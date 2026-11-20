@@ -36,6 +36,7 @@ describe('notification links', () => {
 	it('maps entity types to their app routes', () => {
 		expect(libraryPath('movie', 'abc')).toBe('/library/movie/abc');
 		expect(libraryPath('series', 'xyz')).toBe('/library/tv/xyz');
+		expect(libraryPath('album', 'alb')).toBe('/library/music/alb');
 	});
 
 	it('turns a TMDB poster path into an absolute image URL', () => {

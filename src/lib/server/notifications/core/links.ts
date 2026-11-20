@@ -20,7 +20,8 @@ export async function getPublicBaseUrl(): Promise<string | null> {
 }
 
 /** App path for a library entity. */
-export function libraryPath(mediaType: 'movie' | 'series', id: string): string {
+export function libraryPath(mediaType: 'movie' | 'series' | 'album', id: string): string {
+	if (mediaType === 'album') return `/library/music/${id}`;
 	return mediaType === 'movie' ? `/library/movie/${id}` : `/library/tv/${id}`;
 }
 

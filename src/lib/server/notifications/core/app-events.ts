@@ -9,7 +9,7 @@
 
 import { inArray, eq } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
-import { episodes, movies, requests, series, user } from '#lib/server/db/schema.js';
+import { albums, artists, episodes, movies, requests, series, user } from '#lib/server/db/schema.js';
 import type { RequestNotificationEvent } from '#lib/server/requests/RequestNotificationService.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { getNotificationDeliveryService } from './delivery.js';
@@ -64,6 +64,29 @@ async function movieRef(movieId: string): Promise<NotificationMediaRef | null> {
 		: null;
 }
 
+async function albumRef(albumId: string): Promise<NotificationMediaRef | null> {
+	const [row] = await db
+		.select({
+			title: albums.title,
+			year: albums.year,
+			mbid: albums.mbid,
+			artistName: artists.name
+		})
+		.from(albums)
+		.innerJoin(artists, eq(albums.artistId, artists.id))
+		.where(eq(albums.id, albumId))
+		.limit(1);
+	return row
+		? {
+				type: 'album',
+				title: `${row.artistName} — ${row.title}`,
+				year: row.year,
+				mbid: row.mbid,
+				posterUrl: null
+			}
+		: null;
+}
+
 async function seriesRef(seriesId: string): Promise<NotificationMediaRef | null> {
 	const [row] = await db
 		.select({
@@ -111,6 +134,7 @@ export function publishGrab(params: {
 	releaseName: string;
 	movieId?: string | null;
 	seriesId?: string | null;
+	albumId?: string | null;
 	episodeIds?: string[];
 	seasonNumber?: number | null;
 	quality?: QualityLike | null;
@@ -124,7 +148,9 @@ export function publishGrab(params: {
 				? await movieRef(params.movieId)
 				: params.seriesId
 					? await seriesRef(params.seriesId)
-					: null;
+					: params.albumId
+						? await albumRef(params.albumId)
+						: null;
 			const refs = await episodeRefs(params.episodeIds);
 			const episodeRefsFinal =
 				refs.length === 0 && params.seasonNumber != null
@@ -138,7 +164,12 @@ export function publishGrab(params: {
 				quality: formatQuality(params.quality),
 				indexer: params.indexerName ?? null,
 				link: media
-					? await buildLink(libraryPath(media.type, (params.movieId ?? params.seriesId) as string))
+					? await buildLink(
+							libraryPath(
+								media.type,
+								(params.movieId ?? params.seriesId ?? params.albumId) as string
+							)
+						)
 					: null,
 				summary: params.isUpgrade
 					? 'Upgrade release sent to the download client'
@@ -150,7 +181,7 @@ export function publishGrab(params: {
 
 /** A file landed in the library, replacing an existing one on upgrade. */
 export function publishImport(params: {
-	mediaType: 'movie' | 'series';
+	mediaType: 'movie' | 'series' | 'album';
 	mediaId: string;
 	episodeIds?: string[];
 	releaseName?: string | null;
@@ -163,7 +194,9 @@ export function publishImport(params: {
 			const media =
 				params.mediaType === 'movie'
 					? await movieRef(params.mediaId)
-					: await seriesRef(params.mediaId);
+					: params.mediaType === 'album'
+						? await albumRef(params.mediaId)
+						: await seriesRef(params.mediaId);
 			const refs = await episodeRefs(params.episodeIds);
 			const event: NotificationEvent = params.wasUpgrade ? 'upgrade' : 'import';
 			await getNotificationDeliveryService().publish(event, {
@@ -178,9 +211,13 @@ export function publishImport(params: {
 						? params.wasUpgrade
 							? 'Movie upgraded in the library'
 							: 'Movie imported into the library'
-						: params.wasUpgrade
-							? 'Episodes upgraded in the library'
-							: 'Episodes imported into the library'
+						: params.mediaType === 'album'
+							? params.wasUpgrade
+								? 'Album upgraded in the library'
+								: 'Album imported into the library'
+							: params.wasUpgrade
+								? 'Episodes upgraded in the library'
+								: 'Episodes imported into the library'
 			});
 		})()
 	);
