@@ -225,8 +225,11 @@ import {
  * Version 183: download_clients.category_map - per-kind download categories as
  *   JSON, backfilled from movie_category/tv_category, so a new media kind reads
  *   the map instead of gaining another column.
+ * Version 187: scoring_profiles.music_allow_fallback / music_min_size_mb /
+ *   music_max_size_mb - a music profile's own fallback switch and size bounds.
+ *   `upgrades_allowed` is video semantics and stays video-only.
  */
-export const CURRENT_SCHEMA_VERSION = 186;
+export const CURRENT_SCHEMA_VERSION = 187;
 
 /**
  * Seed rows for the *legacy* backfill in migration 078 only.
@@ -337,6 +340,9 @@ const TABLE_DEFINITIONS: string[] = [
 		"allowed_indexers" text,
 		"media_kind" text DEFAULT 'video',
 		"music_tiers" text,
+		"music_allow_fallback" integer DEFAULT true,
+		"music_min_size_mb" real,
+		"music_max_size_mb" real,
 		"created_at" text,
 		"updated_at" text
 	)`,

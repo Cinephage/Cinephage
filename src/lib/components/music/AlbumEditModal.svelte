@@ -14,13 +14,25 @@
 			catalogNumber: string | null;
 			barcode: string | null;
 			country: string | null;
+			qualityProfileId: string | null;
 		};
+		qualityProfiles: Array<{ id: string; name: string }>;
+		/** What "inherit" resolves to, shown on the empty option. */
+		inheritedProfileName: string | null;
 		saving: boolean;
 		onClose: () => void;
 		onSave: (data: AlbumEditData) => void;
 	}
 
-	let { open, album, saving, onClose, onSave }: Props = $props();
+	let {
+		open,
+		album,
+		qualityProfiles,
+		inheritedProfileName,
+		saving,
+		onClose,
+		onSave
+	}: Props = $props();
 
 	let title = $state('');
 	let year = $state('');
@@ -29,6 +41,7 @@
 	let catalogNumber = $state('');
 	let barcode = $state('');
 	let country = $state('');
+	let qualityProfileId = $state('');
 
 	// Re-sync whenever the modal opens, so a cancelled edit never leaks back in.
 	$effect(() => {
@@ -40,6 +53,7 @@
 		catalogNumber = album.catalogNumber ?? '';
 		barcode = album.barcode ?? '';
 		country = album.country ?? '';
+		qualityProfileId = album.qualityProfileId ?? '';
 	});
 
 	const parsedYear = $derived(year.trim() ? Number.parseInt(year, 10) : null);
@@ -57,7 +71,8 @@
 			labelName: labelName.trim() || null,
 			catalogNumber: catalogNumber.trim() || null,
 			barcode: barcode.trim() || null,
-			country: country.trim() || null
+			country: country.trim() || null,
+			qualityProfileId: qualityProfileId || null
 		});
 	}
 </script>
@@ -120,6 +135,20 @@
 		<label class="form-control">
 			<span class="mb-1 text-sm font-medium">{m.music_country()}</span>
 			<input class="input w-full input-bordered" bind:value={country} disabled={saving} />
+		</label>
+
+		<label class="form-control">
+			<span class="mb-1 text-sm font-medium">{m.common_qualityProfile()}</span>
+			<select class="select w-full select-bordered" bind:value={qualityProfileId} disabled={saving}>
+				<option value="">
+					{inheritedProfileName
+						? m.music_inheritDefault({ name: inheritedProfileName })
+						: m.music_inheritProfile()}
+				</option>
+				{#each qualityProfiles as profile (profile.id)}
+					<option value={profile.id}>{profile.name}</option>
+				{/each}
+			</select>
 		</label>
 	</div>
 

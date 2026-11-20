@@ -13,6 +13,8 @@ export interface MusicProfileView {
 	description: string | null;
 	tiers: MusicProfileTierView[];
 	allowFallback: boolean;
+	minSizeMb: number | null;
+	maxSizeMb: number | null;
 	isDefault: boolean;
 	isBuiltIn: boolean;
 }

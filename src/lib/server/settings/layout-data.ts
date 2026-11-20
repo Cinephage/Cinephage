@@ -7,12 +7,14 @@ import { getFileManagementSettings } from '#lib/server/settings/file-management.
 import { getLibraryEntityService } from '#lib/server/library/LibraryEntityService.js';
 import { db } from '#lib/server/db/index.js';
 import {
+	albums,
 	episodeFiles,
 	libraryScanHistory,
 	movieFiles,
 	movies,
 	series,
 	subtitles,
+	trackFiles,
 	unmatchedFiles
 } from '#lib/server/db/schema.js';
 
@@ -56,6 +58,7 @@ export async function loadStorageLayoutData() {
 		subtitleStats,
 		libraryMovieUsage,
 		librarySeriesUsage,
+		libraryMusicUsage,
 		detachedMovieUsage,
 		detachedSeriesUsage,
 		unmatchedStats,
@@ -108,6 +111,15 @@ export async function loadStorageLayoutData() {
 			.from(series)
 			.leftJoin(episodeFiles, sql`${episodeFiles.seriesId} = ${series.id}`)
 			.groupBy(series.libraryId),
+		db
+			.select({
+				libraryId: albums.libraryId,
+				usedBytes: sql<number>`COALESCE(SUM(${trackFiles.sizeBytes}), 0)`,
+				itemCount: sql<number>`COUNT(DISTINCT ${albums.id})`
+			})
+			.from(albums)
+			.leftJoin(trackFiles, sql`${trackFiles.albumId} = ${albums.id}`)
+			.groupBy(albums.libraryId),
 		db
 			.select({
 				libraryId: movies.libraryId,
@@ -178,7 +190,7 @@ export async function loadStorageLayoutData() {
 		{ status: string | null; startedAt: string | null; completedAt: string | null }
 	>();
 
-	for (const row of [...libraryMovieUsage, ...librarySeriesUsage]) {
+	for (const row of [...libraryMovieUsage, ...librarySeriesUsage, ...libraryMusicUsage]) {
 		if (!row.libraryId) continue;
 		const current = usageByLibrary.get(row.libraryId) ?? { usedBytes: 0, itemCount: 0 };
 		current.usedBytes += Number(row.usedBytes ?? 0);

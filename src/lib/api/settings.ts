@@ -917,8 +917,11 @@ export async function reorganizeFolderBatch(
 	return apiPost<ReorganizeBatchResult>('/api/rename/reorganize-batch', { items });
 }
 
-export async function getScoringProfiles(): Promise<ScoringProfilesResponse> {
-	const response = await apiGet('/api/scoring-profiles');
+export async function getScoringProfiles(
+	mediaKind?: 'video' | 'music'
+): Promise<ScoringProfilesResponse> {
+	const query = mediaKind ? `?mediaKind=${mediaKind}` : '';
+	const response = await apiGet(`/api/scoring-profiles${query}`);
 	return response as unknown as ScoringProfilesResponse;
 }
 

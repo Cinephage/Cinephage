@@ -30,6 +30,8 @@ export interface AddAlbumInput {
 	rootFolderId?: string | null;
 	monitored?: boolean;
 	coverPath?: string | null;
+	/** The album's own ladder; null/omitted inherits the artist, then the library. */
+	qualityProfileId?: string | null;
 }
 
 /** One row of the music library list: enough for a card, no tracklist. */
@@ -114,6 +116,8 @@ export interface AddArtistPolicy {
 	monitored?: boolean;
 	libraryId?: string | null;
 	rootFolderId?: string | null;
+	/** The artist row's ladder; every album added by this run inherits it. */
+	qualityProfileId?: string | null;
 }
 
 export interface AddAlbumResult {
@@ -134,13 +138,20 @@ export class MusicAlbumService {
 	 * that MusicBrainz id. Artists are only created as a side effect of adding an
 	 * album — there is no standalone artist import yet.
 	 */
-	private ensureArtist(artist: MusicArtistRef): string {
+	private ensureArtist(artist: MusicArtistRef, libraryId?: string | null): string {
 		const existing = db
-			.select({ id: artists.id })
+			.select({ id: artists.id, libraryId: artists.libraryId })
 			.from(artists)
 			.where(eq(artists.mbid, artist.mbid))
 			.get();
-		if (existing) return existing.id;
+		if (existing) {
+			// Give an unhomed artist a library, but never move one that already
+			// has a home: adding one album is not a statement about the artist.
+			if (libraryId && !existing.libraryId) {
+				db.update(artists).set({ libraryId }).where(eq(artists.id, existing.id)).run();
+			}
+			return existing.id;
+		}
 
 		const id = randomUUID();
 		db.insert(artists)
@@ -148,7 +159,8 @@ export class MusicAlbumService {
 				id,
 				mbid: artist.mbid,
 				name: artist.name,
-				sortName: artist.sortName ?? null
+				sortName: artist.sortName ?? null,
+				libraryId: libraryId ?? null
 			})
 			.run();
 		return id;
@@ -163,7 +175,7 @@ export class MusicAlbumService {
 		const { releaseGroup, release } = input;
 
 		const result = db.transaction((tx) => {
-			const artistId = this.ensureArtist(releaseGroup.artist);
+			const artistId = this.ensureArtist(releaseGroup.artist, input.libraryId);
 
 			const existing = tx
 				.select({ id: albums.id, mediaItemId: albums.mediaItemId })
@@ -216,6 +228,7 @@ export class MusicAlbumService {
 					libraryId: input.libraryId ?? null,
 					rootFolderId: input.rootFolderId ?? null,
 					monitored: input.monitored ?? true,
+					qualityProfileId: input.qualityProfileId ?? null,
 					hasFile: false
 				})
 				.run();

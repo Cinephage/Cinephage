@@ -4,6 +4,7 @@ import { getLibraryEntityService } from '#lib/server/library/LibraryEntityServic
 import { musicAlbumService } from '#lib/server/music/MusicAlbumService.js';
 import { musicArtistService } from '#lib/server/music/MusicArtistService.js';
 import { musicTrackService } from '#lib/server/music/MusicTrackService.js';
+import { musicProfileService } from '#lib/server/music/MusicProfileService.js';
 import type { ArtistCardData } from '#lib/components/music/music-card.js';
 
 /**
@@ -55,6 +56,15 @@ export const load: PageServerLoad = async ({ locals }) => {
 		albums,
 		artists,
 		songs,
+		qualityProfiles: musicProfileService.list().map((profile) => ({
+			id: profile.id,
+			name: profile.name,
+			description: profile.description ?? '',
+			isBuiltIn: profile.isBuiltIn,
+			isDefault: profile.isDefault
+		})),
+		/** What an unassigned album inherits here: the library's profile first. */
+		defaultProfileName: musicProfileService.resolve(null, null, library?.qualityProfileId).name,
 		counts: {
 			albums: albums.length,
 			artists: artists.length,

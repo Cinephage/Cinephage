@@ -85,6 +85,8 @@
 	let applyingToItems = $state(false);
 	let librarySaveError = $state<string | null>(null);
 	let availableProfiles = $state<ProfileRef[]>([]);
+	let availableMusicProfiles = $state<ProfileRef[]>([]);
+	let musicDefaultProfileName = $state<string | null>(null);
 	let availableLanguageProfiles = $state<ProfileRef[]>([]);
 
 	onMount(() => {
@@ -104,6 +106,23 @@
 		})();
 		void (async () => {
 			try {
+				const data = (await getScoringProfiles('music')) as unknown as {
+					profiles?: Array<{ id: string; name: string; isDefault?: boolean }>;
+					defaultProfileId?: string | null;
+				};
+				availableMusicProfiles = (data.profiles ?? []).map((p) => ({
+					id: p.id,
+					name: p.name,
+					isDefault: p.id === data.defaultProfileId
+				}));
+				musicDefaultProfileName =
+					availableMusicProfiles.find((p) => p.isDefault)?.name ?? null;
+			} catch {
+				availableMusicProfiles = [];
+			}
+		})();
+		void (async () => {
+			try {
 				const profiles = (await getLanguageProfiles()) as unknown as Array<{
 					id: string;
 					name: string;
@@ -115,8 +134,14 @@
 		})();
 	});
 
+	/** A music library is assigned from the music ladders, never the video list. */
+	const profileOptions = $derived(
+		libraryForm.mediaType === 'music' ? availableMusicProfiles : availableProfiles
+	);
 	const defaultProfileName = $derived(
-		availableProfiles.find((p) => p.isDefault)?.name ?? m.common_default()
+		libraryForm.mediaType === 'music'
+			? (musicDefaultProfileName ?? m.common_default())
+			: (availableProfiles.find((p) => p.isDefault)?.name ?? m.common_default())
 	);
 
 	const isCreateMode = $derived(libraryId === null);
@@ -285,9 +310,15 @@
 					class="select-bordered select select-sm"
 					bind:value={libraryForm.mediaType}
 					disabled={editingLibraryIsSystem}
+					onchange={() => {
+						// The profile lists are kind-specific; a choice from the old
+						// list cannot be carried into the new one.
+						libraryForm.qualityProfileId = null;
+					}}
 				>
 					<option value="movie">{m.rootFolders_movies()}</option>
 					<option value="tv">{m.rootFolders_tvShows()}</option>
+					<option value="music">{m.nav_music()}</option>
 				</select>
 			</div>
 
@@ -316,7 +347,7 @@
 					bind:value={libraryForm.qualityProfileId}
 				>
 					<option value={null}>{defaultProfileName}</option>
-					{#each availableProfiles.filter((p) => !p.isDefault) as profile (profile.id)}
+					{#each profileOptions.filter((p) => !p.isDefault) as profile (profile.id)}
 						<option value={profile.id}>{profile.name}</option>
 					{/each}
 				</select>

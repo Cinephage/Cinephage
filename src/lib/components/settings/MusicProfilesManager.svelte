@@ -18,6 +18,7 @@
 		label: string;
 		formats: string;
 		minBitrateKbps: string;
+		minBitDepth: string;
 	};
 
 	let modalOpen = $state(false);
@@ -25,13 +26,15 @@
 	let name = $state('');
 	let description = $state('');
 	let allowFallback = $state(true);
+	let minSizeMb = $state('');
+	let maxSizeMb = $state('');
 	let tiers = $state<TierDraft[]>([]);
 	let saving = $state(false);
 	let deleteTarget = $state<MusicProfileView | null>(null);
 	let deleting = $state(false);
 
 	function blankTier(kind: TierDraft['kind'] = 'lossless'): TierDraft {
-		return { kind, label: '', formats: '', minBitrateKbps: '' };
+		return { kind, label: '', formats: '', minBitrateKbps: '', minBitDepth: '' };
 	}
 
 	function openNew() {
@@ -39,6 +42,8 @@
 		name = '';
 		description = '';
 		allowFallback = true;
+		minSizeMb = '';
+		maxSizeMb = '';
 		tiers = [blankTier('lossless')];
 		modalOpen = true;
 	}
@@ -48,11 +53,14 @@
 		name = profile.name;
 		description = profile.description ?? '';
 		allowFallback = profile.allowFallback;
+		minSizeMb = profile.minSizeMb ? String(profile.minSizeMb) : '';
+		maxSizeMb = profile.maxSizeMb ? String(profile.maxSizeMb) : '';
 		tiers = profile.tiers.map((tier) => ({
 			kind: tier.kind,
 			label: tier.label,
 			formats: (tier.formats ?? []).join(', '),
-			minBitrateKbps: tier.minBitrateKbps ? String(tier.minBitrateKbps) : ''
+			minBitrateKbps: tier.minBitrateKbps ? String(tier.minBitrateKbps) : '',
+			minBitDepth: tier.minBitDepth ? String(tier.minBitDepth) : ''
 		}));
 		modalOpen = true;
 	}
@@ -87,8 +95,16 @@
 				: {}),
 			...(tier.kind === 'lossy' && tier.minBitrateKbps.trim()
 				? { minBitrateKbps: Number.parseInt(tier.minBitrateKbps, 10) }
+				: {}),
+			...(tier.kind === 'lossless' && tier.minBitDepth.trim()
+				? { minBitDepth: Number.parseInt(tier.minBitDepth, 10) }
 				: {})
 		}));
+	}
+
+	/** '' means "no bound"; the API stores that as null. */
+	function sizePayload(value: string): number | null {
+		return value.trim() ? Number.parseInt(value, 10) : null;
 	}
 
 	async function save() {
@@ -101,14 +117,18 @@
 						id: editingId,
 						name: name.trim(),
 						description: description.trim() || null,
-						upgradesAllowed: allowFallback,
+						musicAllowFallback: allowFallback,
+						musicMinSizeMb: sizePayload(minSizeMb),
+						musicMaxSizeMb: sizePayload(maxSizeMb),
 						musicTiers: tierPayload(),
 						mediaKind: 'music'
 					}
 				: {
 						name: name.trim(),
 						description: description.trim() || null,
-						upgradesAllowed: allowFallback,
+						musicAllowFallback: allowFallback,
+						musicMinSizeMb: sizePayload(minSizeMb),
+						musicMaxSizeMb: sizePayload(maxSizeMb),
 						musicTiers: tierPayload(),
 						mediaKind: 'music'
 					};
@@ -178,15 +198,24 @@
 			.join('  →  ');
 	}
 
+	function validOptionalInteger(value: string): boolean {
+		const trimmed = value.trim();
+		return trimmed === '' || /^\d+$/.test(trimmed);
+	}
+
 	const canSave = $derived(
 		name.trim().length > 0 &&
 			tiers.length > 0 &&
+			validOptionalInteger(minSizeMb) &&
+			validOptionalInteger(maxSizeMb) &&
+			(!minSizeMb.trim() ||
+				!maxSizeMb.trim() ||
+				Number.parseInt(minSizeMb, 10) <= Number.parseInt(maxSizeMb, 10)) &&
 			tiers.every(
 				(tier) =>
 					tier.label.trim().length > 0 &&
-					(tier.kind !== 'lossy' ||
-						!tier.minBitrateKbps.trim() ||
-						Number.isInteger(Number.parseInt(tier.minBitrateKbps, 10)))
+					(tier.kind !== 'lossy' || validOptionalInteger(tier.minBitrateKbps)) &&
+					(tier.kind !== 'lossless' || validOptionalInteger(tier.minBitDepth))
 			)
 	);
 </script>
@@ -289,6 +318,29 @@
 			{m.music_allowFallback()}
 		</label>
 
+		<div class="grid gap-4 sm:grid-cols-2">
+			<label class="form-control">
+				<span class="mb-1 text-sm font-medium">{m.music_profileSizeFloor()}</span>
+				<input
+					class="input w-full input-bordered"
+					bind:value={minSizeMb}
+					inputmode="numeric"
+					placeholder="0"
+					disabled={saving}
+				/>
+			</label>
+			<label class="form-control">
+				<span class="mb-1 text-sm font-medium">{m.music_profileSizeCeiling()}</span>
+				<input
+					class="input w-full input-bordered"
+					bind:value={maxSizeMb}
+					inputmode="numeric"
+					placeholder="0"
+					disabled={saving}
+				/>
+			</label>
+		</div>
+
 		<div>
 			<span class="mb-2 block text-sm font-medium">{m.music_profileTiers()}</span>
 			<div class="space-y-2">
@@ -325,6 +377,18 @@
 									bind:value={tier.minBitrateKbps}
 									inputmode="numeric"
 									placeholder="256"
+									disabled={saving}
+								/>
+							</label>
+						{/if}
+						{#if tier.kind === 'lossless'}
+							<label class="form-control w-24">
+								<span class="mb-1 text-xs text-base-content/60">{m.music_tierMinBitDepth()}</span>
+								<input
+									class="input w-full input-bordered input-xs"
+									bind:value={tier.minBitDepth}
+									inputmode="numeric"
+									placeholder="24"
 									disabled={saving}
 								/>
 							</label>

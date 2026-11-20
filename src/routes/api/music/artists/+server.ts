@@ -5,6 +5,7 @@ import { parseBody } from '#lib/server/api/validate.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { getLibraryEntityService } from '#lib/server/library/LibraryEntityService.js';
 import { musicArtistService } from '#lib/server/music/MusicArtistService.js';
+import { musicProfileService } from '#lib/server/music/MusicProfileService.js';
 import { musicBrainz, MusicBrainzError } from '#lib/server/music/musicbrainz.js';
 
 const logger = createChildLogger({ module: 'MusicArtistsApi', logDomain: 'system' });
@@ -24,7 +25,9 @@ const addArtistSchema = z.object({
 	monitored: z.boolean().default(true),
 	/** Release-group primary types to take. Default: albums and EPs. */
 	primaryTypes: z.array(z.string()).optional(),
-	excludeSecondaryTypes: z.array(z.string()).optional()
+	excludeSecondaryTypes: z.array(z.string()).optional(),
+	/** The artist's ladder; albums added by this run inherit it. */
+	qualityProfileId: z.string().trim().min(1).nullable().optional()
 });
 
 /** GET /api/music/artists/[mbid]/preview?artistName= — what an add would do, without writing. */
@@ -91,6 +94,13 @@ export const POST: RequestHandler = async (event) => {
 		rootFolderId = rootFolderId ?? target?.defaultRootFolderId ?? null;
 	}
 
+	if (input.qualityProfileId && !musicProfileService.get(input.qualityProfileId)) {
+		return Response.json(
+			{ error: `Unknown music quality profile: ${input.qualityProfileId}` },
+			{ status: 400 }
+		);
+	}
+
 	try {
 		const result = await musicArtistService.addArtist({
 			artist: input.artist,
@@ -100,7 +110,8 @@ export const POST: RequestHandler = async (event) => {
 				rootFolderId,
 				monitored: input.monitored,
 				primaryTypes: input.primaryTypes,
-				excludeSecondaryTypes: input.excludeSecondaryTypes
+				excludeSecondaryTypes: input.excludeSecondaryTypes,
+				qualityProfileId: input.qualityProfileId ?? null
 			}
 		});
 
@@ -125,25 +136,31 @@ export const POST: RequestHandler = async (event) => {
 };
 
 
-const bulkMonitoredSchema = z.object({
-	ids: z.array(z.string().min(1)).min(1).max(500),
-	monitored: z.boolean()
-});
+const bulkUpdateSchema = z
+	.object({
+		ids: z.array(z.string().min(1)).min(1).max(500),
+		monitored: z.boolean().optional(),
+		/** null clears the artist's own choice (inherit the library/default). */
+		qualityProfileId: z.string().trim().min(1).nullable().optional()
+	})
+	.refine((value) => value.monitored !== undefined || value.qualityProfileId !== undefined, {
+		message: 'Nothing to update'
+	});
 
 /**
- * PATCH /api/music/artists — the list page's Monitor All / Unmonitor All.
+ * PATCH /api/music/artists — the list page's bulk actions.
  *
  * Monitoring an artist only decides what a discography refresh treats as
- * wanted; each album keeps its own acquisition flag, and this route does not
- * touch those.
+ * wanted; each album keeps its own acquisition flag. A profile write is the
+ * artist-level default every album inherits unless it names its own.
  */
 export const PATCH: RequestHandler = async (event) => {
 	const authError = requireAdmin(event);
 	if (authError) return authError;
 
-	let input: z.infer<typeof bulkMonitoredSchema>;
+	let input: z.infer<typeof bulkUpdateSchema>;
 	try {
-		input = await parseBody(event.request, bulkMonitoredSchema);
+		input = await parseBody(event.request, bulkUpdateSchema);
 	} catch (err) {
 		return Response.json(
 			{ error: 'Invalid request', details: err instanceof Error ? err.message : String(err) },
@@ -151,9 +168,25 @@ export const PATCH: RequestHandler = async (event) => {
 		);
 	}
 
+	if (input.qualityProfileId && !musicProfileService.get(input.qualityProfileId)) {
+		return Response.json(
+			{ error: `Unknown music quality profile: ${input.qualityProfileId}` },
+			{ status: 400 }
+		);
+	}
+
 	let updated = 0;
 	for (const id of input.ids) {
-		if (musicArtistService.updateArtist(id, { monitored: input.monitored })) updated += 1;
+		if (
+			musicArtistService.updateArtist(id, {
+				...(input.monitored !== undefined ? { monitored: input.monitored } : {}),
+				...(input.qualityProfileId !== undefined
+					? { qualityProfileId: input.qualityProfileId }
+					: {})
+			})
+		) {
+			updated += 1;
+		}
 	}
 
 	return Response.json({ success: true, updated, requested: input.ids.length });

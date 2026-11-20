@@ -33,6 +33,7 @@
 	import LibraryBulkActionBar from '#lib/components/library/LibraryBulkActionBar.svelte';
 	import { createListSelection } from '#lib/components/library/list/list-selection.svelte.js';
 	import ConfirmationModal from '#lib/components/ui/modal/ConfirmationModal.svelte';
+	import BulkQualityProfileModal from '#lib/components/library/BulkQualityProfileModal.svelte';
 	import type { TrackTableRow } from '#lib/components/music/music-card.js';
 
 	let { data }: { data: PageData } = $props();
@@ -388,8 +389,9 @@
 	);
 
 	let bulkLoading = $state(false);
-	let bulkAction = $state<'monitor' | 'unmonitor' | 'delete' | null>(null);
+	let bulkAction = $state<'monitor' | 'unmonitor' | 'quality' | 'delete' | null>(null);
 	let removeSelectedOpen = $state(false);
+	let qualityOpen = $state(false);
 
 	async function bulkMonitor(monitored: boolean) {
 		if (selection.count === 0) return;
@@ -401,6 +403,36 @@
 				? setArtistsMonitored(ids, monitored)
 				: setMonitored(ids, monitored));
 			selection.clear();
+		} finally {
+			bulkLoading = false;
+			bulkAction = null;
+		}
+	}
+
+	async function bulkQuality(profileId: string | null) {
+		const ids = [...selection.ids];
+		if (ids.length === 0) return;
+		bulkLoading = true;
+		bulkAction = 'quality';
+		try {
+			const response = await fetch(
+				browse === 'artists' ? '/api/music/artists' : '/api/music/albums',
+				{
+					method: 'PATCH',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ ids, qualityProfileId: profileId })
+				}
+			);
+			const body = await response.json().catch(() => ({}));
+			if (!response.ok) {
+				toasts.error(body.details ?? body.error ?? m.common_failedToSave());
+				return;
+			}
+			qualityOpen = false;
+			selection.clear();
+			await invalidateAll();
+		} catch (err) {
+			toasts.error(err instanceof Error ? err.message : m.common_failedToSave());
 		} finally {
 			bulkLoading = false;
 			bulkAction = null;
@@ -798,8 +830,19 @@
 		itemLabel={bulkItemLabel}
 		onMonitor={() => bulkMonitor(true)}
 		onUnmonitor={() => bulkMonitor(false)}
+		onChangeQuality={() => (qualityOpen = true)}
 		onDelete={() => (removeSelectedOpen = true)}
 		onClear={selection.clear}
+	/>
+
+	<BulkQualityProfileModal
+		open={qualityOpen}
+		selectedCount={selection.count}
+		qualityProfiles={data.qualityProfiles}
+		saving={bulkLoading && bulkAction === 'quality'}
+		itemLabel={bulkItemLabel}
+		onSave={bulkQuality}
+		onCancel={() => (qualityOpen = false)}
 	/>
 
 	<ConfirmationModal
@@ -849,4 +892,5 @@
 	open={addOpen}
 	onClose={() => (addOpen = false)}
 	libraryId={data.library?.id ?? null}
+	defaultProfileName={data.defaultProfileName}
 />

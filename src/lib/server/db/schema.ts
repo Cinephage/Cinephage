@@ -387,6 +387,15 @@ export const scoringProfiles = sqliteTable('scoring_profiles', {
 	mediaKind: text('media_kind').default('video'),
 	/** Ordered music ladder; null for video profiles. */
 	musicTiers: text('music_tiers', { mode: 'json' }).$type<MusicProfileTierRow[]>(),
+	/**
+	 * Music's faulty-fallback switch. `upgrades_allowed` is video semantics
+	 * ("replace a file with a better one"); a music ladder needs the different
+	 * question "is a lower rung acceptable", so it gets its own column.
+	 */
+	musicAllowFallback: integer('music_allow_fallback', { mode: 'boolean' }).default(true),
+	/** Music size bounds in MB of audio; null on either side means no bound. */
+	musicMinSizeMb: real('music_min_size_mb'),
+	musicMaxSizeMb: real('music_max_size_mb'),
 	createdAt: text('created_at').$defaultFn(() => new Date().toISOString()),
 	updatedAt: text('updated_at').$defaultFn(() => new Date().toISOString())
 });

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
+	import { onMount } from 'svelte';
 	import { Disc3, ListMusic, LoaderCircle, Plus, Search, User } from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import { ModalWrapper } from '#lib/components/ui/modal/index.js';
@@ -15,9 +16,11 @@
 		open: boolean;
 		onClose: () => void;
 		libraryId?: string | null;
+		/** What "default" resolves to here: the library's profile, or the instance default. */
+		defaultProfileName?: string | null;
 	};
 
-	let { open, onClose, libraryId = null }: Props = $props();
+	let { open, onClose, libraryId = null, defaultProfileName = null }: Props = $props();
 
 	let kind = $state<Kind>('artist');
 	let artistQuery = $state('');
@@ -29,6 +32,27 @@
 	let albumResults = $state<MusicReleaseGroup[]>([]);
 	let songResults = $state<MusicRecordingHit[]>([]);
 	let message = $state<{ kind: 'error' | 'info'; text: string } | null>(null);
+	/** Assignment at the door: artist rows carry it, single albums carry it. */
+	let qualityProfiles = $state<Array<{ id: string; name: string }>>([]);
+	let qualityProfileId = $state('');
+
+	onMount(() => {
+		void (async () => {
+			try {
+				const response = await fetch('/api/scoring-profiles?mediaKind=music');
+				if (!response.ok) return;
+				const body = (await response.json()) as {
+					profiles?: Array<{ id: string; name: string }>;
+				};
+				qualityProfiles = (body.profiles ?? []).map((profile) => ({
+					id: profile.id,
+					name: profile.name
+				}));
+			} catch {
+				qualityProfiles = [];
+			}
+		})();
+	});
 
 	const canSearch = $derived(
 		kind === 'artist'
@@ -96,7 +120,11 @@
 			const response = await fetch('/api/music/albums', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ releaseGroupMbid: group.mbid, libraryId })
+				body: JSON.stringify({
+					releaseGroupMbid: group.mbid,
+					libraryId,
+					qualityProfileId: qualityProfileId || null
+				})
 			});
 			const body = await response.json();
 			if (!response.ok) {
@@ -138,7 +166,8 @@
 					body: JSON.stringify({
 						artist: { mbid: artist.mbid, name: artist.name, sortName: artist.sortName ?? null },
 						limit: 25,
-						libraryId
+						libraryId,
+						qualityProfileId: qualityProfileId || null
 					})
 				});
 				const body = await response.json();
@@ -186,6 +215,22 @@
 		<button class="tab gap-1.5" class:tab-active={kind === 'song'} onclick={() => setKind('song')}>
 			<ListMusic class="h-3.5 w-3.5" />{m.music_tabSong()}
 		</button>
+	</div>
+
+	<div class="mt-4 flex flex-wrap items-end gap-2">
+		<label class="form-control w-full sm:w-80">
+			<span class="mb-1 text-xs text-base-content/55">{m.common_qualityProfile()}</span>
+			<select class="select-bordered select select-sm" bind:value={qualityProfileId}>
+				<option value="">
+					{defaultProfileName
+						? m.music_useDefaultProfile({ name: defaultProfileName })
+						: m.common_default()}
+				</option>
+				{#each qualityProfiles as profile (profile.id)}
+					<option value={profile.id}>{profile.name}</option>
+				{/each}
+			</select>
+		</label>
 	</div>
 
 	<form

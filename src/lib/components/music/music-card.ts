@@ -142,4 +142,6 @@ export interface AlbumEditData {
 	catalogNumber: string | null;
 	barcode: string | null;
 	country: string | null;
+	/** null clears the album's own choice and inherits the artist/library. */
+	qualityProfileId: string | null;
 }

@@ -10,7 +10,7 @@
 		itemLabel: string;
 		onMonitor: () => void;
 		onUnmonitor: () => void;
-		/** Video-only: music grades on bitrate, not a quality profile. */
+		/** Bulk quality-profile assignment; both video and music lists wire it. */
 		onChangeQuality?: () => void;
 		/** Optional bulk language profile action. */
 		onLanguage?: () => void;

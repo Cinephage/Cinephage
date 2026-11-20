@@ -87,6 +87,7 @@
 	let editOpen = $state(false);
 	let editName = $state('');
 	let editSortName = $state('');
+	let editQualityProfileId = $state('');
 	let savingEdit = $state(false);
 	let deleteOpen = $state(false);
 	let deleting = $state(false);
@@ -94,6 +95,7 @@
 	function openEdit() {
 		editName = artist.name;
 		editSortName = artist.sortName ?? '';
+		editQualityProfileId = activeProfile ?? '';
 		editOpen = true;
 	}
 
@@ -106,7 +108,8 @@
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({
 					name: editName.trim(),
-					sortName: editSortName.trim() || null
+					sortName: editSortName.trim() || null,
+					qualityProfileId: editQualityProfileId || null
 				})
 			});
 			if (!response.ok) {
@@ -522,6 +525,19 @@
 		<label class="form-control">
 			<span class="mb-1 text-xs text-base-content/50 uppercase">{m.music_sortName()}</span>
 			<input class="input w-full input-sm" bind:value={editSortName} placeholder={artist.name} />
+		</label>
+		<label class="form-control">
+			<span class="mb-1 text-xs text-base-content/50 uppercase">{m.common_qualityProfile()}</span>
+			<select class="select w-full select-sm select-bordered" bind:value={editQualityProfileId}>
+				<option value="">
+					{data.defaultProfileName
+						? m.music_inheritDefault({ name: data.defaultProfileName })
+						: m.music_inheritProfile()}
+				</option>
+				{#each data.qualityProfiles as profile (profile.id)}
+					<option value={profile.id}>{profile.name}</option>
+				{/each}
+			</select>
 		</label>
 		<div class="flex justify-end gap-2 pt-1">
 			<button type="button" class="btn btn-ghost btn-sm" onclick={() => (editOpen = false)}>

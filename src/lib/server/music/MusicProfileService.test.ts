@@ -27,6 +27,20 @@ function seedMusicProfile(id: string, name: string) {
 		.run();
 }
 
+function seedMusicLibrary(qualityProfileId: string | null) {
+	testDb.db
+		.insert(schema.libraries)
+		.values({
+			id: 'lib-music',
+			name: 'Music',
+			slug: 'music',
+			mediaType: 'music',
+			mediaSubType: 'standard',
+			qualityProfileId
+		})
+		.run();
+}
+
 function seedArtistAndAlbum(artistProfile: string | null, albumProfile: string | null) {
 	testDb.db
 		.insert(schema.mediaItems)
@@ -34,7 +48,12 @@ function seedArtistAndAlbum(artistProfile: string | null, albumProfile: string |
 		.run();
 	testDb.db
 		.insert(schema.artists)
-		.values({ id: 'artist-1', name: 'Daft Punk', qualityProfileId: artistProfile })
+		.values({
+			id: 'artist-1',
+			name: 'Daft Punk',
+			libraryId: 'lib-music',
+			qualityProfileId: artistProfile
+		})
 		.run();
 	testDb.db
 		.insert(schema.albums)
@@ -63,9 +82,11 @@ describe('MusicProfileService', () => {
 		expect(musicProfileService.getDefault()?.id).toBe('music-a');
 	});
 
-	it('resolves album then artist then default', () => {
+	it('resolves album then artist then library then default', () => {
 		seedMusicProfile('music-artist', 'Artist profile');
 		seedMusicProfile('music-album', 'Album profile');
+		seedMusicProfile('music-library', 'Library profile');
+		seedMusicLibrary('music-library');
 		seedArtistAndAlbum('music-artist', 'music-album');
 
 		expect(musicProfileService.resolveForAlbum('album-1').id).toBe('music-album');
@@ -74,16 +95,53 @@ describe('MusicProfileService', () => {
 		expect(musicProfileService.resolveForAlbum('album-1').id).toBe('music-artist');
 
 		testDb.db.update(schema.artists).set({ qualityProfileId: null }).run();
+		expect(musicProfileService.resolveForAlbum('album-1').id).toBe('music-library');
+
+		testDb.db.update(schema.libraries).set({ qualityProfileId: null }).run();
 		expect(musicProfileService.resolveForAlbum('album-1').id).toBe(
 			musicProfileService.getDefault()?.id
 		);
 	});
 
-	it('validates tiers and refuses to delete a built-in profile', () => {
+	it('stores fallback and size bounds in the music columns, not upgradesAllowed', () => {
+		const created = musicProfileService.create({
+			name: 'Custom',
+			tiers: [{ kind: 'lossless', label: 'Lossless' }],
+			allowFallback: false,
+			minSizeMb: 100,
+			maxSizeMb: 2000
+		});
+
+		const row = testDb.sqlite
+			.prepare(
+				'SELECT music_allow_fallback, upgrades_allowed, music_min_size_mb, music_max_size_mb FROM scoring_profiles WHERE id = ?'
+			)
+			.get(created.id) as {
+			music_allow_fallback: number;
+			upgrades_allowed: number;
+			music_min_size_mb: number;
+			music_max_size_mb: number;
+		};
+
+		expect(row.music_allow_fallback).toBe(0);
+		expect(row.music_min_size_mb).toBe(100);
+		expect(row.music_max_size_mb).toBe(2000);
+		expect(created.allowFallback).toBe(false);
+	});
+
+	it('validates tiers and size bounds, and refuses to delete a built-in profile', () => {
 		seedMusicProfile('music-builtin', 'Built in');
+		expect(() => musicProfileService.create({ name: 'Broken', tiers: [] })).toThrow(
+			/at least one tier/i
+		);
 		expect(() =>
-			musicProfileService.create({ name: 'Broken', tiers: [] })
-		).toThrow(/at least one tier/i);
+			musicProfileService.create({
+				name: 'Inverted',
+				tiers: [{ kind: 'lossless', label: 'Lossless' }],
+				minSizeMb: 900,
+				maxSizeMb: 100
+			})
+		).toThrow(/floor cannot be above the ceiling/i);
 		expect(() => musicProfileService.remove('music-builtin')).toThrow(/built-in/i);
 	});
 });

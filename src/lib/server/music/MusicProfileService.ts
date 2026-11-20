@@ -1,8 +1,9 @@
-import { and, asc, eq, ne } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
 import {
 	albums,
 	artists,
+	libraries,
 	scoringProfiles,
 	settings,
 	type MusicProfileTierRow
@@ -24,6 +25,9 @@ export interface MusicProfile {
 	description: string | null;
 	tiers: MusicProfileTierRow[];
 	allowFallback: boolean;
+	/** MB of audio; null on either side means no bound. */
+	minSizeMb: number | null;
+	maxSizeMb: number | null;
 	isDefault: boolean;
 	isBuiltIn: boolean;
 	sortOrder: number;
@@ -34,6 +38,8 @@ export interface MusicProfileInput {
 	description?: string | null;
 	tiers: MusicProfileTierRow[];
 	allowFallback?: boolean;
+	minSizeMb?: number | null;
+	maxSizeMb?: number | null;
 }
 
 function toPublic(row: typeof scoringProfiles.$inferSelect, defaultId: string | null): MusicProfile {
@@ -42,7 +48,9 @@ function toPublic(row: typeof scoringProfiles.$inferSelect, defaultId: string | 
 		name: row.name,
 		description: row.description,
 		tiers: row.musicTiers ?? [],
-		allowFallback: row.upgradesAllowed ?? true,
+		allowFallback: row.musicAllowFallback ?? true,
+		minSizeMb: row.musicMinSizeMb ?? null,
+		maxSizeMb: row.musicMaxSizeMb ?? null,
 		isDefault: row.id === defaultId,
 		isBuiltIn: row.isBuiltIn ?? false,
 		sortOrder: 0
@@ -65,8 +73,8 @@ function toQualityProfile(row: MusicProfile): MusicQualityProfile {
 		),
 		allowFallback: row.allowFallback,
 		formatScores: {},
-		minSizeMb: null,
-		maxSizeMb: null
+		minSizeMb: row.minSizeMb,
+		maxSizeMb: row.maxSizeMb
 	};
 }
 
@@ -92,6 +100,20 @@ function validateTiers(tiers: MusicProfileTierRow[]): MusicProfileTierRow[] {
 			...(tier.minBitDepth ? { minBitDepth: tier.minBitDepth } : {})
 		};
 	});
+}
+
+function validateSizeBounds(minSizeMb?: number | null, maxSizeMb?: number | null): void {
+	for (const [name, value] of [
+		['floor', minSizeMb],
+		['ceiling', maxSizeMb]
+	] as const) {
+		if (value !== undefined && value !== null && (!Number.isFinite(value) || value <= 0)) {
+			throw new ValidationError(`The size ${name} must be a positive number of MB`);
+		}
+	}
+	if (minSizeMb && maxSizeMb && minSizeMb > maxSizeMb) {
+		throw new ValidationError('The size floor cannot be above the ceiling');
+	}
 }
 
 function readDefaultId(): string | null {
@@ -153,31 +175,55 @@ export class MusicProfileService {
 		return this.get(defaultId) ?? this.list()[0];
 	}
 
+	/** The library's profile: the rung between the item's own choice and the instance default. */
+	private libraryProfileId(libraryId?: string | null): string | null {
+		if (!libraryId) return null;
+		const row = db
+			.select({ qualityProfileId: libraries.qualityProfileId })
+			.from(libraries)
+			.where(eq(libraries.id, libraryId))
+			.get();
+		return row?.qualityProfileId ?? null;
+	}
+
 	resolveForAlbum(albumId: string): MusicQualityProfile {
 		const row = db
 			.select({
 				albumProfileId: albums.qualityProfileId,
-				artistProfileId: artists.qualityProfileId
+				albumLibraryId: albums.libraryId,
+				artistProfileId: artists.qualityProfileId,
+				artistLibraryId: artists.libraryId
 			})
 			.from(albums)
 			.innerJoin(artists, eq(albums.artistId, artists.id))
 			.where(eq(albums.id, albumId))
 			.get();
 
-		return this.resolve(row?.albumProfileId, row?.artistProfileId);
+		return this.resolve(
+			row?.albumProfileId,
+			row?.artistProfileId,
+			this.libraryProfileId(row?.artistLibraryId ?? row?.albumLibraryId)
+		);
 	}
 
 	resolveForArtist(artistId: string): MusicQualityProfile {
 		const row = db
-			.select({ artistProfileId: artists.qualityProfileId })
+			.select({
+				artistProfileId: artists.qualityProfileId,
+				artistLibraryId: artists.libraryId
+			})
 			.from(artists)
 			.where(eq(artists.id, artistId))
 			.get();
-		return this.resolve(null, row?.artistProfileId);
+		return this.resolve(null, row?.artistProfileId, this.libraryProfileId(row?.artistLibraryId));
 	}
 
-	resolve(albumProfileId?: string | null, artistProfileId?: string | null): MusicQualityProfile {
-		for (const id of [albumProfileId, artistProfileId, this.getDefault()?.id]) {
+	resolve(
+		albumProfileId?: string | null,
+		artistProfileId?: string | null,
+		libraryProfileId?: string | null
+	): MusicQualityProfile {
+		for (const id of [albumProfileId, artistProfileId, libraryProfileId, this.getDefault()?.id]) {
 			if (!id) continue;
 			const profile = this.get(id);
 			if (profile) return toQualityProfile(profile);
@@ -194,6 +240,7 @@ export class MusicProfileService {
 		const tiers = validateTiers(input.tiers);
 		const name = input.name?.trim();
 		if (!name) throw new ValidationError('A music profile needs a name');
+		validateSizeBounds(input.minSizeMb, input.maxSizeMb);
 
 		const row = db
 			.insert(scoringProfiles)
@@ -202,7 +249,9 @@ export class MusicProfileService {
 				description: input.description?.trim() || null,
 				mediaKind: 'music',
 				musicTiers: tiers,
-				upgradesAllowed: input.allowFallback ?? true,
+				musicAllowFallback: input.allowFallback ?? true,
+				musicMinSizeMb: input.minSizeMb ?? null,
+				musicMaxSizeMb: input.maxSizeMb ?? null,
 				isBuiltIn: false,
 				isDefault: false
 			})
@@ -225,7 +274,14 @@ export class MusicProfileService {
 		}
 		if (input.description !== undefined) values.description = input.description?.trim() || null;
 		if (input.tiers !== undefined) values.musicTiers = validateTiers(input.tiers);
-		if (input.allowFallback !== undefined) values.upgradesAllowed = input.allowFallback;
+		if (input.allowFallback !== undefined) values.musicAllowFallback = input.allowFallback;
+		if (input.minSizeMb !== undefined || input.maxSizeMb !== undefined) {
+			const minSizeMb = input.minSizeMb !== undefined ? input.minSizeMb : existing.minSizeMb;
+			const maxSizeMb = input.maxSizeMb !== undefined ? input.maxSizeMb : existing.maxSizeMb;
+			validateSizeBounds(minSizeMb, maxSizeMb);
+			if (input.minSizeMb !== undefined) values.musicMinSizeMb = input.minSizeMb;
+			if (input.maxSizeMb !== undefined) values.musicMaxSizeMb = input.maxSizeMb;
+		}
 
 		const row = db
 			.update(scoringProfiles)
@@ -250,6 +306,13 @@ export class MusicProfileService {
 			tx.update(artists)
 				.set({ qualityProfileId: null })
 				.where(eq(artists.qualityProfileId, id))
+				.run();
+			// A library pointing at a deleted profile would resolve to the default
+			// anyway (unknown ids are skipped), but the column should not hold a
+			// dangling id that the UI then shows as "inherit".
+			tx.update(libraries)
+				.set({ qualityProfileId: null })
+				.where(eq(libraries.qualityProfileId, id))
 				.run();
 			const result = tx.delete(scoringProfiles).where(eq(scoringProfiles.id, id)).run();
 			return result.changes > 0;

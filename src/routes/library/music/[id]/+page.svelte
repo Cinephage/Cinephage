@@ -632,7 +632,9 @@
 
 <AlbumEditModal
 	open={editOpen}
-	{album}
+	album={{ ...album, qualityProfileId: activeProfile ?? null }}
+	qualityProfiles={data.qualityProfiles}
+	inheritedProfileName={data.inheritedProfileName}
 	saving={editSaving}
 	onClose={() => (editOpen = false)}
 	onSave={saveAlbumEdit}

@@ -2426,7 +2426,11 @@ export const scoringProfileCreateSchema = z.object({
 	isDefault: z.boolean().optional(),
 	// Music profiles are rows in this same table, tagged by media kind.
 	mediaKind: z.enum(['video', 'music']).optional(),
-	musicTiers: z.array(musicTierSchema).min(1).max(20).optional()
+	musicTiers: z.array(musicTierSchema).min(1).max(20).optional(),
+	/** Music's own fallback switch; see MusicProfileService for why it is not upgradesAllowed. */
+	musicAllowFallback: z.boolean().optional(),
+	musicMinSizeMb: z.number().min(0).nullable().optional(),
+	musicMaxSizeMb: z.number().min(0).nullable().optional()
 });
 
 export const scoringProfileUpdateSchema = scoringProfileCreateSchema.required().partial();

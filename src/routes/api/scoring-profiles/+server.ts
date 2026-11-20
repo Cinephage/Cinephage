@@ -13,6 +13,7 @@ import {
 	scoringProfileUpdateBodySchema,
 	scoringProfileDeleteSchema
 } from '#lib/validation/schemas.js';
+import { musicProfileService } from '#lib/server/music/MusicProfileService.js';
 
 const BUILT_IN_IDS = DEFAULT_PROFILES.map((p) => p.id);
 
@@ -89,7 +90,20 @@ async function resolveAllowedIndexerIds(
 	return unique;
 }
 
-export const GET: RequestHandler = async () => {
+export const GET: RequestHandler = async ({ url }) => {
+	// The assignment surfaces ask for one kind at a time: a music library and a
+	// music add flow must never be offered a video profile, and the video pages
+	// must never be offered a ladder.
+	if (url.searchParams.get('mediaKind') === 'music') {
+		const profiles = musicProfileService.list();
+		return Response.json({
+			profiles,
+			count: profiles.length,
+			defaultProfileId: musicProfileService.getDefaultId(),
+			mediaKind: 'music'
+		});
+	}
+
 	const dbProfiles = (await db.select().from(scoringProfiles)).filter(
 		(p) => p.mediaKind !== 'music'
 	);
@@ -172,6 +186,20 @@ export const POST: RequestHandler = async (event) => {
 				{ error: `Profile with name '${data.name}' already exists` },
 				{ status: 409 }
 			);
+		}
+
+		// Music rows have their own validator and writer; the video fields below
+		// (scores, resolutions, size limits per movie/episode) do not apply.
+		if (data.mediaKind === 'music') {
+			const profile = musicProfileService.create({
+				name: data.name,
+				description: data.description,
+				tiers: data.musicTiers ?? [],
+				allowFallback: data.musicAllowFallback,
+				minSizeMb: data.musicMinSizeMb,
+				maxSizeMb: data.musicMaxSizeMb
+			});
+			return Response.json(profile, { status: 201 });
 		}
 
 		if (data.id) {
@@ -353,6 +381,28 @@ export const PUT: RequestHandler = async (event) => {
 			throw new NotFoundError('Profile', id);
 		}
 
+		if (existing[0].mediaKind === 'music') {
+			if (updateData.name !== undefined) {
+				const duplicateByName = await findProfileByNameCaseInsensitive(updateData.name, id);
+				if (duplicateByName) {
+					return Response.json(
+						{ error: `Profile with name '${updateData.name}' already exists` },
+						{ status: 409 }
+					);
+				}
+			}
+			const updated = musicProfileService.update(id, {
+				name: updateData.name,
+				description: updateData.description,
+				tiers: updateData.musicTiers,
+				allowFallback: updateData.musicAllowFallback,
+				minSizeMb: updateData.musicMinSizeMb,
+				maxSizeMb: updateData.musicMaxSizeMb
+			});
+			if (!updated) throw new NotFoundError('Profile', id);
+			return Response.json(updated);
+		}
+
 		if (updateData.name !== undefined) {
 			const duplicateByName = await findProfileByNameCaseInsensitive(updateData.name, id);
 			if (duplicateByName) {
@@ -428,6 +478,19 @@ export const DELETE: RequestHandler = async (event) => {
 
 		if (isBuiltInProfile(id)) {
 			throw new ValidationError(`Cannot delete built-in profile '${id}'`);
+		}
+
+		const existing = await db
+			.select()
+			.from(scoringProfiles)
+			.where(eq(scoringProfiles.id, id))
+			.get();
+		if (!existing) {
+			throw new NotFoundError('Profile', id);
+		}
+		if (existing.mediaKind === 'music') {
+			musicProfileService.remove(id);
+			return Response.json({ success: true, deleted: existing });
 		}
 
 		const deleted = await db.delete(scoringProfiles).where(eq(scoringProfiles.id, id)).returning();

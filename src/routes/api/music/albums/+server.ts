@@ -4,6 +4,7 @@ import { requireAdmin, requireAuth } from '#lib/server/auth/authorization.js';
 import { parseBody } from '#lib/server/api/validate.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { musicAlbumService } from '#lib/server/music/MusicAlbumService.js';
+import { musicProfileService } from '#lib/server/music/MusicProfileService.js';
 import { getLibraryEntityService } from '#lib/server/library/LibraryEntityService.js';
 import {
 	musicBrainz,
@@ -20,7 +21,9 @@ const addAlbumSchema = z.object({
 	releaseMbid: z.string().uuid().optional().nullable(),
 	libraryId: z.string().optional().nullable(),
 	rootFolderId: z.string().optional().nullable(),
-	monitored: z.boolean().default(true)
+	monitored: z.boolean().default(true),
+	/** The album's own ladder; null inherits the artist/library/default. */
+	qualityProfileId: z.string().trim().min(1).nullable().optional()
 });
 
 /** GET /api/music/albums?libraryId= — the library list. */
@@ -55,6 +58,15 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	try {
+		// Fail before the MusicBrainz round trips: a bad profile id is a client
+		// mistake, not something to discover after two network calls.
+		if (input.qualityProfileId && !musicProfileService.get(input.qualityProfileId)) {
+			return Response.json(
+				{ error: `Unknown music quality profile: ${input.qualityProfileId}` },
+				{ status: 400 }
+			);
+		}
+
 		// An album added without a library goes to the default music library, with
 		// that library's default root folder — otherwise it is stored with no home
 		// and never shows up in a library view.
@@ -89,7 +101,8 @@ export const POST: RequestHandler = async (event) => {
 			release,
 			libraryId,
 			rootFolderId,
-			monitored: input.monitored
+			monitored: input.monitored,
+			qualityProfileId: input.qualityProfileId ?? null
 		});
 
 		return Response.json(
@@ -122,13 +135,19 @@ export const POST: RequestHandler = async (event) => {
 };
 
 
-const bulkMonitoredSchema = z.object({
-	ids: z.array(z.string().min(1)).min(1).max(500),
-	monitored: z.boolean()
-});
+const bulkUpdateSchema = z
+	.object({
+		ids: z.array(z.string().min(1)).min(1).max(500),
+		monitored: z.boolean().optional(),
+		/** null clears the album's own choice (inherit the artist/library/default). */
+		qualityProfileId: z.string().trim().min(1).nullable().optional()
+	})
+	.refine((value) => value.monitored !== undefined || value.qualityProfileId !== undefined, {
+		message: 'Nothing to update'
+	});
 
 /**
- * PATCH /api/music/albums — the list page's Monitor All / Unmonitor All.
+ * PATCH /api/music/albums — the list page's bulk actions.
  *
  * One request for a whole filtered shelf: the library toolbar acts on what the
  * user is looking at, and a loop of per-album PATCHes would be N round trips
@@ -138,9 +157,9 @@ export const PATCH: RequestHandler = async (event) => {
 	const authError = requireAdmin(event);
 	if (authError) return authError;
 
-	let input: z.infer<typeof bulkMonitoredSchema>;
+	let input: z.infer<typeof bulkUpdateSchema>;
 	try {
-		input = await parseBody(event.request, bulkMonitoredSchema);
+		input = await parseBody(event.request, bulkUpdateSchema);
 	} catch (err) {
 		return Response.json(
 			{ error: 'Invalid request', details: err instanceof Error ? err.message : String(err) },
@@ -148,9 +167,24 @@ export const PATCH: RequestHandler = async (event) => {
 		);
 	}
 
+	if (input.qualityProfileId && !musicProfileService.get(input.qualityProfileId)) {
+		return Response.json(
+			{ error: `Unknown music quality profile: ${input.qualityProfileId}` },
+			{ status: 400 }
+		);
+	}
+
 	let updated = 0;
 	for (const id of input.ids) {
-		if (musicAlbumService.setMonitored(id, input.monitored)) updated += 1;
+		const changed =
+			input.monitored !== undefined
+				? musicAlbumService.setMonitored(id, input.monitored)
+				: false;
+		const profileChanged =
+			input.qualityProfileId !== undefined
+				? musicAlbumService.setQualityProfile(id, input.qualityProfileId)
+				: false;
+		if (changed || profileChanged) updated += 1;
 	}
 
 	return Response.json({ success: true, updated, requested: input.ids.length });

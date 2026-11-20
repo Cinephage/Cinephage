@@ -7,9 +7,11 @@ import {
 	languageProfiles,
 	movies,
 	rootFolders,
+	scoringProfiles,
 	series
 } from '#lib/server/db/schema.js';
 import { NotFoundError, ValidationError } from '#lib/errors/index.js';
+import { isBuiltInProfile } from '#lib/server/scoring/index.js';
 import type { KindId } from '#lib/media-kinds/registry.js';
 
 export type LibraryMediaType = KindId;
@@ -769,11 +771,47 @@ export class LibraryEntityService {
 		};
 	}
 
+	/**
+	 * A library and its quality profiles have to be the same media kind. A music
+	 * library holding a video profile (or the reverse) would look assigned in the
+	 * UI and never apply at search time.
+	 */
+	private async resolveLibraryQualityProfileId(
+		mediaType: LibraryMediaType,
+		qualityProfileId?: string | null
+	): Promise<string | null> {
+		if (!qualityProfileId) return null;
+		const profile = await db
+			.select({ id: scoringProfiles.id, mediaKind: scoringProfiles.mediaKind })
+			.from(scoringProfiles)
+			.where(eq(scoringProfiles.id, qualityProfileId))
+			.get();
+
+		// Video built-ins live in code and may have no row until someone edits
+		// them; they are still valid assignments.
+		let profileKind: 'music' | 'video' | null = null;
+		if (profile) profileKind = profile.mediaKind === 'music' ? 'music' : 'video';
+		else if (isBuiltInProfile(qualityProfileId)) profileKind = 'video';
+		if (!profileKind) throw new ValidationError(`Unknown quality profile: ${qualityProfileId}`);
+
+		const libraryKind = mediaType === 'music' ? 'music' : 'video';
+		if (profileKind !== libraryKind) {
+			throw new ValidationError(
+				`Quality profile '${qualityProfileId}' is a ${profileKind} profile, but this is a ${libraryKind} library`
+			);
+		}
+		return profile?.id ?? qualityProfileId;
+	}
+
 	async createLibrary(input: CreateLibraryInput): Promise<LibraryEntity> {
 		const mediaSubType = input.mediaSubType ?? 'standard';
 		const rootFolderIds = uniqueStringArray(input.rootFolderIds);
 		await ensureRootFoldersMatchLibrary(rootFolderIds, input.mediaType, mediaSubType);
 		const languageProfileId = await this.resolveLibraryLanguageProfileId(input.languageProfileId);
+		const qualityProfileId = await this.resolveLibraryQualityProfileId(
+			input.mediaType,
+			input.qualityProfileId
+		);
 
 		const now = new Date().toISOString();
 		const id = randomUUID();
@@ -807,7 +845,7 @@ export class LibraryEntityService {
 			defaultRootFolderId: null,
 			defaultSearchOnAdd: input.defaultSearchOnAdd ?? true,
 			defaultWantsSubtitles: input.defaultWantsSubtitles ?? true,
-			qualityProfileId: input.qualityProfileId || null,
+			qualityProfileId,
 			languageProfileId,
 			sortOrder: nextSortOrder,
 			scanMode: input.scanMode ?? 'scheduled',
@@ -887,7 +925,10 @@ export class LibraryEntityService {
 			updateData.defaultWantsSubtitles = updates.defaultWantsSubtitles;
 		}
 		if (updates.qualityProfileId !== undefined) {
-			updateData.qualityProfileId = updates.qualityProfileId || null;
+			updateData.qualityProfileId = await this.resolveLibraryQualityProfileId(
+				mediaType,
+				updates.qualityProfileId
+			);
 		}
 		if (updates.languageProfileId !== undefined) {
 			updateData.languageProfileId = await this.resolveLibraryLanguageProfileId(

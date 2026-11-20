@@ -3,6 +3,7 @@
 	import {
 		Film,
 		Tv,
+		Music,
 		Settings,
 		Trash2,
 		Search,
@@ -39,7 +40,7 @@
 	let { libraries, storageBreakdown, onEdit, onDelete, formatBytes }: Props = $props();
 
 	type LibrarySection = {
-		id: 'movie' | 'tv';
+		id: 'movie' | 'tv' | 'music';
 		title: string;
 		icon: typeof Film;
 		sectionClasses: string;
@@ -88,6 +89,14 @@
 				sectionClasses: 'bg-secondary/15 text-secondary',
 				cardClasses: 'bg-secondary/20 text-secondary',
 				libraries: libraries.filter((library) => library.mediaType === 'tv')
+			},
+			{
+				id: 'music',
+				title: m.settings_general_musicLibraries(),
+				icon: Music,
+				sectionClasses: 'bg-accent/15 text-accent',
+				cardClasses: 'bg-accent/20 text-accent',
+				libraries: libraries.filter((library) => library.mediaType === 'music')
 			}
 		].filter((section) => section.libraries.length > 0) as LibrarySection[]
 	);

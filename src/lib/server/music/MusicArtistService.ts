@@ -90,13 +90,29 @@ export class MusicArtistService {
 	}
 
 	/** Reuse the artist row if it exists, otherwise create it without albums. */
-	private ensureArtistRow(artist: MusicArtistRef, libraryId?: string | null): string {
+	private ensureArtistRow(
+		artist: MusicArtistRef,
+		libraryId?: string | null,
+		qualityProfileId?: string | null
+	): string {
 		const existing = db
-			.select({ id: artists.id })
+			.select({ id: artists.id, libraryId: artists.libraryId })
 			.from(artists)
 			.where(eq(artists.mbid, artist.mbid))
 			.get();
-		if (existing) return existing.id;
+		if (existing) {
+			const patch: Partial<typeof artists.$inferInsert> = {};
+			// A chosen profile is a statement about this artist; a library is only
+			// filled in when the row has no home yet.
+			if (qualityProfileId !== undefined && qualityProfileId !== null) {
+				patch.qualityProfileId = qualityProfileId;
+			}
+			if (libraryId && !existing.libraryId) patch.libraryId = libraryId;
+			if (Object.keys(patch).length > 0) {
+				db.update(artists).set(patch).where(eq(artists.id, existing.id)).run();
+			}
+			return existing.id;
+		}
 
 		const id = randomUUID();
 		db.insert(artists)
@@ -105,7 +121,8 @@ export class MusicArtistService {
 				mbid: artist.mbid,
 				name: artist.name,
 				sortName: artist.sortName ?? null,
-				libraryId: libraryId ?? null
+				libraryId: libraryId ?? null,
+				qualityProfileId: qualityProfileId ?? null
 			})
 			.run();
 		return id;
@@ -291,7 +308,7 @@ export class MusicArtistService {
 			.filterReleaseGroups(groups, policy)
 			.sort((a, b) => (a.firstReleaseDate ?? '9999').localeCompare(b.firstReleaseDate ?? '9999'));
 
-		const artistId = this.ensureArtistRow(artist, policy.libraryId);
+		const artistId = this.ensureArtistRow(artist, policy.libraryId, policy.qualityProfileId);
 		const stored = musicAlbumService.existingReleaseGroupMbids(artistId);
 		const pending = matched.filter((group) => !stored.has(group.mbid));
 		const batch = pending.slice(0, limit);

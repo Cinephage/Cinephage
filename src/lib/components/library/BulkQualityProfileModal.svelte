@@ -10,13 +10,23 @@
 		selectedCount: number;
 		qualityProfiles: QualityProfileOption[];
 		saving: boolean;
-		mediaType: MediaType;
+		/** Video lists pass their kind; music passes the noun it already renders. */
+		mediaType?: MediaType;
+		itemLabel?: string;
 		onSave: (profileId: string | null) => void;
 		onCancel: () => void;
 	}
 
-	let { open, selectedCount, qualityProfiles, saving, mediaType, onSave, onCancel }: Props =
-		$props();
+	let {
+		open,
+		selectedCount,
+		qualityProfiles,
+		saving,
+		mediaType,
+		itemLabel,
+		onSave,
+		onCancel
+	}: Props = $props();
 
 	let qualityProfileId = $state('');
 
@@ -33,7 +43,9 @@
 		qualityProfiles.find((p) => p.id === qualityProfileId) ?? defaultProfile
 	);
 
-	const itemLabel = $derived(mediaTypeCountLabel(mediaType, selectedCount));
+	const resolvedItemLabel = $derived(
+		itemLabel ?? (mediaType ? mediaTypeCountLabel(mediaType, selectedCount) : '')
+	);
 
 	function handleSave() {
 		onSave(qualityProfileId || null);
@@ -110,7 +122,7 @@
 			{#if saving}
 				<Loader2 class="h-4 w-4 animate-spin" />
 			{/if}
-			{m.library_bulkQualityProfile_applyButton({ count: selectedCount, items: itemLabel })}
+			{m.library_bulkQualityProfile_applyButton({ count: selectedCount, items: resolvedItemLabel })}
 		</button>
 	</div>
 </ModalWrapper>
