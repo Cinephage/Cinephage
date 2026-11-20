@@ -21,6 +21,8 @@
 	import { ConfirmationModal, ModalWrapper } from '#lib/components/ui/modal/index.js';
 	import Panel from '#lib/components/ui/Panel.svelte';
 	import FactRow from '#lib/components/ui/FactRow.svelte';
+	import LibraryMediaCard from '#lib/components/library/LibraryMediaCard.svelte';
+	import { albumCardView } from '#lib/components/library/media-view.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { SvelteSet } from 'svelte/reactivity';
 
@@ -576,6 +578,20 @@
 							{album.artistName}
 						</a>
 					</FactRow>
+					{#if album.genres && album.genres.length > 0}
+						<FactRow label={m.common_genres()} variant="block">
+							<div class="flex flex-wrap gap-1">
+								{#each album.genres.slice(0, 8) as genre (genre)}
+									<span class="badge badge-ghost badge-xs">{genre}</span>
+								{/each}
+								{#if album.genres.length > 8}
+									<span class="badge badge-ghost badge-xs" title={album.genres.slice(8).join(", ")}
+										>+{album.genres.length - 8}</span
+									>
+								{/if}
+							</div>
+						</FactRow>
+					{/if}
 					<FactRow label={m.music_qualityProfile()}>
 						<select
 							class="select-bordered select select-xs"
@@ -631,6 +647,19 @@
 			</Panel>
 		</div>
 	</div>
+
+	{#if data.moreFromArtist.length > 0}
+		<section class="mt-8">
+			<h2 class="mb-3 text-lg font-semibold">
+				{m.music_moreFromArtist({ artist: album.artistName })}
+			</h2>
+			<div class="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+				{#each data.moreFromArtist as entry (entry.id)}
+					<LibraryMediaCard view={albumCardView(entry)} />
+				{/each}
+			</div>
+		</section>
+	{/if}
 </div>
 
 <TrackSearchModal

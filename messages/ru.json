@@ -5444,6 +5444,7 @@
 	"music_genreLabel": "Жанр",
 	"music_typeLabel": "Тип",
 	"music_qualityProfile": "Профиль качества",
+	"music_moreFromArtist": "Больше от {artist}",
 	"music_qualityProfileDefault": "По умолчанию (Lossless сначала)",
 	"music_editAlbumTitle": "Редактировать альбом",
 	"music_yearInvalid": "Укажите год от 1900 до 2100",

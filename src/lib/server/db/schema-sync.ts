@@ -233,8 +233,10 @@ import {
  *   the album after import. Additive ALTER, no rebuild.
  * Version 191: blocklist.album_id - a failed album import's release can be
  *   remembered per album and skipped by the music search.
+ * Version 192: albums.genres - MusicBrainz release-group genres for the album
+ *   page, refreshed with the release group.
  */
-export const CURRENT_SCHEMA_VERSION = 191;
+export const CURRENT_SCHEMA_VERSION = 192;
 
 /**
  * Seed rows for the *legacy* backfill in migration 078 only.
@@ -1867,6 +1869,7 @@ const TABLE_DEFINITIONS: string[] = [
 		"track_count" integer,
 		"duration" integer,
 		"cover_path" text,
+		"genres" text,
 		"path" text,
 		"library_id" text REFERENCES "libraries"("id") ON DELETE SET NULL,
 		"root_folder_id" text REFERENCES "root_folders"("id") ON DELETE SET NULL,

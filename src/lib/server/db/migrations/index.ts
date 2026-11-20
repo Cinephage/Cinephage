@@ -187,6 +187,7 @@ import { migration_v188 } from './188-download-history-media-item.js';
 import { migration_v189 } from './189-track-stream-video.js';
 import { migration_v190 } from './190-track-stream-cache.js';
 import { migration_v191 } from './191-blocklist-album.js';
+import { migration_v192 } from './192-album-genres.js';
 
 export const MIGRATIONS: MigrationDefinition[] = [
 	migration_v002,
@@ -376,5 +377,6 @@ export const MIGRATIONS: MigrationDefinition[] = [
 	migration_v188,
 	migration_v189,
 	migration_v190,
-	migration_v191
+	migration_v191,
+	migration_v192
 ];

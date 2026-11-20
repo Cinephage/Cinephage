@@ -372,3 +372,18 @@ describe('MusicAlbumService.listAlbums', () => {
 		expect(row?.sizeBytes).toBe(350);
 	});
 });
+
+describe('MusicAlbumService genres', () => {
+	it('caches the release group genres on the album', () => {
+		const added = musicAlbumService.addAlbum({
+			releaseGroup: { ...RELEASE_GROUP, genres: ['electronic', 'french house'] },
+			release: RELEASE,
+			libraryId: null,
+			rootFolderId: null,
+			monitored: true,
+			qualityProfileId: null
+		});
+
+		expect(musicAlbumService.getAlbum(added.albumId)?.genres).toEqual(['electronic', 'french house']);
+	});
+});

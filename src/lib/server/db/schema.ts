@@ -4891,6 +4891,8 @@ export const albums = sqliteTable(
 		/** Total runtime in seconds, summed across the tracklist. */
 		duration: integer('duration'),
 		coverPath: text('cover_path'),
+		/** MusicBrainz release-group genres, cached with the metadata. */
+		genres: text('genres', { mode: 'json' }).$type<string[]>(),
 		path: text('path'),
 		libraryId: text('library_id').references(() => libraries.id, { onDelete: 'set null' }),
 		rootFolderId: text('root_folder_id').references(() => rootFolders.id, { onDelete: 'set null' }),

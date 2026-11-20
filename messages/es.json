@@ -5444,6 +5444,7 @@
 	"music_genreLabel": "Género",
 	"music_typeLabel": "Tipo",
 	"music_qualityProfile": "Perfil de calidad",
+	"music_moreFromArtist": "Más de {artist}",
 	"music_qualityProfileDefault": "Predeterminado (Lossless primero)",
 	"music_editAlbumTitle": "Editar álbum",
 	"music_yearInvalid": "Introduce un año entre 1900 y 2100",

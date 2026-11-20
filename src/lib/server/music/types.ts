@@ -24,6 +24,8 @@ export interface MusicReleaseGroup {
 	firstReleaseDate?: string | null;
 	year?: number | null;
 	artist: MusicArtistRef;
+	/** Genres MusicBrainz files the release group under; absent when none. */
+	genres?: string[];
 	/** MusicBrainz relevance score for a search hit (0-100); absent on direct lookups. */
 	score?: number;
 }

@@ -50,6 +50,8 @@ export interface AlbumSummary {
 	hasFile: boolean | null;
 	monitored: boolean | null;
 	coverPath: string | null;
+	/** MusicBrainz release-group genres, cached with the metadata. */
+	genres: string[] | null;
 	path: string | null;
 	/** Library this album belongs to; null for an add that resolved no library. */
 	libraryId: string | null;
@@ -232,6 +234,7 @@ export class MusicAlbumService {
 					trackCount: release.trackCount,
 					duration: release.duration,
 					coverPath: input.coverPath ?? null,
+					genres: releaseGroup.genres ?? [],
 					libraryId: input.libraryId ?? null,
 					rootFolderId: input.rootFolderId ?? null,
 					monitored: input.monitored ?? true,
@@ -451,6 +454,7 @@ export class MusicAlbumService {
 					year: group.year ?? release.year ?? null,
 					primaryType: group.primaryType ?? null,
 					secondaryTypes: group.secondaryTypes,
+					genres: group.genres ?? [],
 					status: release.status ?? null,
 					labelName: release.labelName ?? null,
 					catalogNumber: release.catalogNumber ?? null,
@@ -605,6 +609,7 @@ export class MusicAlbumService {
 				hasFile: albums.hasFile,
 				monitored: albums.monitored,
 				coverPath: albums.coverPath,
+				genres: albums.genres,
 				path: albums.path,
 				releaseMbid: albums.releaseMbid,
 				libraryId: albums.libraryId,
@@ -653,6 +658,7 @@ export class MusicAlbumService {
 				libraryId: albums.libraryId,
 				monitored: albums.monitored,
 				coverPath: albums.coverPath,
+				genres: albums.genres,
 				path: albums.path,
 				releaseMbid: albums.releaseMbid,
 				mbid: albums.mbid,

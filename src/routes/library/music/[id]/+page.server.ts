@@ -22,6 +22,13 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		// What "inherit" resolves to for this album: the artist's profile, or
 		// the install default when the artist has none.
 		inheritedProfileName: musicProfileService.resolveForArtist(album.artistId).name,
+		// The album's related row: the rest of this artist's discography. Music
+		// has no TMDB-style "similar" endpoint, and the artist's own catalogue is
+		// the honest neighbour set.
+		moreFromArtist: musicAlbumService
+			.listAlbums({ artistId: album.artistId })
+			.filter((entry) => entry.id !== album.id)
+			.slice(0, 6),
 		featured: deriveFeaturedArtists(
 			album.tracks.map((track) => track.artistCredit),
 			album.artistName

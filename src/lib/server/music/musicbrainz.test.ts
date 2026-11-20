@@ -265,7 +265,8 @@ describe('MusicBrainzClient.getArtistReleaseGroups', () => {
 						'secondary-types': ['Mixtape/Street'],
 						'first-release-date': '2010-06-01'
 					}
-				]
+				],
+				genres: [{ name: 'electronic' }, { name: 'french house' }]
 			});
 		}) as typeof fetch);
 
@@ -302,15 +303,17 @@ describe('MusicBrainzClient.getReleaseGroup', () => {
 						name: 'Daft Punk',
 						artist: { id: '056e4f3e', name: 'Daft Punk', 'sort-name': 'Daft Punk' }
 					}
-				]
+				],
+				genres: [{ name: 'electronic' }, { name: 'french house' }]
 			});
 		}) as typeof fetch);
 
 		const group = await client.getReleaseGroup('48117b90-a16e-34ca-a514-19c702df1158');
 
-		expect(new URL(requested).searchParams.get('inc')).toBe('artist-credits');
+		expect(new URL(requested).searchParams.get('inc')).toBe('artist-credits+genres');
 		expect(group.artist.name).toBe('Daft Punk');
 		expect(group.year).toBe(2001);
+		expect(group.genres).toEqual(['electronic', 'french house']);
 	});
 });
 

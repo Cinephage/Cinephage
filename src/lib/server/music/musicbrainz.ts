@@ -93,6 +93,7 @@ interface RawReleaseGroup {
 	'first-release-date'?: string | null;
 	score?: number | null;
 	'artist-credit'?: ArtistCredit[] | null;
+	genres?: Array<{ name?: string | null }> | null;
 }
 
 interface RawArtist {
@@ -317,6 +318,7 @@ export class MusicBrainzClient {
 					firstReleaseDate: group['first-release-date'] ?? null,
 					year: yearOf(group['first-release-date']),
 					artist,
+					genres: (group.genres ?? []).flatMap((genre) => (genre.name ? [genre.name] : [])),
 					score: typeof group.score === 'number' ? group.score : undefined
 				} satisfies MusicReleaseGroup
 			];
@@ -453,7 +455,7 @@ export class MusicBrainzClient {
 		// `artist-credits` is not included by default on a lookup, and without it the
 		// entity carries no artist — which read as "not found" on the first live call.
 		const body = await this.request<RawReleaseGroup>(`/release-group/${releaseGroupMbid}`, {
-			inc: 'artist-credits'
+			inc: 'artist-credits+genres'
 		});
 		const artist = artistOf(body['artist-credit']);
 		if (!body.id || !body.title || !artist) {
@@ -466,7 +468,8 @@ export class MusicBrainzClient {
 			secondaryTypes: body['secondary-types'] ?? [],
 			firstReleaseDate: body['first-release-date'] ?? null,
 			year: yearOf(body['first-release-date']),
-			artist
+			artist,
+			genres: (body.genres ?? []).flatMap((genre) => (genre.name ? [genre.name] : []))
 		};
 	}
 
@@ -482,7 +485,7 @@ export class MusicBrainzClient {
 	}> {
 		const body = await this.request<RawReleaseGroup & { releases?: RawRelease[] }>(
 			`/release-group/${releaseGroupMbid}`,
-			{ inc: 'artist-credits+releases' }
+			{ inc: 'artist-credits+releases+genres' }
 		);
 		const artist = artistOf(body['artist-credit']);
 		if (!body.id || !body.title || !artist) {
@@ -496,7 +499,8 @@ export class MusicBrainzClient {
 				secondaryTypes: body['secondary-types'] ?? [],
 				firstReleaseDate: body['first-release-date'] ?? null,
 				year: yearOf(body['first-release-date']),
-				artist
+				artist,
+				genres: (body.genres ?? []).flatMap((genre) => (genre.name ? [genre.name] : []))
 			},
 			releases: (body.releases ?? []).flatMap((release) => {
 				if (!release.id) return [];
