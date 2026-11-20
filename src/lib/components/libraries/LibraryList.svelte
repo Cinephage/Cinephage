@@ -182,7 +182,7 @@
 									</div>
 								</div>
 
-								<div class="mt-3 grid grid-cols-2 gap-2 border-t border-base-300 pt-3">
+								<div class="mt-3 grid {library.mediaType === 'music' ? 'grid-cols-1' : 'grid-cols-2'} gap-2 border-t border-base-300 pt-3">
 									<div
 										class="flex flex-col items-center gap-1 rounded-lg"
 										title={m.settings_general_statusTooltip({
@@ -202,27 +202,29 @@
 											{/if}
 										</span>
 									</div>
-									<div
-										class="flex flex-col items-center gap-1 rounded-lg"
-										title={m.settings_general_statusTooltip({
-											label: m.settings_general_wantSubtitles(),
-											status: library.defaultWantsSubtitles
-												? m.common_enabled()
-												: m.common_disabled()
-										})}
-									>
-										<span
-											class={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${getStatusBadgeClass(
-												library.defaultWantsSubtitles
-											)}`}
+									{#if library.mediaType !== 'music'}
+										<div
+											class="flex flex-col items-center gap-1 rounded-lg"
+											title={m.settings_general_statusTooltip({
+												label: m.settings_general_wantSubtitles(),
+												status: library.defaultWantsSubtitles
+													? m.common_enabled()
+													: m.common_disabled()
+											})}
 										>
-											{#if library.defaultWantsSubtitles}
-												<Captions class="h-3.5 w-3.5" />
-											{:else}
-												<CaptionsOff class="h-3.5 w-3.5" />
-											{/if}
-										</span>
-									</div>
+											<span
+												class={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${getStatusBadgeClass(
+													library.defaultWantsSubtitles
+												)}`}
+											>
+												{#if library.defaultWantsSubtitles}
+													<Captions class="h-3.5 w-3.5" />
+												{:else}
+													<CaptionsOff class="h-3.5 w-3.5" />
+												{/if}
+											</span>
+										</div>
+									{/if}
 								</div>
 							</div>
 						</div>

@@ -5,6 +5,7 @@
 	import * as m from '#lib/paraglide/messages.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import AlbumHero from '#lib/components/music/AlbumHero.svelte';
+	import MusicAddConfirmModal from '#lib/components/music/MusicAddConfirmModal.svelte';
 	import TrackList from '#lib/components/music/TrackList.svelte';
 	import type { AlbumHeroAlbum, TrackListTrack } from '#lib/components/music/music-card.js';
 
@@ -103,6 +104,7 @@
 	);
 
 	let busy = $state(false);
+	let addOpen = $state(false);
 
 	/**
 	 * A Deezer page carries no MusicBrainz id, and adding is the one action that
@@ -119,7 +121,7 @@
 	}
 
 	/** Same contract as the library page: one POST, idempotent server-side. */
-	async function addToLibrary() {
+	async function addToLibrary(profileId: string | null) {
 		if (busy) return;
 		busy = true;
 		try {
@@ -131,7 +133,11 @@
 			const response = await fetch('/api/music/albums', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ releaseGroupMbid: mbid, libraryId: null })
+				body: JSON.stringify({
+					releaseGroupMbid: mbid,
+					libraryId: null,
+					qualityProfileId: profileId
+				})
 			});
 			const body = await response.json();
 			if (!response.ok) {
@@ -184,7 +190,7 @@
 						label: m.music_addAlbum(),
 						emphasis: 'primary',
 						busy,
-						onSelect: addToLibrary
+						onSelect: () => (addOpen = true)
 					}
 				]}
 	/>
@@ -198,4 +204,13 @@
 			{m.music_noTracks()}
 		</div>
 	{/if}
+
+	<MusicAddConfirmModal
+		open={addOpen}
+		kind="album"
+		title={group.title}
+		subtitle={group.artist.name}
+		onAdd={addToLibrary}
+		onClose={() => (addOpen = false)}
+	/>
 </div>

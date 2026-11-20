@@ -353,21 +353,23 @@
 				</select>
 			</div>
 
-			<div class="form-control">
-				<label class="label py-1" for="status-library-language-profile">
-					<span class="label-text">{m.settings_general_subtitleProfile()}</span>
-				</label>
-				<select
-					id="status-library-language-profile"
-					class="select-bordered select select-sm"
-					bind:value={libraryForm.languageProfileId}
-				>
-					<option value="">{m.settings_general_subtitleProfileInherit()}</option>
-					{#each availableLanguageProfiles as profile (profile.id)}
-						<option value={profile.id}>{profile.name}</option>
-					{/each}
-				</select>
-			</div>
+			{#if libraryForm.mediaType !== 'music'}
+				<div class="form-control">
+					<label class="label py-1" for="status-library-language-profile">
+						<span class="label-text">{m.settings_general_subtitleProfile()}</span>
+					</label>
+					<select
+						id="status-library-language-profile"
+						class="select-bordered select select-sm"
+						bind:value={libraryForm.languageProfileId}
+					>
+						<option value="">{m.settings_general_subtitleProfileInherit()}</option>
+						{#each availableLanguageProfiles as profile (profile.id)}
+							<option value={profile.id}>{profile.name}</option>
+						{/each}
+					</select>
+				</div>
+			{/if}
 
 			<div class="form-control md:col-span-2">
 				<div class="space-y-3 rounded-xl border border-base-300 bg-base-100 p-4">
@@ -425,7 +427,7 @@
 			</div>
 		</div>
 
-		<div class="grid gap-3 sm:grid-cols-2">
+		<div class="grid gap-3 {libraryForm.mediaType === 'music' ? '' : 'sm:grid-cols-2'}">
 			<label class="label cursor-pointer justify-start gap-3 rounded-lg border border-base-300 p-3">
 				<input
 					type="checkbox"
@@ -434,14 +436,16 @@
 				/>
 				<span class="label-text text-base-content">{m.settings_general_searchOnAddLabel()}</span>
 			</label>
-			<label class="label cursor-pointer justify-start gap-3 rounded-lg border border-base-300 p-3">
-				<input
-					type="checkbox"
-					class="checkbox shrink-0 checkbox-sm checkbox-primary"
-					bind:checked={libraryForm.defaultWantsSubtitles}
-				/>
-				<span class="label-text text-base-content">{m.settings_general_wantSubtitles()}</span>
-			</label>
+			{#if libraryForm.mediaType !== 'music'}
+				<label class="label cursor-pointer justify-start gap-3 rounded-lg border border-base-300 p-3">
+					<input
+						type="checkbox"
+						class="checkbox shrink-0 checkbox-sm checkbox-primary"
+						bind:checked={libraryForm.defaultWantsSubtitles}
+					/>
+					<span class="label-text text-base-content">{m.settings_general_wantSubtitles()}</span>
+				</label>
+			{/if}
 		</div>
 	</div>
 	<ModalFooter

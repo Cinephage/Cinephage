@@ -3,6 +3,7 @@
 	import * as m from '#lib/paraglide/messages.js';
 	import { invalidateAll } from '$app/navigation';
 	import LibraryMediaCard from '#lib/components/library/LibraryMediaCard.svelte';
+	import MusicAddConfirmModal from '#lib/components/music/MusicAddConfirmModal.svelte';
 	import { albumCardView, artistCardView } from '#lib/components/library/media-view.js';
 	import type { MusicRowItem } from './music-row-item.js';
 
@@ -11,6 +12,7 @@
 	type AddState = 'idle' | 'added' | 'exists' | 'missing' | 'failed';
 
 	let busy = $state(false);
+	let confirmOpen = $state(false);
 	// Not named `state`: it collides with svelte-check's generated component
 	// scope and breaks the TS transform for the whole file.
 	let addState = $state<AddState>('idle');
@@ -97,13 +99,19 @@
 	}
 
 	/**
-	 * Quick add without leaving the grid: resolve the release group the same
-	 * way the Music library page does, then add the top hit.
+	 * Quick add without leaving the grid: the plus opens the same profile
+	 * choice every other add surface has, then resolves the release group and
+	 * adds the top hit.
 	 */
-	async function add(event: MouseEvent) {
+	function openConfirm(event: MouseEvent) {
 		event.preventDefault();
 		event.stopPropagation();
 		if (busy || done || isArtist) return;
+		confirmOpen = true;
+	}
+
+	async function add(profileId: string | null) {
+		if (busy || done) return;
 		busy = true;
 		addState = 'idle';
 		try {
@@ -115,7 +123,11 @@
 			const response = await fetch('/api/music/albums', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ releaseGroupMbid: mbid, libraryId: null })
+				body: JSON.stringify({
+					releaseGroupMbid: mbid,
+					libraryId: null,
+					qualityProfileId: profileId
+				})
 			});
 			const body = await response.json();
 			if (!response.ok) {
@@ -141,7 +153,7 @@
 			class="btn absolute right-2 bottom-2 z-20 btn-circle shadow-lg btn-xs {done
 				? 'btn-success'
 				: 'btn-primary'}"
-			onclick={add}
+			onclick={openConfirm}
 			disabled={busy || done}
 			title={done ? m.music_inLibrary() : m.music_addAlbum()}
 			aria-label={done ? m.music_inLibrary() : m.music_addAlbum()}
@@ -155,4 +167,13 @@
 			{/if}
 		</button>
 	{/if}
+
+	<MusicAddConfirmModal
+		open={confirmOpen}
+		kind="album"
+		title={albumLabel}
+		subtitle={item.subtitle ?? null}
+		onAdd={add}
+		onClose={() => (confirmOpen = false)}
+	/>
 </div>

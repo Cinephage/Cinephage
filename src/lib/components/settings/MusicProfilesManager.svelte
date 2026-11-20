@@ -28,6 +28,7 @@
 	let allowFallback = $state(true);
 	let minSizeMb = $state('');
 	let maxSizeMb = $state('');
+	let copyFromId = $state('');
 	let tiers = $state<TierDraft[]>([]);
 	let saving = $state(false);
 	let deleteTarget = $state<MusicProfileView | null>(null);
@@ -44,6 +45,7 @@
 		allowFallback = true;
 		minSizeMb = '';
 		maxSizeMb = '';
+		copyFromId = '';
 		tiers = [blankTier('lossless')];
 		modalOpen = true;
 	}
@@ -55,6 +57,7 @@
 		allowFallback = profile.allowFallback;
 		minSizeMb = profile.minSizeMb ? String(profile.minSizeMb) : '';
 		maxSizeMb = profile.maxSizeMb ? String(profile.maxSizeMb) : '';
+		copyFromId = '';
 		tiers = profile.tiers.map((tier) => ({
 			kind: tier.kind,
 			label: tier.label,
@@ -67,6 +70,20 @@
 
 	function addTier() {
 		tiers = [...tiers, blankTier('lossy')];
+	}
+
+	/** Copying is a starting point for the ladder; the rest of the profile stays. */
+	function copyTiersFrom(id: string) {
+		copyFromId = id;
+		const source = profiles.find((profile) => profile.id === id);
+		if (!source) return;
+		tiers = source.tiers.map((tier) => ({
+			kind: tier.kind,
+			label: tier.label,
+			formats: (tier.formats ?? []).join(', '),
+			minBitrateKbps: tier.minBitrateKbps ? String(tier.minBitrateKbps) : '',
+			minBitDepth: tier.minBitDepth ? String(tier.minBitDepth) : ''
+		}));
 	}
 
 	function removeTier(index: number) {
@@ -312,6 +329,21 @@
 				<input class="input w-full input-bordered" bind:value={description} disabled={saving} />
 			</label>
 		</div>
+
+		<label class="form-control sm:max-w-xs">
+			<span class="mb-1 text-sm font-medium">{m.music_copyTiersFrom()}</span>
+			<select
+				class="select w-full select-bordered"
+				value={copyFromId}
+				disabled={saving}
+				onchange={(event) => copyTiersFrom(event.currentTarget.value)}
+			>
+				<option value="">{m.music_copyTiersScratch()}</option>
+				{#each profiles.filter((profile) => profile.id !== editingId) as profile (profile.id)}
+					<option value={profile.id}>{profile.name}</option>
+				{/each}
+			</select>
+		</label>
 
 		<label class="flex items-center gap-2 text-sm">
 			<input type="checkbox" class="checkbox checkbox-sm" bind:checked={allowFallback} disabled={saving} />

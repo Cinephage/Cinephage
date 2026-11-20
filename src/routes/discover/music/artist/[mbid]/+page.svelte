@@ -4,6 +4,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import * as m from '#lib/paraglide/messages.js';
 	import ArtistHero from '#lib/components/music/ArtistHero.svelte';
+	import MusicAddConfirmModal from '#lib/components/music/MusicAddConfirmModal.svelte';
 	import LibraryMediaCard from '#lib/components/library/LibraryMediaCard.svelte';
 	import { albumCardView } from '#lib/components/library/media-view.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
@@ -47,6 +48,7 @@
 	);
 
 	let busy = $state(false);
+	let addOpen = $state(false);
 
 	function rowKey(group: ReleaseGroupRow): string {
 		return group.mbid ?? `deezer-${group.deezerId ?? group.title}`;
@@ -93,7 +95,7 @@
 	 * Add the rest of the discography. The server writes a bounded batch and
 	 * reports what it left, so this loops until nothing remains.
 	 */
-	async function addDiscography() {
+	async function addDiscography(profileId: string | null) {
 		if (busy) return;
 		busy = true;
 		let added = 0;
@@ -110,7 +112,8 @@
 					headers: { 'content-type': 'application/json' },
 					body: JSON.stringify({
 						artist: { mbid, name: artist.name },
-						limit: 25
+						limit: 25,
+						qualityProfileId: profileId
 					})
 				});
 				const body = await response.json();
@@ -158,7 +161,7 @@
 				label: m.music_addArtist(),
 				emphasis: 'primary',
 				busy,
-				onSelect: addDiscography
+				onSelect: () => (addOpen = true)
 			}
 		]}
 	/>
@@ -195,4 +198,13 @@
 			</ul>
 		{/if}
 	</div>
+
+	<MusicAddConfirmModal
+		open={addOpen}
+		kind="artist"
+		title={artist.name}
+		subtitle={m.music_addArtist()}
+		onAdd={addDiscography}
+		onClose={() => (addOpen = false)}
+	/>
 </div>
