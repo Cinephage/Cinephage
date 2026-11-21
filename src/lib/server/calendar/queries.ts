@@ -1,5 +1,5 @@
 import { db } from '#lib/server/db/index.js';
-import { movies, series, episodes, releaseEvents } from '#lib/server/db/schema.js';
+import { movies, series, episodes, releaseEvents, albums, artists } from '#lib/server/db/schema.js';
 import { eq, and, gte, lte, inArray, isNotNull } from 'drizzle-orm';
 import { tmdb } from '#lib/server/tmdb.js';
 import type { DiscoverItem } from '#lib/server/tmdb.js';
@@ -29,10 +29,19 @@ export interface CalendarEpisodeItem {
 	seriesPosterPath: string | null;
 }
 
+export interface CalendarAlbumItem {
+	albumId: string;
+	title: string;
+	artistName: string | null;
+	releaseDate: string;
+	hasCover: boolean;
+}
+
 export interface CalendarDay {
 	date: string;
 	movies: CalendarMovieItem[];
 	episodes: CalendarEpisodeItem[];
+	albums: CalendarAlbumItem[];
 }
 
 export interface UpcomingItem {
@@ -124,7 +133,7 @@ async function fetchTmdbAiringTv(): Promise<DiscoverItem[]> {
 
 export async function getCalendarData(
 	monthStr: string,
-	type: 'all' | 'movies' | 'episodes',
+	type: 'all' | 'movies' | 'episodes' | 'music',
 	libraryOnly = false,
 	minRating = 0,
 	genreIds: number[] = [],
@@ -142,12 +151,50 @@ export async function getCalendarData(
 	while (current <= endDate) {
 		const dateStr = toDateString(current);
 		allDates.push(dateStr);
-		dayMap.set(dateStr, { date: dateStr, movies: [], episodes: [] });
+		dayMap.set(dateStr, { date: dateStr, movies: [], episodes: [], albums: [] });
 		current.setDate(current.getDate() + 1);
 	}
 
 	const includeMovies = type === 'all' || type === 'movies';
 	const includeEpisodes = type === 'all' || type === 'episodes';
+	const includeAlbums = type === 'all' || type === 'music';
+
+	if (includeAlbums) {
+		// A monitored album's MusicBrainz first-release date is what a release
+		// calendar means for music: the day the record came (or will come) out.
+		const rows = db
+			.select({
+				albumId: albums.id,
+				title: albums.title,
+				artistName: artists.name,
+				releaseDate: albums.releaseDate,
+				hasCover: albums.coverPath
+			})
+			.from(albums)
+			.leftJoin(artists, eq(albums.artistId, artists.id))
+			.where(
+				and(
+					isNotNull(albums.releaseDate),
+					gte(albums.releaseDate, start),
+					lte(albums.releaseDate, end),
+					eq(albums.monitored, true)
+				)
+			)
+			.all();
+
+		for (const row of rows) {
+			// MusicBrainz can carry a partial date (`YYYY-MM`); only a full day
+			// can be placed in the grid.
+			if (!row.releaseDate || row.releaseDate.length !== 10) continue;
+			dayMap.get(row.releaseDate)?.albums.push({
+				albumId: row.albumId,
+				title: row.title,
+				artistName: row.artistName,
+				releaseDate: row.releaseDate,
+				hasCover: Boolean(row.hasCover)
+			});
+		}
+	}
 
 	if (includeMovies) {
 		const tmdbItems = await fetchTmdbUpcoming(certifications);

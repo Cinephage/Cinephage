@@ -237,8 +237,10 @@ import {
  *   page, refreshed with the release group.
  * Version 193: music_scan_issues - folders a music scan could not identify, so
  *   they get a review queue like unmatched video files.
+ * Version 194: albums.release_date - the full first-release date the calendar
+ *   needs; `year` cannot place an album on a day.
  */
-export const CURRENT_SCHEMA_VERSION = 193;
+export const CURRENT_SCHEMA_VERSION = 194;
 
 /**
  * Seed rows for the *legacy* backfill in migration 078 only.
@@ -1860,6 +1862,7 @@ const TABLE_DEFINITIONS: string[] = [
 		"title" text NOT NULL,
 		"sort_title" text,
 		"year" integer,
+		"release_date" text,
 		"primary_type" text,
 		"secondary_types" text,
 		"status" text,

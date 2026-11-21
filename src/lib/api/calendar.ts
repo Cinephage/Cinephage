@@ -45,7 +45,7 @@ export interface UpcomingItem {
 
 export async function getCalendar(
 	month?: string,
-	type?: 'all' | 'movies' | 'episodes',
+	type?: 'all' | 'movies' | 'episodes' | 'music',
 	libraryOnly?: boolean,
 	minRating?: number,
 	genreIds?: number[],

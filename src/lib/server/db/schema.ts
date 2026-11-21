@@ -4877,6 +4877,8 @@ export const albums = sqliteTable(
 		title: text('title').notNull(),
 		sortTitle: text('sort_title'),
 		year: integer('year'),
+		/** MusicBrainz first-release date (YYYY-MM-DD); the calendar's day key. */
+		releaseDate: text('release_date'),
 		/** MusicBrainz primary type: Album, EP, Single, Broadcast, Other. */
 		primaryType: text('primary_type'),
 		secondaryTypes: text('secondary_types', { mode: 'json' }).$type<string[]>(),

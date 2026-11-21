@@ -10,7 +10,7 @@ const calendarQuerySchema = z.object({
 			const now = new Date();
 			return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 		}),
-	type: z.enum(['all', 'movies', 'episodes']).default('all'),
+	type: z.enum(['all', 'movies', 'episodes', 'music']).default('all'),
 	libraryOnly: z
 		.string()
 		.optional()

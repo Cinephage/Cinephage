@@ -12,7 +12,8 @@
 		LayoutGrid,
 		List,
 		Plus,
-		Info
+		Info,
+		Disc3
 	} from '@lucide/svelte';
 	import { SvelteMap } from 'svelte/reactivity';
 	import { getLocale } from '#lib/paraglide/runtime.js';
@@ -127,7 +128,9 @@
 	const agendaDays = $derived(
 		days
 			.filter(
-				(d) => d.date.startsWith(currentMonth) && (d.movies.length > 0 || d.episodes.length > 0)
+				(d) =>
+				d.date.startsWith(currentMonth) &&
+				(d.movies.length > 0 || d.episodes.length > 0 || d.albums.length > 0)
 			)
 			.sort((a, b) => a.date.localeCompare(b.date))
 	);
@@ -286,7 +289,12 @@
 
 	function openDay(cell: GridCell) {
 		if (!cell.items) return;
-		if (cell.items.movies.length === 0 && cell.items.episodes.length === 0) return;
+		if (
+			cell.items.movies.length === 0 &&
+			cell.items.episodes.length === 0 &&
+			cell.items.albums.length === 0
+		)
+			return;
 		selectedDay = cell.items;
 	}
 
@@ -429,6 +437,14 @@
 							>
 								{m.common_episodes()}
 							</button>
+							<button
+								class="btn join-item btn-xs sm:btn-sm {prefs.contentType === 'music'
+									? 'btn-primary'
+									: 'border border-base-300 btn-ghost'}"
+								onclick={() => (prefs.contentType = 'music')}
+							>
+								{m.nav_music()}
+							</button>
 						</div>
 					</div>
 
@@ -437,7 +453,7 @@
 							{m.calendar_prefs_options()}
 						</p>
 						<div class="flex flex-col gap-2">
-							{#if prefs.contentType !== 'episodes'}
+							{#if prefs.contentType === 'all' || prefs.contentType === 'movies'}
 								<label class="flex cursor-pointer items-center gap-3">
 									<input
 										type="checkbox"
@@ -607,7 +623,15 @@
 							{#each week as cell (cell.date)}
 								{@const movieCount = cell.items?.movies.length ?? 0}
 								{@const episodeCount = cell.items?.episodes.length ?? 0}
-								{@const totalItems = movieCount + episodeCount}
+								{@const albumCount = cell.items?.albums.length ?? 0}
+								{@const totalItems = movieCount + episodeCount + albumCount}
+								{@const chipCount =
+									Math.min(movieCount, 2) +
+									Math.min(episodeCount, 2 - Math.min(movieCount, 2)) +
+									Math.min(
+										albumCount,
+										2 - Math.min(movieCount, 2) - Math.min(episodeCount, 2 - Math.min(movieCount, 2))
+									)}
 								{@const hasItems = totalItems > 0}
 								<button
 									class="min-h-20 p-2 text-left transition-colors sm:min-h-28 sm:p-3
@@ -647,6 +671,12 @@
 										{#each (cell.items?.episodes ?? []).slice(0, Math.max(0, 3 - movieCount)) as ep (ep.episodeId)}
 											<span class="h-1.5 w-1.5 rounded-full bg-secondary"></span>
 										{/each}
+										{#each (cell.items?.albums ?? []).slice(
+											0,
+											Math.max(0, 3 - movieCount - Math.min(episodeCount, 3 - movieCount))
+										) as album (album.albumId)}
+											<span class="h-1.5 w-1.5 rounded-full bg-accent"></span>
+										{/each}
 										{#if totalItems > 3}
 											<span class="h-1.5 w-1.5 rounded-full bg-base-content/20"></span>
 										{/if}
@@ -664,6 +694,16 @@
 												{movie.title}
 											</div>
 										{/each}
+										{#each (cell.items?.albums ?? []).slice(
+											0,
+											2 - Math.min(movieCount, 2) - Math.min(episodeCount, 2 - Math.min(movieCount, 2))
+										) as album (album.albumId)}
+											<div
+												class="truncate rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold text-accent"
+											>
+												{album.title}
+											</div>
+										{/each}
 										{#each (cell.items?.episodes ?? []).slice(0, 2 - Math.min(movieCount, 2)) as ep (ep.episodeId)}
 											<div
 												class="rounded-md bg-secondary/15 px-1.5 py-0.5 text-[10px] leading-tight font-semibold text-secondary"
@@ -676,14 +716,9 @@
 												<div class="truncate opacity-75">{ep.seriesTitle}</div>
 											</div>
 										{/each}
-										{#if totalItems > Math.min(movieCount, 2) + Math.min(episodeCount, 2 - Math.min(movieCount, 2))}
+										{#if totalItems > chipCount}
 											<div class="px-1 text-[10px] text-base-content/40">
-												{m.calendar_more({
-													count:
-														totalItems -
-														(Math.min(movieCount, 2) +
-															Math.min(episodeCount, 2 - Math.min(movieCount, 2)))
-												})}
+												{m.calendar_more({ count: totalItems - chipCount })}
 											</div>
 										{/if}
 									</div>
@@ -753,6 +788,39 @@
 											</button>
 										{/if}
 									</div>
+								{/each}
+
+								{#each day.albums as album (album.albumId)}
+									<a
+										href="/library/music/{album.albumId}"
+										class="flex min-h-14 items-center gap-3 rounded-xl border border-base-300 bg-base-200 p-3 transition-colors hover:bg-base-300"
+									>
+										<div class="h-16 w-16 shrink-0 overflow-hidden rounded">
+											{#if album.hasCover}
+												<img
+													src={`/api/music/albums/${album.albumId}/cover`}
+													alt={album.title}
+													class="h-16 w-16 object-cover"
+												/>
+											{:else}
+												<div class="flex h-16 w-16 items-center justify-center bg-base-300">
+													<Disc3 class="h-6 w-6 text-base-content/30" />
+												</div>
+											{/if}
+										</div>
+										<div class="min-w-0 flex-1">
+											<p class="truncate text-sm font-semibold">{album.title}</p>
+											<div class="mt-0.5 flex items-center gap-1.5">
+												<Disc3 class="h-3 w-3 text-accent/60" />
+												<span class="text-xs text-accent/60">
+													{album.artistName ?? m.nav_music()}
+												</span>
+											</div>
+										</div>
+										<span class="badge shrink-0 badge-sm badge-accent">
+											{m.calendar_inLibrary()}
+										</span>
+									</a>
 								{/each}
 
 								{#each day.episodes as ep (ep.episodeId)}
@@ -868,6 +936,48 @@
 				</div>
 			{/if}
 
+			{#if selectedDay.albums.length > 0}
+				<div>
+					<h3
+						class="mb-2 flex items-center gap-2 text-sm font-bold tracking-wide text-base-content/70 uppercase"
+					>
+						<Disc3 class="h-4 w-4 text-accent" />
+						{m.nav_music()}
+					</h3>
+					<div class="space-y-2">
+						{#each selectedDay.albums as album (album.albumId)}
+							<a
+								href="/library/music/{album.albumId}"
+								class="flex items-center gap-3 rounded-lg bg-base-200 p-3 transition-colors hover:bg-base-300"
+							>
+								<div class="h-16 w-16 shrink-0 overflow-hidden rounded">
+									{#if album.hasCover}
+										<img
+											src={`/api/music/albums/${album.albumId}/cover`}
+											alt={album.title}
+											class="h-16 w-16 object-cover"
+										/>
+									{:else}
+										<div class="flex h-16 w-16 items-center justify-center bg-base-300">
+											<Disc3 class="h-6 w-6 text-base-content/30" />
+										</div>
+									{/if}
+								</div>
+								<div class="min-w-0 flex-1">
+									<div class="truncate text-sm font-medium">{album.title}</div>
+									<div class="text-xs text-base-content/60">
+										{album.artistName ?? m.nav_music()}
+									</div>
+								</div>
+								<span class="badge shrink-0 badge-sm badge-accent">
+									{m.calendar_inLibrary()}
+								</span>
+							</a>
+						{/each}
+					</div>
+				</div>
+			{/if}
+
 			{#if selectedDay.episodes.length > 0}
 				<div>
 					<h3
@@ -907,7 +1017,9 @@
 				</div>
 			{/if}
 
-			{#if selectedDay.movies.length === 0 && selectedDay.episodes.length === 0}
+			{#if selectedDay.movies.length === 0 &&
+				selectedDay.episodes.length === 0 &&
+				selectedDay.albums.length === 0}
 				<div class="py-8 text-center text-base-content/50">
 					{m.calendar_noUpcoming()}
 				</div>

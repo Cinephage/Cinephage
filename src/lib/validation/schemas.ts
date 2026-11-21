@@ -2770,7 +2770,7 @@ export type CustomFormatTestRequest = z.infer<typeof customFormatTestSchema>;
 // ============================================================
 
 export const calendarPreferencesSchema = z.object({
-	contentType: z.enum(['all', 'movies', 'episodes']).default('all'),
+	contentType: z.enum(['all', 'movies', 'episodes', 'music']).default('all'),
 	libraryOnly: z.boolean().default(false),
 	upcomingShowNonLibrary: z.boolean().default(true),
 	viewMode: z.enum(['grid', 'list']).default('grid'),
