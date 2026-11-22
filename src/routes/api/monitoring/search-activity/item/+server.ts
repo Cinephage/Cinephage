@@ -6,7 +6,7 @@
  * attempt timestamps, the paused flag, and a short recent-attempts timeline.
  * Fetched lazily on expand, not part of the paginated list.
  *
- * Query params: movieId? | episodeId? (exactly one required).
+ * Query params: movieId? | episodeId? | albumId? (exactly one required).
  */
 
 import { json } from '@sveltejs/kit';
@@ -23,13 +23,17 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
 	const movieId = url.searchParams.get('movieId') ?? undefined;
 	const episodeId = url.searchParams.get('episodeId') ?? undefined;
+	const albumId = url.searchParams.get('albumId') ?? undefined;
 
-	if (!movieId && !episodeId) {
-		return json({ success: false, error: 'movieId or episodeId is required' }, { status: 400 });
+	if (!movieId && !episodeId && !albumId) {
+		return json(
+			{ success: false, error: 'movieId, episodeId or albumId is required' },
+			{ status: 400 }
+		);
 	}
 
 	try {
-		const detail = await activityService.fetchSearchItemDetail({ movieId, episodeId });
+		const detail = await activityService.fetchSearchItemDetail({ movieId, episodeId, albumId });
 		if (!detail) {
 			return json({ success: false, error: 'Not found' }, { status: 404 });
 		}

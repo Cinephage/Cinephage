@@ -8,7 +8,7 @@
  * issue #658's incident is visible before it needs dozens of attempts to
  * become obvious.
  *
- * Query params: mediaType? ('movie' | 'tv'), status? (searched | found |
+ * Query params: mediaType? ('movie' | 'tv' | 'music'), status? (searched | found |
  * grabbed | no_results | skipped | error), pausedOnly? ('true' to show only
  * items with auto-search paused), search? (case-insensitive contains on the
  * resolved media title), startDate?/endDate? (YYYY-MM-DD, same date-filter
@@ -50,7 +50,9 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	try {
 		const mediaTypeParam = url.searchParams.get('mediaType');
 		const mediaType =
-			mediaTypeParam === 'movie' || mediaTypeParam === 'tv' ? mediaTypeParam : undefined;
+			mediaTypeParam === 'movie' || mediaTypeParam === 'tv' || mediaTypeParam === 'music'
+				? mediaTypeParam
+				: undefined;
 
 		const statusParam = url.searchParams.get('status');
 		const status =

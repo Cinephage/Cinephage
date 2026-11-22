@@ -21,6 +21,8 @@ export interface AlbumAutoSearchResult {
 	grabbed: boolean;
 	release?: string;
 	size?: number | null;
+	/** Candidates the release search returned, for the Searches tab. */
+	releasesFound?: number;
 	error?: string;
 }
 
@@ -53,7 +55,13 @@ export async function autoSearchAlbum(album: Pick<AlbumSummary, 'id' | 'title'>)
 				releaseMatchesAlbum(album.title, candidate.title)
 		);
 		if (!best?.guid) {
-			return { albumId: album.id, title: album.title, grabbed: false, error: 'no accepted release' };
+			return {
+				albumId: album.id,
+				title: album.title,
+				grabbed: false,
+				releasesFound: search.candidates.length,
+				error: 'no accepted release'
+			};
 		}
 		const grab = await musicGrabService.grabAlbum(album.id, { releaseGuid: best.guid });
 		return {
@@ -61,11 +69,12 @@ export async function autoSearchAlbum(album: Pick<AlbumSummary, 'id' | 'title'>)
 			title: album.title,
 			grabbed: true,
 			release: grab.title,
-			size: grab.size
+			size: grab.size,
+			releasesFound: search.candidates.length
 		};
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
 		logger.warn({ albumId: album.id, err: message }, '[MusicAutoSearch] album search failed');
-		return { albumId: album.id, title: album.title, grabbed: false, error: message };
+		return { albumId: album.id, title: album.title, grabbed: false, releasesFound: 0, error: message };
 	}
 }

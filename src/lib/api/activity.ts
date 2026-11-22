@@ -47,10 +47,15 @@ export async function resetSearchFailures(movieIds: string[], episodeIds: string
 	return apiPost('/api/monitoring/search-activity/reset-failures', { movieIds, episodeIds });
 }
 
-export async function getSearchItemDetail(target: { movieId?: string; episodeId?: string }) {
+export async function getSearchItemDetail(target: {
+	movieId?: string;
+	episodeId?: string;
+	albumId?: string;
+}) {
 	const params: Record<string, string> = {};
 	if (target.movieId) params.movieId = target.movieId;
 	if (target.episodeId) params.episodeId = target.episodeId;
+	if (target.albumId) params.albumId = target.albumId;
 	return apiGet<SearchItemDetailResponse>('/api/monitoring/search-activity/item', params);
 }
 

@@ -23,6 +23,7 @@ import type { KindFilter } from '#lib/media-kinds/registry.js';
 		ExternalLink,
 		Clapperboard,
 		Tv,
+		Disc3,
 		Info
 	} from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
@@ -66,7 +67,11 @@ import type { KindFilter } from '#lib/media-kinds/registry.js';
 		return filters.search ?? '';
 	}
 	function getInitialMediaType(): KindFilter {
-		return filters.mediaType === 'movie' || filters.mediaType === 'tv' ? filters.mediaType : 'all';
+		return filters.mediaType === 'movie' ||
+			filters.mediaType === 'tv' ||
+			filters.mediaType === 'music'
+			? filters.mediaType
+			: 'all';
 	}
 	function getInitialStartDate(): string | undefined {
 		return filters.startDate;
@@ -212,13 +217,17 @@ import type { KindFilter } from '#lib/media-kinds/registry.js';
 	// selectedAttachable/selectedSuggestable/selectedImportable precedent) so
 	// the bulk buttons never silently no-op on rows they can't act on.
 	function selectedSearchableItems(): SearchActivityItem[] {
-		return selectedItems().filter(
-			(item) =>
+		return selectedItems().filter((item) => {
+			// Music has no failure counter or pause flag; its only question is
+			// whether the attempt already succeeded.
+			if (item.mediaType === 'album') return Boolean(item.albumId) && item.status !== 'grabbed';
+			return (
 				classifyActionRelevance(item.status, item.errorMessage, item.consecutiveFailureCount)
 					.canSearch &&
 				((item.mediaType === 'movie' && item.movieId) ||
 					(item.mediaType === 'episode' && item.seriesId))
-		);
+			);
+		});
 	}
 
 	function selectedResettableItems(): SearchActivityItem[] {
@@ -261,11 +270,13 @@ import type { KindFilter } from '#lib/media-kinds/registry.js';
 	async function handleSearchNow(): Promise<void> {
 		const movieIds = new SvelteSet<string>();
 		const seriesIds = new SvelteSet<string>();
+		const albumIds = new SvelteSet<string>();
 		for (const item of selectedSearchableItems()) {
 			if (item.mediaType === 'movie' && item.movieId) movieIds.add(item.movieId);
 			else if (item.mediaType === 'episode' && item.seriesId) seriesIds.add(item.seriesId);
+			else if (item.mediaType === 'album' && item.albumId) albumIds.add(item.albumId);
 		}
-		if (movieIds.size === 0 && seriesIds.size === 0) return;
+		if (movieIds.size === 0 && seriesIds.size === 0 && albumIds.size === 0) return;
 
 		bulkActionLoading = true;
 		try {
@@ -283,6 +294,11 @@ import type { KindFilter } from '#lib/media-kinds/registry.js';
 						headers: { 'Content-Type': 'application/json' },
 						body: JSON.stringify({ type: 'missing' })
 					})
+						.then((r) => r.ok)
+						.catch(() => false)
+				),
+				...Array.from(albumIds).map((id) =>
+					fetch(`/api/music/albums/${id}/auto-search`, { method: 'POST' })
 						.then((r) => r.ok)
 						.catch(() => false)
 				)
@@ -400,7 +416,11 @@ import type { KindFilter } from '#lib/media-kinds/registry.js';
 		detailLoading = true;
 		try {
 			const target =
-				item.mediaType === 'movie' ? { movieId: item.movieId } : { episodeId: item.episodeId };
+				item.mediaType === 'movie'
+					? { movieId: item.movieId }
+					: item.mediaType === 'album'
+						? { albumId: item.albumId }
+						: { episodeId: item.episodeId };
 			const res = await getSearchItemDetail(target);
 			detail = res.item;
 		} catch (error) {
@@ -427,10 +447,12 @@ import type { KindFilter } from '#lib/media-kinds/registry.js';
 			const url =
 				item.mediaType === 'movie'
 					? `/api/library/movies/${item.movieId}/auto-search`
-					: `/api/library/series/${item.seriesId}/auto-search`;
+					: item.mediaType === 'album'
+						? `/api/music/albums/${item.albumId}/auto-search`
+						: `/api/library/series/${item.seriesId}/auto-search`;
 			const searchOk = await fetch(url, {
 				method: 'POST',
-				...(item.mediaType === 'movie'
+				...(item.mediaType !== 'episode'
 					? {}
 					: {
 							headers: { 'Content-Type': 'application/json' },
@@ -461,6 +483,8 @@ import type { KindFilter } from '#lib/media-kinds/registry.js';
 	}
 
 	async function handlePauseToggle(item: SearchActivityItem, paused: boolean): Promise<void> {
+		// Music has no per-album pause; the button is hidden, this guards the path.
+		if (item.mediaType === 'album') return;
 		rowActionLoading.add(item.id);
 		try {
 			const movieIds = item.mediaType === 'movie' && item.movieId ? [item.movieId] : [];
@@ -597,6 +621,9 @@ import type { KindFilter } from '#lib/media-kinds/registry.js';
 	}
 
 	function mediaLabel(item: SearchActivityItem): string {
+		if (item.mediaType === 'album') {
+			return item.artistName ? `${item.artistName} – ${item.mediaTitle}` : item.mediaTitle;
+		}
 		if (item.mediaType === 'episode' && item.seasonNumber !== undefined) {
 			const season = `S${String(item.seasonNumber).padStart(2, '0')}`;
 			const episode =
@@ -726,11 +753,14 @@ import type { KindFilter } from '#lib/media-kinds/registry.js';
 	{:else if detailError}
 		<div class="text-sm text-error">{detailError}</div>
 	{:else if detail}
-		{@const relevance = classifyActionRelevance(
-			item.status,
-			item.errorMessage,
-			item.consecutiveFailureCount
-		)}
+		{@const relevance =
+			item.mediaType === 'album'
+				? { canSearch: item.status !== 'grabbed', canPause: false }
+				: classifyActionRelevance(
+						item.status,
+						item.errorMessage,
+						item.consecutiveFailureCount
+					)}
 		{@const searchType = TASK_TYPE_LABELS[detail.timeline[0]?.taskType ?? item.taskType ?? '']}
 		<div class="flex flex-wrap items-start gap-x-6 gap-y-2">
 			<div class="flex flex-wrap items-center gap-1.5 text-sm">
@@ -760,6 +790,7 @@ import type { KindFilter } from '#lib/media-kinds/registry.js';
 					<span class="rounded bg-base-100 px-2 py-1">{item.indexersQueried}</span>
 				</div>
 			{/if}
+			{#if item.mediaType !== 'album'}
 			<div class="flex flex-wrap items-center gap-1.5 text-sm">
 				<span class="mr-1 text-[10px] font-bold tracking-widest text-base-content/50 uppercase">
 					{m.activity_searches_detailAttempts()}
@@ -774,6 +805,7 @@ import type { KindFilter } from '#lib/media-kinds/registry.js';
 					{detail.consecutiveFailureCount} / {detail.maxConsecutiveFailures}
 				</span>
 			</div>
+			{/if}
 			<div class="flex flex-wrap items-center gap-1.5 text-sm">
 				<span class="mr-1 text-[10px] font-bold tracking-widest text-base-content/50 uppercase">
 					{m.activity_searches_detailFirstAttempt()}
@@ -794,6 +826,7 @@ import type { KindFilter } from '#lib/media-kinds/registry.js';
 						: m.activity_searches_detailNeverSearched()}
 				</span>
 			</div>
+			{#if item.mediaType !== 'album'}
 			<div class="flex flex-wrap items-center gap-1.5 text-sm">
 				<span class="mr-1 text-[10px] font-bold tracking-widest text-base-content/50 uppercase">
 					{m.activity_searches_detailNextAttempt()}
@@ -807,6 +840,7 @@ import type { KindFilter } from '#lib/media-kinds/registry.js';
 						: m.activity_searches_detailEligibleNow()}
 				</span>
 			</div>
+			{/if}
 			{#if item.isUpgrade && item.status === 'grabbed' && item.oldScore !== null && item.newScore !== null}
 				<div class="text-sm">
 					<span class="font-medium text-base-content/55">{m.activity_table_upgrade()}</span>
@@ -926,6 +960,13 @@ import type { KindFilter } from '#lib/media-kinds/registry.js';
 					onclick={() => setMediaType('tv')}
 				>
 					{m.common_tvShows()}
+				</button>
+				<button
+					class="btn join-item btn-sm {mediaType === 'music' ? 'btn-primary' : 'btn-ghost'}"
+					onclick={() => setMediaType('music')}
+				>
+					<Disc3 class="h-3.5 w-3.5 sm:mr-1" />
+					<span class="hidden sm:inline">{m.nav_music()}</span>
 				</button>
 			</div>
 			<button
@@ -1255,11 +1296,11 @@ import type { KindFilter } from '#lib/media-kinds/registry.js';
 
 							<td class="min-w-0">
 								<div class="flex flex-col gap-0.5">
-									{#if item.movieId || item.seriesId}
+									{#if item.movieId || item.seriesId || item.albumId}
 										<a
 											href={getMediaLink({
 												mediaType: item.mediaType,
-												mediaId: item.movieId ?? item.episodeId ?? '',
+												mediaId: item.movieId ?? item.episodeId ?? item.albumId ?? '',
 												seriesId: item.seriesId
 											})}
 											class="flex items-center gap-1.5 hover:text-primary"
@@ -1267,6 +1308,8 @@ import type { KindFilter } from '#lib/media-kinds/registry.js';
 										>
 											{#if item.mediaType === 'movie'}
 												<Clapperboard class="h-4 w-4 shrink-0" />
+											{:else if item.mediaType === 'album'}
+												<Disc3 class="h-4 w-4 shrink-0" />
 											{:else}
 												<Tv class="h-4 w-4 shrink-0" />
 											{/if}
@@ -1278,6 +1321,8 @@ import type { KindFilter } from '#lib/media-kinds/registry.js';
 										<div class="flex items-center gap-1.5">
 											{#if item.mediaType === 'movie'}
 												<Clapperboard class="h-4 w-4 shrink-0" />
+											{:else if item.mediaType === 'album'}
+												<Disc3 class="h-4 w-4 shrink-0" />
 											{:else}
 												<Tv class="h-4 w-4 shrink-0" />
 											{/if}

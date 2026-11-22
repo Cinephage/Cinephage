@@ -241,8 +241,10 @@ import {
  *   needs; `year` cannot place an album on a day.
  * Version 195: synced track identity - artist_name/album_name so media-server
  *   stats can group music without a TMDB id.
+ * Version 196: monitoring_history.media_item_id - the album a music search
+ *   attempt acted on, so the Searches tab can resolve it.
  */
-export const CURRENT_SCHEMA_VERSION = 195;
+export const CURRENT_SCHEMA_VERSION = 196;
 
 /**
  * Seed rows for the *legacy* backfill in migration 078 only.
@@ -1109,6 +1111,7 @@ const TABLE_DEFINITIONS: string[] = [
 		"series_id" text REFERENCES "series"("id") ON DELETE CASCADE,
 		"season_number" integer,
 		"episode_id" text REFERENCES "episodes"("id") ON DELETE CASCADE,
+		"media_item_id" text REFERENCES "media_items"("id") ON DELETE CASCADE,
 		"status" text NOT NULL,
 		"releases_found" integer DEFAULT 0,
 		"release_grabbed" text,

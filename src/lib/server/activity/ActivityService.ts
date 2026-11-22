@@ -1252,9 +1252,7 @@ export class ActivityService {
 		} else if (filters.mediaType === 'tv') {
 			conditions.push(sql`${monitoringHistory.seriesId} IS NOT NULL`);
 		} else if (filters.mediaType === 'music') {
-			// Music monitoring history does not exist yet; never show video rows
-			// under the music filter.
-			conditions.push(sql`1 = 0`);
+			conditions.push(sql`${monitoringHistory.mediaItemId} IS NOT NULL`);
 		}
 
 		// Date filters
@@ -1277,6 +1275,7 @@ export class ActivityService {
 				seriesId: monitoringHistory.seriesId,
 				seasonNumber: monitoringHistory.seasonNumber,
 				episodeId: monitoringHistory.episodeId,
+				mediaItemId: monitoringHistory.mediaItemId,
 				status: monitoringHistory.status,
 				releasesFound: monitoringHistory.releasesFound,
 				releaseGrabbed: monitoringHistory.releaseGrabbed,
@@ -1354,7 +1353,7 @@ export class ActivityService {
 		} else if (params.mediaType === 'tv') {
 			conditions.push(sql`${monitoringHistory.seriesId} IS NOT NULL`);
 		} else if (params.mediaType === 'music') {
-			conditions.push(sql`1 = 0`);
+			conditions.push(sql`${monitoringHistory.mediaItemId} IS NOT NULL`);
 		}
 
 		if (params.startDate) {
@@ -1374,6 +1373,7 @@ export class ActivityService {
 				seriesId: monitoringHistory.seriesId,
 				seasonNumber: monitoringHistory.seasonNumber,
 				episodeId: monitoringHistory.episodeId,
+				mediaItemId: monitoringHistory.mediaItemId,
 				status: monitoringHistory.status,
 				releasesFound: monitoringHistory.releasesFound,
 				releaseGrabbed: monitoringHistory.releaseGrabbed,
@@ -1530,6 +1530,9 @@ export class ActivityService {
 				.filter((id): id is string => Boolean(id)),
 			...Array.from(mediaMaps.series.values())
 				.map((s) => s.scoringProfileId)
+				.filter((id): id is string => Boolean(id)),
+			...Array.from(mediaMaps.albums.values())
+				.map((a) => a.qualityProfileId)
 				.filter((id): id is string => Boolean(id))
 		]);
 		if (profileIds.size === 0) return new Map();
@@ -1549,12 +1552,13 @@ export class ActivityService {
 		missingSearchIntervalHours: number
 	): SearchActivityItem {
 		const mediaInfo = resolveMonitoringMediaInfo(item, mediaMaps);
+		const album = item.mediaItemId ? mediaMaps.albums.get(item.mediaItemId) : undefined;
 		const mediaRecord =
 			mediaInfo.mediaType === 'movie'
 				? item.movieId
 					? mediaMaps.movies.get(item.movieId)
 					: undefined
-				: item.episodeId
+				: mediaInfo.mediaType === 'episode' && item.episodeId
 					? mediaMaps.episodes.get(item.episodeId)
 					: undefined;
 		const scoringProfileId =
@@ -1562,17 +1566,22 @@ export class ActivityService {
 				? item.movieId
 					? mediaMaps.movies.get(item.movieId)?.scoringProfileId
 					: undefined
-				: item.seriesId
-					? mediaMaps.series.get(item.seriesId)?.scoringProfileId
-					: undefined;
+				: mediaInfo.mediaType === 'album'
+					? (album?.qualityProfileId ?? undefined)
+					: item.seriesId
+						? mediaMaps.series.get(item.seriesId)?.scoringProfileId
+						: undefined;
 		return {
 			id: item.id,
 			taskType: item.taskType,
 			status: item.status as SearchActivityStatus,
-			mediaType: mediaInfo.mediaType === 'movie' ? 'movie' : 'episode',
+			mediaType: mediaInfo.mediaType,
 			movieId: item.movieId ?? undefined,
 			seriesId: item.seriesId ?? undefined,
 			episodeId: item.episodeId ?? undefined,
+			albumId: mediaInfo.mediaType === 'album' ? mediaInfo.mediaId : undefined,
+			mediaItemId: item.mediaItemId ?? undefined,
+			artistName: mediaInfo.artistName,
 			mediaTitle: mediaInfo.mediaTitle,
 			mediaYear: mediaInfo.mediaYear,
 			seriesTitle: mediaInfo.seriesTitle,
@@ -1585,15 +1594,16 @@ export class ActivityService {
 			releaseGrabbed: item.releaseGrabbed,
 			errorMessage: item.errorMessage,
 			executedAt: item.executedAt as string,
-			nextAttempt: mediaRecord?.lastSearchTime
-				? (getNextSearchTime(
-						mediaRecord.lastSearchTime,
-						backoffCooldownHours(
-							missingSearchIntervalHours,
-							mediaRecord?.consecutiveFailureCount ?? 0
-						)
-					)?.toISOString() ?? null)
-				: null,
+			nextAttempt:
+				mediaInfo.mediaType === 'album' || !mediaRecord?.lastSearchTime
+					? null
+					: (getNextSearchTime(
+							mediaRecord.lastSearchTime,
+							backoffCooldownHours(
+								missingSearchIntervalHours,
+								mediaRecord?.consecutiveFailureCount ?? 0
+							)
+						)?.toISOString() ?? null),
 			isUpgrade: item.isUpgrade,
 			oldScore: item.oldScore,
 			newScore: item.newScore,
@@ -1613,11 +1623,92 @@ export class ActivityService {
 	async fetchSearchItemDetail(target: {
 		movieId?: string;
 		episodeId?: string;
+		albumId?: string;
 	}): Promise<SearchItemDetail | null> {
-		const { movieId, episodeId } = target;
-		if (!movieId && !episodeId) return null;
+		const { movieId, episodeId, albumId } = target;
+		if (!movieId && !episodeId && !albumId) return null;
 
 		const { missingSearchIntervalHours } = await monitoringScheduler.getSettings();
+
+		if (albumId) {
+			const album = db
+				.select({
+					id: albums.id,
+					mediaItemId: albums.mediaItemId,
+					title: albums.title,
+					year: albums.year,
+					artistName: artists.name,
+					qualityProfileId: albums.qualityProfileId,
+					lastSearchedAt: albums.lastSearchedAt
+				})
+				.from(albums)
+				.innerJoin(artists, eq(albums.artistId, artists.id))
+				.where(eq(albums.id, albumId))
+				.get();
+			if (!album) return null;
+
+			const [profile, firstAttemptRow, timelineRows] = await Promise.all([
+				album.qualityProfileId
+					? db.query.scoringProfiles.findFirst({
+							where: eq(scoringProfiles.id, album.qualityProfileId)
+						})
+					: Promise.resolve(undefined),
+				db
+					.select({ value: min(monitoringHistory.executedAt) })
+					.from(monitoringHistory)
+					.where(eq(monitoringHistory.mediaItemId, album.mediaItemId))
+					.get(),
+				db
+					.select({
+						id: monitoringHistory.id,
+						taskType: monitoringHistory.taskType,
+						movieId: monitoringHistory.movieId,
+						seriesId: monitoringHistory.seriesId,
+						seasonNumber: monitoringHistory.seasonNumber,
+						episodeId: monitoringHistory.episodeId,
+						mediaItemId: monitoringHistory.mediaItemId,
+						status: monitoringHistory.status,
+						releasesFound: monitoringHistory.releasesFound,
+						releaseGrabbed: monitoringHistory.releaseGrabbed,
+						queueItemId: monitoringHistory.queueItemId,
+						isUpgrade: monitoringHistory.isUpgrade,
+						oldScore: monitoringHistory.oldScore,
+						newScore: monitoringHistory.newScore,
+						indexerName: monitoringHistory.indexerName,
+						indexersQueried: monitoringHistory.indexersQueried,
+						executedAt: monitoringHistory.executedAt,
+						errorMessage: monitoringHistory.errorMessage
+					})
+					.from(monitoringHistory)
+					.where(eq(monitoringHistory.mediaItemId, album.mediaItemId))
+					.orderBy(desc(monitoringHistory.executedAt))
+					.limit(20)
+					.all()
+			]);
+
+			const mediaMaps = await this.fetchMediaMaps(
+				[],
+				[],
+				timelineRows as MonitoringHistoryRecord[]
+			);
+
+			return {
+				mediaType: 'album',
+				mediaTitle: album.title,
+				mediaYear: album.year,
+				artistName: album.artistName,
+				qualityProfileName: profile?.name ?? null,
+				consecutiveFailureCount: 0,
+				maxConsecutiveFailures: DEFAULT_MAX_CONSECUTIVE_FAILURES,
+				paused: false,
+				firstAttempt: firstAttemptRow?.value ?? null,
+				lastAttempt: album.lastSearchedAt ?? null,
+				nextAttempt: null,
+				timeline: (timelineRows as MonitoringHistoryRecord[]).map((row) =>
+					this.toSearchActivityItem(row, mediaMaps, new Map(), missingSearchIntervalHours)
+				)
+			};
+		}
 
 		if (movieId) {
 			const movie = await db.query.movies.findFirst({ where: eq(movies.id, movieId) });
@@ -1800,9 +1891,7 @@ export class ActivityService {
 		} else if (filters.mediaType === 'tv') {
 			conditions.push(sql`${monitoringHistory.seriesId} IS NOT NULL`);
 		} else if (filters.mediaType === 'music') {
-			// Music monitoring history does not exist yet; never show video rows
-			// under the music filter.
-			conditions.push(sql`1 = 0`);
+			conditions.push(sql`${monitoringHistory.mediaItemId} IS NOT NULL`);
 		}
 		if (filters.startDate) {
 			conditions.push(gte(monitoringHistory.executedAt, filters.startDate));
@@ -2004,7 +2093,7 @@ export class ActivityService {
 	): Promise<MediaMaps> {
 		// Collect all IDs
 		const mediaItemIds = new Set<string>(
-			[...activeDownloads, ...historyItems].flatMap((item) =>
+			[...activeDownloads, ...historyItems, ...monitoringItems].flatMap((item) =>
 				item.mediaItemId ? [item.mediaItemId] : []
 			)
 		);
@@ -2067,7 +2156,8 @@ export class ActivityService {
 							title: albums.title,
 							year: albums.year,
 							artistId: artists.id,
-							artistName: artists.name
+							artistName: artists.name,
+							qualityProfileId: albums.qualityProfileId
 						})
 						.from(albums)
 						.innerJoin(artists, eq(albums.artistId, artists.id))

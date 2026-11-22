@@ -11,7 +11,7 @@
 
 import { and, eq, notInArray } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
-import { albums, artists, downloadQueue } from '#lib/server/db/schema.js';
+import { albums, artists, downloadQueue, monitoringHistory } from '#lib/server/db/schema.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { autoSearchAlbum } from './MusicAutoSearch.js';
 
@@ -116,6 +116,21 @@ export async function searchMissingMusic(
 
 		if (result.grabbed) summary.grabbed++;
 		if (result.error) summary.errors++;
+
+		// One row per attempt, the shape the Searches tab reads for video. A
+		// cooldown skip is not an attempt and writes nothing; an album that could
+		// not be searched stays visible through `last_searched_at`.
+		db.insert(monitoringHistory)
+			.values({
+				taskType: 'missing',
+				mediaItemId: row.mediaItemId,
+				status: result.grabbed ? 'grabbed' : result.error ? 'error' : 'no_results',
+				releasesFound: result.releasesFound ?? 0,
+				releaseGrabbed: result.release,
+				errorMessage: result.error,
+				executedAt: new Date().toISOString()
+			})
+			.run();
 
 		items.push({
 			albumId: row.albumId,

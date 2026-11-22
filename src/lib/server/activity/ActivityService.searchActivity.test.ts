@@ -11,6 +11,9 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../test/db-helper';
 import {
+	albums,
+	artists,
+	mediaItems,
 	movies,
 	monitoringHistory,
 	series,
@@ -55,6 +58,9 @@ async function seedHistoryRow(
 
 beforeEach(() => {
 	testDb.db.delete(monitoringHistory).run();
+	testDb.db.delete(albums).run();
+	testDb.db.delete(artists).run();
+	testDb.db.delete(mediaItems).run();
 	testDb.db.delete(episodes).run();
 	testDb.db.delete(series).run();
 	testDb.db.delete(movies).run();
@@ -540,5 +546,60 @@ describe('ActivityService.fetchSearchItemDetail', () => {
 		const detail = await service.fetchSearchItemDetail({ movieId });
 
 		expect(detail!.nextAttempt).toBeNull();
+	});
+
+	it('resolves a music search row to its album and artist, and filters by music', async () => {
+		const mediaItemId = randomUUID();
+		const artistId = randomUUID();
+		const albumId = randomUUID();
+		await testDb.db
+			.insert(mediaItems)
+			.values({ id: mediaItemId, kind: 'album', title: 'Discovery' })
+			.run();
+		await testDb.db.insert(artists).values({ id: artistId, name: 'Daft Punk' }).run();
+		await testDb.db
+			.insert(albums)
+			.values({
+				id: albumId,
+				mediaItemId,
+				artistId,
+				title: 'Discovery',
+				year: 2001,
+				lastSearchedAt: new Date().toISOString()
+			})
+			.run();
+		await testDb.db.insert(monitoringHistory).values({
+			taskType: 'missing',
+			mediaItemId,
+			status: 'grabbed',
+			releasesFound: 2,
+			releaseGrabbed: 'Daft Punk - Discovery FLAC',
+			executedAt: new Date().toISOString()
+		});
+
+		const service = ActivityService.getInstance();
+		const page = await service.fetchSearchActivity({ page: 1, limit: 10 });
+		expect(page.items[0]).toMatchObject({
+			mediaType: 'album',
+			albumId,
+			mediaItemId,
+			mediaTitle: 'Discovery',
+			artistName: 'Daft Punk',
+			status: 'grabbed'
+		});
+
+		const music = await service.fetchSearchActivity({ page: 1, limit: 10, mediaType: 'music' });
+		expect(music.total).toBe(1);
+		const video = await service.fetchSearchActivity({ page: 1, limit: 10, mediaType: 'movie' });
+		expect(video.total).toBe(0);
+
+		const detail = await service.fetchSearchItemDetail({ albumId });
+		expect(detail).toMatchObject({
+			mediaType: 'album',
+			mediaTitle: 'Discovery',
+			artistName: 'Daft Punk',
+			lastAttempt: expect.any(String)
+		});
+		expect(detail?.timeline).toHaveLength(1);
 	});
 });

@@ -49,6 +49,8 @@ export interface AlbumInfo {
 	year: number | null;
 	artistId: string;
 	artistName: string;
+	/** Effective assignment, or null when the album inherits. */
+	qualityProfileId: string | null;
 }
 
 export interface ResolvedMediaInfo {
@@ -76,11 +78,15 @@ export interface SearchActivityItem {
 	id: string;
 	taskType: string | null;
 	status: SearchActivityStatus;
-	mediaType: 'movie' | 'episode';
+	mediaType: 'movie' | 'episode' | 'album';
 	/** Raw ids for acting on this row (Search Now, Reset Failure Count) - not for display. */
 	movieId?: string;
 	seriesId?: string;
 	episodeId?: string;
+	/** Album row id and its shared identity row (music only). */
+	albumId?: string;
+	mediaItemId?: string;
+	artistName?: string;
 	mediaTitle: string;
 	mediaYear: number | null;
 	seriesTitle?: string;
@@ -114,10 +120,11 @@ export interface SearchActivityItem {
  * expand, not part of the paginated SearchActivityItem list.
  */
 export interface SearchItemDetail {
-	mediaType: 'movie' | 'episode';
+	mediaType: 'movie' | 'episode' | 'album';
 	mediaTitle: string;
 	mediaYear: number | null;
 	seriesTitle?: string;
+	artistName?: string;
 	seasonNumber?: number;
 	episodeNumber?: number;
 	qualityProfileName: string | null;
@@ -274,6 +281,18 @@ export function resolveMonitoringMediaInfo(
 	mon: MonitoringHistoryRecord,
 	mediaMaps: MediaMaps
 ): ResolvedMediaInfo {
+	if (mon.mediaItemId && mediaMaps.albums.has(mon.mediaItemId)) {
+		const album = mediaMaps.albums.get(mon.mediaItemId)!;
+		return {
+			mediaType: 'album',
+			mediaId: album.id,
+			mediaTitle: album.title,
+			mediaYear: album.year,
+			artistId: album.artistId,
+			artistName: album.artistName
+		};
+	}
+
 	if (mon.movieId && mediaMaps.movies.has(mon.movieId)) {
 		const movie = mediaMaps.movies.get(mon.movieId)!;
 		return {

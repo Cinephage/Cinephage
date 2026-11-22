@@ -2,7 +2,14 @@ import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../test/db-helper';
-import { albums, artists, downloadClients, downloadQueue, mediaItems } from '#lib/server/db/schema.js';
+import {
+	albums,
+	artists,
+	downloadClients,
+	downloadQueue,
+	mediaItems,
+	monitoringHistory
+} from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 
@@ -23,6 +30,7 @@ afterAll(() => destroyTestDb(testDb));
 
 beforeEach(() => {
 	autoSearchMock.mockReset();
+	testDb.db.delete(monitoringHistory).run();
 	testDb.db.delete(downloadQueue).run();
 	testDb.db.delete(downloadClients).run();
 	testDb.db.delete(albums).run();
@@ -119,5 +127,28 @@ describe('searchMissingMusic', () => {
 
 		expect(result.summary).toMatchObject({ searched: 0, skipped: 1 });
 		expect(autoSearchMock).not.toHaveBeenCalled();
+	});
+
+	it('records the attempt against the album identity', async () => {
+		const { albumId, mediaItemId } = seedAlbum({});
+		autoSearchMock.mockResolvedValue({
+			albumId,
+			title: 'Album',
+			grabbed: false,
+			releasesFound: 4,
+			error: 'no accepted release'
+		});
+
+		await searchMissingMusic();
+
+		const rows = testDb.db.select().from(monitoringHistory).all();
+		expect(rows).toHaveLength(1);
+		expect(rows[0]).toMatchObject({
+			taskType: 'missing',
+			mediaItemId,
+			status: 'error',
+			releasesFound: 4,
+			errorMessage: 'no accepted release'
+		});
 	});
 });

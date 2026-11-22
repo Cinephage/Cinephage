@@ -2037,6 +2037,8 @@ export const monitoringHistory = sqliteTable(
 		seriesId: text('series_id').references(() => series.id, { onDelete: 'cascade' }),
 		seasonNumber: integer('season_number'),
 		episodeId: text('episode_id').references(() => episodes.id, { onDelete: 'cascade' }),
+		// Music's acquisition unit: the album's shared identity row (migration 196).
+		mediaItemId: text('media_item_id').references(() => mediaItems.id, { onDelete: 'cascade' }),
 
 		// Status of this monitoring action
 		// 'searching' | 'found' | 'grabbed' | 'no_results' | 'skipped' | 'error'
