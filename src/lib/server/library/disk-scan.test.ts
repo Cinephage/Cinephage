@@ -77,11 +77,11 @@ for (const rootId of ['root-empty', 'root-missing']) {
 		.run();
 }
 
-afterAll(() => {
-	void rm(emptyRoot, { recursive: true, force: true });
-	for (const root of healScanRoots) {
-		void rm(root, { recursive: true, force: true });
-	}
+afterAll(async () => {
+	// Await the removals: a fire-and-forget rm loses the race with process exit
+	// and every suite run leaves its scan roots behind in the temp dir.
+	await rm(emptyRoot, { recursive: true, force: true });
+	await Promise.all(healScanRoots.map((root) => rm(root, { recursive: true, force: true })));
 	destroyTestDb(testDb);
 });
 
