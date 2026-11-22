@@ -14,10 +14,11 @@
  * half; this module only decides which folder is which album.
  */
 
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { eq } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
-import { albums, trackFiles } from '#lib/server/db/schema.js';
+import { albums, trackFiles, tracks } from '#lib/server/db/schema.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { collectAudioFiles, groupAudioFiles, type AudioAlbumFolder } from './audio-folder.js';
 import { pickReleaseGroup, type AlbumCandidate } from './release-match.js';
@@ -41,6 +42,10 @@ export interface MusicScanFolderResult {
 export interface MusicScanSummary {
 	filesScanned: number;
 	filesImported: number;
+	/** Rows dropped because their file is gone (deletion reconciliation). */
+	filesRemoved: number;
+	/** Albums whose last file disappeared; they stay as metadata, marked missing. */
+	albumsCleared: number;
 	folders: number;
 	imported: number;
 	skipped: number;
@@ -116,11 +121,98 @@ async function adoptFolder(
 		qualityProfileId: null
 	});
 
+	const existing = db
+		.select({ path: albums.path, hasFile: albums.hasFile })
+		.from(albums)
+		.where(eq(albums.id, added.albumId))
+		.get();
+	if (isDuplicateAdoption(added.created, existing, group.folder)) {
+		throw new DuplicateAlbumError(`already in the library at ${existing?.path}`);
+	}
+
 	const imported = await musicImportService.adoptFolder(added.albumId, group.folder);
 	return { albumId: added.albumId, filesImported: imported.filesImported };
 }
 
 class UnmatchedAlbumError extends Error {}
+
+class DuplicateAlbumError extends Error {}
+
+/**
+ * A second folder for an album the library already holds is a duplicate, not
+ * a re-adoption: adopting it would move `albums.path` and leave the first
+ * copy's rows pointing at files the album no longer names.
+ */
+export function isDuplicateAdoption(
+	created: boolean,
+	existing: { path: string | null; hasFile: boolean | null } | undefined,
+	folder: string
+): boolean {
+	if (created || !existing?.hasFile || !existing.path) return false;
+	return path.resolve(existing.path) !== path.resolve(folder);
+}
+
+/**
+ * Drop rows whose file no longer exists and re-derive the track and album
+ * `has_file` flags from what is left.
+ *
+ * Only called once a walk has found audio: an unmounted root also looks like
+ * "no files", and clearing a library because a mount went away is worse than
+ * leaving a stale row until the next successful scan. The check is a stat per
+ * tracked file, not a dependence on the walk, so a file the walker skipped
+ * for its own reasons is never treated as deleted.
+ */
+function reconcileRemovedFiles(rootFolderId: string): { files: number; albums: number } {
+	const rows = db
+		.select({
+			id: trackFiles.id,
+			albumId: trackFiles.albumId,
+			trackId: trackFiles.trackId,
+			relativePath: trackFiles.relativePath,
+			albumPath: albums.path
+		})
+		.from(trackFiles)
+		.innerJoin(albums, eq(trackFiles.albumId, albums.id))
+		.where(eq(albums.rootFolderId, rootFolderId))
+		.all();
+
+	const gone = rows.filter(
+		(row) => row.albumPath && !existsSync(path.join(row.albumPath, row.relativePath))
+	);
+	if (gone.length === 0) return { files: 0, albums: 0 };
+
+	const albumsTouched = new Set<string>();
+	const tracksTouched = new Set<string>();
+	for (const row of gone) {
+		db.delete(trackFiles).where(eq(trackFiles.id, row.id)).run();
+		albumsTouched.add(row.albumId);
+		if (row.trackId) tracksTouched.add(row.trackId);
+	}
+
+	for (const trackId of tracksTouched) {
+		const remaining = db
+			.select({ id: trackFiles.id })
+			.from(trackFiles)
+			.where(eq(trackFiles.trackId, trackId))
+			.get();
+		db.update(tracks).set({ hasFile: Boolean(remaining) }).where(eq(tracks.id, trackId)).run();
+	}
+
+	for (const albumId of albumsTouched) {
+		const remaining = db
+			.select({ id: trackFiles.id })
+			.from(trackFiles)
+			.where(eq(trackFiles.albumId, albumId))
+			.get();
+		db.update(albums).set({ hasFile: Boolean(remaining) }).where(eq(albums.id, albumId)).run();
+	}
+
+	logger.info(
+		{ files: gone.length, albums: albumsTouched.size },
+		'[MusicDiskScan] removed track files missing from disk'
+	);
+	return { files: gone.length, albums: albumsTouched.size };
+}
 
 /**
  * Scan one music root folder: walk, group into albums, match, adopt.
@@ -133,6 +225,8 @@ export async function scanMusicRootFolder(options: MusicScanOptions): Promise<Mu
 	const summary: MusicScanSummary = {
 		filesScanned: 0,
 		filesImported: 0,
+		filesRemoved: 0,
+		albumsCleared: 0,
 		folders: 0,
 		imported: 0,
 		skipped: 0,
@@ -144,6 +238,10 @@ export async function scanMusicRootFolder(options: MusicScanOptions): Promise<Mu
 	const files = await collectAudioFiles(options.rootPath);
 	summary.filesScanned = files.length;
 	if (files.length === 0) return summary;
+
+	const reconciled = reconcileRemovedFiles(options.rootFolderId);
+	summary.filesRemoved = reconciled.files;
+	summary.albumsCleared = reconciled.albums;
 
 	const groups = groupAudioFiles(files);
 	summary.folders = groups.length;
@@ -202,6 +300,22 @@ export async function scanMusicRootFolder(options: MusicScanOptions): Promise<Mu
 				'[MusicDiskScan] album adopted'
 			);
 		} catch (error) {
+			if (error instanceof DuplicateAlbumError) {
+				summary.skipped += 1;
+				summary.results.push({
+					folder: group.folder,
+					album: group.album,
+					artist: group.artist,
+					status: 'skipped',
+					reason: error.message
+				});
+				logger.warn(
+					{ folder: group.folder, reason: error.message },
+					'[MusicDiskScan] duplicate album folder skipped'
+				);
+				continue;
+			}
+
 			if (error instanceof UnmatchedAlbumError) {
 				summary.unmatched += 1;
 				summary.results.push({

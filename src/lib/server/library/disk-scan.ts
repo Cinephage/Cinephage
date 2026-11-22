@@ -1086,7 +1086,8 @@ export class DiskScanService extends EventEmitter {
 					skipped: summary.skipped,
 					unmatched: summary.unmatched,
 					failed: summary.failed,
-					files: summary.filesImported
+					files: summary.filesImported,
+					removed: summary.filesRemoved
 				},
 				'[DiskScan] Music library scan finished'
 			);
