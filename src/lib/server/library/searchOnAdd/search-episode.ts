@@ -183,16 +183,7 @@ export async function searchForEpisode(
 		// No existing file - grab the top-ranked release
 		const bestRelease = searchResult.releases[0];
 		const grabResult = await grabService.grab({
-			release: {
-				title: bestRelease.title,
-				infoHash: bestRelease.infoHash,
-				magnetUrl: bestRelease.magnetUrl,
-				downloadUrl: bestRelease.downloadUrl,
-				indexerId: bestRelease.indexerId,
-				indexerName: bestRelease.indexerName,
-				size: bestRelease.size,
-				protocol: bestRelease.protocol as 'torrent' | 'usenet' | 'streaming' | undefined
-			},
+			release: toGrabRelease(bestRelease),
 			target: {
 				type: 'episode' as const,
 				episodeId,
