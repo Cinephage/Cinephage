@@ -708,3 +708,60 @@ describe('PlexStatsProvider episode series-id resolution', () => {
 		expect(result.items[0].tmdbId).toBeNull();
 	});
 });
+
+
+describe('PlexStatsProvider music', () => {
+	let mockFetch: ReturnType<typeof vi.fn>;
+
+	beforeEach(() => {
+		mockFetch = vi.fn();
+		vi.stubGlobal('fetch', mockFetch);
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it('walks an artist section and keeps the track identity', async () => {
+		mockFetch.mockResolvedValueOnce(mockSectionsResponse([{ key: '3', type: 'artist', title: 'Music' }]));
+		mockFetch.mockResolvedValueOnce(
+			mockFetchResponse({
+				MediaContainer: {
+					totalSize: 1,
+					Metadata: [
+						{
+							ratingKey: '900',
+							title: 'Crescendolls',
+							grandparentTitle: 'Daft Punk',
+							parentTitle: 'Discovery',
+							viewCount: 3,
+							duration: 214000,
+							Media: [
+								{
+									container: 'flac',
+									audioCodec: 'flac',
+									audioChannels: 2,
+									Part: [
+										{
+											size: 32000000,
+											Stream: [{ streamType: 2, codec: 'flac', channels: 2 }]
+										}
+									]
+								}
+							]
+						}
+					]
+				}
+			})
+		);
+
+		const result = await new PlexStatsProvider(mockConfig).fetchAllItems();
+		const item = result.items[0];
+
+		expect(item.itemType).toBe('track');
+		expect(item.artistName).toBe('Daft Punk');
+		expect(item.albumName).toBe('Discovery');
+		expect(item.playCount).toBe(3);
+		expect(item.audioCodec).toBe('flac');
+	});
+});

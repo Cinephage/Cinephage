@@ -5,7 +5,7 @@ import {
 	mediaServerSyncedRuns,
 	mediaBrowserServers
 } from '#lib/server/db/schema.js';
-import { sql, desc, eq, and, or, isNull, inArray } from 'drizzle-orm';
+import { sql, desc, eq, and, or, isNull, isNotNull, inArray } from 'drizzle-orm';
 import type {
 	StatsSummary,
 	AggregatedMediaItem,
@@ -117,7 +117,12 @@ export const GET: RequestHandler = async () => {
 	// predicate (no special-casing needed if zero servers are enabled).
 	const servers = await db.select().from(mediaBrowserServers);
 	const enabledServerIds = servers.filter((s) => s.enabled).map((s) => s.id);
-	const enabledFilter = inArray(mediaServerSyncedItems.serverId, enabledServerIds);
+	const serverFilter = inArray(mediaServerSyncedItems.serverId, enabledServerIds);
+	// Tracks are music and the video aggregates below are video-shaped
+	// (resolution, HDR, video codec). Keep them out of those numbers; music
+	// gets its own summary further down.
+	const enabledFilter = and(serverFilter, sql`${mediaServerSyncedItems.itemType} <> 'track'`);
+	const musicEnabled = and(serverFilter, sql`${mediaServerSyncedItems.itemType} = 'track'`);
 
 	const [
 		totalPlaysRow,
@@ -131,7 +136,12 @@ export const GET: RequestHandler = async () => {
 		containerRows,
 		itemCountsByServerRows,
 		topPlayedKeys,
-		largestRawRows
+		largestRawRows,
+		musicPlaysRow,
+		musicTracksRow,
+		musicArtistRows,
+		musicAlbumRows,
+		musicFormatRows
 	] = await Promise.all([
 		db
 			.select({ total: sql<number>`coalesce(sum(${mediaServerSyncedItems.playCount}), 0)` })
@@ -220,7 +230,46 @@ export const GET: RequestHandler = async () => {
 			.from(mediaServerSyncedItems)
 			.where(and(sql`${mediaServerSyncedItems.fileSize} IS NOT NULL`, enabledFilter))
 			.orderBy(desc(mediaServerSyncedItems.fileSize))
-			.limit(10)
+			.limit(10),
+		db
+			.select({ total: sql<number>`coalesce(sum(${mediaServerSyncedItems.playCount}), 0)` })
+			.from(mediaServerSyncedItems)
+			.where(musicEnabled),
+		db
+			.select({ count: sql<number>`count(*)` })
+			.from(mediaServerSyncedItems)
+			.where(musicEnabled),
+		db
+			.select({
+				artist: mediaServerSyncedItems.artistName,
+				plays: sql<number>`coalesce(sum(${mediaServerSyncedItems.playCount}), 0)`
+			})
+			.from(mediaServerSyncedItems)
+			.where(and(musicEnabled, isNotNull(mediaServerSyncedItems.artistName)))
+			.groupBy(mediaServerSyncedItems.artistName)
+			.orderBy(sql`sum(${mediaServerSyncedItems.playCount}) desc`)
+			.limit(5),
+		db
+			.select({
+				artist: mediaServerSyncedItems.artistName,
+				album: mediaServerSyncedItems.albumName,
+				plays: sql<number>`coalesce(sum(${mediaServerSyncedItems.playCount}), 0)`,
+				tracks: sql<number>`count(*)`
+			})
+			.from(mediaServerSyncedItems)
+			.where(and(musicEnabled, isNotNull(mediaServerSyncedItems.albumName)))
+			.groupBy(mediaServerSyncedItems.artistName, mediaServerSyncedItems.albumName)
+			.orderBy(sql`sum(${mediaServerSyncedItems.playCount}) desc`)
+			.limit(5),
+		db
+			.select({
+				label: mediaServerSyncedItems.audioCodec,
+				count: sql<number>`count(*)`
+			})
+			.from(mediaServerSyncedItems)
+			.where(musicEnabled)
+			.groupBy(mediaServerSyncedItems.audioCodec)
+			.orderBy(sql`count(*) desc`)
 	]);
 
 	// Server metadata for breakdown entries (real type/name, never hardcoded).
@@ -293,6 +342,25 @@ export const GET: RequestHandler = async () => {
 		count: r.count
 	}));
 
+	const music = {
+		plays: musicPlaysRow[0]?.total ?? 0,
+		tracks: musicTracksRow[0]?.count ?? 0,
+		topArtists: musicArtistRows.map((row) => ({
+			name: row.artist ?? 'Unknown',
+			plays: row.plays
+		})),
+		topAlbums: musicAlbumRows.map((row) => ({
+			artist: row.artist,
+			album: row.album ?? 'Unknown',
+			plays: row.plays,
+			tracks: row.tracks
+		})),
+		formatBreakdown: musicFormatRows.map((row) => ({
+			label: row.label ?? 'Unknown',
+			count: row.count
+		}))
+	};
+
 	const topPlayedItems = aggregateItems(topPlayedRows, serverById)
 		.sort((a, b) => b.totalPlayCount - a.totalPlayCount)
 		.slice(0, 25);
@@ -351,6 +419,7 @@ export const GET: RequestHandler = async () => {
 		containerBreakdown,
 		topPlayedItems,
 		largestItems,
+		music,
 		serverStatuses
 	};
 

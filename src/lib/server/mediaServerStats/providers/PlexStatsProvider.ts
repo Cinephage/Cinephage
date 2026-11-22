@@ -27,6 +27,12 @@ export class PlexStatsProvider implements MediaServerStatsProvider {
 				for (const raw of movies) {
 					items.push(this.normalizeItem(raw, 'movie'));
 				}
+			} else if (section.type === 'artist') {
+				const tracks = await this.fetchLibraryItems(section.key, 10);
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				for (const raw of tracks) {
+					items.push(this.normalizeItem(raw, 'track'));
+				}
 			} else if (section.type === 'show') {
 				// Plex attaches only EPISODE-scoped ids to episode Guid arrays
 				// (tmdb://<episode-id> per the metadata provider spec), while local
@@ -128,7 +134,10 @@ export class PlexStatsProvider implements MediaServerStatsProvider {
 	}
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	private normalizeItem(raw: any, libraryType: 'movie' | 'episode'): SyncedMediaItem {
+	private normalizeItem(
+		raw: any,
+		libraryType: 'movie' | 'episode' | 'track'
+	): SyncedMediaItem {
 		const guids = this.parseGuids(raw);
 		// Deterministic enumeration (Phase 5): walk ALL Media versions and ALL of
 		// their Parts in order instead of Media[0].Part[0], so multi-version/
@@ -196,9 +205,21 @@ export class PlexStatsProvider implements MediaServerStatsProvider {
 			title: raw?.title ?? '',
 			year: raw?.year != null ? Number(raw.year) : null,
 			itemType: libraryType,
-			seriesName: raw?.grandparentTitle ?? null,
-			seasonNumber: raw?.parentIndex != null ? Number(raw.parentIndex) : null,
-			episodeNumber: raw?.index != null ? Number(raw.index) : null,
+			artistName: libraryType === 'track' ? (raw?.grandparentTitle ?? null) : null,
+			albumName: libraryType === 'track' ? (raw?.parentTitle ?? null) : null,
+			seriesName: libraryType === 'track' ? null : (raw?.grandparentTitle ?? null),
+			seasonNumber:
+				libraryType === 'track'
+					? null
+					: raw?.parentIndex != null
+						? Number(raw.parentIndex)
+						: null,
+				episodeNumber:
+					libraryType === 'track'
+						? null
+						: raw?.index != null
+							? Number(raw.index)
+							: null,
 			playCount,
 			lastPlayedDate: lastViewedAt,
 			playedPercentage: null,

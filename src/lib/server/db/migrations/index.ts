@@ -190,6 +190,7 @@ import { migration_v191 } from './191-blocklist-album.js';
 import { migration_v192 } from './192-album-genres.js';
 import { migration_v193 } from './193-music-scan-issues.js';
 import { migration_v194 } from './194-album-release-date.js';
+import { migration_v195 } from './195-synced-track-identity.js';
 
 export const MIGRATIONS: MigrationDefinition[] = [
 	migration_v002,
@@ -382,5 +383,6 @@ export const MIGRATIONS: MigrationDefinition[] = [
 	migration_v191,
 	migration_v192,
 	migration_v193,
-	migration_v194
+	migration_v194,
+	migration_v195
 ];

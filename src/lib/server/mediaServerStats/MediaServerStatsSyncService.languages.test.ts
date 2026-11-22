@@ -71,6 +71,8 @@ function makeItem(overrides: Partial<SyncedMediaItem> = {}): SyncedMediaItem {
 		title: 'Language Movie',
 		year: 2024,
 		itemType: 'movie',
+		artistName: null,
+		albumName: null,
 		seriesName: null,
 		seasonNumber: null,
 		episodeNumber: null,

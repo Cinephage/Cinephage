@@ -174,6 +174,8 @@ class MediaServerStatsSyncService extends EventEmitter implements BackgroundServ
 					title: item.title,
 					year: item.year,
 					itemType: item.itemType,
+					artistName: item.artistName,
+					albumName: item.albumName,
 					seriesName: item.seriesName,
 					seasonNumber: item.seasonNumber,
 					episodeNumber: item.episodeNumber,

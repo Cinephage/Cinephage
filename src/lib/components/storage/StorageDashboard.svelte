@@ -11,7 +11,8 @@
 		ChevronRight,
 		ChevronDown,
 		TrendingUp,
-		Database
+		Database,
+		Disc3
 	} from '@lucide/svelte';
 	import type { StorageSummary, ScanSuccess, ServerStatus } from './utils.js';
 	import type { LibraryBreakdownItem, RootFolderBreakdownItem } from './utils.js';
@@ -60,6 +61,13 @@
 			codecBreakdown: BreakdownItem[];
 			hdrBreakdown: BreakdownItem[];
 			audioCodecBreakdown: BreakdownItem[];
+			music: {
+				plays: number;
+				tracks: number;
+				topArtists: Array<{ name: string; plays: number }>;
+				topAlbums: Array<{ artist: string | null; album: string; plays: number; tracks: number }>;
+				formatBreakdown: BreakdownItem[];
+			};
 		};
 		topItems: MediaListItem[];
 		largestItems: MediaListItem[];
@@ -406,6 +414,65 @@
 				/>
 			</div>
 		{/each}
+	</div>
+{/if}
+
+{#if mediaServerStats.music && mediaServerStats.music.tracks > 0}
+	<div class="mt-4 card bg-base-200 p-3">
+		<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+			<h3 class="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-base-content/60 uppercase">
+				<Disc3 class="h-3.5 w-3.5 text-accent" />
+				Music
+			</h3>
+			<span class="text-xs text-base-content/40">
+				{mediaServerStats.music.plays} plays · {mediaServerStats.music.tracks} tracks
+			</span>
+		</div>
+		<div class="grid gap-4 sm:grid-cols-2">
+			<div>
+				<p class="mb-1.5 text-[11px] font-semibold tracking-wide text-base-content/40 uppercase">
+					Top artists
+				</p>
+				{#if mediaServerStats.music.topArtists.length === 0}
+					<p class="text-xs text-base-content/40">No plays yet</p>
+				{:else}
+					{#each mediaServerStats.music.topArtists as artist (artist.name)}
+						<div class="flex items-center justify-between gap-2 py-0.5 text-sm">
+							<span class="truncate">{artist.name}</span>
+							<span class="shrink-0 text-xs text-base-content/50">{artist.plays}</span>
+						</div>
+					{/each}
+				{/if}
+			</div>
+			<div>
+				<p class="mb-1.5 text-[11px] font-semibold tracking-wide text-base-content/40 uppercase">
+					Top albums
+				</p>
+				{#if mediaServerStats.music.topAlbums.length === 0}
+					<p class="text-xs text-base-content/40">No plays yet</p>
+				{:else}
+					{#each mediaServerStats.music.topAlbums as album (`${album.artist}-${album.album}`)}
+						<div class="flex items-center justify-between gap-2 py-0.5 text-sm">
+							<div class="min-w-0">
+								<div class="truncate">{album.album}</div>
+								<div class="truncate text-[11px] text-base-content/40">
+									{album.artist ?? 'Unknown'} · {album.tracks} tracks
+								</div>
+							</div>
+							<span class="shrink-0 text-xs text-base-content/50">{album.plays}</span>
+						</div>
+					{/each}
+				{/if}
+			</div>
+		</div>
+		{#if mediaServerStats.music.formatBreakdown.length > 0}
+			<div class="mt-3 flex flex-wrap items-center gap-1.5 border-t border-base-300 pt-2">
+				<span class="text-[11px] text-base-content/40">Formats</span>
+				{#each mediaServerStats.music.formatBreakdown as format (format.label)}
+					<span class="badge badge-ghost badge-xs">{format.label} · {format.count}</span>
+				{/each}
+			</div>
+		{/if}
 	</div>
 {/if}
 

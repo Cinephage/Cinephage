@@ -10,7 +10,7 @@ import {
 	episodeFiles,
 	storageInsights
 } from '#lib/server/db/schema.js';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import {
 	extractResolution,
 	extractVideoCodec,
@@ -28,7 +28,11 @@ export const load: LayoutServerLoad = async ({ parent }) => {
 	// stat below - including the per-server serverStatuses list, which is
 	// fully hidden (not just its data) once a server is disabled.
 	const enabledServerIds = servers.filter((s) => s.enabled).map((s) => s.id);
-	const enabledFilter = inArray(mediaServerSyncedItems.serverId, enabledServerIds);
+	const serverFilter = inArray(mediaServerSyncedItems.serverId, enabledServerIds);
+	// Track rows feed the music card; they must not leak into the video
+	// play totals or quality breakdowns on this page.
+	const enabledFilter = and(serverFilter, sql`${mediaServerSyncedItems.itemType} <> 'track'`);
+	const musicEnabled = and(serverFilter, sql`${mediaServerSyncedItems.itemType} = 'track'`);
 
 	const playsResult =
 		enabledServerIds.length === 0
@@ -38,6 +42,72 @@ export const load: LayoutServerLoad = async ({ parent }) => {
 					.from(mediaServerSyncedItems)
 					.where(enabledFilter);
 	const totalPlays = playsResult[0]?.total ?? 0;
+
+	const [musicPlayRows, musicTrackRows, musicArtistRows, musicAlbumRows, musicFormatRows] =
+		enabledServerIds.length === 0
+			? [[{ total: 0 }], [{ count: 0 }], [], [], []]
+			: await Promise.all([
+					db
+						.select({ total: sql<number>`coalesce(sum(${mediaServerSyncedItems.playCount}), 0)` })
+						.from(mediaServerSyncedItems)
+						.where(musicEnabled),
+					db
+						.select({ count: sql<number>`count(*)` })
+						.from(mediaServerSyncedItems)
+						.where(musicEnabled),
+					db
+						.select({
+							artist: mediaServerSyncedItems.artistName,
+							plays: sql<number>`coalesce(sum(${mediaServerSyncedItems.playCount}), 0)`
+						})
+						.from(mediaServerSyncedItems)
+						.where(and(musicEnabled, isNotNull(mediaServerSyncedItems.artistName)))
+						.groupBy(mediaServerSyncedItems.artistName)
+						.orderBy(sql`sum(${mediaServerSyncedItems.playCount}) desc`)
+						.limit(5),
+					db
+						.select({
+							artist: mediaServerSyncedItems.artistName,
+							album: mediaServerSyncedItems.albumName,
+							plays: sql<number>`coalesce(sum(${mediaServerSyncedItems.playCount}), 0)`,
+							tracks: sql<number>`count(*)`
+						})
+						.from(mediaServerSyncedItems)
+						.where(and(musicEnabled, isNotNull(mediaServerSyncedItems.albumName)))
+						.groupBy(mediaServerSyncedItems.artistName, mediaServerSyncedItems.albumName)
+						.orderBy(sql`sum(${mediaServerSyncedItems.playCount}) desc`)
+						.limit(5),
+					db
+						.select({
+							label: mediaServerSyncedItems.audioCodec,
+							count: sql<number>`count(*)`
+						})
+						.from(mediaServerSyncedItems)
+						.where(musicEnabled)
+						.groupBy(mediaServerSyncedItems.audioCodec)
+						.orderBy(sql`count(*) desc`)
+				]);
+
+	const music = {
+		plays: musicPlayRows[0]?.total ?? 0,
+		tracks: musicTrackRows[0]?.count ?? 0,
+		topArtists: musicArtistRows.map((row: { artist: string | null; plays: number }) => ({
+			name: row.artist ?? 'Unknown',
+			plays: row.plays
+		})),
+		topAlbums: musicAlbumRows.map(
+			(row: { artist: string | null; album: string | null; plays: number; tracks: number }) => ({
+				artist: row.artist,
+				album: row.album ?? 'Unknown',
+				plays: row.plays,
+				tracks: row.tracks
+			})
+		),
+		formatBreakdown: musicFormatRows.map((row: { label: string | null; count: number }) => ({
+			label: row.label ?? 'Unknown',
+			count: row.count
+		}))
+	};
 
 	// Quality data (resolution/codec/HDR/audio/container, and which items
 	// have it at all) is Cinephage's own - extracted via ffprobe at import
@@ -267,7 +337,8 @@ export const load: LayoutServerLoad = async ({ parent }) => {
 			codecBreakdown,
 			hdrBreakdown,
 			audioCodecBreakdown,
-			containerBreakdown
+			containerBreakdown,
+			music
 		},
 		serverStatuses,
 		servers,

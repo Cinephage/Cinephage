@@ -645,3 +645,54 @@ describe('JellyfinStatsProvider', () => {
 		expect(eps.find((e) => e.serverItemId === 'ep-B-1')!.tmdbId).toBe(222);
 	});
 });
+
+
+describe('JellyfinStatsProvider music', () => {
+	let mockFetch: ReturnType<typeof vi.fn>;
+
+	beforeEach(() => {
+		mockFetch = vi.fn();
+		vi.stubGlobal('fetch', mockFetch);
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it('normalizes an audio track with artist and album identity', async () => {
+		mockFetch.mockResolvedValueOnce(mockAdminResponse());
+		mockFetch.mockResolvedValueOnce(
+			mockFetchResponse({
+				TotalRecordCount: 1,
+				Items: [
+					makeJellyfinItem({
+						Id: 'track-1',
+						Name: 'Crescendolls',
+						Type: 'Audio',
+						Album: 'Discovery',
+						AlbumArtist: 'Daft Punk',
+						ProviderIds: {},
+						MediaSources: [
+							{
+								Container: 'flac',
+								Size: 32000000,
+								MediaStreams: [{ Type: 'Audio', Codec: 'flac', Channels: 2, BitRate: 1000000 }]
+							}
+						]
+					})
+				]
+			})
+		);
+
+		const result = await new JellyfinStatsProvider(mockConfig).fetchAllItems();
+		const item = result.items[0];
+
+		expect(item.itemType).toBe('track');
+		expect(item.title).toBe('Crescendolls');
+		expect(item.artistName).toBe('Daft Punk');
+		expect(item.albumName).toBe('Discovery');
+		expect(item.seriesName).toBeNull();
+		expect(item.audioCodec).toBe('flac');
+		expect(item.containerFormat).toBe('flac');
+	});
+});

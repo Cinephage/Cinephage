@@ -239,8 +239,10 @@ import {
  *   they get a review queue like unmatched video files.
  * Version 194: albums.release_date - the full first-release date the calendar
  *   needs; `year` cannot place an album on a day.
+ * Version 195: synced track identity - artist_name/album_name so media-server
+ *   stats can group music without a TMDB id.
  */
-export const CURRENT_SCHEMA_VERSION = 194;
+export const CURRENT_SCHEMA_VERSION = 195;
 
 /**
  * Seed rows for the *legacy* backfill in migration 078 only.
@@ -1384,6 +1386,8 @@ const TABLE_DEFINITIONS: string[] = [
 		"imdb_id" text,
 		"title" text NOT NULL,
 		"year" integer,
+		"artist_name" text,
+		"album_name" text,
 		"item_type" text NOT NULL,
 		"series_name" text,
 		"season_number" integer,

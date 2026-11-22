@@ -12,13 +12,14 @@ import {
 
 const PAGE_SIZE = 1000;
 const TIMEOUT_MS = 30_000;
-const ITEM_TYPES = 'Movie,Episode,Series';
+const ITEM_TYPES = 'Movie,Episode,Series,Audio';
 const ITEM_FIELDS = 'MediaSources,MediaStreams,Path,Overview,ProviderIds';
 
 const TYPE_MAP: Record<string, SyncedMediaItem['itemType']> = {
 	Movie: 'movie',
 	Episode: 'episode',
-	Series: 'series'
+	Series: 'series',
+	Audio: 'track'
 };
 
 export abstract class EmbyCompatibleProvider implements MediaServerStatsProvider {
@@ -200,7 +201,12 @@ export abstract class EmbyCompatibleProvider implements MediaServerStatsProvider
 			title: raw.Name,
 			year: raw.ProductionYear ?? null,
 			itemType,
-			seriesName: raw.SeriesName ?? null,
+			artistName:
+				itemType === 'track'
+					? (raw.AlbumArtist ?? raw.AlbumArtists?.[0]?.Name ?? raw.Artists?.[0] ?? null)
+					: null,
+			albumName: itemType === 'track' ? (raw.Album ?? null) : null,
+			seriesName: itemType === 'track' ? null : (raw.SeriesName ?? null),
 			seasonNumber: useSeasonEpisode ? (raw.ParentIndexNumber ?? null) : null,
 			episodeNumber: useSeasonEpisode ? (raw.IndexNumber ?? null) : null,
 			playCount: raw.UserData?.PlayCount ?? 0,

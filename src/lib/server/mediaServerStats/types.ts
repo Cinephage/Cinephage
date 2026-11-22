@@ -14,7 +14,10 @@ export interface SyncedMediaItem {
 	imdbId: string | null;
 	title: string;
 	year: number | null;
-	itemType: 'movie' | 'episode' | 'series' | 'season';
+	itemType: 'movie' | 'episode' | 'series' | 'season' | 'track';
+	/** Music-only grouping identity; null on video items. */
+	artistName: string | null;
+	albumName: string | null;
 	seriesName: string | null;
 	seasonNumber: number | null;
 	episodeNumber: number | null;
@@ -90,6 +93,13 @@ export interface StatsSummary {
 	topPlayedItems: AggregatedMediaItem[];
 	largestItems: AggregatedMediaItem[];
 	totalFileSize: number;
+	music: {
+		plays: number;
+		tracks: number;
+		topArtists: Array<{ name: string; plays: number }>;
+		topAlbums: Array<{ artist: string | null; album: string; plays: number; tracks: number }>;
+		formatBreakdown: Array<{ label: string; count: number }>;
+	};
 }
 
 export interface ServerSyncStatus {

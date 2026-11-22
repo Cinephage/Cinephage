@@ -3492,7 +3492,10 @@ export const mediaServerSyncedItems = sqliteTable(
 		imdbId: text('imdb_id'),
 		title: text('title').notNull(),
 		year: integer('year'),
-		itemType: text('item_type', { enum: ['movie', 'episode', 'series', 'season'] }).notNull(),
+		itemType: text('item_type', { enum: ['movie', 'episode', 'series', 'season', 'track'] }).notNull(),
+		/** Music-only: the artist and album a track belongs to. */
+		artistName: text('artist_name'),
+		albumName: text('album_name'),
 		seriesName: text('series_name'),
 		seasonNumber: integer('season_number'),
 		episodeNumber: integer('episode_number'),
