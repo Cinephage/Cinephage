@@ -4,7 +4,6 @@ import { join, resolve, normalize } from 'node:path';
 import { db } from '#lib/server/db/index.js';
 import {
 	downloadHistory,
-	downloadQueue,
 	movies,
 	movieFiles,
 	rootFolders,
@@ -18,14 +17,14 @@ import { monitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.
 import { monitoringSearchService } from '#lib/server/monitoring/search/MonitoringSearchService.js';
 import { deleteAllAlternateTitles } from '#lib/server/services/index.js';
 import {
-	cancelQueuedDownloads,
+	cancelEntityDownloads,
+	releaseUnmatchedTracking,
 	removeEntityFromDisk
 } from '#lib/server/library/library-removal.js';
 import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
 import { tmdb } from '#lib/server/tmdb.js';
 import { movieUpdateSchema } from '#lib/validation/schemas.js';
 import { parseBody } from '#lib/server/api/validate.js';
-import { acquisitionService } from '#lib/server/acquisition/AcquisitionService.js';
 import {
 	validateRootFolder,
 	getAnimeSubtypeEnforcement
@@ -718,10 +717,7 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 		// track/enroll flow so the torrent resurfaces in Unmatched. Real
 		// grabs (including arr_push-pushed ones) and the client itself are
 		// never touched - only rows explicitly stamped with `origin` qualify.
-		const unmatchedRelease = acquisitionService.releaseUnmatchedQueueItems(
-			{ movieId: params.id },
-			'files unmatched from library'
-		);
+		const unmatchedRelease = releaseUnmatchedTracking({ kind: 'movie', id: params.id });
 
 		// Only require files if not removing from library entirely and there
 		// is no client tracking to release back to Unmatched.
@@ -762,12 +758,7 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 
 		if (removeFromLibrary) {
 			// Cancel active downloads from client before removing
-			const activeQueueItems = await db
-				.select()
-				.from(downloadQueue)
-				.where(eq(downloadQueue.movieId, params.id));
-
-			await cancelQueuedDownloads(activeQueueItems);
+			await cancelEntityDownloads({ kind: 'movie', id: params.id });
 
 			// Preserve activity audit trail after media row is deleted (FKs become null on delete)
 			await db

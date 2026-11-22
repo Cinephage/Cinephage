@@ -2,10 +2,11 @@
  * What happens to an entity's footprint when it leaves the library: its files
  * on disk and its queued downloads.
  *
- * The movie and series DELETE handlers each carried these two blocks. The disk
+ * The movie and series DELETE handlers each carried these blocks. The disk
  * block holds a safety rule — an entity tracked AT the root must remove its own
  * files, never the directory, or the whole library goes with it — and a rule
- * that important should not exist twice.
+ * that important should not exist twice. The same is true of the queue and
+ * Unmatched-tab releases: single and batch removal must leave the same footprint.
  */
 
 import { join } from 'node:path';
@@ -23,9 +24,17 @@ import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'LibraryRemoval', logDomain: 'scans' });
 
+export type LibraryEntityKind = 'movie' | 'series';
+
+/** A library entry an operation acts on: the movie or series row itself. */
+export interface LibraryEntityRef {
+	kind: LibraryEntityKind;
+	id: string;
+}
+
 export interface EntityOnDisk {
 	/** Used in log lines only. */
-	kind: 'movie' | 'series';
+	kind: LibraryEntityKind;
 	rootFolderPath: string | null;
 	entityPath: string | null;
 	/** File paths relative to `entityPath`. */
@@ -104,4 +113,44 @@ export async function cancelQueuedDownloads(items: QueuedDownload[]): Promise<vo
 		acquisitionService.cancelByQueueId(item.id, 'media removed from library');
 		await db.delete(downloadQueue).where(eq(downloadQueue.id, item.id));
 	}
+}
+
+export interface UnmatchedRelease {
+	released: number;
+	heldBack: number;
+}
+
+/**
+ * Release the client-side tracking the Unmatched tab enrolled for this entity,
+ * so its torrent resurfaces there instead of disappearing with the library row.
+ * Only rows the Unmatched flow stamped with `origin` qualify; a real grab (even
+ * an arr_push one, which has no indexer id) is never touched.
+ */
+export function releaseUnmatchedTracking(
+	entity: LibraryEntityRef,
+	reason = 'files unmatched from library'
+): UnmatchedRelease {
+	return acquisitionService.releaseUnmatchedQueueItems(
+		entity.kind === 'movie' ? { movieId: entity.id } : { seriesId: entity.id },
+		reason
+	);
+}
+
+/**
+ * Stop the entity's queued downloads on their clients, release their acquisition
+ * slots, then drop the rows. Returns how many rows were handled.
+ */
+export async function cancelEntityDownloads(entity: LibraryEntityRef): Promise<number> {
+	const rows = await db
+		.select()
+		.from(downloadQueue)
+		.where(
+			entity.kind === 'movie'
+				? eq(downloadQueue.movieId, entity.id)
+				: eq(downloadQueue.seriesId, entity.id)
+		);
+
+	if (rows.length === 0) return 0;
+	await cancelQueuedDownloads(rows);
+	return rows.length;
 }

@@ -8,7 +8,6 @@ import {
 	episodes,
 	episodeFiles,
 	downloadHistory,
-	downloadQueue,
 	rootFolders,
 	subtitles
 } from '#lib/server/db/schema.js';
@@ -21,7 +20,8 @@ import { monitoringScheduler } from '#lib/server/monitoring/MonitoringScheduler.
 import { monitoringSearchService } from '#lib/server/monitoring/search/MonitoringSearchService.js';
 import { deleteAllAlternateTitles } from '#lib/server/services/index.js';
 import {
-	cancelQueuedDownloads,
+	cancelEntityDownloads,
+	releaseUnmatchedTracking,
 	removeEntityFromDisk
 } from '#lib/server/library/library-removal.js';
 import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
@@ -41,7 +41,6 @@ import { getLibraryEntityService } from '#lib/server/library/LibraryEntityServic
 import { getLibraryScheduler } from '#lib/server/library/library-scheduler.js';
 import { isLikelyAnimeMedia } from '#lib/shared/anime-classification.js';
 import { seriesUpdateSchema } from '#lib/validation/schemas.js';
-import { acquisitionService } from '#lib/server/acquisition/AcquisitionService.js';
 import { tmdb } from '#lib/server/tmdb.js';
 import { getMetadataProviderConfig } from '#lib/server/metadata/provider-settings.js';
 import { resolveMissingAnimeProviderRefs } from '#lib/server/metadata/provider-ref-resolver.js';
@@ -820,10 +819,7 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 		// track/enroll flow so the torrent resurfaces in Unmatched. Real
 		// grabs (including arr_push-pushed ones) and the client itself are
 		// never touched - only rows explicitly stamped with `origin` qualify.
-		const unmatchedRelease = acquisitionService.releaseUnmatchedQueueItems(
-			{ seriesId: params.id },
-			'files unmatched from library'
-		);
+		const unmatchedRelease = releaseUnmatchedTracking({ kind: 'series', id: params.id });
 
 		// Only require files if not removing from library entirely and there
 		// is no client tracking to release back to Unmatched.
@@ -864,12 +860,7 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 
 		if (removeFromLibrary) {
 			// Cancel active downloads from client before removing
-			const activeQueueItems = await db
-				.select()
-				.from(downloadQueue)
-				.where(eq(downloadQueue.seriesId, params.id));
-
-			await cancelQueuedDownloads(activeQueueItems);
+			await cancelEntityDownloads({ kind: 'series', id: params.id });
 
 			// Preserve activity audit trail after media row is deleted (FKs become null on delete)
 			await db

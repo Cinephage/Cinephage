@@ -4,7 +4,11 @@ import { downloadHistory, movies, movieFiles, rootFolders } from '#lib/server/db
 import { eq, inArray } from 'drizzle-orm';
 import { deleteAllAlternateTitles } from '#lib/server/services/index.js';
 import { monitoringSearchService } from '#lib/server/monitoring/search/MonitoringSearchService.js';
-import { removeEntityFromDisk } from '#lib/server/library/library-removal.js';
+import {
+	cancelEntityDownloads,
+	releaseUnmatchedTracking,
+	removeEntityFromDisk
+} from '#lib/server/library/library-removal.js';
 import { libraryMediaEvents } from '#lib/server/library/LibraryMediaEvents.js';
 import { createChildLogger } from '#lib/logging/index.js';
 
@@ -152,8 +156,17 @@ export const DELETE: RequestHandler = async ({ request }) => {
 				// Get files for this movie
 				const files = await db.select().from(movieFiles).where(eq(movieFiles.movieId, movieId));
 
-				// Skip if no files and not removing from library
-				if (files.length === 0 && !removeFromLibrary) {
+				// Release Unmatched-tab tracking first: a row with no files can
+				// still own it, and single removal acts on it too.
+				const unmatchedRelease = releaseUnmatchedTracking({ kind: 'movie', id: movieId });
+
+				// Skip if no files, not removing from library, and nothing to release
+				if (
+					files.length === 0 &&
+					!removeFromLibrary &&
+					unmatchedRelease.released === 0 &&
+					unmatchedRelease.heldBack === 0
+				) {
 					skippedCount++;
 					continue;
 				}
@@ -182,6 +195,9 @@ export const DELETE: RequestHandler = async ({ request }) => {
 				}
 
 				if (removeFromLibrary) {
+					// Stop the entity's downloads on their clients before the rows go.
+					await cancelEntityDownloads({ kind: 'movie', id: movieId });
+
 					// Preserve activity audit trail after media rows are deleted (FKs become null on delete)
 					await db
 						.update(downloadHistory)
