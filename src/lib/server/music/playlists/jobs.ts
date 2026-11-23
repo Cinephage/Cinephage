@@ -20,9 +20,16 @@ import { createChildLogger } from '#lib/logging/index.js';
 import { getLibraryEntityService } from '#lib/server/library/LibraryEntityService.js';
 import { autoSearchAlbum } from '../MusicAutoSearch.js';
 import { musicAlbumService } from '../MusicAlbumService.js';
-import { musicBrainz } from '../musicbrainz.js';
+import { COMPILATION_SECONDARY, musicBrainz } from '../musicbrainz.js';
 import type { MusicReleaseGroup } from '../types.js';
-import { getCachedRelease, setCachedRelease } from './cache.js';
+import {
+	getArtistDiscography,
+	getArtistFeatures,
+	getCachedRelease,
+	setArtistDiscography,
+	setArtistFeatures,
+	setCachedRelease
+} from './cache.js';
 import { PlaylistError } from './errors.js';
 import { resolvePlaylistTracks } from './resolve.js';
 import { resolveSource } from './sources/index.js';
@@ -62,9 +69,10 @@ export type PlaylistJobRowStatus = 'pending' | 'added' | 'existing' | 'failed' |
 /** What an import should add: the matched album, or every album by its artist. */
 /**
  * What a selection means: the albums that matched, every album by each
- * match's artist, or the matched albums with only the listed songs wanted.
+ * match's artist, that plus guest appearances, or the matched albums with
+ * only the listed songs wanted.
  */
-export type ImportScope = 'album' | 'artist' | 'songs';
+export type ImportScope = 'album' | 'artist' | 'features' | 'songs';
 
 export interface PlaylistJobRow {
 	releaseGroupMbid: string;
@@ -169,7 +177,14 @@ function save(job: PlaylistJob, force = false): void {
 			title: row.title,
 			artist: row.artistName,
 			status: row.status,
-			error: row.error
+			error: row.error,
+			// Enough to preview and expand after a restart: the artist is what an
+			// expansion browses, and the rest is what the review screen shows.
+			artistMbid: row.artistMbid,
+			year: row.year,
+			primaryType: row.primaryType,
+			albumId: row.albumId,
+			inLibrary: row.inLibrary
 		})),
 		error: job.error,
 		createdAt: job.createdAt,
@@ -238,16 +253,16 @@ export function getPlaylistJob(id: string): PlaylistJob | null {
 		resolvedTracks: 0,
 		rows: (row.result ?? []).map((entry) => ({
 			releaseGroupMbid: entry.mbid,
-			artistMbid: null,
+			artistMbid: entry.artistMbid ?? null,
 			title: entry.title,
 			artistName: entry.artist,
-			year: null,
-			primaryType: null,
+			year: entry.year ?? null,
+			primaryType: entry.primaryType ?? null,
 			matchedBy: 'album',
 			confidence: 'high',
 			tracks: [],
-			inLibrary: entry.status === 'existing',
-			albumId: null,
+			inLibrary: entry.inLibrary ?? entry.status === 'existing',
+			albumId: entry.albumId ?? null,
 			status: entry.status as PlaylistJobRowStatus,
 			error: entry.error
 		})),
@@ -407,7 +422,86 @@ export function startResolveJob(input: string, scope: ImportScope = 'album'): Pl
  * `filterReleaseGroups` keeps albums and EPs and drops compilations, so a
  * "whole artist" import is a discography, not every single and karaoke disc.
  */
-async function expandArtists(rows: PlaylistJobRow[]): Promise<PlaylistJobRow[]> {
+/** One artist's albums as an expansion would add them, cached per scope. */
+async function artistGroups(
+	artist: { mbid: string; name: string },
+	scope: 'artist' | 'features'
+): Promise<MusicReleaseGroup[]> {
+	const cached = scope === 'features' ? getArtistFeatures(artist.mbid) : getArtistDiscography(artist.mbid);
+	if (cached) return cached.value ?? [];
+
+	const groups: MusicReleaseGroup[] = [];
+	let offset = 0;
+	// Browse pages at 100; a prolific artist needs two or three requests.
+	while (true) {
+		const page = await musicBrainz.getArtistReleaseGroups(artist.mbid, artist, { limit: 100, offset });
+		groups.push(...page.releaseGroups);
+		offset += page.releaseGroups.length;
+		if (page.releaseGroups.length === 0 || offset >= page.total) break;
+	}
+	const own = musicAlbumService.filterReleaseGroups(groups, {});
+	setArtistDiscography(artist.mbid, own);
+	if (scope === 'artist') return own;
+
+	const guests = await guestAlbums(artist);
+	const all = [...own, ...guests.filter((guest) => !own.some((group) => group.mbid === guest.mbid))];
+	setArtistFeatures(artist.mbid, all);
+	return all;
+}
+
+/**
+ * Albums where the artist is a guest, not the album artist.
+ *
+ * MusicBrainz has no "guest appearances" browse: the recording search keyed by
+ * artist id is the way in — every recording they are credited on, from which
+ * the albums that belong to someone else are what "with featuring" means.
+ * Only the first release each recording names is visible here, so this is a
+ * good approximation, not a discography.
+ */
+async function guestAlbums(artist: { mbid: string; name: string }): Promise<MusicReleaseGroup[]> {
+	const hits = await musicBrainz.searchRecordings({
+		artist: artist.name,
+		artistMbid: artist.mbid,
+		limit: 100
+	});
+	const seen = new Map<string, MusicReleaseGroup>();
+	for (const hit of hits) {
+		const candidate = hit.releaseGroup;
+		const owner = candidate?.artist;
+		if (!candidate || !owner || owner.mbid === artist.mbid) continue;
+		if (owner.name === 'Various Artists') continue;
+		if ((candidate.primaryType ?? 'Album') !== 'Album' && candidate.primaryType !== 'EP') continue;
+		const secondary = candidate.secondaryTypes ?? [];
+		if (secondary.some((type) => (COMPILATION_SECONDARY as readonly string[]).includes(type))) continue;
+		seen.set(candidate.mbid, {
+			mbid: candidate.mbid,
+			title: candidate.title,
+			primaryType: candidate.primaryType ?? null,
+			secondaryTypes: secondary,
+			firstReleaseDate: candidate.firstReleaseDate ?? null,
+			year: candidate.firstReleaseDate ? Number(candidate.firstReleaseDate.slice(0, 4)) : null,
+			artist: owner
+		});
+	}
+	return [...seen.values()];
+}
+
+/** What an expansion would add, per artist, before anything is written. */
+export interface ExpansionPreview {
+	total: number;
+	byArtist: Array<{
+		artistMbid: string;
+		artistName: string;
+		count: number;
+		albums: Array<{ mbid: string; title: string; year: number | null; primaryType: string | null }>;
+	}>;
+}
+
+/** The albums an expansion adds, as rows and as a preview, computed once. */
+async function planExpansion(
+	rows: PlaylistJobRow[],
+	scope: ImportScope
+): Promise<{ rows: PlaylistJobRow[]; preview: ExpansionPreview }> {
 	const artists = new Map<string, string>();
 	for (const row of rows) {
 		if (row.artistMbid) artists.set(row.artistMbid, row.artistName);
@@ -415,28 +509,53 @@ async function expandArtists(rows: PlaylistJobRow[]): Promise<PlaylistJobRow[]> 
 
 	const stored = musicAlbumService.existingReleaseGroupMbids();
 	const targets = new Map<string, PlaylistJobRow>();
+	const byArtist: ExpansionPreview['byArtist'] = [];
 	for (const [mbid, name] of artists) {
-		const groups: MusicReleaseGroup[] = [];
-		let offset = 0;
-		// Browse pages at 100; a prolific artist needs two or three requests.
-		while (true) {
-			const page = await musicBrainz.getArtistReleaseGroups(
-				mbid,
-				{ mbid, name },
-				{ limit: 100, offset }
+		let groups: MusicReleaseGroup[] = [];
+		try {
+			groups = await artistGroups({ mbid, name }, scope === 'features' ? 'features' : 'artist');
+		} catch (err) {
+			logger.warn(
+				{ err: err instanceof Error ? err.message : String(err), artist: name },
+				'[MusicPlaylistJobs] artist expansion failed'
 			);
-			groups.push(...page.releaseGroups);
-			offset += page.releaseGroups.length;
-			if (page.releaseGroups.length === 0 || offset >= page.total) break;
+			continue;
 		}
-		for (const group of musicAlbumService.filterReleaseGroups(groups, {})) {
+		const added: ExpansionPreview['byArtist'][number]['albums'] = [];
+		for (const group of groups) {
 			if (stored.has(group.mbid) || targets.has(group.mbid)) continue;
-			targets.set(group.mbid, rowFromGroup(group));
 			if (targets.size >= MAX_SCOPE_ALBUMS) break;
+			targets.set(group.mbid, rowFromGroup(group));
+			added.push({
+				mbid: group.mbid,
+				title: group.title,
+				year: group.year ?? null,
+				primaryType: group.primaryType ?? null
+			});
 		}
+		byArtist.push({ artistMbid: mbid, artistName: name, count: added.length, albums: added });
 		if (targets.size >= MAX_SCOPE_ALBUMS) break;
 	}
-	return [...targets.values()];
+	return { rows: [...targets.values()], preview: { total: targets.size, byArtist } };
+}
+
+/** The rows an artist/features import would add on top of the selection. */
+export async function expandArtists(
+	rows: PlaylistJobRow[],
+	scope: ImportScope
+): Promise<PlaylistJobRow[]> {
+	return (await planExpansion(rows, scope)).rows;
+}
+
+/**
+ * What the current selection would add, without importing anything.
+ *
+ * "Artist" turns three checked albums into two hundred; the review screen says
+ * so before the button is pressed, using the same computation the import does.
+ */
+export async function previewExpansion(rows: PlaylistJobRow[], scope: ImportScope): Promise<ExpansionPreview> {
+	if (scope !== 'artist' && scope !== 'features') return { total: 0, byArtist: [] };
+	return (await planExpansion(rows, scope)).preview;
 }
 
 async function runImport(
@@ -464,8 +583,8 @@ async function runImport(
 	}
 
 	let targets = chosen;
-	if (job.recipe.scope === 'artist') {
-		const expanded = await expandArtists(chosen);
+	if (job.recipe.scope === 'artist' || job.recipe.scope === 'features') {
+		const expanded = await expandArtists(chosen, job.recipe.scope);
 		job.rows.push(...expanded);
 		targets = [...chosen, ...expanded];
 		job.progress.total = targets.length;

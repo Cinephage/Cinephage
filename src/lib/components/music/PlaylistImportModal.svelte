@@ -65,7 +65,18 @@
 	let monitored = $state(true);
 	let searchAfterAdd = $state(false);
 	/** 'album' adds what matched; 'artist' adds each match's discography. */
-	let scope = $state<'album' | 'artist' | 'songs'>('album');
+	let scope = $state<'album' | 'artist' | 'features' | 'songs'>('album');
+	/** What the artist/features scopes would add, asked for before importing. */
+	let expansion = $state<{
+		total: number;
+		byArtist: Array<{
+			artistName: string;
+			count: number;
+			albums: Array<{ title: string; year: number | null }>;
+		}>;
+	} | null>(null);
+	let expanding = $state(false);
+	let expansionKey = '';
 	let recent = $state<Job[]>([]);
 	let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -143,6 +154,52 @@
 			submitting = false;
 		}
 	}
+
+	/**
+	 * Ask what "artist" would add before it is added.
+	 *
+	 * Three checked albums can be two hundred; the server computes the same
+	 * expansion the import will run, from the same cache, so this is a count
+	 * rather than a guess.
+	 */
+	async function loadExpansion() {
+		if (!job || (scope !== 'artist' && scope !== 'features') || selected.size === 0) {
+			expansion = null;
+			expansionKey = '';
+			return;
+		}
+		const key = `${job.id}|${scope}|${[...selected].sort().join(',')}`;
+		if (key === expansionKey) return;
+		expansionKey = key;
+		expanding = true;
+		try {
+			const response = await fetch(`/api/music/playlists/jobs/${job.id}/expand`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ rowIds: [...selected], scope })
+			});
+			const body = (await response.json()) as {
+				total?: number;
+				byArtist?: Array<{
+					artistName: string;
+					count: number;
+					albums: Array<{ title: string; year: number | null }>;
+				}>;
+			};
+			expansion = response.ok
+				? { total: body.total ?? 0, byArtist: body.byArtist ?? [] }
+				: null;
+		} catch {
+			expansion = null;
+		} finally {
+			expanding = false;
+		}
+	}
+
+	$effect(() => {
+		// Re-ask whenever the selection or the scope changes, not on every tick.
+		if (job?.phase === 'ready') void loadExpansion();
+	});
 
 	/** The list a returning user sees: what ran, how it ended, what can resume. */
 	async function loadRecent() {
@@ -303,16 +360,52 @@
 		<select class="select select-bordered select-xs" bind:value={scope}>
 			<option value="album">{m.music_importScopeAlbum()}</option>
 			<option value="artist">{m.music_importScopeArtist()}</option>
+			<option value="features">{m.music_importScopeFeatures()}</option>
 			<option value="songs">{m.music_importScopeSongs()}</option>
 		</select>
 		<span class="text-xs text-base-content/50">
 			{scope === 'artist'
 				? m.music_importScopeHint()
-				: scope === 'songs'
-					? m.music_importScopeSongsHint()
-					: ''}
+				: scope === 'features'
+					? m.music_importScopeFeaturesHint()
+					: scope === 'songs'
+						? m.music_importScopeSongsHint()
+						: ''}
 		</span>
 	</div>
+
+	{#if (scope === 'artist' || scope === 'features') && (expanding || expansion)}
+		<div class="mt-1 text-xs text-base-content/60">
+			{#if expanding && !expansion}
+				<span class="loading loading-spinner loading-xs"></span>
+			{:else if expansion}
+				<span>{m.music_importExpandSummary({ count: expansion.total })}</span>
+				{#if expansion.total > 0}
+					<details class="mt-0.5">
+						<summary class="cursor-pointer text-base-content/45">
+							{m.music_importExpandShow()}
+						</summary>
+						<ul class="mt-1 max-h-40 space-y-0.5 overflow-y-auto">
+							{#each expansion.byArtist as artist (artist.artistName)}
+								<li>
+									<span class="font-medium">{artist.artistName}</span>
+									<span class="text-base-content/45">+{artist.count}</span>
+									{#if artist.count > 0}
+										<span class="text-base-content/40">
+											— {artist.albums
+												.slice(0, 4)
+												.map((album) => album.title)
+												.join(', ')}{artist.count > 4 ? '…' : ''}
+										</span>
+									{/if}
+								</li>
+							{/each}
+						</ul>
+					</details>
+				{/if}
+			{/if}
+		</div>
+	{/if}
 
 	{#if error}
 		<div class="alert alert-error mt-4 py-2 text-sm">{error}</div>

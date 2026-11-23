@@ -73,6 +73,14 @@ export function artistCacheKey(name: string): string {
 	return `artist:${fold(name)}`;
 }
 
+export function discographyKey(artistMbid: string): string {
+	return `discog:${artistMbid}`;
+}
+
+export function featuresKey(artistMbid: string): string {
+	return `features:${artistMbid}`;
+}
+
 export function artistAlbumsKey(artistMbid: string): string {
 	return `albums:${artistMbid}`;
 }
@@ -104,6 +112,30 @@ export function getArtistMbid(name: string): Cached<string> | null {
 
 export function setArtistMbid(name: string, mbid: string | null): void {
 	write(artistCacheKey(name), mbid);
+}
+
+/**
+ * An artist's own release groups, as the discography scope would add them.
+ *
+ * Cached because the preview and the import both ask: expanding a selection
+ * to a discography is a browse of every release group, and the user looking at
+ * "this will add 213 albums" must not pay for it twice.
+ */
+export function getArtistDiscography(artistMbid: string): Cached<MusicReleaseGroup[]> | null {
+	return read<MusicReleaseGroup[]>(discographyKey(artistMbid), () => HIT_TTL_MS);
+}
+
+export function setArtistDiscography(artistMbid: string, groups: MusicReleaseGroup[]): void {
+	write(discographyKey(artistMbid), groups);
+}
+
+/** Albums where the artist is a guest, not the album artist. */
+export function getArtistFeatures(artistMbid: string): Cached<MusicReleaseGroup[]> | null {
+	return read<MusicReleaseGroup[]>(featuresKey(artistMbid), () => HIT_TTL_MS);
+}
+
+export function setArtistFeatures(artistMbid: string, groups: MusicReleaseGroup[]): void {
+	write(featuresKey(artistMbid), groups);
 }
 
 /** An artist's albums indexed by track title — the song path's search space. */

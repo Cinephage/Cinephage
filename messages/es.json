@@ -5518,5 +5518,9 @@
 	"music_importStatusRunning": "En curso",
 	"music_importScopeSongs": "Solo las canciones",
 	"music_importScopeSongsHint": "Añade cada álbum encontrado, pero solo las canciones de la lista cuentan.",
-	"music_trackNotMonitored": "Sin monitorizar"
+	"music_trackNotMonitored": "Sin monitorizar",
+	"music_importScopeFeatures": "Artista + colaboraciones",
+	"music_importScopeFeaturesHint": "Añade los álbumes de cada artista y los álbumes en los que colabora.",
+	"music_importExpandSummary": "Añade {count} álbumes además de tu selección.",
+	"music_importExpandShow": "Ver qué se añade"
 }

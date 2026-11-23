@@ -5518,5 +5518,9 @@
 	"music_importStatusRunning": "Выполняется",
 	"music_importScopeSongs": "Только песни",
 	"music_importScopeSongsHint": "Добавляет каждый найденный альбом, но нужны только песни из плейлиста.",
-	"music_trackNotMonitored": "Не отслеживается"
+	"music_trackNotMonitored": "Не отслеживается",
+	"music_importScopeFeatures": "Исполнитель + участия",
+	"music_importScopeFeaturesHint": "Добавляет альбомы исполнителя и альбомы, где он участвует как гость.",
+	"music_importExpandSummary": "Добавляет {count} альбомов к вашему выбору.",
+	"music_importExpandShow": "Показать, что добавится"
 }

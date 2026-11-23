@@ -5518,5 +5518,9 @@
 	"music_importStatusRunning": "Läuft",
 	"music_importScopeSongs": "Nur die Songs",
 	"music_importScopeSongsHint": "Fügt jedes gefundene Album hinzu, aber nur die Songs aus der Playlist sind gewollt.",
-	"music_trackNotMonitored": "Nicht überwacht"
+	"music_trackNotMonitored": "Nicht überwacht",
+	"music_importScopeFeatures": "Künstler + Gastauftritte",
+	"music_importScopeFeaturesHint": "Fügt die Alben jedes Künstlers und die Alben, auf denen er gastiert, hinzu.",
+	"music_importExpandSummary": "Fügt {count} Alben zu deiner Auswahl hinzu.",
+	"music_importExpandShow": "Anzeigen, was hinzukommt"
 }

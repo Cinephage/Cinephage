@@ -15,7 +15,7 @@ const importSchema = z.object({
 	monitored: z.boolean().optional(),
 	searchAfterAdd: z.boolean().optional(),
 	/** 'artist' expands each selected album to its artist's discography. */
-	scope: z.enum(['album', 'artist', 'songs']).default('album')
+	scope: z.enum(['album', 'artist', 'features', 'songs']).default('album')
 });
 
 /**

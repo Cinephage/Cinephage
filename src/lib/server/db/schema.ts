@@ -5061,7 +5061,7 @@ export const musicImportJobs = sqliteTable(
 		url: text('url').notNull(),
 		/** JSON: scope, library/folder/profile choices, the selected release groups. */
 		recipe: text('recipe', { mode: 'json' }).$type<{
-			scope: 'album' | 'artist' | 'songs';
+			scope: 'album' | 'artist' | 'features' | 'songs';
 			rowIds: string[];
 			libraryId: string | null;
 			rootFolderId: string | null;
@@ -5078,7 +5078,25 @@ export const musicImportJobs = sqliteTable(
 			.$type<{ added: number; existing: number; failed: number } | null>(),
 		/** Per-album outcome, kept so a returning user can see what happened. */
 		result: text('result', { mode: 'json' })
-			.$type<Array<{ mbid: string; title: string; artist: string; status: string; error: string | null }>>()
+			.$type<
+				Array<{
+					mbid: string;
+					title: string;
+					artist: string;
+					status: string;
+					error: string | null;
+					/**
+					 * Fields an expansion needs. Absent on rows written before the
+					 * discography preview existed: an old job cannot expand, and says so
+					 * rather than pretending every artist has no albums.
+					 */
+					artistMbid?: string | null;
+					year?: number | null;
+					primaryType?: string | null;
+					albumId?: string | null;
+					inLibrary?: boolean;
+				}>
+			>()
 			.default([]),
 		error: text('error'),
 		createdAt: text('created_at').notNull(),

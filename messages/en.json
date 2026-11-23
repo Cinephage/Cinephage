@@ -5882,5 +5882,9 @@
 	"music_importStatusRunning": "Running",
 	"music_importScopeSongs": "Just the songs",
 	"music_importScopeSongsHint": "Adds each matched album, but only the songs from the playlist are wanted.",
-	"music_trackNotMonitored": "Not monitored"
+	"music_trackNotMonitored": "Not monitored",
+	"music_importScopeFeatures": "Artist + features",
+	"music_importScopeFeaturesHint": "Adds each artist's albums plus the albums they guest on.",
+	"music_importExpandSummary": "Adds {count} albums on top of your selection.",
+	"music_importExpandShow": "Show what it adds"
 }

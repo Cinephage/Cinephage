@@ -8,7 +8,7 @@ import { listPlaylistJobs, startResolveJob } from '#lib/server/music/playlists/j
 const createSchema = z.object({
 	url: z.string().trim().min(1).max(2048),
 	/** 'album' adds what matched; 'artist' adds every album by each match's artist. */
-	scope: z.enum(['album', 'artist', 'songs']).default('album')
+	scope: z.enum(['album', 'artist', 'features', 'songs']).default('album')
 });
 
 /**
