@@ -654,6 +654,18 @@ export class MusicAlbumService {
 		await cancelQueuedDownloads(rows);
 	}
 
+	/** The two fields the cover route needs, without the tracklist. */
+	getAlbumCoverInfo(
+		albumId: string
+	): { coverPath: string | null; releaseMbid: string | null; albumPath: string | null } | null {
+		const row = db
+			.select({ coverPath: albums.coverPath, releaseMbid: albums.releaseMbid, albumPath: albums.path })
+			.from(albums)
+			.where(eq(albums.id, albumId))
+			.get();
+		return row ?? null;
+	}
+
 	deleteAlbum(albumId: string): boolean {
 		const row = db
 			.select({ mediaItemId: albums.mediaItemId })

@@ -1,34 +1,53 @@
+import { readFile } from 'node:fs/promises';
+import { extname, isAbsolute, join } from 'node:path';
 import type { RequestHandler } from './$types.js';
 import { requireAuth } from '#lib/server/auth/authorization.js';
 import { musicAlbumService } from '#lib/server/music/MusicAlbumService.js';
 import { musicBrainz } from '#lib/server/music/musicbrainz.js';
+import { isPathInsideManagedRoot } from '#lib/server/filesystem/path-guard.js';
+
+const CONTENT_TYPES: Record<string, string> = {
+	'.jpg': 'image/jpeg',
+	'.jpeg': 'image/jpeg',
+	'.png': 'image/png',
+	'.webp': 'image/webp'
+};
 
 /**
  * GET /api/music/albums/[id]/cover
  *
- * Serves the album's artwork. Imported albums get a local `coverPath`; before an
- * album has files, the edition is still known, so the Cover Art Archive is the
- * source and the browser follows the redirect. Proxying beats putting the
- * archive URL in the page: one source of truth, and swapping in the local file
- * later changes nothing for callers.
- *
- * The redirect is a plain Response with a Location header on purpose —
- * SvelteKit's `redirect()` helper refuses an external origin
- * (`kit/redirect_external_not_allowed`), which surfaced as a 500 on the first
- * live request.
+ * Serves the album's artwork. A local `coverPath` wins; otherwise the chosen
+ * MusicBrainz edition is proxied through the Cover Art Archive. This reads two
+ * fields, not the album and its whole tracklist — a grid asks for dozens of
+ * these on one render.
  */
 export const GET: RequestHandler = async (event) => {
 	const authError = requireAuth(event);
 	if (authError) return authError;
 
-	const album = musicAlbumService.getAlbum(event.params.id);
-	if (!album?.hasCover) return new Response('No cover for this album', { status: 404 });
+	const info = musicAlbumService.getAlbumCoverInfo(event.params.id);
+	if (!info) return new Response('No cover for this album', { status: 404 });
 
-	// Local artwork (`coverPath`) is written by the import slice; until an album
-	// has files there is no local file to serve, so the archive is the source.
-	if (!album.releaseMbid) return new Response('No cover for this album', { status: 404 });
+	if (info.coverPath) {
+		const path = isAbsolute(info.coverPath)
+			? info.coverPath
+			: join(info.albumPath ?? '', info.coverPath);
+		if (await isPathInsideManagedRoot(path)) {
+			const data = await readFile(path).catch(() => null);
+			if (data) {
+				return new Response(data, {
+					headers: {
+						'content-type': CONTENT_TYPES[extname(path).toLowerCase()] ?? 'application/octet-stream',
+						'cache-control': 'public, max-age=86400'
+					}
+				});
+			}
+		}
+	}
+
+	if (!info.releaseMbid) return new Response('No cover for this album', { status: 404 });
 	return new Response(null, {
 		status: 302,
-		headers: { location: musicBrainz.coverArtUrl(album.releaseMbid, 500) }
+		headers: { location: musicBrainz.coverArtUrl(info.releaseMbid, 500) }
 	});
 };
