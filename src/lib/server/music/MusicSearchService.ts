@@ -14,6 +14,7 @@ import {
 	type MusicQualityProfile
 } from './parse-release.js';
 import { musicProfileService } from './MusicProfileService.js';
+import { parseMusicStreamUrl } from './stream-url.js';
 import { blocklistService } from '#lib/server/blocklist/BlocklistService.js';
 
 const logger = createChildLogger({ module: 'MusicSearchService', logDomain: 'system' });
@@ -210,7 +211,11 @@ export class MusicSearchService {
 		const allowed = relevant.filter(
 			(candidate) =>
 				!(candidate.infoHash && blocked.blockedHashes.has(candidate.infoHash)) &&
-				!blocked.blockedTitles.has(candidate.title)
+				!blocked.blockedTitles.has(candidate.title) &&
+				// A stream candidate from the library indexer must name THIS album;
+				// a same-titled album's stream would otherwise be selected.
+				(candidate.protocol !== 'streaming' ||
+					parseMusicStreamUrl(candidate.downloadUrl ?? '')?.albumId === albumId)
 		);
 
 		logger.info(

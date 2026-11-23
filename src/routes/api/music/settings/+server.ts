@@ -32,7 +32,15 @@ export const PATCH: RequestHandler = async (event) => {
 	const authError = requireAdmin(event);
 	if (authError) return authError;
 
-	const input = await parseBody(event.request, patchSchema);
+	let input: { defaultProfileId: string };
+	try {
+		input = await parseBody(event.request, patchSchema);
+	} catch (err) {
+		return Response.json(
+			{ error: 'Invalid request', details: err instanceof Error ? err.message : String(err) },
+			{ status: 400 }
+		);
+	}
 	const updated = musicProfileService.setDefault(input.defaultProfileId);
 	if (!updated) return Response.json({ error: 'Profile not found' }, { status: 404 });
 

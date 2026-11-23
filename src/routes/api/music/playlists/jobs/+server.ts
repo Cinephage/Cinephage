@@ -53,6 +53,6 @@ export const GET: RequestHandler = async (event) => {
 	const authError = requireAuth(event);
 	if (authError) return authError;
 
-	const limit = Math.min(Number(event.url.searchParams.get('limit') ?? 12) || 12, 50);
+	const limit = Math.max(1, Math.min(Number(event.url.searchParams.get('limit') ?? 12) || 12, 50));
 	return Response.json({ success: true, jobs: listPlaylistJobs(limit) });
 };

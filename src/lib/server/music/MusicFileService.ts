@@ -49,18 +49,27 @@ export class MusicFileService {
 
 		const fullPath = row.albumPath ? join(row.albumPath, row.relativePath) : null;
 
+		let physicalDeleted = true;
 		if (fullPath && (await isPathInsideManagedRoot(fullPath))) {
 			try {
 				const { recycleEnabled } = await getFileManagementSettings();
 				await deletePhysicalFile(fullPath, recycleEnabled, row.rootPath ?? row.albumPath ?? '.');
 			} catch (error) {
+				physicalDeleted = false;
 				logger.warn(
 					{ fullPath, err: error instanceof Error ? error.message : String(error) },
 					'[MusicFile] Could not delete file from disk'
 				);
 			}
 		} else if (fullPath) {
+			physicalDeleted = false;
 			logger.warn({ fullPath }, '[MusicFile] Refusing to unlink a path outside managed roots');
+		}
+
+		if (!physicalDeleted) {
+			// Keep the row: forgetting a file that is still on disk makes the
+			// track unplayable with no record of why.
+			throw new ValidationError('Could not remove the file from disk');
 		}
 
 		db.delete(trackFiles).where(eq(trackFiles.id, fileId)).run();

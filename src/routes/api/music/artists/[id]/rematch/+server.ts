@@ -12,7 +12,7 @@ export const POST: RequestHandler = async (event) => {
 	if (authError) return authError;
 
 	const body = (await event.request.json().catch(() => null)) as { mbid?: unknown } | null;
-	if (!body || typeof body.mbid !== 'string' || !/^[0-9a-f-]{36}$/i.test(body.mbid)) {
+	if (!body || typeof body.mbid !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.mbid)) {
 		return Response.json({ error: 'A MusicBrainz artist id is required' }, { status: 400 });
 	}
 
