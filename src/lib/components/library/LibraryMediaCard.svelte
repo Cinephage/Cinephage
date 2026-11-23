@@ -3,6 +3,7 @@
 	import TmdbImage from '#lib/components/tmdb/TmdbImage.svelte';
 	import { Eye, EyeOff, Check, X, Download, AlertTriangle, Clapperboard, Tv, Disc3, Mic2 } from '@lucide/svelte';
 	import { resolvePath } from '#lib/utils/routing.js';
+	import { imageError } from '#lib/actions/image-error.js';
 	import type { MediaCardView, LibraryKind } from './media-view.js';
 
 	/**
@@ -100,7 +101,7 @@
 			alt={view.title}
 			class="h-full w-full object-cover"
 			loading="lazy"
-			onerror={() => (artFailed = true)}
+			use:imageError={() => (artFailed = true)}
 		/>
 	{:else}
 		<div class="flex h-full w-full items-center justify-center bg-base-300">

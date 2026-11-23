@@ -15,6 +15,7 @@
 	} from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import { resolvePath } from '#lib/utils/routing.js';
+	import { imageError } from '#lib/actions/image-error.js';
 	import StatusIndicator from '#lib/components/library/StatusIndicator.svelte';
 	import DetailActionBar from '#lib/components/library/DetailActionBar.svelte';
 	import DetailMobileBar from '#lib/components/library/DetailMobileBar.svelte';
@@ -215,7 +216,7 @@
 					alt=""
 					aria-hidden="true"
 					class="h-full w-full object-cover opacity-40"
-					onerror={() => (coverFailed = true)}
+					use:imageError={() => (coverFailed = true)}
 				/>
 			{/if}
 			<div
@@ -236,7 +237,7 @@
 								src={artUrl}
 								alt={album.title}
 								class="aspect-square h-auto w-full object-cover"
-								onerror={() => (coverFailed = true)}
+								use:imageError={() => (coverFailed = true)}
 							/>
 						{:else}
 							<div class="flex aspect-square w-full items-center justify-center bg-base-300">

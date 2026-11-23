@@ -13,6 +13,7 @@
 	} from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import { formatDisplayDateShort } from '#lib/utils/format.js';
+	import { imageError } from '#lib/actions/image-error.js';
 	import DetailActionBar from '#lib/components/library/DetailActionBar.svelte';
 	import DetailMobileBar from '#lib/components/library/DetailMobileBar.svelte';
 	import type { DetailAction } from '#lib/components/library/detail-actions.js';
@@ -211,7 +212,7 @@
 					alt=""
 					aria-hidden="true"
 					class="h-full w-full object-cover opacity-40"
-					onerror={() => (artFailed = true)}
+					use:imageError={() => (artFailed = true)}
 				/>
 			{/if}
 			<div
@@ -232,7 +233,7 @@
 								src={artUrl}
 								alt={artist.name}
 								class="aspect-square h-auto w-full object-cover"
-								onerror={() => (artFailed = true)}
+								use:imageError={() => (artFailed = true)}
 							/>
 						{:else}
 							<div class="flex aspect-square w-full items-center justify-center bg-base-300">
