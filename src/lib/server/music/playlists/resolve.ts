@@ -177,6 +177,8 @@ function markInLibrary(candidates: AlbumCandidate[]): void {
 export interface ResolveOptions {
 	/** Called after each MusicBrainz round trip so a job can report progress. */
 	onProgress?: (progress: { done: number; total: number; phase: string }) => void;
+	/** A cancelled job stops before the next item, not after the whole list. */
+	isCancelled?: () => boolean;
 }
 
 /** MusicBrainz release types, best-first for "which album is this song on". */
@@ -301,6 +303,7 @@ export async function resolvePlaylistTracks(
 
 	report('Resolving albums');
 	for (const group of groups) {
+		if (options.isCancelled?.()) break;
 		// The cached answer is the same one a search would produce, so a re-import
 		// of an unchanged playlist costs no request at all.
 		const query = coreTitle(group.album);
@@ -344,6 +347,7 @@ export async function resolvePlaylistTracks(
 
 	report('Resolving songs');
 	for (const track of [...loose, ...leftover]) {
+		if (options.isCancelled?.()) break;
 		const artist = track.artists[0]?.trim();
 		if (!artist) {
 			unmatched.push({ title: track.title, artist: null, reason: 'no-artist' });

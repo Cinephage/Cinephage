@@ -359,6 +359,7 @@ async function runResolve(job: PlaylistJob): Promise<void> {
 		touch(job, true);
 
 		const result = await resolvePlaylistTracks(page.tracks, {
+			isCancelled: () => job.cancelRequested,
 			onProgress: (progress) => {
 				job.progress = { done: progress.done, total: progress.total };
 				touch(job);
