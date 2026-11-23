@@ -13,6 +13,7 @@
 	import SectionRow from '#lib/components/discover/SectionRow.svelte';
 	import SelectionActionBar from '#lib/components/discover/SelectionActionBar.svelte';
 	import BulkAddToLibraryModal from '#lib/components/discover/BulkAddToLibraryModal.svelte';
+	import PlaylistImportModal from '#lib/components/music/PlaylistImportModal.svelte';
 	import AddToLibraryModal from '#lib/components/library/AddToLibraryModal.svelte';
 	import TmdbConfigRequired from '#lib/components/ui/TmdbConfigRequired.svelte';
 	import { UI } from '#lib/config/constants.js';
@@ -32,7 +33,7 @@
 		toDiscoverSelectionEntry,
 		type DiscoverSelectionEntry
 	} from '#lib/utils/discoverSelection.js';
-	import { Search, Eye, EyeOff, X, Loader2, Bug, CheckSquare, XSquare } from '@lucide/svelte';
+	import { Search, Eye, EyeOff, X, Loader2, Bug, CheckSquare, XSquare, ListMusic } from '@lucide/svelte';
 	import { getMediaTypeLabel } from '#lib/types/tmdb-guards.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { searchTmdb, getDiscover, getDiscoverUnfiltered } from '#lib/api/index.js';
@@ -51,6 +52,9 @@
 	}
 
 	let { data } = $props();
+
+	/** Opened from the music view; a paste is a one-time import, not a smart list. */
+	let importOpen = $state(false);
 
 	/** The music landing payload, narrowed once: it exists only on the music
 	 *  view, and this page's data type is a union of every view. */
@@ -855,6 +859,12 @@
 			<!-- Music View: one chart request per selected genre feeds three shelves.
 			     Genres are a facet in the drawer, not a control row on the page. -->
 			<div class="animate-in fade-in space-y-10 duration-500">
+				<div class="flex items-center justify-end">
+					<button class="btn btn-outline btn-sm gap-2" onclick={() => (importOpen = true)}>
+						<ListMusic class="h-4 w-4" />
+						{m.music_importPlaylist()}
+					</button>
+				</div>
 				{#each musicShelves as shelf (shelf.id)}
 					<section class="space-y-4">
 						<h2 class="text-lg font-bold">
@@ -1095,4 +1105,11 @@
 			onSuccess={handleBulkAddSuccess}
 		/>
 	{/if}
+
+	<!-- A playlist paste adds albums straight to the library; the shelves refresh behind it. -->
+	<PlaylistImportModal
+		open={importOpen}
+		onClose={() => (importOpen = false)}
+		onDone={() => refreshAll()}
+	/>
 </div>

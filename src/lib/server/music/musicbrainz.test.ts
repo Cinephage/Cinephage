@@ -212,6 +212,54 @@ describe('MusicBrainzClient.searchRecordings', () => {
 		expect(hits[0].artists.map((artist) => artist.mbid)).toEqual(['artist-webby', 'artist-daja']);
 	});
 
+	it('prefers the artist\'s own release over a Various Artists compilation', async () => {
+		const client = clientWith((async () =>
+			jsonResponse({
+				recordings: [
+					{
+						id: 'rec-california',
+						title: "California Dreamin'",
+						score: 100,
+						'artist-credit': [
+							{ name: 'The Mamas & the Papas', artist: { id: 'artist-mamas', name: 'The Mamas & the Papas' } }
+						],
+						releases: [
+							{
+								id: 'rel-va',
+								title: 'Die Schönsten Filmhits',
+								status: 'Official',
+								date: '1994-01-01',
+								'artist-credit': [
+									{ name: 'Various Artists', artist: { id: 'artist-va', name: 'Various Artists' } }
+								],
+								'release-group': { id: 'rg-va', title: 'Die Schönsten Filmhits', 'primary-type': 'Album' }
+							},
+							{
+								id: 'rel-own',
+								title: 'Farewell to the First Golden Era',
+								status: 'Official',
+								date: '1968-01-01',
+								'artist-credit': [
+									{ name: 'The Mamas & the Papas', artist: { id: 'artist-mamas', name: 'The Mamas & the Papas' } }
+								],
+								'release-group': {
+									id: 'rg-own',
+									title: 'Farewell to the First Golden Era',
+									'primary-type': 'Album'
+								}
+							}
+						]
+					}
+				]
+			})) as typeof fetch);
+
+		const hits = await client.searchRecordings({ artist: 'The Mamas & The Papas', track: "California Dreamin'" });
+
+		expect(hits[0].releaseGroup).toMatchObject({ mbid: 'rg-own' });
+		expect(hits[0].releaseMbid).toBe('rel-own');
+		expect(hits[0].releaseOwned).toBe(true);
+	});
+
 	it('keeps the artist credit joins as MusicBrainz writes them', async () => {
 		const client = clientWith((async () =>
 			jsonResponse({

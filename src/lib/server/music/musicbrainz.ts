@@ -117,6 +117,8 @@ interface RawRecording {
 		title?: string | null;
 		status?: string | null;
 		date?: string | null;
+		/** Whose release this is; a Various Artists compilation is not the artist's album. */
+		'artist-credit'?: ArtistCredit[] | null;
 		'release-group'?: {
 			id?: string | null;
 			title?: string | null;
@@ -384,10 +386,31 @@ export class MusicBrainzClient {
 						: null;
 				return ref ? [ref] : [];
 			});
-			// Prefer an official release with a release group: that is the edition
-			// worth importing, and the group is what the album importer needs.
-			const releases = (recording.releases ?? []).filter((release) => release['release-group']?.id);
-			const release = releases.find((entry) => entry.status === 'Official') ?? releases[0] ?? null;
+			// Which release this song "came from". MusicBrainz lists every release
+			// carrying the recording, and the first is frequently a Various Artists
+			// compilation — importing that instead of the artist's own album is how a
+			// song ends up filed under a karaoke disc. Order: credited to the
+			// recording's artist, then Official, then the oldest release.
+			const credited = new Set(
+				(recording['artist-credit'] ?? []).flatMap((credit) =>
+					credit.artist?.id ? [credit.artist.id] : []
+				)
+			);
+			const isOwned = (entry: NonNullable<RawRecording['releases']>[number]): boolean =>
+				(entry['artist-credit'] ?? []).some(
+					(credit) => credit.artist?.id && credited.has(credit.artist.id)
+				);
+			const scoreRelease = (entry: NonNullable<RawRecording['releases']>[number]): number =>
+				(isOwned(entry) ? 2 : 0) + (entry.status === 'Official' ? 1 : 0);
+			const releases = (recording.releases ?? [])
+				.filter((release) => release['release-group']?.id)
+				.sort(
+					(a, b) =>
+						scoreRelease(b) - scoreRelease(a) ||
+						(a.date ?? '9999').localeCompare(b.date ?? '9999')
+				);
+			const release = releases[0] ?? null;
+			const owned = release ? isOwned(release) : false;
 
 			return [
 				{
@@ -405,6 +428,7 @@ export class MusicBrainzClient {
 							}
 						: null,
 					releaseMbid: release?.id ?? null,
+					releaseOwned: owned,
 					score: typeof recording.score === 'number' ? recording.score : undefined
 				} satisfies MusicRecordingHit
 			];

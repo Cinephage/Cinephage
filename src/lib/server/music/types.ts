@@ -114,5 +114,11 @@ export interface MusicRecordingHit {
 	artists: MusicArtistRef[];
 	releaseGroup: { mbid: string; title: string; primaryType?: string | null } | null;
 	releaseMbid: string | null;
+	/**
+	 * True when the chosen release is credited to the recording's own artist
+	 * rather than a Various Artists compilation. A playlist import must pick the
+	 * owned hit when one exists: the compilation is not the album the song is on.
+	 */
+	releaseOwned?: boolean;
 	score?: number;
 }
