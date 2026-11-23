@@ -23,7 +23,7 @@ export const load: PageServerLoad = async () => {
 	// The list is every music library, like the movie list. The default library
 	// still supplies the header/root-folder facts and the fallback profile.
 	const albums = musicAlbumService.listAlbums();
-	const songs = musicTrackService.listTracks();
+	const songsTotal = musicTrackService.countTracks();
 	const artistRows = musicArtistService.listArtists([
 		...new Set(albums.map((album) => album.artistId))
 	]);
@@ -67,7 +67,7 @@ export const load: PageServerLoad = async () => {
 			: null,
 		albums: albumsWithProfile,
 		artists,
-		songs,
+		songs: [],
 		libraries: libraries.map((entry) => ({
 			id: entry.id,
 			name: entry.name,
@@ -86,7 +86,7 @@ export const load: PageServerLoad = async () => {
 		counts: {
 			albums: albums.length,
 			artists: artists.length,
-			songs: songs.length,
+			songs: songsTotal,
 			missing: albums.filter((album) => !album.hasFile && !album.streamSource).length,
 			monitored: albums.filter((album) => album.monitored).length
 		}

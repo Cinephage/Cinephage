@@ -35,6 +35,7 @@
 	import { createListSelection } from '#lib/components/library/list/list-selection.svelte.js';
 	import ConfirmationModal from '#lib/components/ui/modal/ConfirmationModal.svelte';
 	import BulkQualityProfileModal from '#lib/components/library/BulkQualityProfileModal.svelte';
+import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 	import type { TrackTableRow } from '#lib/components/music/music-card.js';
 
 	let { data }: { data: PageData } = $props();
@@ -53,7 +54,14 @@
 	let monitorFilter = $state<MonitorFilter>((initial.get('monitor') as MonitorFilter) ?? 'all');
 	let libraryFilter = $state(initial.get('library') ?? 'all');
 	let qualityFilter = $state(initial.get('quality') ?? 'all');
-	let sortField = $state(initial.get('sort') ?? 'name-asc');
+	let sortField = $state(
+		initial.get('sort') ??
+			(initialBrowse === 'songs'
+				? 'title-asc'
+				: initialBrowse === 'albums'
+					? 'artist-asc'
+					: 'name-asc')
+	);
 	let drawerOpen = $state(false);
 	let addOpen = $state(false);
 
@@ -138,25 +146,109 @@
 			})
 	);
 
-	const songs = $derived(
-		data.songs
-			.filter(
-				(song) =>
-					matches(`${song.title} ${song.artistName} ${song.albumTitle}`) &&
-					keepFile(song.hasFile) &&
-					(libraryFilter === 'all' && qualityFilter === 'all'
-						? true
-						: scopedAlbumIds.has(song.albumId))
-			)
-			.sort((a, b) => {
-				if (sortField === 'artist-asc') return a.artistName.localeCompare(b.artistName);
-				if (sortField === 'album-asc') return a.albumTitle.localeCompare(b.albumTitle);
-				if (sortField === 'duration-desc') return (b.duration ?? 0) - (a.duration ?? 0);
-				return a.title.localeCompare(b.title);
-			})
-	);
+	// Songs are the one list large enough to page on the server. The first window
+	// is fetched after hydration; the sentinel asks for the next one.
+	let songs = $state<TrackTableRow[]>([]);
+	let songsTotal = $state(0);
+	let songsHasMore = $state(false);
+	let songsLoading = $state(false);
+	let songTimer: ReturnType<typeof setTimeout> | null = null;
+	let songRequest = 0;
+
+	async function loadSongs(reset: boolean) {
+		const request = ++songRequest;
+		const offset = reset ? 0 : songs.length;
+		const params = new URLSearchParams({
+			offset: String(offset),
+			limit: '90',
+			file: fileFilter,
+			sort: sortField
+		});
+		if (searchQuery.trim()) params.set('q', searchQuery.trim());
+		if (libraryFilter !== 'all') params.set('libraryId', libraryFilter);
+		songsLoading = true;
+		try {
+			const response = await fetch(`/api/music/tracks?${params}`);
+			const body = await response.json().catch(() => ({}));
+			if (request !== songRequest) return;
+			if (!response.ok) {
+				toasts.error(body.error ?? m.music_searchFailed());
+				return;
+			}
+			songs = reset ? (body.tracks ?? []) : [...songs, ...(body.tracks ?? [])];
+			songsTotal = body.total ?? songs.length;
+			songsHasMore = Boolean(body.hasMore);
+		} catch (err) {
+			if (request === songRequest) {
+				toasts.error(err instanceof Error ? err.message : m.music_searchFailed());
+			}
+		} finally {
+			if (request === songRequest) songsLoading = false;
+		}
+	}
+
+	$effect(() => {
+		void browse;
+		void searchQuery;
+		void fileFilter;
+		void sortField;
+		void libraryFilter;
+		if (typeof window === 'undefined') return;
+		if (browse !== 'songs' && !searchQuery.trim()) return;
+		if (songTimer) clearTimeout(songTimer);
+		songTimer = setTimeout(() => void loadSongs(true), 250);
+		return () => {
+			if (songTimer) clearTimeout(songTimer);
+		};
+	});
 
 	const searching = $derived(needles.length > 0);
+
+	// A sort from another tab is not valid here (songs have no name-asc);
+	// falling back keeps the query accepted instead of a 400.
+	$effect(() => {
+		void browse;
+		if (!sortOptions.some((option) => option.value === sortField)) {
+			sortField = defaultSort(browse);
+		}
+	});
+
+	// Windowed rendering: the lists are already filtered and sorted, and only
+	// this many rows are in the DOM. The sentinel raises it as the reader nears
+	// the end, so a large library scrolls instead of painting every card at once.
+	const PAGE_SIZE = 90;
+	let visibleCount = $state(PAGE_SIZE);
+	const visibleArtists = $derived(artists.slice(0, visibleCount));
+	const visibleAlbums = $derived(albums.slice(0, visibleCount));
+	const visibleSongs = $derived(songs);
+	const hasMoreRows = $derived(
+		searching
+			? songsHasMore || visibleCount < artists.length || visibleCount < albums.length
+			: browse === 'songs'
+				? songsHasMore
+				: browse === 'albums'
+					? visibleCount < albums.length
+					: visibleCount < artists.length
+	);
+
+	function loadMoreRows() {
+		if (browse === 'songs' || searching) {
+			if (songsHasMore && !songsLoading) void loadSongs(false);
+		}
+		if (visibleCount < Math.max(artists.length, albums.length)) visibleCount += PAGE_SIZE;
+	}
+
+	// A new filter, query, sort or tab starts a new list at the top.
+	$effect(() => {
+		void browse;
+		void searchQuery;
+		void fileFilter;
+		void monitorFilter;
+		void libraryFilter;
+		void qualityFilter;
+		void sortField;
+		visibleCount = PAGE_SIZE;
+	});
 
 	function defaultSort(view: Browse): string {
 		if (view === 'songs') return 'title-asc';
@@ -697,7 +789,7 @@
 						<ul
 							class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-9"
 						>
-							{#each artists as artist (artist.id)}
+							{#each visibleArtists as artist (artist.id)}
 								<li>
 									<LibraryMediaCard
 										view={artistCardView(artist)}
@@ -710,7 +802,7 @@
 						</ul>
 					{:else}
 						<LibraryMediaTable
-							rows={artists.map((artist) => artistRowView(artist))}
+							rows={visibleArtists.map((artist) => artistRowView(artist))}
 							kind="artist"
 							selectedItems={selectedIds}
 							selectable={selectable && selection.mode}
@@ -733,7 +825,7 @@
 						<ul
 							class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-9"
 						>
-							{#each albums as album (album.id)}
+							{#each visibleAlbums as album (album.id)}
 								<li>
 									<LibraryMediaCard
 										view={albumCardView(album)}
@@ -746,7 +838,7 @@
 						</ul>
 					{:else}
 						<LibraryMediaTable
-							rows={albums.map((album) => albumRowView(album))}
+							rows={visibleAlbums.map((album) => albumRowView(album))}
 							kind="album"
 							selectedItems={selectedIds}
 							selectable={selectable && selection.mode}
@@ -765,10 +857,10 @@
 				<section class="mb-8">
 					<div class="mb-3 flex items-center gap-2">
 						<h2 class="font-semibold">{m.music_tabSongs()}</h2>
-						<span class="badge badge-ghost badge-sm">{songs.length}</span>
+						<span class="badge badge-ghost badge-sm">{songsTotal}</span>
 					</div>
 					<TrackTable
-						tracks={songs as TrackTableRow[]}
+						tracks={visibleSongs as TrackTableRow[]}
 						onAutoSearch={autoSearchSong}
 						onOpenSearch={(track) =>
 							(songSearch = {
@@ -781,7 +873,7 @@
 				</section>
 			{/if}
 
-			{#if artists.length === 0 && albums.length === 0 && songs.length === 0}
+			{#if artists.length === 0 && albums.length === 0 && songs.length === 0 && !songsLoading}
 				<div class="flex flex-col items-center justify-center py-20 text-center">
 					<div class="opacity-50">
 						<Search class="mx-auto mb-4 h-16 w-16" />
@@ -802,7 +894,7 @@
 				</div>
 			{/if}
 		{:else if browse === 'songs'}
-			{#if songs.length === 0}
+			{#if songs.length === 0 && !songsLoading}
 				<div class="flex flex-col items-center justify-center py-20 text-center opacity-50">
 					<Music class="mb-4 h-20 w-20" />
 					<p class="text-2xl font-bold">{m.music_noFilterMatch()}</p>
@@ -813,7 +905,7 @@
 			{:else}
 				<div class="animate-in fade-in slide-in-from-bottom-4 duration-500">
 					<TrackTable
-						tracks={songs as TrackTableRow[]}
+						tracks={visibleSongs as TrackTableRow[]}
 						onAutoSearch={autoSearchSong}
 						onOpenSearch={(track) =>
 							(songSearch = {
@@ -841,7 +933,7 @@
 						<ul
 							class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-9"
 						>
-							{#each albums as album (album.id)}
+							{#each visibleAlbums as album (album.id)}
 								<li>
 									<LibraryMediaCard
 										view={albumCardView(album)}
@@ -854,7 +946,7 @@
 						</ul>
 					{:else}
 						<LibraryMediaTable
-							rows={albums.map((album) => albumRowView(album))}
+							rows={visibleAlbums.map((album) => albumRowView(album))}
 							kind="album"
 							selectedItems={selectedIds}
 							selectable={selectable && selection.mode}
@@ -884,7 +976,7 @@
 						<ul
 							class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-9"
 						>
-							{#each artists as artist (artist.id)}
+							{#each visibleArtists as artist (artist.id)}
 								<li>
 									<LibraryMediaCard
 										view={artistCardView(artist)}
@@ -897,7 +989,7 @@
 						</ul>
 					{:else}
 						<LibraryMediaTable
-							rows={artists.map((artist) => artistRowView(artist))}
+							rows={visibleArtists.map((artist) => artistRowView(artist))}
 							kind="artist"
 							selectedItems={selectedIds}
 							selectable={selectable && selection.mode}
@@ -910,6 +1002,7 @@
 				</div>
 			{/if}
 		{/if}
+		<InfiniteSentinel hasMore={hasMoreRows} onLoadMore={loadMoreRows} />
 	</main>
 
 	<LibraryBulkActionBar

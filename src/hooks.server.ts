@@ -243,6 +243,7 @@ const customHandler: Handle = async ({ event, resolve }) => {
 					path === '/api/music/artists' ||
 					path.startsWith('/api/music/artists/') ||
 					path === '/api/music/search' ||
+					path === '/api/music/tracks' ||
 					path === '/api/music/settings' ||
 					path === '/api/music/scan-issues'
 				) {

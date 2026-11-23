@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, count, eq, like, or } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
 import { albums, artists, tracks } from '#lib/server/db/schema.js';
 
@@ -27,7 +27,94 @@ export interface TrackRow {
  * its season. This is a read-only projection over the tracklist; nothing here
  * writes, and a track never becomes an acquisition subject of its own.
  */
+export interface TrackPageOptions {
+	q?: string;
+	file?: 'all' | 'downloaded' | 'missing';
+	libraryId?: string | null;
+	artistId?: string | null;
+	sort?: 'title-asc' | 'artist-asc' | 'album-asc' | 'duration-desc';
+	offset?: number;
+	limit?: number;
+}
+
 export class MusicTrackService {
+	/** Counts for the page header, without loading a row. */
+	countTracks(): number {
+		return db.select({ value: count() }).from(tracks).get()?.value ?? 0;
+	}
+
+	/**
+	 * One page of songs, filtered and sorted in SQL. The library list renders a
+	 * window at a time; this is the query behind that window.
+	 */
+	listTracksPage(options: TrackPageOptions = {}): { rows: TrackRow[]; total: number } {
+		const conditions = [
+			options.libraryId ? eq(albums.libraryId, options.libraryId) : undefined,
+			options.artistId ? eq(albums.artistId, options.artistId) : undefined,
+			options.file === 'downloaded'
+				? eq(tracks.hasFile, true)
+				: options.file === 'missing'
+					? eq(tracks.hasFile, false)
+					: undefined
+		];
+		for (const needle of (options.q ?? '').trim().toLowerCase().split(/\s+/).filter(Boolean)) {
+			const pattern = `%${needle}%`;
+			conditions.push(
+				or(
+					like(tracks.title, pattern),
+					like(albums.title, pattern),
+					like(artists.name, pattern)
+				)!
+			);
+		}
+		const where = conditions.filter(Boolean).length > 0 ? and(...conditions.filter(Boolean)) : undefined;
+
+		const total =
+			db
+				.select({ value: count() })
+				.from(tracks)
+				.innerJoin(albums, eq(tracks.albumId, albums.id))
+				.innerJoin(artists, eq(albums.artistId, artists.id))
+				.where(where)
+				.get()?.value ?? 0;
+
+		const order =
+			options.sort === 'artist-asc'
+				? [asc(artists.name), asc(albums.title), asc(tracks.position)]
+				: options.sort === 'album-asc'
+					? [asc(albums.title), asc(tracks.position)]
+					: options.sort === 'duration-desc'
+						? [asc(albums.title), asc(tracks.position)]
+						: [asc(tracks.title), asc(artists.name)];
+
+		const rows = db
+			.select({
+				id: tracks.id,
+				albumId: tracks.albumId,
+				albumTitle: albums.title,
+				artistId: albums.artistId,
+				artistName: artists.name,
+				title: tracks.title,
+				artistCredit: tracks.artistCredit,
+				discNumber: tracks.discNumber,
+				trackNumber: tracks.trackNumber,
+				position: tracks.position,
+				duration: tracks.duration,
+				explicit: tracks.explicit,
+				hasFile: tracks.hasFile
+			})
+			.from(tracks)
+			.innerJoin(albums, eq(tracks.albumId, albums.id))
+			.innerJoin(artists, eq(albums.artistId, artists.id))
+			.where(where)
+			.orderBy(...order)
+			.limit(options.limit ?? 90)
+			.offset(options.offset ?? 0)
+			.all();
+
+		return { rows, total };
+	}
+
 	listTracks(options: { libraryId?: string | null; artistId?: string | null } = {}): TrackRow[] {
 		const base = db
 			.select({
