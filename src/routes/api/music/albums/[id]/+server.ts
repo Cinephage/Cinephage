@@ -4,7 +4,6 @@ import { requireAdmin, requireAuth } from '#lib/server/auth/authorization.js';
 import { parseBody } from '#lib/server/api/validate.js';
 import { isAppError } from '#lib/errors/index.js';
 import { musicAlbumService } from '#lib/server/music/MusicAlbumService.js';
-import { musicProfileService } from '#lib/server/music/MusicProfileService.js';
 
 const patchAlbumSchema = z
 	.object({
@@ -55,40 +54,7 @@ export const PATCH: RequestHandler = async (event) => {
 	}
 
 	try {
-		// Validate the profile before writing any other field, so a bad id is a
-		// clean 400 rather than a half-applied PATCH.
-		if (
-			input.qualityProfileId !== undefined &&
-			input.qualityProfileId !== null &&
-			!musicProfileService.get(input.qualityProfileId)
-		) {
-			return Response.json(
-				{ error: `Unknown music quality profile: ${input.qualityProfileId}` },
-				{ status: 400 }
-			);
-		}
-
-		let updated = true;
-		if (input.monitored !== undefined) {
-			updated = musicAlbumService.setMonitored(event.params.id, input.monitored) && updated;
-		}
-		if (input.qualityProfileId !== undefined) {
-			updated = musicAlbumService.setQualityProfile(event.params.id, input.qualityProfileId) && updated;
-		}
-
-		const metadata = {
-			title: input.title,
-			year: input.year,
-			primaryType: input.primaryType,
-			labelName: input.labelName,
-			catalogNumber: input.catalogNumber,
-			barcode: input.barcode,
-			country: input.country
-		};
-		if (Object.values(metadata).some((value) => value !== undefined)) {
-			updated = musicAlbumService.updateMetadata(event.params.id, metadata) && updated;
-		}
-
+		const updated = musicAlbumService.patchAlbum(event.params.id, input);
 		if (!updated) return Response.json({ error: 'Album not found' }, { status: 404 });
 
 		return Response.json({ success: true, album: musicAlbumService.getAlbum(event.params.id) });

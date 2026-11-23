@@ -16,6 +16,7 @@ import { getOwnerStreamingApiKey } from '#lib/server/auth/index.js';
 import { getStreamingBaseUrl } from '#lib/server/streaming/index.js';
 import { getMediaBrowserNotifier } from '#lib/server/notifications/mediabrowser/MediaBrowserNotifier.js';
 import { createChildLogger } from '#lib/logging/index.js';
+import { ValidationError } from '#lib/errors/index.js';
 import { albumFolderName, sanitizeMusicSegment } from './paths.js';
 
 const logger = createChildLogger({ module: 'MusicStrmService', logDomain: 'system' });
@@ -98,7 +99,12 @@ export class MusicStrmService {
 
 		await mkdir(folder, { recursive: true });
 
-		const baseUrl = await getStreamingBaseUrl('http://localhost:3000');
+		const baseUrl = await getStreamingBaseUrl('');
+		if (!baseUrl) {
+			throw new ValidationError(
+				'Set the streaming base URL before creating stream shortcuts'
+			);
+		}
 		const albumTracks = db
 			.select({
 				id: tracks.id,

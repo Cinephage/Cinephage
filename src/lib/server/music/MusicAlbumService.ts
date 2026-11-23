@@ -205,6 +205,20 @@ export class MusicAlbumService {
 				.where(and(eq(albums.mbid, releaseGroup.mbid), eq(albums.artistId, artistId)))
 				.get();
 			if (existing) {
+				const chosen: Partial<typeof albums.$inferInsert> = {};
+				if (input.monitored !== undefined) chosen.monitored = input.monitored;
+				if (input.qualityProfileId !== undefined) {
+					chosen.qualityProfileId = input.qualityProfileId;
+				}
+				if (Object.keys(chosen).length > 0) {
+					tx.update(albums).set(chosen).where(eq(albums.id, existing.id)).run();
+				}
+				if (input.monitored !== undefined) {
+					tx.update(mediaItems)
+						.set({ monitored: input.monitored })
+						.where(eq(mediaItems.id, existing.mediaItemId))
+						.run();
+				}
 				// Re-adding is normally a no-op, but "just the songs" still has to
 				// apply the wanted titles to an album that is already stored.
 				if (input.onlyTracks && input.onlyTracks.length > 0) {
@@ -335,6 +349,42 @@ export class MusicAlbumService {
 				: db.select({ mbid: albums.mbid }).from(albums)
 		).all();
 		return new Set(rows.flatMap((row) => (row.mbid ? [row.mbid] : [])));
+	}
+
+	/**
+	 * One album update for everything the PATCH route can set. Validating first
+	 * and writing once keeps a bad profile from applying the other fields.
+	 */
+	patchAlbum(
+		albumId: string,
+		patch: AlbumMetadataUpdate & { monitored?: boolean; qualityProfileId?: string | null }
+	): boolean {
+		if (
+			patch.qualityProfileId !== undefined &&
+			patch.qualityProfileId !== null &&
+			!musicProfileService.get(patch.qualityProfileId)
+		) {
+			throw new ValidationError(`Unknown music quality profile: ${patch.qualityProfileId}`);
+		}
+
+		const values: Partial<typeof albums.$inferInsert> = {};
+		if (patch.monitored !== undefined) values.monitored = patch.monitored;
+		if (patch.qualityProfileId !== undefined) values.qualityProfileId = patch.qualityProfileId;
+		if (patch.title !== undefined) {
+			const title = patch.title.trim();
+			if (!title) throw new ValidationError('Album title cannot be empty');
+			values.title = title;
+		}
+		if (patch.year !== undefined) values.year = patch.year;
+		if (patch.primaryType !== undefined) values.primaryType = patch.primaryType;
+		if (patch.labelName !== undefined) values.labelName = patch.labelName;
+		if (patch.catalogNumber !== undefined) values.catalogNumber = patch.catalogNumber;
+		if (patch.barcode !== undefined) values.barcode = patch.barcode;
+		if (patch.country !== undefined) values.country = patch.country;
+		if (Object.keys(values).length === 0) return false;
+
+		const result = db.update(albums).set(values).where(eq(albums.id, albumId)).run();
+		return result.changes > 0;
 	}
 
 	/**

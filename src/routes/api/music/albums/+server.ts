@@ -21,7 +21,7 @@ const addAlbumSchema = z.object({
 	releaseMbid: z.string().uuid().optional().nullable(),
 	libraryId: z.string().optional().nullable(),
 	rootFolderId: z.string().optional().nullable(),
-	monitored: z.boolean().default(true),
+	monitored: z.boolean().optional(),
 	/** The album's own ladder; null inherits the artist/library/default. */
 	qualityProfileId: z.string().trim().min(1).nullable().optional()
 });

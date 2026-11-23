@@ -253,6 +253,36 @@ describe('MusicAlbumService.updateMetadata', () => {
 	});
 });
 
+describe('MusicAlbumService.patchAlbum', () => {
+	it('applies monitor and metadata in one write', () => {
+		const { albumId } = musicAlbumService.addAlbum({
+			releaseGroup: RELEASE_GROUP,
+			release: RELEASE
+		});
+
+		expect(
+			musicAlbumService.patchAlbum(albumId, { monitored: false, title: 'Discovery (Deluxe)' })
+		).toBe(true);
+		const album = musicAlbumService.getAlbum(albumId)!;
+		expect(album.monitored).toBe(false);
+		expect(album.title).toBe('Discovery (Deluxe)');
+	});
+
+	it('rejects an unknown profile without applying the other fields', () => {
+		const { albumId } = musicAlbumService.addAlbum({
+			releaseGroup: RELEASE_GROUP,
+			release: RELEASE
+		});
+
+		expect(() =>
+			musicAlbumService.patchAlbum(albumId, { monitored: false, qualityProfileId: 'nope' })
+		).toThrow(/Unknown/);
+		const album = musicAlbumService.getAlbum(albumId)!;
+		expect(album.monitored).toBe(true);
+		expect(album.title).toBe('Discovery');
+	});
+});
+
 describe('MusicAlbumService.setQualityProfile', () => {
 	it('stores, clears and rejects unknown profile ids', () => {
 		const { albumId } = musicAlbumService.addAlbum({
