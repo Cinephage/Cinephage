@@ -359,9 +359,18 @@
 					</span>
 				</div>
 				{#if job.unmatched.length > 0}
-					<p class="mt-1 text-xs text-warning">
-						{m.music_importUnmatchedSummary({ count: job.unmatched.length })}
-					</p>
+					<details class="mt-1 text-xs text-warning">
+						<summary class="cursor-pointer">
+							{m.music_importUnmatchedSummary({ count: job.unmatched.length })}
+						</summary>
+						<ul class="mt-1 max-h-40 space-y-0.5 overflow-y-auto text-base-content/70">
+							{#each job.unmatched as entry, index (index)}
+								<li class="truncate">
+									{entry.artist ? `${entry.artist} — ` : ''}{entry.title}
+								</li>
+							{/each}
+						</ul>
+					</details>
 				{/if}
 			{/if}
 

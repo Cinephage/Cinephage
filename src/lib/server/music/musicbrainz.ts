@@ -1,5 +1,6 @@
 import { createChildLogger } from '#lib/logging/index.js';
 import { RateGate } from './rate-gate.js';
+import { normalizeForMatch } from './track-matching.js';
 import type {
 	MusicArtistDetail,
 	MusicArtistRef,
@@ -14,6 +15,21 @@ import type {
 const logger = createChildLogger({ module: 'MusicBrainzClient', logDomain: 'system' });
 
 const BASE_URL = 'https://musicbrainz.org/ws/2';
+
+/**
+ * Release-group secondary types that make an "album" the wrong answer to
+ * "which album is this song from" — a live set, a soundtrack, a hits package.
+ */
+export const COMPILATION_SECONDARY = [
+	'Compilation',
+	'Live',
+	'Remix',
+	'DJ-mix',
+	'Soundtrack',
+	'Interview',
+	'Spokenword',
+	'Audiobook'
+] as const;
 
 /**
  * MusicBrainz blocks generic agents and asks for a contact URL, so the agent
@@ -357,6 +373,21 @@ export class MusicBrainzClient {
 
 
 	/** Artist search, used by "find an artist to add" and by interactive search. */
+	/**
+	 * The MusicBrainz id for an artist name, or null when no artist is exactly
+	 * that name.
+	 *
+	 * Recording searches by name match the *text* of a credit, so a DJ-mix track
+	 * also called "One More Time" scores 100 against Daft Punk and its
+	 * compilation becomes the answer. Searching by id cannot do that.
+	 */
+	async resolveArtistMbid(name: string): Promise<string | null> {
+		const results = await this.searchArtists(name, 5);
+		const wanted = normalizeForMatch(name);
+		const exact = results.find((artist) => normalizeForMatch(artist.name) === wanted);
+		return exact?.mbid ?? null;
+	}
+
 	async searchArtists(query: string, limit = 20): Promise<MusicArtistSearchResult[]> {
 		if (!query.trim()) return [];
 		const body = await this.request<{ artists?: RawArtist[] }>('/artist', {
@@ -389,11 +420,14 @@ export class MusicBrainzClient {
 	 */
 	async searchRecordings(options: {
 		artist?: string;
+		/** Preferred over the name: a name search returns other people's tracks. */
+		artistMbid?: string;
 		track?: string;
 		limit?: number;
 	}): Promise<MusicRecordingHit[]> {
 		const clauses: string[] = [];
-		if (options.artist?.trim()) clauses.push(`artist:"${escapeLucene(options.artist.trim())}"`);
+		if (options.artistMbid) clauses.push(`arid:${options.artistMbid}`);
+		else if (options.artist?.trim()) clauses.push(`artist:"${escapeLucene(options.artist.trim())}"`);
 		if (options.track?.trim()) clauses.push(`recording:"${escapeLucene(options.track.trim())}"`);
 		if (clauses.length === 0) return [];
 
@@ -434,8 +468,26 @@ export class MusicBrainzClient {
 				(entry['artist-credit'] ?? []).some(
 					(credit) => credit.artist?.id && credited.has(credit.artist.id)
 				);
+			// A song is usually released as a single first and lands on the album
+			// later. "Which album is this song on" means the album, so the type
+			// outweighs the date — otherwise every modern track resolves to a single.
+			// A live album, a soundtrack or a greatest-hits set is an album by
+			// primary type and would otherwise beat the studio album a song is
+			// actually from. Only a plain album counts as the answer.
+			const typeWeight = (entry: NonNullable<RawRecording['releases']>[number]): number => {
+				const group = entry['release-group'];
+				const secondary = new Set(group?.['secondary-types'] ?? []);
+				const plain = !COMPILATION_SECONDARY.some((type) => secondary.has(type));
+				const type = group?.['primary-type'];
+				if (type === 'Album') return plain ? 6 : 2;
+				if (type === 'EP') return plain ? 5 : 2;
+				if (type === 'Single') return 3;
+				return 1;
+			};
 			const scoreRelease = (entry: NonNullable<RawRecording['releases']>[number]): number =>
-				(isOwned(entry) ? 2 : 0) + (entry.status === 'Official' ? 1 : 0);
+				(isOwned(entry) ? 8 : 0) +
+				typeWeight(entry) +
+				(entry.status === 'Official' ? 2 : 0);
 			const releases = (recording.releases ?? [])
 				.filter((release) => release['release-group']?.id)
 				.sort(
@@ -467,12 +519,109 @@ export class MusicBrainzClient {
 						: null,
 					releaseMbid: release?.id ?? null,
 					releaseOwned: owned,
-					score: typeof recording.score === 'number' ? recording.score : undefined
+					score: typeof recording.score === 'number' ? recording.score : undefined,
+					releaseCount: (recording.releases ?? []).length
 				} satisfies MusicRecordingHit
 			];
 		});
 	}
 
+
+	/**
+	 * The album each of an artist's track titles belongs to.
+	 *
+	 * This is the answer to "which album is this song on" when the playlist
+	 * does not say: the artist's own official albums are the search space, so a
+	 * same-titled track by someone else, a bootleg or the single that came first
+	 * cannot win. One request per artist, not per song, and only the studio
+	 * albums — a discography browse of everything is hundreds of releases.
+	 */
+	async getArtistAlbumTrackIndex(
+		artistMbid: string
+	): Promise<Array<{ title: string; groups: MusicReleaseGroup[] }>> {
+		const byTitle = new Map<string, Map<string, MusicReleaseGroup>>();
+		let offset = 0;
+		for (let page = 0; page < 3; page += 1) {
+			const body = await this.request<{ releases?: RawRelease[]; 'release-count'?: number }>(
+				'/release',
+				{
+					artist: artistMbid,
+					inc: 'recordings+release-groups+artist-credits',
+					status: 'official',
+					type: 'album',
+					limit: '100',
+					offset: String(offset)
+				}
+			);
+			const releases = body.releases ?? [];
+			for (const release of releases) {
+				const group = release['release-group'];
+				const artist = artistOf(release['artist-credit']);
+				if (!group?.id || !group.title || !artist) continue;
+				const mapped: MusicReleaseGroup = {
+					mbid: group.id,
+					title: group.title,
+					primaryType: group['primary-type'] ?? null,
+					secondaryTypes: group['secondary-types'] ?? [],
+					firstReleaseDate: group['first-release-date'] ?? release.date ?? null,
+					year: yearOf(group['first-release-date'] ?? release.date),
+					artist
+				};
+				for (const medium of release.media ?? []) {
+					for (const track of medium.tracks ?? []) {
+						if (!track.title) continue;
+						const groups = byTitle.get(track.title) ?? new Map<string, MusicReleaseGroup>();
+						groups.set(group.id, mapped);
+						byTitle.set(track.title, groups);
+					}
+				}
+			}
+			offset += releases.length;
+			if (releases.length === 0 || offset >= (body['release-count'] ?? 0)) break;
+		}
+		return [...byTitle.entries()].map(([title, groups]) => ({ title, groups: [...groups.values()] }));
+	}
+
+	/**
+	 * Every release group a recording appears on.
+	 *
+	 * A recording search carries only a handful of releases, and for a modern
+	 * track those are the singles that came first. This browse returns all of
+	 * them, which is what lets an import pick the album the song ended up on
+	 * instead of the single it was released as.
+	 */
+	async getRecordingReleaseGroups(recordingMbid: string): Promise<MusicReleaseGroup[]> {
+		const body = await this.request<{ releases?: RawRelease[] }>('/release', {
+			recording: recordingMbid,
+			inc: 'release-groups+artist-credits',
+			limit: '100'
+		});
+		// Bootlegs are plentiful, unofficial and never the answer to "which album
+		// is this song on"; the same release group can also appear once per edition,
+		// so the earliest official one stands for the group.
+		const seen = new Map<string, string>();
+		return (body.releases ?? []).flatMap((release) => {
+			const group = release['release-group'];
+			const artist = artistOf(release['artist-credit']);
+			if (!group?.id || !group.title || !artist) return [];
+			if (release.status && release.status !== 'Official' && release.status !== 'Promotion') return [];
+			const date = group['first-release-date'] ?? release.date ?? '';
+			const known = seen.get(group.id);
+			if (known !== undefined && known <= date) return [];
+			seen.set(group.id, date);
+			return [
+				{
+					mbid: group.id,
+					title: group.title,
+					primaryType: group['primary-type'] ?? null,
+					secondaryTypes: group['secondary-types'] ?? [],
+					firstReleaseDate: group['first-release-date'] ?? release.date ?? null,
+					year: yearOf(group['first-release-date'] ?? release.date),
+					artist
+				} satisfies MusicReleaseGroup
+			];
+		});
+	}
 
 	/**
 	 * Every release group an artist owns, paged. Browse (not search) is the right

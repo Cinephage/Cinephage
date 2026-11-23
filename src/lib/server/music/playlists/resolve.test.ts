@@ -89,6 +89,25 @@ describe('titlesMatch', () => {
 });
 
 describe('resolvePlaylistTracks', () => {
+	beforeEach(() => {
+		// These cases drive the recording path; an artist id would send them
+		// through the discography index instead.
+		vi.spyOn(musicBrainz, 'resolveArtistMbid').mockResolvedValue(null);
+	});
+
+	it("takes a song's album from the artist's own discography", async () => {
+		vi.spyOn(musicBrainz, 'resolveArtistMbid').mockResolvedValue('artist-daft-punk');
+		vi.spyOn(musicBrainz, 'getArtistAlbumTrackIndex').mockResolvedValue([
+			{ title: 'One More Time', groups: [DISCOVERY] }
+		]);
+
+		const result = await resolvePlaylistTracks([track({ title: 'One More Time' })]);
+
+		expect(result.candidates).toHaveLength(1);
+		expect(result.candidates[0].releaseGroupMbid).toBe('rg-discovery');
+		expect(result.candidates[0].title).toBe('Discovery');
+	});
+
 	it('resolves a whole album with one search and keeps every song on it', async () => {
 		const search = vi.spyOn(musicBrainz, 'searchReleaseGroups').mockResolvedValue([DISCOVERY]);
 		const recordings = vi.spyOn(musicBrainz, 'searchRecordings');
@@ -150,28 +169,96 @@ describe('resolvePlaylistTracks', () => {
 		expect(result.candidates[0].confidence).toBe('low');
 	});
 
-	it('prefers the recording whose release belongs to the artist over a compilation', async () => {
+	it('prefers the album the artist owns over a Various Artists compilation', async () => {
+		const compilation: MusicReleaseGroup = {
+			mbid: 'rg-compilation',
+			title: 'Hits of the 2000s',
+			primaryType: 'Album',
+			secondaryTypes: ['Compilation'],
+			firstReleaseDate: '2008-01-01',
+			year: 2008,
+			artist: { mbid: 'artist-va', name: 'Various Artists' }
+		};
 		vi.spyOn(musicBrainz, 'searchReleaseGroups').mockResolvedValue([]);
 		vi.spyOn(musicBrainz, 'searchRecordings').mockResolvedValue([
-			recordingHit({
-				mbid: 'rec-va',
-				releaseOwned: false,
-				releaseGroup: {
-					mbid: 'rg-compilation',
-					title: 'Hits of the 2000s',
-					primaryType: 'Album',
-					secondaryTypes: ['Compilation'],
-					artist: { mbid: 'artist-va', name: 'Various Artists' }
-				}
-			}),
-			recordingHit({ mbid: 'rec-own' })
+			recordingHit({ mbid: 'rec-va', releaseOwned: false, releaseGroup: compilation })
 		]);
+		vi.spyOn(musicBrainz, 'getRecordingReleaseGroups').mockResolvedValue([compilation, DISCOVERY]);
 
 		const result = await resolvePlaylistTracks([track({ title: 'One More Time' })]);
 
 		expect(result.candidates).toHaveLength(1);
 		expect(result.candidates[0].releaseGroupMbid).toBe('rg-discovery');
 		expect(result.candidates[0].artistName).toBe('Daft Punk');
+	});
+
+	it('takes the studio album over a live album the song also appears on', async () => {
+		const live: MusicReleaseGroup = {
+			mbid: 'rg-live',
+			title: 'Alive 2007',
+			primaryType: 'Album',
+			secondaryTypes: ['Live'],
+			firstReleaseDate: '2007-11-19',
+			year: 2007,
+			artist: { mbid: 'artist-daft-punk', name: 'Daft Punk' }
+		};
+		vi.spyOn(musicBrainz, 'searchReleaseGroups').mockResolvedValue([]);
+		vi.spyOn(musicBrainz, 'searchRecordings').mockResolvedValue([
+			recordingHit({ releaseGroup: live })
+		]);
+		const appearances = vi
+			.spyOn(musicBrainz, 'getRecordingReleaseGroups')
+			.mockResolvedValue([live, DISCOVERY]);
+
+		const result = await resolvePlaylistTracks([track({ title: 'One More Time' })]);
+
+		expect(appearances).toHaveBeenCalledTimes(1);
+		expect(result.candidates).toHaveLength(1);
+		expect(result.candidates[0].releaseGroupMbid).toBe('rg-discovery');
+	});
+
+	it('keeps the single when the only album is a hits compilation', async () => {
+		const single: MusicReleaseGroup = {
+			mbid: 'rg-single',
+			title: 'One More Time',
+			primaryType: 'Single',
+			secondaryTypes: [],
+			firstReleaseDate: '2000-11-13',
+			year: 2000,
+			artist: { mbid: 'artist-daft-punk', name: 'Daft Punk' }
+		};
+		const hits: MusicReleaseGroup = {
+			mbid: 'rg-hits',
+			title: 'Greatest Hits',
+			primaryType: 'Album',
+			secondaryTypes: ['Compilation'],
+			firstReleaseDate: '2008-01-01',
+			year: 2008,
+			artist: { mbid: 'artist-daft-punk', name: 'Daft Punk' }
+		};
+		vi.spyOn(musicBrainz, 'searchReleaseGroups').mockResolvedValue([]);
+		vi.spyOn(musicBrainz, 'searchRecordings').mockResolvedValue([
+			recordingHit({ releaseGroup: single })
+		]);
+		vi.spyOn(musicBrainz, 'getRecordingReleaseGroups').mockResolvedValue([hits, single]);
+
+		const result = await resolvePlaylistTracks([track({ title: 'One More Time' })]);
+
+		expect(result.candidates[0].releaseGroupMbid).toBe('rg-single');
+	});
+
+	it('resolves a recording the search returned without any release attached', async () => {
+		vi.spyOn(musicBrainz, 'searchReleaseGroups').mockResolvedValue([]);
+		vi.spyOn(musicBrainz, 'searchRecordings').mockResolvedValue([
+			recordingHit({ releaseGroup: null, releaseMbid: null })
+		]);
+		vi.spyOn(musicBrainz, 'getRecordingReleaseGroups').mockResolvedValue([DISCOVERY]);
+
+		const result = await resolvePlaylistTracks([track({ title: 'One More Time' })]);
+
+		expect(result.candidates).toHaveLength(1);
+		expect(result.candidates[0].releaseGroupMbid).toBe('rg-discovery');
+		expect(result.candidates[0].matchedBy).toBe('track');
 	});
 
 	it('reports a song whose recording does not match instead of adding a similar one', async () => {

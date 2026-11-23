@@ -69,8 +69,17 @@ export function albumCacheKey(artist: string, album: string): string {
 	return `album:${fold(artist)}|${fold(album)}`;
 }
 
+export function artistCacheKey(name: string): string {
+	return `artist:${fold(name)}`;
+}
+
+export function artistAlbumsKey(artistMbid: string): string {
+	return `albums:${artistMbid}`;
+}
+
 export function songCacheKey(artist: string, title: string): string {
-	return `song:${fold(artist)}|${fold(title)}`;
+	// `song3:` retires entries resolved before album-first ranking: those held singles.
+	return `song3:${fold(artist)}|${fold(title)}`;
 }
 
 /** The release group an artist+album search settled on, or a remembered miss. */
@@ -86,6 +95,32 @@ export function setAlbumMatch(
 	group: MusicReleaseGroup | null
 ): void {
 	write(albumCacheKey(artist, album), group);
+}
+
+/** The MusicBrainz id behind a credited artist name, or a remembered miss. */
+export function getArtistMbid(name: string): Cached<string> | null {
+	return read<string>(artistCacheKey(name), (value) => (value === null ? MISS_TTL_MS : HIT_TTL_MS));
+}
+
+export function setArtistMbid(name: string, mbid: string | null): void {
+	write(artistCacheKey(name), mbid);
+}
+
+/** An artist's albums indexed by track title — the song path's search space. */
+export function getArtistAlbums(
+	artistMbid: string
+): Cached<Array<{ title: string; groups: MusicReleaseGroup[] }>> | null {
+	return read<Array<{ title: string; groups: MusicReleaseGroup[] }>>(
+		artistAlbumsKey(artistMbid),
+		() => HIT_TTL_MS
+	);
+}
+
+export function setArtistAlbums(
+	artistMbid: string,
+	rows: Array<{ title: string; groups: MusicReleaseGroup[] }>
+): void {
+	write(artistAlbumsKey(artistMbid), rows);
 }
 
 /** The album a song resolved to, or a remembered miss. */

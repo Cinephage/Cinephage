@@ -20,8 +20,17 @@ import { inArray } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
 import { albums } from '#lib/server/db/schema.js';
 import { normalizeForMatch } from '../track-matching.js';
-import { musicBrainz } from '../musicbrainz.js';
-import { getAlbumMatch, getSongMatch, setAlbumMatch, setSongMatch } from './cache.js';
+import { COMPILATION_SECONDARY, musicBrainz } from '../musicbrainz.js';
+import {
+	getAlbumMatch,
+	getArtistAlbums,
+	getArtistMbid,
+	getSongMatch,
+	setAlbumMatch,
+	setArtistAlbums,
+	setArtistMbid,
+	setSongMatch
+} from './cache.js';
 import type { MusicRecordingHit, MusicReleaseGroup } from '../types.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import type {
@@ -193,6 +202,32 @@ export interface ResolveOptions {
 	onProgress?: (progress: { done: number; total: number; phase: string }) => void;
 }
 
+/** MusicBrainz release types, best-first for "which album is this song on". */
+/** The rank of a plain studio album: the answer the promo path looks for. */
+const PLAIN_ALBUM_RANK = 4;
+
+function typeRank(group: MusicReleaseGroup): number {
+	const secondary = new Set(group.secondaryTypes ?? []);
+	const plain = !COMPILATION_SECONDARY.some((type) => secondary.has(type));
+	if (group.primaryType === 'Album') return plain ? 4 : 1;
+	if (group.primaryType === 'EP') return plain ? 3 : 1;
+	if (group.primaryType === 'Single') return 2;
+	return 0;
+}
+
+/** The group a song belongs to: the best type the artist owns, earliest first. */
+function pickGroup(groups: MusicReleaseGroup[], track: PlaylistTrack): MusicReleaseGroup | null {
+	return (
+		groups
+			.filter((group) => artistMatches(track.artists, group.artist.name))
+			.sort(
+				(a, b) =>
+					typeRank(b) - typeRank(a) ||
+					(a.firstReleaseDate ?? '9999').localeCompare(b.firstReleaseDate ?? '9999')
+			)[0] ?? null
+	);
+}
+
 function yearOfDate(date: string | null | undefined): number | null {
 	const match = /^(\d{4})/.exec(date ?? '');
 	return match ? Number(match[1]) : null;
@@ -216,20 +251,6 @@ function groupFromHit(hit: MusicRecordingHit): MusicReleaseGroup | null {
 		year: yearOfDate(group.firstReleaseDate),
 		artist: group.artist
 	};
-}
-
-/** The best hit for one song: the artist's own release first, then any credit match. */
-function pickRecording(
-	hits: MusicRecordingHit[],
-	track: PlaylistTrack
-): MusicRecordingHit | null {
-	const matching = hits.filter(
-		(hit) =>
-			hit.releaseGroup &&
-			titlesMatch(track.title, hit.title) &&
-			artistMatches(track.artists, hit.artistCredit)
-	);
-	return matching.find((hit) => hit.releaseOwned) ?? matching[0] ?? null;
 }
 
 /**
@@ -266,6 +287,40 @@ export async function resolvePlaylistTracks(
 	const leftover: PlaylistTrack[] = [];
 
 	const report = (phase: string) => options.onProgress?.({ done, total, phase });
+
+	// One artist lookup per name, cached for the next playlist: searching
+	// recordings by id is what keeps same-titled tracks by other people out.
+	const artistIds = new Map<string, string | null>();
+	const artistMbidFor = async (name: string): Promise<string | null> => {
+		if (artistIds.has(name)) return artistIds.get(name) ?? null;
+		const cached = getArtistMbid(name);
+		let mbid = cached ? cached.value : null;
+		if (!cached) {
+			mbid = await attempt(() => musicBrainz.resolveArtistMbid(name));
+			setArtistMbid(name, mbid);
+		}
+		artistIds.set(name, mbid);
+		return mbid;
+	};
+
+	// The artist's own studio albums, indexed by track title. A song title is
+	// tiny and shared — searching recordings by title finds other people's
+	// tracks before the artist's own — so the discography is the search space.
+	const albumIndexes = new Map<string, Map<string, MusicReleaseGroup[]>>();
+	const albumIndexFor = async (mbid: string): Promise<Map<string, MusicReleaseGroup[]>> => {
+		const ready = albumIndexes.get(mbid);
+		if (ready) return ready;
+		const stored = getArtistAlbums(mbid);
+		const rows = stored ? stored.value : await attempt(() => musicBrainz.getArtistAlbumTrackIndex(mbid));
+		if (!stored && rows) setArtistAlbums(mbid, rows);
+		const index = new Map<string, MusicReleaseGroup[]>();
+		for (const row of rows ?? []) {
+			const key = normalizeForMatch(core(row.title));
+			index.set(key, [...(index.get(key) ?? []), ...row.groups]);
+		}
+		albumIndexes.set(mbid, index);
+		return index;
+	};
 
 	report('Resolving albums');
 	for (const group of groups) {
@@ -334,8 +389,27 @@ export async function resolvePlaylistTracks(
 			continue;
 		}
 
+		const artistMbid = await artistMbidFor(artist);
+		if (artistMbid) {
+			const index = await albumIndexFor(artistMbid);
+			const fromAlbum = pickGroup(index.get(normalizeForMatch(query)) ?? [], track);
+			if (fromAlbum) {
+				addCandidate(candidates, fromAlbum, track, 'track', 'low');
+				setSongMatch(artist, query, fromAlbum);
+				resolvedTracks += 1;
+				done += 1;
+				report('Resolving songs');
+				continue;
+			}
+		}
+
 		const hits = await attempt(() =>
-			musicBrainz.searchRecordings({ artist, track: query, limit: SEARCH_LIMIT })
+			musicBrainz.searchRecordings({
+				artist,
+				artistMbid: artistMbid ?? undefined,
+				track: query,
+				limit: SEARCH_LIMIT
+			})
 		);
 		if (!hits) {
 			unmatched.push({ title: track.title, artist, reason: 'lookup-failed' });
@@ -344,9 +418,25 @@ export async function resolvePlaylistTracks(
 			continue;
 		}
 
-		const hit = pickRecording(hits, track);
-		const group = hit ? groupFromHit(hit) : null;
-		if (group && artistMatches(track.artists, group.artist.name)) {
+		// The group the search reports is the answer when it is a plain album; now
+		// that the search is keyed by artist id it usually is. When it is not — a
+		// single, a live set, a hits package — ask what else the recording is on
+		// and take the album from there.
+		const anchor = hits.find(
+			(candidate) =>
+				titlesMatch(track.title, candidate.title) &&
+				artistMatches(track.artists, candidate.artistCredit)
+		);
+		const reported = anchor ? groupFromHit(anchor) : null;
+		let group = reported && artistMatches(track.artists, reported.artist.name) ? reported : null;
+		if ((!group || typeRank(group) < PLAIN_ALBUM_RANK) && anchor) {
+			const appearances = await attempt(() =>
+				musicBrainz.getRecordingReleaseGroups(anchor.mbid)
+			);
+			group = pickGroup(appearances ?? [], track) ?? group;
+		}
+
+		if (group) {
 			addCandidate(candidates, group, track, 'track', 'low');
 			setSongMatch(artist, query, group);
 			resolvedTracks += 1;

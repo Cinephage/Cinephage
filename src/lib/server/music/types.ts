@@ -129,5 +129,7 @@ export interface MusicRecordingHit {
 	 * owned hit when one exists: the compilation is not the album the song is on.
 	 */
 	releaseOwned?: boolean;
+	/** How many releases MusicBrainz lists for this recording in the search. */
+	releaseCount?: number;
 	score?: number;
 }

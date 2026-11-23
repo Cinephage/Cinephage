@@ -7,7 +7,8 @@ import {
 	getAlbumMatch,
 	getSongMatch,
 	setAlbumMatch,
-	setSongMatch
+	setSongMatch,
+	songCacheKey
 } from './cache.js';
 
 const testDb: TestDatabase = createTestDb();
@@ -63,7 +64,7 @@ describe('playlist lookup cache', () => {
 		testDb.db
 			.insert(musicLookupCache)
 			.values({
-				key: 'song:daft punk|one more time',
+				key: songCacheKey('Daft Punk', 'One More Time'),
 				payload: JSON.stringify(DISCOVERY),
 				fetchedAt: old
 			})
