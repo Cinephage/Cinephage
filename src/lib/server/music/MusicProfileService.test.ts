@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as schema from '#lib/server/db/schema.js';
 import { createTestDb, type TestDatabase } from '../../../test/db-helper.js';
 import { musicProfileService } from './MusicProfileService.js';
+import { gradeMusicRelease } from './parse-release.js';
 
 const testDb: TestDatabase = createTestDb();
 
@@ -127,6 +128,39 @@ describe('MusicProfileService', () => {
 		expect(row.music_min_size_mb).toBe(100);
 		expect(row.music_max_size_mb).toBe(2000);
 		expect(created.allowFallback).toBe(false);
+	});
+
+	it('grades through the stored profile, so a lossless rung rejects an MP3', () => {
+		testDb.db
+			.insert(schema.mediaItems)
+			.values({ id: 'mi-grade', kind: 'album', title: 'Grade Me' })
+			.run();
+		testDb.db.insert(schema.artists).values({ id: 'artist-grade', name: 'Grade Artist' }).run();
+		testDb.db
+			.insert(schema.albums)
+			.values({
+				id: 'album-grade',
+				mediaItemId: 'mi-grade',
+				artistId: 'artist-grade',
+				title: 'Grade Me',
+				qualityProfileId: 'music-default'
+			})
+			.run();
+		const profile = musicProfileService.resolveForAlbum('album-grade');
+
+		const flac = gradeMusicRelease(profile, {
+			title: 'Daft Punk - Discovery (2001) [FLAC 24-96]',
+			protocol: 'torrent'
+		});
+		const mp3 = gradeMusicRelease(profile, {
+			title: 'Daft Punk - Discovery (2001) [MP3 128]',
+			protocol: 'torrent'
+		});
+
+		expect(flac.tierIndex).toBe(0);
+		expect(flac.tierLabel).toBe('Lossless');
+		expect(mp3.tierIndex).toBeGreaterThan(0);
+		expect(mp3.tierLabel).not.toBe('Lossless');
 	});
 
 	it('validates tiers and size bounds, and refuses to delete a built-in profile', () => {

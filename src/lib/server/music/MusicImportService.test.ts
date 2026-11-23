@@ -125,6 +125,31 @@ describe('MusicImportService.adoptFolder', () => {
 		expect(item?.path).toBe(folder);
 	});
 
+	it('does not mark a track owned when no file matched it', async () => {
+		testDb.db
+			.insert(schema.tracks)
+			.values({
+				id: 'tr-3',
+				albumId: 'al-adopt',
+				title: 'Three',
+				discNumber: 1,
+				trackNumber: 3,
+				position: 3
+			})
+			.run();
+
+		await musicImportService.adoptFolder('al-adopt', folder);
+
+		const tracks = testDb.db
+			.select()
+			.from(schema.tracks)
+			.where(eq(schema.tracks.albumId, 'al-adopt'))
+			.all();
+		expect(tracks.find((track) => track.id === 'tr-1')?.hasFile).toBe(true);
+		expect(tracks.find((track) => track.id === 'tr-2')?.hasFile).toBe(true);
+		expect(tracks.find((track) => track.id === 'tr-3')?.hasFile).toBe(false);
+	});
+
 	it('is idempotent: adopting the same folder twice keeps one row per file', async () => {
 		await musicImportService.adoptFolder('al-adopt', folder);
 		await musicImportService.adoptFolder('al-adopt', folder);

@@ -67,12 +67,16 @@ function toQualityProfile(row: MusicProfile): MusicQualityProfile {
 				kind: tier.kind,
 				label: tier.label,
 				formats: tier.formats as MusicFormat[] | undefined,
+				// `kind` is what the row stores; the grader needs the derived
+				// lossless constraint too, or a no-formats lossless rung matches
+				// an MP3 as rung 0.
+				lossless: tier.kind === 'lossless' ? true : tier.kind === 'lossy' ? false : undefined,
 				minBitrateKbps: tier.minBitrateKbps,
 				minBitDepth: tier.minBitDepth
 			})
 		),
 		allowFallback: row.allowFallback,
-		formatScores: {},
+		formatScores: DEFAULT_MUSIC_PROFILE.formatScores,
 		minSizeMb: row.minSizeMb,
 		maxSizeMb: row.maxSizeMb
 	};

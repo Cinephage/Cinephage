@@ -1,6 +1,6 @@
 import { promises as fs, constants } from 'node:fs';
 import path from 'node:path';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
 import {
 	albums,
@@ -15,12 +15,15 @@ import {
 } from '#lib/server/db/schema.js';
 import { mapClientPathToLocal } from '#lib/server/downloadClients/monitoring/PathMapping.js';
 import { createChildLogger } from '#lib/logging/index.js';
-import { NotFoundError, ValidationError } from '#lib/errors/index.js';
+import { isAppError, NotFoundError, ValidationError } from '#lib/errors/index.js';
+import { downloadMonitor } from '#lib/server/downloadClients/monitoring/index.js';
 import { matchFilesToTracks } from './track-matching.js';
 import { AUDIO_EXTENSIONS, collectAudioFiles, type TaggedAudioFile } from './audio-folder.js';
 import { musicStrmService } from './MusicStrmService.js';
 import { sanitizeMusicSegment } from './paths.js';
 import { publishImport } from '#lib/server/notifications/core/app-events.js';
+import { getMediaBrowserNotifier } from '#lib/server/notifications/mediabrowser/MediaBrowserNotifier.js';
+import { invalidateTrackStream } from './playback/resolver.js';
 import { blocklistService } from '#lib/server/blocklist/BlocklistService.js';
 import { musicScanIssueService } from './MusicScanIssueService.js';
 
@@ -85,7 +88,14 @@ export class MusicImportService {
 		try {
 			return await this.importFolder(albumRow.id, this.resolveLocalPath(queueRow), { queueId });
 		} catch (error) {
-			this.recordImportFailure(albumRow.id, queueRow, error);
+			// Every real failure terminates the queue row; only content failures
+			// blocklist. A precondition (no path yet) never reaches here.
+			if (!isAppError(error)) this.recordImportFailure(albumRow.id, queueRow, error);
+			await downloadMonitor.markFailed(
+				queueRow.id,
+				error instanceof Error ? error.message : String(error),
+				{ terminalImport: true }
+			);
 			throw error;
 		} finally {
 			this.inFlight.delete(queueId);
@@ -147,6 +157,9 @@ export class MusicImportService {
 
 		const row = db.select().from(downloadQueue).where(eq(downloadQueue.id, queueRow.id)).get();
 		if (!row) throw new NotFoundError('Queued download for album', albumId);
+		if (row.status !== 'completed' && row.status !== 'seeding' && row.status !== 'seeding-imported') {
+			throw new ValidationError('The download has not finished yet');
+		}
 
 		try {
 			return await this.importFolder(albumId, this.resolveLocalPath(row), {
@@ -154,7 +167,12 @@ export class MusicImportService {
 				dryRun: options.dryRun
 			});
 		} catch (error) {
-			this.recordImportFailure(albumId, row, error);
+			if (!isAppError(error)) this.recordImportFailure(albumId, row, error);
+			await downloadMonitor.markFailed(
+				row.id,
+				error instanceof Error ? error.message : String(error),
+				{ terminalImport: true }
+			);
 			throw error;
 		}
 	}
@@ -407,16 +425,24 @@ export class MusicImportService {
 				.run();
 		}
 
-		db.update(tracks)
-			.set({ hasFile: true })
-			.where(and(eq(tracks.albumId, albumId), eq(tracks.hasFile, false)))
-			.run();
+		// Only tracks a file actually matched are owned. Marking the whole
+		// album made an 8-of-12 folder look complete, kept stale rows alive in
+		// reconcileTracklist and stopped the missing search from retrying.
+		const matchedIds = [...new Set(trackIdByPath.values())];
+		if (matchedIds.length > 0) {
+			db.update(tracks)
+				.set({ hasFile: true })
+				.where(inArray(tracks.id, matchedIds))
+				.run();
+		}
 		db.update(albums)
 			.set({ path: folder, hasFile: true, streamSource: null })
 			.where(eq(albums.id, albumId))
 			.run();
 
 		musicScanIssueService.resolveFolder(folder);
+		for (const id of matchedIds) invalidateTrackStream(id);
+		getMediaBrowserNotifier().queueUpdate(folder, 'Created', 'import');
 
 		// The album is owned now: stream shortcuts left beside the real files
 		// would make the media server show every track twice.

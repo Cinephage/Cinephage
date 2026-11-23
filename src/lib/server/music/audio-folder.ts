@@ -28,7 +28,7 @@ export const AUDIO_EXTENSIONS = new Set([
 ]);
 
 /** Directories and files that are never album content. */
-export const SKIP_NAMES = /^(sample|samples|scans|covers?|artwork|\.)/i;
+export const SKIP_NAMES = /^(samples?|scans|covers?|artwork)$|^\./i;
 /** A file this small is a cue stub or a failed download, not audio. */
 export const MIN_AUDIO_BYTES = 64 * 1024;
 /** Deeper nesting than this is a box set's paperwork, not its audio. */
