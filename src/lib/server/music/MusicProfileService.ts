@@ -206,7 +206,7 @@ export class MusicProfileService {
 		return this.resolve(
 			row?.albumProfileId,
 			row?.artistProfileId,
-			this.libraryProfileId(row?.artistLibraryId ?? row?.albumLibraryId)
+			this.libraryProfileId(row?.albumLibraryId ?? row?.artistLibraryId)
 		);
 	}
 
