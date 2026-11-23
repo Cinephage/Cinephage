@@ -149,6 +149,8 @@ export interface MusicBrainzClientOptions {
 	/** Injectable for tests; production uses the real clock. */
 	now?: () => number;
 	sleep?: (ms: number) => Promise<void>;
+	/** Shared gate; defaults to one at `minIntervalMs`. Injected by tests. */
+	gate?: RateGate;
 }
 
 export interface ReleaseGroupSearchOptions {
@@ -225,7 +227,9 @@ export class MusicBrainzClient {
 		this.timeoutMs = options.timeoutMs ?? 15_000;
 		this.maxAttempts = options.maxAttempts ?? MAX_ATTEMPTS;
 		this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
-		this.gate = new RateGate(options.minIntervalMs ?? MIN_INTERVAL_MS, options.now, options.sleep);
+		this.gate =
+			options.gate ??
+			new RateGate(options.minIntervalMs ?? MIN_INTERVAL_MS, options.now, options.sleep);
 	}
 
 	/**
@@ -302,7 +306,13 @@ export class MusicBrainzClient {
 				if (!error.retryable || attempt === this.maxAttempts) throw error;
 
 				const backoff = Math.min(RETRY_BASE_MS * 2 ** (attempt - 1), RETRY_MAX_MS);
-				await this.sleep(Math.max(backoff, error.retryAfterMs ?? 0));
+				const wait = Math.max(backoff, error.retryAfterMs ?? 0);
+				if (error.status === 503 || error.status === 429) {
+					// Load shedding: every caller waits, not just this retry.
+					this.gate.hold(wait);
+				} else {
+					await this.sleep(wait);
+				}
 			}
 		}
 		throw lastError ?? new MusicBrainzError('MusicBrainz request failed');

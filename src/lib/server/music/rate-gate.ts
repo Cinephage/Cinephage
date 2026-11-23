@@ -20,6 +20,18 @@ export class RateGate {
 		this.nextAt = 0;
 	}
 
+	/**
+	 * Push every caller back by `ms`.
+	 *
+	 * A 503 from the server is not this caller's problem alone — the whole
+	 * client is over the limit, and retrying privately while others keep
+	 * firing is how a busy minute becomes a block. Holding the shared slot
+	 * makes the backoff apply to everyone queued behind it.
+	 */
+	hold(ms: number): void {
+		this.nextAt = Math.max(this.nextAt, this.now() + Math.max(0, ms));
+	}
+
 	/** Wait until this caller's slot is due. */
 	async wait(): Promise<void> {
 		const now = this.now();
