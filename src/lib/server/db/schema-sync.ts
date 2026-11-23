@@ -235,6 +235,8 @@ import {
  *   remembered per album and skipped by the music search.
  * Version 192: albums.genres - MusicBrainz release-group genres for the album
  *   page, refreshed with the release group.
+ * Version 198: music_import_jobs - the recipe and outcome of a playlist import,
+ *              so a big import survives a restart.
  * Version 197: music_lookup_cache - MusicBrainz answers reused across playlist
  *              resolves (one request per second is the ceiling).
  * Version 193: music_scan_issues - folders a music scan could not identify, so
@@ -246,7 +248,7 @@ import {
  * Version 196: monitoring_history.media_item_id - the album a music search
  *   attempt acted on, so the Searches tab can resolve it.
  */
-export const CURRENT_SCHEMA_VERSION = 197;
+export const CURRENT_SCHEMA_VERSION = 198;
 
 /**
  * Seed rows for the *legacy* backfill in migration 078 only.
@@ -1926,6 +1928,21 @@ const TABLE_DEFINITIONS: string[] = [
 		"duration" integer,
 		"added" text
 	)`,
+
+	`CREATE TABLE IF NOT EXISTS "music_import_jobs" (
+		"id" text PRIMARY KEY NOT NULL,
+		"url" text NOT NULL,
+		"recipe" text NOT NULL,
+		"phase" text NOT NULL,
+		"progress" text NOT NULL,
+		"summary" text,
+		"result" text,
+		"error" text,
+		"created_at" text NOT NULL,
+		"updated_at" text NOT NULL
+	)`,
+
+	`CREATE INDEX IF NOT EXISTS "idx_music_import_jobs_created" ON "music_import_jobs" ("created_at")`,
 
 	`CREATE TABLE IF NOT EXISTS "music_lookup_cache" (
 		"key" text PRIMARY KEY NOT NULL,

@@ -5503,5 +5503,17 @@
 	"music_importFailedTitle": "Импорт не удался",
 	"music_importMonitorAdded": "Отслеживать добавленные альбомы",
 	"music_importSearchAfterAdd": "Искать релизы после добавления",
-	"music_importRetry": "Повторить"
+	"music_importRetry": "Повторить",
+	"music_importScope": "Что добавить",
+	"music_importScopeAlbum": "Найденный альбом",
+	"music_importScopeArtist": "Все альбомы исполнителя",
+	"music_importScopeHint": "Режим исполнителя добавляет дискографию каждого совпадения (альбомы и EP) и пропускает то, что уже есть.",
+	"music_importRecent": "Недавние импорты",
+	"music_importResume": "Продолжить",
+	"music_importInterrupted": "Прерван",
+	"music_importInterruptedHint": "Сервер перезапустился во время импорта. Продолжите — уже добавленное не будет добавлено повторно.",
+	"music_importStatusDone": "Готово",
+	"music_importStatusFailed": "Ошибка",
+	"music_importStatusReady": "Готов к проверке",
+	"music_importStatusRunning": "Выполняется"
 }

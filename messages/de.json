@@ -5503,5 +5503,17 @@
 	"music_importFailedTitle": "Import fehlgeschlagen",
 	"music_importMonitorAdded": "Hinzugefügte Alben überwachen",
 	"music_importSearchAfterAdd": "Nach Releases suchen, sobald hinzugefügt",
-	"music_importRetry": "Erneut versuchen"
+	"music_importRetry": "Erneut versuchen",
+	"music_importScope": "Was hinzufügen",
+	"music_importScopeAlbum": "Das gefundene Album",
+	"music_importScopeArtist": "Alle Alben des Künstlers",
+	"music_importScopeHint": "Der Künstler-Modus fügt die Diskografie jeder Übereinstimmung hinzu (Alben und EPs) und überspringt, was du schon hast.",
+	"music_importRecent": "Letzte Importe",
+	"music_importResume": "Fortsetzen",
+	"music_importInterrupted": "Unterbrochen",
+	"music_importInterruptedHint": "Der Server wurde während dieses Imports neu gestartet. Setze ihn fort — bereits hinzugefügte Alben werden nicht doppelt hinzugefügt.",
+	"music_importStatusDone": "Fertig",
+	"music_importStatusFailed": "Fehlgeschlagen",
+	"music_importStatusReady": "Bereit",
+	"music_importStatusRunning": "Läuft"
 }

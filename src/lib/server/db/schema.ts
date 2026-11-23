@@ -5041,6 +5041,49 @@ export const trackFiles = sqliteTable(
  * its tracklist for the import step. A miss expires sooner than a hit, because
  * MusicBrainz gains data while a match rarely stops being one.
  */
+/**
+ * Music import jobs - the recipe for a playlist import and how it ended.
+ *
+ * Rows are not stored: resolution lives in `music_lookup_cache` and adding an
+ * album is idempotent, so a job that was interrupted can be re-run cheaply and
+ * cannot duplicate anything. `recipe` keeps the URL, the scope and the choices;
+ * `summary` keeps the counts a returning user wants to see.
+ */
+export const musicImportJobs = sqliteTable(
+	'music_import_jobs',
+	{
+		id: text('id').primaryKey(),
+		url: text('url').notNull(),
+		/** JSON: scope, library/folder/profile choices, the selected release groups. */
+		recipe: text('recipe', { mode: 'json' }).$type<{
+			scope: 'album' | 'artist';
+			rowIds: string[];
+			libraryId: string | null;
+			rootFolderId: string | null;
+			qualityProfileId: string | null;
+			monitored: boolean;
+			searchAfterAdd: boolean;
+		}>()
+			.notNull(),
+		phase: text('phase').notNull(),
+		progress: text('progress', { mode: 'json' })
+			.$type<{ done: number; total: number }>()
+			.notNull(),
+		summary: text('summary', { mode: 'json' })
+			.$type<{ added: number; existing: number; failed: number } | null>(),
+		/** Per-album outcome, kept so a returning user can see what happened. */
+		result: text('result', { mode: 'json' })
+			.$type<Array<{ mbid: string; title: string; artist: string; status: string; error: string | null }>>()
+			.default([]),
+		error: text('error'),
+		createdAt: text('created_at').notNull(),
+		updatedAt: text('updated_at').notNull()
+	},
+	(table) => [index('idx_music_import_jobs_created').on(table.createdAt)]
+);
+
+export type MusicImportJobRecord = typeof musicImportJobs.$inferSelect;
+
 export const musicLookupCache = sqliteTable('music_lookup_cache', {
 	/** `album:<artist>|<album>`, `song:<artist>|<title>`, `release:<release-group mbid>`. */
 	key: text('key').primaryKey(),

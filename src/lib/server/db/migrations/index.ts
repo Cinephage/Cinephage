@@ -193,6 +193,7 @@ import { migration_v194 } from './194-album-release-date.js';
 import { migration_v195 } from './195-synced-track-identity.js';
 import { migration_v196 } from './196-monitoring-history-media-item.js';
 import { migration_v197 } from './197-music-lookup-cache.js';
+import { migration_v198 } from './198-music-import-jobs.js';
 
 export const MIGRATIONS: MigrationDefinition[] = [
 	migration_v002,
@@ -388,5 +389,6 @@ export const MIGRATIONS: MigrationDefinition[] = [
 	migration_v194,
 	migration_v195,
 	migration_v196,
-	migration_v197
+	migration_v197,
+	migration_v198
 ];

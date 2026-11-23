@@ -5867,5 +5867,17 @@
 	"music_importFailedTitle": "Import failed",
 	"music_importMonitorAdded": "Monitor added albums",
 	"music_importSearchAfterAdd": "Search for releases after adding",
-	"music_importRetry": "Try again"
+	"music_importRetry": "Try again",
+	"music_importScope": "What to add",
+	"music_importScopeAlbum": "The matched album",
+	"music_importScopeArtist": "Every album by the artist",
+	"music_importScopeHint": "Artist mode adds each match's discography (albums and EPs) and skips what you already have.",
+	"music_importRecent": "Recent imports",
+	"music_importResume": "Resume",
+	"music_importInterrupted": "Interrupted",
+	"music_importInterruptedHint": "The server restarted while this import was running. Resume it — anything already added will not be added twice.",
+	"music_importStatusDone": "Finished",
+	"music_importStatusFailed": "Failed",
+	"music_importStatusReady": "Ready",
+	"music_importStatusRunning": "Running"
 }

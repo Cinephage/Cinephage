@@ -28,7 +28,15 @@
 
 	interface Job {
 		id: string;
-		phase: 'fetching' | 'resolving' | 'ready' | 'importing' | 'done' | 'failed' | 'cancelled';
+		phase:
+			| 'fetching'
+			| 'resolving'
+			| 'ready'
+			| 'importing'
+			| 'done'
+			| 'failed'
+			| 'cancelled'
+			| 'interrupted';
 		progress: { done: number; total: number };
 		playlist: { title: string; owner: string | null; trackCount: number; provider: string } | null;
 		trackTotal: number;
@@ -37,6 +45,8 @@
 		unmatched: Array<{ title: string; artist: string | null; reason: string }>;
 		summary: { added: number; existing: number; failed: number } | null;
 		error: string | null;
+		url: string;
+		createdAt: string;
 	}
 
 	let { open, onClose, onDone }: { open: boolean; onClose: () => void; onDone?: () => void } =
@@ -54,6 +64,9 @@
 	let profileId = $state('');
 	let monitored = $state(true);
 	let searchAfterAdd = $state(false);
+	/** 'album' adds what matched; 'artist' adds each match's discography. */
+	let scope = $state<'album' | 'artist'>('album');
+	let recent = $state<Job[]>([]);
 	let timer: ReturnType<typeof setTimeout> | null = null;
 
 	const busy = $derived(
@@ -95,7 +108,10 @@
 					job.rows.filter((row) => !row.inLibrary).map((row) => row.releaseGroupMbid)
 				);
 			}
-			if (job.phase === 'done') onDone?.();
+			if (job.phase === 'done') {
+				void loadRecent();
+				onDone?.();
+			}
 		} catch (err) {
 			error = err instanceof Error ? err.message : String(err);
 		}
@@ -120,11 +136,49 @@
 			}
 			job = body.job;
 			schedule(body.job.id);
+			void loadRecent();
 		} catch (err) {
 			error = err instanceof Error ? err.message : String(err);
 		} finally {
 			submitting = false;
 		}
+	}
+
+	/** The list a returning user sees: what ran, how it ended, what can resume. */
+	async function loadRecent() {
+		try {
+			const response = await fetch('/api/music/playlists/jobs?limit=10');
+			if (!response.ok) return;
+			const body = (await response.json()) as { jobs?: Job[] };
+			recent = body.jobs ?? [];
+		} catch {
+			recent = [];
+		}
+	}
+
+	async function resume(id: string) {
+		error = null;
+		try {
+			const response = await fetch(`/api/music/playlists/jobs/${id}/resume`, { method: 'POST' });
+			const body = (await response.json()) as { job?: Job; error?: string };
+			if (!response.ok || !body.job) {
+				error = body.error ?? m.music_importFailedTitle();
+				return;
+			}
+			job = body.job;
+			schedule(body.job.id);
+		} catch (err) {
+			error = err instanceof Error ? err.message : String(err);
+		}
+	}
+
+	/** A finished job's per-album outcome, kept in the row so a user can review it later. */
+	function statusLabel(entry: Job): string {
+		if (entry.phase === 'done') return m.music_importStatusDone();
+		if (entry.phase === 'failed') return m.music_importStatusFailed();
+		if (entry.phase === 'interrupted') return m.music_importInterrupted();
+		if (entry.phase === 'ready') return m.music_importStatusReady();
+		return m.music_importStatusRunning();
 	}
 
 	async function importSelected() {
@@ -138,7 +192,8 @@
 					rowIds: [...selected],
 					qualityProfileId: profileId || null,
 					monitored,
-					searchAfterAdd
+					searchAfterAdd,
+					scope
 				})
 			});
 			const body = (await response.json()) as { job?: Job; error?: string };
@@ -166,6 +221,7 @@
 
 	// A closed modal starts clean; the job itself lives on the server.
 	$effect(() => {
+		if (open) void loadRecent();
 		if (!open) {
 			stopPolling();
 			job = null;
@@ -242,11 +298,52 @@
 		</button>
 	</div>
 
+	<div class="mt-3 flex flex-wrap items-center gap-2">
+		<span class="text-xs font-medium text-base-content/70">{m.music_importScope()}</span>
+		<select class="select select-bordered select-xs" bind:value={scope}>
+			<option value="album">{m.music_importScopeAlbum()}</option>
+			<option value="artist">{m.music_importScopeArtist()}</option>
+		</select>
+		<span class="text-xs text-base-content/50">{m.music_importScopeHint()}</span>
+	</div>
+
 	{#if error}
 		<div class="alert alert-error mt-4 py-2 text-sm">{error}</div>
 	{/if}
 
-	{#if job && job.phase !== 'failed' && job.phase !== 'cancelled'}
+	{#if !job && recent.length > 0}
+		<div class="mt-5">
+			<h4 class="text-sm font-semibold">{m.music_importRecent()}</h4>
+			<ul class="mt-2 divide-y divide-base-200 text-sm">
+				{#each recent as entry (entry.id)}
+					<li class="flex items-center gap-3 py-2">
+						<span class="min-w-0 flex-1 truncate text-base-content/70">{entry.url}</span>
+						<span
+							class="badge badge-xs {entry.phase === 'done'
+								? 'badge-success'
+								: entry.phase === 'interrupted' || entry.phase === 'failed'
+									? 'badge-warning'
+									: 'badge-ghost'}"
+						>
+							{statusLabel(entry)}
+						</span>
+						{#if entry.summary}
+							<span class="text-xs text-base-content/50">
+								{entry.summary.added} / {entry.summary.existing} / {entry.summary.failed}
+							</span>
+						{/if}
+						{#if entry.phase === 'interrupted' || entry.phase === 'failed'}
+							<button class="btn btn-ghost btn-xs" onclick={() => void resume(entry.id)}>
+								{m.music_importResume()}
+							</button>
+						{/if}
+					</li>
+				{/each}
+			</ul>
+		</div>
+	{/if}
+
+	{#if job && job.phase !== 'failed' && job.phase !== 'cancelled' && job.phase !== 'interrupted'}
 		<div class="mt-5 min-h-0 flex-1 overflow-y-auto">
 			{#if job.playlist}
 				<div class="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
@@ -435,15 +532,22 @@
 				</button>
 			{/if}
 		</div>
-	{:else if job && (job.phase === 'failed' || job.phase === 'cancelled')}
+	{:else if job && (job.phase === 'failed' || job.phase === 'cancelled' || job.phase === 'interrupted')}
+		{@const finishedId = job.id}
 		<div class="mt-4 space-y-3">
-			<div class="alert alert-error py-2 text-sm">
-				{job.error ?? m.music_importFailedTitle()}
+			<div class="alert {job.phase === 'interrupted' ? 'alert-warning' : 'alert-error'} py-2 text-sm">
+				{job.phase === 'interrupted' ? m.music_importInterruptedHint() : (job.error ?? m.music_importFailedTitle())}
 			</div>
-			<div class="flex justify-end">
-				<button class="btn btn-ghost btn-sm" onclick={() => void start()}>
-					{m.music_importRetry()}
-				</button>
+			<div class="flex justify-end gap-2">
+				{#if job.phase === 'interrupted'}
+					<button class="btn btn-primary btn-sm" onclick={() => void resume(finishedId)}>
+						{m.music_importResume()}
+					</button>
+				{:else}
+					<button class="btn btn-ghost btn-sm" onclick={() => void start()}>
+						{m.music_importRetry()}
+					</button>
+				{/if}
 			</div>
 		</div>
 	{/if}

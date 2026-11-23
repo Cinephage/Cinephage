@@ -5503,5 +5503,17 @@
 	"music_importFailedTitle": "La importación falló",
 	"music_importMonitorAdded": "Monitorizar los álbumes añadidos",
 	"music_importSearchAfterAdd": "Buscar lanzamientos después de añadir",
-	"music_importRetry": "Reintentar"
+	"music_importRetry": "Reintentar",
+	"music_importScope": "Qué añadir",
+	"music_importScopeAlbum": "El álbum encontrado",
+	"music_importScopeArtist": "Todos los álbumes del artista",
+	"music_importScopeHint": "El modo artista añade la discografía de cada coincidencia (álbumes y EPs) y omite lo que ya tienes.",
+	"music_importRecent": "Importaciones recientes",
+	"music_importResume": "Reanudar",
+	"music_importInterrupted": "Interrumpida",
+	"music_importInterruptedHint": "El servidor se reinició durante esta importación. Reanúdala: lo ya añadido no se añadirá dos veces.",
+	"music_importStatusDone": "Terminada",
+	"music_importStatusFailed": "Falló",
+	"music_importStatusReady": "Lista",
+	"music_importStatusRunning": "En curso"
 }

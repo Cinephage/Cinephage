@@ -6,7 +6,7 @@
 export class PlaylistError extends Error {
 	constructor(
 		message: string,
-		readonly status: 400 | 422 | 502 = 422
+		readonly status: 400 | 404 | 422 | 502 = 422
 	) {
 		super(message);
 		this.name = 'PlaylistError';

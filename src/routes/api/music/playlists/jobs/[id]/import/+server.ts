@@ -13,7 +13,9 @@ const importSchema = z.object({
 	rootFolderId: z.string().trim().min(1).nullable().optional(),
 	qualityProfileId: z.string().trim().min(1).nullable().optional(),
 	monitored: z.boolean().optional(),
-	searchAfterAdd: z.boolean().optional()
+	searchAfterAdd: z.boolean().optional(),
+	/** 'artist' expands each selected album to its artist's discography. */
+	scope: z.enum(['album', 'artist']).default('album')
 });
 
 /**
@@ -50,7 +52,8 @@ export const POST: RequestHandler = async (event) => {
 			rootFolderId: input.rootFolderId ?? null,
 			qualityProfileId: input.qualityProfileId ?? null,
 			monitored: input.monitored,
-			searchAfterAdd: input.searchAfterAdd
+			searchAfterAdd: input.searchAfterAdd,
+			scope: input.scope
 		});
 		return Response.json({ success: true, job }, { status: 202 });
 	} catch (err) {
