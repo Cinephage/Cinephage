@@ -4966,6 +4966,11 @@ export const tracks = sqliteTable(
 		 * album's other tracks can be warmed from it.
 		 */
 		streamVideoId: text('stream_video_id'),
+		/**
+		 * Whether this track is wanted. A playlist import can bring a whole album
+		 * for one song; the rest of the tracklist is then present but not wanted.
+		 */
+		monitored: integer('monitored', { mode: 'boolean' }).notNull().default(true),
 		added: text('added').$defaultFn(() => new Date().toISOString())
 	},
 	(table) => [
@@ -5056,7 +5061,7 @@ export const musicImportJobs = sqliteTable(
 		url: text('url').notNull(),
 		/** JSON: scope, library/folder/profile choices, the selected release groups. */
 		recipe: text('recipe', { mode: 'json' }).$type<{
-			scope: 'album' | 'artist';
+			scope: 'album' | 'artist' | 'songs';
 			rowIds: string[];
 			libraryId: string | null;
 			rootFolderId: string | null;

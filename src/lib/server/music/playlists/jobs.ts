@@ -60,7 +60,11 @@ export type PlaylistJobPhase =
 export type PlaylistJobRowStatus = 'pending' | 'added' | 'existing' | 'failed' | 'skipped';
 
 /** What an import should add: the matched album, or every album by its artist. */
-export type ImportScope = 'album' | 'artist';
+/**
+ * What a selection means: the albums that matched, every album by each
+ * match's artist, or the matched albums with only the listed songs wanted.
+ */
+export type ImportScope = 'album' | 'artist' | 'songs';
 
 export interface PlaylistJobRow {
 	releaseGroupMbid: string;
@@ -517,7 +521,10 @@ async function runImport(
 				libraryId,
 				rootFolderId,
 				monitored: job.recipe.monitored,
-				qualityProfileId: job.recipe.qualityProfileId
+				qualityProfileId: job.recipe.qualityProfileId,
+				// "Just the songs": the album comes along, the want is the track.
+				onlyTracks:
+					job.recipe.scope === 'songs' ? row.tracks.map((track) => track.title) : undefined
 			});
 			row.status = result.created ? 'added' : 'existing';
 			row.albumId = result.albumId;

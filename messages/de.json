@@ -5515,5 +5515,8 @@
 	"music_importStatusDone": "Fertig",
 	"music_importStatusFailed": "Fehlgeschlagen",
 	"music_importStatusReady": "Bereit",
-	"music_importStatusRunning": "Läuft"
+	"music_importStatusRunning": "Läuft",
+	"music_importScopeSongs": "Nur die Songs",
+	"music_importScopeSongsHint": "Fügt jedes gefundene Album hinzu, aber nur die Songs aus der Playlist sind gewollt.",
+	"music_trackNotMonitored": "Nicht überwacht"
 }

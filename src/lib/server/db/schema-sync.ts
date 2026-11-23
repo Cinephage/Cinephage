@@ -247,8 +247,10 @@ import {
  *   stats can group music without a TMDB id.
  * Version 196: monitoring_history.media_item_id - the album a music search
  *   attempt acted on, so the Searches tab can resolve it.
+ * Version 199: tracks.monitored - a playlist import can bring a whole album
+ *   but only want the song that was on the list.
  */
-export const CURRENT_SCHEMA_VERSION = 198;
+export const CURRENT_SCHEMA_VERSION = 199;
 
 /**
  * Seed rows for the *legacy* backfill in migration 078 only.
@@ -1910,6 +1912,7 @@ const TABLE_DEFINITIONS: string[] = [
 		"duration" integer,
 		"explicit" integer DEFAULT false,
 		"has_file" integer DEFAULT false,
+		"monitored" integer NOT NULL DEFAULT 1,
 		"stream_video_id" text,
 		"added" text
 	)`,

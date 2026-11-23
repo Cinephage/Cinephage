@@ -66,7 +66,11 @@
 		</thead>
 		<tbody>
 			{#each tracks as track (track.id)}
-				<tr class="border-base-content/5 hover:bg-base-200/40">
+				<tr
+					class="border-base-content/5 hover:bg-base-200/40"
+					class:opacity-45={track.monitored === false}
+					title={track.monitored === false ? m.music_trackNotMonitored() : undefined}
+				>
 					<td class="text-right font-mono text-xs text-base-content/40">
 						{#if track.trackNumber === null}
 							–

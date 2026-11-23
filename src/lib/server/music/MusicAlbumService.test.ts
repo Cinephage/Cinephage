@@ -119,6 +119,51 @@ describe('MusicAlbumService.addAlbum', () => {
 		]);
 	});
 
+	it('wants only the songs a playlist named, and keeps the rest of the tracklist', () => {
+		const result = musicAlbumService.addAlbum({
+			releaseGroup: RELEASE_GROUP,
+			release: RELEASE,
+			onlyTracks: ['One More Time']
+		});
+
+		const rows = testDb.db
+			.select({ title: schema.tracks.title, monitored: schema.tracks.monitored })
+			.from(schema.tracks)
+			.where(eq(schema.tracks.albumId, result.albumId))
+			.all();
+
+		expect(rows).toEqual([
+			{ title: 'One More Time', monitored: true },
+			{ title: 'Aerodynamic', monitored: false }
+		]);
+		// The album itself is still the subject: it is what gets acquired.
+		const album = testDb.db
+			.select({ monitored: schema.albums.monitored })
+			.from(schema.albums)
+			.where(eq(schema.albums.id, result.albumId))
+			.get();
+		expect(album?.monitored).toBe(true);
+	});
+
+	it('matches a decorated playlist title to the album track', () => {
+		const result = musicAlbumService.addAlbum({
+			releaseGroup: RELEASE_GROUP,
+			release: RELEASE,
+			onlyTracks: ['One More Time (Remastered 2015)']
+		});
+
+		const rows = testDb.db
+			.select({ title: schema.tracks.title, monitored: schema.tracks.monitored })
+			.from(schema.tracks)
+			.where(eq(schema.tracks.albumId, result.albumId))
+			.all();
+
+		expect(rows).toEqual([
+			{ title: 'One More Time', monitored: true },
+			{ title: 'Aerodynamic', monitored: false }
+		]);
+	});
+
 	it('is idempotent on the same release group instead of duplicating', () => {
 		const first = musicAlbumService.addAlbum({ releaseGroup: RELEASE_GROUP, release: RELEASE });
 		const second = musicAlbumService.addAlbum({ releaseGroup: RELEASE_GROUP, release: RELEASE });

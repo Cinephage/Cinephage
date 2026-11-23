@@ -1,5 +1,6 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
+import { coreTitle } from './track-matching.js';
 import { db } from '#lib/server/db/index.js';
 import { albums, artists, mediaItems, trackFiles, tracks } from '#lib/server/db/schema.js';
 import { createChildLogger } from '#lib/logging/index.js';
@@ -33,6 +34,14 @@ export interface AddAlbumInput {
 	coverPath?: string | null;
 	/** The album's own ladder; null/omitted inherits the artist, then the library. */
 	qualityProfileId?: string | null;
+	/**
+	 * Track titles to want, when it is not the whole album.
+	 *
+	 * A playlist import brings the album for the songs on the list; everything
+	 * else is written unmonitored so the tracklist is complete but the want is
+	 * honest. Omitted means every track.
+	 */
+	onlyTracks?: string[];
 }
 
 /** One row of the music library list: enough for a card, no tracklist. */
@@ -114,6 +123,7 @@ export interface AlbumDetail extends AlbumSummary {
 		position: number | null;
 		duration: number | null;
 		hasFile: boolean | null;
+		monitored: boolean | null;
 	}>;
 }
 
@@ -256,7 +266,12 @@ export class MusicAlbumService {
 							discNumber: track.discNumber,
 							trackNumber: track.trackNumber,
 							position: track.position,
-							duration: track.duration ?? null
+							duration: track.duration ?? null,
+							// Compare works, not strings: the playlist says "Song (Remastered)",
+							// the album says "Song", and they are the same song.
+							monitored: input.onlyTracks
+								? input.onlyTracks.some((title) => coreTitle(title) === coreTitle(track.title))
+								: true
 						}))
 					)
 					.run();
@@ -689,7 +704,8 @@ export class MusicAlbumService {
 				trackNumber: tracks.trackNumber,
 				position: tracks.position,
 				duration: tracks.duration,
-				hasFile: tracks.hasFile
+				hasFile: tracks.hasFile,
+				monitored: tracks.monitored
 			})
 			.from(tracks)
 			.where(eq(tracks.albumId, albumId))

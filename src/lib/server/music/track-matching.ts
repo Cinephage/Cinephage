@@ -38,6 +38,37 @@ export function normalizeForMatch(value: string): string {
 		.trim();
 }
 
+/**
+ * Wording that decorates an edition without changing the work. Stripped before
+ * comparing, so "Hey Jude (Remastered 2015)" still matches "Hey Jude" while
+ * "Discovery Remixed" does not match "Discovery".
+ */
+const DECORATIONS = /\b(remaster(ed)?|deluxe|expanded|edition|explicit|anniversary|bonus|version)\b/g;
+/** "Remastered 2015" and "2015 Remaster": the year belongs to the decoration, not the title. */
+const DECORATED_YEAR = /\b(?:(?:19|20)\d{2}\s+)?(?:remaster(?:ed)?|version)\s+(?:(?:19|20)\d{2})?\b/g;
+
+/**
+ * A title reduced to the work it names: no edition tag, no upload noise.
+ *
+ * Two places need this and they must agree — resolving a playlist track to an
+ * album, and deciding which of an album's tracks a "just the songs" import
+ * wants. Both go through here so a decorated title cannot match in one and
+ * miss in the other.
+ */
+export function coreTitle(text: string): string {
+	return normalizeForMatch(
+		// A bracketed tail names the edition or the upload, never the work:
+		// "What a Wonderful World (Remastered)" is the same song. Dropping the
+		// bracket is also what makes single-version titles resolve at all —
+		// "California Dreamin' (Single Version)" left "single" behind.
+		text.replace(/\([^)]*\)|\[[^\]]*\]/g, ' ')
+	)
+		.replace(DECORATED_YEAR, ' ')
+		.replace(DECORATIONS, ' ')
+		.replace(/\s+/g, ' ')
+		.trim();
+}
+
 /** "01 - One More Time.flac" -> { track: 1, title: "One More Time" }. */
 export function parseFileName(fileName: string): {
 	trackNumber: number | null;

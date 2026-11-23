@@ -19,7 +19,7 @@
 import { inArray } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
 import { albums } from '#lib/server/db/schema.js';
-import { normalizeForMatch } from '../track-matching.js';
+import { coreTitle, normalizeForMatch } from '../track-matching.js';
 import { COMPILATION_SECONDARY, musicBrainz } from '../musicbrainz.js';
 import {
 	getAlbumMatch,
@@ -48,37 +48,14 @@ const logger = createChildLogger({ module: 'MusicPlaylistResolve', logDomain: 's
 const SEARCH_LIMIT = 10;
 
 /**
- * Wording that decorates an edition without changing the work. Stripped before
- * comparing, so "Hey Jude (Remastered 2015)" still matches "Hey Jude" while
- * "Discovery Remixed" does not match "Discovery".
- */
-const DECORATIONS = /\b(remaster(ed)?|deluxe|expanded|edition|explicit|anniversary|bonus|version)\b/g;
-/** "Remastered 2015" and "2015 Remaster": the year belongs to the decoration, not the title. */
-const DECORATED_YEAR = /\b(?:(?:19|20)\d{2}\s+)?(?:remaster(?:ed)?|version)\s+(?:(?:19|20)\d{2})?\b/g;
-
-function core(text: string): string {
-	return normalizeForMatch(
-		// A bracketed tail names the edition or the upload, never the work:
-		// "What a Wonderful World (Remastered)" is the same song. Dropping the
-		// bracket is also what makes single-version titles resolve at all —
-		// "California Dreamin' (Single Version)" left "single" behind.
-		text.replace(/\([^)]*\)|\[[^\]]*\]/g, ' ')
-	)
-		.replace(DECORATED_YEAR, ' ')
-		.replace(DECORATIONS, ' ')
-		.replace(/\s+/g, ' ')
-		.trim();
-}
-
-/**
  * Same work, not merely a similar name. Equality after decoration stripping —
  * "Hey Jude (Remastered 2015)" equals "Hey Jude", but "Discovery Remixed" is a
  * different release group from "Discovery" and must not be silently added in
  * its place.
  */
 export function titlesMatch(query: string, candidate: string): boolean {
-	const left = core(query);
-	const right = core(candidate);
+	const left = coreTitle(query);
+	const right = coreTitle(candidate);
 	if (!left || !right) return false;
 	return left === right;
 }
@@ -89,10 +66,10 @@ export function titlesMatch(query: string, candidate: string): boolean {
  * playlist named them as performers.
  */
 function artistMatches(queryArtists: string[], candidate: string): boolean {
-	const candidateCore = core(candidate);
+	const candidateCore = coreTitle(candidate);
 	if (!candidateCore) return false;
 	return queryArtists.some((artist) => {
-		const query = core(artist);
+		const query = coreTitle(artist);
 		if (!query) return false;
 		return candidateCore === query || candidateCore.includes(query) || query.includes(candidateCore);
 	});
@@ -114,7 +91,7 @@ function groupByAlbum(tracks: PlaylistTrack[]): { groups: AlbumGroup[]; loose: P
 			loose.push(track);
 			continue;
 		}
-		const key = `${core(artist)}|${core(album)}`;
+		const key = `${coreTitle(artist)}|${coreTitle(album)}`;
 		const existing = groups.get(key);
 		if (existing) existing.tracks.push(track);
 		else groups.set(key, { artist, album, tracks: [track] });
@@ -315,7 +292,7 @@ export async function resolvePlaylistTracks(
 		if (!stored && rows) setArtistAlbums(mbid, rows);
 		const index = new Map<string, MusicReleaseGroup[]>();
 		for (const row of rows ?? []) {
-			const key = normalizeForMatch(core(row.title));
+			const key = normalizeForMatch(coreTitle(row.title));
 			index.set(key, [...(index.get(key) ?? []), ...row.groups]);
 		}
 		albumIndexes.set(mbid, index);
@@ -326,7 +303,7 @@ export async function resolvePlaylistTracks(
 	for (const group of groups) {
 		// The cached answer is the same one a search would produce, so a re-import
 		// of an unchanged playlist costs no request at all.
-		const query = core(group.album);
+		const query = coreTitle(group.album);
 		const cached = getAlbumMatch(group.artist, query);
 		let picked: MusicReleaseGroup | null;
 		if (cached) {
@@ -375,7 +352,7 @@ export async function resolvePlaylistTracks(
 			continue;
 		}
 
-		const query = core(track.title);
+		const query = coreTitle(track.title);
 		const cached = getSongMatch(artist, query);
 		if (cached) {
 			if (cached.value) {
@@ -451,7 +428,7 @@ export async function resolvePlaylistTracks(
 		// try that before giving up — adding a random karaoke compilation to
 		// someone's library is worse than adding nothing and saying so.
 		const sameNamed = await attempt(() =>
-			musicBrainz.searchReleaseGroups({ artist, album: core(track.title), limit: SEARCH_LIMIT })
+			musicBrainz.searchReleaseGroups({ artist, album: coreTitle(track.title), limit: SEARCH_LIMIT })
 		);
 		const own = sameNamed?.find(
 			(candidate) =>

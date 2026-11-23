@@ -5879,5 +5879,8 @@
 	"music_importStatusDone": "Finished",
 	"music_importStatusFailed": "Failed",
 	"music_importStatusReady": "Ready",
-	"music_importStatusRunning": "Running"
+	"music_importStatusRunning": "Running",
+	"music_importScopeSongs": "Just the songs",
+	"music_importScopeSongsHint": "Adds each matched album, but only the songs from the playlist are wanted.",
+	"music_trackNotMonitored": "Not monitored"
 }

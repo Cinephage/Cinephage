@@ -5515,5 +5515,8 @@
 	"music_importStatusDone": "Готово",
 	"music_importStatusFailed": "Ошибка",
 	"music_importStatusReady": "Готов к проверке",
-	"music_importStatusRunning": "Выполняется"
+	"music_importStatusRunning": "Выполняется",
+	"music_importScopeSongs": "Только песни",
+	"music_importScopeSongsHint": "Добавляет каждый найденный альбом, но нужны только песни из плейлиста.",
+	"music_trackNotMonitored": "Не отслеживается"
 }

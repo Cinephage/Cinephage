@@ -75,6 +75,8 @@ export interface TrackListTrack {
 	trackNumber: number | null;
 	duration: number | null;
 	hasFile: boolean | null;
+	/** False when the album came along for other songs (a playlist import). */
+	monitored?: boolean | null;
 }
 
 /** "2h 14m" / "47m" — the same shape the movie runtime line uses. */
@@ -91,6 +93,8 @@ export type AlbumWithTracks = AlbumCardData & { tracks: TrackListTrack[] };
 
 /** One row of the songs table, across the whole library. */
 export interface TrackTableRow {
+	/** False when the album came along for other songs (a playlist import). */
+	monitored?: boolean;
 	id: string;
 	albumId: string;
 	albumTitle: string;

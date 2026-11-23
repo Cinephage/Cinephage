@@ -65,7 +65,7 @@
 	let monitored = $state(true);
 	let searchAfterAdd = $state(false);
 	/** 'album' adds what matched; 'artist' adds each match's discography. */
-	let scope = $state<'album' | 'artist'>('album');
+	let scope = $state<'album' | 'artist' | 'songs'>('album');
 	let recent = $state<Job[]>([]);
 	let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -303,8 +303,15 @@
 		<select class="select select-bordered select-xs" bind:value={scope}>
 			<option value="album">{m.music_importScopeAlbum()}</option>
 			<option value="artist">{m.music_importScopeArtist()}</option>
+			<option value="songs">{m.music_importScopeSongs()}</option>
 		</select>
-		<span class="text-xs text-base-content/50">{m.music_importScopeHint()}</span>
+		<span class="text-xs text-base-content/50">
+			{scope === 'artist'
+				? m.music_importScopeHint()
+				: scope === 'songs'
+					? m.music_importScopeSongsHint()
+					: ''}
+		</span>
 	</div>
 
 	{#if error}

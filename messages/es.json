@@ -5515,5 +5515,8 @@
 	"music_importStatusDone": "Terminada",
 	"music_importStatusFailed": "Falló",
 	"music_importStatusReady": "Lista",
-	"music_importStatusRunning": "En curso"
+	"music_importStatusRunning": "En curso",
+	"music_importScopeSongs": "Solo las canciones",
+	"music_importScopeSongsHint": "Añade cada álbum encontrado, pero solo las canciones de la lista cuentan.",
+	"music_trackNotMonitored": "Sin monitorizar"
 }

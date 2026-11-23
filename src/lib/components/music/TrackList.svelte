@@ -87,7 +87,11 @@
 			<tbody>
 				{#each discTracks as track (track.id)}
 					{@const busy = busyTrackIds.has(track.id)}
-					<tr class="group border-none hover:bg-base-200/50">
+					<tr
+						class="group border-none hover:bg-base-200/50"
+						class:opacity-45={track.monitored === false}
+						title={track.monitored === false ? m.music_trackNotMonitored() : undefined}
+					>
 						<td class="w-12 text-right font-mono text-xs text-base-content/40">
 							{track.trackNumber ?? '–'}
 						</td>
