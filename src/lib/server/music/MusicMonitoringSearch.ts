@@ -68,6 +68,17 @@ export async function searchMissingMusic(
 		)
 		.all();
 
+	// One read of the active queue instead of one query per album.
+	const queuedMediaItemIds = new Set(
+		db
+			.select({ mediaItemId: downloadQueue.mediaItemId })
+			.from(downloadQueue)
+			.where(notInArray(downloadQueue.status, ACTIVE_QUEUE_STATUSES))
+			.all()
+			.map((row) => row.mediaItemId)
+			.filter((id): id is string => Boolean(id))
+	);
+
 	const cutoff =
 		options.ignoreCooldown || !options.cooldownHours
 			? null
@@ -90,17 +101,7 @@ export async function searchMissingMusic(
 			}
 		}
 
-		const active = db
-			.select({ id: downloadQueue.id })
-			.from(downloadQueue)
-			.where(
-				and(
-					eq(downloadQueue.mediaItemId, row.mediaItemId),
-					notInArray(downloadQueue.status, ACTIVE_QUEUE_STATUSES)
-				)
-			)
-			.get();
-		if (active) {
+		if (row.mediaItemId && queuedMediaItemIds.has(row.mediaItemId)) {
 			summary.skipped++;
 			items.push({
 				albumId: row.albumId,
