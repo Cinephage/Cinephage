@@ -235,6 +235,8 @@ import {
  *   remembered per album and skipped by the music search.
  * Version 192: albums.genres - MusicBrainz release-group genres for the album
  *   page, refreshed with the release group.
+ * Version 197: music_lookup_cache - MusicBrainz answers reused across playlist
+ *              resolves (one request per second is the ceiling).
  * Version 193: music_scan_issues - folders a music scan could not identify, so
  *   they get a review queue like unmatched video files.
  * Version 194: albums.release_date - the full first-release date the calendar
@@ -244,7 +246,7 @@ import {
  * Version 196: monitoring_history.media_item_id - the album a music search
  *   attempt acted on, so the Searches tab can resolve it.
  */
-export const CURRENT_SCHEMA_VERSION = 196;
+export const CURRENT_SCHEMA_VERSION = 197;
 
 /**
  * Seed rows for the *legacy* backfill in migration 078 only.
@@ -1923,6 +1925,12 @@ const TABLE_DEFINITIONS: string[] = [
 		"channels" integer,
 		"duration" integer,
 		"added" text
+	)`,
+
+	`CREATE TABLE IF NOT EXISTS "music_lookup_cache" (
+		"key" text PRIMARY KEY NOT NULL,
+		"payload" text NOT NULL,
+		"fetched_at" text NOT NULL
 	)`,
 
 	`CREATE TABLE IF NOT EXISTS "music_scan_issues" (

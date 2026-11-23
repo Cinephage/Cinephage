@@ -5032,6 +5032,24 @@ export const trackFiles = sqliteTable(
  * and episode ids — so a scan issue is its own small queue: the folder, the
  * tags it carried, why the match was refused, and whether someone dismissed it.
  */
+/**
+ * Music lookup cache - MusicBrainz answers kept between playlist resolves.
+ *
+ * One request per second is a hard ceiling, and the same playlist is resolved
+ * again by every re-import and by every smart-list refresh. Values are JSON:
+ * the release group a search settled on, `{"miss":true}`, or a full release with
+ * its tracklist for the import step. A miss expires sooner than a hit, because
+ * MusicBrainz gains data while a match rarely stops being one.
+ */
+export const musicLookupCache = sqliteTable('music_lookup_cache', {
+	/** `album:<artist>|<album>`, `song:<artist>|<title>`, `release:<release-group mbid>`. */
+	key: text('key').primaryKey(),
+	payload: text('payload').notNull(),
+	fetchedAt: text('fetched_at').notNull()
+});
+
+export type MusicLookupCacheRecord = typeof musicLookupCache.$inferSelect;
+
 export const musicScanIssues = sqliteTable(
 	'music_scan_issues',
 	{

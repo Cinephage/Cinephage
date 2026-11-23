@@ -20,8 +20,9 @@ import { inArray } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
 import { albums } from '#lib/server/db/schema.js';
 import { normalizeForMatch } from '../track-matching.js';
-import { MusicBrainzError, musicBrainz } from '../musicbrainz.js';
-import type { MusicReleaseGroup } from '../types.js';
+import { musicBrainz } from '../musicbrainz.js';
+import { getAlbumMatch, getSongMatch, setAlbumMatch, setSongMatch } from './cache.js';
+import type { MusicRecordingHit, MusicReleaseGroup } from '../types.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import type {
 	AlbumCandidate,
@@ -33,41 +34,6 @@ import type {
 } from './types.js';
 
 const logger = createChildLogger({ module: 'MusicPlaylistResolve', logDomain: 'system' });
-
-/** MusicBrainz sheds load with 503s; a playlist is dozens of requests long. */
-const LOOKUP_ATTEMPTS = 3;
-const LOOKUP_BACKOFF_MS = 4_000;
-
-function sleep(ms: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * One lookup, retried across transient throttling.
- *
- * The shared client already retries a 503 three times; that covers one blip,
- * not a minute of load shedding — which is what a 50-song playlist walks into.
- * Returning null after the last attempt lets the caller mark the one row that
- * failed and keep going, instead of discarding every album resolved so far.
- */
-async function lookup<T>(call: () => Promise<T>): Promise<T | null> {
-	for (let attempt = 1; attempt <= LOOKUP_ATTEMPTS; attempt++) {
-		try {
-			return await call();
-		} catch (err) {
-			const retryable = err instanceof MusicBrainzError ? err.retryable : true;
-			if (!retryable || attempt === LOOKUP_ATTEMPTS) {
-				logger.warn(
-					{ err: err instanceof Error ? err.message : String(err), attempt },
-					'[MusicPlaylistResolve] MusicBrainz lookup gave up'
-				);
-				return null;
-			}
-			await sleep(LOOKUP_BACKOFF_MS * attempt);
-		}
-	}
-	return null;
-}
 
 /** Search at most this many hits; MusicBrainz's own ordering is good, we only verify. */
 const SEARCH_LIMIT = 10;
@@ -227,6 +193,65 @@ export interface ResolveOptions {
 	onProgress?: (progress: { done: number; total: number; phase: string }) => void;
 }
 
+function yearOfDate(date: string | null | undefined): number | null {
+	const match = /^(\d{4})/.exec(date ?? '');
+	return match ? Number(match[1]) : null;
+}
+
+/**
+ * The album a recording hit belongs to, without asking MusicBrainz again: the
+ * search already returned the release group's id, title, type and first date,
+ * plus the release's artist credit, which is the group's artist. That is one
+ * request per song instead of two.
+ */
+function groupFromHit(hit: MusicRecordingHit): MusicReleaseGroup | null {
+	const group = hit.releaseGroup;
+	if (!group?.artist) return null;
+	return {
+		mbid: group.mbid,
+		title: group.title,
+		primaryType: group.primaryType ?? null,
+		secondaryTypes: group.secondaryTypes ?? [],
+		firstReleaseDate: group.firstReleaseDate ?? null,
+		year: yearOfDate(group.firstReleaseDate),
+		artist: group.artist
+	};
+}
+
+/** The best hit for one song: the artist's own release first, then any credit match. */
+function pickRecording(
+	hits: MusicRecordingHit[],
+	track: PlaylistTrack
+): MusicRecordingHit | null {
+	const matching = hits.filter(
+		(hit) =>
+			hit.releaseGroup &&
+			titlesMatch(track.title, hit.title) &&
+			artistMatches(track.artists, hit.artistCredit)
+	);
+	return matching.find((hit) => hit.releaseOwned) ?? matching[0] ?? null;
+}
+
+/**
+ * One MusicBrainz call, no retry loop of our own.
+ *
+ * The client already retries a throttled request three times with a long,
+ * growing wait. Retrying again up here multiplied the request rate exactly when
+ * MusicBrainz was shedding load — which is how an IP gets blocked — so a failed
+ * lookup is now reported and left alone.
+ */
+async function attempt<T>(call: () => Promise<T>): Promise<T | null> {
+	try {
+		return await call();
+	} catch (err) {
+		logger.warn(
+			{ err: err instanceof Error ? err.message : String(err) },
+			'[MusicPlaylistResolve] MusicBrainz lookup failed'
+		);
+		return null;
+	}
+}
+
 export async function resolvePlaylistTracks(
 	tracks: PlaylistTrack[],
 	options: ResolveOptions = {}
@@ -237,47 +262,56 @@ export async function resolvePlaylistTracks(
 	const candidates = new Map<string, AlbumCandidate>();
 	const unmatched: UnmatchedTrack[] = [];
 	let resolvedTracks = 0;
+	/** Album groups whose name did not resolve; their songs go through phase 2. */
+	const leftover: PlaylistTrack[] = [];
 
 	const report = (phase: string) => options.onProgress?.({ done, total, phase });
-	report('Resolving albums');
 
+	report('Resolving albums');
 	for (const group of groups) {
-		// Query with the cleaned title: MusicBrainz matches the literal string,
-		// so "1 (Remastered 2015)" finds nothing while "1" finds the album.
-		const hits = await lookup(() =>
-			musicBrainz.searchReleaseGroups({
-				artist: group.artist,
-				album: core(group.album),
-				limit: SEARCH_LIMIT
-			})
-		);
-		if (!hits) {
-			for (const track of group.tracks) {
-				unmatched.push({ title: track.title, artist: group.artist, reason: 'lookup-failed' });
+		// The cached answer is the same one a search would produce, so a re-import
+		// of an unchanged playlist costs no request at all.
+		const query = core(group.album);
+		const cached = getAlbumMatch(group.artist, query);
+		let picked: MusicReleaseGroup | null;
+		if (cached) {
+			picked = cached.value;
+		} else {
+			const hits = await attempt(() =>
+				musicBrainz.searchReleaseGroups({
+					artist: group.artist,
+					album: query,
+					limit: SEARCH_LIMIT
+				})
+			);
+			if (!hits) {
+				for (const track of group.tracks) {
+					unmatched.push({ title: track.title, artist: group.artist, reason: 'lookup-failed' });
+				}
+				done += 1;
+				report('Resolving albums');
+				continue;
 			}
-			done += 1;
-			report('Resolving albums');
-			continue;
+			picked = pickReleaseGroup(hits, group.artist, group.album);
+			setAlbumMatch(group.artist, query, picked);
 		}
-		const picked = pickReleaseGroup(hits, group.artist, group.album);
 		if (picked) {
 			for (const track of group.tracks) {
 				addCandidate(candidates, picked, track, 'album', 'high');
 				resolvedTracks += 1;
 			}
 		} else {
-			// The album name did not resolve — the songs still might, one at a
+			// The album name resolved to nothing — the songs still might, one at a
 			// time. Losing them here would drop exactly what the user pasted.
-			loose.push(...group.tracks);
-			// Progress counts every MusicBrainz round trip, and these tracks
-			// just became one each; without this the bar can pass its own total.
+			leftover.push(...group.tracks);
 			total += group.tracks.length;
 		}
 		done += 1;
 		report('Resolving albums');
 	}
 
-	for (const track of loose) {
+	report('Resolving songs');
+	for (const track of [...loose, ...leftover]) {
 		const artist = track.artists[0]?.trim();
 		if (!artist) {
 			unmatched.push({ title: track.title, artist: null, reason: 'no-artist' });
@@ -286,12 +320,22 @@ export async function resolvePlaylistTracks(
 			continue;
 		}
 
-		const hits = await lookup(() =>
-			musicBrainz.searchRecordings({
-				artist,
-				track: core(track.title),
-				limit: SEARCH_LIMIT
-			})
+		const query = core(track.title);
+		const cached = getSongMatch(artist, query);
+		if (cached) {
+			if (cached.value) {
+				addCandidate(candidates, cached.value, track, 'track', 'low');
+				resolvedTracks += 1;
+			} else {
+				unmatched.push({ title: track.title, artist, reason: 'no-match' });
+			}
+			done += 1;
+			report('Resolving songs');
+			continue;
+		}
+
+		const hits = await attempt(() =>
+			musicBrainz.searchRecordings({ artist, track: query, limit: SEARCH_LIMIT })
 		);
 		if (!hits) {
 			unmatched.push({ title: track.title, artist, reason: 'lookup-failed' });
@@ -299,48 +343,37 @@ export async function resolvePlaylistTracks(
 			report('Resolving songs');
 			continue;
 		}
-		// Several recordings match the title; prefer one whose release is the
-		// artist's own rather than a compilation they appear on.
-		const matching = hits.filter(
-			(candidate) =>
-				candidate.releaseGroup &&
-				titlesMatch(track.title, candidate.title) &&
-				artistMatches(track.artists, candidate.artistCredit)
-		);
-		const hit = matching.find((candidate) => candidate.releaseOwned) ?? matching[0] ?? null;
 
-		if (hit?.releaseGroup) {
-			// A recording hit carries the group but not the artist's mbid; the
-			// group's own artist is what the album row needs.
-			const group = await lookup(() => musicBrainz.getReleaseGroup(hit.releaseGroup!.mbid));
-			if (!group) {
-				unmatched.push({ title: track.title, artist, reason: 'lookup-failed' });
-			} else if (artistMatches(track.artists, group.artist.name)) {
-				addCandidate(candidates, group, track, 'track', 'low');
-				resolvedTracks += 1;
-			} else {
-				// MusicBrainz picked a Various Artists compilation because it was
-				// the first official release of the recording. That is not what
-				// the user pasted. The song's own single or album is usually
-				// named after it, so try that before giving up — adding a random
-				// karaoke compilation to someone's library is worse than adding
-				// nothing and saying so.
-				const sameNamed = await lookup(() =>
-					musicBrainz.searchReleaseGroups({ artist, album: core(track.title), limit: SEARCH_LIMIT })
-				);
-				const own = sameNamed?.find(
-					(candidate) =>
-						titlesMatch(track.title, candidate.title) &&
-						artistMatches(track.artists, candidate.artist.name)
-				);
-				if (own) {
-					addCandidate(candidates, own, track, 'track', 'low');
-					resolvedTracks += 1;
-				} else {
-					unmatched.push({ title: track.title, artist, reason: 'no-match' });
-				}
-			}
+		const hit = pickRecording(hits, track);
+		const group = hit ? groupFromHit(hit) : null;
+		if (group && artistMatches(track.artists, group.artist.name)) {
+			addCandidate(candidates, group, track, 'track', 'low');
+			setSongMatch(artist, query, group);
+			resolvedTracks += 1;
+			done += 1;
+			report('Resolving songs');
+			continue;
+		}
+
+		// MusicBrainz picked a Various Artists compilation because it was the
+		// first official release of the recording. That is not what the user
+		// pasted. The song's own single or album is usually named after it, so
+		// try that before giving up — adding a random karaoke compilation to
+		// someone's library is worse than adding nothing and saying so.
+		const sameNamed = await attempt(() =>
+			musicBrainz.searchReleaseGroups({ artist, album: core(track.title), limit: SEARCH_LIMIT })
+		);
+		const own = sameNamed?.find(
+			(candidate) =>
+				titlesMatch(track.title, candidate.title) &&
+				artistMatches(track.artists, candidate.artist.name)
+		);
+		if (own) {
+			addCandidate(candidates, own, track, 'track', 'low');
+			setSongMatch(artist, query, own);
+			resolvedTracks += 1;
 		} else {
+			setSongMatch(artist, query, null);
 			unmatched.push({ title: track.title, artist, reason: 'no-match' });
 		}
 		done += 1;

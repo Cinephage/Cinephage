@@ -112,7 +112,16 @@ export interface MusicRecordingHit {
 	/** Rendered credit, e.g. "Emilio Rojas & Chris Webby". */
 	artistCredit: string;
 	artists: MusicArtistRef[];
-	releaseGroup: { mbid: string; title: string; primaryType?: string | null } | null;
+	releaseGroup: {
+		mbid: string;
+		title: string;
+		primaryType?: string | null;
+		/** Compilation, Live, Remix… — a compilation is rarely the album a song is on. */
+		secondaryTypes?: string[];
+		firstReleaseDate?: string | null;
+		/** The release's artist credit, which is also the release group's artist. */
+		artist?: MusicArtistRef | null;
+	} | null;
 	releaseMbid: string | null;
 	/**
 	 * True when the chosen release is credited to the recording's own artist

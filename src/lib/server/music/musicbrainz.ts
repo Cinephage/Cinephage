@@ -30,8 +30,11 @@ const MIN_INTERVAL_MS = 1200;
 
 /** Attempts per request. MusicBrainz documents 503 as "slow down", not "failed". */
 const MAX_ATTEMPTS = 3;
-const RETRY_BASE_MS = 1500;
-const RETRY_MAX_MS = 8000;
+// MusicBrainz blocks an IP for exceeding one request per second *average*;
+// a short retry loop is what turns a busy minute into a block, so waits are
+// long enough to fall back under the limit.
+const RETRY_BASE_MS = 2500;
+const RETRY_MAX_MS = 10000;
 
 /** MusicBrainz errors answer 200 with an `error` field, or 503 when throttled. */
 export class MusicBrainzError extends Error {
@@ -83,6 +86,14 @@ interface RawRelease {
 	}> | null;
 	media?: RawMedium[] | null;
 	'artist-credit'?: ArtistCredit[] | null;
+	/** Present on browse results (`inc=release-groups`); the group an edition belongs to. */
+	'release-group'?: {
+		id?: string | null;
+		title?: string | null;
+		'primary-type'?: string | null;
+		'secondary-types'?: string[] | null;
+		'first-release-date'?: string | null;
+	} | null;
 }
 
 interface RawReleaseGroup {
@@ -123,6 +134,8 @@ interface RawRecording {
 			id?: string | null;
 			title?: string | null;
 			'primary-type'?: string | null;
+			'secondary-types'?: string[] | null;
+			'first-release-date'?: string | null;
 		} | null;
 	}> | null;
 }
@@ -308,7 +321,12 @@ export class MusicBrainzClient {
 			limit: String(options.limit ?? 25)
 		});
 
-		return (body['release-groups'] ?? []).flatMap((group) => {
+		return this.mapReleaseGroups(body['release-groups'] ?? []);
+	}
+
+	/** A search hit and a batch hit are the same shape, so both map here. */
+	private mapReleaseGroups(groups: RawReleaseGroup[]): MusicReleaseGroup[] {
+		return groups.flatMap((group) => {
 			const artist = artistOf(group['artist-credit']);
 			if (!group.id || !group.title || !artist) return [];
 			return [
@@ -326,6 +344,7 @@ export class MusicBrainzClient {
 			];
 		});
 	}
+
 
 	/** Artist search, used by "find an artist to add" and by interactive search. */
 	async searchArtists(query: string, limit = 20): Promise<MusicArtistSearchResult[]> {
@@ -373,7 +392,12 @@ export class MusicBrainzClient {
 			limit: String(options.limit ?? 25)
 		});
 
-		return (body.recordings ?? []).flatMap((recording) => {
+		return this.mapRecordings(body.recordings ?? []);
+	}
+
+	/** A search hit and a batch hit are the same shape, so both map here. */
+	private mapRecordings(recordings: RawRecording[]): MusicRecordingHit[] {
+		return recordings.flatMap((recording) => {
 			if (!recording.id || !recording.title) return [];
 			const artists = (recording['artist-credit'] ?? []).flatMap((credit) => {
 				const ref =
@@ -424,7 +448,11 @@ export class MusicBrainzClient {
 						? {
 								mbid: release['release-group']!.id!,
 								title: release['release-group']!.title ?? '',
-								primaryType: release['release-group']!['primary-type'] ?? null
+								primaryType: release['release-group']!['primary-type'] ?? null,
+								secondaryTypes: release['release-group']!['secondary-types'] ?? [],
+								firstReleaseDate:
+									release['release-group']!['first-release-date'] ?? release.date ?? null,
+								artist: artistOf(release['artist-credit'] ?? null)
 							}
 						: null,
 					releaseMbid: release?.id ?? null,
@@ -434,6 +462,7 @@ export class MusicBrainzClient {
 			];
 		});
 	}
+
 
 	/**
 	 * Every release group an artist owns, paged. Browse (not search) is the right
@@ -588,6 +617,11 @@ export class MusicBrainzClient {
 		const release = body.releases?.[0] ?? body;
 		if (!release?.id) throw new MusicBrainzError(`Release ${releaseMbid} not found`, 404, false);
 
+		return this.mapRelease(release, releaseMbid);
+	}
+
+	/** Raw release -> the domain shape. The one place a tracklist is built. */
+	private mapRelease(release: RawRelease, fallbackMbid: string): MusicRelease {
 		const tracks: MusicTrack[] = [];
 		let position = 0;
 		let duration = 0;
@@ -611,7 +645,7 @@ export class MusicBrainzClient {
 
 		const labelInfo = release['label-info']?.[0];
 		return {
-			mbid: release.id ?? releaseMbid,
+			mbid: release.id ?? fallbackMbid,
 			title: release.title ?? 'Untitled',
 			status: release.status ?? null,
 			country: release.country ?? null,
@@ -625,6 +659,70 @@ export class MusicBrainzClient {
 			trackCount: tracks.length,
 			duration,
 			tracks
+		};
+	}
+
+	/**
+	 * The group, one official edition and that edition's tracklist in a single
+	 * request — everything adding an album needs.
+	 *
+	 * The browse endpoint accepts `inc=recordings`, so an import no longer pays
+	 * three round trips (group, editions, release) per album; at one request per
+	 * second those round trips were most of the wall clock.
+	 */
+	async getReleaseGroupWithTracklist(
+		releaseGroupMbid: string,
+		options: { editions?: number } = {}
+	): Promise<{ group: MusicReleaseGroup; release: MusicRelease }> {
+		const limit = String(Math.max(1, Math.min(options.editions ?? 3, 10)));
+		const fetchEditions = (status?: string) =>
+			this.request<{ releases?: RawRelease[] }>('/release', {
+				...(status ? { status } : {}),
+				'release-group': releaseGroupMbid,
+				inc: 'recordings+artist-credits+release-groups',
+				limit
+			});
+
+		// Official editions are what an import wants; a group with none is still
+		// importable (a bootleg-only entry), so retry without the filter.
+		let body = await fetchEditions('official');
+		let editions = (body.releases ?? []).filter((release) => release.id);
+		if (editions.length === 0) {
+			body = await fetchEditions();
+			editions = (body.releases ?? []).filter((release) => release.id);
+		}
+
+		const chosen = pickPrimaryRelease(editions);
+		if (!chosen?.id) {
+			throw new MusicBrainzError(
+				`Release group ${releaseGroupMbid} has no editions to import`,
+				404,
+				false
+			);
+		}
+
+		const release = this.mapRelease(chosen, chosen.id);
+		const rawGroup = chosen['release-group'];
+		const artist = artistOf(chosen['artist-credit']);
+		if (!rawGroup?.id || !artist) {
+			throw new MusicBrainzError(
+				`Release ${chosen.id} came back without its group or artist`,
+				502,
+				false
+			);
+		}
+
+		return {
+			group: {
+				mbid: rawGroup.id,
+				title: rawGroup.title ?? release.title,
+				primaryType: rawGroup['primary-type'] ?? null,
+				secondaryTypes: rawGroup['secondary-types'] ?? [],
+				firstReleaseDate: rawGroup['first-release-date'] ?? release.date ?? null,
+				year: yearOf(rawGroup['first-release-date'] ?? release.date),
+				artist
+			},
+			release
 		};
 	}
 

@@ -17,7 +17,8 @@ import { createChildLogger } from '#lib/logging/index.js';
 import { getLibraryEntityService } from '#lib/server/library/LibraryEntityService.js';
 import { autoSearchAlbum } from '../MusicAutoSearch.js';
 import { musicAlbumService } from '../MusicAlbumService.js';
-import { musicBrainz, pickPrimaryRelease } from '../musicbrainz.js';
+import { musicBrainz } from '../musicbrainz.js';
+import { getCachedRelease, setCachedRelease } from './cache.js';
 import { PlaylistError } from './errors.js';
 import { resolvePlaylistTracks } from './resolve.js';
 import { resolveSource } from './sources/index.js';
@@ -242,14 +243,31 @@ async function runImport(job: PlaylistJob, rowIds: string[], options: ImportOpti
 			finishCancelled(job);
 			return;
 		}
+		if (row.inLibrary) {
+			// Already here; the resolve already told us, and re-fetching the
+			// release group would spend a request to learn nothing.
+			row.status = 'existing';
+			job.summary.existing += 1;
+			job.progress.done += 1;
+			touch(job);
+			continue;
+		}
+
 		try {
-			const releaseGroup = await musicBrainz.getReleaseGroup(row.releaseGroupMbid);
-			const editions = await musicBrainz.getReleaseGroupReleases(row.releaseGroupMbid);
-			const primary = pickPrimaryRelease(editions);
-			if (!primary) throw new Error('no editions to import');
-			const release = await musicBrainz.getRelease(primary.mbid);
+			// One request per album: group, official edition and tracklist together.
+			// A release that was imported before comes back from the cache instead.
+			const cachedRelease = getCachedRelease(row.releaseGroupMbid)?.value ?? null;
+			let group;
+			let release;
+			if (cachedRelease) {
+				({ group, release } = cachedRelease);
+			} else {
+				const fetched = await musicBrainz.getReleaseGroupWithTracklist(row.releaseGroupMbid);
+				setCachedRelease(row.releaseGroupMbid, fetched);
+				({ group, release } = fetched);
+			}
 			const result = musicAlbumService.addAlbum({
-				releaseGroup,
+				releaseGroup: group,
 				release,
 				libraryId,
 				rootFolderId,

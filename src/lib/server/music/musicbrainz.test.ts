@@ -436,8 +436,9 @@ describe('MusicBrainzClient retry', () => {
 
 		expect(release.title).toBe('Discovery');
 		expect(calls).toBe(2);
-		// The gate's own spacing is asserted separately; here the backoff is what matters.
-		expect(slept).toContain(1500);
+		// The gate's own spacing is asserted separately; here the backoff is what matters,
+		// and it must stay well above the one-request-per-second budget.
+		expect(Math.max(...slept)).toBeGreaterThanOrEqual(2000);
 	});
 
 	it('honours Retry-After over the internal backoff', async () => {

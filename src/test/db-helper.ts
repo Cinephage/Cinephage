@@ -53,6 +53,7 @@ const CORE_TABLES = [
 	'episodeFiles',
 	'downloadQueue',
 	'rootFolders',
+	'musicLookupCache',
 	'musicScanIssues',
 	'unmatchedFiles'
 ] as const;
