@@ -1,6 +1,5 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types.js';
-import { requireAdminPage } from '#lib/server/auth/authorization.js';
 import { musicAlbumService } from '#lib/server/music/MusicAlbumService.js';
 import { musicArtistService } from '#lib/server/music/MusicArtistService.js';
 import { musicTrackService } from '#lib/server/music/MusicTrackService.js';
@@ -15,9 +14,7 @@ import { deriveFeaturedArtists } from '#lib/components/music/music-card.js';
  * the owner and their own records. Albums carry their tracklists so the page
  * can expand one in place, the way a series page expands a season.
  */
-export const load: PageServerLoad = async ({ locals, params }) => {
-	requireAdminPage(locals);
-
+export const load: PageServerLoad = async ({ params }) => {
 	let artist = musicArtistService.getArtist(params.id);
 	if (!artist) error(404, 'Artist not found');
 

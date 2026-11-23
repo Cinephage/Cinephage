@@ -622,6 +622,13 @@ export type MediaServerStatsResponse = {
 	containerBreakdown: Array<{ label: string; count: number }>;
 	topPlayedItems: AggregatedMediaItemResponse[];
 	largestItems: AggregatedMediaItemResponse[];
+	music?: {
+		plays: number;
+		tracks: number;
+		topArtists: Array<{ name: string; plays: number }>;
+		topAlbums: Array<{ artist: string; album: string; plays: number; tracks: number }>;
+		formatBreakdown: Array<{ label: string; count: number }>;
+	};
 	serverStatuses: MediaServerSyncStatusResponse[];
 };
 

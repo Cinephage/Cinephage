@@ -66,6 +66,8 @@ export interface MusicAlbumPageData {
 		}>;
 	} | null;
 	libraryAlbumId: string | null;
+	/** The stored album's file state; null when the album is not in the library. */
+	libraryAlbumHasFile: boolean | null;
 	featured: string[];
 	/** Provider artwork. Null on a MusicBrainz album: the page falls back to
 	 *  the Cover Art Archive url it derives from the MBID. */
@@ -120,11 +122,14 @@ export function deezerPrimaryType(album: DeezerAlbum): string {
  * (case-insensitive) on both, so a deluxe edition is not mistaken for the
  * album it extends.
  */
-async function findStoredAlbum(title: string, artistName: string): Promise<string | null> {
+async function findStoredAlbum(
+	title: string,
+	artistName: string
+): Promise<{ id: string; hasFile: boolean | null } | null> {
 	if (!title.trim() || !artistName.trim()) return null;
 	try {
 		const rows = await db
-			.select({ id: albums.id })
+			.select({ id: albums.id, hasFile: albums.hasFile })
 			.from(albums)
 			.innerJoin(artists, eq(albums.artistId, artists.id))
 			.where(
@@ -134,13 +139,17 @@ async function findStoredAlbum(title: string, artistName: string): Promise<strin
 				)
 			)
 			.limit(1);
-		return rows[0]?.id ?? null;
+		return rows[0] ?? null;
 	} catch {
 		return null;
 	}
 }
 
-export function mapDeezerAlbum(album: DeezerAlbum, libraryAlbumId: string | null): MusicAlbumPageData {
+export function mapDeezerAlbum(
+	album: DeezerAlbum,
+	libraryAlbumId: string | null,
+	libraryAlbumHasFile: boolean | null = null
+): MusicAlbumPageData {
 	const tracks = album.tracks?.data ?? [];
 	const artistName = album.artist?.name ?? '';
 	const contributors = (album.contributors ?? [])
@@ -177,6 +186,7 @@ export function mapDeezerAlbum(album: DeezerAlbum, libraryAlbumId: string | null
 			}))
 		},
 		libraryAlbumId,
+		libraryAlbumHasFile,
 		featured: [...new Set(contributors)],
 		artworkUrl: pickImage(album.cover_big, album.cover_xl, album.cover_medium)
 	};
@@ -187,7 +197,7 @@ async function loadAlbumFromDeezer(id: number, rawId: string): Promise<MusicAlbu
 		const album = await deezer.album(id);
 		if (!album) throw error(404, 'Album not found on Deezer');
 		const stored = await findStoredAlbum(album.title, album.artist?.name ?? '');
-		return mapDeezerAlbum(album, stored);
+		return mapDeezerAlbum(album, stored?.id ?? null, stored?.hasFile ?? null);
 	});
 }
 
@@ -241,6 +251,7 @@ async function loadAlbumFromMusicBrainz(mbid: string): Promise<MusicAlbumPageDat
 					}
 				: null,
 			libraryAlbumId: stored?.id ?? null,
+			libraryAlbumHasFile: stored?.hasFile ?? null,
 			featured: deriveFeaturedArtists(
 				(release?.tracks ?? []).map((track) => track.artistCredit ?? null),
 				group.artist.name

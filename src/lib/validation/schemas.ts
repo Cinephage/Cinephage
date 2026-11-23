@@ -2677,6 +2677,7 @@ export const addToBlocklistSchema = z.object({
 	indexerId: z.string().optional(),
 	movieId: z.string().nullable().optional(),
 	seriesId: z.string().nullable().optional(),
+	albumId: z.string().nullable().optional(),
 	size: z.number().nonnegative().optional(),
 	protocol: z.enum(['torrent', 'usenet', 'streaming']).optional(),
 	reason: z.enum(['manual']).default('manual'),

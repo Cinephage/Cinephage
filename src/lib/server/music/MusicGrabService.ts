@@ -57,7 +57,7 @@ export class MusicGrabService {
 
 	async grabAlbum(
 		albumId: string,
-		options: { releaseGuid?: string } = {}
+		options: { releaseGuid?: string; candidate?: MusicReleaseCandidate } = {}
 	): Promise<MusicGrabResult> {
 		const album = db
 			.select({
@@ -80,8 +80,9 @@ export class MusicGrabService {
 			});
 		}
 
-		const { candidates } = await musicSearchService.searchForAlbum(albumId);
-		const chosen = this.choose(candidates, options.releaseGuid);
+		const chosen =
+			options.candidate ??
+			this.choose((await musicSearchService.searchForAlbum(albumId)).candidates, options.releaseGuid);
 		if (!chosen) {
 			throw new ValidationError('No release passed the quality profile for this album');
 		}
@@ -115,8 +116,15 @@ export class MusicGrabService {
 			throw new ValidationError('The chosen release has no magnet, torrent URL or info hash');
 		}
 
-		const clientResult = await getDownloadClientManager().getClientForProtocol('torrent');
-		if (!clientResult) throw new ValidationError('No enabled torrent download client configured');
+		const protocol = chosen.protocol === 'usenet' ? 'usenet' : 'torrent';
+		const clientResult = await getDownloadClientManager().getClientForProtocol(protocol);
+		if (!clientResult) {
+			throw new ValidationError(
+				protocol === 'usenet'
+					? 'No enabled usenet download client configured'
+					: 'No enabled torrent download client configured'
+			);
+		}
 		const { client: clientConfig, instance } = clientResult;
 
 		const categoryMap = (clientConfig.categoryMap ?? {}) as Record<string, string>;
@@ -125,6 +133,46 @@ export class MusicGrabService {
 			throw new ValidationError(
 				`Download client "${clientConfig.name}" has no music category configured`
 			);
+		}
+
+		if (protocol === 'usenet') {
+			const downloadId = await instance.addDownload({
+				downloadUrl: chosen.downloadUrl ?? undefined,
+				title: chosen.title,
+				category,
+				paused: false
+			});
+			if (!downloadId) {
+				throw new ValidationError('The download client did not return a download id; the release cannot be tracked');
+			}
+			const queueItem = await downloadMonitor.addToQueue({
+				downloadClientId: clientConfig.id,
+				downloadId,
+				title: chosen.title,
+				indexerId: chosen.indexerId ?? undefined,
+				indexerName: chosen.indexerName ?? undefined,
+				downloadUrl: chosen.downloadUrl ?? undefined,
+				protocol: 'usenet',
+				size: chosen.size ?? undefined,
+				mediaItemId: album.mediaItemId
+			});
+			publishGrab({
+				albumId: album.id,
+				releaseName: chosen.title,
+				indexerName: chosen.indexerName ?? null
+			});
+			logger.info(
+				{ albumId, queueId: queueItem.id, title: chosen.title, tier: chosen.tierLabel, category },
+				'[MusicGrab] album grabbed (usenet)'
+			);
+			return {
+				queueId: queueItem.id,
+				downloadId,
+				title: chosen.title,
+				indexerName: chosen.indexerName,
+				size: chosen.size,
+				tierLabel: chosen.tierLabel ?? null
+			};
 		}
 
 		// Resolve the release before adding it. A tracker result often carries only

@@ -1,4 +1,5 @@
 import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
+import type { Dirent } from 'node:fs';
 import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
@@ -156,18 +157,23 @@ export class MusicStrmService {
 		return this.removeShortcutsInFolder(album.path);
 	}
 
-	/** Remove every `.strm` in a folder without touching real media. */
+	/** Remove every `.strm` in a folder (including Disc N subfolders). */
 	async removeShortcutsInFolder(folder: string): Promise<number> {
-		let names: string[];
+		let entries: Dirent[];
 		try {
-			names = await readdir(folder);
+			entries = await readdir(folder, { withFileTypes: true });
 		} catch {
 			return 0;
 		}
 
 		let removed = 0;
-		for (const name of names) {
-			if (!name.toLowerCase().endsWith('.strm')) continue;
+		for (const entry of entries) {
+			const name = entry.name;
+			if (entry.isDirectory() && /^(cd|disc|disk)[\s._-]*\d+$/i.test(name)) {
+				removed += await this.removeShortcutsInFolder(join(folder, name));
+				continue;
+			}
+			if (!entry.isFile() || !name.toLowerCase().endsWith('.strm')) continue;
 			try {
 				await unlink(join(folder, name));
 				removed += 1;

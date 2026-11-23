@@ -1,14 +1,11 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types.js';
-import { requireAdminPage } from '#lib/server/auth/authorization.js';
 import { musicAlbumService } from '#lib/server/music/MusicAlbumService.js';
 import { musicProfileService } from '#lib/server/music/MusicProfileService.js';
 import { deriveFeaturedArtists } from '#lib/components/music/music-card.js';
 
 /** One album with its tracklist, and the collaborators its credits name. */
-export const load: PageServerLoad = async ({ locals, params }) => {
-	requireAdminPage(locals);
-
+export const load: PageServerLoad = async ({ params }) => {
 	const album = musicAlbumService.getAlbum(params.id);
 	if (!album) error(404, 'Album not found');
 

@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '#lib/server/db/index.js';
-import { downloadHistory } from '#lib/server/db/schema.js';
+import { albums, downloadHistory } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 import { createChildLogger } from '#lib/logging/index.js';
 import { requireAdminLocals } from '#lib/server/auth/authorization.js';
@@ -33,6 +33,9 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 			throw error(404, 'History item not found');
 		}
 
+		const album = historyItem.mediaItemId
+			? db.select({ id: albums.id }).from(albums).where(eq(albums.mediaItemId, historyItem.mediaItemId)).get()
+			: null;
 		const { blocklistService } =
 			await import('#lib/server/monitoring/specifications/BlocklistSpecification.js');
 		const blocklistId = blocklistService.addToBlocklist(
@@ -47,6 +50,7 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 			{
 				movieId: historyItem.movieId ?? undefined,
 				seriesId: historyItem.seriesId ?? undefined,
+				albumId: album?.id,
 				episodeIds: historyItem.episodeIds ?? undefined,
 				reason: 'manual',
 				message: 'Manually blocklisted from history'

@@ -136,7 +136,8 @@ describe('searchMissingMusic', () => {
 			title: 'Album',
 			grabbed: false,
 			releasesFound: 4,
-			error: 'no accepted release'
+			error: 'no accepted release',
+			errorKind: 'no-results'
 		});
 
 		await searchMissingMusic();
@@ -146,7 +147,7 @@ describe('searchMissingMusic', () => {
 		expect(rows[0]).toMatchObject({
 			taskType: 'missing',
 			mediaItemId,
-			status: 'error',
+			status: 'no_results',
 			releasesFound: 4,
 			errorMessage: 'no accepted release'
 		});

@@ -19,7 +19,10 @@ export const POST: RequestHandler = async (event) => {
 
 	const result = await autoSearchAlbum(album);
 	if (!result.grabbed) {
-		return Response.json({ success: false, ...result }, { status: 409 });
+		return Response.json(
+			{ success: false, ...result },
+			{ status: result.errorKind === 'error' ? 502 : 409 }
+		);
 	}
 
 	return Response.json({ success: true, ...result });

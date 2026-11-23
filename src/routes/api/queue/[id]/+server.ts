@@ -2,6 +2,7 @@ import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '#lib/server/db/index.js';
 import {
+	albums,
 	downloadQueue,
 	downloadHistory,
 	movies,
@@ -335,6 +336,13 @@ export const DELETE: RequestHandler = async ({ params, url, locals }) => {
 		// indexer/quality/size too (see BlocklistService.addToBlocklist).
 		if (addToBlocklist) {
 			try {
+				const album = queueItem.mediaItemId
+					? db
+							.select({ id: albums.id })
+							.from(albums)
+							.where(eq(albums.mediaItemId, queueItem.mediaItemId))
+							.get()
+					: null;
 				const { blocklistService } =
 					await import('#lib/server/monitoring/specifications/BlocklistSpecification.js');
 				await blocklistService.addToBlocklist(
@@ -349,6 +357,7 @@ export const DELETE: RequestHandler = async ({ params, url, locals }) => {
 					{
 						movieId: queueItem.movieId ?? undefined,
 						seriesId: queueItem.seriesId ?? undefined,
+						albumId: album?.id,
 						episodeIds: queueItem.episodeIds ?? undefined,
 						reason: 'manual',
 						message: 'Manually blocklisted from the queue/history'

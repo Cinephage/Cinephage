@@ -1,5 +1,4 @@
 import type { PageServerLoad } from './$types.js';
-import { requireAdminPage } from '#lib/server/auth/authorization.js';
 import { getLibraryEntityService } from '#lib/server/library/LibraryEntityService.js';
 import { musicAlbumService } from '#lib/server/music/MusicAlbumService.js';
 import { musicArtistService } from '#lib/server/music/MusicArtistService.js';
@@ -17,9 +16,7 @@ import { musicScanIssueService } from '#lib/server/music/MusicScanIssueService.j
  * Nothing here touches the filesystem: `hasFile` is the cache the importer
  * maintains, exactly like `movies.has_file`.
  */
-export const load: PageServerLoad = async ({ locals }) => {
-	requireAdminPage(locals);
-
+export const load: PageServerLoad = async () => {
 	const libraries = await getLibraryEntityService().listLibraries({ mediaType: 'music' });
 	const library = libraries.find((entry) => entry.isDefault) ?? libraries[0] ?? null;
 
@@ -90,7 +87,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			albums: albums.length,
 			artists: artists.length,
 			songs: songs.length,
-			missing: albums.filter((album) => !album.hasFile).length,
+			missing: albums.filter((album) => !album.hasFile && !album.streamSource).length,
 			monitored: albums.filter((album) => album.monitored).length
 		}
 	};

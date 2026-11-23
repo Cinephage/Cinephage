@@ -2,10 +2,11 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { coreTitle } from './track-matching.js';
 import { db } from '#lib/server/db/index.js';
-import { albums, artists, mediaItems, trackFiles, tracks } from '#lib/server/db/schema.js';
+import { albums, artists, downloadQueue, mediaItems, trackFiles, tracks } from '#lib/server/db/schema.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { NotFoundError, ValidationError } from '#lib/errors/index.js';
 import { musicProfileService } from './MusicProfileService.js';
+import { cancelQueuedDownloads } from '#lib/server/library/library-removal.js';
 import { musicBrainz, pickPrimaryRelease } from './musicbrainz.js';
 import type { MusicArtistRef, MusicRelease, MusicReleaseGroup, MusicTrack } from './types.js';
 
@@ -57,6 +58,8 @@ export interface AlbumSummary {
 	/** Total runtime in seconds, summed across the tracklist. */
 	duration: number | null;
 	hasFile: boolean | null;
+	/** Non-null when the album is served by a stream, not files. */
+	streamSource: string | null;
 	monitored: boolean | null;
 	coverPath: string | null;
 	/** MusicBrainz release-group genres, cached with the metadata. */
@@ -202,6 +205,22 @@ export class MusicAlbumService {
 				.where(and(eq(albums.mbid, releaseGroup.mbid), eq(albums.artistId, artistId)))
 				.get();
 			if (existing) {
+				// Re-adding is normally a no-op, but "just the songs" still has to
+				// apply the wanted titles to an album that is already stored.
+				if (input.onlyTracks && input.onlyTracks.length > 0) {
+					const wanted = new Set(input.onlyTracks.map((title) => coreTitle(title)));
+					const rows = tx
+						.select({ id: tracks.id, title: tracks.title })
+						.from(tracks)
+						.where(eq(tracks.albumId, existing.id))
+						.all();
+					for (const row of rows) {
+						tx.update(tracks)
+							.set({ monitored: wanted.has(coreTitle(row.title)) })
+							.where(eq(tracks.id, row.id))
+							.run();
+					}
+				}
 				return {
 					albumId: existing.id,
 					mediaItemId: existing.mediaItemId,
@@ -590,6 +609,51 @@ export class MusicAlbumService {
 	 * exists. Files on disk are never touched: this is a catalogue write, and
 	 * the movie/series delete paths behave the same way.
 	 */
+	/** Stop anything still downloading for this album before its rows go. */
+	async cancelDownloadsForAlbum(albumId: string): Promise<void> {
+		const album = db
+			.select({ mediaItemId: albums.mediaItemId })
+			.from(albums)
+			.where(eq(albums.id, albumId))
+			.get();
+		if (!album) return;
+		const rows = db
+			.select({
+				id: downloadQueue.id,
+				downloadClientId: downloadQueue.downloadClientId,
+				protocol: downloadQueue.protocol,
+				infoHash: downloadQueue.infoHash,
+				downloadId: downloadQueue.downloadId
+			})
+			.from(downloadQueue)
+			.where(eq(downloadQueue.mediaItemId, album.mediaItemId))
+			.all();
+		await cancelQueuedDownloads(rows);
+	}
+
+	/** Same, for every album under an artist. */
+	async cancelDownloadsForArtist(artistId: string): Promise<void> {
+		const mediaItemIds = db
+			.select({ mediaItemId: albums.mediaItemId })
+			.from(albums)
+			.where(eq(albums.artistId, artistId))
+			.all()
+			.map((row) => row.mediaItemId);
+		if (mediaItemIds.length === 0) return;
+		const rows = db
+			.select({
+				id: downloadQueue.id,
+				downloadClientId: downloadQueue.downloadClientId,
+				protocol: downloadQueue.protocol,
+				infoHash: downloadQueue.infoHash,
+				downloadId: downloadQueue.downloadId
+			})
+			.from(downloadQueue)
+			.where(inArray(downloadQueue.mediaItemId, mediaItemIds))
+			.all();
+		await cancelQueuedDownloads(rows);
+	}
+
 	deleteAlbum(albumId: string): boolean {
 		const row = db
 			.select({ mediaItemId: albums.mediaItemId })
@@ -624,6 +688,7 @@ export class MusicAlbumService {
 				trackCount: albums.trackCount,
 				duration: albums.duration,
 				hasFile: albums.hasFile,
+				streamSource: albums.streamSource,
 				monitored: albums.monitored,
 				coverPath: albums.coverPath,
 				genres: albums.genres,

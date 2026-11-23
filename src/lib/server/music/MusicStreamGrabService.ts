@@ -79,6 +79,7 @@ export class MusicStreamGrabService {
 				indexerName: candidate.indexerName ?? undefined,
 				protocol: 'streaming',
 				status: 'streaming',
+				mediaItemId: album.mediaItemId,
 				// The release only carries the size sentinel that keeps the
 				// protocol validator happy; the real payload size is unknown
 				// until playback, so record nothing rather than "100 B".

@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types.js';
 import { requireAdmin, requireAuth } from '#lib/server/auth/authorization.js';
 import { parseBody } from '#lib/server/api/validate.js';
 import { musicArtistService } from '#lib/server/music/MusicArtistService.js';
+import { musicAlbumService } from '#lib/server/music/MusicAlbumService.js';
 import { musicProfileService } from '#lib/server/music/MusicProfileService.js';
 
 const patchArtistSchema = z
@@ -67,6 +68,7 @@ export const DELETE: RequestHandler = async (event) => {
 	const authError = requireAdmin(event);
 	if (authError) return authError;
 
+	await musicAlbumService.cancelDownloadsForArtist(event.params.id);
 	const removed = musicArtistService.deleteArtist(event.params.id);
 	if (!removed) return Response.json({ error: 'Artist not found' }, { status: 404 });
 

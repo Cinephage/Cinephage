@@ -80,11 +80,24 @@ export const POST: RequestHandler = async (event) => {
 			rootFolderId = rootFolderId ?? target?.defaultRootFolderId ?? null;
 		}
 
+		if (input.libraryId) {
+			const musicLibraries = await getLibraryEntityService().listLibraries({ mediaType: 'music' });
+			if (!musicLibraries.some((library) => library.id === input.libraryId)) {
+				return Response.json({ error: 'That library does not hold music' }, { status: 400 });
+			}
+		}
+
 		const releaseGroup = await musicBrainz.getReleaseGroup(input.releaseGroupMbid);
 
 		let releaseMbid = input.releaseMbid ?? null;
+		const editions = await musicBrainz.getReleaseGroupReleases(releaseGroup.mbid);
+		if (releaseMbid && !editions.some((edition) => edition.mbid === releaseMbid)) {
+			return Response.json(
+				{ error: 'That edition does not belong to the release group' },
+				{ status: 400 }
+			);
+		}
 		if (!releaseMbid) {
-			const editions = await musicBrainz.getReleaseGroupReleases(releaseGroup.mbid);
 			const primary = pickPrimaryRelease(editions);
 			if (!primary) {
 				return Response.json(

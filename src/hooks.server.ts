@@ -234,6 +234,20 @@ const customHandler: Handle = async ({ event, resolve }) => {
 				if (path === '/api/library/series' || path.startsWith('/api/library/series/')) {
 					return true;
 				}
+				// The music pages follow the movies/TV model: viewers browse, writes
+				// stay admin. Only the read surfaces are allowlisted; job control and
+				// imports remain admin territory.
+				if (
+					path === '/api/music/albums' ||
+					path.startsWith('/api/music/albums/') ||
+					path === '/api/music/artists' ||
+					path.startsWith('/api/music/artists/') ||
+					path === '/api/music/search' ||
+					path === '/api/music/settings' ||
+					path === '/api/music/scan-issues'
+				) {
+					return true;
+				}
 				if (path === '/api/system/status') {
 					return true;
 				}

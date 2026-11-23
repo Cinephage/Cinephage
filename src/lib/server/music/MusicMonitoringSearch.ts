@@ -9,7 +9,7 @@
  * only burns indexer requests.
  */
 
-import { and, eq, notInArray } from 'drizzle-orm';
+import { and, eq, isNull, notInArray } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
 import { albums, artists, downloadQueue, monitoringHistory } from '#lib/server/db/schema.js';
 import { createChildLogger } from '#lib/logging/index.js';
@@ -58,7 +58,14 @@ export async function searchMissingMusic(
 		})
 		.from(albums)
 		.innerJoin(artists, eq(albums.artistId, artists.id))
-		.where(and(eq(albums.monitored, true), eq(albums.hasFile, false), eq(artists.monitored, true)))
+		.where(
+			and(
+				eq(albums.monitored, true),
+				eq(albums.hasFile, false),
+				isNull(albums.streamSource),
+				eq(artists.monitored, true)
+			)
+		)
 		.all();
 
 	const cutoff =
@@ -124,7 +131,11 @@ export async function searchMissingMusic(
 			.values({
 				taskType: 'missing',
 				mediaItemId: row.mediaItemId,
-				status: result.grabbed ? 'grabbed' : result.error ? 'error' : 'no_results',
+				status: result.grabbed
+					? 'grabbed'
+					: result.errorKind === 'error'
+						? 'error'
+						: 'no_results',
 				releasesFound: result.releasesFound ?? 0,
 				releaseGrabbed: result.release,
 				errorMessage: result.error,

@@ -1,5 +1,6 @@
 import type { RequestHandler } from './$types.js';
-import { requireAuth } from '#lib/server/auth/authorization.js';
+import { requireAdmin } from '#lib/server/auth/authorization.js';
+import { isPathAllowed } from '#lib/server/filesystem/path-guard.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { isAppError } from '#lib/errors/index.js';
 import { musicImportService } from '#lib/server/music/MusicImportService.js';
@@ -14,7 +15,7 @@ const logger = createChildLogger({ module: 'MusicAlbumImportApi', logDomain: 'sy
  * how an existing collection gets in without a download.
  */
 export const POST: RequestHandler = async (event) => {
-	const authError = requireAuth(event);
+	const authError = requireAdmin(event);
 	if (authError) return authError;
 
 	const body = (await event.request.json().catch(() => ({}))) as {
@@ -23,6 +24,9 @@ export const POST: RequestHandler = async (event) => {
 	};
 	if (body.path !== undefined && typeof body.path !== 'string') {
 		return Response.json({ error: 'path must be a string' }, { status: 400 });
+	}
+	if (typeof body.path === 'string' && !(await isPathAllowed(body.path))) {
+		return Response.json({ error: 'That path is not an allowed media source' }, { status: 400 });
 	}
 
 	try {

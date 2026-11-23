@@ -47,6 +47,7 @@
 			};
 			release: Release;
 			libraryAlbumId: string | null;
+			libraryAlbumHasFile: boolean | null;
 			featured: string[];
 			/** Deezer cover; null on a MusicBrainz page, which uses the archive. */
 			artworkUrl: string | null;
@@ -74,7 +75,7 @@
 		trackCount: release?.trackCount ?? null,
 		duration: release?.duration ?? null,
 		// Null on a catalog page: no library row means no file state to report.
-		hasFile: data.libraryAlbumId ? true : null,
+		hasFile: data.libraryAlbumHasFile,
 		mbid: group.mbid
 	});
 

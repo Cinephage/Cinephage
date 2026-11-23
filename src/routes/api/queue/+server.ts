@@ -40,6 +40,8 @@ export const GET: RequestHandler = async ({ url }) => {
 		conditions.push(and(isNotNull(downloadQueue.movieId), isNull(downloadQueue.seriesId)));
 	} else if (mediaType === 'tv') {
 		conditions.push(and(isNotNull(downloadQueue.seriesId), isNull(downloadQueue.movieId)));
+	} else if (mediaType === 'music') {
+		conditions.push(isNotNull(downloadQueue.mediaItemId));
 	}
 
 	// Client filter

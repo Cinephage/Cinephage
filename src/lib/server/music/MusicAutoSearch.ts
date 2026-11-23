@@ -24,6 +24,8 @@ export interface AlbumAutoSearchResult {
 	/** Candidates the release search returned, for the Searches tab. */
 	releasesFound?: number;
 	error?: string;
+	/** `no-results` is a normal empty search; `error` is a failed run. */
+	errorKind?: 'no-results' | 'error';
 }
 
 /** Letters and digits only, lowercased — release titles are punctuation soup. */
@@ -38,10 +40,10 @@ function normalize(text: string): string {
 export function releaseMatchesAlbum(albumTitle: string, releaseTitle: string): boolean {
 	const tokens = normalize(albumTitle)
 		.split(' ')
-		.filter((token) => token.length > 2);
+		.filter((token) => token.length >= 2);
 	if (tokens.length === 0) return false;
-	const haystack = normalize(releaseTitle);
-	return tokens.every((token) => haystack.includes(token));
+	const haystack = new Set(normalize(releaseTitle).split(' '));
+	return tokens.every((token) => haystack.has(token));
 }
 
 /** Search the indexers for one album and grab its best accepted release. */
@@ -60,10 +62,11 @@ export async function autoSearchAlbum(album: Pick<AlbumSummary, 'id' | 'title'>)
 				title: album.title,
 				grabbed: false,
 				releasesFound: search.candidates.length,
-				error: 'no accepted release'
+				error: 'no accepted release',
+				errorKind: 'no-results'
 			};
 		}
-		const grab = await musicGrabService.grabAlbum(album.id, { releaseGuid: best.guid });
+		const grab = await musicGrabService.grabAlbum(album.id, { candidate: best });
 		return {
 			albumId: album.id,
 			title: album.title,
@@ -75,6 +78,13 @@ export async function autoSearchAlbum(album: Pick<AlbumSummary, 'id' | 'title'>)
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
 		logger.warn({ albumId: album.id, err: message }, '[MusicAutoSearch] album search failed');
-		return { albumId: album.id, title: album.title, grabbed: false, releasesFound: 0, error: message };
+		return {
+			albumId: album.id,
+			title: album.title,
+			grabbed: false,
+			releasesFound: 0,
+			error: message,
+			errorKind: 'error'
+		};
 	}
 }

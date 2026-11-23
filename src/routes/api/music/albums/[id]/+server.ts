@@ -4,6 +4,7 @@ import { requireAdmin, requireAuth } from '#lib/server/auth/authorization.js';
 import { parseBody } from '#lib/server/api/validate.js';
 import { isAppError } from '#lib/errors/index.js';
 import { musicAlbumService } from '#lib/server/music/MusicAlbumService.js';
+import { musicProfileService } from '#lib/server/music/MusicProfileService.js';
 
 const patchAlbumSchema = z
 	.object({
@@ -54,6 +55,19 @@ export const PATCH: RequestHandler = async (event) => {
 	}
 
 	try {
+		// Validate the profile before writing any other field, so a bad id is a
+		// clean 400 rather than a half-applied PATCH.
+		if (
+			input.qualityProfileId !== undefined &&
+			input.qualityProfileId !== null &&
+			!musicProfileService.get(input.qualityProfileId)
+		) {
+			return Response.json(
+				{ error: `Unknown music quality profile: ${input.qualityProfileId}` },
+				{ status: 400 }
+			);
+		}
+
 		let updated = true;
 		if (input.monitored !== undefined) {
 			updated = musicAlbumService.setMonitored(event.params.id, input.monitored) && updated;
@@ -94,6 +108,7 @@ export const DELETE: RequestHandler = async (event) => {
 	const authError = requireAdmin(event);
 	if (authError) return authError;
 
+	await musicAlbumService.cancelDownloadsForAlbum(event.params.id);
 	const removed = musicAlbumService.deleteAlbum(event.params.id);
 	if (!removed) return Response.json({ error: 'Album not found' }, { status: 404 });
 
