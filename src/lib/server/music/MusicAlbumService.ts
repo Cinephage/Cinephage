@@ -2,7 +2,7 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { coreTitle } from './track-matching.js';
 import { db } from '#lib/server/db/index.js';
-import { albums, artists, downloadQueue, mediaItems, trackFiles, tracks } from '#lib/server/db/schema.js';
+import { albums, artists, downloadQueue, libraries, mediaItems, trackFiles, tracks } from '#lib/server/db/schema.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { NotFoundError, ValidationError } from '#lib/errors/index.js';
 import { musicProfileService } from './MusicProfileService.js';
@@ -702,6 +702,34 @@ export class MusicAlbumService {
 			.where(inArray(downloadQueue.mediaItemId, mediaItemIds))
 			.all();
 		await cancelQueuedDownloads(rows);
+	}
+
+	/**
+	 * Albums whose effective ladder is `profileId`. Effective means the same
+	 * album -> artist -> library -> default walk a grab uses, not just the
+	 * album's own column.
+	 */
+	albumIdsForEffectiveProfile(profileId: string): string[] {
+		return db
+			.select({
+				id: albums.id,
+				albumProfile: albums.qualityProfileId,
+				artistProfile: artists.qualityProfileId,
+				libraryProfile: libraries.qualityProfileId
+			})
+			.from(albums)
+			.leftJoin(artists, eq(albums.artistId, artists.id))
+			.leftJoin(libraries, eq(albums.libraryId, libraries.id))
+			.all()
+			.filter(
+				(row) =>
+					musicProfileService.resolve(
+						row.albumProfile,
+						row.artistProfile,
+						row.libraryProfile
+					).id === profileId
+			)
+			.map((row) => row.id);
 	}
 
 	/** The two fields the cover route needs, without the tracklist. */

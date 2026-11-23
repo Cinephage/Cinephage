@@ -162,7 +162,8 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 			offset: String(offset),
 			limit: '90',
 			file: fileFilter,
-			sort: sortField
+			sort: sortField,
+			quality: qualityFilter
 		});
 		if (searchQuery.trim()) params.set('q', searchQuery.trim());
 		if (libraryFilter !== 'all') params.set('libraryId', libraryFilter);
@@ -193,6 +194,7 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 		void fileFilter;
 		void sortField;
 		void libraryFilter;
+		void qualityFilter;
 		if (typeof window === 'undefined') return;
 		if (browse !== 'songs' && !searchQuery.trim()) return;
 		if (songTimer) clearTimeout(songTimer);

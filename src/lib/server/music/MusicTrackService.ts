@@ -1,4 +1,4 @@
-import { and, asc, count, eq, like, or } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, like, or } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
 import { albums, artists, tracks } from '#lib/server/db/schema.js';
 
@@ -32,6 +32,8 @@ export interface TrackPageOptions {
 	file?: 'all' | 'downloaded' | 'missing';
 	libraryId?: string | null;
 	artistId?: string | null;
+	/** A profile-scoped set, resolved by the caller; empty means no rows. */
+	albumIds?: string[];
 	sort?: 'title-asc' | 'artist-asc' | 'album-asc' | 'duration-desc';
 	offset?: number;
 	limit?: number;
@@ -49,6 +51,7 @@ export class MusicTrackService {
 	 */
 	listTracksPage(options: TrackPageOptions = {}): { rows: TrackRow[]; total: number } {
 		const conditions = [
+			options.albumIds ? inArray(tracks.albumId, options.albumIds) : undefined,
 			options.libraryId ? eq(albums.libraryId, options.libraryId) : undefined,
 			options.artistId ? eq(albums.artistId, options.artistId) : undefined,
 			options.file === 'downloaded'
