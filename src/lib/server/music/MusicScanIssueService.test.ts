@@ -42,7 +42,7 @@ describe('MusicScanIssueService', () => {
 		expect(musicScanIssueService.countPending()).toBe(2);
 	});
 
-	it('reopens a dismissed folder when a later scan still cannot match it', () => {
+	it('keeps a dismissed folder dismissed when a later scan refuses it again', () => {
 		musicScanIssueService.record(null, [scanResult('/music/Unknown/Untitled', 'unmatched')]);
 		const [issue] = musicScanIssueService.listPending();
 
@@ -50,7 +50,7 @@ describe('MusicScanIssueService', () => {
 		expect(musicScanIssueService.listPending()).toHaveLength(0);
 
 		musicScanIssueService.record(null, [scanResult('/music/Unknown/Untitled', 'unmatched')]);
-		expect(musicScanIssueService.listPending()).toHaveLength(1);
+		expect(musicScanIssueService.listPending()).toHaveLength(0);
 	});
 
 	it('resolves the issue when the folder is imported by hand', () => {

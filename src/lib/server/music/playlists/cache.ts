@@ -42,6 +42,7 @@ function readEntry<T>(key: string): { value: T | null; ageMs: number } | null {
 	try {
 		return { value: JSON.parse(row.payload) as T | null, ageMs: Date.now() - Date.parse(row.fetchedAt) };
 	} catch {
+		db.delete(musicLookupCache).where(eq(musicLookupCache.key, key)).run();
 		return null;
 	}
 }

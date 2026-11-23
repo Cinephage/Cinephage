@@ -5076,6 +5076,15 @@ export const musicImportJobs = sqliteTable(
 			.notNull(),
 		summary: text('summary', { mode: 'json' })
 			.$type<{ added: number; existing: number; failed: number } | null>(),
+		/** Counts and provider truncation that outlive the process. */
+		meta: text('meta', { mode: 'json' })
+			.$type<{
+				trackTotal: number;
+				resolvedTracks: number;
+				unmatched: Array<{ title: string; artist: string | null; reason: string }>;
+				truncated: boolean;
+			}>()
+			.default({ trackTotal: 0, resolvedTracks: 0, unmatched: [], truncated: false }),
 		/** Per-album outcome, kept so a returning user can see what happened. */
 		result: text('result', { mode: 'json' })
 			.$type<
@@ -5095,6 +5104,8 @@ export const musicImportJobs = sqliteTable(
 					primaryType?: string | null;
 					albumId?: string | null;
 					inLibrary?: boolean;
+					/** The playlist titles that matched, so a songs-scope import survives a restart. */
+					tracks?: Array<{ title: string; artist: string }>;
 				}>
 			>()
 			.default([]),

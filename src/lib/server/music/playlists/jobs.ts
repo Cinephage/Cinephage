@@ -15,7 +15,7 @@
 import { randomUUID } from 'node:crypto';
 import { desc, eq, lt } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
-import { musicImportJobs } from '#lib/server/db/schema.js';
+import { musicImportJobs, musicLookupCache } from '#lib/server/db/schema.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { getLibraryEntityService } from '#lib/server/library/LibraryEntityService.js';
 import { autoSearchAlbum } from '../MusicAutoSearch.js';
@@ -111,6 +111,8 @@ export interface PlaylistJob {
 	/** Work unit progress inside the current phase; `total` is 0 while fetching. */
 	progress: { done: number; total: number };
 	trackTotal: number;
+	/** True when the provider held more entries than it returned. */
+	truncated: boolean;
 	resolvedTracks: number;
 	rows: PlaylistJobRow[];
 	unmatched: UnmatchedTrack[];
@@ -172,6 +174,12 @@ function save(job: PlaylistJob, force = false): void {
 		phase: job.phase,
 		progress: job.progress,
 		summary: job.summary,
+		meta: {
+			trackTotal: job.trackTotal,
+			resolvedTracks: job.resolvedTracks,
+			unmatched: job.unmatched,
+			truncated: job.truncated
+		},
 		result: job.rows.map((row) => ({
 			mbid: row.releaseGroupMbid,
 			title: row.title,
@@ -184,7 +192,8 @@ function save(job: PlaylistJob, force = false): void {
 			year: row.year,
 			primaryType: row.primaryType,
 			albumId: row.albumId,
-			inLibrary: row.inLibrary
+			inLibrary: row.inLibrary,
+			tracks: row.tracks
 		})),
 		error: job.error,
 		createdAt: job.createdAt,
@@ -226,6 +235,7 @@ function prune(): void {
 	const cutoff = new Date(now - JOB_KEEP_DAYS * 24 * 60 * 60 * 1000).toISOString();
 	try {
 		db.delete(musicImportJobs).where(lt(musicImportJobs.createdAt, cutoff)).run();
+		db.delete(musicLookupCache).where(lt(musicLookupCache.fetchedAt, cutoff)).run();
 	} catch {
 		// Housekeeping only; a failure here must not break a new import.
 	}
@@ -242,15 +252,17 @@ export function getPlaylistJob(id: string): PlaylistJob | null {
 		row.phase === 'fetching' || row.phase === 'resolving' || row.phase === 'importing'
 			? 'interrupted'
 			: (row.phase as PlaylistJobPhase);
-	return {
+	const meta = row.meta ?? { trackTotal: 0, resolvedTracks: 0, unmatched: [], truncated: false };
+	const job: PlaylistJob = {
 		id: row.id,
 		url: row.url,
 		provider: null,
 		playlist: null,
 		phase,
 		progress: row.progress,
-		trackTotal: 0,
-		resolvedTracks: 0,
+		trackTotal: meta.trackTotal,
+		truncated: meta.truncated,
+		resolvedTracks: meta.resolvedTracks,
 		rows: (row.result ?? []).map((entry) => ({
 			releaseGroupMbid: entry.mbid,
 			artistMbid: entry.artistMbid ?? null,
@@ -260,13 +272,13 @@ export function getPlaylistJob(id: string): PlaylistJob | null {
 			primaryType: entry.primaryType ?? null,
 			matchedBy: 'album',
 			confidence: 'high',
-			tracks: [],
+			tracks: entry.tracks ?? [],
 			inLibrary: entry.inLibrary ?? entry.status === 'existing',
 			albumId: entry.albumId ?? null,
 			status: entry.status as PlaylistJobRowStatus,
 			error: entry.error
 		})),
-		unmatched: [],
+		unmatched: meta.unmatched as UnmatchedTrack[],
 		summary: row.summary ?? null,
 		recipe: row.recipe,
 		error: row.error,
@@ -274,6 +286,9 @@ export function getPlaylistJob(id: string): PlaylistJob | null {
 		createdAt: row.createdAt,
 		updatedAt: row.updatedAt
 	};
+	// A job loaded from the database has to be actionable in this process too.
+	jobs.set(job.id, job);
+	return job;
 }
 
 /** Recent imports, newest first — what the modal's "recent" list shows. */
@@ -339,6 +354,7 @@ async function runResolve(job: PlaylistJob): Promise<void> {
 
 		job.playlist = page.playlist;
 		job.trackTotal = page.tracks.length;
+		job.truncated = page.truncated;
 		job.phase = 'resolving';
 		touch(job, true);
 
@@ -400,6 +416,7 @@ export function startResolveJob(input: string, scope: ImportScope = 'album'): Pl
 		phase: 'fetching',
 		progress: { done: 0, total: 0 },
 		trackTotal: 0,
+		truncated: false,
 		resolvedTracks: 0,
 		rows: [],
 		unmatched: [],
@@ -508,6 +525,7 @@ async function planExpansion(
 	}
 
 	const stored = musicAlbumService.existingReleaseGroupMbids();
+	const selected = new Set(rows.map((row) => row.releaseGroupMbid));
 	const targets = new Map<string, PlaylistJobRow>();
 	const byArtist: ExpansionPreview['byArtist'] = [];
 	for (const [mbid, name] of artists) {
@@ -523,7 +541,7 @@ async function planExpansion(
 		}
 		const added: ExpansionPreview['byArtist'][number]['albums'] = [];
 		for (const group of groups) {
-			if (stored.has(group.mbid) || targets.has(group.mbid)) continue;
+			if (stored.has(group.mbid) || selected.has(group.mbid) || targets.has(group.mbid)) continue;
 			if (targets.size >= MAX_SCOPE_ALBUMS) break;
 			targets.set(group.mbid, rowFromGroup(group));
 			added.push({
@@ -683,7 +701,7 @@ export function startImportJob(
 	rowIds: string[],
 	options: ImportOptions = {}
 ): PlaylistJob {
-	const job = jobs.get(id);
+	const job = getPlaylistJob(id);
 	if (!job) throw new PlaylistError('Import job not found or expired', 400);
 	if (job.phase !== 'ready') {
 		throw new PlaylistError(`That job is ${job.phase}, not ready to import`, 400);

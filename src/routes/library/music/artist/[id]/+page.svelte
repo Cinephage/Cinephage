@@ -172,18 +172,23 @@
 		searchingDiscography = true;
 		const total = data.albums.filter((album) => !album.hasFile).length;
 		let done = 0;
+		let batches = 0;
+		const attempted = new Set<string>();
 		searchProgress = { done, total };
 		try {
 			for (;;) {
 				const response = await fetch(`/api/music/artists/${artist.id}/search`, {
 					method: 'POST',
 					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({ limit: 5 })
+					body: JSON.stringify({ limit: 5, excludeIds: [...attempted] })
 				});
 				const body = await response.json();
 				if (!response.ok) {
 					toasts.error(body.details ?? body.error ?? m.music_searchFailed());
 					return;
+				}
+				for (const entry of body.results ?? []) {
+					if (entry?.albumId) attempted.add(entry.albumId);
 				}
 				done += body.searched ?? 0;
 				searchProgress = { done, total };
@@ -191,7 +196,8 @@
 					toasts.success(m.music_discographyGrabbed({ count: body.grabbed }));
 				}
 				await invalidateAll();
-				if (!body.remaining) break;
+				batches += 1;
+				if (!body.remaining || (body.searched ?? 0) === 0 || batches >= 12) break;
 			}
 		} catch (err) {
 			toasts.error(err instanceof Error ? err.message : m.music_searchFailed());
@@ -587,14 +593,14 @@
 		albumTitle={searchTrack.albumTitle}
 		onClose={() => (searchTrack = null)}
 	/>
-
-	<ArtistReleasesModal
-		open={releasesOpen}
-		artistId={artist.id}
-		artistName={artist.name}
-		onClose={() => (releasesOpen = false)}
-	/>
 {/if}
+
+<ArtistReleasesModal
+	open={releasesOpen}
+	artistId={artist.id}
+	artistName={artist.name}
+	onClose={() => (releasesOpen = false)}
+/>
 
 <ConfirmationModal
 	open={removeAlbumTarget !== null}

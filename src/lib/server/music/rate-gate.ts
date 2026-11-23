@@ -11,6 +11,7 @@ export type SleepFn = (ms: number) => Promise<void>;
 
 export class RateGate {
 	private nextAt: number;
+	private notBefore = 0;
 
 	constructor(
 		private readonly minIntervalMs: number,
@@ -29,16 +30,26 @@ export class RateGate {
 	 * makes the backoff apply to everyone queued behind it.
 	 */
 	hold(ms: number): void {
-		this.nextAt = Math.max(this.nextAt, this.now() + Math.max(0, ms));
+		const until = this.now() + Math.max(0, ms);
+		this.notBefore = Math.max(this.notBefore, until);
+		this.nextAt = Math.max(this.nextAt, until);
 	}
 
-	/** Wait until this caller's slot is due. */
+	/** Wait until this caller's slot is due, re-checking a hold after waking. */
 	async wait(): Promise<void> {
-		const now = this.now();
-		const reservedAt = Math.max(now, this.nextAt);
-		this.nextAt = reservedAt + this.minIntervalMs;
+		for (;;) {
+			const now = this.now();
+			const reservedAt = Math.max(now, this.nextAt, this.notBefore);
+			this.nextAt = reservedAt + this.minIntervalMs;
 
-		const delay = reservedAt - now;
-		if (delay > 0) await this.sleep(delay);
+			const delay = reservedAt - now;
+			if (delay > 0) await this.sleep(delay);
+			// A hold issued while this caller was asleep must delay it too. One
+			// extra sleep, not a re-reservation loop: a fake clock in a test never
+			// advances, and an unbounded loop would hang it.
+			const held = this.notBefore - this.now();
+			if (held > 0) await this.sleep(held);
+			return;
+		}
 	}
 }

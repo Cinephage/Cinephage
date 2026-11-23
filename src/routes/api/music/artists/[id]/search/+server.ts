@@ -9,7 +9,9 @@ const searchSchema = z.object({
 	/** Albums to try in this call. Each one costs an indexer round trip. */
 	limit: z.number().int().min(1).max(25).default(10),
 	/** Only albums with no file yet. The default, because that is the point. */
-	missingOnly: z.boolean().default(true)
+	missingOnly: z.boolean().default(true),
+	/** Albums an earlier batch of this run already tried. */
+	excludeIds: z.array(z.string().min(1)).max(2000).optional()
 });
 
 /**
@@ -38,7 +40,10 @@ export const POST: RequestHandler = async (event) => {
 	const albums = musicAlbumService.listAlbums({ artistId: event.params.id });
 	if (albums.length === 0) return Response.json({ error: 'Artist not found' }, { status: 404 });
 
-	const eligible = input.missingOnly ? albums.filter((album) => !album.hasFile) : albums;
+	const excluded = new Set(input.excludeIds ?? []);
+	const eligible = (input.missingOnly ? albums.filter((album) => !album.hasFile) : albums).filter(
+		(album) => !excluded.has(album.id)
+	);
 	const targets = eligible.slice(0, input.limit);
 
 	const results = [];

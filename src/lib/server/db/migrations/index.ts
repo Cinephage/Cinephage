@@ -195,6 +195,7 @@ import { migration_v196 } from './196-monitoring-history-media-item.js';
 import { migration_v197 } from './197-music-lookup-cache.js';
 import { migration_v198 } from './198-music-import-jobs.js';
 import { migration_v199 } from './199-tracks-monitored.js';
+import { migration_v200 } from './200-music-job-meta-indexes.js';
 
 export const MIGRATIONS: MigrationDefinition[] = [
 	migration_v002,
@@ -392,5 +393,6 @@ export const MIGRATIONS: MigrationDefinition[] = [
 	migration_v196,
 	migration_v197,
 	migration_v198,
-	migration_v199
+	migration_v199,
+	migration_v200
 ];

@@ -250,7 +250,7 @@ import {
  * Version 199: tracks.monitored - a playlist import can bring a whole album
  *   but only want the song that was on the list.
  */
-export const CURRENT_SCHEMA_VERSION = 199;
+export const CURRENT_SCHEMA_VERSION = 200;
 
 /**
  * Seed rows for the *legacy* backfill in migration 078 only.
@@ -1939,6 +1939,7 @@ const TABLE_DEFINITIONS: string[] = [
 		"phase" text NOT NULL,
 		"progress" text NOT NULL,
 		"summary" text,
+		"meta" text,
 		"result" text,
 		"error" text,
 		"created_at" text NOT NULL,
@@ -2001,6 +2002,7 @@ const INDEX_DEFINITIONS: string[] = [
 	`CREATE INDEX IF NOT EXISTS "idx_albums_library" ON "albums" ("library_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_albums_root_folder" ON "albums" ("root_folder_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_albums_monitored_hasfile" ON "albums" ("monitored", "has_file")`,
+	`CREATE INDEX IF NOT EXISTS "idx_albums_monitored_release_date" ON "albums" ("monitored", "release_date")`,
 	`CREATE UNIQUE INDEX IF NOT EXISTS "idx_tracks_album_disc_track"
 		ON "tracks" ("album_id", "disc_number", "track_number")`,
 	`CREATE INDEX IF NOT EXISTS "idx_tracks_album" ON "tracks" ("album_id")`,
@@ -2072,6 +2074,7 @@ const INDEX_DEFINITIONS: string[] = [
 	`CREATE INDEX IF NOT EXISTS "idx_monitoring_history_movie" ON "monitoring_history" ("movie_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_monitoring_history_series" ON "monitoring_history" ("series_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_monitoring_history_episode" ON "monitoring_history" ("episode_id")`,
+	`CREATE INDEX IF NOT EXISTS "idx_monitoring_history_media_item" ON "monitoring_history" ("media_item_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_subtitles_movie" ON "subtitles" ("movie_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_subtitles_episode" ON "subtitles" ("episode_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_subtitles_movie_file" ON "subtitles" ("movie_file_id")`,

@@ -40,6 +40,20 @@ export class MusicScanIssueService {
 
 		for (const result of results) {
 			if (result.status !== 'unmatched' && result.status !== 'failed') continue;
+			const existing = db
+				.select({ status: musicScanIssues.status })
+				.from(musicScanIssues)
+				.where(eq(musicScanIssues.folder, result.folder))
+				.get();
+			if (existing?.status === 'ignored' || existing?.status === 'resolved') {
+				// A dismissal is a decision, not a cache entry. Only the sighting
+				// timestamp moves; the same refusal on a later scan does not reopen it.
+				db.update(musicScanIssues)
+					.set({ lastSeenAt: now })
+					.where(eq(musicScanIssues.folder, result.folder))
+					.run();
+				continue;
+			}
 			db.insert(musicScanIssues)
 				.values({
 					id: randomUUID(),
