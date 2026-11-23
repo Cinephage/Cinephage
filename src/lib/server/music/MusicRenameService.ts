@@ -27,6 +27,8 @@ import type {
 import { libraryOperationLock } from '../library/library-operation-lock.js';
 import { moveFile } from '#lib/server/downloadClients/import/FileTransfer.js';
 import { sanitizeMusicSegment } from './paths.js';
+import { getMediaBrowserNotifier } from '#lib/server/notifications/mediabrowser/MediaBrowserNotifier.js';
+import { invalidateTrackStream } from './playback/resolver.js';
 
 const logger = createChildLogger({ logDomain: 'scans' as const });
 
@@ -136,6 +138,8 @@ export class MusicRenameService {
 	}
 
 	private async executeLocked(fileIds: string[]): Promise<RenameExecuteResult> {
+		const touchedAlbums = new Set<string>();
+		const touchedFolders = new Set<string>();
 		const result: RenameExecuteResult = {
 			success: true,
 			processed: 0,
@@ -230,6 +234,8 @@ export class MusicRenameService {
 				.where(eq(trackFiles.id, fileId))
 				.run();
 
+			touchedAlbums.add(item.mediaId);
+			touchedFolders.add(dirname(item.newFullPath));
 			result.succeeded++;
 			result.results.push({
 				fileId,
@@ -238,6 +244,20 @@ export class MusicRenameService {
 				oldPath: item.currentFullPath,
 				newPath: item.newFullPath
 			});
+		}
+
+		// The file names changed under the media server and under the cached
+		// stream URLs. Tell the first and drop the second.
+		for (const albumId of touchedAlbums) {
+			const albumTracks = db
+				.select({ id: tracks.id })
+				.from(tracks)
+				.where(eq(tracks.albumId, albumId))
+				.all();
+			for (const track of albumTracks) invalidateTrackStream(track.id);
+		}
+		for (const folder of touchedFolders) {
+			getMediaBrowserNotifier().queueUpdate(folder, 'Modified', 'rename');
 		}
 
 		result.success = result.failed === 0;

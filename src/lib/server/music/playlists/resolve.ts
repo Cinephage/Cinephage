@@ -240,15 +240,17 @@ function groupFromHit(hit: MusicRecordingHit): MusicReleaseGroup | null {
  * MusicBrainz was shedding load — which is how an IP gets blocked — so a failed
  * lookup is now reported and left alone.
  */
-async function attempt<T>(call: () => Promise<T>): Promise<T | null> {
+type Attempt<T> = { ok: true; value: T } | { ok: false };
+
+async function attempt<T>(call: () => Promise<T>): Promise<Attempt<T>> {
 	try {
-		return await call();
+		return { ok: true, value: await call() };
 	} catch (err) {
 		logger.warn(
 			{ err: err instanceof Error ? err.message : String(err) },
 			'[MusicPlaylistResolve] MusicBrainz lookup failed'
 		);
-		return null;
+		return { ok: false };
 	}
 }
 
@@ -275,8 +277,13 @@ export async function resolvePlaylistTracks(
 		const cached = getArtistMbid(name);
 		let mbid = cached ? cached.value : null;
 		if (!cached) {
-			mbid = await attempt(() => musicBrainz.resolveArtistMbid(name));
-			setArtistMbid(name, mbid);
+			const resolved = await attempt(() => musicBrainz.resolveArtistMbid(name));
+			if (resolved.ok) {
+				mbid = resolved.value;
+				// Only a successful answer is a cacheable fact; a 503 is not
+				// "no such artist" for the next seven days.
+				setArtistMbid(name, mbid);
+			}
 		}
 		artistIds.set(name, mbid);
 		return mbid;
@@ -290,8 +297,11 @@ export async function resolvePlaylistTracks(
 		const ready = albumIndexes.get(mbid);
 		if (ready) return ready;
 		const stored = getArtistAlbums(mbid);
-		const rows = stored ? stored.value : await attempt(() => musicBrainz.getArtistAlbumTrackIndex(mbid));
-		if (!stored && rows) setArtistAlbums(mbid, rows);
+		const fetched = stored?.value
+			? { ok: true as const, value: stored.value }
+			: await attempt(() => musicBrainz.getArtistAlbumTrackIndex(mbid));
+		const rows = fetched.ok ? fetched.value : null;
+		if (!stored && fetched.ok) setArtistAlbums(mbid, fetched.value);
 		const index = new Map<string, MusicReleaseGroup[]>();
 		for (const row of rows ?? []) {
 			const key = normalizeForMatch(coreTitle(row.title));
@@ -312,14 +322,14 @@ export async function resolvePlaylistTracks(
 		if (cached) {
 			picked = cached.value;
 		} else {
-			const hits = await attempt(() =>
+			const hitResult = await attempt(() =>
 				musicBrainz.searchReleaseGroups({
 					artist: group.artist,
 					album: query,
 					limit: SEARCH_LIMIT
 				})
 			);
-			if (!hits) {
+			if (!hitResult.ok) {
 				for (const track of group.tracks) {
 					unmatched.push({ title: track.title, artist: group.artist, reason: 'lookup-failed' });
 				}
@@ -327,7 +337,7 @@ export async function resolvePlaylistTracks(
 				report('Resolving albums');
 				continue;
 			}
-			picked = pickReleaseGroup(hits, group.artist, group.album);
+			picked = pickReleaseGroup(hitResult.value, group.artist, group.album);
 			setAlbumMatch(group.artist, query, picked);
 		}
 		if (picked) {
@@ -384,7 +394,7 @@ export async function resolvePlaylistTracks(
 			}
 		}
 
-		const hits = await attempt(() =>
+		const recordingResult = await attempt(() =>
 			musicBrainz.searchRecordings({
 				artist,
 				artistMbid: artistMbid ?? undefined,
@@ -392,7 +402,7 @@ export async function resolvePlaylistTracks(
 				limit: SEARCH_LIMIT
 			})
 		);
-		if (!hits) {
+		if (!recordingResult.ok) {
 			unmatched.push({ title: track.title, artist, reason: 'lookup-failed' });
 			done += 1;
 			report('Resolving songs');
@@ -403,7 +413,7 @@ export async function resolvePlaylistTracks(
 		// that the search is keyed by artist id it usually is. When it is not — a
 		// single, a live set, a hits package — ask what else the recording is on
 		// and take the album from there.
-		const anchor = hits.find(
+		const anchor = recordingResult.value.find(
 			(candidate) =>
 				titlesMatch(track.title, candidate.title) &&
 				artistMatches(track.artists, candidate.artistCredit)
@@ -414,7 +424,7 @@ export async function resolvePlaylistTracks(
 			const appearances = await attempt(() =>
 				musicBrainz.getRecordingReleaseGroups(anchor.mbid)
 			);
-			group = pickGroup(appearances ?? [], track) ?? group;
+			if (appearances.ok) group = pickGroup(appearances.value, track) ?? group;
 		}
 
 		if (group) {
@@ -434,7 +444,14 @@ export async function resolvePlaylistTracks(
 		const sameNamed = await attempt(() =>
 			musicBrainz.searchReleaseGroups({ artist, album: coreTitle(track.title), limit: SEARCH_LIMIT })
 		);
-		const own = sameNamed?.find(
+		if (!sameNamed.ok) {
+			// A failed last lookup is not "MusicBrainz has no such song".
+			unmatched.push({ title: track.title, artist, reason: 'lookup-failed' });
+			done += 1;
+			report('Resolving songs');
+			continue;
+		}
+		const own = sameNamed.value.find(
 			(candidate) =>
 				titlesMatch(track.title, candidate.title) &&
 				artistMatches(track.artists, candidate.artist.name)

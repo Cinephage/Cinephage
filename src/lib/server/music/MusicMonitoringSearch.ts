@@ -115,7 +115,11 @@ export async function searchMissingMusic(
 
 		summary.searched++;
 		searchedCount++;
-		const result = await autoSearchAlbum({ id: row.albumId, title: row.title });
+		const result = await autoSearchAlbum({
+			id: row.albumId,
+			title: row.title,
+			artistName: row.artistName
+		});
 		db.update(albums)
 			.set({ lastSearchedAt: new Date().toISOString() })
 			.where(eq(albums.id, row.albumId))

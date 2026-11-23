@@ -37,24 +37,37 @@ function normalize(text: string): string {
 }
 
 /** True when every meaningful album-title token appears in the release title. */
-export function releaseMatchesAlbum(albumTitle: string, releaseTitle: string): boolean {
+export function releaseMatchesAlbum(
+	albumTitle: string,
+	releaseTitle: string,
+	artistName?: string
+): boolean {
 	const tokens = normalize(albumTitle)
 		.split(' ')
 		.filter((token) => token.length >= 2);
 	if (tokens.length === 0) return false;
 	const haystack = new Set(normalize(releaseTitle).split(' '));
-	return tokens.every((token) => haystack.has(token));
+	if (!tokens.every((token) => haystack.has(token))) return false;
+	if (artistName) {
+		const artistTokens = normalize(artistName)
+			.split(' ')
+			.filter((token) => token.length >= 3);
+		if (artistTokens.length > 0 && !artistTokens.some((token) => haystack.has(token))) return false;
+	}
+	return true;
 }
 
 /** Search the indexers for one album and grab its best accepted release. */
-export async function autoSearchAlbum(album: Pick<AlbumSummary, 'id' | 'title'>): Promise<AlbumAutoSearchResult> {
+export async function autoSearchAlbum(
+	album: Pick<AlbumSummary, 'id' | 'title' | 'artistName'>
+): Promise<AlbumAutoSearchResult> {
 	try {
 		const search = await musicSearchService.searchForAlbum(album.id);
 		const best = search.candidates.find(
 			(candidate) =>
 				candidate.accepted !== false &&
 				Boolean(candidate.guid) &&
-				releaseMatchesAlbum(album.title, candidate.title)
+				releaseMatchesAlbum(album.title, candidate.title, album.artistName)
 		);
 		if (!best?.guid) {
 			return {
