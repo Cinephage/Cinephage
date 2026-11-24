@@ -38,14 +38,33 @@ export const COMPILATION_SECONDARY = [
 const USER_AGENT = 'Cinephage/0.1.0 ( https://github.com/Cinephage/Cinephage )';
 
 /**
- * Published limit is 1 req/s. Measured in practice: spacing at 1.1 s still
- * drew a 503 on the second call, because their window is not the same second
- * boundary the client sees — 1.2 s plus a retry is what actually holds.
+ * Published limit is 1 req/s. Measured in practice: spacing at 1.1 s still drew
+ * a 503 on the second call, because their window is not the same second
+ * boundary the client sees. 1.5 s leaves headroom for a second client on the
+ * same public IP (a dev box next to the live one), which is exactly how this
+ * was tripped: two instances, two gates, one address.
  */
-const MIN_INTERVAL_MS = 1200;
+const MIN_INTERVAL_MS = 1500;
 
-/** Attempts per request. MusicBrainz documents 503 as "slow down", not "failed". */
-const MAX_ATTEMPTS = 3;
+/**
+ * Attempts per request. MusicBrainz documents 503 as "slow down", so a
+ * throttled call gets one more try after a long wait — not a retry loop, which
+ * is what turns a busy minute into an IP block.
+ */
+const MAX_ATTEMPTS = 2;
+
+/** Their guidance for a bare 503 is 30 seconds; retrying sooner is what gets blocked. */
+const THROTTLE_WAIT_MS = 30_000;
+
+/**
+ * Circuit breaker. MusicBrainz answers 503 when an address is over its budget,
+ * and every retry inside that window is another request against it. Three
+ * throttles in five minutes means we are the problem, so the client stops
+ * calling entirely for ten minutes instead of walking back into the limit.
+ */
+const THROTTLE_WINDOW_MS = 5 * 60_000;
+const THROTTLE_TRIP_COUNT = 3;
+const COOLDOWN_MS = 10 * 60_000;
 // MusicBrainz blocks an IP for exceeding one request per second *average*;
 // a short retry loop is what turns a busy minute into a block, so waits are
 // long enough to fall back under the limit.
@@ -232,10 +251,14 @@ export function pickPrimaryRelease<T extends { status?: string | null; date?: st
 export class MusicBrainzClient {
 	private readonly fetchImpl: typeof fetch;
 	private readonly userAgent: string;
+	/** Recent throttle timestamps, and the end of a circuit-breaker cooldown. */
+	private readonly throttles: number[] = [];
+	private coolingUntil = 0;
 	private readonly timeoutMs: number;
 	private readonly maxAttempts: number;
 	private readonly gate: RateGate;
 	private readonly sleep: (ms: number) => Promise<void>;
+	private readonly now: () => number;
 
 	constructor(options: MusicBrainzClientOptions = {}) {
 		this.fetchImpl = options.fetchImpl ?? fetch;
@@ -243,9 +266,10 @@ export class MusicBrainzClient {
 		this.timeoutMs = options.timeoutMs ?? 15_000;
 		this.maxAttempts = options.maxAttempts ?? MAX_ATTEMPTS;
 		this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+		this.now = options.now ?? Date.now;
 		this.gate =
 			options.gate ??
-			new RateGate(options.minIntervalMs ?? MIN_INTERVAL_MS, options.now, options.sleep);
+			new RateGate(options.minIntervalMs ?? MIN_INTERVAL_MS, this.now, options.sleep);
 	}
 
 	/**
@@ -269,6 +293,7 @@ export class MusicBrainzClient {
 
 		const retryAfterMs = this.retryAfterMs(response);
 		if (response.status === 429 || response.status === 503) {
+			this.noteThrottle();
 			logger.warn({ status: response.status }, '[MusicBrainz] throttled; backing off and retrying');
 			throw new MusicBrainzError(
 				`MusicBrainz throttled the request (${response.status})`,
@@ -301,7 +326,37 @@ export class MusicBrainzClient {
 		return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : undefined;
 	}
 
+	/**
+	 * Count a refusal, and stop calling for a while once we are clearly the
+	 * cause. Each retry inside a throttled window is another request against an
+	 * address that is already over budget — the fastest way to turn a busy hour
+	 * into a block.
+	 */
+	private noteThrottle(): void {
+		const now = this.now();
+		this.throttles.push(now);
+		while (this.throttles.length > 0 && now - this.throttles[0] > THROTTLE_WINDOW_MS) {
+			this.throttles.shift();
+		}
+		if (this.throttles.length >= THROTTLE_TRIP_COUNT && now >= this.coolingUntil) {
+			this.coolingUntil = now + COOLDOWN_MS;
+			logger.warn(
+				{ throttles: this.throttles.length, cooldownMs: COOLDOWN_MS },
+				'[MusicBrainz] refusing further calls for ten minutes after repeated throttling'
+			);
+		}
+	}
+
 	private async request<T>(path: string, params: Record<string, string>): Promise<T> {
+		if (this.now() < this.coolingUntil) {
+			const seconds = Math.ceil((this.coolingUntil - this.now()) / 1000);
+			throw new MusicBrainzError(
+				`MusicBrainz is cooling down after repeated throttling; try again in ${seconds}s`,
+				503,
+				true
+			);
+		}
+
 		const url = `${BASE_URL}${path}?${new URLSearchParams({ fmt: 'json', ...params })}`;
 
 		let lastError: MusicBrainzError | undefined;
@@ -321,13 +376,13 @@ export class MusicBrainzClient {
 				lastError = error;
 				if (!error.retryable || attempt === this.maxAttempts) throw error;
 
-				const backoff = Math.min(RETRY_BASE_MS * 2 ** (attempt - 1), RETRY_MAX_MS);
-				const wait = Math.max(backoff, error.retryAfterMs ?? 0);
 				if (error.status === 503 || error.status === 429) {
-					// Load shedding: every caller waits, not just this retry.
-					this.gate.hold(wait);
+					// Load shedding: every caller waits, the whole client slows down,
+					// and the wait follows MusicBrainz's own guidance (Retry-After when
+					// it sends one, thirty seconds otherwise).
+					this.gate.throttle(Math.max(error.retryAfterMs ?? 0, THROTTLE_WAIT_MS));
 				} else {
-					await this.sleep(wait);
+					await this.sleep(Math.min(RETRY_BASE_MS * 2 ** (attempt - 1), RETRY_MAX_MS));
 				}
 			}
 		}

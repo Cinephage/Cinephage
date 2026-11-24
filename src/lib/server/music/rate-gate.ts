@@ -12,6 +12,8 @@ export type SleepFn = (ms: number) => Promise<void>;
 export class RateGate {
 	private nextAt: number;
 	private notBefore = 0;
+	/** Set after the server throttles us: a slower pace, not just one sleep. */
+	private slowUntil = 0;
 
 	constructor(
 		private readonly minIntervalMs: number,
@@ -35,12 +37,31 @@ export class RateGate {
 		this.nextAt = Math.max(this.nextAt, until);
 	}
 
+	/**
+	 * The server said slow down, not just "wait once".
+	 *
+	 * MusicBrainz enforces a rolling average: a burst that drew a 503 needs a
+	 * visibly slower pace for a while, otherwise the very next requests walk
+	 * straight back into the limit. The gate stays at 2.5x its interval for the
+	 * penalty window (five minutes by default), then decays on its own.
+	 */
+	throttle(waitMs: number, penaltyMs = 5 * 60_000): void {
+		this.slowUntil = Math.max(this.slowUntil, this.now() + Math.max(0, penaltyMs));
+		this.hold(waitMs);
+	}
+
+	private get intervalMs(): number {
+		return this.now() < this.slowUntil
+			? Math.round(this.minIntervalMs * 2.5)
+			: this.minIntervalMs;
+	}
+
 	/** Wait until this caller's slot is due, re-checking a hold after waking. */
 	async wait(): Promise<void> {
 		for (;;) {
 			const now = this.now();
 			const reservedAt = Math.max(now, this.nextAt, this.notBefore);
-			this.nextAt = reservedAt + this.minIntervalMs;
+			this.nextAt = reservedAt + this.intervalMs;
 
 			const delay = reservedAt - now;
 			if (delay > 0) await this.sleep(delay);

@@ -441,20 +441,52 @@ describe('MusicBrainzClient retry', () => {
 		expect(Math.max(...slept)).toBeGreaterThanOrEqual(2000);
 	});
 
-	it('honours Retry-After over the internal backoff', async () => {
+	it('honours a Retry-After longer than its own throttle floor', async () => {
 		const slept: number[] = [];
 		let calls = 0;
 		const client = clientWith(
 			(async () => {
 				calls += 1;
 				if (calls > 1) return jsonResponse(RELEASE_DETAIL);
-				return new Response('{}', { status: 503, headers: { 'retry-after': '4' } });
+				return new Response('{}', { status: 503, headers: { 'retry-after': '45' } });
 			}) as typeof fetch,
 			{ sleep: async (ms: number) => void slept.push(ms) }
 		);
 
 		await client.getRelease('x');
-		expect(slept).toContain(4000);
+		expect(slept).toContain(45000);
+	});
+
+	it('waits the documented 30 seconds when a 503 carries no Retry-After', async () => {
+		const slept: number[] = [];
+		let calls = 0;
+		const client = clientWith(
+			(async () => {
+				calls += 1;
+				if (calls > 1) return jsonResponse(RELEASE_DETAIL);
+				return jsonResponse({}, 503);
+			}) as typeof fetch,
+			{ sleep: async (ms: number) => void slept.push(ms) }
+		);
+
+		await client.getRelease('x');
+		expect(slept).toContain(30000);
+	});
+
+	it('stops calling entirely after repeated throttling instead of retrying into it', async () => {
+		let calls = 0;
+		const client = clientWith((async () => {
+			calls += 1;
+			return jsonResponse({}, 503);
+		}) as typeof fetch);
+
+		await expect(client.getRelease('x')).rejects.toMatchObject({ status: 503 });
+		await expect(client.getRelease('y')).rejects.toMatchObject({ status: 503 });
+		const beforeCooldown = calls;
+
+		// The third refusal inside the window trips the breaker: no more requests.
+		await expect(client.getRelease('z')).rejects.toThrow(/cooling down/);
+		expect(calls).toBe(beforeCooldown);
 	});
 
 	it('gives up after the attempt budget and reports the last failure', async () => {
@@ -465,7 +497,8 @@ describe('MusicBrainzClient retry', () => {
 		}) as typeof fetch);
 
 		await expect(client.getRelease('x')).rejects.toMatchObject({ status: 503, retryable: true });
-		expect(calls).toBe(3);
+		// One more try after the long wait, not a retry loop.
+		expect(calls).toBe(2);
 	});
 });
 
