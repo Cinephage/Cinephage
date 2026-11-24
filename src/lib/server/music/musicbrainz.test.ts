@@ -473,20 +473,37 @@ describe('MusicBrainzClient retry', () => {
 		expect(slept).toContain(30000);
 	});
 
-	it('stops calling entirely after repeated throttling instead of retrying into it', async () => {
+	it('stops calling entirely once every call is refused', async () => {
 		let calls = 0;
 		const client = clientWith((async () => {
 			calls += 1;
 			return jsonResponse({}, 503);
 		}) as typeof fetch);
 
-		await expect(client.getRelease('x')).rejects.toMatchObject({ status: 503 });
-		await expect(client.getRelease('y')).rejects.toMatchObject({ status: 503 });
+		for (const id of ['a', 'b', 'c']) {
+			await expect(client.getRelease(id)).rejects.toMatchObject({ status: 503 });
+		}
 		const beforeCooldown = calls;
 
-		// The third refusal inside the window trips the breaker: no more requests.
-		await expect(client.getRelease('z')).rejects.toThrow(/cooling down/);
+		// Six refusals in a row: the address is blocked, not merely degraded.
+		await expect(client.getRelease('d')).rejects.toThrow(/cooling down/);
 		expect(calls).toBe(beforeCooldown);
+	});
+
+	it('keeps grinding through ordinary shedding instead of tripping the breaker', async () => {
+		let calls = 0;
+		const client = clientWith((async () => {
+			calls += 1;
+			// Refused, served, refused, served: a degraded service refusing about half
+			// of all calls at random, so each request's second attempt is answered.
+			return calls % 2 === 0 ? jsonResponse(RELEASE_DETAIL) : jsonResponse({}, 503);
+		}) as typeof fetch);
+
+		for (let i = 0; i < 3; i++) {
+			await expect(client.getRelease(`id-${i}`)).resolves.toMatchObject({ title: 'Discovery' });
+		}
+		// Three requests, two calls each, and every one answered: no cooldown.
+		expect(calls).toBe(6);
 	});
 
 	it('gives up after the attempt budget and reports the last failure', async () => {

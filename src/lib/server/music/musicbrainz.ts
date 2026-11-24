@@ -57,13 +57,13 @@ const MAX_ATTEMPTS = 2;
 const THROTTLE_WAIT_MS = 30_000;
 
 /**
- * Circuit breaker. MusicBrainz answers 503 when an address is over its budget,
- * and every retry inside that window is another request against it. Three
- * throttles in five minutes means we are the problem, so the client stops
- * calling entirely for ten minutes instead of walking back into the limit.
+ * Circuit breaker. When MusicBrainz is merely degraded it refuses about half
+ * of all requests at random, and those come back with a Retry-After — the run
+ * should keep grinding. A block is different: every single call is refused.
+ * So the breaker counts *consecutive* refusals and trips at six, which random
+ * shedding almost never reaches but a blocked address reaches immediately.
  */
-const THROTTLE_WINDOW_MS = 5 * 60_000;
-const THROTTLE_TRIP_COUNT = 3;
+const THROTTLE_TRIP_COUNT = 6;
 const COOLDOWN_MS = 10 * 60_000;
 // MusicBrainz blocks an IP for exceeding one request per second *average*;
 // a short retry loop is what turns a busy minute into a block, so waits are
@@ -251,8 +251,8 @@ export function pickPrimaryRelease<T extends { status?: string | null; date?: st
 export class MusicBrainzClient {
 	private readonly fetchImpl: typeof fetch;
 	private readonly userAgent: string;
-	/** Recent throttle timestamps, and the end of a circuit-breaker cooldown. */
-	private readonly throttles: number[] = [];
+	/** How many calls in a row have been refused, and the end of a breaker cooldown. */
+	private consecutiveThrottles = 0;
 	private coolingUntil = 0;
 	private readonly timeoutMs: number;
 	private readonly maxAttempts: number;
@@ -311,6 +311,7 @@ export class MusicBrainzClient {
 			);
 		}
 
+		this.consecutiveThrottles = 0;
 		const body = (await response.json()) as T & { error?: string };
 		// A throttled MusicBrainz can also answer 200 with an error body and no result key.
 		if (body && typeof body === 'object' && typeof body.error === 'string') {
@@ -333,16 +334,13 @@ export class MusicBrainzClient {
 	 * into a block.
 	 */
 	private noteThrottle(): void {
+		this.consecutiveThrottles += 1;
 		const now = this.now();
-		this.throttles.push(now);
-		while (this.throttles.length > 0 && now - this.throttles[0] > THROTTLE_WINDOW_MS) {
-			this.throttles.shift();
-		}
-		if (this.throttles.length >= THROTTLE_TRIP_COUNT && now >= this.coolingUntil) {
+		if (this.consecutiveThrottles >= THROTTLE_TRIP_COUNT && now >= this.coolingUntil) {
 			this.coolingUntil = now + COOLDOWN_MS;
 			logger.warn(
-				{ throttles: this.throttles.length, cooldownMs: COOLDOWN_MS },
-				'[MusicBrainz] refusing further calls for ten minutes after repeated throttling'
+				{ consecutive: this.consecutiveThrottles, cooldownMs: COOLDOWN_MS },
+				'[MusicBrainz] every call refused; stopping for ten minutes'
 			);
 		}
 	}
@@ -380,7 +378,7 @@ export class MusicBrainzClient {
 					// Load shedding: every caller waits, the whole client slows down,
 					// and the wait follows MusicBrainz's own guidance (Retry-After when
 					// it sends one, thirty seconds otherwise).
-					this.gate.throttle(Math.max(error.retryAfterMs ?? 0, THROTTLE_WAIT_MS));
+					this.gate.throttle(error.retryAfterMs ?? THROTTLE_WAIT_MS);
 				} else {
 					await this.sleep(Math.min(RETRY_BASE_MS * 2 ** (attempt - 1), RETRY_MAX_MS));
 				}
