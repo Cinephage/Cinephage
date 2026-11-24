@@ -209,10 +209,10 @@
 
 	<!-- Hover Overlay -->
 	<div
-		class="absolute inset-0 flex flex-col justify-end bg-linear-to-t from-black/90 via-black/20 to-transparent p-3 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+		class="absolute inset-0 flex flex-col justify-end bg-linear-to-t from-black/90 via-black/20 to-transparent p-3 opacity-100 transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100"
 	>
 		<div
-			class="translate-y-4 transform transition-transform duration-300 group-hover:translate-y-0"
+			class="translate-y-0 transform transition-transform duration-300 md:translate-y-4 md:group-hover:translate-y-0"
 		>
 			<h3 class="line-clamp-2 text-sm leading-tight font-bold text-white">
 				{title}

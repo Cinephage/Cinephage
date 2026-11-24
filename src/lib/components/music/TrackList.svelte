@@ -127,6 +127,8 @@
 										class="btn btn-ghost btn-xs"
 										class:btn-disabled={busy}
 										title={m.music_searchTrack()}
+										aria-label={m.music_searchTrack()}
+										aria-haspopup="menu"
 									>
 										{#if busy}
 											<LoaderCircle class="h-3.5 w-3.5 animate-spin" />

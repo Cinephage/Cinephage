@@ -1,24 +1,12 @@
 <script lang="ts">
-	import { Download, LoaderCircle, Search, Zap } from '@lucide/svelte';
+	import { LoaderCircle, Search, Zap } from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import { ModalWrapper } from '#lib/components/ui/modal/index.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
-	import { musicQualityLabel } from './release-quality.js';
+	import ReleaseTable from './ReleaseTable.svelte';
+	import type { ReleaseRow } from './release-row.js';
 
-	export type TrackSearchCandidate = {
-		guid: string | null;
-		title: string;
-		indexerName: string | null;
-		size: number | null;
-		seeders: number | null;
-		format?: string;
-		bitDepth?: number | null;
-		sampleRateKhz?: number | null;
-		bitrateKbps?: number | null;
-		accepted?: boolean;
-		tierLabel?: string | null;
-		reasons?: string[];
-	};
+	export type TrackSearchCandidate = ReleaseRow;
 
 	type Props = {
 		open: boolean;
@@ -86,11 +74,6 @@
 		if (!open) lastTrackId = null;
 	});
 
-	function gib(bytes: number | null): string {
-		if (!bytes) return '–';
-		return `${(bytes / 1_073_741_824).toFixed(2)} GB`;
-	}
-
 	async function grab(candidate: TrackSearchCandidate | null) {
 		if (grabbing) return;
 		grabbing = candidate?.guid ?? 'best';
@@ -135,10 +118,12 @@
 	}
 </script>
 
-<ModalWrapper {open} {onClose} maxWidth="xl">
+<ModalWrapper {open} {onClose} maxWidth="xl" labelledBy="track-search-modal-title">
 	<div class="flex flex-wrap items-center justify-between gap-2">
 		<div class="min-w-0">
-			<h2 class="truncate text-lg font-bold">{track?.title ?? albumTitle}</h2>
+			<h2 id="track-search-modal-title" class="truncate text-lg font-bold">
+				{track?.title ?? albumTitle}
+			</h2>
 			<p class="mt-0.5 text-sm text-base-content/55">
 				{albumTitle}
 			</p>
@@ -162,7 +147,7 @@
 				{:else}
 					<Search class="h-4 w-4" />
 				{/if}
-				{m.music_findReleases()}
+				{m.action_refresh()}
 			</button>
 		</div>
 	</div>
@@ -177,59 +162,7 @@
 				{track ? m.music_noTrackReleases() : m.music_noReleases()}
 			</p>
 		{:else}
-			<div class="overflow-hidden rounded-lg bg-base-200">
-				<table class="table table-sm">
-					<thead>
-						<tr class="border-base-content/10">
-							<th>{m.music_titleHeader()}</th>
-							<th class="w-32">{m.music_indexer()}</th>
-							<th class="w-24 text-right">{m.music_size()}</th>
-							<th class="w-28">{m.music_quality()}</th>
-							<th class="w-20 text-right">{m.music_seeders()}</th>
-							<th class="w-16"></th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each candidates as candidate (candidate.title + (candidate.indexerName ?? ''))}
-							<tr class="border-base-content/5">
-								<td class="max-w-0 truncate" title={candidate.title}>
-									<span class="font-medium">{candidate.title}</span>
-									{#if candidate.accepted === false && candidate.reasons?.length}
-										<span class="ml-2 text-xs text-warning">{candidate.reasons[0]}</span>
-									{/if}
-								</td>
-								<td class="text-xs text-base-content/55">{candidate.indexerName ?? '–'}</td>
-								<td class="text-right font-mono text-xs text-base-content/60 tabular-nums">
-									{gib(candidate.size)}
-								</td>
-								<td>
-									<span class="badge badge-sm" class:badge-ghost={candidate.accepted === false}>
-										{musicQualityLabel(candidate)}
-									</span>
-								</td>
-								<td class="text-right tabular-nums">{candidate.seeders ?? '–'}</td>
-								<td class="text-right">
-									<button
-										class="btn gap-1 btn-ghost btn-xs"
-										disabled={grabbing !== null}
-										title={candidate.accepted === false
-											? (candidate.reasons?.[0] ?? m.music_grabFailed())
-											: (candidate.tierLabel ?? '')}
-										onclick={() => grab(candidate)}
-									>
-										{#if grabbing === candidate.guid}
-											<LoaderCircle class="h-3 w-3 animate-spin" />
-										{:else}
-											<Download class="h-3 w-3" />
-										{/if}
-										{m.music_grab()}
-									</button>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
+			<ReleaseTable rows={candidates} {grabbing} onGrab={grab} />
 		{/if}
 	</div>
 </ModalWrapper>

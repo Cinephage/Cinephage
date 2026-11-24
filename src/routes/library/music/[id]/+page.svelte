@@ -10,13 +10,13 @@
 		Trash2
 	} from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
-	import { musicQualityLabel } from '#lib/components/music/release-quality.js';
 	import AlbumHero from '#lib/components/music/AlbumHero.svelte';
 	import AlbumEditModal from '#lib/components/music/AlbumEditModal.svelte';
 	import type { AlbumEditData } from '#lib/components/music/music-card.js';
 	import { formatBytes } from '#lib/utils/format.js';
 	import TrackList from '#lib/components/music/TrackList.svelte';
 	import TrackSearchModal from '#lib/components/music/TrackSearchModal.svelte';
+	import ReleaseTable from '#lib/components/music/ReleaseTable.svelte';
 	import MusicMatchModal from '#lib/components/music/MusicMatchModal.svelte';
 	import RenamePreviewModal from '#lib/components/library/RenamePreviewModal.svelte';
 	import { ConfirmationModal, ModalWrapper } from '#lib/components/ui/modal/index.js';
@@ -98,11 +98,6 @@
 	let refreshing = $state(false);
 	let renameOpen = $state(false);
 	let matchOpen = $state(false);
-
-	function gib(bytes: number | null): string {
-		if (!bytes) return '–';
-		return `${(bytes / 1_073_741_824).toFixed(2)} GB`;
-	}
 
 	async function toggleMonitor(next: boolean) {
 		if (monitorBusy) return;
@@ -458,61 +453,12 @@
 							{searched ? m.common_noResults() : m.music_releasesTitle()}
 						</p>
 					{:else}
-						<div class="overflow-hidden rounded-lg bg-base-100">
-							<table class="table table-sm">
-								<thead>
-									<tr class="border-base-content/10 bg-base-200/40">
-										<th>{m.music_titleHeader()}</th>
-										<th class="w-32">{m.music_indexer()}</th>
-										<th class="w-24 text-right">{m.music_size()}</th>
-										<th class="w-28">{m.music_quality()}</th>
-										<th class="w-20 text-right">{m.music_seeders()}</th>
-										<th class="w-16"></th>
-									</tr>
-								</thead>
-								<tbody>
-									{#each candidates as candidate (candidate.title + (candidate.indexerName ?? ''))}
-										<tr class="border-base-content/5 hover:bg-base-200/40">
-											<td class="max-w-0 truncate" title={candidate.title}>
-												<span class="font-medium">{candidate.title}</span>
-												{#if candidate.accepted === false && candidate.reasons?.length}
-													<span class="ml-2 text-xs text-warning">{candidate.reasons[0]}</span>
-												{/if}
-											</td>
-											<td class="text-xs text-base-content/55">{candidate.indexerName ?? '–'}</td>
-											<td class="text-right font-mono text-xs text-base-content/60 tabular-nums">
-												{gib(candidate.size)}
-											</td>
-											<td>
-												<span
-													class="badge badge-sm"
-													class:badge-ghost={candidate.accepted === false}
-												>
-													{musicQualityLabel(candidate)}
-												</span>
-											</td>
-											<td class="text-right tabular-nums">{candidate.seeders ?? '–'}</td>
-											<td class="text-right">
-												<button
-													class="btn btn-ghost btn-xs"
-													disabled={grabbingGuid !== null}
-													title={candidate.accepted === false
-														? (candidate.reasons?.[0] ?? m.music_grabFailed())
-														: (candidate.tierLabel ?? '')}
-													onclick={() => grab(candidate)}
-												>
-													{#if grabbingGuid === candidate.guid}
-														<LoaderCircle class="h-3 w-3 animate-spin" />
-													{:else}
-														{m.music_grab()}
-													{/if}
-												</button>
-											</td>
-										</tr>
-									{/each}
-								</tbody>
-							</table>
-						</div>
+						<ReleaseTable
+							rows={candidates}
+							grabbing={grabbingGuid}
+							onGrab={grab}
+							containerClass="bg-base-100"
+						/>
 					{/if}
 				</div>
 			</div>
