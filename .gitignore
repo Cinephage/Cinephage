@@ -38,6 +38,8 @@ vite.config.ts.timestamp-*
 /logs/
 /data/logs/
 /data/avatars/
+/data/channel-logos/
+/data/music-covers/
 /config/
 *.log
 
