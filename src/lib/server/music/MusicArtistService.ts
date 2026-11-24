@@ -403,7 +403,7 @@ export class MusicArtistService {
 				mbid: artists.mbid,
 				monitored: artists.monitored,
 				albumCount: count(albums.id),
-				inLibraryCount: sql<number>`sum(case when ${albums.hasFile} = 1 then 1 else 0 end)`,
+				inLibraryCount: sql<number>`sum(case when ${albums.hasFile} = 1 or ${albums.streamSource} is not null then 1 else 0 end)`,
 				coverAlbumId:
 					sql<string | null>`(select a2.id from albums a2 where a2.artist_id = ${artists.id} and (a2.cover_path is not null or a2.release_mbid is not null) order by a2.year, a2.title limit 1)`
 			})

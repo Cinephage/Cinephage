@@ -21,6 +21,8 @@ export interface AlbumCardData {
 	duration?: number | null;
 	monitored?: boolean | null;
 	hasFile?: boolean | null;
+	/** Non-null when the album is served by shortcuts, not local files. */
+	streamSource?: string | null;
 	hasCover?: boolean;
 	/** Release-group MBID — the key the discover album route takes. */
 	mbid?: string | null;
@@ -75,8 +77,27 @@ export interface TrackListTrack {
 	trackNumber: number | null;
 	duration: number | null;
 	hasFile: boolean | null;
+	/** Copied from the album: a streamed album's tracks have no file of their own. */
+	streamSource?: string | null;
 	/** False when the album came along for other songs (a playlist import). */
 	monitored?: boolean | null;
+}
+
+/**
+ * What backs a track: its own file, the album's `.strm` shortcut, or nothing.
+ *
+ * A stream-backed album writes one shortcut per track and no local audio, so
+ * `hasFile: false` alone is not "missing" — reading it that way painted every
+ * track of a streaming album red while Jellyfin was playing it fine.
+ */
+export type TrackAvailability = 'downloaded' | 'streaming' | 'missing';
+
+export function trackAvailability(track: {
+	hasFile?: boolean | null;
+	streamSource?: string | null;
+}): TrackAvailability {
+	if (track.hasFile) return 'downloaded';
+	return track.streamSource ? 'streaming' : 'missing';
 }
 
 /** "2h 14m" / "47m" — the same shape the movie runtime line uses. */
@@ -106,6 +127,8 @@ export interface TrackTableRow {
 	trackNumber: number | null;
 	duration: number | null;
 	hasFile: boolean | null;
+	/** Copied from the album, for the same reason as TrackListTrack. */
+	streamSource?: string | null;
 }
 
 /**

@@ -1,4 +1,4 @@
-import { and, asc, count, eq, inArray, like, or } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNull, like, or } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
 import { albums, artists, tracks } from '#lib/server/db/schema.js';
 
@@ -17,6 +17,8 @@ export interface TrackRow {
 	duration: number | null;
 	explicit: boolean | null;
 	hasFile: boolean | null;
+	/** Non-null when the album is served by shortcuts, not local files. */
+	streamSource: string | null;
 }
 
 /**
@@ -57,7 +59,8 @@ export class MusicTrackService {
 			options.file === 'downloaded'
 				? eq(tracks.hasFile, true)
 				: options.file === 'missing'
-					? eq(tracks.hasFile, false)
+					? // A streaming album has no files but is not missing its music.
+						and(eq(tracks.hasFile, false), isNull(albums.streamSource))
 					: undefined
 		];
 		for (const needle of (options.q ?? '').trim().toLowerCase().split(/\s+/).filter(Boolean)) {
@@ -104,7 +107,8 @@ export class MusicTrackService {
 				position: tracks.position,
 				duration: tracks.duration,
 				explicit: tracks.explicit,
-				hasFile: tracks.hasFile
+				hasFile: tracks.hasFile,
+				streamSource: albums.streamSource
 			})
 			.from(tracks)
 			.innerJoin(albums, eq(tracks.albumId, albums.id))
@@ -133,7 +137,8 @@ export class MusicTrackService {
 				position: tracks.position,
 				duration: tracks.duration,
 				explicit: tracks.explicit,
-				hasFile: tracks.hasFile
+				hasFile: tracks.hasFile,
+				streamSource: albums.streamSource
 			})
 			.from(tracks)
 			.innerJoin(albums, eq(tracks.albumId, albums.id))

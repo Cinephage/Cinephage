@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { ChevronDown, CircleCheck, CircleDashed, Clock, LoaderCircle, Search, Zap } from '@lucide/svelte';
+	import { ChevronDown, CircleCheck, CircleDashed, Clock, LoaderCircle, Radio, Search, Zap } from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
-	import type { TrackListTrack } from './music-card.js';
+	import { trackAvailability, type TrackListTrack } from './music-card.js';
 
 	type Props = {
 		tracks: TrackListTrack[];
@@ -59,6 +59,9 @@
 		{#if showFileState}
 			<p class="flex items-center gap-3 text-xs text-base-content/45">
 				<span class="flex items-center gap-1"><CircleCheck class="h-3.5 w-3.5 text-success" />{m.common_downloaded()}</span>
+				{#if tracks.some((track) => trackAvailability(track) === 'streaming')}
+					<span class="flex items-center gap-1"><Radio class="h-3.5 w-3.5 text-info" />{m.library_fileCard_streaming()}</span>
+				{/if}
 				<span class="flex items-center gap-1"><CircleDashed class="h-3.5 w-3.5" />{m.common_missing()}</span>
 			</p>
 		{/if}
@@ -101,13 +104,19 @@
 								<p class="truncate text-xs text-base-content/50">{track.artistCredit}</p>
 							{/if}
 							{#if showFileState}
+								{@const availability = trackAvailability(track)}
 								<span
-									class="mt-1 inline-flex items-center gap-1 badge badge-sm border-none {track.hasFile
+									class="mt-1 inline-flex items-center gap-1 badge badge-sm border-none {availability ===
+									'downloaded'
 										? 'bg-success/15 text-success'
-										: 'bg-warning/15 text-warning'}"
+										: availability === 'streaming'
+											? 'bg-info/15 text-info'
+											: 'bg-warning/15 text-warning'}"
 								>
-									{#if track.hasFile}
+									{#if availability === 'downloaded'}
 										<CircleCheck class="h-3 w-3" />{m.common_downloaded()}
+									{:else if availability === 'streaming'}
+										<Radio class="h-3 w-3" />{m.library_fileCard_streaming()}
 									{:else}
 										<CircleDashed class="h-3 w-3" />{m.common_missing()}
 									{/if}

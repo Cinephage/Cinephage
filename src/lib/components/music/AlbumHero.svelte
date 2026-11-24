@@ -20,7 +20,7 @@
 	import DetailActionBar from '#lib/components/library/DetailActionBar.svelte';
 	import DetailMobileBar from '#lib/components/library/DetailMobileBar.svelte';
 	import type { DetailAction } from '#lib/components/library/detail-actions.js';
-	import { formatRuntime } from './music-card.js';
+	import { formatRuntime, trackAvailability } from './music-card.js';
 	import type { AlbumHeroAlbum } from './music-card.js';
 
 	type Props = {
@@ -329,18 +329,13 @@
 							     catalog album was never added, so it carries no file state. -->
 							{#if album.hasFile !== null && album.hasFile !== undefined}
 								<StatusIndicator
-									status={album.hasFile ? 'downloaded' : 'missing'}
+									status={trackAvailability(album)}
 									qualityText={album.primaryType}
 								/>
 							{/if}
 							{#if album.hasFile && album.trackCount}
 								<span class="badge badge-outline badge-sm">
 									{m.music_tracksShort({ count: album.trackCount })}
-								</span>
-							{/if}
-							{#if album.streamSource}
-								<span class="badge badge-outline badge-sm">
-									{m.library_fileCard_streaming()}
 								</span>
 							{/if}
 						</div>

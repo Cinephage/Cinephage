@@ -1,8 +1,8 @@
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
-	import { CheckCircle, XCircle, Download, Clock } from '@lucide/svelte';
+	import { CheckCircle, XCircle, Download, Clock, Radio } from '@lucide/svelte';
 
-	type Status = 'downloaded' | 'missing' | 'downloading' | 'queued';
+	type Status = 'downloaded' | 'streaming' | 'missing' | 'downloading' | 'queued';
 
 	interface Props {
 		status: Status;
@@ -18,6 +18,12 @@
 			color: 'text-success',
 			bgColor: 'bg-success/10',
 			label: m.common_downloaded()
+		},
+		streaming: {
+			icon: Radio,
+			color: 'text-info',
+			bgColor: 'bg-info/10',
+			label: m.library_fileCard_streaming()
 		},
 		missing: {
 			icon: XCircle,

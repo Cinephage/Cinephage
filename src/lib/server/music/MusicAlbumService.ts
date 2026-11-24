@@ -154,6 +154,8 @@ export interface AlbumDetail extends AlbumSummary {
 		duration: number | null;
 		hasFile: boolean | null;
 		monitored: boolean | null;
+		/** The album's stream source, so a track knows its shortcut is the artefact. */
+		streamSource: string | null;
 	}>;
 }
 
@@ -1020,7 +1022,7 @@ export class MusicAlbumService {
 			...row,
 			sizeBytes: fileRows.reduce((sum, file) => sum + (file.sizeBytes ?? 0), 0),
 			hasCover: Boolean(row.coverPath ?? row.releaseMbid),
-			tracks: trackRows,
+			tracks: trackRows.map((track) => ({ ...track, streamSource: row.streamSource })),
 			files: fileRows
 		};
 	}

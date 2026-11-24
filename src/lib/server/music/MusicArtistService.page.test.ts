@@ -252,3 +252,19 @@ describe('MusicArtistService.listArtistsPage', () => {
 		expect(musicArtistService.countArtists()).toBe(2);
 	});
 });
+
+describe('MusicArtistService.listArtistsPage with streaming albums', () => {
+	it('counts a stream-backed album as playable, not as an empty slot', () => {
+		seedArtist('artist-stream', 'Streamer');
+		seedAlbum({
+			artistId: 'artist-stream',
+			title: 'Streamed',
+			streamSource: 'Cinephage Library'
+		});
+		seedAlbum({ artistId: 'artist-stream', title: 'Wanted' });
+
+		const page = musicArtistService.listArtistsPage();
+
+		expect(page.rows[0]).toMatchObject({ albumCount: 2, inLibraryCount: 1 });
+	});
+});

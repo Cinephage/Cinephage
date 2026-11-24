@@ -18,7 +18,7 @@ import {
 	downloadClients,
 	settings
 } from '#lib/server/db/schema.js';
-import { count, eq, desc, and, inArray, sql, gte, ne, asc } from 'drizzle-orm';
+import { count, eq, desc, and, inArray, isNull, sql, gte, ne, asc } from 'drizzle-orm';
 import {
 	computeMissingMovieAvailabilityCounts,
 	enrichMoviesWithAvailability
@@ -169,6 +169,11 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 			.select({
 				total: count(),
 				withFile: count(sql`CASE WHEN ${albums.hasFile} = 1 THEN 1 END`),
+				// A stream-backed album has no file but is playable, so it is neither
+				// "with file" nor missing — the same rule the library list counts by.
+				missing: count(
+					sql`CASE WHEN ${albums.hasFile} = 0 AND ${albums.streamSource} IS NULL THEN 1 END`
+				),
 				monitored: count(sql`CASE WHEN ${albums.monitored} = 1 THEN 1 END`)
 			})
 			.from(albums),
@@ -253,7 +258,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 		albums: {
 			total: albumStats?.total || 0,
 			withFile: albumStats?.withFile || 0,
-			missing: Math.max(0, (albumStats?.total || 0) - (albumStats?.withFile || 0)),
+			missing: albumStats?.missing || 0,
 			monitored: albumStats?.monitored || 0
 		},
 		episodes: {
@@ -476,7 +481,15 @@ export async function getMissingAlbums(): Promise<MissingAlbum[]> {
 		})
 		.from(albums)
 		.innerJoin(artists, eq(albums.artistId, artists.id))
-		.where(and(eq(albums.monitored, true), eq(albums.hasFile, false), eq(artists.monitored, true)))
+		.where(
+			and(
+				eq(albums.monitored, true),
+				eq(albums.hasFile, false),
+				// Served by shortcuts: nothing to acquire.
+				isNull(albums.streamSource),
+				eq(artists.monitored, true)
+			)
+		)
 		.orderBy(desc(albums.year), asc(artists.name))
 		.limit(10)
 		.all()

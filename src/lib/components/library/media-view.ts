@@ -33,7 +33,11 @@ export interface MediaCardView {
 	hideMonitored: boolean;
 	partiallyMonitored: boolean;
 	/** Top-left state badge: a file tick/cross, or a child-count "n/n". */
-	state: { icon: 'file' | 'cross' | 'count'; label: string; tone: 'success' | 'error' | 'neutral' } | null;
+	state: {
+		icon: 'file' | 'cross' | 'count' | 'stream';
+		label: string;
+		tone: 'success' | 'error' | 'neutral';
+	} | null;
 	/** Muted badge under the state (a movie's quality, an album's format). */
 	detail: string | null;
 	/** 0–100 when the kind has partial progress. */
@@ -143,9 +147,11 @@ return {
 		partiallyMonitored: false,
 		state: options.hideState
 			? null
-			: album.hasFile
-				? { icon: 'file', label: m.library_mediaCard_fileAvailable(), tone: 'success' }
-				: { icon: 'cross', label: m.library_mediaCard_missingFile(), tone: 'error' },
+			: album.streamSource
+				? { icon: 'stream', label: m.library_fileCard_streaming(), tone: 'neutral' }
+				: album.hasFile
+					? { icon: 'file', label: m.library_mediaCard_fileAvailable(), tone: 'success' }
+					: { icon: 'cross', label: m.library_mediaCard_missingFile(), tone: 'error' },
 		detail: album.trackCount ? m.music_tracksShort({ count: album.trackCount }) : null,
 		progress: null,
 		subtitle: album.artistName,

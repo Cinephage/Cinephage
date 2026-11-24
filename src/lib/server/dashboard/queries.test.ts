@@ -182,3 +182,18 @@ describe('missing albums', () => {
 		expect(await getMissingAlbums()).toHaveLength(0);
 	});
 });
+
+describe('streaming albums on the dashboard', () => {
+	it('counts a stream-backed album as neither missing nor with file', async () => {
+		seedAlbum();
+		testDb.db
+			.update(albums)
+			.set({ hasFile: false, streamSource: 'Cinephage Library' })
+			.run();
+
+		const stats = await getDashboardStats();
+
+		expect(stats.albums).toMatchObject({ total: 1, withFile: 0, missing: 0 });
+		expect(await getMissingAlbums()).toHaveLength(0);
+	});
+});

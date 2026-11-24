@@ -2,7 +2,7 @@
 	import { ChevronDown, Disc3, Eye, EyeOff, LoaderCircle, MoreVertical, Search, Trash2, Zap } from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import { resolvePath } from '#lib/utils/routing.js';
-	import type { AlbumWithTracks } from './music-card.js';
+	import { trackAvailability, type AlbumWithTracks } from './music-card.js';
 	import TrackList from './TrackList.svelte';
 
 	type Props = {
@@ -39,6 +39,7 @@
 	{#each albums as album (album.id)}
 		{@const open = openAlbumId === album.id}
 		{@const busy = busyAlbumIds.has(album.id)}
+		{@const availability = trackAvailability(album)}
 		<li class="overflow-hidden rounded-xl border border-base-content/10 bg-base-100">
 			<div class="flex items-center gap-2 p-3">
 				<button
@@ -71,8 +72,10 @@
 					</div>
 
 					<div class="hidden shrink-0 items-center gap-2 sm:flex">
-						{#if album.hasFile}
+						{#if availability === 'downloaded'}
 							<span class="badge badge-sm border-none bg-success/15 text-success">{m.common_downloaded()}</span>
+						{:else if availability === 'streaming'}
+							<span class="badge badge-sm border-none bg-info/15 text-info">{m.library_fileCard_streaming()}</span>
 						{:else}
 							<span class="badge badge-sm border-none bg-warning/15 text-warning">{m.common_missing()}</span>
 						{/if}

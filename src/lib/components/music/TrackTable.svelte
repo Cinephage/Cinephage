@@ -4,13 +4,14 @@
 		CircleCheck,
 		CircleDashed,
 		Disc3,
+		Radio,
 		LoaderCircle,
 		Search,
 		Zap
 	} from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import { resolvePath } from '#lib/utils/routing.js';
-	import type { TrackTableRow } from './music-card.js';
+	import { trackAvailability, type TrackTableRow } from './music-card.js';
 
 	type Props = {
 		tracks: TrackTableRow[];
@@ -66,6 +67,7 @@
 		</thead>
 		<tbody>
 			{#each tracks as track (track.id)}
+				{@const availability = trackAvailability(track)}
 				<tr
 					class="border-base-content/5 hover:bg-base-200/40"
 					class:opacity-45={track.monitored === false}
@@ -108,9 +110,13 @@
 						{clock(track.duration)}
 					</td>
 					<td>
-						{#if track.hasFile}
+						{#if availability === 'downloaded'}
 							<span class="badge gap-1 badge-sm border-none bg-success/15 text-success">
 								<CircleCheck class="h-3 w-3" />{m.common_downloaded()}
+							</span>
+						{:else if availability === 'streaming'}
+							<span class="badge gap-1 badge-sm border-none bg-info/15 text-info">
+								<Radio class="h-3 w-3" />{m.library_fileCard_streaming()}
 							</span>
 						{:else}
 							<span class="badge gap-1 badge-sm border-none bg-base-content/10 text-base-content/50">

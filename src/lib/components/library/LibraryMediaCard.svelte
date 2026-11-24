@@ -1,7 +1,7 @@
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
 	import TmdbImage from '#lib/components/tmdb/TmdbImage.svelte';
-	import { Eye, EyeOff, Check, X, Download, AlertTriangle, Clapperboard, Tv, Disc3, Mic2 } from '@lucide/svelte';
+	import { Eye, EyeOff, Check, X, Download, AlertTriangle, Clapperboard, Tv, Disc3, Mic2, Radio } from '@lucide/svelte';
 	import { resolvePath } from '#lib/utils/routing.js';
 	import { imageError } from '#lib/actions/image-error.js';
 	import type { MediaCardView, LibraryKind } from './media-view.js';
@@ -169,6 +169,8 @@
 					<Check class="h-3 w-3" />
 				{:else if view.state.icon === 'cross'}
 					<X class="h-3 w-3" />
+				{:else if view.state.icon === 'stream'}
+					<Radio class="h-3 w-3" />
 				{:else}
 					{view.state.label}
 				{/if}
