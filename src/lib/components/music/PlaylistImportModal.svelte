@@ -461,7 +461,11 @@
 				{#if job.unmatched.length > 0}
 					<details class="mt-1 text-xs text-warning">
 						<summary class="cursor-pointer">
-							{m.music_importUnmatchedSummary({ count: job.unmatched.length })}
+							{m.music_importUnmatchedBroken({
+								count: job.unmatched.length,
+								unreachable: job.unmatched.filter((entry) => entry.reason === 'lookup-failed').length,
+								noMatch: job.unmatched.filter((entry) => entry.reason !== 'lookup-failed').length
+							})}
 						</summary>
 						<ul class="mt-1 max-h-40 space-y-0.5 overflow-y-auto text-base-content/70">
 							{#each job.unmatched as entry, index (index)}

@@ -47,6 +47,9 @@ const logger = createChildLogger({ module: 'MusicPlaylistResolve', logDomain: 's
 /** Search at most this many hits; MusicBrainz's own ordering is good, we only verify. */
 const SEARCH_LIMIT = 10;
 
+/** Extra passes over songs whose lookup was refused, not answered. */
+const RETRY_PASSES = 2;
+
 /**
  * Same work, not merely a similar name. Equality after decoration stripping —
  * "Hey Jude (Remastered 2015)" equals "Hey Jude", but "Discovery Remixed" is a
@@ -467,6 +470,87 @@ export async function resolvePlaylistTracks(
 		done += 1;
 		report('Resolving songs');
 	}
+
+	/**
+	 * A 503 is not "no such song".
+	 *
+	 * Under load MusicBrainz refuses about half of all calls, and one song can
+	 * need three of them, so a single pass loses most of a playlist: a 50-song
+	 * import measured 12 albums and 38 "unmatched", which was the catalog being
+	 * unreachable, not the songs being unknowable. Everything already answered is
+	 * cached, so extra passes cost one call per failed song — the gate still
+	 * spaces them — and nothing resolved is ever asked for twice.
+	 */
+	const retryUnreachable = async (): Promise<void> => {
+		for (let pass = 1; pass <= RETRY_PASSES; pass += 1) {
+			const pending = unmatched.filter((entry) => entry.reason === 'lookup-failed');
+			if (pending.length === 0) return;
+			logger.info(
+				{ pass, songs: pending.length },
+				'[MusicPlaylistResolve] retrying songs MusicBrainz could not answer'
+			);
+			report(`Retrying ${pending.length} songs`);
+			for (const entry of [...pending]) {
+				if (options.isCancelled?.()) return;
+				const artist = entry.artist;
+				if (!artist) continue;
+				const query = coreTitle(entry.title);
+				const mbid = await artistMbidFor(artist);
+				const search = await attempt(() =>
+					musicBrainz.searchRecordings({
+						artist,
+						artistMbid: mbid ?? undefined,
+						track: query,
+						limit: SEARCH_LIMIT
+					})
+				);
+				if (!search.ok) continue;
+				const retried: PlaylistTrack = {
+					title: entry.title,
+					artists: [artist],
+					album: null,
+					year: null,
+					durationMs: null,
+					isrc: null
+				};
+				const anchor = search.value.find(
+					(hit) => titlesMatch(entry.title, hit.title) && artistMatches(retried.artists, hit.artistCredit)
+				);
+				let group: MusicReleaseGroup | null = null;
+				if (anchor) {
+					const reported = groupFromHit(anchor);
+					group = reported && artistMatches(retried.artists, reported.artist.name) ? reported : null;
+					if (!group || typeRank(group) < PLAIN_ALBUM_RANK) {
+						const appearances = await attempt(() => musicBrainz.getRecordingReleaseGroups(anchor.mbid));
+						if (appearances.ok) group = pickGroup(appearances.value, retried) ?? group;
+					}
+				}
+				if (!group) {
+					const sameNamed = await attempt(() =>
+						musicBrainz.searchReleaseGroups({ artist, album: query, limit: SEARCH_LIMIT })
+					);
+					if (!sameNamed.ok) continue;
+					group =
+						sameNamed.value.find(
+							(candidate) =>
+								titlesMatch(entry.title, candidate.title) &&
+								artistMatches(retried.artists, candidate.artist.name)
+						) ?? null;
+				}
+				if (group) {
+					addCandidate(candidates, group, retried, 'track', 'low');
+					setSongMatch(artist, query, group);
+					resolvedTracks += 1;
+					unmatched.splice(unmatched.indexOf(entry), 1);
+				} else {
+					// Answered, and the answer is "nothing matches": that is a fact.
+					entry.reason = 'no-match';
+				}
+			}
+		}
+	};
+
+	await retryUnreachable();
 
 	const list = [...candidates.values()].sort((a, b) => {
 		// Albums with more of the user's songs first; that is what they will

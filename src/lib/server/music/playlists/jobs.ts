@@ -378,7 +378,9 @@ async function runResolve(job: PlaylistJob): Promise<void> {
 				provider: job.provider,
 				tracks: job.trackTotal,
 				albums: job.rows.length,
-				unmatched: job.unmatched.length
+				unmatched: job.unmatched.length,
+				unreachable: job.unmatched.filter((entry) => entry.reason === 'lookup-failed').length,
+				noMatch: job.unmatched.filter((entry) => entry.reason !== 'lookup-failed').length
 			},
 			'[MusicPlaylistJobs] playlist resolved'
 		);

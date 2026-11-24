@@ -5478,6 +5478,7 @@
 	"music_importResolving": "Сопоставление песен с альбомами…",
 	"music_importResolvedSummary": "{albums} альбомов из {tracks} песен",
 	"music_importUnmatchedSummary": "{count} песен не удалось сопоставить",
+	"music_importUnmatchedBroken": "{count} песен не удалось сопоставить ({unreachable} недоступно, {noMatch} совпадений нет)",
 	"music_importSelectAll": "Выбрать все",
 	"music_importHideInLibrary": "Скрыть альбомы, уже имеющиеся в библиотеке",
 	"music_importAlbumColumn": "Альбом",

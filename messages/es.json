@@ -5478,6 +5478,7 @@
 	"music_importResolving": "Asociando canciones a álbumes…",
 	"music_importResolvedSummary": "{albums} álbumes de {tracks} canciones",
 	"music_importUnmatchedSummary": "{count} canciones no se pudieron asociar",
+	"music_importUnmatchedBroken": "{count} canciones no se pudieron emparejar ({unreachable} inaccesibles, {noMatch} sin coincidencia)",
 	"music_importSelectAll": "Seleccionar todo",
 	"music_importHideInLibrary": "Ocultar álbumes que ya están en la biblioteca",
 	"music_importAlbumColumn": "Álbum",

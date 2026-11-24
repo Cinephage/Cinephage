@@ -5851,6 +5851,7 @@
 	"music_importResolving": "Matching songs to albums…",
 	"music_importResolvedSummary": "{albums} albums from {tracks} songs",
 	"music_importUnmatchedSummary": "{count} songs could not be matched",
+	"music_importUnmatchedBroken": "{count} songs could not be matched ({unreachable} unreachable, {noMatch} no match)",
 	"music_importSelectAll": "Select all",
 	"music_importHideInLibrary": "Hide albums already in the library",
 	"music_importAlbumColumn": "Album",

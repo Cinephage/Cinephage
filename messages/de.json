@@ -5478,6 +5478,7 @@
 	"music_importResolving": "Songs werden Alben zugeordnet…",
 	"music_importResolvedSummary": "{albums} Alben aus {tracks} Songs",
 	"music_importUnmatchedSummary": "{count} Songs konnten nicht zugeordnet werden",
+	"music_importUnmatchedBroken": "{count} Songs konnten nicht zugeordnet werden ({unreachable} nicht erreichbar, {noMatch} keine Übereinstimmung)",
 	"music_importSelectAll": "Alle auswählen",
 	"music_importHideInLibrary": "Bereits in der Bibliothek vorhandene Alben ausblenden",
 	"music_importAlbumColumn": "Album",

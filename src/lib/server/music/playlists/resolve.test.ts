@@ -95,6 +95,41 @@ describe('resolvePlaylistTracks', () => {
 		vi.spyOn(musicBrainz, 'resolveArtistMbid').mockResolvedValue(null);
 	});
 
+	it('retries a song whose lookup was refused and keeps it when the retry answers', async () => {
+		vi.spyOn(musicBrainz, 'searchRecordings')
+			.mockRejectedValueOnce(new Error('MusicBrainz throttled the request (503)'))
+			.mockResolvedValue([recordingHit()]);
+
+		const result = await resolvePlaylistTracks([track({ title: 'One More Time' })]);
+
+		expect(result.unmatched).toHaveLength(0);
+		expect(result.candidates[0].releaseGroupMbid).toBe('rg-discovery');
+		expect(result.resolvedTracks).toBe(1);
+	});
+
+	it('reports an unreachable song as unreachable, not as a missing match', async () => {
+		vi.spyOn(musicBrainz, 'searchRecordings').mockRejectedValue(
+			new Error('MusicBrainz throttled the request (503)')
+		);
+
+		const result = await resolvePlaylistTracks([track({ title: 'One More Time' })]);
+
+		expect(result.unmatched).toEqual([
+			expect.objectContaining({ title: 'One More Time', reason: 'lookup-failed' })
+		]);
+	});
+
+	it('calls a song with no match a miss once MusicBrainz has answered', async () => {
+		vi.spyOn(musicBrainz, 'searchRecordings').mockResolvedValue([]);
+		vi.spyOn(musicBrainz, 'searchReleaseGroups').mockResolvedValue([]);
+
+		const result = await resolvePlaylistTracks([track({ title: 'One More Time' })]);
+
+		expect(result.unmatched).toEqual([
+			expect.objectContaining({ title: 'One More Time', reason: 'no-match' })
+		]);
+	});
+
 	it("takes a song's album from the artist's own discography", async () => {
 		vi.spyOn(musicBrainz, 'resolveArtistMbid').mockResolvedValue('artist-daft-punk');
 		vi.spyOn(musicBrainz, 'getArtistAlbumTrackIndex').mockResolvedValue([
