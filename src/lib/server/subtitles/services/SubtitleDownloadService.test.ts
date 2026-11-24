@@ -223,6 +223,8 @@ describe('SubtitleDownloadService', () => {
 
 	afterAll(async () => {
 		await fsPromises.rm(ROOT_PATH, { recursive: true, force: true });
+		// The symlink-escape test writes a sibling directory outside the root.
+		await fsPromises.rm(`${ROOT_PATH}-outside`, { recursive: true, force: true });
 		destroyTestDb(testDb);
 	});
 
