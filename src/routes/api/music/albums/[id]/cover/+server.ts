@@ -3,7 +3,7 @@ import { extname, isAbsolute, join } from 'node:path';
 import type { RequestHandler } from './$types.js';
 import { requireAuth } from '#lib/server/auth/authorization.js';
 import { musicAlbumService } from '#lib/server/music/MusicAlbumService.js';
-import { musicBrainz } from '#lib/server/music/musicbrainz.js';
+import { getCover } from '#lib/server/music/cover-cache.js';
 import { isPathInsideManagedRoot } from '#lib/server/filesystem/path-guard.js';
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -16,10 +16,14 @@ const CONTENT_TYPES: Record<string, string> = {
 /**
  * GET /api/music/albums/[id]/cover
  *
- * Serves the album's artwork. A local `coverPath` wins; otherwise the chosen
- * MusicBrainz edition is proxied through the Cover Art Archive. This reads two
- * fields, not the album and its whole tracklist — a grid asks for dozens of
- * these on one render.
+ * Serves the album's artwork. A local `coverPath` wins; otherwise the album's
+ * release is served through the cover cache, which walks the Cover Art
+ * Archive redirect chain once instead of once per tile per load. This reads
+ * two fields, not the album and its whole tracklist — a grid asks for dozens
+ * of these on one render.
+ *
+ * The URL is keyed by album id, not by release id, so a rematch can change the
+ * bytes behind it: a day of caching, not `immutable`.
  */
 export const GET: RequestHandler = async (event) => {
 	const authError = requireAuth(event);
@@ -45,9 +49,17 @@ export const GET: RequestHandler = async (event) => {
 		}
 	}
 
-	if (!info.releaseMbid) return new Response('No cover for this album', { status: 404 });
-	return new Response(null, {
-		status: 302,
-		headers: { location: musicBrainz.coverArtUrl(info.releaseMbid, 500) }
+	// The edition the album was imported from can have no front image while the
+	// release group does: fall back rather than show a blank tile.
+	const cover =
+		(info.releaseMbid ? await getCover('release', info.releaseMbid, 500) : null) ??
+		(info.releaseGroupMbid ? await getCover('release-group', info.releaseGroupMbid, 500) : null);
+	if (!cover) return new Response('No cover for this album', { status: 404 });
+
+	return new Response(cover.body, {
+		headers: {
+			'content-type': cover.contentType,
+			'cache-control': 'public, max-age=86400'
+		}
 	});
 };

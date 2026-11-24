@@ -3,6 +3,7 @@
 	import { Check, Plus } from '@lucide/svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import * as m from '#lib/paraglide/messages.js';
+	import { releaseGroupCoverUrl } from '#lib/music/cover-art.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import AlbumHero from '#lib/components/music/AlbumHero.svelte';
 	import MusicAddConfirmModal from '#lib/components/music/MusicAddConfirmModal.svelte';
@@ -83,8 +84,7 @@
 
 	/** The provider that answered this page owns the art and the artist link. */
 	const coverUrl = $derived(
-		data.artworkUrl ??
-			(group.mbid ? `https://coverartarchive.org/release-group/${group.mbid}/front-500` : null)
+		data.artworkUrl ?? (group.mbid ? releaseGroupCoverUrl(group.mbid, 500) : null)
 	);
 	const artistHref = $derived(
 		group.artist.mbid

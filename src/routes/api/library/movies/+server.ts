@@ -29,7 +29,6 @@ export const GET: RequestHandler = async (event) => {
 				title: movies.title,
 				originalTitle: movies.originalTitle,
 				year: movies.year,
-				overview: movies.overview,
 				posterPath: movies.posterPath,
 				backdropPath: movies.backdropPath,
 				runtime: movies.runtime,

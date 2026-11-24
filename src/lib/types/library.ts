@@ -82,7 +82,8 @@ export interface LibraryMovie {
 	title: string;
 	originalTitle: string | null;
 	year: number | null;
-	overview: string | null;
+	/** Only detail payloads carry it; the list omits it to keep the page small. */
+	overview?: string | null;
 	posterPath: string | null;
 	backdropPath: string | null;
 	runtime: number | null;

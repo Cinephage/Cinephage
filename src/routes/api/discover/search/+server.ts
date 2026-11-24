@@ -2,6 +2,7 @@ import type { RequestHandler } from './$types';
 import { tmdb } from '#lib/server/tmdb.js';
 import { searchMusic } from '#lib/server/catalog/deezerSearch.js';
 import { musicBrainz } from '#lib/server/music/musicbrainz.js';
+import { releaseGroupCoverUrl } from '#lib/music/cover-art.js';
 import { contentFilterPipeline } from '#lib/server/filters/ContentFilterPipeline.js';
 import { enrichWithReleaseDates } from '#lib/server/release-enrichment.js';
 import { z } from 'zod';
@@ -95,7 +96,7 @@ async function musicBrainzRows(query: string): Promise<MusicRow[]> {
 			musicKind: 'album',
 			title: group.title,
 			subtitle: group.artist.name,
-			image_url: `https://coverartarchive.org/release-group/${group.mbid}/front-250`,
+			image_url: releaseGroupCoverUrl(group.mbid, 250),
 			year: group.year ?? null,
 			primary_type: group.primaryType ?? null,
 			mbid: group.mbid

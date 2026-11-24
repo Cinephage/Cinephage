@@ -15,12 +15,12 @@ import { musicBrainz } from '#lib/server/music/musicbrainz.js';
 import type { RefreshResult } from '../types.js';
 import { addMusicItem } from './add.js';
 import {
-	coverArtUrl,
 	musicListConfig,
 	musicListConfigError,
 	type MusicListCandidate,
 	type MusicListConfig
 } from './types.js';
+import { releaseGroupCoverUrl } from '#lib/music/cover-art.js';
 
 const logger = createChildLogger({
 	module: 'MusicSmartListRefresh',
@@ -56,7 +56,7 @@ async function resolvePlaylistCandidates(
 			year: candidate.year,
 			primaryType: candidate.primaryType,
 			trackCount: null,
-			coverUrl: coverArtUrl(candidate.releaseGroupMbid)
+			coverUrl: releaseGroupCoverUrl(candidate.releaseGroupMbid)
 		}))
 	};
 }
@@ -104,7 +104,7 @@ async function resolveNewReleaseCandidates(config: MusicListConfig): Promise<Mus
 						year: group.year ?? null,
 						primaryType: group.primaryType ?? null,
 						trackCount: null,
-						coverUrl: coverArtUrl(group.mbid)
+						coverUrl: releaseGroupCoverUrl(group.mbid)
 					}
 				});
 			}

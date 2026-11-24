@@ -172,9 +172,7 @@ describe('refreshMusicList (playlist)', () => {
 		expect(rows.map((row) => row.mbid)).toEqual(['rg-discovery', 'rg-random']);
 		expect(rows.map((row) => row.position)).toEqual([0, 1]);
 		expect(rows[0].artistName).toBe('Daft Punk');
-		expect(rows[0].coverUrl).toBe(
-			'https://coverartarchive.org/release-group/rg-discovery/front-250'
-		);
+		expect(rows[0].coverUrl).toBe('/api/music/cover/release-group/rg-discovery/250');
 		expect(rows.every((row) => row.tmdbId === null)).toBe(true);
 		expect(rows.every((row) => row.mediaType === 'music')).toBe(true);
 

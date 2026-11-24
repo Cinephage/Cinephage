@@ -21,7 +21,7 @@ import { addSeriesToLibrary } from '#lib/server/library/add/add-series.js';
 import { blockedMediaService } from '#lib/server/blocked-media/service.js';
 import { addAlbumFromReleaseGroup } from '#lib/server/music/add-album.js';
 import { musicBrainz } from '#lib/server/music/musicbrainz.js';
-import { coverArtUrl } from '#lib/server/music/cover-art.js';
+import { releaseGroupCoverUrl } from '#lib/music/cover-art.js';
 import { resolveMovieMultiQuality } from '#lib/server/quality/movie-buckets.js';
 import { isLikelyAnimeMedia } from '#lib/shared/anime-classification.js';
 import { getRequestSettingsService, type RequestSettings } from './RequestSettingsService.js';
@@ -590,7 +590,7 @@ export class RequestService {
 			artistName: group.artist?.name || 'Unknown artist',
 			year,
 			primaryType: group.primaryType ?? null,
-			coverUrl: coverArtUrl(releaseGroupMbid, 500)
+			coverUrl: releaseGroupCoverUrl(releaseGroupMbid, 500)
 		};
 	}
 

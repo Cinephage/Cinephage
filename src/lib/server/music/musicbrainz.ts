@@ -909,13 +909,6 @@ export class MusicBrainzClient {
 		};
 	}
 
-	/**
-	 * Front cover for a release. The Archive answers a 307 to the real image
-	 * file, so callers that store the artwork must follow redirects.
-	 */
-	coverArtUrl(releaseMbid: string, size: 250 | 500 | 1200 = 500): string {
-		return `https://coverartarchive.org/release/${releaseMbid}/front-${size}`;
-	}
 }
 
 /**

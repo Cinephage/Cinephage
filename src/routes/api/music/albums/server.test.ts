@@ -35,8 +35,7 @@ vi.mock('#lib/server/music/musicbrainz.js', async () => {
 			getReleaseGroup: vi.fn(),
 			getReleaseGroupReleases: vi.fn(),
 			getRelease: vi.fn(),
-			searchReleaseGroups: vi.fn(),
-			coverArtUrl: vi.fn(() => 'https://coverartarchive.org/release/x/front-500')
+			searchReleaseGroups: vi.fn()
 		}
 	};
 });

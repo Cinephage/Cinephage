@@ -3,6 +3,7 @@
 	import { Plus } from '@lucide/svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import * as m from '#lib/paraglide/messages.js';
+	import { releaseGroupCoverUrl } from '#lib/music/cover-art.js';
 	import ArtistHero from '#lib/components/music/ArtistHero.svelte';
 	import MusicAddConfirmModal from '#lib/components/music/MusicAddConfirmModal.svelte';
 	import LibraryMediaCard from '#lib/components/library/LibraryMediaCard.svelte';
@@ -61,7 +62,7 @@
 
 	function rowCover(group: ReleaseGroupRow): string | null {
 		if (group.artworkUrl) return group.artworkUrl;
-		return group.mbid ? `https://coverartarchive.org/release-group/${group.mbid}/front-250` : null;
+		return group.mbid ? releaseGroupCoverUrl(group.mbid, 250) : null;
 	}
 
 	/** Only a MusicBrainz row can be in the library by id; a Deezer row cannot. */

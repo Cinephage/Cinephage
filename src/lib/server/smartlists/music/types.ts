@@ -94,5 +94,3 @@ export function musicSourceConfigError(input: {
 	return null;
 }
 
-/** The Cover Art Archive thumbnail a not-yet-imported album renders. */
-export { coverArtUrl } from '../../music/cover-art.js';

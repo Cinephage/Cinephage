@@ -148,7 +148,7 @@ describe('music requests', () => {
 			tmdbId: null,
 			mbid: MBID,
 			title: 'Discovery',
-			coverUrl: `https://coverartarchive.org/release-group/${MBID}/front-500`,
+			coverUrl: `/api/music/cover/release-group/${MBID}/500`,
 			year: 2001,
 			status: 'pending'
 		});

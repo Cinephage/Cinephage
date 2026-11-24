@@ -760,11 +760,19 @@ export class MusicAlbumService {
 	}
 
 	/** The two fields the cover route needs, without the tracklist. */
-	getAlbumCoverInfo(
-		albumId: string
-	): { coverPath: string | null; releaseMbid: string | null; albumPath: string | null } | null {
+	getAlbumCoverInfo(albumId: string): {
+		coverPath: string | null;
+		releaseMbid: string | null;
+		releaseGroupMbid: string | null;
+		albumPath: string | null;
+	} | null {
 		const row = db
-			.select({ coverPath: albums.coverPath, releaseMbid: albums.releaseMbid, albumPath: albums.path })
+			.select({
+				coverPath: albums.coverPath,
+				releaseMbid: albums.releaseMbid,
+				releaseGroupMbid: albums.mbid,
+				albumPath: albums.path
+			})
 			.from(albums)
 			.where(eq(albums.id, albumId))
 			.get();
