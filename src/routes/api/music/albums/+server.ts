@@ -26,13 +26,49 @@ const addAlbumSchema = z.object({
 	qualityProfileId: z.string().trim().min(1).nullable().optional()
 });
 
-/** GET /api/music/albums?libraryId= — the library list. */
+const listQuerySchema = z.object({
+	q: z.string().trim().max(200).optional(),
+	file: z.enum(['all', 'downloaded', 'missing']).default('all'),
+	monitor: z.enum(['all', 'monitored', 'unmonitored']).default('all'),
+	libraryId: z.string().trim().min(1).optional(),
+	quality: z.string().trim().min(1).optional(),
+	sort: z
+		.enum(['artist-asc', 'title-asc', 'year-desc', 'year-asc', 'tracks-desc', 'size-desc', 'size-asc'])
+		.default('artist-asc'),
+	offset: z.coerce.number().int().min(0).default(0),
+	limit: z.coerce.number().int().min(1).max(180).default(90),
+	/** `1` answers with the matching ids only, for select-all and monitor-all. */
+	idsOnly: z.literal('1').optional()
+});
+
+/**
+ * GET /api/music/albums — the Albums tab, one window at a time.
+ *
+ * The list's bulk actions need the whole filtered shelf, not only the rows the
+ * reader has scrolled to, so `idsOnly=1` runs the same filters and returns ids.
+ */
 export const GET: RequestHandler = async (event) => {
 	const authError = requireAuth(event);
 	if (authError) return authError;
 
-	const libraryId = event.url.searchParams.get('libraryId')?.trim() || null;
-	return Response.json({ success: true, albums: musicAlbumService.listAlbums({ libraryId }) });
+	const parsed = listQuerySchema.safeParse(Object.fromEntries(event.url.searchParams));
+	if (!parsed.success) {
+		return Response.json({ error: 'Invalid query' }, { status: 400 });
+	}
+
+	const { idsOnly, offset, limit, sort, ...filters } = parsed.data;
+	if (idsOnly) {
+		const ids = musicAlbumService.listAlbumIds(filters);
+		return Response.json({ success: true, ids, total: ids.length });
+	}
+
+	const { rows, total } = musicAlbumService.listAlbumsPage({ ...filters, sort, offset, limit });
+	return Response.json({
+		success: true,
+		albums: rows,
+		total,
+		hasMore: offset + rows.length < total
+	});
 };
 
 /**

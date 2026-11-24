@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { coreTitle } from './track-matching.js';
 import { db } from '#lib/server/db/index.js';
@@ -6,6 +6,16 @@ import { albums, artists, downloadQueue, libraries, mediaItems, trackFiles, trac
 import { createChildLogger } from '#lib/logging/index.js';
 import { NotFoundError, ValidationError } from '#lib/errors/index.js';
 import { musicProfileService } from './MusicProfileService.js';
+import {
+	albumFilter,
+	albumOrder,
+	effectiveProfileSql,
+	musicLibraryJoin,
+	pageLimit,
+	pageOffset,
+	type AlbumListSort,
+	type MusicLibraryFilter
+} from './library-query.js';
 import { cancelQueuedDownloads } from '#lib/server/library/library-removal.js';
 import { musicBrainz, pickPrimaryRelease } from './musicbrainz.js';
 import type { MusicArtistRef, MusicRelease, MusicReleaseGroup, MusicTrack } from './types.js';
@@ -73,6 +83,23 @@ export interface AlbumSummary {
 	sizeBytes: number;
 	/** True when the cover can be served: a local file, or a MusicBrainz edition to proxy. */
 	hasCover: boolean;
+}
+
+/** A list row also knows the profile a grab would inherit, so the filter is exact. */
+export interface AlbumListRow extends AlbumSummary {
+	effectiveProfileId: string;
+}
+
+/** One page of the album list plus the unfiltered-by-window total. */
+export interface AlbumPage {
+	rows: AlbumListRow[];
+	total: number;
+}
+
+export interface AlbumPageOptions extends MusicLibraryFilter {
+	sort?: AlbumListSort;
+	offset?: number;
+	limit?: number;
 }
 
 /** One audio file on disk, as the album page's Files block lists it. */
@@ -811,6 +838,102 @@ export class MusicAlbumService {
 			sizeBytes: Number(row.sizeBytes),
 			hasCover: Boolean(row.coverPath ?? releaseMbid)
 		}));
+	}
+
+	/**
+	 * One page of the album list, filtered and sorted in SQL. The page used to
+	 * receive every album and narrow in the browser; this is the query behind the
+	 * window it shows instead, so a large library costs one page, not all rows.
+	 */
+	listAlbumsPage(options: AlbumPageOptions = {}): AlbumPage {
+		const defaultProfileId = musicProfileService.defaultQualityProfile().id;
+		const where = albumFilter(options, defaultProfileId);
+
+		const total =
+			db
+				.select({ value: count() })
+				.from(albums)
+				.innerJoin(artists, eq(albums.artistId, artists.id))
+				.leftJoin(libraries, musicLibraryJoin)
+				.where(where)
+				.get()?.value ?? 0;
+
+		const rows = db
+			.select({
+				id: albums.id,
+				title: albums.title,
+				artistId: albums.artistId,
+				artistName: artists.name,
+				artistMbid: artists.mbid,
+				year: albums.year,
+				trackCount: albums.trackCount,
+				duration: albums.duration,
+				hasFile: albums.hasFile,
+				streamSource: albums.streamSource,
+				monitored: albums.monitored,
+				coverPath: albums.coverPath,
+				genres: albums.genres,
+				path: albums.path,
+				releaseMbid: albums.releaseMbid,
+				libraryId: albums.libraryId,
+				qualityProfileId: albums.qualityProfileId,
+				effectiveProfileId: effectiveProfileSql(defaultProfileId),
+				sizeBytes: sql<number>`COALESCE(SUM(${trackFiles.sizeBytes}), 0)`
+			})
+			.from(albums)
+			.innerJoin(artists, eq(albums.artistId, artists.id))
+			.leftJoin(libraries, musicLibraryJoin)
+			.leftJoin(trackFiles, eq(trackFiles.albumId, albums.id))
+			.where(where)
+			.groupBy(albums.id)
+			.orderBy(...albumOrder(options.sort))
+			.limit(pageLimit(options.limit))
+			.offset(pageOffset(options.offset))
+			.all();
+
+		return {
+			rows: rows.map(({ releaseMbid, ...row }) => ({
+				...row,
+				sizeBytes: Number(row.sizeBytes),
+				hasCover: Boolean(row.coverPath ?? releaseMbid)
+			})),
+			total
+		};
+	}
+
+	/**
+	 * Every album id matching the list filters. "Select all" and "Monitor all"
+	 * mean the filtered shelf, not only the rows already scrolled into view.
+	 */
+	listAlbumIds(options: MusicLibraryFilter = {}): string[] {
+		const defaultProfileId = musicProfileService.defaultQualityProfile().id;
+		return db
+			.select({ id: albums.id })
+			.from(albums)
+			.innerJoin(artists, eq(albums.artistId, artists.id))
+			.leftJoin(libraries, musicLibraryJoin)
+			.where(albumFilter(options, defaultProfileId))
+			.orderBy(asc(artists.name), asc(albums.year), asc(albums.title))
+			.all()
+			.map((row) => row.id);
+	}
+
+	/** The header counts, without loading a row. */
+	countLibrary(): { albums: number; missing: number; monitored: number } {
+		const row = db
+			.select({
+				albums: count(),
+				missing:
+					sql<number>`sum(case when ${albums.hasFile} = 0 and ${albums.streamSource} is null then 1 else 0 end)`,
+				monitored: sql<number>`sum(case when ${albums.monitored} = 1 then 1 else 0 end)`
+			})
+			.from(albums)
+			.get();
+		return {
+			albums: row?.albums ?? 0,
+			missing: Number(row?.missing ?? 0),
+			monitored: Number(row?.monitored ?? 0)
+		};
 	}
 
 	/** One album with its tracklist, or null when the id is unknown. */

@@ -1,4 +1,4 @@
-import { eq, inArray } from 'drizzle-orm';
+import { asc, count, eq, inArray, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { db } from '#lib/server/db/index.js';
 import { albums, artists, mediaItems } from '#lib/server/db/schema.js';
@@ -10,6 +10,17 @@ import {
 	type AddArtistPolicy,
 	type AddAlbumResult
 } from './MusicAlbumService.js';
+import { musicProfileService } from './MusicProfileService.js';
+import {
+	artistFilter,
+	artistHaving,
+	artistOrder,
+	pageLimit,
+	pageOffset,
+	type ArtistListSort,
+	type MusicLibraryFilter
+} from './library-query.js';
+import type { ArtistCardData } from '#lib/components/music/music-card.js';
 import type { MusicArtistRef, MusicReleaseGroup } from './types.js';
 
 const logger = createChildLogger({ module: 'MusicArtistService', logDomain: 'system' });
@@ -58,6 +69,18 @@ export interface ArtistRecord {
 	/** Null = inherit the default music quality profile. */
 	qualityProfileId: string | null;
 	added: string | null;
+}
+
+/** One page of the artist list, in the shape every artist card already takes. */
+export interface ArtistPage {
+	rows: ArtistCardData[];
+	total: number;
+}
+
+export interface ArtistPageOptions extends MusicLibraryFilter {
+	sort?: ArtistListSort;
+	offset?: number;
+	limit?: number;
 }
 
 /**
@@ -350,6 +373,86 @@ export class MusicArtistService {
 			.from(artists)
 			.where(inArray(artists.id, ids))
 			.all();
+	}
+
+	/**
+	 * One page of the artist list, filtered and sorted in SQL. The page used to
+	 * receive every artist and narrow in the browser; this is the query behind
+	 * the window it shows instead.
+	 */
+	listArtistsPage(options: ArtistPageOptions = {}): ArtistPage {
+		const defaultProfileId = musicProfileService.defaultQualityProfile().id;
+		const where = artistFilter(options, defaultProfileId);
+		const having = artistHaving(options);
+
+		const matching = db
+			.select({ id: artists.id })
+			.from(artists)
+			.innerJoin(albums, eq(albums.artistId, artists.id))
+			.where(where)
+			.groupBy(artists.id)
+			.having(having)
+			.as('matching_artists');
+
+		const total = db.select({ value: count() }).from(matching).get()?.value ?? 0;
+
+		const rows = db
+			.select({
+				id: artists.id,
+				name: artists.name,
+				mbid: artists.mbid,
+				monitored: artists.monitored,
+				albumCount: count(albums.id),
+				inLibraryCount: sql<number>`sum(case when ${albums.hasFile} = 1 then 1 else 0 end)`,
+				coverAlbumId:
+					sql<string | null>`(select a2.id from albums a2 where a2.artist_id = ${artists.id} and (a2.cover_path is not null or a2.release_mbid is not null) order by a2.year, a2.title limit 1)`
+			})
+			.from(artists)
+			.innerJoin(albums, eq(albums.artistId, artists.id))
+			.where(where)
+			.groupBy(artists.id)
+			.having(having)
+			.orderBy(...artistOrder(options.sort))
+			.limit(pageLimit(options.limit))
+			.offset(pageOffset(options.offset))
+			.all();
+
+		return {
+			rows: rows.map((row) => ({
+				...row,
+				inLibraryCount: Number(row.inLibraryCount)
+			})),
+			total
+		};
+	}
+
+	/**
+	 * Every artist id matching the list filters. "Select all" and "Monitor all"
+	 * mean the filtered shelf, not only the rows already scrolled into view.
+	 */
+	listArtistIds(options: MusicLibraryFilter = {}): string[] {
+		const defaultProfileId = musicProfileService.defaultQualityProfile().id;
+		return db
+			.select({ id: artists.id })
+			.from(artists)
+			.innerJoin(albums, eq(albums.artistId, artists.id))
+			.where(artistFilter(options, defaultProfileId))
+			.groupBy(artists.id)
+			.having(artistHaving(options))
+			.orderBy(asc(artists.name))
+			.all()
+			.map((row) => row.id);
+	}
+
+	/** The header count. Artists with no album are not part of the music list. */
+	countArtists(): number {
+		return (
+			db
+				.select({ value: sql<number>`count(distinct ${artists.id})` })
+				.from(artists)
+				.innerJoin(albums, eq(albums.artistId, artists.id))
+				.get()?.value ?? 0
+		);
 	}
 
 	/** How much an artist would add, without writing anything — the preview. */

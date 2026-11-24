@@ -36,13 +36,33 @@
 	import ConfirmationModal from '#lib/components/ui/modal/ConfirmationModal.svelte';
 	import BulkQualityProfileModal from '#lib/components/library/BulkQualityProfileModal.svelte';
 import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
-	import type { TrackTableRow } from '#lib/components/music/music-card.js';
+	import type { ArtistCardData, TrackTableRow } from '#lib/components/music/music-card.js';
 
 	let { data }: { data: PageData } = $props();
 
 	type Browse = 'artists' | 'albums' | 'songs';
 	type FileFilter = 'all' | 'downloaded' | 'missing';
 	type MonitorFilter = 'all' | 'monitored' | 'unmonitored';
+	/** One album row as the list endpoint returns it. */
+	type AlbumRow = {
+		id: string;
+		title: string;
+		artistId: string;
+		artistName: string;
+		artistMbid: string | null;
+		year: number | null;
+		trackCount: number | null;
+		duration: number | null;
+		hasFile: boolean | null;
+		streamSource: string | null;
+		monitored: boolean | null;
+		coverPath: string | null;
+		libraryId: string | null;
+		qualityProfileId: string | null;
+		sizeBytes: number;
+		hasCover: boolean;
+		effectiveProfileId: string;
+	};
 
 	const initial = new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search);
 	const initialBrowse = initial.get('type');
@@ -67,87 +87,112 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 
 	const isAdminUser = $derived(data.user?.role === 'admin');
 
-	/**
-	 * One search box, three levels. A query looks at artists, albums and songs at
-	 * once — the way the movie list's search looks at every movie — and the
-	 * matching kind decides how a result is drawn. An empty query is the browse
-	 * state, which shows one level at a time.
-	 */
-	const needles = $derived(searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean));
+	// Filtering is the server's job: every list request carries the same query,
+	// file, monitoring, library and profile parameters, and the response is one
+	// window plus the filtered total.
 
-	function matches(text: string): boolean {
-		if (needles.length === 0) return true;
-		const haystack = text.toLowerCase();
-		return needles.every((needle) => haystack.includes(needle));
+	// Rows arrive a window at a time; the server applies every filter, so the
+	// browser only appends. `total` is the filtered count, not the loaded count.
+	const PAGE_SIZE = 90;
+
+	const ARTIST_SORTS = ['name-asc', 'name-desc', 'albums-desc', 'missing-desc'];
+	const ALBUM_SORTS = [
+		'artist-asc',
+		'title-asc',
+		'year-desc',
+		'year-asc',
+		'tracks-desc',
+		'size-desc',
+		'size-asc'
+	];
+	const SONG_SORTS = ['title-asc', 'artist-asc', 'album-asc', 'duration-desc'];
+
+	let artists = $state<ArtistCardData[]>([]);
+	let artistsTotal = $state(0);
+	let artistsHasMore = $state(false);
+	let artistsLoading = $state(false);
+	let artistTimer: ReturnType<typeof setTimeout> | null = null;
+	let artistRequest = 0;
+
+	let albums = $state<AlbumRow[]>([]);
+	let albumsTotal = $state(0);
+	let albumsHasMore = $state(false);
+	let albumsLoading = $state(false);
+	let albumTimer: ReturnType<typeof setTimeout> | null = null;
+	let albumRequest = 0;
+
+	function listParams(extra: Record<string, string> = {}, sort = 'name-asc'): URLSearchParams {
+		const params = new URLSearchParams({ file: fileFilter, monitor: monitorFilter, sort, ...extra });
+		if (searchQuery.trim()) params.set('q', searchQuery.trim());
+		if (libraryFilter !== 'all') params.set('libraryId', libraryFilter);
+		if (qualityFilter !== 'all') params.set('quality', qualityFilter);
+		return params;
 	}
 
-	function keepFile(hasFile: boolean | null | undefined): boolean {
-		if (fileFilter === 'downloaded' && !hasFile) return false;
-		if (fileFilter === 'missing' && hasFile) return false;
-		return true;
+	async function loadArtists(reset: boolean): Promise<void> {
+		const request = ++artistRequest;
+		const params = listParams(
+			{
+				offset: String(reset ? 0 : artists.length),
+				limit: String(PAGE_SIZE)
+			},
+			ARTIST_SORTS.includes(sortField) ? sortField : 'name-asc'
+		);
+		artistsLoading = true;
+		if (reset) artists = [];
+		try {
+			const response = await fetch(`/api/music/artists?${params}`);
+			const body = await response.json().catch(() => ({}));
+			if (request !== artistRequest) return;
+			if (!response.ok) {
+				toasts.error(body.error ?? m.music_searchFailed());
+				return;
+			}
+			artists = reset ? (body.artists ?? []) : [...artists, ...(body.artists ?? [])];
+			artistsTotal = body.total ?? artists.length;
+			artistsHasMore = Boolean(body.hasMore);
+		} catch (err) {
+			if (request === artistRequest) {
+				toasts.error(err instanceof Error ? err.message : m.music_searchFailed());
+			}
+		} finally {
+			if (request === artistRequest) artistsLoading = false;
+		}
 	}
 
-	function keepMonitor(monitored: boolean | null | undefined): boolean {
-		if (monitorFilter === 'monitored' && !monitored) return false;
-		if (monitorFilter === 'unmonitored' && monitored) return false;
-		return true;
+	async function loadAlbums(reset: boolean): Promise<void> {
+		const request = ++albumRequest;
+		const params = listParams(
+			{
+				offset: String(reset ? 0 : albums.length),
+				limit: String(PAGE_SIZE)
+			},
+			ALBUM_SORTS.includes(sortField) ? sortField : 'artist-asc'
+		);
+		albumsLoading = true;
+		if (reset) albums = [];
+		try {
+			const response = await fetch(`/api/music/albums?${params}`);
+			const body = await response.json().catch(() => ({}));
+			if (request !== albumRequest) return;
+			if (!response.ok) {
+				toasts.error(body.error ?? m.music_searchFailed());
+				return;
+			}
+			albums = reset ? (body.albums ?? []) : [...albums, ...(body.albums ?? [])];
+			albumsTotal = body.total ?? albums.length;
+			albumsHasMore = Boolean(body.hasMore);
+		} catch (err) {
+			if (request === albumRequest) {
+				toasts.error(err instanceof Error ? err.message : m.music_searchFailed());
+			}
+		} finally {
+			if (request === albumRequest) albumsLoading = false;
+		}
 	}
 
-	const artists = $derived(
-		[...data.artists]
-			.filter(
-				(artist) =>
-					matches(artist.name) &&
-					keepMonitor(artist.monitored) &&
-					(fileFilter === 'all' ||
-						(fileFilter === 'downloaded' && artist.inLibraryCount > 0) ||
-						(fileFilter === 'missing' && artist.inLibraryCount < artist.albumCount)) &&
-					((libraryFilter === 'all' && qualityFilter === 'all') ||
-						scopedArtistIds.has(artist.id))
-			)
-			.sort((a, b) => {
-				if (sortField === 'name-desc') return b.name.localeCompare(a.name);
-				if (sortField === 'albums-desc') return b.albumCount - a.albumCount;
-				if (sortField === 'missing-desc')
-					return b.albumCount - b.inLibraryCount - (a.albumCount - a.inLibraryCount);
-				return a.name.localeCompare(b.name);
-			})
-	);
-
-	const matchesScope = (album: (typeof data.albums)[number]) =>
-		(libraryFilter === 'all' || album.libraryId === libraryFilter) &&
-		(qualityFilter === 'all' || album.effectiveProfileId === qualityFilter);
-	const scopedAlbumIds = $derived(new Set(data.albums.filter(matchesScope).map((album) => album.id)));
-	const scopedArtistIds = $derived(
-		new Set(data.albums.filter(matchesScope).map((album) => album.artistId))
-	);
-
-	const albums = $derived(
-		[...data.albums]
-			.filter(
-				(album) =>
-					matches(`${album.title} ${album.artistName}`) &&
-					keepFile(album.hasFile) &&
-					keepMonitor(album.monitored) &&
-					matchesScope(album)
-			)
-			.sort((a, b) => {
-				if (sortField === 'title-asc') return a.title.localeCompare(b.title);
-				if (sortField === 'year-desc') return (b.year ?? 0) - (a.year ?? 0);
-				if (sortField === 'year-asc') return (a.year ?? 9999) - (b.year ?? 9999);
-				if (sortField === 'tracks-desc') return (b.trackCount ?? 0) - (a.trackCount ?? 0);
-				if (sortField === 'size-desc') return (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0);
-				if (sortField === 'size-asc') return (a.sizeBytes ?? 0) - (b.sizeBytes ?? 0);
-				return (
-					a.artistName.localeCompare(b.artistName) ||
-					(a.year ?? 0) - (b.year ?? 0) ||
-					a.title.localeCompare(b.title)
-				);
-			})
-	);
-
-	// Songs are the one list large enough to page on the server. The first window
-	// is fetched after hydration; the sentinel asks for the next one.
+	// Songs use the same windowed contract: the first page is fetched after
+	// hydration and the sentinel asks for the next one.
 	let songs = $state<TrackTableRow[]>([]);
 	let songsTotal = $state(0);
 	let songsHasMore = $state(false);
@@ -162,12 +207,13 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 			offset: String(offset),
 			limit: '90',
 			file: fileFilter,
-			sort: sortField,
-			quality: qualityFilter
+			sort: SONG_SORTS.includes(sortField) ? sortField : 'title-asc'
 		});
 		if (searchQuery.trim()) params.set('q', searchQuery.trim());
 		if (libraryFilter !== 'all') params.set('libraryId', libraryFilter);
+		if (qualityFilter !== 'all') params.set('quality', qualityFilter);
 		songsLoading = true;
+		if (reset) songs = [];
 		try {
 			const response = await fetch(`/api/music/tracks?${params}`);
 			const body = await response.json().catch(() => ({}));
@@ -204,7 +250,43 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 		};
 	});
 
-	const searching = $derived(needles.length > 0);
+	const searching = $derived(searchQuery.trim().length > 0);
+
+	// One query, three sources. In search mode every level asks the server for
+	// its own window; in browse mode only the active tab does.
+	$effect(() => {
+		void browse;
+		void searchQuery;
+		void fileFilter;
+		void monitorFilter;
+		void libraryFilter;
+		void qualityFilter;
+		void sortField;
+		if (typeof window === 'undefined') return;
+		if (browse !== 'artists' && !searching) return;
+		if (artistTimer) clearTimeout(artistTimer);
+		artistTimer = setTimeout(() => void loadArtists(true), 250);
+		return () => {
+			if (artistTimer) clearTimeout(artistTimer);
+		};
+	});
+
+	$effect(() => {
+		void browse;
+		void searchQuery;
+		void fileFilter;
+		void monitorFilter;
+		void libraryFilter;
+		void qualityFilter;
+		void sortField;
+		if (typeof window === 'undefined') return;
+		if (browse !== 'albums' && !searching) return;
+		if (albumTimer) clearTimeout(albumTimer);
+		albumTimer = setTimeout(() => void loadAlbums(true), 250);
+		return () => {
+			if (albumTimer) clearTimeout(albumTimer);
+		};
+	});
 
 	// A sort from another tab is not valid here (songs have no name-asc);
 	// falling back keeps the query accepted instead of a 400.
@@ -215,42 +297,30 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 		}
 	});
 
-	// Windowed rendering: the lists are already filtered and sorted, and only
-	// this many rows are in the DOM. The sentinel raises it as the reader nears
-	// the end, so a large library scrolls instead of painting every card at once.
-	const PAGE_SIZE = 90;
-	let visibleCount = $state(PAGE_SIZE);
-	const visibleArtists = $derived(artists.slice(0, visibleCount));
-	const visibleAlbums = $derived(albums.slice(0, visibleCount));
+	// Each list pages at the source; one sentinel asks every visible list for
+	// its next window.
 	const visibleSongs = $derived(songs);
 	const hasMoreRows = $derived(
 		searching
-			? songsHasMore || visibleCount < artists.length || visibleCount < albums.length
+			? songsHasMore || artistsHasMore || albumsHasMore
 			: browse === 'songs'
 				? songsHasMore
 				: browse === 'albums'
-					? visibleCount < albums.length
-					: visibleCount < artists.length
+					? albumsHasMore
+					: artistsHasMore
 	);
 
 	function loadMoreRows() {
-		if (browse === 'songs' || searching) {
-			if (songsHasMore && !songsLoading) void loadSongs(false);
+		if ((searching || browse === 'songs') && songsHasMore && !songsLoading) {
+			void loadSongs(false);
 		}
-		if (visibleCount < Math.max(artists.length, albums.length)) visibleCount += PAGE_SIZE;
+		if ((searching || browse === 'artists') && artistsHasMore && !artistsLoading) {
+			void loadArtists(false);
+		}
+		if ((searching || browse === 'albums') && albumsHasMore && !albumsLoading) {
+			void loadAlbums(false);
+		}
 	}
-
-	// A new filter, query, sort or tab starts a new list at the top.
-	$effect(() => {
-		void browse;
-		void searchQuery;
-		void fileFilter;
-		void monitorFilter;
-		void libraryFilter;
-		void qualityFilter;
-		void sortField;
-		visibleCount = PAGE_SIZE;
-	});
 
 	function defaultSort(view: Browse): string {
 		if (view === 'songs') return 'title-asc';
@@ -364,11 +434,7 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 				: m.music_tabArtists()
 	);
 	const browseCount = $derived(
-		browse === 'albums'
-			? data.counts.albums
-			: browse === 'songs'
-				? data.counts.songs
-				: data.counts.artists
+		browse === 'albums' ? albumsTotal : browse === 'songs' ? songsTotal : artistsTotal
 	);
 
 	// Keep the view in the URL so a reload and the detail page's back link land on
@@ -395,82 +461,123 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 		qualityFilter = 'all';
 	}
 
-	async function setMonitored(ids: string[], monitored: boolean) {
-		if (ids.length === 0) return;
-		const response = await fetch('/api/music/albums', {
-			method: 'PATCH',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ ids, monitored })
-		});
+	/** The ids behind the current filters, not only the rows on screen. */
+	async function idsForList(): Promise<string[]> {
+		if (browse === 'songs') return [];
+		const endpoint = browse === 'artists' ? '/api/music/artists' : '/api/music/albums';
+		const sorts = browse === 'artists' ? ARTIST_SORTS : ALBUM_SORTS;
+		const params = listParams(
+			{ idsOnly: '1' },
+			sorts.includes(sortField) ? sortField : browse === 'artists' ? 'name-asc' : 'artist-asc'
+		);
+		const response = await fetch(`${endpoint}?${params}`);
+		const body = await response.json().catch(() => ({}));
 		if (!response.ok) {
-			const body = await response.json().catch(() => ({}));
-			toasts.error(body.details ?? body.error ?? m.common_failedToSave());
+			toasts.error(body.error ?? m.music_searchFailed());
+			return [];
+		}
+		return body.ids ?? [];
+	}
+
+	/** Reload the visible lists after a write; the page load only carries counts. */
+	async function refreshAfterChange() {
+		await invalidateAll();
+		if (browse === 'artists' || searching) void loadArtists(true);
+		if (browse === 'albums' || searching) void loadAlbums(true);
+		if (browse === 'songs' || searching) void loadSongs(true);
+	}
+
+	/** Header button: select → select all matching → done. */
+	async function cycleSelection() {
+		if (!selection.mode) {
+			selection.cycle([]);
 			return;
 		}
-		await invalidateAll();
+		if (selection.count < browseCount) {
+			const ids = await idsForList();
+			if (ids.length > 0) selection.selectAll(ids.map((id) => ({ id })));
+			return;
+		}
+		selection.clear();
+	}
+
+	async function setMonitored(ids: string[], monitored: boolean): Promise<boolean> {
+		if (ids.length === 0) return true;
+		// The API takes at most 500 ids per call; the filtered shelf can be larger.
+		for (let index = 0; index < ids.length; index += 500) {
+			const response = await fetch('/api/music/albums', {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ ids: ids.slice(index, index + 500), monitored })
+			});
+			if (!response.ok) {
+				const body = await response.json().catch(() => ({}));
+				toasts.error(body.details ?? body.error ?? m.common_failedToSave());
+				return false;
+			}
+		}
+		return true;
+	}
+
+	async function setArtistsMonitored(ids: string[], monitored: boolean): Promise<boolean> {
+		if (ids.length === 0) return true;
+		for (let index = 0; index < ids.length; index += 500) {
+			const response = await fetch('/api/music/artists', {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ ids: ids.slice(index, index + 500), monitored })
+			});
+			if (!response.ok) {
+				const body = await response.json().catch(() => ({}));
+				toasts.error(body.details ?? body.error ?? m.common_failedToSave());
+				return false;
+			}
+		}
+		return true;
 	}
 
 	async function handleMonitorAll(monitored: boolean) {
-		if (browse === 'artists') {
-			await setArtistsMonitored(
-				artists.map((artist) => artist.id),
-				monitored
-			);
-			return;
-		}
-		await setMonitored(
-			albums.map((album) => album.id),
-			monitored
-		);
-	}
-
-	async function setArtistsMonitored(ids: string[], monitored: boolean) {
+		const ids = await idsForList();
 		if (ids.length === 0) return;
-		const response = await fetch('/api/music/artists', {
-			method: 'PATCH',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ ids, monitored })
-		});
-		if (!response.ok) {
-			const body = await response.json().catch(() => ({}));
-			toasts.error(body.details ?? body.error ?? m.common_failedToSave());
-			return;
-		}
-		await invalidateAll();
+		const ok =
+			browse === 'artists'
+				? await setArtistsMonitored(ids, monitored)
+				: await setMonitored(ids, monitored);
+		if (ok) await refreshAfterChange();
 	}
 
 	async function toggleAlbumMonitored(id: string) {
-		const album = data.albums.find((entry) => entry.id === id);
+		const album = albums.find((entry) => entry.id === id);
 		if (!album) return;
-		await setMonitored([id], !album.monitored);
+		if (await setMonitored([id], !album.monitored)) await refreshAfterChange();
 	}
 
 	async function toggleArtistMonitored(id: string) {
-		const artist = data.artists.find((entry) => entry.id === id);
+		const artist = artists.find((entry) => entry.id === id);
 		if (!artist) return;
-		await setArtistsMonitored([id], !artist.monitored);
+		if (await setArtistsMonitored([id], !artist.monitored)) await refreshAfterChange();
 	}
 
 	async function removeAlbum(id: string) {
-		const album = data.albums.find((entry) => entry.id === id);
+		const album = albums.find((entry) => entry.id === id);
 		const response = await fetch(`/api/music/albums/${id}`, { method: 'DELETE' });
 		if (!response.ok) {
 			toasts.error(m.common_failedToSave());
 			return;
 		}
 		toasts.success(m.music_removedAlbum({ title: album?.title ?? '' }));
-		await invalidateAll();
+		await refreshAfterChange();
 	}
 
 	async function removeArtist(id: string) {
-		const artist = data.artists.find((entry) => entry.id === id);
+		const artist = artists.find((entry) => entry.id === id);
 		const response = await fetch(`/api/music/artists/${id}`, { method: 'DELETE' });
 		if (!response.ok) {
 			toasts.error(m.common_failedToSave());
 			return;
 		}
 		toasts.success(m.music_removedArtist({ name: artist?.name ?? '' }));
-		await invalidateAll();
+		await refreshAfterChange();
 	}
 
 	/** Song rows search their album — the unit acquisition actually acts on. */
@@ -491,7 +598,7 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 			const body = await response.json().catch(() => ({}));
 			if (body.grabbed) {
 				toasts.success(m.music_grabbed({ title: body.release ?? track.albumTitle }));
-				await invalidateAll();
+				await refreshAfterChange();
 			} else {
 				toasts.info(body.error ?? m.music_noReleases());
 			}
@@ -508,7 +615,7 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 			const body = await response.json().catch(() => ({}));
 			if (body.grabbed) {
 				toasts.success(m.music_grabbed({ title: body.release ?? albumTitle(id) }));
-				await invalidateAll();
+				await refreshAfterChange();
 			} else {
 				toasts.info(body.error ?? m.music_noReleases());
 			}
@@ -539,7 +646,7 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 			}
 			if (!body.remaining) break;
 		}
-		await invalidateAll();
+		await refreshAfterChange();
 	}
 
 	const selection = createListSelection();
@@ -547,8 +654,6 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 
 	const emptyLibrary = $derived(data.counts.albums === 0);
 
-	/** The list selection acts on artists or albums, never on song rows. */
-	const selectionItems = $derived(browse === 'artists' ? artists : albums);
 	const selectable = $derived(browse !== 'songs' && isAdminUser);
 	const bulkItemLabel = $derived(
 		browse === 'artists'
@@ -571,10 +676,13 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 		bulkAction = monitored ? 'monitor' : 'unmonitor';
 		try {
 			const ids = [...selection.ids];
-			await (browse === 'artists'
+			const ok = await (browse === 'artists'
 				? setArtistsMonitored(ids, monitored)
 				: setMonitored(ids, monitored));
-			selection.clear();
+			if (ok) {
+				selection.clear();
+				await refreshAfterChange();
+			}
 		} finally {
 			bulkLoading = false;
 			bulkAction = null;
@@ -602,7 +710,7 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 			}
 			qualityOpen = false;
 			selection.clear();
-			await invalidateAll();
+			await refreshAfterChange();
 		} catch (err) {
 			toasts.error(err instanceof Error ? err.message : m.common_failedToSave());
 		} finally {
@@ -631,7 +739,7 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 			} else {
 				toasts.error(m.common_failedToSave());
 			}
-			await invalidateAll();
+			await refreshAfterChange();
 		} finally {
 			bulkLoading = false;
 			bulkAction = null;
@@ -683,12 +791,12 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 			{#if selectable}
 				<button
 					class="btn gap-1.5 btn-ghost btn-xs sm:btn-sm {selection.mode ? 'btn-primary' : ''}"
-					onclick={() => selection.cycle(selectionItems)}
+					onclick={() => void cycleSelection()}
 				>
 					{#if !selection.mode}
 						<CheckSquare class="h-4 w-4" />
 						<span class="hidden sm:inline">{m.library_movies_select()}</span>
-					{:else if !selection.allSelected(selectionItems)}
+					{:else if selection.count < browseCount}
 						<CheckSquare class="h-4 w-4" />
 						<span class="hidden sm:inline">{m.library_movies_selectAll()}</span>
 					{:else}
@@ -736,7 +844,7 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 			</div>
 
 			<div class="dropdown dropdown-end">
-				{#if isAdminUser}
+				{#if isAdminUser && browse !== 'songs'}
 					<div
 						tabindex="0"
 						role="button"
@@ -781,17 +889,17 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 			</div>
 		{:else if searching}
 			<!-- One query, every level. A section appears only when it has matches. -->
-			{#if artists.length > 0}
+			{#if artistsTotal > 0}
 				<section class="mb-8">
 					<div class="mb-3 flex items-center gap-2">
 						<h2 class="font-semibold">{m.music_tabArtists()}</h2>
-						<span class="badge badge-ghost badge-sm">{artists.length}</span>
+						<span class="badge badge-ghost badge-sm">{artistsTotal}</span>
 					</div>
 					{#if viewPreferences.viewMode === 'grid'}
 						<ul
 							class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-9"
 						>
-							{#each visibleArtists as artist (artist.id)}
+							{#each artists as artist (artist.id)}
 								<li>
 									<LibraryMediaCard
 										view={artistCardView(artist)}
@@ -804,7 +912,7 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 						</ul>
 					{:else}
 						<LibraryMediaTable
-							rows={visibleArtists.map((artist) => artistRowView(artist))}
+							rows={artists.map((artist) => artistRowView(artist))}
 							kind="artist"
 							selectedItems={selectedIds}
 							selectable={selectable && selection.mode}
@@ -817,17 +925,17 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 				</section>
 			{/if}
 
-			{#if albums.length > 0}
+			{#if albumsTotal > 0}
 				<section class="mb-8">
 					<div class="mb-3 flex items-center gap-2">
 						<h2 class="font-semibold">{m.music_tabAlbums()}</h2>
-						<span class="badge badge-ghost badge-sm">{albums.length}</span>
+						<span class="badge badge-ghost badge-sm">{albumsTotal}</span>
 					</div>
 					{#if viewPreferences.viewMode === 'grid'}
 						<ul
 							class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-9"
 						>
-							{#each visibleAlbums as album (album.id)}
+							{#each albums as album (album.id)}
 								<li>
 									<LibraryMediaCard
 										view={albumCardView(album)}
@@ -840,7 +948,7 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 						</ul>
 					{:else}
 						<LibraryMediaTable
-							rows={visibleAlbums.map((album) => albumRowView(album))}
+							rows={albums.map((album) => albumRowView(album))}
 							kind="album"
 							selectedItems={selectedIds}
 							selectable={selectable && selection.mode}
@@ -855,7 +963,7 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 				</section>
 			{/if}
 
-			{#if songs.length > 0}
+			{#if songsTotal > 0}
 				<section class="mb-8">
 					<div class="mb-3 flex items-center gap-2">
 						<h2 class="font-semibold">{m.music_tabSongs()}</h2>
@@ -875,7 +983,7 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 				</section>
 			{/if}
 
-			{#if artists.length === 0 && albums.length === 0 && songs.length === 0 && !songsLoading}
+			{#if artistsTotal === 0 && albumsTotal === 0 && songsTotal === 0 && !songsLoading && !artistsLoading && !albumsLoading}
 				<div class="flex flex-col items-center justify-center py-20 text-center">
 					<div class="opacity-50">
 						<Search class="mx-auto mb-4 h-16 w-16" />
@@ -920,7 +1028,7 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 				</div>
 			{/if}
 		{:else if browse === 'albums'}
-			{#if albums.length === 0}
+			{#if albumsTotal === 0 && !albumsLoading}
 				<div class="flex flex-col items-center justify-center py-20 text-center opacity-50">
 					<Disc3 class="mb-4 h-20 w-20" />
 					<p class="text-2xl font-bold">{m.music_noFilterMatch()}</p>
@@ -935,7 +1043,7 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 						<ul
 							class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-9"
 						>
-							{#each visibleAlbums as album (album.id)}
+							{#each albums as album (album.id)}
 								<li>
 									<LibraryMediaCard
 										view={albumCardView(album)}
@@ -948,7 +1056,7 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 						</ul>
 					{:else}
 						<LibraryMediaTable
-							rows={visibleAlbums.map((album) => albumRowView(album))}
+							rows={albums.map((album) => albumRowView(album))}
 							kind="album"
 							selectedItems={selectedIds}
 							selectable={selectable && selection.mode}
@@ -963,7 +1071,7 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 				</div>
 			{/if}
 		{:else}
-			{#if artists.length === 0}
+			{#if artistsTotal === 0 && !artistsLoading}
 				<div class="flex flex-col items-center justify-center py-20 text-center opacity-50">
 					<Mic2 class="mb-4 h-20 w-20" />
 					<p class="text-2xl font-bold">{m.music_noFilterMatch()}</p>
@@ -978,7 +1086,7 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 						<ul
 							class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-9"
 						>
-							{#each visibleArtists as artist (artist.id)}
+							{#each artists as artist (artist.id)}
 								<li>
 									<LibraryMediaCard
 										view={artistCardView(artist)}
@@ -991,7 +1099,7 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 						</ul>
 					{:else}
 						<LibraryMediaTable
-							rows={visibleArtists.map((artist) => artistRowView(artist))}
+							rows={artists.map((artist) => artistRowView(artist))}
 							kind="artist"
 							selectedItems={selectedIds}
 							selectable={selectable && selection.mode}

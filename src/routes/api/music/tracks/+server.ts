@@ -25,7 +25,11 @@ export const GET: RequestHandler = async (event) => {
 	}
 
 	const { quality, ...page } = parsed.data;
-	const albumIds = quality ? musicAlbumService.albumIdsForEffectiveProfile(quality) : undefined;
+	// `quality=all` is the unfiltered list, not a profile named "all".
+	const albumIds =
+		quality && quality !== 'all'
+			? musicAlbumService.albumIdsForEffectiveProfile(quality)
+			: undefined;
 	const { rows, total } = musicTrackService.listTracksPage({ ...page, albumIds });
 	return Response.json({
 		success: true,
