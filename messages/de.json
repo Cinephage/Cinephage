@@ -2984,6 +2984,8 @@
 	"rootFolders_movieFoldersDesc": "Standard-Filmordner zuerst, dann verbleibende Ordner alphabetisch.",
 	"rootFolders_movieFoldersTitle": "Film-Stammordner",
 	"rootFolders_movies": "Filme",
+	"rootFolders_music": "Musik",
+	"rootFolders_musicFoldersTitle": "Musik-Stammordner",
 	"rootFolders_namePlaceholder": "Mein Ordner",
 	"rootFolders_noFoldersConfigured": "Keine Stammordner konfiguriert",
 	"rootFolders_pathHint": "Der Ordnerpfad, in dem deine Medienbibliothek gespeichert ist",

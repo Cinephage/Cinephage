@@ -3118,6 +3118,8 @@
 	"rootFolders_movieFoldersDesc": "Default movie folder first, then remaining folders alphabetically.",
 	"rootFolders_movieFoldersTitle": "Movie Root Folders",
 	"rootFolders_movies": "Movies",
+	"rootFolders_music": "Music",
+	"rootFolders_musicFoldersTitle": "Music Root Folders",
 	"rootFolders_namePlaceholder": "Movies Library",
 	"rootFolders_noFoldersConfigured": "No root folders configured",
 	"rootFolders_pathHint": "The folder path where your media library is stored",

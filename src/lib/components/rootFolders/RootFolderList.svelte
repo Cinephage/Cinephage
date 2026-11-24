@@ -4,8 +4,6 @@
 		Folder,
 		Settings,
 		Trash2,
-		Film,
-		Tv,
 		Star,
 		Eye,
 		EyeOff,
@@ -17,6 +15,12 @@
 	} from '@lucide/svelte';
 	import type { RootFolder } from '#lib/types/downloadClient.js';
 	import { sortRootFoldersForMediaType } from '#lib/utils/root-folders.js';
+	import {
+		ROOT_FOLDER_KINDS,
+		ROOT_FOLDER_KIND_ICON,
+		ROOT_FOLDER_KIND_TITLE,
+		ROOT_FOLDER_KIND_TONE
+	} from './root-folder-kinds.js';
 
 	interface Props {
 		folders: RootFolder[];
@@ -26,31 +30,13 @@
 
 	let { folders, onEdit, onDelete }: Props = $props();
 
-	const movieFolders = $derived(sortRootFoldersForMediaType(folders, 'movie'));
-	const tvFolders = $derived(sortRootFoldersForMediaType(folders, 'tv'));
-
-	type FolderSection = {
-		id: 'movie' | 'tv';
-		title: string;
-		icon: typeof Film;
-		folders: RootFolder[];
-	};
-
 	const sections = $derived(
-		[
-			{
-				id: 'movie',
-				title: m.rootFolders_movieFoldersTitle(),
-				icon: Film,
-				folders: movieFolders
-			},
-			{
-				id: 'tv',
-				title: m.rootFolders_tvFoldersTitle(),
-				icon: Tv,
-				folders: tvFolders
-			}
-		].filter((section) => section.folders.length > 0) as FolderSection[]
+		ROOT_FOLDER_KINDS.map((kind) => ({
+			id: kind,
+			title: ROOT_FOLDER_KIND_TITLE[kind](),
+			icon: ROOT_FOLDER_KIND_ICON[kind],
+			folders: sortRootFoldersForMediaType(folders, kind)
+		})).filter((section) => section.folders.length > 0)
 	);
 </script>
 
@@ -65,11 +51,7 @@
 		{#each sections as section (section.id)}
 			<section class="space-y-3">
 				<div class="flex items-start gap-3">
-					<div
-						class="mt-0.5 rounded-lg p-2 {section.id === 'movie'
-							? 'bg-primary/15 text-primary'
-							: 'bg-secondary/15 text-secondary'}"
-					>
+					<div class="mt-0.5 rounded-lg p-2 {ROOT_FOLDER_KIND_TONE[section.id]}">
 						<section.icon class="h-4 w-4" />
 					</div>
 					<div class="min-w-0">
@@ -79,20 +61,15 @@
 
 				<div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
 					{#each section.folders as folder (folder.id)}
+						{@const KindIcon = ROOT_FOLDER_KIND_ICON[folder.mediaType] ?? Folder}
 						<div class="card bg-base-200 shadow-sm">
 							<div class="card-body p-4">
 								<div class="flex items-start justify-between gap-3">
 									<div class="flex min-w-0 items-start gap-3">
 										<div
-											class="shrink-0 rounded-lg p-2 {folder.mediaType === 'movie'
-												? 'bg-primary/20 text-primary'
-												: 'bg-secondary/20 text-secondary'}"
+											class="shrink-0 rounded-lg p-2 {ROOT_FOLDER_KIND_TONE[folder.mediaType]}"
 										>
-											{#if folder.mediaType === 'movie'}
-												<Film class="h-5 w-5" />
-											{:else}
-												<Tv class="h-5 w-5" />
-											{/if}
+											<KindIcon class="h-5 w-5" />
 										</div>
 										<div class="min-w-0">
 											<h3 class="flex flex-wrap items-center gap-2">

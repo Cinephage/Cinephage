@@ -2984,6 +2984,8 @@
 	"rootFolders_movieFoldersDesc": "Сначала папка фильмов по умолчанию, затем остальные папки в алфавитном порядке.",
 	"rootFolders_movieFoldersTitle": "Корневые папки фильмов",
 	"rootFolders_movies": "Фильмы",
+	"rootFolders_music": "Музыка",
+	"rootFolders_musicFoldersTitle": "Корневые папки музыки",
 	"rootFolders_namePlaceholder": "Библиотека фильмов",
 	"rootFolders_noFoldersConfigured": "Корневые папки не настроены",
 	"rootFolders_pathHint": "Путь к папке, где хранится ваша медиабиблиотека",

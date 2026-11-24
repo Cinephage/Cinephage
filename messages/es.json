@@ -2984,6 +2984,8 @@
 	"rootFolders_movieFoldersDesc": "Carpeta de películas predeterminada primero, luego carpetas restantes alfabéticamente.",
 	"rootFolders_movieFoldersTitle": "Carpetas raíz de películas",
 	"rootFolders_movies": "Películas",
+	"rootFolders_music": "Música",
+	"rootFolders_musicFoldersTitle": "Carpetas raíz de música",
 	"rootFolders_namePlaceholder": "Biblioteca de películas",
 	"rootFolders_noFoldersConfigured": "Sin carpetas raíz configuradas",
 	"rootFolders_pathHint": "La ruta de carpeta donde se almacena tu biblioteca multimedia",

@@ -1,3 +1,5 @@
+import type { KindId } from '#lib/media-kinds/types.js';
+
 interface RootFolderLike {
 	id: string;
 	name: string;
@@ -9,7 +11,7 @@ interface RootFolderLike {
 
 export function getWritableRootFoldersForMediaType<T extends RootFolderLike>(
 	rootFolders: T[],
-	mediaType: 'movie' | 'tv',
+	mediaType: KindId,
 	mediaSubType?: 'standard' | 'anime'
 ): T[] {
 	return sortRootFoldersForMediaType(
@@ -21,7 +23,7 @@ export function getWritableRootFoldersForMediaType<T extends RootFolderLike>(
 
 export function sortRootFoldersForMediaType<T extends RootFolderLike>(
 	rootFolders: T[],
-	mediaType: 'movie' | 'tv',
+	mediaType: KindId,
 	mediaSubType?: 'standard' | 'anime'
 ): T[] {
 	const subtypeRank = (subType: string | null | undefined): number =>

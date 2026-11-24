@@ -6,6 +6,7 @@ import {
 	indexerUpdateSchema,
 	nntpServerUpdateSchema,
 	libraryUpdateSchema,
+	rootFolderCreateSchema,
 	rootFolderUpdateSchema,
 	mediaBrowserServerUpdateSchema,
 	mediaBrowserServerTestSchema,
@@ -236,5 +237,38 @@ describe('movie desiredQualities', () => {
 			desiredQualities: ['2160p', '1080p', '720p']
 		});
 		expect(result.success).toBe(true);
+	});
+});
+
+describe('root folder schemas', () => {
+	const base = { name: 'Music', path: '/srv/music' };
+
+	it('accepts a music root folder', () => {
+		const result = rootFolderCreateSchema.safeParse({ ...base, mediaType: 'music' });
+		expect(result.success).toBe(true);
+	});
+
+	it('rejects a subtype the kind does not declare', () => {
+		// Music owns a standard shelf only; anime is a video-library subtype.
+		const result = rootFolderCreateSchema.safeParse({
+			...base,
+			mediaType: 'music',
+			mediaSubType: 'anime'
+		});
+		expect(result.success).toBe(false);
+	});
+
+	it('still accepts the video anime subtype', () => {
+		expect(
+			rootFolderCreateSchema.safeParse({ ...base, mediaType: 'tv', mediaSubType: 'anime' })
+				.success
+		).toBe(true);
+	});
+
+	it('checks the subtype on update only when both fields are sent', () => {
+		expect(rootFolderUpdateSchema.safeParse({ isDefault: false }).success).toBe(true);
+		expect(
+			rootFolderUpdateSchema.safeParse({ mediaType: 'music', mediaSubType: 'anime' }).success
+		).toBe(false);
 	});
 });

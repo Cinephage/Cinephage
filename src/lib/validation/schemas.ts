@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { TMDB } from '#lib/config/constants.js';
-import { LIBRARY_KIND_IDS } from '#lib/media-kinds/registry.js';
+import { LIBRARY_KIND_IDS, MEDIA_KINDS } from '#lib/media-kinds/registry.js';
+import type { KindId } from '#lib/media-kinds/types.js';
 import { BUG_REPORT_AREAS, BUG_REPORT_LOG_SCOPES } from '#lib/shared/bug-report.js';
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
@@ -725,9 +726,25 @@ export const rootFolderMediaTypeSchema = z.enum(LIBRARY_KIND_IDS);
 export const rootFolderMediaSubTypeSchema = z.enum(['standard', 'anime']);
 
 /**
- * Schema for creating a root folder.
+ * The subtypes a kind declares are the only ones it accepts: music owns a
+ * standard shelf only, so `music/anime` is a caller mistake, not a new library.
  */
-export const rootFolderCreateSchema = z.object({
+function checkKindSubtype(
+	value: { mediaType: string; mediaSubType: string },
+	ctx: z.RefinementCtx
+): void {
+	const kind = MEDIA_KINDS.get(value.mediaType as KindId);
+	if (kind && !kind.subTypes.includes(value.mediaSubType)) {
+		ctx.addIssue({
+			code: 'custom',
+			path: ['mediaSubType'],
+			message: `${value.mediaSubType} is not a ${kind.labels.singular} library subtype`
+		});
+	}
+}
+
+/** The fields both root-folder schemas are built from. */
+const rootFolderFields = z.object({
 	name: z.string().min(1, 'Name is required').max(100, 'Name must be 100 characters or less'),
 	path: z.string().min(1, 'Path is required'),
 	mediaType: rootFolderMediaTypeSchema,
@@ -748,10 +765,20 @@ export const rootFolderCreateSchema = z.object({
 		.default([])
 });
 
+/** Schema for creating a root folder. */
+export const rootFolderCreateSchema = rootFolderFields.superRefine(checkKindSubtype);
+
 /**
- * Schema for updating a root folder.
+ * Update keeps the create shape's defaults off absent keys; the subtype check
+ * only runs when the request actually sets both fields.
  */
-export const rootFolderUpdateSchema = rootFolderCreateSchema.required().partial();
+export const rootFolderUpdateSchema = rootFolderFields
+	.required()
+	.partial()
+	.superRefine((value, ctx) => {
+		if (!value.mediaType || !value.mediaSubType) return;
+		checkKindSubtype({ mediaType: value.mediaType, mediaSubType: value.mediaSubType }, ctx);
+	});
 
 // Download Client Type Exports
 export type DownloadClientImplementation = z.infer<typeof downloadClientImplementationSchema>;

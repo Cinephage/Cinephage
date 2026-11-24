@@ -8,6 +8,8 @@
 		PathValidationResult
 	} from '#lib/types/downloadClient.js';
 	import { FolderBrowser } from '#lib/components/library/index.js';
+	import { MEDIA_KINDS } from '#lib/media-kinds/registry.js';
+	import { ROOT_FOLDER_KINDS, ROOT_FOLDER_KIND_LABEL } from './root-folder-kinds.js';
 	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
 	import ModalHeader from '#lib/components/ui/modal/ModalHeader.svelte';
 	import ModalFooter from '#lib/components/ui/modal/ModalFooter.svelte';
@@ -67,9 +69,16 @@
 		mode === 'add' ? m.rootFolders_addTitle() : m.rootFolders_editTitle()
 	);
 	const defaultScopeLabel = $derived.by(() => {
-		const mediaLabel = mediaType === 'movie' ? 'Movies' : mediaType === 'tv' ? 'TV Shows' : 'Music';
 		const subtypeLabel = mediaSubType === 'anime' ? 'Anime' : 'Standard';
-		return `${subtypeLabel} ${mediaLabel}`;
+		return `${subtypeLabel} ${ROOT_FOLDER_KIND_LABEL[mediaType]()}`;
+	});
+
+	/** Only the subtypes the selected kind declares: music has no anime shelf. */
+	const subtypeOptions = $derived(MEDIA_KINDS.get(mediaType)?.subTypes ?? ['standard']);
+
+	// Switching kind can strand a subtype the new kind does not have.
+	$effect(() => {
+		if (!subtypeOptions.includes(mediaSubType)) mediaSubType = 'standard';
 	});
 	// This folder is already the default for its type - unsetting it here
 	// directly is rejected server-side (there must always be a default
@@ -174,8 +183,9 @@
 						<span class="label-text">{m.rootFolders_mediaTypeLabel()}</span>
 					</label>
 					<select id="mediaType" class="select-bordered select select-sm" bind:value={mediaType}>
-						<option value="movie">{m.rootFolders_movies()}</option>
-						<option value="tv">{m.rootFolders_tvShows()}</option>
+						{#each ROOT_FOLDER_KINDS as kind (kind)}
+							<option value={kind}>{ROOT_FOLDER_KIND_LABEL[kind]()}</option>
+						{/each}
 					</select>
 				</div>
 
@@ -188,8 +198,9 @@
 						class="select-bordered select select-sm"
 						bind:value={mediaSubType}
 					>
-						<option value="standard">Standard</option>
-						<option value="anime">Anime</option>
+						{#each subtypeOptions as subType (subType)}
+							<option value={subType}>{subType === 'anime' ? 'Anime' : 'Standard'}</option>
+						{/each}
 					</select>
 				</div>
 			</div>
