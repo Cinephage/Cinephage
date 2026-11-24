@@ -19,7 +19,7 @@
 import { inArray } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
 import { albums } from '#lib/server/db/schema.js';
-import { coreTitle, normalizeForMatch } from '../track-matching.js';
+import { artistMatches, coreTitle, normalizeForMatch } from '../track-matching.js';
 import { COMPILATION_SECONDARY, musicBrainz } from '../musicbrainz.js';
 import {
 	getAlbumMatch,
@@ -31,7 +31,7 @@ import {
 	setArtistMbid,
 	setSongMatch
 } from './cache.js';
-import type { MusicRecordingHit, MusicReleaseGroup } from '../types.js';
+import type { MusicRecordingHit, MusicReleaseGroup, MusicReleaseGroupRef } from '../types.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import type {
 	AlbumCandidate,
@@ -61,21 +61,6 @@ export function titlesMatch(query: string, candidate: string): boolean {
 	const right = coreTitle(candidate);
 	if (!left || !right) return false;
 	return left === right;
-}
-
-/**
- * A credit like "Peso Pluma, Anitta" is two artists; MusicBrainz matches the
- * whole credit string. Any listed artist matching is enough, because the
- * playlist named them as performers.
- */
-function artistMatches(queryArtists: string[], candidate: string): boolean {
-	const candidateCore = coreTitle(candidate);
-	if (!candidateCore) return false;
-	return queryArtists.some((artist) => {
-		const query = coreTitle(artist);
-		if (!query) return false;
-		return candidateCore === query || candidateCore.includes(query) || query.includes(candidateCore);
-	});
 }
 
 interface AlbumGroup {
@@ -184,10 +169,6 @@ export interface ResolveOptions {
 	isCancelled?: () => boolean;
 }
 
-/** MusicBrainz release types, best-first for "which album is this song on". */
-/** The rank of a plain studio album: the answer the promo path looks for. */
-const PLAIN_ALBUM_RANK = 4;
-
 function typeRank(group: MusicReleaseGroup): number {
 	const secondary = new Set(group.secondaryTypes ?? []);
 	const plain = !COMPILATION_SECONDARY.some((type) => secondary.has(type));
@@ -197,10 +178,22 @@ function typeRank(group: MusicReleaseGroup): number {
 	return 0;
 }
 
-/** The group a song belongs to: the best type the artist owns, earliest first. */
-function pickGroup(groups: MusicReleaseGroup[], track: PlaylistTrack): MusicReleaseGroup | null {
+/**
+ * The group a song belongs to: the best type the artist owns, earliest first.
+ *
+ * A search release can arrive without an artist credit. Such a group is not a
+ * candidate — the whole point of the filter is that the album belongs to this
+ * act, and an unknown credit cannot say that.
+ */
+function pickGroup(
+	groups: MusicReleaseGroupRef[],
+	track: PlaylistTrack
+): MusicReleaseGroup | null {
+	const owned = groups.filter(
+		(group): group is MusicReleaseGroup => group.artist !== null
+	);
 	return (
-		groups
+		owned
 			.filter((group) => artistMatches(track.artists, group.artist.name))
 			.sort(
 				(a, b) =>
@@ -421,13 +414,19 @@ export async function resolvePlaylistTracks(
 				titlesMatch(track.title, candidate.title) &&
 				artistMatches(track.artists, candidate.artistCredit)
 		);
+		// The search already returned every release group this recording is on,
+		// ranked. Choosing the album from that list is the decision a follow-up
+		// browse used to make — one request cheaper, per song.
 		const reported = anchor ? groupFromHit(anchor) : null;
-		let group = reported && artistMatches(track.artists, reported.artist.name) ? reported : null;
-		if ((!group || typeRank(group) < PLAIN_ALBUM_RANK) && anchor) {
-			const appearances = await attempt(() =>
-				musicBrainz.getRecordingReleaseGroups(anchor.mbid)
-			);
-			if (appearances.ok) group = pickGroup(appearances.value, track) ?? group;
+		let group =
+			(anchor ? pickGroup(anchor.releaseGroups, track) : null) ??
+			(reported && artistMatches(track.artists, reported.artist.name) ? reported : null);
+		// The search can name a recording and list no releases for it. That is the
+		// one case the response cannot answer, so it is the only case still worth
+		// a browse: every other album was already in the response, ranked.
+		if (!group && anchor && anchor.releaseGroups.length === 0) {
+			const appearances = await attempt(() => musicBrainz.getRecordingReleaseGroups(anchor.mbid));
+			if (appearances.ok) group = pickGroup(appearances.value, track);
 		}
 
 		if (group) {
@@ -519,10 +518,14 @@ export async function resolvePlaylistTracks(
 				let group: MusicReleaseGroup | null = null;
 				if (anchor) {
 					const reported = groupFromHit(anchor);
-					group = reported && artistMatches(retried.artists, reported.artist.name) ? reported : null;
-					if (!group || typeRank(group) < PLAIN_ALBUM_RANK) {
-						const appearances = await attempt(() => musicBrainz.getRecordingReleaseGroups(anchor.mbid));
-						if (appearances.ok) group = pickGroup(appearances.value, retried) ?? group;
+					group =
+						pickGroup(anchor.releaseGroups, retried) ??
+						(reported && artistMatches(retried.artists, reported.artist.name) ? reported : null);
+					if (!group && anchor.releaseGroups.length === 0) {
+						const appearances = await attempt(() =>
+							musicBrainz.getRecordingReleaseGroups(anchor.mbid)
+						);
+						if (appearances.ok) group = pickGroup(appearances.value, retried);
 					}
 				}
 				if (!group) {

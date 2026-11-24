@@ -69,6 +69,26 @@ export function coreTitle(text: string): string {
 		.trim();
 }
 
+/**
+ * A credit like "Peso Pluma, Anitta" is two artists; MusicBrainz and Deezer
+ * match the whole credit string. Any listed artist matching is enough, because
+ * the caller named them as performers.
+ *
+ * Two places decide "is this the same act" — resolving a playlist entry
+ * against a release group, and finding that entry's album on the catalog that
+ * is not rate limited. They must agree, or a track is one artist before the
+ * lookup and another after it.
+ */
+export function artistMatches(queryArtists: string[], candidate: string): boolean {
+	const candidateCore = coreTitle(candidate);
+	if (!candidateCore) return false;
+	return queryArtists.some((artist) => {
+		const query = coreTitle(artist);
+		if (!query) return false;
+		return candidateCore === query || candidateCore.includes(query) || query.includes(candidateCore);
+	});
+}
+
 /** "01 - One More Time.flac" -> { track: 1, title: "One More Time" }. */
 export function parseFileName(fileName: string): {
 	trackNumber: number | null;

@@ -30,6 +30,18 @@ export interface MusicReleaseGroup {
 	score?: number;
 }
 
+/**
+ * A release group as a recording search reports it.
+ *
+ * The same shape as `MusicReleaseGroup`, except the artist credit may be
+ * absent: a search release sometimes carries none, and inventing one from the
+ * recording would let a Various Artists compilation pass as the artist's own
+ * album. Callers that need the artist check for it.
+ */
+export interface MusicReleaseGroupRef extends Omit<MusicReleaseGroup, 'artist'> {
+	artist: MusicArtistRef | null;
+}
+
 /** One track of a specific release (an edition), not of the work. */
 export interface MusicTrack {
 	recordingMbid?: string | null;
@@ -112,16 +124,16 @@ export interface MusicRecordingHit {
 	/** Rendered credit, e.g. "Emilio Rojas & Chris Webby". */
 	artistCredit: string;
 	artists: MusicArtistRef[];
-	releaseGroup: {
-		mbid: string;
-		title: string;
-		primaryType?: string | null;
-		/** Compilation, Live, Remix… — a compilation is rarely the album a song is on. */
-		secondaryTypes?: string[];
-		firstReleaseDate?: string | null;
-		/** The release's artist credit, which is also the release group's artist. */
-		artist?: MusicArtistRef | null;
-	} | null;
+	releaseGroup: MusicReleaseGroupRef | null;
+	/**
+	 * Every release group this recording's search found, best first.
+	 *
+	 * The search response already carries them, so ranking them costs nothing —
+	 * and "which album is this song on" can be answered from one response
+	 * instead of a follow-up browse per song. `releaseGroup` is the head of this
+	 * list: what MusicBrainz itself ranked first.
+	 */
+	releaseGroups: MusicReleaseGroupRef[];
 	releaseMbid: string | null;
 	/**
 	 * True when the chosen release is credited to the recording's own artist

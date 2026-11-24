@@ -45,14 +45,10 @@ function recordingHit(overrides: Partial<MusicRecordingHit> = {}): MusicRecordin
 		title: 'One More Time',
 		artistCredit: 'Daft Punk',
 		artists: [{ mbid: 'artist-daft-punk', name: 'Daft Punk' }],
-		releaseGroup: {
-			mbid: 'rg-discovery',
-			title: 'Discovery',
-			primaryType: 'Album',
-			secondaryTypes: [],
-			firstReleaseDate: '2001-02-26',
-			artist: { mbid: 'artist-daft-punk', name: 'Daft Punk' }
-		},
+		releaseGroup: DISCOVERY,
+		// What the search itself returned, ranked: the resolver picks the album
+		// from here instead of browsing the recording again.
+		releaseGroups: [DISCOVERY],
 		releaseMbid: 'rel-discovery',
 		releaseOwned: true,
 		score: 100,
@@ -215,16 +211,24 @@ describe('resolvePlaylistTracks', () => {
 			artist: { mbid: 'artist-va', name: 'Various Artists' }
 		};
 		vi.spyOn(musicBrainz, 'searchReleaseGroups').mockResolvedValue([]);
+		const appearances = vi.spyOn(musicBrainz, 'getRecordingReleaseGroups');
 		vi.spyOn(musicBrainz, 'searchRecordings').mockResolvedValue([
-			recordingHit({ mbid: 'rec-va', releaseOwned: false, releaseGroup: compilation })
+			recordingHit({
+				mbid: 'rec-va',
+				releaseOwned: false,
+				releaseGroup: compilation,
+				releaseGroups: [compilation, DISCOVERY]
+			})
 		]);
-		vi.spyOn(musicBrainz, 'getRecordingReleaseGroups').mockResolvedValue([compilation, DISCOVERY]);
 
 		const result = await resolvePlaylistTracks([track({ title: 'One More Time' })]);
 
 		expect(result.candidates).toHaveLength(1);
 		expect(result.candidates[0].releaseGroupMbid).toBe('rg-discovery');
 		expect(result.candidates[0].artistName).toBe('Daft Punk');
+		// The compilation was already in the search response; asking again for
+		// what we had just been told is the request this change removes.
+		expect(appearances).not.toHaveBeenCalled();
 	});
 
 	it('takes the studio album over a live album the song also appears on', async () => {
@@ -239,15 +243,11 @@ describe('resolvePlaylistTracks', () => {
 		};
 		vi.spyOn(musicBrainz, 'searchReleaseGroups').mockResolvedValue([]);
 		vi.spyOn(musicBrainz, 'searchRecordings').mockResolvedValue([
-			recordingHit({ releaseGroup: live })
+			recordingHit({ releaseGroup: live, releaseGroups: [live, DISCOVERY] })
 		]);
-		const appearances = vi
-			.spyOn(musicBrainz, 'getRecordingReleaseGroups')
-			.mockResolvedValue([live, DISCOVERY]);
 
 		const result = await resolvePlaylistTracks([track({ title: 'One More Time' })]);
 
-		expect(appearances).toHaveBeenCalledTimes(1);
 		expect(result.candidates).toHaveLength(1);
 		expect(result.candidates[0].releaseGroupMbid).toBe('rg-discovery');
 	});
@@ -273,9 +273,8 @@ describe('resolvePlaylistTracks', () => {
 		};
 		vi.spyOn(musicBrainz, 'searchReleaseGroups').mockResolvedValue([]);
 		vi.spyOn(musicBrainz, 'searchRecordings').mockResolvedValue([
-			recordingHit({ releaseGroup: single })
+			recordingHit({ releaseGroup: single, releaseGroups: [hits, single] })
 		]);
-		vi.spyOn(musicBrainz, 'getRecordingReleaseGroups').mockResolvedValue([hits, single]);
 
 		const result = await resolvePlaylistTracks([track({ title: 'One More Time' })]);
 
@@ -285,7 +284,7 @@ describe('resolvePlaylistTracks', () => {
 	it('resolves a recording the search returned without any release attached', async () => {
 		vi.spyOn(musicBrainz, 'searchReleaseGroups').mockResolvedValue([]);
 		vi.spyOn(musicBrainz, 'searchRecordings').mockResolvedValue([
-			recordingHit({ releaseGroup: null, releaseMbid: null })
+			recordingHit({ releaseGroup: null, releaseGroups: [], releaseMbid: null })
 		]);
 		vi.spyOn(musicBrainz, 'getRecordingReleaseGroups').mockResolvedValue([DISCOVERY]);
 

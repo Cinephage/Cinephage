@@ -8,6 +8,7 @@ import type {
 	MusicArtistSearchResult,
 	MusicRecordingHit,
 	MusicReleaseGroup,
+	MusicReleaseGroupRef,
 	MusicReleaseSummary,
 	MusicTrack
 } from './types.js';
@@ -38,13 +39,26 @@ export const COMPILATION_SECONDARY = [
 const USER_AGENT = 'Cinephage/0.1.0 ( https://github.com/Cinephage/Cinephage )';
 
 /**
- * Published limit is 1 req/s. Measured in practice: spacing at 1.1 s still drew
- * a 503 on the second call, because their window is not the same second
- * boundary the client sees. 1.5 s leaves headroom for a second client on the
- * same public IP (a dev box next to the live one), which is exactly how this
- * was tripped: two instances, two gates, one address.
+ * The budget is per source address, not per process.
+ *
+ * Published ceiling: one request per second on average, and exceeding it
+ * declines *every* request until the rate drops — not a share of them. This
+ * deployment runs two instances (dev and live) behind one address, and each
+ * one used to assume it owned the whole second: 1.5 s each is 1.33 req/s for
+ * the pair, which is over the line every time both are busy. Measured
+ * 2026-11-24: three calls 1.6 s apart from this network drew a 503 on the
+ * third, while the live instance was importing a playlist.
+ *
+ * So the default is 2.5 s per process — 0.4 req/s each, 0.8 req/s for the
+ * pair. Raise it if another client (Lidarr, Picard, Jellyfin) shares the
+ * address; lower it only when this process is the address's only caller.
  */
-const MIN_INTERVAL_MS = 1500;
+const DEFAULT_MIN_INTERVAL_MS = 2500;
+
+function configuredIntervalMs(): number {
+	const raw = Number(process.env.MUSICBRAINZ_MIN_INTERVAL_MS);
+	return Number.isFinite(raw) && raw >= 1000 ? raw : DEFAULT_MIN_INTERVAL_MS;
+}
 
 /**
  * Attempts per request. MusicBrainz documents 503 as "slow down", so a
@@ -71,14 +85,36 @@ const COOLDOWN_MS = 10 * 60_000;
 const RETRY_BASE_MS = 2500;
 const RETRY_MAX_MS = 10000;
 
-/** MusicBrainz errors answer 200 with an `error` field, or 503 when throttled. */
+/**
+ * A 503 that asks for a retry this soon is the load shedder, not the rate
+ * limiter: MusicBrainz answers "currently busy" with `Retry-After: 1` while it
+ * refuses roughly half of all requests, to everyone, at any pace.
+ */
+const BUSY_RETRY_CEILING_MS = 5000;
+
+/** Attempts for a call the server merely could not take. Shedding is random. */
+const SHED_ATTEMPTS = 4;
+
+/**
+ * MusicBrainz errors answer 200 with an `error` field, or 503 when it will not
+ * take the call.
+ *
+ * `shed` separates the two reasons for a 503, because they call for opposite
+ * responses. "The MusicBrainz web server is currently busy" is the global load
+ * shedder refusing a share of *everyone's* requests and asking for a
+ * one-second retry; counting that as this client being over budget stops a
+ * healthy import for ten minutes. A 503 without that short retry is the rate
+ * limit or a block, and that one really is about us.
+ */
 export class MusicBrainzError extends Error {
 	constructor(
 		message: string,
 		readonly status?: number,
 		readonly retryable: boolean = false,
 		/** From a Retry-After header, when the server bothers to send one. */
-		readonly retryAfterMs?: number
+		readonly retryAfterMs?: number,
+		/** Load shedding: the server is busy, not judging this client. */
+		readonly shed: boolean = false
 	) {
 		super(message);
 		this.name = 'MusicBrainzError';
@@ -269,7 +305,7 @@ export class MusicBrainzClient {
 		this.now = options.now ?? Date.now;
 		this.gate =
 			options.gate ??
-			new RateGate(options.minIntervalMs ?? MIN_INTERVAL_MS, this.now, options.sleep);
+			new RateGate(options.minIntervalMs ?? configuredIntervalMs(), this.now, options.sleep);
 	}
 
 	/**
@@ -293,13 +329,27 @@ export class MusicBrainzClient {
 
 		const retryAfterMs = this.retryAfterMs(response);
 		if (response.status === 429 || response.status === 503) {
-			this.noteThrottle();
-			logger.warn({ status: response.status }, '[MusicBrainz] throttled; backing off and retrying');
+			const shed = retryAfterMs !== undefined && retryAfterMs <= BUSY_RETRY_CEILING_MS;
+			if (shed) {
+				// Everyone is getting these. Hold the whole client for the second the
+				// server asked for and retry — do not count it as our own doing.
+				this.gate.hold(retryAfterMs);
+				logger.debug(
+					{ status: response.status, retryAfterMs },
+					'[MusicBrainz] busy; retrying after the retry window'
+				);
+			} else {
+				this.noteThrottle();
+				logger.warn({ status: response.status }, '[MusicBrainz] throttled; backing off and retrying');
+			}
 			throw new MusicBrainzError(
-				`MusicBrainz throttled the request (${response.status})`,
+				shed
+					? 'MusicBrainz is busy; retrying'
+					: `MusicBrainz throttled the request (${response.status})`,
 				response.status,
 				true,
-				retryAfterMs
+				retryAfterMs,
+				shed
 			);
 		}
 		if (!response.ok) {
@@ -358,7 +408,10 @@ export class MusicBrainzClient {
 		const url = `${BASE_URL}${path}?${new URLSearchParams({ fmt: 'json', ...params })}`;
 
 		let lastError: MusicBrainzError | undefined;
-		for (let attempt = 1; attempt <= this.maxAttempts; attempt++) {
+		// Grows when the server says it is busy: a shed call deserves another try,
+		// because the refusal was random and the next one usually lands.
+		let budget = this.maxAttempts;
+		for (let attempt = 1; attempt <= budget; attempt++) {
 			await this.gate.wait();
 			try {
 				return await this.send<T>(url);
@@ -372,12 +425,18 @@ export class MusicBrainzClient {
 								true
 							);
 				lastError = error;
-				if (!error.retryable || attempt === this.maxAttempts) throw error;
+				if (!error.retryable) throw error;
+				if (error.shed) budget = Math.max(budget, SHED_ATTEMPTS);
+				if (attempt === budget) throw error;
 
-				if (error.status === 503 || error.status === 429) {
-					// Load shedding: every caller waits, the whole client slows down,
-					// and the wait follows MusicBrainz's own guidance (Retry-After when
-					// it sends one, thirty seconds otherwise).
+				if (error.shed) {
+					// The gate already held every caller; this is the extra second the
+					// server asked for, not a penalty on the client's pace.
+					await this.sleep(error.retryAfterMs ?? 1000);
+				} else if (error.status === 503 || error.status === 429) {
+					// A refusal that is not load shedding: every caller waits, the
+					// whole client slows down, and the wait follows MusicBrainz's own
+					// guidance (Retry-After when it sends one, thirty seconds otherwise).
 					this.gate.throttle(error.retryAfterMs ?? THROTTLE_WAIT_MS);
 				} else {
 					await this.sleep(Math.min(RETRY_BASE_MS * 2 ** (attempt - 1), RETRY_MAX_MS));
@@ -548,6 +607,30 @@ export class MusicBrainzClient {
 						scoreRelease(b) - scoreRelease(a) ||
 						(a.date ?? '9999').localeCompare(b.date ?? '9999')
 				);
+			// The ranked list, kept whole. Its head is what MusicBrainz ordered
+			// first; the rest is what lets a picker find the plain album when the
+			// head is a single, a live set or a hits package — from this one
+			// response, without a browse per song.
+			const seenGroups = new Set<string>();
+			const releaseGroups: MusicReleaseGroupRef[] = [];
+			for (const entry of releases) {
+				const group = entry['release-group'];
+				if (!group?.id || !group.title || seenGroups.has(group.id)) continue;
+				seenGroups.add(group.id);
+				releaseGroups.push({
+					mbid: group.id,
+					title: group.title,
+					primaryType: group['primary-type'] ?? null,
+					secondaryTypes: group['secondary-types'] ?? [],
+					firstReleaseDate: group['first-release-date'] ?? entry.date ?? null,
+					year: yearOf(group['first-release-date'] ?? entry.date),
+					// Null when the search release carries no credit. Guessing the
+					// recording's artist here is how a Various Artists compilation
+					// becomes "the artist's album".
+					artist: artistOf(entry['artist-credit'] ?? null)
+				});
+			}
+
 			const release = releases[0] ?? null;
 			const owned = release ? isOwned(release) : false;
 
@@ -559,17 +642,8 @@ export class MusicBrainzClient {
 						typeof recording.length === 'number' ? Math.round(recording.length / 1000) : null,
 					artistCredit: artistCreditOf(recording['artist-credit']) ?? '',
 					artists,
-					releaseGroup: release
-						? {
-								mbid: release['release-group']!.id!,
-								title: release['release-group']!.title ?? '',
-								primaryType: release['release-group']!['primary-type'] ?? null,
-								secondaryTypes: release['release-group']!['secondary-types'] ?? [],
-								firstReleaseDate:
-									release['release-group']!['first-release-date'] ?? release.date ?? null,
-								artist: artistOf(release['artist-credit'] ?? null)
-							}
-						: null,
+					releaseGroup: releaseGroups[0] ?? null,
+					releaseGroups,
 					releaseMbid: release?.id ?? null,
 					releaseOwned: owned,
 					score: typeof recording.score === 'number' ? recording.score : undefined,
@@ -638,10 +712,11 @@ export class MusicBrainzClient {
 	/**
 	 * Every release group a recording appears on.
 	 *
-	 * A recording search carries only a handful of releases, and for a modern
-	 * track those are the singles that came first. This browse returns all of
-	 * them, which is what lets an import pick the album the song ended up on
-	 * instead of the single it was released as.
+	 * The last resort, not the normal path: a recording search already carries
+	 * its releases ranked, so the album is normally chosen from that response
+	 * with no extra request. This browse is for the one case the response cannot
+	 * answer — a recording MusicBrainz knows about but lists no releases for —
+	 * and for anything else the caller explicitly wants the full set for.
 	 */
 	async getRecordingReleaseGroups(recordingMbid: string): Promise<MusicReleaseGroup[]> {
 		const body = await this.request<{ releases?: RawRelease[] }>('/release', {

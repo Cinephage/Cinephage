@@ -39,6 +39,11 @@ vi.mock('#lib/server/music/playlists/resolve.js', () => ({
 	resolvePlaylistTracks: mocks.resolveTracks
 }));
 vi.mock('./add.js', () => ({ addMusicItem: mocks.addItem }));
+// Album discovery is a Deezer call; it has its own test. Here the tracks are
+// already what the resolver sees, and the suite must not touch the network.
+vi.mock('#lib/server/music/playlists/albums.js', () => ({
+	fillMissingAlbums: vi.fn(async (tracks: unknown) => ({ tracks, filled: 0 }))
+}));
 
 const { refreshMusicList } = await import('./refresh.js');
 

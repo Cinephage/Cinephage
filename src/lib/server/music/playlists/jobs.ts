@@ -16,6 +16,7 @@ import { randomUUID } from 'node:crypto';
 import { desc, eq, lt } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
 import { musicImportJobs, musicLookupCache } from '#lib/server/db/schema.js';
+import { deezer } from '#lib/server/catalog/deezerApi.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { getLibraryEntityService } from '#lib/server/library/LibraryEntityService.js';
 import { autoSearchAlbum } from '../MusicAutoSearch.js';
@@ -31,6 +32,7 @@ import {
 	setCachedRelease
 } from './cache.js';
 import { PlaylistError } from './errors.js';
+import { fillMissingAlbums } from './albums.js';
 import { resolvePlaylistTracks } from './resolve.js';
 import { resolveSource } from './sources/index.js';
 import type {
@@ -352,13 +354,26 @@ async function runResolve(job: PlaylistJob): Promise<void> {
 		const page = await source.fetchPlaylist(url, { limit: MAX_PLAYLIST_TRACKS });
 		if (job.cancelRequested) return void finishCancelled(job);
 
+		// A provider that lists songs (Spotify, YouTube) leaves the album empty, and
+		// an empty album is what pushes the resolver into one MusicBrainz request
+		// per song. Asking the unmetered catalog first turns that into one request
+		// per album, and gives the resolver a title to verify instead of a name to
+		// guess.
+		const enriched = await fillMissingAlbums(page.tracks, deezer);
+		if (enriched.filled > 0) {
+			logger.info(
+				{ jobId: job.id, tracks: page.tracks.length, albums: enriched.filled },
+				'[MusicPlaylistJobs] albums discovered for tracks the provider left bare'
+			);
+		}
+
 		job.playlist = page.playlist;
 		job.trackTotal = page.tracks.length;
 		job.truncated = page.truncated;
 		job.phase = 'resolving';
 		touch(job, true);
 
-		const result = await resolvePlaylistTracks(page.tracks, {
+		const result = await resolvePlaylistTracks(enriched.tracks, {
 			isCancelled: () => job.cancelRequested,
 			onProgress: (progress) => {
 				job.progress = { done: progress.done, total: progress.total };

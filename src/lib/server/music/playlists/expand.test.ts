@@ -53,6 +53,7 @@ function hit(overrides: Partial<MusicRecordingHit> = {}): MusicRecordingHit {
 		artistCredit: 'Daft Punk feat. Pharrell Williams',
 		artists: [{ mbid: 'artist-daft-punk', name: 'Daft Punk' }],
 		releaseGroup: null,
+		releaseGroups: [],
 		releaseMbid: null,
 		releaseOwned: true,
 		score: 100,

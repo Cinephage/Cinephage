@@ -256,6 +256,9 @@ describe('MusicBrainzClient.searchRecordings', () => {
 		const hits = await client.searchRecordings({ artist: 'The Mamas & The Papas', track: "California Dreamin'" });
 
 		expect(hits[0].releaseGroup).toMatchObject({ mbid: 'rg-own' });
+		// Both groups the search returned, the owned one first: this list is what
+		// saves a browse per song.
+		expect(hits[0].releaseGroups.map((group) => group.mbid)).toEqual(['rg-own', 'rg-va']);
 		expect(hits[0].releaseMbid).toBe('rel-own');
 		expect(hits[0].releaseOwned).toBe(true);
 	});
@@ -504,6 +507,53 @@ describe('MusicBrainzClient retry', () => {
 		}
 		// Three requests, two calls each, and every one answered: no cooldown.
 		expect(calls).toBe(6);
+	});
+
+	it('retries a busy server inside the retry window it asked for', async () => {
+		const slept: number[] = [];
+		let calls = 0;
+		const client = clientWith(
+			(async () => {
+				calls += 1;
+				if (calls > 1) return jsonResponse(RELEASE_DETAIL);
+				// What MusicBrainz actually answers while it sheds global load.
+				return new Response('{"error":"The MusicBrainz web server is currently busy."}', {
+					status: 503,
+					headers: { 'retry-after': '1' }
+				});
+			}) as typeof fetch,
+			{ sleep: async (ms: number) => void slept.push(ms) }
+		);
+
+		await expect(client.getRelease('x')).resolves.toMatchObject({ title: 'Discovery' });
+		expect(calls).toBe(2);
+		// The server asked for a second, and got a second — not the thirty-second
+		// wait a suspected block is answered with.
+		expect(slept).toContain(1000);
+	});
+
+	it('does not trip the breaker on repeated load shedding', async () => {
+		let clock = 0;
+		let shed = true;
+		const client = clientWith(
+			(async () =>
+				shed
+					? new Response('{}', { status: 503, headers: { 'retry-after': '1' } })
+					: jsonResponse(RELEASE_DETAIL)) as typeof fetch,
+			{ now: () => clock }
+		);
+
+		// Six refusals in a row used to mean "this address is blocked" and stop
+		// every caller for ten minutes. The shedder refuses half of everyone's
+		// calls, so a healthy client must survive six of them.
+		for (let i = 0; i < 6; i += 1) {
+			clock += 1000;
+			await expect(client.getRelease('x')).rejects.toMatchObject({ status: 503, shed: true });
+		}
+
+		shed = false;
+		clock += 1000;
+		await expect(client.getRelease('x')).resolves.toMatchObject({ title: 'Discovery' });
 	});
 
 	it('gives up after the attempt budget and reports the last failure', async () => {

@@ -8,7 +8,9 @@ import {
 	smartLists,
 	type SmartListRecord
 } from '#lib/server/db/schema.js';
+import { deezer } from '#lib/server/catalog/deezerApi.js';
 import { createChildLogger } from '#lib/logging/index.js';
+import { fillMissingAlbums } from '#lib/server/music/playlists/albums.js';
 import { resolvePlaylistTracks } from '#lib/server/music/playlists/resolve.js';
 import { resolveSource } from '#lib/server/music/playlists/sources/index.js';
 import { musicBrainz } from '#lib/server/music/musicbrainz.js';
@@ -45,7 +47,11 @@ async function resolvePlaylistCandidates(
 	if (!config.url) throw new Error('A playlist list needs a playlist URL');
 	const { source, url } = resolveSource(config.url);
 	const page = await source.fetchPlaylist(url, { limit: config.trackLimit });
-	const { candidates, unmatched } = await resolvePlaylistTracks(page.tracks);
+	// Same discovery the paste path does: a list of songs becomes a list of
+	// albums before MusicBrainz is asked anything, so a refresh costs one
+	// request per album instead of one per track.
+	const enriched = await fillMissingAlbums(page.tracks, deezer);
+	const { candidates, unmatched } = await resolvePlaylistTracks(enriched.tracks);
 	return {
 		failed: unmatched.length,
 		candidates: candidates.map((candidate) => ({
