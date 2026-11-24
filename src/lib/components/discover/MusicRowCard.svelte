@@ -124,6 +124,7 @@
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({
+					searchOnAdd: true,
 					releaseGroupMbid: mbid,
 					libraryId: null,
 					qualityProfileId: profileId

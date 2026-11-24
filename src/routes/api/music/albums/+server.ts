@@ -4,6 +4,7 @@ import { requireAdmin, requireAuth } from '#lib/server/auth/authorization.js';
 import { parseBody } from '#lib/server/api/validate.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { musicAlbumService } from '#lib/server/music/MusicAlbumService.js';
+import { searchAddedAlbums } from '#lib/server/music/MusicAutoSearch.js';
 import { musicProfileService } from '#lib/server/music/MusicProfileService.js';
 import { getLibraryEntityService } from '#lib/server/library/LibraryEntityService.js';
 import {
@@ -22,6 +23,8 @@ const addAlbumSchema = z.object({
 	libraryId: z.string().optional().nullable(),
 	rootFolderId: z.string().optional().nullable(),
 	monitored: z.boolean().optional(),
+	/** Search the indexers as soon as the album is stored. */
+	searchOnAdd: z.boolean().default(false),
 	/** The album's own ladder; null inherits the artist/library/default. */
 	qualityProfileId: z.string().trim().min(1).nullable().optional()
 });
@@ -154,8 +157,18 @@ export const POST: RequestHandler = async (event) => {
 			qualityProfileId: input.qualityProfileId ?? null
 		});
 
+		const album = musicAlbumService.getAlbum(result.albumId);
+
+		// The add answers now; the search runs behind it, the same way a movie's
+		// search-on-add does. Only a new album is searched.
+		if (input.searchOnAdd && result.created && album) {
+			void searchAddedAlbums([
+				{ id: album.id, title: album.title, artistName: album.artistName }
+			]);
+		}
+
 		return Response.json(
-			{ success: true, ...result, album: musicAlbumService.getAlbum(result.albumId) },
+			{ success: true, ...result, album },
 			{ status: result.created ? 201 : 200 }
 		);
 	} catch (err) {

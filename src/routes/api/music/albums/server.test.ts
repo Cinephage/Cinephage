@@ -25,6 +25,12 @@ vi.mock('#lib/server/db/index.js', () => ({
 	initializeDatabase: vi.fn().mockResolvedValue(undefined)
 }));
 
+const searchAddedAlbumsMock = vi.hoisted(() => vi.fn());
+
+vi.mock('#lib/server/music/MusicAutoSearch.js', () => ({
+	searchAddedAlbums: searchAddedAlbumsMock
+}));
+
 vi.mock('#lib/server/music/musicbrainz.js', async () => {
 	const actual = await vi.importActual<typeof import('#lib/server/music/musicbrainz.js')>(
 		'#lib/server/music/musicbrainz.js'
@@ -131,6 +137,24 @@ describe('POST /api/music/albums', () => {
 			'Aerodynamic'
 		]);
 		expect(mocked.getRelease).toHaveBeenCalledWith(RELEASE.mbid);
+	});
+
+	it('searches the album it just created when search-on-add is set', async () => {
+		const { status } = await api.post<any>(POST, {
+			releaseGroupMbid: RELEASE_GROUP_MBID,
+			searchOnAdd: true
+		});
+
+		expect(status).toBe(201);
+		expect(searchAddedAlbumsMock).toHaveBeenCalledTimes(1);
+		const [albums] = searchAddedAlbumsMock.mock.calls[0];
+		expect(albums[0]).toMatchObject({ title: 'Discovery', artistName: 'Daft Punk' });
+	});
+
+	it('does not search when search-on-add is off', async () => {
+		await api.post<any>(POST, { releaseGroupMbid: RELEASE_GROUP_MBID });
+
+		expect(searchAddedAlbumsMock).not.toHaveBeenCalled();
 	});
 
 	it('returns the existing album instead of duplicating it', async () => {

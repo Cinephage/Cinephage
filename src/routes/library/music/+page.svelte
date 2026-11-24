@@ -1193,4 +1193,5 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 	onClose={() => (addOpen = false)}
 	libraryId={data.library?.id ?? null}
 	defaultProfileName={data.defaultProfileName}
+	defaultSearchOnAdd={data.library?.defaultSearchOnAdd ?? true}
 />

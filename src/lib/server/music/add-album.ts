@@ -5,7 +5,7 @@ import { createChildLogger } from '#lib/logging/index.js';
 import { getLibraryEntityService } from '#lib/server/library/LibraryEntityService.js';
 import { validateRootFolder } from '#lib/server/library/LibraryAddService.js';
 import { musicAlbumService } from '#lib/server/music/MusicAlbumService.js';
-import { autoSearchAlbum } from '#lib/server/music/MusicAutoSearch.js';
+import { searchAddedAlbums } from '#lib/server/music/MusicAutoSearch.js';
 import { musicBrainz, pickPrimaryRelease } from '#lib/server/music/musicbrainz.js';
 
 const logger = createChildLogger({ module: 'MusicAddAlbum', logDomain: 'monitoring' as const });
@@ -93,13 +93,7 @@ export async function addAlbumFromReleaseGroup(input: AddAlbumInput): Promise<Ad
 	}
 
 	if (input.search) {
-		const search = await autoSearchAlbum({ id: albumId, title, artistName });
-		if (!search.grabbed) {
-			logger.info(
-				{ albumId, error: search.error },
-				'[MusicAddAlbum] album added but no release grabbed'
-			);
-		}
+		await searchAddedAlbums([{ id: albumId, title, artistName }]);
 	}
 
 	return { albumId, created };

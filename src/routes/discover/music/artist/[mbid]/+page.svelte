@@ -114,7 +114,8 @@
 					body: JSON.stringify({
 						artist: { mbid, name: artist.name },
 						limit: 25,
-						qualityProfileId: profileId
+						qualityProfileId: profileId,
+						searchOnAdd: true
 					})
 				});
 				const body = await response.json();

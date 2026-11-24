@@ -101,3 +101,37 @@ export async function autoSearchAlbum(
 		};
 	}
 }
+
+/**
+ * Search a batch of just-added albums, one at a time.
+ *
+ * A discography add writes up to 25 albums per call and must not hold the
+ * request open while indexers answer, so callers fire this and forget. One
+ * album's failure is logged and the batch continues — a dead indexer should
+ * not leave the rest of a discography unsearched.
+ */
+export async function searchAddedAlbums(
+	albums: Array<Pick<AlbumSummary, 'id' | 'title' | 'artistName'>>
+): Promise<void> {
+	for (const album of albums) {
+		try {
+			const result = await autoSearchAlbum(album);
+			logger.info(
+				{
+					albumId: album.id,
+					title: album.title,
+					grabbed: result.grabbed,
+					release: result.release,
+					releasesFound: result.releasesFound,
+					error: result.error
+				},
+				'[MusicAutoSearch] search on add'
+			);
+		} catch (err) {
+			logger.warn(
+				{ albumId: album.id, err: err instanceof Error ? err.message : String(err) },
+				'[MusicAutoSearch] search on add failed'
+			);
+		}
+	}
+}

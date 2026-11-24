@@ -18,9 +18,17 @@
 		libraryId?: string | null;
 		/** What "default" resolves to here: the library's profile, or the instance default. */
 		defaultProfileName?: string | null;
+		/** The library's search-on-add default, the same setting the video add uses. */
+		defaultSearchOnAdd?: boolean;
 	};
 
-	let { open, onClose, libraryId = null, defaultProfileName = null }: Props = $props();
+	let {
+		open,
+		onClose,
+		libraryId = null,
+		defaultProfileName = null,
+		defaultSearchOnAdd = true
+	}: Props = $props();
 
 	let kind = $state<Kind>('artist');
 	let artistQuery = $state('');
@@ -35,6 +43,12 @@
 	/** Assignment at the door: artist rows carry it, single albums carry it. */
 	let qualityProfiles = $state<Array<{ id: string; name: string }>>([]);
 	let qualityProfileId = $state('');
+	let searchOnAdd = $state(true);
+
+	// Every open starts from the library's setting, like the video add does.
+	$effect(() => {
+		if (open) searchOnAdd = defaultSearchOnAdd;
+	});
 
 	onMount(() => {
 		void (async () => {
@@ -123,7 +137,8 @@
 				body: JSON.stringify({
 					releaseGroupMbid: group.mbid,
 					libraryId,
-					qualityProfileId: qualityProfileId || null
+					qualityProfileId: qualityProfileId || null,
+					searchOnAdd
 				})
 			});
 			const body = await response.json();
@@ -167,7 +182,8 @@
 						artist: { mbid: artist.mbid, name: artist.name, sortName: artist.sortName ?? null },
 						limit: 25,
 						libraryId,
-						qualityProfileId: qualityProfileId || null
+						qualityProfileId: qualityProfileId || null,
+						searchOnAdd
 					})
 				});
 				const body = await response.json();
@@ -230,6 +246,13 @@
 					<option value={profile.id}>{profile.name}</option>
 				{/each}
 			</select>
+		</label>
+		<label class="flex cursor-pointer items-center gap-3 pb-1">
+			<input type="checkbox" class="toggle toggle-sm toggle-success" bind:checked={searchOnAdd} />
+			<span class="flex items-center gap-1.5 text-sm">
+				<Search class="h-4 w-4 shrink-0" />
+				{m.library_add_searchImmediately()}
+			</span>
 		</label>
 	</div>
 

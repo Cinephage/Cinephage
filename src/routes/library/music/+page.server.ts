@@ -26,7 +26,8 @@ export const load: PageServerLoad = async () => {
 					name: library.name,
 					slug: library.slug,
 					rootFolderPath: library.defaultRootFolderPath,
-					rootFolderCount: library.rootFolders.length
+					rootFolderCount: library.rootFolders.length,
+					defaultSearchOnAdd: library.defaultSearchOnAdd
 				}
 			: null,
 		libraries: libraries.map((entry) => ({

@@ -6,6 +6,8 @@ import { createChildLogger } from '#lib/logging/index.js';
 import { getLibraryEntityService } from '#lib/server/library/LibraryEntityService.js';
 import { musicArtistService } from '#lib/server/music/MusicArtistService.js';
 import { musicProfileService } from '#lib/server/music/MusicProfileService.js';
+import { musicAlbumService } from '#lib/server/music/MusicAlbumService.js';
+import { searchAddedAlbums } from '#lib/server/music/MusicAutoSearch.js';
 import { MusicBrainzError } from '#lib/server/music/musicbrainz.js';
 
 const logger = createChildLogger({ module: 'MusicArtistsApi', logDomain: 'system' });
@@ -26,6 +28,8 @@ const addArtistSchema = z.object({
 	/** Release-group primary types to take. Default: albums and EPs. */
 	primaryTypes: z.array(z.string()).optional(),
 	excludeSecondaryTypes: z.array(z.string()).optional(),
+	/** Search the indexers for every album this call creates. */
+	searchOnAdd: z.boolean().default(false),
 	/** The artist's ladder; albums added by this run inherit it. */
 	qualityProfileId: z.string().trim().min(1).nullable().optional()
 });
@@ -128,6 +132,19 @@ export const POST: RequestHandler = async (event) => {
 			{ artist: input.artist.name, added: result.added, remaining: result.remaining },
 			'[MusicArtists] artist batch added'
 		);
+
+		// The batch answers now; its new albums are searched behind it. A
+		// discography is many searches, so they run one at a time in the
+		// background rather than holding the add open.
+		if (input.searchOnAdd) {
+			const created = result.albums
+				.filter((album) => album.created)
+				.map((album) => musicAlbumService.getAlbum(album.albumId))
+				.filter((album): album is NonNullable<typeof album> => album !== null)
+				.map((album) => ({ id: album.id, title: album.title, artistName: album.artistName }));
+			if (created.length > 0) void searchAddedAlbums(created);
+		}
+
 		return Response.json({ success: true, ...result }, { status: 201 });
 	} catch (err) {
 		logger.error(

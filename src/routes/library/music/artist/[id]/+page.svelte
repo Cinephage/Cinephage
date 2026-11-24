@@ -286,7 +286,8 @@
 					headers: { 'content-type': 'application/json' },
 					body: JSON.stringify({
 						artist: { mbid: artist.mbid, name: artist.name, sortName: artist.sortName ?? null },
-						limit: 25
+						limit: 25,
+						searchOnAdd: true
 					})
 				});
 				const body = await response.json();

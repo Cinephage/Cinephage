@@ -139,7 +139,8 @@
 				body: JSON.stringify({
 					releaseGroupMbid: mbid,
 					libraryId: null,
-					qualityProfileId: profileId
+					qualityProfileId: profileId,
+					searchOnAdd: true
 				})
 			});
 			const body = await response.json();
