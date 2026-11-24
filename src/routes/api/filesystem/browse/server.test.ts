@@ -8,7 +8,7 @@
  * once per directory entry.
  */
 
-import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -59,9 +59,12 @@ describe('Filesystem Browse API', () => {
 		rootFolderStats.getFoldersCalls = 0;
 	});
 
-	afterAll(async () => {
+	// Per test, not per file: every test replaces testDir, so a file-level
+	// cleanup left all but the last one behind in /tmp.
+	afterEach(async () => {
 		if (testDir) {
 			await rm(testDir, { recursive: true, force: true });
+			testDir = '';
 		}
 	});
 

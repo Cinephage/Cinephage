@@ -188,6 +188,7 @@ describe('subtitle-paths', () => {
 
 		expect(await resolveDestructivePathWithinBase(base, 'subtitle.en.srt')).toBeNull();
 		expect(await resolveDestructivePathWithinBase(base, 'safe-target.srt')).toBe(target);
+		await (await import('node:fs/promises')).rm(base, { recursive: true, force: true });
 	});
 
 	it('preserves exclusive create, truncate, and append open semantics', async () => {
@@ -210,6 +211,7 @@ describe('subtitle-paths', () => {
 		expect(
 			await (await import('node:fs/promises')).readFile(join(base, 'created.srt'), 'utf8')
 		).toBe('truncated-appended');
+		await (await import('node:fs/promises')).rm(base, { recursive: true, force: true });
 	});
 
 	it('batch-resolves every row into a map', async () => {
