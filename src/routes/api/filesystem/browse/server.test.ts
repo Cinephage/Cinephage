@@ -8,9 +8,8 @@
  * once per directory entry.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach, vi } from 'vitest';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { api } from '../../../../test/api-helper';
 
@@ -53,7 +52,22 @@ const { GET } = await import('./+server');
 
 let testDir: string;
 
+/**
+ * Fixtures live under the checkout, not os.tmpdir(): `/tmp` is on the path
+ * guard's denylist (a browse request may not open system directories), so a
+ * tmpdir fixture is refused before the route ever reads it.
+ */
+const SCRATCH_ROOT = join(process.cwd(), '.test-tmp');
+
 describe('Filesystem Browse API', () => {
+	beforeAll(async () => {
+		await mkdir(SCRATCH_ROOT, { recursive: true });
+	});
+
+	afterAll(async () => {
+		await rm(SCRATCH_ROOT, { recursive: true, force: true });
+	});
+
 	beforeEach(() => {
 		rootFolderStats.instances = 0;
 		rootFolderStats.getFoldersCalls = 0;
@@ -69,7 +83,7 @@ describe('Filesystem Browse API', () => {
 	});
 
 	it('resolves configured root folders exactly once per request, not once per directory entry (bug #495)', async () => {
-		testDir = await mkdtemp(join(tmpdir(), 'cinephage-browse-test-'));
+		testDir = await mkdtemp(join(SCRATCH_ROOT, 'browse-'));
 		await Promise.all(
 			Array.from({ length: SUBDIR_COUNT }, (_, i) => mkdir(join(testDir, `subdir_${i}`)))
 		);
@@ -90,7 +104,7 @@ describe('Filesystem Browse API', () => {
 	});
 
 	it('serves a listing for a directory whose name is not a well-known base path', async () => {
-		testDir = await mkdtemp(join(tmpdir(), 'cinephage-browse-test-'));
+		testDir = await mkdtemp(join(SCRATCH_ROOT, 'browse-'));
 		await mkdir(join(testDir, 'media2'));
 		await mkdir(join(testDir, 'media2', 'Movies'));
 
@@ -106,7 +120,7 @@ describe('Filesystem Browse API', () => {
 	});
 
 	it('does not list, and refuses to open, a blocked directory', async () => {
-		testDir = await mkdtemp(join(tmpdir(), 'cinephage-browse-test-'));
+		testDir = await mkdtemp(join(SCRATCH_ROOT, 'browse-'));
 		const blockedDir = join(testDir, 'blocked');
 		await mkdir(blockedDir);
 		await mkdir(join(testDir, 'media2'));

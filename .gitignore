@@ -124,3 +124,6 @@ docs/
 docs/notes/
 .worktrees/
 
+
+# Test fixtures that must live outside the path guard's denylist
+.test-tmp/
