@@ -14,9 +14,10 @@ export const requestSettingsSchema = z.object({
 	autoApprove: z
 		.object({
 			movie: z.boolean().default(false),
-			series: z.boolean().default(false)
+			series: z.boolean().default(false),
+			music: z.boolean().default(false)
 		})
-		.default({ movie: false, series: false }),
+		.default({ movie: false, series: false, music: false }),
 	defaultQuotas: z
 		.object({
 			movie: z.object({
@@ -26,9 +27,17 @@ export const requestSettingsSchema = z.object({
 			tv: z.object({
 				limit: z.number().int().min(0).nullable().default(null),
 				days: z.number().int().min(1).nullable().default(null)
+			}),
+			music: z.object({
+				limit: z.number().int().min(0).nullable().default(null),
+				days: z.number().int().min(1).nullable().default(null)
 			})
 		})
-		.default({ movie: { limit: null, days: null }, tv: { limit: null, days: null } }),
+		.default({
+			movie: { limit: null, days: null },
+			tv: { limit: null, days: null },
+			music: { limit: null, days: null }
+		}),
 	tvQuotaUnit: z.enum(['episodes', 'seasons']).default('episodes'),
 	pendingTtlDays: z.number().int().min(0).default(30),
 	reRequestCooldownDays: z.number().int().min(0).default(7)

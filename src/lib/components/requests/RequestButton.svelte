@@ -1,6 +1,6 @@
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
-	import { Clapperboard, X, Check } from '@lucide/svelte';
+	import { Clapperboard, Disc3, X, Check } from '@lucide/svelte';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { listRequests, cancelRequest, type MediaRequest } from '#lib/api/requests.js';
 	import RequestModal from './RequestModal.svelte';
@@ -8,22 +8,29 @@
 
 	interface Props {
 		/** Discover pages use 'tv'; the request API uses 'series'. */
-		mediaType: 'movie' | 'tv';
-		tmdbId: number;
+		mediaType: 'movie' | 'tv' | 'music';
+		/** TMDB id for movie/tv; the release-group id for music. */
+		tmdbId?: number;
+		mbid?: string;
 		title: string;
 		year?: number | null;
 		posterPath?: string | null;
+		coverUrl?: string | null;
 		onChange?: () => void;
 	}
 
-	let { mediaType, tmdbId, title, year, posterPath, onChange }: Props = $props();
+	let { mediaType, tmdbId, mbid, title, year, posterPath, coverUrl, onChange }: Props = $props();
 
 	let showModal = $state(false);
 	let ownRequests = $state<MediaRequest[]>([]);
 	let loaded = $state(false);
 	let cancelling = $state(false);
 
-	const requestMediaType = $derived(mediaType === 'tv' ? 'series' : 'movie');
+	const isMusic = $derived(mediaType === 'music');
+	const requestMediaType = $derived(
+		mediaType === 'music' ? 'music' : mediaType === 'tv' ? 'series' : 'movie'
+	);
+	const identity = $derived(isMusic ? (mbid ?? '') : String(tmdbId ?? ''));
 
 	// The live one wins; otherwise show the newest request so the user still
 	// sees where theirs stands (declined/expired keep the request action).
@@ -34,10 +41,12 @@
 	);
 	let fulfilledRequest = $derived(ownRequests.find((r) => r.status === 'fulfilled'));
 
-	async function load(media: 'movie' | 'series', id: number) {
+	async function load(media: 'movie' | 'series' | 'music', id: string) {
 		try {
 			const all = await listRequests({ take: 100 });
-			ownRequests = all.filter((r) => r.mediaType === media && r.tmdbId === id);
+			ownRequests = all.filter((r) =>
+				media === 'music' ? r.mediaType === media && r.mbid === id : r.mediaType === media && String(r.tmdbId) === id
+			);
 		} catch {
 			// Non-fatal: the request action still renders.
 		} finally {
@@ -50,7 +59,7 @@
 	// happen inside the effect, not after an await).
 	$effect(() => {
 		const media = requestMediaType;
-		const id = tmdbId;
+		const id = identity;
 		void load(media, id);
 	});
 
@@ -60,7 +69,7 @@
 		try {
 			await cancelRequest(activeRequest.id);
 			toasts.info(m.requests_cancelled({ title }));
-			await load(requestMediaType, tmdbId);
+			await load(requestMediaType, identity);
 			onChange?.();
 		} catch {
 			toasts.error(m.requests_errorGeneric());
@@ -70,7 +79,7 @@
 	}
 
 	function handleSuccess() {
-		void load(requestMediaType, tmdbId);
+		void load(requestMediaType, identity);
 		onChange?.();
 	}
 </script>
@@ -106,8 +115,16 @@
 		</div>
 	{:else}
 		<button type="button" class="btn gap-1.5 btn-primary btn-sm" onclick={() => (showModal = true)}>
-			<Clapperboard class="h-4 w-4" />
-			{mediaType === 'tv' ? m.requests_requestSeries() : m.requests_requestMovie()}
+			{#if isMusic}
+				<Disc3 class="h-4 w-4" />
+				{m.requests_requestAlbum()}
+			{:else if mediaType === 'tv'}
+				<Clapperboard class="h-4 w-4" />
+				{m.requests_requestSeries()}
+			{:else}
+				<Clapperboard class="h-4 w-4" />
+				{m.requests_requestMovie()}
+			{/if}
 		</button>
 	{/if}
 {/if}
@@ -116,9 +133,11 @@
 	open={showModal}
 	{mediaType}
 	{tmdbId}
+	{mbid}
 	{title}
 	{year}
 	{posterPath}
+	{coverUrl}
 	onClose={() => (showModal = false)}
 	onSuccess={handleSuccess}
 />

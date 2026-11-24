@@ -16,7 +16,9 @@ export const userRequestSettingsUpdateSchema = z.object({
 	movieQuotaLimit: z.number().int().min(0).nullable().optional(),
 	movieQuotaDays: z.number().int().min(1).nullable().optional(),
 	tvQuotaLimit: z.number().int().min(0).nullable().optional(),
-	tvQuotaDays: z.number().int().min(1).nullable().optional()
+	tvQuotaDays: z.number().int().min(1).nullable().optional(),
+	musicQuotaLimit: z.number().int().min(0).nullable().optional(),
+	musicQuotaDays: z.number().int().min(1).nullable().optional()
 });
 
 export type UserRequestSettingsUpdate = z.infer<typeof userRequestSettingsUpdateSchema>;
@@ -29,6 +31,8 @@ export type UserRequestSettingsRow = {
 	movieQuotaDays: number | null;
 	tvQuotaLimit: number | null;
 	tvQuotaDays: number | null;
+	musicQuotaLimit: number | null;
+	musicQuotaDays: number | null;
 };
 
 // Drizzle's boolean-mode columns already round-trip JS booleans (and keep
@@ -41,6 +45,8 @@ function rowToSettings(row: {
 	movieQuotaDays: number | null;
 	tvQuotaLimit: number | null;
 	tvQuotaDays: number | null;
+	musicQuotaLimit: number | null;
+	musicQuotaDays: number | null;
 }): UserRequestSettingsRow {
 	return { ...row };
 }
@@ -61,7 +67,9 @@ export class UserRequestSettingsService {
 				movieQuotaLimit: null,
 				movieQuotaDays: null,
 				tvQuotaLimit: null,
-				tvQuotaDays: null
+				tvQuotaDays: null,
+				musicQuotaLimit: null,
+				musicQuotaDays: null
 			};
 		}
 		return rowToSettings(row);
@@ -80,7 +88,11 @@ export class UserRequestSettingsService {
 			movieQuotaDays:
 				update.movieQuotaDays === undefined ? current.movieQuotaDays : update.movieQuotaDays,
 			tvQuotaLimit: update.tvQuotaLimit === undefined ? current.tvQuotaLimit : update.tvQuotaLimit,
-			tvQuotaDays: update.tvQuotaDays === undefined ? current.tvQuotaDays : update.tvQuotaDays
+			tvQuotaDays: update.tvQuotaDays === undefined ? current.tvQuotaDays : update.tvQuotaDays,
+			musicQuotaLimit:
+				update.musicQuotaLimit === undefined ? current.musicQuotaLimit : update.musicQuotaLimit,
+			musicQuotaDays:
+				update.musicQuotaDays === undefined ? current.musicQuotaDays : update.musicQuotaDays
 		};
 
 		await db
@@ -93,6 +105,8 @@ export class UserRequestSettingsService {
 				movieQuotaDays: next.movieQuotaDays,
 				tvQuotaLimit: next.tvQuotaLimit,
 				tvQuotaDays: next.tvQuotaDays,
+				musicQuotaLimit: next.musicQuotaLimit,
+				musicQuotaDays: next.musicQuotaDays,
 				updatedAt: new Date().toISOString()
 			})
 			.onConflictDoUpdate({
@@ -104,6 +118,8 @@ export class UserRequestSettingsService {
 					movieQuotaDays: next.movieQuotaDays,
 					tvQuotaLimit: next.tvQuotaLimit,
 					tvQuotaDays: next.tvQuotaDays,
+					musicQuotaLimit: next.musicQuotaLimit,
+					musicQuotaDays: next.musicQuotaDays,
 					updatedAt: new Date().toISOString()
 				}
 			});

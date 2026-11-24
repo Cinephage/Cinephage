@@ -4607,10 +4607,17 @@ export const requests = sqliteTable(
 			.primaryKey()
 			.$defaultFn(() => randomUUID()),
 		mediaType: text('media_type').notNull(),
-		tmdbId: integer('tmdb_id').notNull(),
+		// TMDB identity for movie/series; null for a music request, which carries
+		// a MusicBrainz release-group id instead.
+		tmdbId: integer('tmdb_id'),
 		title: text('title').notNull(),
 		posterPath: text('poster_path'),
+		// Absolute cover URL for music; posterPath stays TMDB-relative.
+		coverUrl: text('cover_url'),
 		year: integer('year'),
+		// Music identity: the release group, and the library album once approved.
+		mbid: text('mbid'),
+		albumId: text('album_id').references(() => albums.id, { onDelete: 'set null' }),
 		// Linked once approval creates (or re-monitors) the library row.
 		movieId: text('movie_id').references(() => movies.id, { onDelete: 'set null' }),
 		seriesId: text('series_id').references(() => series.id, { onDelete: 'set null' }),
@@ -4649,6 +4656,8 @@ export const requests = sqliteTable(
 	},
 	(table) => [
 		index('idx_requests_media_status').on(table.mediaType, table.tmdbId, table.status),
+		index('idx_requests_media_mbid').on(table.mediaType, table.mbid, table.status),
+		index('idx_requests_album').on(table.albumId),
 		index('idx_requests_requester_created').on(table.requestedBy, table.createdAt),
 		index('idx_requests_pending').on(table.status)
 	]
@@ -4671,6 +4680,8 @@ export const userRequestSettings = sqliteTable('user_request_settings', {
 	movieQuotaDays: integer('movie_quota_days'),
 	tvQuotaLimit: integer('tv_quota_limit'),
 	tvQuotaDays: integer('tv_quota_days'),
+	musicQuotaLimit: integer('music_quota_limit'),
+	musicQuotaDays: integer('music_quota_days'),
 	updatedAt: text('updated_at')
 		.notNull()
 		.$defaultFn(() => new Date().toISOString())

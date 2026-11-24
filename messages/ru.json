@@ -5905,5 +5905,11 @@
 	"searchRetries_resume": "Возобновить",
 	"searchRetries_resumeAll": "Возобновить все",
 	"searchRetries_running": "Автоматический поиск выполняется",
-	"searchRetries_status": "Статус"
+	"searchRetries_status": "Статус",
+	"requests_quotaMusic": "Музыка",
+	"requests_requestAlbum": "Запросить альбом",
+	"requests_modalTitleAlbum": "Запросить альбом",
+	"requests_errorQuotaMusic": "Превышена квота запросов музыки",
+	"requestsSettings_autoApproveMusic": "Автоматически одобрять запросы музыки",
+	"requestsSettings_musicQuota": "Квота музыки"
 }

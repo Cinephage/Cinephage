@@ -1,17 +1,23 @@
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
-	import { Film, Tv } from '@lucide/svelte';
+	import { Disc3, Film, Tv } from '@lucide/svelte';
 	import type { QuotaStatus } from '#lib/api/requests.js';
 
 	let {
 		quota,
 		type,
 		compact = false
-	}: { quota: QuotaStatus; type: 'movie' | 'tv'; compact?: boolean } = $props();
+	}: { quota: QuotaStatus; type: 'movie' | 'tv' | 'music'; compact?: boolean } = $props();
 
 	const unlimited = $derived(quota.limit === null || quota.limit === 0);
-	const label = $derived(type === 'movie' ? m.requests_quotaMovie() : m.requests_quotaTv());
-	const Icon = $derived(type === 'movie' ? Film : Tv);
+	const label = $derived(
+		type === 'movie'
+			? m.requests_quotaMovie()
+			: type === 'music'
+				? m.requests_quotaMusic()
+				: m.requests_quotaTv()
+	);
+	const Icon = $derived(type === 'movie' ? Film : type === 'music' ? Disc3 : Tv);
 	const pct = $derived(
 		quota.limit && quota.limit > 0 ? Math.min(100, Math.round((quota.used / quota.limit) * 100)) : 0
 	);

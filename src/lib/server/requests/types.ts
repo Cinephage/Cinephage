@@ -36,7 +36,7 @@ export const QUOTA_EXCLUDED_STATUSES: readonly RequestStatus[] = [
 	'cancelled'
 ] as const;
 
-export type RequestMediaType = 'movie' | 'series';
+export type RequestMediaType = 'movie' | 'series' | 'music';
 
 export interface RequestEpisodeEntry {
 	seasonNumber: number;
@@ -55,6 +55,7 @@ export type RequestErrorCode =
 	| 'cooldown'
 	| 'movie_quota'
 	| 'tv_quota'
+	| 'music_quota'
 	| 'invalid_scope'
 	| 'not_found'
 	| 'invalid_status'

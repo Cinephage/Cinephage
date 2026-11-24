@@ -49,7 +49,8 @@ export const GET: RequestHandler = async (event) => {
 			requester.id,
 			requester.role,
 			'series'
-		)
+		),
+		music: await getRequestService().getEffectiveAutoApprove(requester.id, requester.role, 'music')
 	};
 
 	const globalSettings = await getRequestSettingsService().getRequestSettings();

@@ -19,10 +19,10 @@ import { parseBody } from '#lib/server/api/validate.js';
 import { getRequestService } from '#lib/server/requests/RequestService.js';
 import {
 	createRequestSchema,
+	toRequestDto,
 	toRequestErrorResponse,
 	requesterFromLocals
 } from '#lib/server/requests/http.js';
-import type { RequestRecord } from '#lib/server/db/schema.js';
 import type { RequestStatus } from '#lib/server/requests/types.js';
 
 const FILTER_TO_STATUSES: Record<string, RequestStatus[]> = {
@@ -35,42 +35,6 @@ const FILTER_TO_STATUSES: Record<string, RequestStatus[]> = {
 	declined: ['declined', 'expired'],
 	cancelled: ['cancelled']
 };
-
-/**
- * Explicit response DTO: everything the client type declares plus display
- * names. actingUserId / ignoreQuota / episodeCountSnapshot never cross the
- * wire - the row spread that preceded this leaked them to viewers.
- */
-function toRequestDto(
-	r: RequestRecord,
-	usersById: Map<string, string>
-): Record<string, unknown> & { requestedByName: string | null; decidedByName: string | null } {
-	return {
-		id: r.id,
-		mediaType: r.mediaType,
-		tmdbId: r.tmdbId,
-		title: r.title,
-		posterPath: r.posterPath,
-		year: r.year,
-		movieId: r.movieId,
-		seriesId: r.seriesId,
-		status: r.status,
-		seasons: r.seasons,
-		episodes: r.episodes,
-		requestedBy: r.requestedBy,
-		decidedBy: r.decidedBy,
-		autoApproved: r.autoApproved,
-		declineReason: r.declineReason,
-		failureReason: r.failureReason,
-		expiresAt: r.expiresAt,
-		decidedAt: r.decidedAt,
-		fulfilledAt: r.fulfilledAt,
-		createdAt: r.createdAt,
-		updatedAt: r.updatedAt,
-		requestedByName: usersById.get(r.requestedBy) ?? null,
-		decidedByName: r.decidedBy ? (usersById.get(r.decidedBy) ?? null) : null
-	};
-}
 
 export const GET: RequestHandler = async (event) => {
 	const requester = requesterFromLocals(event.locals);
@@ -90,7 +54,9 @@ export const GET: RequestHandler = async (event) => {
 		requesterId: requester.role === 'admin' ? undefined : requester.id,
 		statuses: statuses.length > 0 ? statuses : undefined,
 		mediaType:
-			mediaTypeParam === 'movie' || mediaTypeParam === 'series' ? mediaTypeParam : undefined,
+			mediaTypeParam === 'movie' || mediaTypeParam === 'series' || mediaTypeParam === 'music'
+				? mediaTypeParam
+				: undefined,
 		take: Number.isFinite(take) ? take : 50,
 		skip: Number.isFinite(skip) ? skip : 0,
 		sort: sortParam === 'modified' ? 'modified' : 'added'
@@ -126,7 +92,7 @@ export const POST: RequestHandler = async (event) => {
 	try {
 		const body = await parseBody(event.request, createRequestSchema);
 		const created = await getRequestService().create(requester, body);
-		return Response.json({ success: true, request: created }, { status: 201 });
+		return Response.json({ success: true, request: toRequestDto(created, new Map()) }, { status: 201 });
 	} catch (error) {
 		return toRequestErrorResponse(error);
 	}

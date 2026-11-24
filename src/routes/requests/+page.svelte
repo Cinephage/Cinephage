@@ -2,7 +2,7 @@
 	import * as m from '#lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 	import { onMount } from 'svelte';
-	import { Loader2, Check, X, RotateCcw, BadgeCheck, Inbox, Clock, Trash2 } from '@lucide/svelte';
+	import { Loader2, Check, X, RotateCcw, BadgeCheck, Disc3, Inbox, Clock, Trash2 } from '@lucide/svelte';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { formatDisplayDateShort } from '#lib/utils/format.js';
@@ -36,7 +36,7 @@
 	let filter = $state<'all' | 'pending' | 'approved' | 'fulfilled' | 'failed' | 'declined'>(
 		data.role === 'admin' ? 'pending' : 'all'
 	);
-	let mediaFilter = $state<'all' | 'movie' | 'series'>('all');
+	let mediaFilter = $state<'all' | 'movie' | 'series' | 'music'>('all');
 	let selected = new SvelteSet<string>();
 	let showDeclineModal = $state(false);
 	let declineTarget = $state<string | 'bulk' | null>(null);
@@ -184,6 +184,10 @@
 	}
 
 	function detailHref(row: MediaRequest): string {
+		if (row.mediaType === 'music') {
+			if (row.albumId) return `/library/music/${row.albumId}`;
+			return row.mbid ? `/discover/music/${row.mbid}` : '/requests';
+		}
 		return row.mediaType === 'movie'
 			? `/discover/movie/${row.tmdbId}`
 			: `/discover/tv/${row.tmdbId}`;
@@ -225,9 +229,10 @@
 	</div>
 
 	{#if !isAdmin && counts}
-		<div class="grid gap-2 sm:grid-cols-2">
+		<div class="grid gap-2 sm:grid-cols-3">
 			<QuotaSummary quota={counts.quota.movie} type="movie" />
 			<QuotaSummary quota={counts.quota.tv} type="tv" />
+			<QuotaSummary quota={counts.quota.music} type="music" />
 		</div>
 	{/if}
 
@@ -262,6 +267,7 @@
 			<option value="all">{m.requests_mediaAll()}</option>
 			<option value="movie">{m.requests_movies()}</option>
 			<option value="series">{m.requests_series()}</option>
+			<option value="music">{m.nav_music()}</option>
 		</select>
 	</div>
 
@@ -342,7 +348,22 @@
 							<td>
 								<div class="flex items-center gap-3">
 									<div class="w-8 shrink-0 overflow-hidden rounded">
-										{#if row.posterPath}
+										{#if row.mediaType === 'music'}
+											{#if row.coverUrl}
+												<img
+													src={row.coverUrl}
+													alt=""
+													loading="lazy"
+													class="aspect-square w-full object-cover"
+												/>
+											{:else}
+												<div
+													class="flex aspect-square w-full items-center justify-center bg-base-300 text-base-content/30"
+												>
+													<Disc3 class="h-3.5 w-3.5" />
+												</div>
+											{/if}
+										{:else if row.posterPath}
 											<img
 												src="https://image.tmdb.org/t/p/w92{row.posterPath}"
 												alt=""

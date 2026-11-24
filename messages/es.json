@@ -5905,5 +5905,11 @@
 	"searchRetries_resume": "Reanudar",
 	"searchRetries_resumeAll": "Reanudar todo",
 	"searchRetries_running": "La búsqueda automática está en marcha",
-	"searchRetries_status": "Estado"
+	"searchRetries_status": "Estado",
+	"requests_quotaMusic": "Música",
+	"requests_requestAlbum": "Solicitar álbum",
+	"requests_modalTitleAlbum": "Solicitar álbum",
+	"requests_errorQuotaMusic": "Cuota de solicitudes de música superada",
+	"requestsSettings_autoApproveMusic": "Aprobar automáticamente solicitudes de música",
+	"requestsSettings_musicQuota": "Cuota de música"
 }

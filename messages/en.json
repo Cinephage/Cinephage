@@ -5905,5 +5905,11 @@
 	"smartlists_desc_musicNewReleases": "New releases by monitored artists",
 	"smartlists_music_playlistRequired": "Playlist URL is required before saving",
 	"smartlists_music_playlistInvalid": "Playlist URL must be a valid URL before saving",
-	"smartlists_music_sourceRequired": "Choose a music source before saving"
+	"smartlists_music_sourceRequired": "Choose a music source before saving",
+	"requests_quotaMusic": "Music",
+	"requests_requestAlbum": "Request album",
+	"requests_modalTitleAlbum": "Request album",
+	"requests_errorQuotaMusic": "Music request quota exceeded",
+	"requestsSettings_autoApproveMusic": "Auto-approve music requests",
+	"requestsSettings_musicQuota": "Music quota"
 }

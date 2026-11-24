@@ -1,18 +1,9 @@
 import { eq } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
-import {
-	albums,
-	smartListItems,
-	type SmartListItemRecord,
-	type SmartListRecord
-} from '#lib/server/db/schema.js';
+import { smartListItems, type SmartListRecord, type SmartListItemRecord } from '#lib/server/db/schema.js';
 import { createChildLogger } from '#lib/logging/index.js';
-import { getLibraryEntityService } from '#lib/server/library/LibraryEntityService.js';
-import { validateRootFolder } from '#lib/server/library/LibraryAddService.js';
-import { musicAlbumService } from '#lib/server/music/MusicAlbumService.js';
 import { musicProfileService } from '#lib/server/music/MusicProfileService.js';
-import { autoSearchAlbum } from '#lib/server/music/MusicAutoSearch.js';
-import { musicBrainz, pickPrimaryRelease } from '#lib/server/music/musicbrainz.js';
+import { addAlbumFromReleaseGroup } from '#lib/server/music/add-album.js';
 
 const logger = createChildLogger({ module: 'MusicSmartListAdd', logDomain: 'monitoring' as const });
 
@@ -44,42 +35,18 @@ export async function addMusicItem(
 	}
 
 	try {
-		await validateRootFolder(list.rootFolderId, 'music', { requireWritable: true });
-		const owningLibrary = await getLibraryEntityService().resolveOwningLibraryForRootFolder(
-			list.rootFolderId,
-			'music'
-		);
 		const monitored = list.autoAddMonitored ?? true;
 		const qualityProfileId =
 			list.scoringProfileId && musicProfileService.get(list.scoringProfileId)
 				? list.scoringProfileId
 				: null;
-
-		const existing = await db
-			.select({ id: albums.id })
-			.from(albums)
-			.where(eq(albums.mbid, item.mbid))
-			.limit(1)
-			.get();
-
-		let albumId = existing?.id ?? null;
-		if (!albumId) {
-			const { group, releases } = await musicBrainz.getReleaseGroupWithReleases(item.mbid);
-			const chosen = pickPrimaryRelease(releases);
-			if (!chosen) {
-				return { success: false, error: 'That release group has no editions' };
-			}
-			const release = await musicBrainz.getRelease(chosen.mbid);
-			const result = musicAlbumService.addAlbum({
-				releaseGroup: group,
-				release,
-				libraryId: owningLibrary.id,
-				rootFolderId: list.rootFolderId,
-				monitored,
-				qualityProfileId
-			});
-			albumId = result.albumId;
-		}
+		const { albumId } = await addAlbumFromReleaseGroup({
+			mbid: item.mbid,
+			rootFolderId: list.rootFolderId,
+			monitored,
+			qualityProfileId,
+			search: options.search ?? false
+		});
 
 		const now = new Date().toISOString();
 		await db
@@ -93,20 +60,6 @@ export async function addMusicItem(
 			})
 			.where(eq(smartListItems.id, item.id))
 			.run();
-
-		if (options.search) {
-			const search = await autoSearchAlbum({
-				id: albumId,
-				title: item.title,
-				artistName: item.artistName ?? ''
-			});
-			if (!search.grabbed) {
-				logger.info(
-					{ listId: list.id, albumId, error: search.error },
-					'[MusicSmartList] album added but no release grabbed'
-				);
-			}
-		}
 
 		return { success: true };
 	} catch (error) {

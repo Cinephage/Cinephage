@@ -776,6 +776,36 @@
 								/>
 							</div>
 						</div>
+						<div>
+							<p class="mb-1 text-xs text-base-content/60">{m.requestsSettings_musicQuota()}</p>
+							<div class="flex items-center gap-1.5">
+								<input
+									type="number"
+									min="0"
+									class="input-bordered input w-20 input-sm"
+									placeholder="∞"
+									value={requestSettings.musicQuotaLimit ?? ''}
+									onchange={(e) =>
+										updateRequestSettings({
+											musicQuotaLimit:
+												e.currentTarget.value === '' ? null : Number(e.currentTarget.value)
+										})}
+								/>
+								<span class="text-xs text-base-content/45">{m.requestsSettings_quotaPer()}</span>
+								<input
+									type="number"
+									min="1"
+									class="input-bordered input w-16 input-sm"
+									placeholder={m.requestsSettings_quotaDays()}
+									value={requestSettings.musicQuotaDays ?? ''}
+									onchange={(e) =>
+										updateRequestSettings({
+											musicQuotaDays:
+												e.currentTarget.value === '' ? null : Number(e.currentTarget.value)
+										})}
+								/>
+							</div>
+						</div>
 					</div>
 				</div>
 			</div></SettingsSection

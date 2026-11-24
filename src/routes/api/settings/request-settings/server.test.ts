@@ -97,7 +97,11 @@ describe('/api/settings/request-settings', () => {
 			PUT,
 			'PUT',
 			{
-				defaultQuotas: { movie: { limit: 5, days: 30 }, tv: { limit: null, days: null } },
+				defaultQuotas: {
+					movie: { limit: 5, days: 30 },
+					tv: { limit: null, days: null },
+					music: { limit: null, days: null }
+				},
 				pendingTtlDays: 14
 			},
 			{ auth: 'admin' }

@@ -265,6 +265,7 @@ export async function getRequestStateMap(
 		.orderBy(desc(requests.createdAt));
 
 	for (const row of rows) {
+		if (row.tmdbId === null) continue;
 		const state = REQUEST_STATUS_TO_STATE[row.status];
 		if (!state) continue; // declined/expired/cancelled never annotate
 		const current = map[row.tmdbId];

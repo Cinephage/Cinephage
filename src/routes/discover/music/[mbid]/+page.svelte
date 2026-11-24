@@ -6,6 +6,7 @@
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import AlbumHero from '#lib/components/music/AlbumHero.svelte';
 	import MusicAddConfirmModal from '#lib/components/music/MusicAddConfirmModal.svelte';
+	import RequestButton from '#lib/components/requests/RequestButton.svelte';
 	import TrackList from '#lib/components/music/TrackList.svelte';
 	import type { AlbumHeroAlbum, TrackListTrack } from '#lib/components/music/music-card.js';
 
@@ -51,6 +52,7 @@
 			featured: string[];
 			/** Deezer cover; null on a MusicBrainz page, which uses the archive. */
 			artworkUrl: string | null;
+			isAdmin: boolean;
 		};
 	} = $props();
 
@@ -184,17 +186,31 @@
 						tone: 'success'
 					}
 				]
-			: [
-					{
-						key: 'add',
-						icon: Plus,
-						label: m.music_addAlbum(),
-						emphasis: 'primary',
-						busy,
-						onSelect: () => (addOpen = true)
-					}
-				]}
+			: data.isAdmin
+				? [
+						{
+							key: 'add',
+							icon: Plus,
+							label: m.music_addAlbum(),
+							emphasis: 'primary',
+							busy,
+							onSelect: () => (addOpen = true)
+						}
+					]
+				: []}
 	/>
+
+	{#if !data.libraryAlbumId && !data.isAdmin && group.mbid}
+		<div class="mt-3 flex justify-end">
+			<RequestButton
+				mediaType="music"
+				mbid={group.mbid}
+				title={group.title}
+				year={album.year}
+				{coverUrl}
+			/>
+		</div>
+	{/if}
 
 	{#if tracks.length > 0}
 		<div class="mt-5">

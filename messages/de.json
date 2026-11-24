@@ -5905,5 +5905,11 @@
 	"searchRetries_resume": "Fortsetzen",
 	"searchRetries_resumeAll": "Alle fortsetzen",
 	"searchRetries_running": "Automatische Suche läuft",
-	"searchRetries_status": "Status"
+	"searchRetries_status": "Status",
+	"requests_quotaMusic": "Musik",
+	"requests_requestAlbum": "Album anfragen",
+	"requests_modalTitleAlbum": "Album anfragen",
+	"requests_errorQuotaMusic": "Musik-Anfragekontingent überschritten",
+	"requestsSettings_autoApproveMusic": "Musik-Anfragen automatisch genehmigen",
+	"requestsSettings_musicQuota": "Musik-Kontingent"
 }

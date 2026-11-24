@@ -254,7 +254,7 @@ import {
  *   items and MusicBrainz albums. SQLite cannot drop NOT NULL in place, so this
  *   rebuilds the table from its live DDL (same pattern as v181).
  */
-export const CURRENT_SCHEMA_VERSION = 201;
+export const CURRENT_SCHEMA_VERSION = 202;
 
 /**
  * Seed rows for the *legacy* backfill in migration 078 only.
@@ -1766,10 +1766,13 @@ const TABLE_DEFINITIONS: string[] = [
 	`CREATE TABLE IF NOT EXISTS "requests" (
 		"id" text PRIMARY KEY NOT NULL,
 		"media_type" text NOT NULL,
-		"tmdb_id" integer NOT NULL,
+		"tmdb_id" integer,
 		"title" text NOT NULL,
 		"poster_path" text,
+		"cover_url" text,
 		"year" integer,
+		"mbid" text,
+		"album_id" text REFERENCES "albums"("id") ON DELETE SET NULL,
 		"movie_id" text REFERENCES "movies"("id") ON DELETE SET NULL,
 		"series_id" text REFERENCES "series"("id") ON DELETE SET NULL,
 		"status" text NOT NULL DEFAULT 'pending',
@@ -1798,6 +1801,8 @@ const TABLE_DEFINITIONS: string[] = [
 		"movie_quota_days" integer,
 		"tv_quota_limit" integer,
 		"tv_quota_days" integer,
+		"music_quota_limit" integer,
+		"music_quota_days" integer,
 		"updated_at" text NOT NULL
 	)`,
 
@@ -2196,6 +2201,8 @@ const INDEX_DEFINITIONS: string[] = [
 	`CREATE INDEX IF NOT EXISTS "idx_metadata_conflicts_status" ON "metadata_conflicts" ("status")`,
 	// Request system indexes
 	`CREATE INDEX IF NOT EXISTS "idx_requests_media_status" ON "requests" ("media_type", "tmdb_id", "status")`,
+	`CREATE INDEX IF NOT EXISTS "idx_requests_media_mbid" ON "requests" ("media_type", "mbid", "status")`,
+	`CREATE INDEX IF NOT EXISTS "idx_requests_album" ON "requests" ("album_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_requests_requester_created" ON "requests" ("requested_by", "created_at")`,
 	`CREATE INDEX IF NOT EXISTS "idx_requests_pending" ON "requests" ("status")`,
 	`CREATE INDEX IF NOT EXISTS "idx_request_notifications_user_read" ON "request_notifications" ("user_id", "read_at")`

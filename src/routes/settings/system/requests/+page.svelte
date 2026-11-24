@@ -108,11 +108,18 @@
 						settings!.autoApprove.series = !settings!.autoApprove.series;
 					}}
 				/>
+				<ToggleSetting
+					checked={settings.autoApprove.music}
+					label={m.requestsSettings_autoApproveMusic()}
+					onchange={() => {
+						settings!.autoApprove.music = !settings!.autoApprove.music;
+					}}
+				/>
 			</div>
 		</SettingsSection>
 
 		<SettingsSection title={m.requestsSettings_defaultQuotas()}>
-			<div class="grid gap-5 sm:grid-cols-2">
+			<div class="grid gap-5 sm:grid-cols-3">
 				<div>
 					<p class="mb-2 text-sm font-medium">{m.requestsSettings_movieQuota()}</p>
 					<div class="flex items-center gap-2">
@@ -173,6 +180,35 @@
 						</select>
 						<span class="text-xs text-base-content/45">{m.requestsSettings_tvUnit()}</span>
 					</div>
+				</div>
+				<div>
+					<p class="mb-2 text-sm font-medium">{m.requestsSettings_musicQuota()}</p>
+					<div class="flex items-center gap-2">
+						<input
+							type="number"
+							min="0"
+							class="input-bordered input w-24 input-sm"
+							placeholder="∞"
+							aria-label={m.requestsSettings_quotaLimit()}
+							value={quotaValue(settings.defaultQuotas.music.limit)}
+							oninput={(e) =>
+								(settings!.defaultQuotas.music.limit = quotaInput(e.currentTarget.value))}
+						/>
+						<span class="text-xs text-base-content/45">{m.requestsSettings_quotaPer()}</span>
+						<input
+							type="number"
+							min="1"
+							class="input-bordered input w-20 input-sm"
+							placeholder="days"
+							aria-label={m.requestsSettings_quotaDays()}
+							value={quotaValue(settings.defaultQuotas.music.days)}
+							oninput={(e) =>
+								(settings!.defaultQuotas.music.days = quotaInput(e.currentTarget.value))}
+						/>
+					</div>
+					<p class="mt-1.5 text-xs text-base-content/45">
+						{m.requestsSettings_quotaUnlimitedValue()}
+					</p>
 				</div>
 			</div>
 		</SettingsSection>

@@ -10,7 +10,7 @@
 
 import type { RequestHandler } from './$types.js';
 import { getRequestService } from '#lib/server/requests/RequestService.js';
-import { toRequestErrorResponse, requesterFromLocals } from '#lib/server/requests/http.js';
+import { toRequestDto, toRequestErrorResponse, requesterFromLocals } from '#lib/server/requests/http.js';
 
 export const DELETE: RequestHandler = async (event) => {
 	const requester = requesterFromLocals(event.locals);
@@ -21,7 +21,7 @@ export const DELETE: RequestHandler = async (event) => {
 	try {
 		const result = await getRequestService().cancelOrRemove(event.params.id, requester);
 		if (result.kind === 'cancelled') {
-			return Response.json({ success: true, request: result.request });
+			return Response.json({ success: true, request: toRequestDto(result.request, new Map()) });
 		}
 		return Response.json({ success: true, deleted: true });
 	} catch (error) {

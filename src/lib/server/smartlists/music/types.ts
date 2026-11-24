@@ -95,6 +95,4 @@ export function musicSourceConfigError(input: {
 }
 
 /** The Cover Art Archive thumbnail a not-yet-imported album renders. */
-export function coverArtUrl(releaseGroupMbid: string): string {
-	return `https://coverartarchive.org/release-group/${releaseGroupMbid}/front-250`;
-}
+export { coverArtUrl } from '../../music/cover-art.js';

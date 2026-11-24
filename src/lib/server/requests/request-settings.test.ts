@@ -61,7 +61,7 @@ describe('RequestSettingsService', () => {
 		const value = await svc.getRequestSettings();
 
 		expect(value.requestsEnabled).toBe(true);
-		expect(value.autoApprove).toEqual({ movie: false, series: false });
+		expect(value.autoApprove).toEqual({ movie: false, series: false, music: false });
 		expect(value.defaultQuotas.movie).toEqual({ limit: null, days: null });
 		expect(value.tvQuotaUnit).toBe('episodes');
 		expect(value.pendingTtlDays).toBe(30);
@@ -72,10 +72,11 @@ describe('RequestSettingsService', () => {
 		const svc = getRequestSettingsService();
 		await svc.saveRequestSettings({
 			requestsEnabled: false,
-			autoApprove: { movie: true, series: false },
+			autoApprove: { movie: true, series: false, music: false },
 			defaultQuotas: {
 				movie: { limit: 5, days: 7 },
-				tv: { limit: null, days: null }
+				tv: { limit: null, days: null },
+				music: { limit: null, days: null }
 			},
 			tvQuotaUnit: 'seasons',
 			pendingTtlDays: 14,
@@ -110,7 +111,7 @@ describe('RequestSettingsService', () => {
 		const svc = getRequestSettingsService();
 		// The schema is the gate: a nested object replaces wholesale and the
 		// parse fills any missing member with its default.
-		const value = await svc.saveRequestSettings({ autoApprove: { movie: true, series: false } });
+		const value = await svc.saveRequestSettings({ autoApprove: { movie: true, series: false, music: false } });
 		expect(value.requestsEnabled).toBe(true);
 		expect(value.autoApprove.series).toBe(false);
 	});
@@ -126,7 +127,9 @@ describe('UserRequestSettingsService', () => {
 			movieQuotaLimit: null,
 			movieQuotaDays: null,
 			tvQuotaLimit: null,
-			tvQuotaDays: null
+			tvQuotaDays: null,
+			musicQuotaLimit: null,
+			musicQuotaDays: null
 		});
 	});
 

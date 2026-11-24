@@ -14,7 +14,7 @@ export type RequestStatus =
 	| 'cancelled'
 	| 'fulfilled';
 
-export type RequestMediaType = 'movie' | 'series';
+export type RequestMediaType = 'movie' | 'series' | 'music';
 
 export interface RequestEpisodeEntry {
 	seasonNumber: number;
@@ -24,9 +24,13 @@ export interface RequestEpisodeEntry {
 export interface MediaRequest {
 	id: string;
 	mediaType: RequestMediaType;
-	tmdbId: number;
+	/** Null for a music request, which carries `mbid` instead. */
+	tmdbId: number | null;
+	mbid: string | null;
+	albumId: string | null;
 	title: string;
 	posterPath: string | null;
+	coverUrl: string | null;
 	year: number | null;
 	movieId: string | null;
 	seriesId: string | null;
@@ -67,17 +71,19 @@ export interface RequestCounts {
 
 export interface RequestCountResponse {
 	counts: RequestCounts;
-	quota: { movie: QuotaStatus; tv: QuotaStatus };
-	autoApprove?: { movie: boolean; series: boolean };
+	quota: { movie: QuotaStatus; tv: QuotaStatus; music: QuotaStatus };
+	autoApprove?: { movie: boolean; series: boolean; music: boolean };
 	tvQuotaUnit?: 'episodes' | 'seasons';
 }
 
-export interface CreateRequestInput {
-	mediaType: RequestMediaType;
-	tmdbId: number;
-	seasons?: number[];
-	episodes?: RequestEpisodeEntry[];
-}
+export type CreateRequestInput =
+	| {
+			mediaType: 'movie' | 'series';
+			tmdbId: number;
+			seasons?: number[];
+			episodes?: RequestEpisodeEntry[];
+	  }
+	| { mediaType: 'music'; mbid: string };
 
 export interface RequestNotification {
 	id: string;
@@ -96,7 +102,7 @@ export interface RequestNotification {
 export async function listRequests(
 	options: {
 		filter?: string;
-		mediaType?: 'movie' | 'series';
+		mediaType?: RequestMediaType;
 		take?: number;
 		skip?: number;
 		sort?: 'added' | 'modified';
@@ -237,10 +243,11 @@ export async function markNotificationsRead(ids?: string[]): Promise<void> {
 
 export interface RequestSettings {
 	requestsEnabled: boolean;
-	autoApprove: { movie: boolean; series: boolean };
+	autoApprove: { movie: boolean; series: boolean; music: boolean };
 	defaultQuotas: {
 		movie: { limit: number | null; days: number | null };
 		tv: { limit: number | null; days: number | null };
+		music: { limit: number | null; days: number | null };
 	};
 	tvQuotaUnit: 'episodes' | 'seasons';
 	pendingTtlDays: number;
@@ -270,6 +277,8 @@ export interface UserRequestSettings {
 	movieQuotaDays: number | null;
 	tvQuotaLimit: number | null;
 	tvQuotaDays: number | null;
+	musicQuotaLimit: number | null;
+	musicQuotaDays: number | null;
 }
 
 export async function getUserRequestSettings(

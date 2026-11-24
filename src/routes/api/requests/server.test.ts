@@ -189,7 +189,11 @@ describe('POST /api/requests', () => {
 
 	it('maps quota failures to coded 403s', async () => {
 		await getRequestSettingsService().saveRequestSettings({
-			defaultQuotas: { movie: { limit: 1, days: 30 }, tv: { limit: null, days: null } }
+			defaultQuotas: {
+				movie: { limit: 1, days: 30 },
+				tv: { limit: null, days: null },
+				music: { limit: null, days: null }
+			}
 		});
 		await callJson(POST, 'POST', { mediaType: 'movie', tmdbId: 99 }, { auth: 'user' });
 		const { status, data } = await callJson(

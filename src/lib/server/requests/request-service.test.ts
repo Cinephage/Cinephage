@@ -298,7 +298,8 @@ describe('create validation order', () => {
 		await getRequestSettingsService().saveRequestSettings({
 			defaultQuotas: {
 				movie: { limit: 1, days: 30 },
-				tv: { limit: null, days: null }
+				tv: { limit: null, days: null },
+				music: { limit: null, days: null }
 			}
 		});
 		const svc = getRequestService();
@@ -312,7 +313,8 @@ describe('create validation order', () => {
 		await getRequestSettingsService().saveRequestSettings({
 			defaultQuotas: {
 				movie: { limit: null, days: null },
-				tv: { limit: 2, days: 30 }
+				tv: { limit: 2, days: 30 },
+				music: { limit: null, days: null }
 			},
 			tvQuotaUnit: 'episodes'
 		});
@@ -395,7 +397,8 @@ describe('post-review hardening', () => {
 		await getRequestSettingsService().saveRequestSettings({
 			defaultQuotas: {
 				movie: { limit: null, days: null },
-				tv: { limit: 2, days: 30 }
+				tv: { limit: 2, days: 30 },
+				music: { limit: null, days: null }
 			},
 			tvQuotaUnit: 'episodes'
 		});
@@ -417,7 +420,8 @@ describe('post-review hardening', () => {
 		await getRequestSettingsService().saveRequestSettings({
 			defaultQuotas: {
 				movie: { limit: null, days: null },
-				tv: { limit: 1, days: 30 }
+				tv: { limit: 1, days: 30 },
+				music: { limit: null, days: null }
 			},
 			tvQuotaUnit: 'seasons'
 		});
@@ -476,7 +480,8 @@ describe('post-review hardening', () => {
 		await getRequestSettingsService().saveRequestSettings({
 			defaultQuotas: {
 				movie: { limit: 1, days: 30 },
-				tv: { limit: null, days: null }
+				tv: { limit: null, days: null },
+				music: { limit: null, days: null }
 			}
 		});
 		const svc = getRequestService();
@@ -571,7 +576,7 @@ describe('auto-approve resolution', () => {
 
 	it('honors the global auto-approve setting per media type', async () => {
 		await getRequestSettingsService().saveRequestSettings({
-			autoApprove: { movie: true, series: false }
+			autoApprove: { movie: true, series: false, music: false }
 		});
 		const svc = getRequestService();
 

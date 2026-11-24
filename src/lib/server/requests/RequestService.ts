@@ -6,9 +6,10 @@ import {
 	seasons,
 	episodes,
 	movieFiles,
-	rootFolders
+	rootFolders,
+	albums
 } from '#lib/server/db/schema.js';
-import { and, desc, eq, gt, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import {
 	fetchMovieDetails,
 	fetchSeriesDetails,
@@ -18,9 +19,12 @@ import {
 import { addMovieToLibrary } from '#lib/server/library/add/add-movie.js';
 import { addSeriesToLibrary } from '#lib/server/library/add/add-series.js';
 import { blockedMediaService } from '#lib/server/blocked-media/service.js';
+import { addAlbumFromReleaseGroup } from '#lib/server/music/add-album.js';
+import { musicBrainz } from '#lib/server/music/musicbrainz.js';
+import { coverArtUrl } from '#lib/server/music/cover-art.js';
 import { resolveMovieMultiQuality } from '#lib/server/quality/movie-buckets.js';
 import { isLikelyAnimeMedia } from '#lib/shared/anime-classification.js';
-import { getRequestSettingsService } from './RequestSettingsService.js';
+import { getRequestSettingsService, type RequestSettings } from './RequestSettingsService.js';
 import { getUserRequestSettingsService } from './UserRequestSettingsService.js';
 import { getRequestNotificationService } from './RequestNotificationService.js';
 import { requestStreamEvents } from './RequestStreamEvents.js';
@@ -31,6 +35,7 @@ import {
 	RequestError,
 	type QuotaStatus,
 	type RequestEpisodeEntry,
+	type RequestMediaType,
 	type RequesterContext,
 	type RequestStatus
 } from './types.js';
@@ -38,11 +43,21 @@ import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ module: 'RequestService', logDomain: 'system' });
 
-export interface CreateRequestInput {
-	mediaType: 'movie' | 'series';
-	tmdbId: number;
-	seasons?: number[];
-	episodes?: RequestEpisodeEntry[];
+export type CreateRequestInput =
+	| {
+			mediaType: 'movie' | 'series';
+			tmdbId: number;
+			seasons?: number[];
+			episodes?: RequestEpisodeEntry[];
+	  }
+	| { mediaType: 'music'; mbid: string };
+
+interface MusicSnapshot {
+	title: string;
+	artistName: string;
+	year: number | null;
+	primaryType: string | null;
+	coverUrl: string | null;
 }
 
 interface TmdbSnapshot {
@@ -85,19 +100,23 @@ export class RequestService {
 	): Promise<{
 		movie: QuotaStatus;
 		tv: QuotaStatus;
+		music: QuotaStatus;
 	}> {
 		const settings = await getRequestSettingsService().getRequestSettings();
 		const overrides = await getUserRequestSettingsService().getUserRequestSettings(requesterId);
 
 		const compute = async (
-			mediaType: 'movie' | 'series',
+			mediaType: RequestMediaType,
 			userLimit: number | null,
 			userDays: number | null
 		): Promise<QuotaStatus> => {
 			if (role === 'admin') {
 				return { days: null, limit: null, used: 0, remaining: null, restricted: false };
 			}
-			const global = settings.defaultQuotas[mediaType === 'movie' ? 'movie' : 'tv'];
+			const global =
+				settings.defaultQuotas[
+					mediaType === 'movie' ? 'movie' : mediaType === 'series' ? 'tv' : 'music'
+				];
 			const limit = userLimit ?? global.limit ?? null;
 			const days = userDays ?? global.days ?? null;
 			const unlimited = limit === null || limit === 0;
@@ -121,7 +140,7 @@ export class RequestService {
 			let used = 0;
 			for (const row of rows) {
 				if ((QUOTA_EXCLUDED_STATUSES as readonly string[]).includes(row.status)) continue;
-				if (mediaType === 'movie') {
+				if (mediaType !== 'series') {
 					used += 1;
 					continue;
 				}
@@ -142,7 +161,8 @@ export class RequestService {
 
 		return {
 			movie: await compute('movie', overrides.movieQuotaLimit, overrides.movieQuotaDays),
-			tv: await compute('series', overrides.tvQuotaLimit, overrides.tvQuotaDays)
+			tv: await compute('series', overrides.tvQuotaLimit, overrides.tvQuotaDays),
+			music: await compute('music', overrides.musicQuotaLimit, overrides.musicQuotaDays)
 		};
 	}
 
@@ -172,14 +192,18 @@ export class RequestService {
 	async getEffectiveAutoApprove(
 		requesterId: string,
 		role: 'admin' | 'user',
-		mediaType: 'movie' | 'series'
+		mediaType: RequestMediaType
 	): Promise<boolean> {
 		if (role === 'admin') return true;
 		const settings = await getRequestSettingsService().getRequestSettings();
 		const overrides = await getUserRequestSettingsService().getUserRequestSettings(requesterId);
 		return (
 			overrides.autoApprove ??
-			(mediaType === 'movie' ? settings.autoApprove.movie : settings.autoApprove.series)
+			(mediaType === 'movie'
+				? settings.autoApprove.movie
+				: mediaType === 'series'
+					? settings.autoApprove.series
+					: settings.autoApprove.music)
 		);
 	}
 
@@ -213,6 +237,10 @@ export class RequestService {
 
 		if (requester.banned) {
 			throw new RequestError('banned', 'This account is banned', 403);
+		}
+
+		if (input.mediaType === 'music') {
+			return this.createMusicUnlocked(requester, input.mbid, settings);
 		}
 
 		if (
@@ -405,6 +433,167 @@ export class RequestService {
 		return this.getRequest(created.id);
 	}
 
+	private async createMusicUnlocked(
+		requester: RequesterContext,
+		mbid: string,
+		settings: RequestSettings
+	) {
+		const releaseGroupMbid = mbid.trim();
+		if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(releaseGroupMbid)) {
+			throw new RequestError('invalid_scope', 'A valid release-group id is required', 400);
+		}
+
+		let snapshot: MusicSnapshot;
+		try {
+			snapshot = await this.fetchMusicSnapshot(releaseGroupMbid);
+		} catch {
+			throw new RequestError('not_found', 'Release group not found', 404);
+		}
+
+		// Cooldown: last declined/expired request for the same release group.
+		if (settings.reRequestCooldownDays > 0) {
+			const cutoff = new Date(
+				Date.now() - settings.reRequestCooldownDays * 86_400_000
+			).toISOString();
+			const recentDecline = await db
+				.select({ id: requests.id })
+				.from(requests)
+				.where(
+					and(
+						eq(requests.mediaType, 'music'),
+						eq(requests.mbid, releaseGroupMbid),
+						inArray(requests.status, ['declined', 'expired']),
+						gt(requests.decidedAt, cutoff)
+					)
+				)
+				.limit(1);
+			if (recentDecline.length > 0) {
+				throw new RequestError(
+					'cooldown',
+					`This album was recently declined; re-requesting is blocked for ${settings.reRequestCooldownDays} days`,
+					403,
+					{ cooldownDays: settings.reRequestCooldownDays }
+				);
+			}
+		}
+
+		const [album] = await db
+			.select({ id: albums.id, hasFile: albums.hasFile, monitored: albums.monitored })
+			.from(albums)
+			.where(eq(albums.mbid, releaseGroupMbid))
+			.limit(1);
+		if (album?.hasFile) {
+			throw new RequestError('already_available', 'Album is already in the library', 409);
+		}
+		if (album?.monitored) {
+			throw new RequestError(
+				'already_in_library',
+				'Album is already in the library and monitored',
+				409
+			);
+		}
+
+		const active = await db
+			.select({ id: requests.id })
+			.from(requests)
+			.where(
+				and(
+					eq(requests.mediaType, 'music'),
+					eq(requests.mbid, releaseGroupMbid),
+					inArray(requests.status, [...ACTIVE_REQUEST_STATUSES])
+				)
+			)
+			.limit(1);
+		if (active.length > 0) {
+			throw new RequestError('duplicate_request', 'An active request already exists', 409);
+		}
+
+		if (requester.role !== 'admin') {
+			const quota = await this.getQuota(requester.id, requester.role);
+			if (quota.music.restricted) {
+				throw new RequestError('music_quota', 'Music request quota exceeded', 403, {
+					quota: quota.music
+				});
+			}
+		}
+
+		const now = new Date().toISOString();
+		const expiresAt =
+			settings.pendingTtlDays > 0
+				? new Date(Date.now() + settings.pendingTtlDays * 86_400_000).toISOString()
+				: null;
+
+		const [created] = await db
+			.insert(requests)
+			.values({
+				mediaType: 'music',
+				tmdbId: null,
+				mbid: releaseGroupMbid,
+				title: snapshot.title,
+				coverUrl: snapshot.coverUrl,
+				year: snapshot.year,
+				status: 'pending',
+				seasons: null,
+				episodes: null,
+				episodeCountSnapshot: null,
+				requestedBy: requester.id,
+				actingUserId: requester.actingUserId ?? null,
+				expiresAt
+			})
+			.returning();
+
+		requestStreamEvents.emitRefresh({
+			requesterId: requester.id,
+			requestId: created.id,
+			timestamp: now
+		});
+
+		const autoApprove = await this.getEffectiveAutoApprove(
+			requester.id,
+			requester.role,
+			'music'
+		);
+
+		if (autoApprove) {
+			try {
+				return await this.approveInternal(created.id, requester, true);
+			} catch (error) {
+				logger.warn(
+					{ requestId: created.id, error: error instanceof Error ? error.message : String(error) },
+					'[Requests] Auto-approval failed; request left failed'
+				);
+				return this.getRequest(created.id);
+			}
+		}
+
+		await getRequestNotificationService().notifyAdmins(
+			'request_pending',
+			{
+				title: snapshot.title,
+				mediaType: 'music',
+				mbid: releaseGroupMbid,
+				coverUrl: snapshot.coverUrl
+			},
+			created.id
+		);
+
+		return this.getRequest(created.id);
+	}
+
+	private async fetchMusicSnapshot(releaseGroupMbid: string): Promise<MusicSnapshot> {
+		const group = await musicBrainz.getReleaseGroup(releaseGroupMbid);
+		const year =
+			group.year ??
+			(group.firstReleaseDate ? new Date(group.firstReleaseDate).getFullYear() : null);
+		return {
+			title: group.title,
+			artistName: group.artist?.name || 'Unknown artist',
+			year,
+			primaryType: group.primaryType ?? null,
+			coverUrl: coverArtUrl(releaseGroupMbid, 500)
+		};
+	}
+
 	/**
 	 * Scope sanity against the TMDB snapshot: seasons must exist with at
 	 * least one episode, episode numbers must fit inside their season's
@@ -436,7 +625,11 @@ export class RequestService {
 		}
 	}
 
-	private normalizeScope(input: CreateRequestInput) {
+	private normalizeScope(input: {
+		mediaType: 'movie' | 'series';
+		seasons?: number[];
+		episodes?: RequestEpisodeEntry[];
+	}) {
 		const seasons = [
 			...new Set((input.seasons ?? []).filter((s) => Number.isInteger(s) && s > 0))
 		].sort((a, b) => a - b);
@@ -659,7 +852,7 @@ export class RequestService {
 
 		try {
 			const targetFolderId = await this.resolveTargetRootFolder(
-				request.mediaType as 'movie' | 'series',
+				request.mediaType as RequestMediaType,
 				request.tmdbId
 			);
 			if (!targetFolderId) {
@@ -669,10 +862,12 @@ export class RequestService {
 				return this.getRequest(requestId);
 			}
 
-			if (request.mediaType === 'movie') {
-				await this.approveMovie(request, targetFolderId);
+			if (request.mediaType === 'music') {
+				await this.approveMusic(request, targetFolderId);
+			} else if (request.mediaType === 'movie') {
+				await this.approveMovie(request as typeof request & { tmdbId: number }, targetFolderId);
 			} else {
-				await this.approveSeries(request, targetFolderId);
+				await this.approveSeries(request as typeof request & { tmdbId: number }, targetFolderId);
 			}
 		} catch (error) {
 			const message = error instanceof Error ? error.message : 'Approval failed';
@@ -712,6 +907,23 @@ export class RequestService {
 			timestamp: claimedAt
 		});
 		return this.getRequest(requestId);
+	}
+
+	private async approveMusic(
+		request: { id: string; mbid: string | null; title: string },
+		targetFolderId: string
+	) {
+		if (!request.mbid) {
+			throw new RequestError('add_failed', 'The request has no release-group id', 409);
+		}
+		const result = await addAlbumFromReleaseGroup({
+			mbid: request.mbid,
+			rootFolderId: targetFolderId,
+			monitored: true,
+			search: true,
+			monitorExisting: true
+		});
+		await db.update(requests).set({ albumId: result.albumId }).where(eq(requests.id, request.id));
 	}
 
 	private async approveMovie(
@@ -903,9 +1115,22 @@ export class RequestService {
 	 * null when no candidate exists (caller parks the request).
 	 */
 	private async resolveTargetRootFolder(
-		mediaType: 'movie' | 'series',
-		tmdbId: number
+		mediaType: RequestMediaType,
+		tmdbId: number | null
 	): Promise<string | null> {
+		if (mediaType === 'music') {
+			const musicFolders = await db
+				.select({
+					id: rootFolders.id,
+					isDefault: rootFolders.isDefault,
+					readOnly: rootFolders.readOnly
+				})
+				.from(rootFolders)
+				.where(and(eq(rootFolders.mediaType, 'music'), eq(rootFolders.readOnly, false)));
+			if (musicFolders.length === 0) return null;
+			return (musicFolders.find((c) => c.isDefault) ?? musicFolders[0]).id;
+		}
+
 		const folderMediaType = mediaType === 'movie' ? 'movie' : 'tv';
 		const candidates = await db
 			.select({
@@ -918,6 +1143,7 @@ export class RequestService {
 			.where(and(eq(rootFolders.mediaType, folderMediaType), eq(rootFolders.readOnly, false)));
 
 		if (candidates.length === 0) return null;
+		if (tmdbId === null) return null;
 
 		const snapshot = await this.fetchSnapshot(mediaType, tmdbId);
 		const wantedSubType = snapshot.isAnime ? 'anime' : 'standard';
@@ -1117,12 +1343,28 @@ export class RequestService {
 	async evaluatePredicate(request: {
 		id: string;
 		mediaType: string;
-		tmdbId: number;
+		tmdbId: number | null;
+		mbid?: string | null;
+		albumId?: string | null;
 		movieId: string | null;
 		seriesId: string | null;
 		seasons: number[] | null;
 		episodes: RequestEpisodeEntry[] | null;
 	}): Promise<boolean> {
+		if (request.mediaType === 'music') {
+			const albumId =
+				request.albumId ?? (request.mbid ? await this.findAlbumId(request.mbid) : null);
+			if (!albumId) return false;
+			const [album] = await db
+				.select({ hasFile: albums.hasFile })
+				.from(albums)
+				.where(eq(albums.id, albumId))
+				.limit(1);
+			return album?.hasFile === true;
+		}
+
+		if (request.tmdbId === null) return false;
+
 		if (request.mediaType === 'movie') {
 			const movieId = request.movieId ?? (await this.findMovieId(request.tmdbId));
 			if (!movieId) return false;
@@ -1177,6 +1419,15 @@ export class RequestService {
 			if (!seasonRows.every((r) => r.hasFile)) return false;
 		}
 		return true;
+	}
+
+	private async findAlbumId(mbid: string): Promise<string | null> {
+		const [row] = await db
+			.select({ id: albums.id })
+			.from(albums)
+			.where(eq(albums.mbid, mbid))
+			.limit(1);
+		return row?.id ?? null;
 	}
 
 	private async findMovieId(tmdbId: number): Promise<string | null> {
@@ -1274,6 +1525,55 @@ export class RequestService {
 		return count;
 	}
 
+	/** Distinct release groups of active music requests - the sweep's work list. */
+	async listActiveMusicMbids(): Promise<string[]> {
+		const rows = await db
+			.selectDistinct({ mbid: requests.mbid })
+			.from(requests)
+			.where(
+				and(
+					eq(requests.mediaType, 'music'),
+					isNotNull(requests.mbid),
+					inArray(requests.status, [...ACTIVE_REQUEST_STATUSES])
+				)
+			);
+		return rows.map((row) => row.mbid).filter((mbid): mbid is string => Boolean(mbid));
+	}
+
+	/** Fulfil active music requests whose album now exists with files. */
+	async advanceFulfilledMusicByMbid(mbid: string): Promise<number> {
+		const active = await db
+			.select()
+			.from(requests)
+			.where(
+				and(
+					eq(requests.mediaType, 'music'),
+					eq(requests.mbid, mbid),
+					inArray(requests.status, ['pending', 'approved', 'awaiting_target'])
+				)
+			);
+		let count = 0;
+		for (const request of active) {
+			if (!request.albumId) {
+				const albumId = await this.findAlbumId(mbid);
+				if (albumId) {
+					await db.update(requests).set({ albumId }).where(eq(requests.id, request.id));
+					request.albumId = albumId;
+				}
+			}
+			if (await this.evaluatePredicate(request)) {
+				await this.markFulfilled(request, 'request_fulfilled');
+				requestStreamEvents.emitRefresh({
+					requesterId: request.requestedBy,
+					requestId: request.id,
+					timestamp: new Date().toISOString()
+				});
+				count++;
+			}
+		}
+		return count;
+	}
+
 	/** Re-drive awaiting_target requests (called when targets may exist). */
 	async retryAwaitingTarget(): Promise<number> {
 		const parked = await db
@@ -1304,7 +1604,17 @@ export class RequestService {
 			.select()
 			.from(requests)
 			.where(
-				and(eq(requests.status, 'approved'), isNull(requests.movieId), isNull(requests.seriesId))
+				and(
+					eq(requests.status, 'approved'),
+					or(
+						and(eq(requests.mediaType, 'music'), isNull(requests.albumId)),
+						and(
+							inArray(requests.mediaType, ['movie', 'series']),
+							isNull(requests.movieId),
+							isNull(requests.seriesId)
+						)
+					)
+				)
 			);
 		let failed = 0;
 		for (const request of orphaned) {
@@ -1401,7 +1711,7 @@ export class RequestService {
 	async listRequests(options: {
 		requesterId?: string;
 		statuses?: RequestStatus[];
-		mediaType?: 'movie' | 'series';
+		mediaType?: RequestMediaType;
 		take?: number;
 		skip?: number;
 		sort?: 'added' | 'modified';
@@ -1438,11 +1748,17 @@ export class RequestService {
 		const rows = await db
 			.selectDistinct({ mediaType: requests.mediaType, tmdbId: requests.tmdbId })
 			.from(requests)
-			.where(inArray(requests.status, [...ACTIVE_REQUEST_STATUSES]));
-		return rows.map((r) => ({
-			mediaType: r.mediaType === 'movie' ? 'movie' : 'series',
-			tmdbId: r.tmdbId
-		}));
+			.where(
+				and(
+					inArray(requests.mediaType, ['movie', 'series']),
+					inArray(requests.status, [...ACTIVE_REQUEST_STATUSES])
+				)
+			);
+		return rows.flatMap((r) =>
+			r.tmdbId === null
+				? []
+				: [{ mediaType: r.mediaType === 'movie' ? ('movie' as const) : ('series' as const), tmdbId: r.tmdbId }]
+		);
 	}
 
 	async countByStatus(): Promise<Record<string, number>> {

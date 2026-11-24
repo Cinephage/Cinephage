@@ -1,6 +1,6 @@
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
-	import { Loader2, ChevronDown, Clapperboard, Info, X, Check } from '@lucide/svelte';
+	import { Loader2, ChevronDown, Clapperboard, Disc3, Info, X, Check } from '@lucide/svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
 	import TmdbImage from '#lib/components/tmdb/TmdbImage.svelte';
@@ -19,19 +19,25 @@
 	interface Props {
 		open: boolean;
 		/** Discover pages use 'tv'; the request API uses 'series'. */
-		mediaType: 'movie' | 'tv';
-		tmdbId: number;
+		mediaType: 'movie' | 'tv' | 'music';
+		tmdbId?: number;
+		/** Release-group id for a music request. */
+		mbid?: string;
 		title: string;
 		year?: number | null;
 		posterPath?: string | null;
+		coverUrl?: string | null;
 		onClose: () => void;
 		/** Called after the request is accepted (pending or auto-approved). */
 		onSuccess?: () => void;
 	}
 
-	let { open, mediaType, tmdbId, title, year, posterPath, onClose, onSuccess }: Props = $props();
+	let { open, mediaType, tmdbId, mbid, title, year, posterPath, coverUrl, onClose, onSuccess } =
+		$props();
 
 	const isSeries = $derived(mediaType === 'tv');
+	const isMusic = $derived(mediaType === 'music');
+	let coverFailed = $state(false);
 
 	let loading = $state(false);
 	let submitting = $state(false);
@@ -56,7 +62,9 @@
 		[...selectedEpisodes.entries()].reduce((sum, [, eps]) => sum + eps.size, 0)
 	);
 	let selectedSeasonCount = $derived(selectedSeasons.size);
-	let hasSelection = $derived(!isSeries || selectedSeasonCount > 0 || selectedEpisodeCount > 0);
+	let hasSelection = $derived(
+		isMusic || !isSeries || selectedSeasonCount > 0 || selectedEpisodeCount > 0
+	);
 
 	// Locked rows: covered by an active request (duplicates are cross-user)
 	// or already on disk. Locks are visible reasons, never silent dims.
@@ -95,11 +103,18 @@
 	}
 
 	let autoApproveEffective = $derived(
-		counts?.autoApprove ? (isSeries ? counts.autoApprove.series : counts.autoApprove.movie) : false
+		counts?.autoApprove
+			? isMusic
+				? counts.autoApprove.music
+				: isSeries
+					? counts.autoApprove.series
+					: counts.autoApprove.movie
+			: false
 	);
 
 	let quotaExceeded = $derived.by(() => {
 		if (!counts || submitting) return false;
+		if (isMusic) return counts.quota.music.restricted;
 		if (!isSeries) return counts.quota.movie.restricted;
 		const tv = counts.quota.tv;
 		if (tv.limit === null) return false;
@@ -131,8 +146,15 @@
 	async function load() {
 		loading = true;
 		try {
-			const statusPromise = getRequestMediaStatus(isSeries ? 'series' : 'movie', tmdbId);
 			const countsPromise = getRequestCounts();
+			if (isMusic) {
+				counts = await countsPromise;
+				return;
+			}
+			const statusPromise = getRequestMediaStatus(
+				isSeries ? 'series' : 'movie',
+				tmdbId as number
+			);
 			if (isSeries) {
 				const details = (await getTmdb(`tv/${tmdbId}`)) as {
 					seasons?: Array<{ season_number: number; episode_count?: number }>;
@@ -223,6 +245,8 @@
 				return m.requests_errorQuotaMovie();
 			case 'tv_quota':
 				return m.requests_errorQuotaTv();
+			case 'music_quota':
+				return m.requests_errorQuotaMusic();
 			case 'duplicate_request':
 				return m.requests_errorDuplicate();
 			case 'blocked_media':
@@ -244,26 +268,34 @@
 		}
 	}
 
+	function buildVideoPayload(): Extract<Parameters<typeof createRequest>[0], { mediaType: 'movie' | 'series' }> {
+		const payload = {
+			mediaType: isSeries ? ('series' as const) : ('movie' as const),
+			tmdbId: tmdbId as number,
+			seasons: undefined as number[] | undefined,
+			episodes: undefined as RequestEpisodeEntry[] | undefined
+		};
+		if (isSeries) {
+			if (selectedSeasonCount > 0) {
+				payload.seasons = [...selectedSeasons].sort((a, b) => a - b);
+			}
+			if (selectedEpisodeCount > 0) {
+				payload.episodes = [...selectedEpisodes.entries()].flatMap(([seasonNumber, eps]) =>
+					[...eps]
+						.sort((a, b) => a - b)
+						.map((episodeNumber): RequestEpisodeEntry => ({ seasonNumber, episodeNumber }))
+				);
+			}
+		}
+		return payload;
+	}
+
 	async function submit() {
 		submitting = true;
 		try {
-			const payload: Parameters<typeof createRequest>[0] = {
-				mediaType: isSeries ? 'series' : 'movie',
-				tmdbId
-			};
-			if (isSeries) {
-				if (selectedSeasonCount > 0) {
-					payload.seasons = [...selectedSeasons].sort((a, b) => a - b);
-				}
-				if (selectedEpisodeCount > 0) {
-					payload.episodes = [...selectedEpisodes.entries()].flatMap(([seasonNumber, eps]) =>
-						[...eps]
-							.sort((a, b) => a - b)
-							.map((episodeNumber): RequestEpisodeEntry => ({ seasonNumber, episodeNumber }))
-					);
-				}
-			}
-			const created = await createRequest(payload);
+			const created = isMusic
+				? await createRequest({ mediaType: 'music', mbid: mbid ?? '' })
+				: await createRequest(buildVideoPayload());
 			toasts.success(
 				created.status === 'fulfilled'
 					? m.requests_successAvailable({ title })
@@ -285,11 +317,30 @@
 <ModalWrapper {open} {onClose} maxWidth="lg">
 	<div class="mb-4 flex items-start gap-3.5">
 		<div class="w-14 shrink-0 overflow-hidden rounded-lg shadow-md">
-			<TmdbImage path={posterPath ?? null} size="w92" alt={title} class="aspect-2/3 w-full" />
+			{#if isMusic}
+				{#if coverUrl && !coverFailed}
+					<img
+						src={coverUrl}
+						alt={title}
+						class="aspect-square w-full object-cover"
+						onerror={() => (coverFailed = true)}
+					/>
+				{:else}
+					<div class="flex aspect-square w-full items-center justify-center bg-base-content/[0.06]">
+						<Disc3 class="h-5 w-5 text-base-content/30" />
+					</div>
+				{/if}
+			{:else}
+				<TmdbImage path={posterPath ?? null} size="w92" alt={title} class="aspect-2/3 w-full" />
+			{/if}
 		</div>
 		<div class="min-w-0 flex-1 pt-0.5">
 			<h3 class="text-lg leading-tight font-semibold">
-				{isSeries ? m.requests_modalTitleSeries() : m.requests_modalTitleMovie()}
+				{isMusic
+					? m.requests_modalTitleAlbum()
+					: isSeries
+						? m.requests_modalTitleSeries()
+						: m.requests_modalTitleMovie()}
 			</h3>
 			<p class="mt-0.5 truncate text-sm text-base-content/60">
 				{title}{year ? ` · ${year}` : ''}
@@ -448,9 +499,13 @@
 
 			{#if counts}
 				<div class="grid gap-2 sm:grid-cols-2">
-					<QuotaSummary quota={counts.quota.movie} type="movie" />
-					{#if isSeries}
-						<QuotaSummary quota={counts.quota.tv} type="tv" />
+					{#if isMusic}
+						<QuotaSummary quota={counts.quota.music} type="music" />
+					{:else}
+						<QuotaSummary quota={counts.quota.movie} type="movie" />
+						{#if isSeries}
+							<QuotaSummary quota={counts.quota.tv} type="tv" />
+						{/if}
 					{/if}
 				</div>
 			{/if}
@@ -470,12 +525,15 @@
 		<button
 			type="button"
 			class="btn gap-1.5 btn-primary btn-sm"
-			disabled={submitting || loading || !hasSelection || quotaExceeded}
+			disabled={submitting || loading || !hasSelection || quotaExceeded || (isMusic && !mbid)}
 			onclick={submit}
 		>
 			{#if submitting}
 				<Loader2 class="h-4 w-4 animate-spin" />
 				{m.requests_requesting()}
+			{:else if isMusic}
+				<Disc3 class="h-4 w-4" />
+				{m.requests_requestAlbum()}
 			{:else if !isSeries}
 				<Clapperboard class="h-4 w-4" />
 				{m.requests_requestMovie()}

@@ -125,6 +125,9 @@ export class RequestAvailabilityProjector {
 		for (const key of keys) {
 			fulfilledAdvanced += await requestService.advanceFulfilledByMedia(key.mediaType, key.tmdbId);
 		}
+		for (const mbid of await requestService.listActiveMusicMbids()) {
+			fulfilledAdvanced += await requestService.advanceFulfilledMusicByMbid(mbid);
+		}
 		return { fulfilledAdvanced, expired, targetRetries, orphanedFailed, notificationsPruned };
 	}
 }
