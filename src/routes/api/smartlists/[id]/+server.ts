@@ -75,14 +75,25 @@ const updateSchema = z.object({
 	refreshIntervalHours: z.number().min(1).max(168).optional(),
 	enabled: z.boolean().optional(),
 	listSourceType: z
-		.enum(['tmdb-discover', 'external-json', 'trakt-list', 'custom-manual'])
+		.enum([
+			'tmdb-discover',
+			'external-json',
+			'trakt-list',
+			'custom-manual',
+			'playlist',
+			'musicbrainz-new-releases'
+		])
 		.optional(),
 	externalSourceConfig: z
 		.object({
 			url: z.string().optional(),
 			headers: z.record(z.string(), z.unknown()).optional(),
 			listId: z.string().optional(),
-			username: z.string().optional()
+			username: z.string().optional(),
+			trackLimit: z.number().int().min(1).max(200).optional(),
+			releaseTypes: z.array(z.string()).optional(),
+			lookbackDays: z.number().int().min(1).max(365).optional(),
+			artistLimit: z.number().int().min(1).max(100).optional()
 		})
 		.optional(),
 	presetId: z.string().optional(),
@@ -133,7 +144,12 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			normalizedData.rootFolderId !== undefined
 				? (normalizedData.rootFolderId ?? '').trim()
 				: (existing.rootFolderId ?? '').trim();
-		const effectiveMediaType = existing.mediaType === 'movie' ? 'movie' : 'tv';
+		const effectiveMediaType =
+			existing.mediaType === 'movie'
+				? 'movie'
+				: existing.mediaType === 'music'
+					? 'music'
+					: 'tv';
 
 		if (effectiveAutoAddBehavior !== 'disabled' && !effectiveRootFolderId) {
 			return Response.json(
@@ -158,8 +174,10 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			}
 
 			if (folder.mediaType !== effectiveMediaType) {
-				const expected = effectiveMediaType === 'movie' ? 'movie' : 'TV';
-				const actual = folder.mediaType === 'movie' ? 'movie' : 'TV';
+				const label = (type: string) =>
+					type === 'movie' ? 'movie' : type === 'music' ? 'music' : 'TV';
+				const expected = label(effectiveMediaType);
+				const actual = label(folder.mediaType);
 				return Response.json(
 					{
 						error: `Selected root folder is a ${actual} folder. Choose a ${expected} folder.`

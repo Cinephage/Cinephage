@@ -22,10 +22,14 @@ import { getEffectiveAnimeRootFolderEnforcement } from './anime-root-enforcement
 import { evaluateIndexerSearchAvailability } from '#lib/server/indexers/search/availability.js';
 import { resolveAllowedIndexerIds } from '#lib/server/indexers/search/profile-indexer-filter.js';
 import { getIndexerManager } from '#lib/server/indexers/IndexerManager.js';
+import type { KindId } from '#lib/media-kinds/types.js';
 
 const logger = createChildLogger({ logDomain: 'scans' as const });
 
 export type MediaType = 'movie' | 'tv';
+
+/** Root folders exist per kind; music folders are validated by the same rule. */
+export type RootFolderKind = KindId;
 
 export interface RootFolderInfo {
 	id: string;
@@ -57,7 +61,7 @@ export interface SearchOnAddResult {
  */
 export async function validateRootFolder(
 	rootFolderId: string,
-	expectedMediaType: MediaType,
+	expectedMediaType: RootFolderKind,
 	options: RootFolderValidationOptions = {}
 ): Promise<RootFolderInfo> {
 	const [folder] = await db
@@ -71,7 +75,8 @@ export async function validateRootFolder(
 	}
 
 	if (folder.mediaType !== expectedMediaType) {
-		const typeLabel = expectedMediaType === 'movie' ? 'Movies' : 'TV shows';
+		const typeLabel =
+			expectedMediaType === 'movie' ? 'Movies' : expectedMediaType === 'music' ? 'Music' : 'TV shows';
 		throw new ValidationError(`Root folder is not configured for ${typeLabel}`, {
 			mediaType: folder.mediaType,
 			expected: expectedMediaType

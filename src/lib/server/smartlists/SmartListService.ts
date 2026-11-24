@@ -52,13 +52,25 @@ import { providerRegistry } from './providers/ProviderRegistry.js';
 import { externalIdResolver } from './ExternalIdResolver.js';
 import { presetService } from './presets/PresetService.js';
 import type { ExternalListItem } from './providers/types.js';
+import { addMusicItem } from './music/add.js';
+import { refreshMusicList } from './music/refresh.js';
+import { musicSourceConfigError } from './music/types.js';
 
 type SmartListExternalSourceConfig = {
 	url?: string;
 	headers?: Record<string, string>;
 	listId?: string;
 	username?: string;
+	/** Music playlist: how many tracks to resolve per refresh. */
+	trackLimit?: number;
+	/** Music new releases: release-group types, lookback and artist bound. */
+	releaseTypes?: string[];
+	lookbackDays?: number;
+	artistLimit?: number;
 };
+
+/** A movie/TV list row: those paths only ever see rows with a TMDB id. */
+type VideoSmartListItem = SmartListItemRecord & { tmdbId: number };
 
 export class SmartListService {
 	private static instance: SmartListService | null = null;
@@ -82,7 +94,8 @@ export class SmartListService {
 			Date.now() + (input.refreshIntervalHours ?? 24) * 60 * 60 * 1000
 		).toISOString();
 
-		const listSourceType = input.listSourceType ?? 'tmdb-discover';
+		const listSourceType =
+			input.listSourceType ?? (input.mediaType === 'music' ? 'playlist' : 'tmdb-discover');
 		const externalSourceConfig = this.resolveExternalSourceConfig({
 			listSourceType,
 			presetId: input.presetId,
@@ -95,6 +108,12 @@ export class SmartListService {
 			presetSettings: input.presetSettings,
 			externalSourceConfig
 		});
+		const musicError = musicSourceConfigError({
+			mediaType: input.mediaType,
+			listSourceType,
+			externalSourceConfig
+		});
+		if (musicError) throw new ValidationError(musicError);
 
 		const [result] = await db
 			.insert(smartLists)
@@ -204,6 +223,12 @@ export class SmartListService {
 				((updates.externalSourceConfig ?? existing.externalSourceConfig) as
 					SmartListExternalSourceConfig | undefined) ?? undefined
 		});
+		const musicError = musicSourceConfigError({
+			mediaType: existing.mediaType,
+			listSourceType: (updates.listSourceType ?? existing.listSourceType) as string,
+			externalSourceConfig: updates.externalSourceConfig ?? existing.externalSourceConfig
+		});
+		if (musicError) throw new ValidationError(musicError);
 
 		const [result] = await db
 			.update(smartLists)
@@ -254,21 +279,14 @@ export class SmartListService {
 			const presetUrl = presetService.getListUrl(presetId, inputConfig?.url);
 			if (presetUrl) {
 				return {
-					url: presetUrl,
-					headers: inputConfig?.headers,
-					listId: inputConfig?.listId,
-					username: inputConfig?.username
+					...inputConfig,
+					url: presetUrl
 				};
 			}
 		}
 
 		if (fallbackToInput && inputConfig) {
-			return {
-				url: inputConfig.url,
-				headers: inputConfig.headers,
-				listId: inputConfig.listId,
-				username: inputConfig.username
-			};
+			return { ...inputConfig };
 		}
 
 		return undefined;
@@ -376,6 +394,10 @@ export class SmartListService {
 			throw new Error(`Smart list not found: ${id}`);
 		}
 
+		if (list.mediaType === 'music') {
+			return refreshMusicList(list, refreshType);
+		}
+
 		// Route to appropriate refresh method based on source type
 		if (list.listSourceType === 'tmdb-discover') {
 			return this.refreshTmdbDiscoverList(list, refreshType);
@@ -422,7 +444,11 @@ export class SmartListService {
 			const existingItems = await db.query.smartListItems.findMany({
 				where: eq(smartListItems.smartListId, id)
 			});
-			const existingTmdbIds = new Set(existingItems.map((item) => item.tmdbId));
+			const existingTmdbIds = new Set(
+				existingItems
+					.map((item) => item.tmdbId)
+					.filter((id): id is number => id != null)
+			);
 
 			// Process items
 			let itemsNew = 0;
@@ -491,7 +517,7 @@ export class SmartListService {
 
 			// Mark items not in new results as removed (but don't delete them)
 			for (const existing of existingItems) {
-				if (!newTmdbIds.has(existing.tmdbId)) {
+				if (existing.tmdbId != null && !newTmdbIds.has(existing.tmdbId)) {
 					itemsRemoved++;
 					// We keep the items but they won't appear in position-based queries
 					await db
@@ -662,11 +688,16 @@ export class SmartListService {
 			inLibrary,
 			isExcluded = false,
 			includeExcluded = false,
-			query
+			query,
+			activeOnly = false
 		} = options;
 		const offset = (page - 1) * limit;
 
 		const conditions = [eq(smartListItems.smartListId, id)];
+
+		if (activeOnly) {
+			conditions.push(lt(smartListItems.position, 9999));
+		}
 
 		if (!includeExcluded) {
 			conditions.push(eq(smartListItems.isExcluded, isExcluded));
@@ -682,7 +713,7 @@ export class SmartListService {
 		if (trimmedQuery) {
 			const pattern = `%${trimmedQuery}%`;
 			conditions.push(
-				sql`(${smartListItems.title} LIKE ${pattern} OR ${smartListItems.originalTitle} LIKE ${pattern})`
+				sql`(${smartListItems.title} LIKE ${pattern} OR ${smartListItems.originalTitle} LIKE ${pattern} OR ${smartListItems.artistName} LIKE ${pattern})`
 			);
 		}
 
@@ -762,6 +793,32 @@ export class SmartListService {
 		}
 	}
 
+	/**
+	 * Music items have no TMDB id, so the UI acts on the row id. Exclusions are
+	 * per row; there is no list-level id array for a release group.
+	 */
+	async excludeItemById(smartListId: string, itemId: string): Promise<void> {
+		await db
+			.update(smartListItems)
+			.set({
+				isExcluded: true,
+				excludedAt: new Date().toISOString(),
+				updatedAt: new Date().toISOString()
+			})
+			.where(and(eq(smartListItems.smartListId, smartListId), eq(smartListItems.id, itemId)));
+	}
+
+	async includeItemById(smartListId: string, itemId: string): Promise<void> {
+		await db
+			.update(smartListItems)
+			.set({
+				isExcluded: false,
+				excludedAt: null,
+				updatedAt: new Date().toISOString()
+			})
+			.where(and(eq(smartListItems.smartListId, smartListId), eq(smartListItems.id, itemId)));
+	}
+
 	async addItemToLibrary(
 		smartListId: string,
 		itemId: string,
@@ -779,14 +836,22 @@ export class SmartListService {
 			return { success: false, error: 'Item already in library' };
 		}
 
-		const blockedIds = await getBlockedTmdbIdSet((item.mediaType as SmartListMediaType) ?? 'all');
-		if (blockedIds.has(item.tmdbId)) {
-			return { success: false, error: 'Media is blocked' };
-		}
-
 		const list = await this.getSmartList(smartListId);
 		if (!list) {
 			return { success: false, error: 'Smart list not found' };
+		}
+
+		if (item.mediaType === 'music') {
+			return addMusicItem(list, item);
+		}
+
+		if (item.tmdbId == null) {
+			return { success: false, error: 'Item has no TMDB id' };
+		}
+
+		const blockedIds = await getBlockedTmdbIdSet((item.mediaType as SmartListMediaType) ?? 'all');
+		if (blockedIds.has(item.tmdbId)) {
+			return { success: false, error: 'Media is blocked' };
 		}
 
 		try {
@@ -1288,7 +1353,9 @@ export class SmartListService {
 
 		if (items.length === 0) return;
 
-		const tmdbIds = [...new Set(items.map((i) => i.tmdbId))];
+		const tmdbIds = [
+			...new Set(items.map((i) => i.tmdbId).filter((id): id is number => id != null))
+		];
 
 		// Batch-fetch all library entries for these tmdbIds in one query
 		const libraryMap = new Map<number, string>();
@@ -1310,6 +1377,7 @@ export class SmartListService {
 
 		// Update items with in-memory lookup
 		for (const item of items) {
+			if (item.tmdbId == null) continue;
 			const libraryId = libraryMap.get(item.tmdbId) ?? null;
 			const inLibrary = libraryId !== null;
 
@@ -1339,6 +1407,11 @@ export class SmartListService {
 		}
 
 		const mediaType = list.mediaType as SmartListMediaType;
+
+		if (mediaType === 'music') {
+			// The music refresh owns its auto-add; this path is the video one.
+			return { added: 0 };
+		}
 
 		// Validate root folder exists and matches media type
 		try {
@@ -1373,8 +1446,10 @@ export class SmartListService {
 		}
 
 		const blockedIds = await getBlockedTmdbIdSet(mediaType);
-		const safeItems =
-			blockedIds.size > 0 ? itemsToAdd.filter((item) => !blockedIds.has(item.tmdbId)) : itemsToAdd;
+		const safeItems = itemsToAdd.filter(
+			(item): item is VideoSmartListItem =>
+				item.tmdbId != null && (blockedIds.size === 0 || !blockedIds.has(item.tmdbId))
+		);
 
 		if (safeItems.length === 0) {
 			return { added: 0 };
@@ -1429,7 +1504,7 @@ export class SmartListService {
 	}
 
 	private async autoAddMovies(
-		items: SmartListItemRecord[],
+		items: VideoSmartListItem[],
 		list: SmartListRecord,
 		scoringProfileId: string,
 		monitored: boolean,
@@ -1594,7 +1669,7 @@ export class SmartListService {
 	}
 
 	private async autoAddSeries(
-		items: SmartListItemRecord[],
+		items: VideoSmartListItem[],
 		list: SmartListRecord,
 		scoringProfileId: string,
 		monitored: boolean,
@@ -2008,7 +2083,11 @@ export class SmartListService {
 			const existingItems = await db.query.smartListItems.findMany({
 				where: eq(smartListItems.smartListId, id)
 			});
-			const existingTmdbIds = new Set(existingItems.map((item) => item.tmdbId));
+			const existingTmdbIds = new Set(
+				existingItems
+					.map((item) => item.tmdbId)
+					.filter((id): id is number => id != null)
+			);
 
 			// Process items
 			let itemsNew = 0;
@@ -2073,7 +2152,7 @@ export class SmartListService {
 
 			// Mark items not in new results as removed
 			for (const existing of existingItems) {
-				if (!newTmdbIds.has(existing.tmdbId)) {
+				if (existing.tmdbId != null && !newTmdbIds.has(existing.tmdbId)) {
 					itemsRemoved++;
 					await db
 						.update(smartListItems)

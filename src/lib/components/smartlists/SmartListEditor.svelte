@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
-	import { ArrowLeft, Loader2, Film, Tv, Save } from '@lucide/svelte';
+	import { ArrowLeft, Loader2, Film, Tv, Music, Save } from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import { onMount } from 'svelte';
 	import { toasts } from '#lib/stores/toast.svelte.js';
@@ -12,6 +12,7 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 	import PreviewPanel from './PreviewPanel.svelte';
 	import SettingsPanel from './SettingsPanel.svelte';
 	import ExternalSourceConfig from './ExternalSourceConfig.svelte';
+	import MusicSourceConfig from './MusicSourceConfig.svelte';
 	import {
 		getSmartListPreview,
 		getExternalListPreview,
@@ -55,7 +56,12 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 	const descriptionTooLong = $derived(description.length > maxDescriptionLength);
 
 	// List source type
-	let listSourceType = $state<'tmdb-discover' | 'external-json'>('tmdb-discover');
+	type ListSourceType =
+		| 'tmdb-discover'
+		| 'external-json'
+		| 'playlist'
+		| 'musicbrainz-new-releases';
+	let listSourceType = $state<ListSourceType>('tmdb-discover');
 
 	// External source config
 	let externalSourceConfig = $state<{
@@ -63,7 +69,18 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 		headers?: Record<string, string>;
 		listId?: string;
 		username?: string;
+		trackLimit?: number;
+		releaseTypes?: string[];
+		lookbackDays?: number;
+		artistLimit?: number;
 	}>({});
+
+	// Music source settings (bound to the music source panel)
+	let musicPlaylistUrl = $state('');
+	let musicTrackLimit = $state(50);
+	let musicReleaseTypes = $state<string[]>(['Album', 'EP']);
+	let musicLookbackDays = $state(30);
+	let musicArtistLimit = $state(30);
 
 	// Preset configuration
 	let presetId = $state<string | undefined>(undefined);
@@ -97,6 +114,11 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 			mediaType = (list.mediaType as SmartListMediaType) ?? 'movie';
 			listSourceType = (list.listSourceType as typeof listSourceType) ?? 'tmdb-discover';
 			externalSourceConfig = list.externalSourceConfig ?? {};
+			musicPlaylistUrl = list.externalSourceConfig?.url ?? '';
+			musicTrackLimit = list.externalSourceConfig?.trackLimit ?? 50;
+			musicReleaseTypes = list.externalSourceConfig?.releaseTypes ?? ['Album', 'EP'];
+			musicLookbackDays = list.externalSourceConfig?.lookbackDays ?? 30;
+			musicArtistLimit = list.externalSourceConfig?.artistLimit ?? 30;
 			presetId = list.presetId ?? undefined;
 			presetProvider = list.presetProvider ?? undefined;
 			presetSettings = (list.presetSettings as Record<string, unknown>) ?? Object.create(null);
@@ -156,6 +178,7 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 
 	// Fetch preview with debounce
 	async function fetchPreview() {
+		if (mediaType === 'music') return;
 		previewLoading = true;
 		previewError = null;
 		previewItems = [];
@@ -182,6 +205,7 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 
 	// Fetch external list preview
 	async function fetchExternalPreview() {
+		if (mediaType === 'music') return;
 		previewLoading = true;
 		previewError = null;
 		previewItems = [];
@@ -216,6 +240,16 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 
 	// Debounced effect for filter changes
 	$effect(() => {
+		// A music list has no TMDB preview: its items appear after the first
+		// refresh, not on a debounced keystroke.
+		if (mediaType === 'music') {
+			clearTimeout(debounceTimer);
+			previewItems = [];
+			previewLoading = false;
+			previewError = null;
+			return;
+		}
+
 		// Deep track filters by serializing (shallow tracking doesn't detect nested property changes)
 		const _filtersJson = JSON.stringify(filters);
 		const _externalConfigJson = JSON.stringify(externalSourceConfig);
@@ -248,6 +282,18 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 	// Handle media type change - reset filters
 	function handleMediaTypeChange(newType: SmartListMediaType) {
 		mediaType = newType;
+		if (newType === 'music') {
+			if (
+				listSourceType !== 'playlist' &&
+				listSourceType !== 'musicbrainz-new-releases'
+			) {
+				listSourceType = 'playlist';
+			}
+			return;
+		}
+		if (listSourceType === 'playlist' || listSourceType === 'musicbrainz-new-releases') {
+			listSourceType = 'tmdb-discover';
+		}
 		// Reset genre filters since movie/tv have different genres
 		filters = {
 			...filters,
@@ -268,6 +314,22 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 	}
 
 	function validateExternalSourceBeforeSave(): string | null {
+		if (mediaType === 'music') {
+			if (listSourceType !== 'playlist' && listSourceType !== 'musicbrainz-new-releases') {
+				return m.smartlists_music_sourceRequired();
+			}
+			if (listSourceType === 'playlist') {
+				const playlistUrl = musicPlaylistUrl.trim();
+				if (!playlistUrl) return m.smartlists_music_playlistRequired();
+				try {
+					new URL(playlistUrl);
+				} catch {
+					return m.smartlists_music_playlistInvalid();
+				}
+			}
+			return null;
+		}
+
 		if (listSourceType !== 'external-json') {
 			return null;
 		}
@@ -333,9 +395,9 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 		}
 
 		if (selectedFolder.mediaType !== mediaType) {
-			const expectedTypeLabel = mediaType === 'movie' ? 'movie' : 'TV';
-			const folderTypeLabel = selectedFolder.mediaType === 'movie' ? 'movie' : 'TV';
-			return `Selected root folder is a ${folderTypeLabel} folder. Choose a ${expectedTypeLabel} folder.`;
+			const label = (type: string) =>
+				type === 'movie' ? 'movie' : type === 'music' ? 'music' : 'TV';
+			return `Selected root folder is a ${label(selectedFolder.mediaType)} folder. Choose a ${label(mediaType)} folder.`;
 		}
 
 		return null;
@@ -369,16 +431,26 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 
 		try {
 			const normalizedDescription = description.trim();
+			const musicConfig =
+				mediaType === 'music'
+					? {
+							url: listSourceType === 'playlist' ? musicPlaylistUrl.trim() : undefined,
+							trackLimit: musicTrackLimit,
+							releaseTypes: musicReleaseTypes,
+							lookbackDays: musicLookbackDays,
+							artistLimit: musicArtistLimit
+						}
+					: externalSourceConfig;
 			const body = {
 				name,
 				description: normalizedDescription || undefined,
 				mediaType,
 				listSourceType,
-				externalSourceConfig,
-				presetId,
-				presetProvider,
-				presetSettings,
-				filters,
+				externalSourceConfig: musicConfig,
+				presetId: mediaType === 'music' ? undefined : presetId,
+				presetProvider: mediaType === 'music' ? undefined : presetProvider,
+				presetSettings: mediaType === 'music' ? undefined : presetSettings,
+				filters: mediaType === 'music' ? {} : filters,
 				sortBy,
 				itemLimit,
 				excludeInLibrary,
@@ -426,6 +498,8 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 		<div class="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
 			{#if mediaType === 'movie'}
 				<Film class="h-7 w-7 shrink-0 text-primary sm:h-8 sm:w-8" />
+			{:else if mediaType === 'music'}
+				<Music class="h-7 w-7 shrink-0 text-accent sm:h-8 sm:w-8" />
 			{:else}
 				<Tv class="h-7 w-7 shrink-0 text-secondary sm:h-8 sm:w-8" />
 			{/if}
@@ -440,25 +514,53 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 		</div>
 
 		<div class="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:w-auto">
-			<!-- Media Type Toggle -->
-			<div class="join w-full sm:w-auto">
-				<button
-					class="btn join-item flex-1 btn-sm sm:flex-none {mediaType === 'movie'
-						? 'btn-active'
-						: ''}"
-					onclick={() => handleMediaTypeChange('movie')}
+			<!-- Media type: fixed once the list exists, so edit shows it as a label -->
+			{#if isEditMode}
+				<div
+					class="flex items-center gap-2 rounded-lg border border-base-300 bg-base-200/40 px-3 py-1.5 text-sm font-medium"
 				>
-					<Film class="h-4 w-4" />
-					{m.common_movies()}
-				</button>
-				<button
-					class="btn join-item flex-1 btn-sm sm:flex-none {mediaType === 'tv' ? 'btn-active' : ''}"
-					onclick={() => handleMediaTypeChange('tv')}
-				>
-					<Tv class="h-4 w-4" />
-					{m.common_tvShows()}
-				</button>
-			</div>
+					{#if mediaType === 'movie'}
+						<Film class="h-4 w-4 text-primary" />
+						{m.common_movies()}
+					{:else if mediaType === 'music'}
+						<Music class="h-4 w-4 text-accent" />
+						{m.nav_music()}
+					{:else}
+						<Tv class="h-4 w-4 text-secondary" />
+						{m.common_tvShows()}
+					{/if}
+				</div>
+			{:else}
+				<div class="join w-full sm:w-auto">
+					<button
+						class="btn join-item flex-1 btn-sm sm:flex-none {mediaType === 'movie'
+							? 'btn-active'
+							: ''}"
+						onclick={() => handleMediaTypeChange('movie')}
+					>
+						<Film class="h-4 w-4" />
+						{m.common_movies()}
+					</button>
+					<button
+						class="btn join-item flex-1 btn-sm sm:flex-none {mediaType === 'tv'
+							? 'btn-active'
+							: ''}"
+						onclick={() => handleMediaTypeChange('tv')}
+					>
+						<Tv class="h-4 w-4" />
+						{m.common_tvShows()}
+					</button>
+					<button
+						class="btn join-item flex-1 btn-sm sm:flex-none {mediaType === 'music'
+							? 'btn-active'
+							: ''}"
+						onclick={() => handleMediaTypeChange('music')}
+					>
+						<Music class="h-4 w-4" />
+						{m.nav_music()}
+					</button>
+				</div>
+			{/if}
 
 			<button
 				class="btn w-full btn-primary sm:w-auto"
@@ -500,19 +602,30 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 			</div>
 
 			<!-- Source Configuration -->
-			<ExternalSourceConfig
-				bind:sourceType={listSourceType}
-				bind:presetId
-				bind:presetProvider
-				bind:presetSettings
-				customUrl={externalSourceConfig.url}
-				customHeaders={externalSourceConfig.headers}
-				{mediaType}
-				onChange={(data) => {
-					externalSourceConfig.url = data.customUrl;
-					externalSourceConfig.headers = data.customHeaders;
-				}}
-			/>
+			{#if mediaType === 'music'}
+				<MusicSourceConfig
+					bind:sourceType={listSourceType}
+					bind:url={musicPlaylistUrl}
+					bind:trackLimit={musicTrackLimit}
+					bind:releaseTypes={musicReleaseTypes}
+					bind:lookbackDays={musicLookbackDays}
+					bind:artistLimit={musicArtistLimit}
+				/>
+			{:else}
+				<ExternalSourceConfig
+					bind:sourceType={listSourceType}
+					bind:presetId
+					bind:presetProvider
+					bind:presetSettings
+					customUrl={externalSourceConfig.url}
+					customHeaders={externalSourceConfig.headers}
+					{mediaType}
+					onChange={(data) => {
+						externalSourceConfig.url = data.customUrl;
+						externalSourceConfig.headers = data.customHeaders;
+					}}
+				/>
+			{/if}
 
 			<!-- Filters (only for TMDB Discover) -->
 			{#if listSourceType === 'tmdb-discover'}
@@ -546,7 +659,18 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 
 		<!-- Right Panel: Preview -->
 		<div class="w-full lg:w-3/5">
-			<PreviewPanel
+			{#if mediaType === 'music'}
+				<div class="rounded-lg border border-dashed border-base-300 bg-base-200/30 p-6">
+					<div class="mb-2 flex items-center gap-2 font-medium">
+						<Music class="h-5 w-5 text-accent" />
+						{m.smartlists_music_fillsOnSaveTitle()}
+					</div>
+					<p class="text-sm text-base-content/70">
+						{m.smartlists_music_fillsOnSaveBody()}
+					</p>
+				</div>
+			{:else}
+				<PreviewPanel
 				items={previewItems}
 				loading={previewLoading}
 				error={previewError}
@@ -595,6 +719,7 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 						: undefined
 				}}
 			/>
+			{/if}
 		</div>
 	</div>
 </div>

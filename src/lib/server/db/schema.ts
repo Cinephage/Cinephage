@@ -2815,8 +2815,8 @@ export const smartLists = sqliteTable(
 		name: text('name').notNull(),
 		description: text('description'),
 
-		// Media type: 'movie' or 'tv' (not mixed - TMDB discover is type-specific)
-		mediaType: text('media_type', { enum: ['movie', 'tv'] }).notNull(),
+		// Media type: 'movie' or 'tv' for TMDB discover; 'music' for a playlist.
+		mediaType: text('media_type', { enum: ['movie', 'tv', 'music'] }).notNull(),
 
 		enabled: integer('enabled', { mode: 'boolean' }).default(true),
 
@@ -2863,9 +2863,17 @@ export const smartLists = sqliteTable(
 		languageProfileId: text('language_profile_id'),
 
 		// === LIST SOURCE TYPE ===
-		// Source of list items: 'tmdb-discover', 'external-json', 'trakt-list', 'custom-manual'
+		// Source of list items: a TMDB discover query, an external JSON/IMDb/Trakt
+		// list, or — for music — a playlist URL or new releases by monitored artists.
 		listSourceType: text('list_source_type', {
-			enum: ['tmdb-discover', 'external-json', 'trakt-list', 'custom-manual']
+			enum: [
+				'tmdb-discover',
+				'external-json',
+				'trakt-list',
+				'custom-manual',
+				'playlist',
+				'musicbrainz-new-releases'
+			]
 		})
 			.default('tmdb-discover')
 			.notNull(),
@@ -2878,6 +2886,14 @@ export const smartLists = sqliteTable(
 				headers?: Record<string, string>;
 				listId?: string;
 				username?: string;
+				/** Music playlist: how many tracks to resolve per refresh. */
+				trackLimit?: number;
+				/** Music new releases: release-group types to take (default Album, EP). */
+				releaseTypes?: string[];
+				/** Music new releases: only groups first released within this window. */
+				lookbackDays?: number;
+				/** Music new releases: how many monitored artists to browse per refresh. */
+				artistLimit?: number;
 			}>()
 			.default({}),
 
@@ -2937,10 +2953,23 @@ export const smartListItems = sqliteTable(
 			.references(() => smartLists.id, { onDelete: 'cascade' }),
 
 		// Media type (inherited from smart list)
-		mediaType: text('media_type', { enum: ['movie', 'tv'] }).notNull(),
+		mediaType: text('media_type', { enum: ['movie', 'tv', 'music'] }).notNull(),
 
 		// === TMDB DATA ===
-		tmdbId: integer('tmdb_id').notNull(),
+		// Null for music: a MusicBrainz release group is the identity there.
+		tmdbId: integer('tmdb_id'),
+
+		// === MUSIC DATA ===
+		/** MusicBrainz release-group id — the album identity in a music list. */
+		mbid: text('mbid'),
+		artistName: text('artist_name'),
+		artistMbid: text('artist_mbid'),
+		/** Set once the album exists in the library. */
+		albumId: text('album_id').references(() => albums.id, { onDelete: 'set null' }),
+		/** Cover Art Archive URL for an album that is not in the library yet. */
+		coverUrl: text('cover_url'),
+		trackCount: integer('track_count'),
+		primaryType: text('primary_type'),
 
 		// Cached metadata for display
 		title: text('title').notNull(),
@@ -2984,7 +3013,14 @@ export const smartListItems = sqliteTable(
 		index('idx_smart_list_items_list').on(table.smartListId),
 		index('idx_smart_list_items_tmdb').on(table.tmdbId, table.mediaType),
 		index('idx_smart_list_items_in_library').on(table.inLibrary),
-		index('idx_smart_list_items_position').on(table.smartListId, table.position)
+		index('idx_smart_list_items_position').on(table.smartListId, table.position),
+		index('idx_smart_list_items_mbid').on(table.mbid, table.mediaType),
+		index('idx_smart_list_items_album').on(table.albumId),
+		// One row per release group per list: a concurrent manual + scheduled
+		// refresh cannot duplicate an album.
+		uniqueIndex('idx_smart_list_items_list_mbid')
+			.on(table.smartListId, table.mbid)
+			.where(sql`${table.mbid} is not null`)
 	]
 );
 

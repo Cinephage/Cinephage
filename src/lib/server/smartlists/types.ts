@@ -33,9 +33,15 @@ export type SmartListSortBy =
 	| 'title.desc';
 
 export type AutoAddBehavior = 'disabled' | 'add_only' | 'add_and_search';
-export type SmartListMediaType = DiscoverKindId;
+export type SmartListMediaType = DiscoverKindId | 'music';
 export type RefreshStatus = 'running' | 'success' | 'partial' | 'failed';
-export type ListSourceType = 'tmdb-discover' | 'external-json' | 'trakt-list' | 'custom-manual';
+export type ListSourceType =
+	| 'tmdb-discover'
+	| 'external-json'
+	| 'trakt-list'
+	| 'custom-manual'
+	| 'playlist'
+	| 'musicbrainz-new-releases';
 
 export interface CreateSmartListInput {
 	name: string;
@@ -62,6 +68,10 @@ export interface CreateSmartListInput {
 		headers?: Record<string, unknown>;
 		listId?: string;
 		username?: string;
+		trackLimit?: number;
+		releaseTypes?: string[];
+		lookbackDays?: number;
+		artistLimit?: number;
 	};
 	presetId?: string;
 	presetProvider?: string;
@@ -92,6 +102,10 @@ export interface UpdateSmartListInput {
 		headers?: Record<string, unknown>;
 		listId?: string;
 		username?: string;
+		trackLimit?: number;
+		releaseTypes?: string[];
+		lookbackDays?: number;
+		artistLimit?: number;
 	};
 	presetId?: string;
 	presetProvider?: string;
@@ -118,11 +132,13 @@ export interface ItemQueryOptions {
 	isExcluded?: boolean;
 	includeExcluded?: boolean;
 	query?: string;
+	/** Hide rows the source no longer has (position 9999). */
+	activeOnly?: boolean;
 }
 
 export interface BulkAddResult {
 	added: number;
 	failed: number;
 	alreadyInLibrary: number;
-	errors: Array<{ tmdbId: number; title: string; error: string }>;
+	errors: Array<{ tmdbId: number | null; title: string; error: string }>;
 }

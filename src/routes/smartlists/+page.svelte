@@ -13,7 +13,8 @@
 		CheckCircle,
 		AlertCircle,
 		Clock,
-		ExternalLink
+		ExternalLink,
+		Music
 	} from '@lucide/svelte';
 	import type { PageData } from './$types';
 	import * as m from '#lib/paraglide/messages.js';
@@ -137,12 +138,21 @@
 		}
 		if (list.listSourceType === 'trakt-list') return m.smartlists_source_trakt();
 		if (list.listSourceType === 'custom-manual') return m.smartlists_source_manualCuration();
+		if (list.listSourceType === 'playlist') return m.smartlists_source_playlist();
+		if (list.listSourceType === 'musicbrainz-new-releases')
+			return m.smartlists_source_newReleases();
 		return m.smartlists_source_tmdbDiscover();
 	}
 
 	function getDisplayDescription(list: SmartListRow): string {
 		const explicit = list.description?.trim();
 		if (explicit) return explicit;
+
+		if (list.mediaType === 'music') {
+			return list.listSourceType === 'playlist'
+				? m.smartlists_desc_musicPlaylist()
+				: m.smartlists_desc_musicNewReleases();
+		}
 
 		const mediaLabel = list.mediaType === 'movie' ? m.common_movies() : m.common_tvShows();
 		const autoAddSuffix =
@@ -241,6 +251,8 @@
 							>
 								{#if list.mediaType === 'movie'}
 									<Film class="h-5 w-5 shrink-0 text-primary" />
+								{:else if list.mediaType === 'music'}
+									<Music class="h-5 w-5 shrink-0 text-accent" />
 								{:else}
 									<Tv class="h-5 w-5 shrink-0 text-secondary" />
 								{/if}

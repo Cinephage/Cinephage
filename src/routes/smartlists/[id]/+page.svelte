@@ -22,21 +22,32 @@
 		CalendarDays,
 		Library,
 		Globe,
-		Database
+		Database,
+		Music,
+		ListMusic,
+		Radio
 	} from '@lucide/svelte';
 	import type { PageData } from './$types';
 	import * as m from '#lib/paraglide/messages.js';
 	import { refreshSmartList, addSmartListItems } from '#lib/api/index.js';
+	import { imageError } from '#lib/actions/image-error.js';
 
 	let { data }: { data: PageData } = $props();
 
 	let refreshing = $state(false);
-	let addingIds = $state<Set<number>>(new Set());
-	let excludingIds = $state<Set<number>>(new Set());
+	/** Row ids: TMDB ids are numbers, music items are not, one key space is simpler. */
+	let addingIds = $state<Set<string>>(new Set());
+	let excludingIds = $state<Set<string>>(new Set());
 	let bulkAdding = $state(false);
 	let activeMobileActionCardId = $state<string | null>(null);
 	let itemDetailOpen = $state(false);
 	let selectedItem = $state<(typeof data.items)[number] | null>(null);
+	/** Cover URLs that 404: fall back to the media icon instead of a broken image. */
+	let failedArt = $state<Set<string>>(new Set());
+
+	function markArtFailed(itemId: string) {
+		failedArt = new Set([...failedArt, itemId]);
+	}
 
 	let filterInLibrary = $state<'all' | 'in' | 'out'>('all');
 	let showExcluded = $state(false);
@@ -46,7 +57,7 @@
 		added: number;
 		failed: number;
 		alreadyInLibrary: number;
-		errors?: Array<{ tmdbId: number; title: string; error: string }>;
+		errors?: Array<{ tmdbId: number | null; title: string; error: string }>;
 		error?: string;
 	};
 
@@ -121,14 +132,17 @@
 		goto(`/smartlists/${data.list.id}/edit`);
 	}
 
-	async function addToLibrary(tmdbId: number, title: string) {
-		addingIds.add(tmdbId);
+	async function addToLibrary(item: (typeof data.items)[number]) {
+		const key = item.id;
+		addingIds.add(key);
 		addingIds = addingIds;
 		try {
-			const result = (await addSmartListItems(data.list.id, {
-				action: 'addToLibrary',
-				tmdbIds: [tmdbId]
-			})) as unknown as AddToLibraryResponse | null;
+			const result = (await addSmartListItems(
+				data.list.id,
+				item.mediaType === 'music'
+					? { action: 'addToLibrary', itemIds: [item.id] }
+					: { action: 'addToLibrary', tmdbIds: [item.tmdbId as number] }
+			)) as unknown as AddToLibraryResponse | null;
 
 			if (!result) {
 				throw new Error(m.smartlists_detail_invalidAddResponse());
@@ -138,7 +152,7 @@
 				throw new Error(result.errors?.[0]?.error ?? m.smartlists_detail_failedToAddToLibrary());
 			}
 
-			toasts.success(m.smartlists_detail_addedToLibrary({ title }));
+			toasts.success(m.smartlists_detail_addedToLibrary({ title: item.title }));
 			closeItemDetails();
 			await refreshAll();
 		} catch (error) {
@@ -146,43 +160,49 @@
 				error instanceof Error ? error.message : m.smartlists_detail_failedToAddToLibrary();
 			toasts.error(m.smartlists_detail_failedToAddToLibrary(), { description: message });
 		} finally {
-			addingIds.delete(tmdbId);
+			addingIds.delete(key);
 			addingIds = addingIds;
 			activeMobileActionCardId = null;
 		}
 	}
 
-	async function excludeItem(tmdbId: number, title: string) {
-		excludingIds.add(tmdbId);
+	async function excludeItem(item: (typeof data.items)[number]) {
+		const key = item.id;
+		excludingIds.add(key);
 		excludingIds = excludingIds;
 		try {
-			await addSmartListItems(data.list.id, {
-				action: 'exclude',
-				tmdbIds: [tmdbId]
-			});
-			toasts.success(m.smartlists_detail_excludedFromList({ title }));
+			await addSmartListItems(
+				data.list.id,
+				item.mediaType === 'music'
+					? { action: 'exclude', itemIds: [item.id] }
+					: { action: 'exclude', tmdbIds: [item.tmdbId as number] }
+			);
+			toasts.success(m.smartlists_detail_excludedFromList({ title: item.title }));
 			closeItemDetails();
 			await refreshAll();
 		} finally {
-			excludingIds.delete(tmdbId);
+			excludingIds.delete(key);
 			excludingIds = excludingIds;
 			activeMobileActionCardId = null;
 		}
 	}
 
-	async function includeItem(tmdbId: number, title: string) {
-		excludingIds.add(tmdbId);
+	async function includeItem(item: (typeof data.items)[number]) {
+		const key = item.id;
+		excludingIds.add(key);
 		excludingIds = excludingIds;
 		try {
-			await addSmartListItems(data.list.id, {
-				action: 'include',
-				tmdbIds: [tmdbId]
-			});
-			toasts.success(m.smartlists_detail_includedInList({ title }));
+			await addSmartListItems(
+				data.list.id,
+				item.mediaType === 'music'
+					? { action: 'include', itemIds: [item.id] }
+					: { action: 'include', tmdbIds: [item.tmdbId as number] }
+			);
+			toasts.success(m.smartlists_detail_includedInList({ title: item.title }));
 			closeItemDetails();
 			await refreshAll();
 		} finally {
-			excludingIds.delete(tmdbId);
+			excludingIds.delete(key);
 			excludingIds = excludingIds;
 			activeMobileActionCardId = null;
 		}
@@ -190,21 +210,34 @@
 
 	async function addAllToLibrary() {
 		if (!confirm(m.smartlists_detail_addAllConfirm())) return;
-		const tmdbIds = data.items
-			.filter((i: (typeof data.items)[0]) => !i.inLibrary && !i.isExcluded)
-			.map((i: (typeof data.items)[0]) => i.tmdbId);
+		const eligible = data.items.filter(
+			(i: (typeof data.items)[0]) => !i.inLibrary && !i.isExcluded
+		);
 
-		if (tmdbIds.length === 0) {
+		const payload =
+			data.list.mediaType === 'music'
+				? { action: 'addToLibrary' as const, itemIds: eligible.map((i) => i.id) }
+				: {
+						action: 'addToLibrary' as const,
+						tmdbIds: eligible
+							.map((i) => i.tmdbId)
+							.filter((id): id is number => id != null)
+					};
+
+		if (
+			(payload as { itemIds?: string[] }).itemIds?.length === 0 ||
+			(payload as { tmdbIds?: number[] }).tmdbIds?.length === 0
+		) {
 			toasts.info(m.smartlists_detail_noEligibleItems());
 			return;
 		}
 
 		bulkAdding = true;
 		try {
-			const result = (await addSmartListItems(data.list.id, {
-				action: 'addToLibrary',
-				tmdbIds
-			})) as unknown as AddToLibraryResponse | null;
+			const result = (await addSmartListItems(
+				data.list.id,
+				payload
+			)) as unknown as AddToLibraryResponse | null;
 
 			if (!result) {
 				throw new Error(m.smartlists_detail_invalidAddResponse());
@@ -294,18 +327,26 @@
 			<div class="space-y-4">
 				<div class="flex flex-col gap-4 sm:flex-row">
 					<div class="mx-auto w-32 shrink-0 sm:mx-0">
-						<div class="aspect-2/3 overflow-hidden rounded-lg bg-base-200 shadow-sm">
-							{#if selectedItem.posterPath}
+						<div
+							class="{data.list.mediaType === 'music'
+								? 'aspect-square'
+								: 'aspect-2/3'} overflow-hidden rounded-lg bg-base-200 shadow-sm"
+						>
+							{#if (selectedItem.coverUrl || selectedItem.posterPath) && !failedArt.has(selectedItem.id)}
 								<img
-									src="https://image.tmdb.org/t/p/w342{selectedItem.posterPath}"
+									src={selectedItem.coverUrl ??
+										`https://image.tmdb.org/t/p/w342${selectedItem.posterPath}`}
 									alt={selectedItem.title}
 									class="h-full w-full object-cover"
 									loading="lazy"
+									use:imageError={() => markArtFailed(selectedItem!.id)}
 								/>
 							{:else}
 								<div class="flex h-full w-full items-center justify-center">
 									{#if selectedItem.mediaType === 'movie'}
 										<Film class="h-8 w-8 text-base-content/30" />
+									{:else if selectedItem.mediaType === 'music'}
+										<Music class="h-8 w-8 text-base-content/30" />
 									{:else}
 										<Tv class="h-8 w-8 text-base-content/30" />
 									{/if}
@@ -319,11 +360,15 @@
 							<div
 								class="badge {selectedItem.mediaType === 'movie'
 									? 'badge-primary'
-									: 'badge-secondary'}"
+									: selectedItem.mediaType === 'music'
+										? 'badge-accent'
+										: 'badge-secondary'}"
 							>
 								{selectedItem.mediaType === 'movie'
 									? m.smartlists_detail_badgeMovie()
-									: m.smartlists_detail_badgeTvShow()}
+									: selectedItem.mediaType === 'music'
+										? m.nav_music()
+										: m.smartlists_detail_badgeTvShow()}
 							</div>
 							{#if selectedItem.inLibrary}
 								<div class="badge badge-success">{m.smartlists_detail_badgeInLibrary()}</div>
@@ -337,6 +382,12 @@
 						</div>
 
 						<div class="flex flex-wrap gap-4 text-sm text-base-content/70">
+							{#if selectedItem.artistName}
+								<div class="flex items-center gap-1">
+									<Music class="h-4 w-4" />
+									<span>{selectedItem.artistName}</span>
+								</div>
+							{/if}
 							{#if selectedItem.voteAverage}
 								<div class="flex items-center gap-1">
 									<Star class="h-4 w-4 fill-warning text-warning" />
@@ -364,10 +415,10 @@
 						<button
 							type="button"
 							class="btn btn-sm btn-success"
-							onclick={() => includeItem(selectedItem!.tmdbId, selectedItem!.title)}
-							disabled={excludingIds.has(selectedItem!.tmdbId)}
+							onclick={() => includeItem(selectedItem!)}
+							disabled={excludingIds.has(selectedItem!.id)}
 						>
-							{#if excludingIds.has(selectedItem!.tmdbId)}
+							{#if excludingIds.has(selectedItem!.id)}
 								<Loader2 class="h-4 w-4 animate-spin" />
 							{:else}
 								<Check class="h-4 w-4" />
@@ -379,10 +430,10 @@
 							<button
 								type="button"
 								class="btn btn-primary btn-sm"
-								onclick={() => addToLibrary(selectedItem!.tmdbId, selectedItem!.title)}
-								disabled={addingIds.has(selectedItem!.tmdbId)}
+								onclick={() => addToLibrary(selectedItem!)}
+								disabled={addingIds.has(selectedItem!.id)}
 							>
-								{#if addingIds.has(selectedItem!.tmdbId)}
+								{#if addingIds.has(selectedItem!.id)}
 									<Loader2 class="h-4 w-4 animate-spin" />
 								{:else}
 									<Plus class="h-4 w-4" />
@@ -393,10 +444,10 @@
 						<button
 							type="button"
 							class="btn btn-error btn-sm"
-							onclick={() => excludeItem(selectedItem!.tmdbId, selectedItem!.title)}
-							disabled={excludingIds.has(selectedItem!.tmdbId)}
+							onclick={() => excludeItem(selectedItem!)}
+							disabled={excludingIds.has(selectedItem!.id)}
 						>
-							{#if excludingIds.has(selectedItem!.tmdbId)}
+							{#if excludingIds.has(selectedItem!.id)}
 								<Loader2 class="h-4 w-4 animate-spin" />
 							{:else}
 								<Ban class="h-4 w-4" />
@@ -414,6 +465,8 @@
 			<div class="flex min-w-0 items-center gap-3">
 				{#if data.list.mediaType === 'movie'}
 					<Film class="h-8 w-8 shrink-0 text-primary" />
+				{:else if data.list.mediaType === 'music'}
+					<Music class="h-8 w-8 shrink-0 text-accent" />
 				{:else}
 					<Tv class="h-8 w-8 shrink-0 text-secondary" />
 				{/if}
@@ -443,6 +496,16 @@
 					<div class="badge badge-outline badge-accent">{m.smartlists_source_traktList()}</div>
 				{:else if data.list.listSourceType === 'custom-manual'}
 					<div class="badge badge-outline badge-warning">{m.common_custom()}</div>
+				{:else if data.list.listSourceType === 'playlist'}
+					<div class="badge flex items-center gap-1 badge-outline badge-accent">
+						<ListMusic class="h-3 w-3" />
+						{m.smartlists_source_playlist()}
+					</div>
+				{:else if data.list.listSourceType === 'musicbrainz-new-releases'}
+					<div class="badge flex items-center gap-1 badge-outline badge-accent">
+						<Radio class="h-3 w-3" />
+						{m.smartlists_source_newReleases()}
+					</div>
 				{:else}
 					<div class="badge flex items-center gap-1 badge-outline badge-primary">
 						<Database class="h-3 w-3" />
@@ -576,7 +639,9 @@
 			{#each filteredItems as item (item.id)}
 				<div class="group relative {item.isExcluded ? 'opacity-50' : ''}">
 					<div
-						class="relative aspect-2/3 overflow-hidden rounded-lg bg-base-300 shadow-sm"
+						class="relative {data.list.mediaType === 'music'
+							? 'aspect-square'
+							: 'aspect-2/3'} overflow-hidden rounded-lg bg-base-300 shadow-sm"
 						role="button"
 						tabindex="0"
 						aria-label={`Open details for ${item.title}`}
@@ -588,17 +653,20 @@
 							}
 						}}
 					>
-						{#if item.posterPath}
+						{#if (item.coverUrl || item.posterPath) && !failedArt.has(item.id)}
 							<img
-								src="https://image.tmdb.org/t/p/w185{item.posterPath}"
+								src={item.coverUrl ?? `https://image.tmdb.org/t/p/w185${item.posterPath}`}
 								alt={item.title}
 								class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
 								loading="lazy"
+								use:imageError={() => markArtFailed(item.id)}
 							/>
 						{:else}
 							<div class="flex h-full w-full items-center justify-center">
-								{#if data.list.mediaType === 'movie'}
+								{#if item.mediaType === 'movie'}
 									<Film class="h-8 w-8 text-base-content/30" />
+								{:else if item.mediaType === 'music'}
+									<Music class="h-8 w-8 text-base-content/30" />
 								{:else}
 									<Tv class="h-8 w-8 text-base-content/30" />
 								{/if}
@@ -651,12 +719,12 @@
 									type="button"
 									class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-success/95 text-success-content shadow-sm transition-transform hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
 									onpointerup={(event) => event.stopPropagation()}
-									onclick={() => includeItem(item.tmdbId, item.title)}
-									disabled={excludingIds.has(item.tmdbId)}
+									onclick={() => includeItem(item)}
+									disabled={excludingIds.has(item.id)}
 									title={m.smartlists_detail_includeButton()}
 									aria-label={m.smartlists_detail_includeButton()}
 								>
-									{#if excludingIds.has(item.tmdbId)}
+									{#if excludingIds.has(item.id)}
 										<Loader2 class="h-3 w-3 animate-spin" />
 									{:else}
 										<Check class="h-4 w-4" />
@@ -668,12 +736,12 @@
 										type="button"
 										class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-content shadow-sm transition-transform hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
 										onpointerup={(event) => event.stopPropagation()}
-										onclick={() => addToLibrary(item.tmdbId, item.title)}
-										disabled={addingIds.has(item.tmdbId)}
+										onclick={() => addToLibrary(item)}
+										disabled={addingIds.has(item.id)}
 										title={m.smartlists_detail_addToLibrary()}
 										aria-label={m.smartlists_detail_addToLibrary()}
 									>
-										{#if addingIds.has(item.tmdbId)}
+										{#if addingIds.has(item.id)}
 											<Loader2 class="h-3 w-3 animate-spin" />
 										{:else}
 											<Plus class="h-4 w-4" />
@@ -684,12 +752,12 @@
 									type="button"
 									class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-error/95 text-error-content shadow-sm transition-transform hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
 									onpointerup={(event) => event.stopPropagation()}
-									onclick={() => excludeItem(item.tmdbId, item.title)}
-									disabled={excludingIds.has(item.tmdbId)}
+									onclick={() => excludeItem(item)}
+									disabled={excludingIds.has(item.id)}
 									title={m.smartlists_detail_excludeButton()}
 									aria-label={m.smartlists_detail_excludeButton()}
 								>
-									{#if excludingIds.has(item.tmdbId)}
+									{#if excludingIds.has(item.id)}
 										<Loader2 class="h-3 w-3 animate-spin" />
 									{:else}
 										<Ban class="h-4 w-4" />
@@ -709,6 +777,9 @@
 						>
 							{item.title}
 						</button>
+						{#if item.artistName}
+							<p class="line-clamp-1 text-[10px] text-base-content/60">{item.artistName}</p>
+						{/if}
 						{#if item.year}
 							<p class="text-[10px] text-base-content/60">{item.year}</p>
 						{/if}

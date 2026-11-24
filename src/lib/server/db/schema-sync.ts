@@ -249,8 +249,12 @@ import {
  *   attempt acted on, so the Searches tab can resolve it.
  * Version 199: tracks.monitored - a playlist import can bring a whole album
  *   but only want the song that was on the list.
+ * Version 201: smart_list_items music identity - tmdb_id becomes nullable and
+ *   the row carries mbid/artist/album/cover, so one list table holds both TMDB
+ *   items and MusicBrainz albums. SQLite cannot drop NOT NULL in place, so this
+ *   rebuilds the table from its live DDL (same pattern as v181).
  */
-export const CURRENT_SCHEMA_VERSION = 200;
+export const CURRENT_SCHEMA_VERSION = 201;
 
 /**
  * Seed rows for the *legacy* backfill in migration 078 only.
@@ -1229,7 +1233,14 @@ const TABLE_DEFINITIONS: string[] = [
 		"id" text PRIMARY KEY NOT NULL,
 		"smart_list_id" text NOT NULL REFERENCES "smart_lists"("id") ON DELETE CASCADE,
 		"media_type" text NOT NULL CHECK ("media_type" IN ('movie', 'tv', 'music')),
-		"tmdb_id" integer NOT NULL,
+		"tmdb_id" integer,
+		"mbid" text,
+		"artist_name" text,
+		"artist_mbid" text,
+		"album_id" text REFERENCES "albums"("id") ON DELETE SET NULL,
+		"cover_url" text,
+		"track_count" integer,
+		"primary_type" text,
 		"title" text NOT NULL,
 		"original_title" text,
 		"overview" text,
@@ -2087,6 +2098,9 @@ const INDEX_DEFINITIONS: string[] = [
 	`CREATE INDEX IF NOT EXISTS "idx_smart_list_items_tmdb" ON "smart_list_items" ("tmdb_id", "media_type")`,
 	`CREATE INDEX IF NOT EXISTS "idx_smart_list_items_in_library" ON "smart_list_items" ("in_library")`,
 	`CREATE INDEX IF NOT EXISTS "idx_smart_list_items_position" ON "smart_list_items" ("smart_list_id", "position")`,
+	`CREATE INDEX IF NOT EXISTS "idx_smart_list_items_mbid" ON "smart_list_items" ("mbid", "media_type")`,
+	`CREATE INDEX IF NOT EXISTS "idx_smart_list_items_album" ON "smart_list_items" ("album_id")`,
+	`CREATE UNIQUE INDEX IF NOT EXISTS "idx_smart_list_items_list_mbid" ON "smart_list_items" ("smart_list_id", "mbid") WHERE "mbid" IS NOT NULL`,
 	`CREATE INDEX IF NOT EXISTS "idx_smart_list_refresh_history_list" ON "smart_list_refresh_history" ("smart_list_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_smart_list_refresh_history_status" ON "smart_list_refresh_history" ("status")`,
 	// Stream extraction cache indexes

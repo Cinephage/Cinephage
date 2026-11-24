@@ -28,12 +28,15 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		limit: GRID_PAGE_SIZE,
 		inLibrary: inLibrary === 'true' ? true : inLibrary === 'false' ? false : null,
 		includeExcluded,
-		query
+		query,
+		activeOnly: list.mediaType === 'music'
 	});
 
 	const blockedIds = await getBlockedTmdbIdSet('all');
 	const filteredItems =
-		blockedIds.size > 0 ? items.items.filter((item) => !blockedIds.has(item.tmdbId)) : items.items;
+		blockedIds.size > 0
+			? items.items.filter((item) => item.tmdbId == null || !blockedIds.has(item.tmdbId))
+			: items.items;
 
 	return {
 		list,

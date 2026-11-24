@@ -31,7 +31,12 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 
 	// Props
 	interface Props {
-		sourceType: 'tmdb-discover' | 'external-json';
+		/** Widened for the editor's shared source state; this panel renders video sources. */
+		sourceType:
+			| 'tmdb-discover'
+			| 'external-json'
+			| 'playlist'
+			| 'musicbrainz-new-releases';
 		presetId?: string;
 		presetProvider?: string;
 		presetSettings?: Record<string, unknown>;
@@ -39,7 +44,11 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 		customHeaders?: Record<string, string>;
 		mediaType: SmartListMediaType;
 		onChange?: (data: {
-			sourceType: 'tmdb-discover' | 'external-json';
+			sourceType:
+				| 'tmdb-discover'
+				| 'external-json'
+				| 'playlist'
+				| 'musicbrainz-new-releases';
 			presetId?: string;
 			presetProvider?: string;
 			presetSettings?: Record<string, unknown>;

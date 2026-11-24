@@ -13,6 +13,12 @@ export const GET: RequestHandler = async ({ url }) => {
 	const query = url.searchParams.get('q') ?? '';
 	const region = url.searchParams.get('region') ?? (await tmdb.getRegion());
 
+	if (type === 'music') {
+		// Genres, providers and certifications are TMDB concepts; music lists
+		// take a playlist or the MusicBrainz new-release source instead.
+		return Response.json({ error: 'No TMDB helpers for music' }, { status: 400 });
+	}
+
 	if (!helper) {
 		return Response.json({ error: 'Missing helper parameter' }, { status: 400 });
 	}

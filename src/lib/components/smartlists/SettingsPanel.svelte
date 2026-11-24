@@ -7,6 +7,7 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 	interface ScoringProfile {
 		id: string;
 		name: string;
+		mediaKind?: string | null;
 	}
 
 	interface Props {
@@ -21,7 +22,7 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 		mediaType: SmartListMediaType;
 		rootFolders: RootFolder[];
 		scoringProfiles: ScoringProfile[];
-		listSourceType?: 'tmdb-discover' | 'external-json';
+		listSourceType?: 'tmdb-discover' | 'external-json' | 'playlist' | 'musicbrainz-new-releases';
 		open?: boolean;
 		onToggle?: (open: boolean) => void;
 	}
@@ -45,6 +46,14 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 
 	const availableRootFolders = $derived(
 		rootFolders.filter((folder) => folder.mediaType === mediaType && !folder.readOnly)
+	);
+
+	// Video profiles and music profiles live in the same table but score
+	// different things; only the matching kind is offered.
+	const availableProfiles = $derived(
+		scoringProfiles.filter((profile) =>
+			mediaType === 'music' ? profile.mediaKind === 'music' : profile.mediaKind !== 'music'
+		)
 	);
 
 	const sortOptions = [
@@ -82,22 +91,24 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 	</div>
 	<div class="collapse-content">
 		<div class="space-y-4 pt-2">
-			<!-- Sort & Limit (only for TMDB Discover) -->
-			{#if listSourceType === 'tmdb-discover'}
+			<!-- Sort & Limit (TMDB discover sorts; a music list has a source order) -->
+			{#if listSourceType === 'tmdb-discover' || mediaType === 'music'}
 				<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-					<div class="form-control">
-						<label class="label py-1" for="sortBy">
-							<span
-								class="label-text text-xs font-medium tracking-wide text-base-content/60 uppercase"
-								>{m.smartlists_settings_sortBy()}</span
-							>
-						</label>
-						<select id="sortBy" bind:value={sortBy} class="select-bordered select w-full select-sm">
-							{#each sortOptions as opt (opt.value)}
-								<option value={opt.value}>{opt.label}</option>
-							{/each}
-						</select>
-					</div>
+					{#if listSourceType === 'tmdb-discover'}
+						<div class="form-control">
+							<label class="label py-1" for="sortBy">
+								<span
+									class="label-text text-xs font-medium tracking-wide text-base-content/60 uppercase"
+									>{m.smartlists_settings_sortBy()}</span
+								>
+							</label>
+							<select id="sortBy" bind:value={sortBy} class="select-bordered select w-full select-sm">
+								{#each sortOptions as opt (opt.value)}
+									<option value={opt.value}>{opt.label}</option>
+								{/each}
+							</select>
+						</div>
+					{/if}
 					<div class="form-control">
 						<label class="label py-1" for="itemLimit">
 							<span
@@ -110,7 +121,7 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 							id="itemLimit"
 							bind:value={itemLimit}
 							min="1"
-							max="1000"
+							max={mediaType === 'music' ? 200 : 1000}
 							class="input-bordered input w-full input-sm"
 						/>
 					</div>
@@ -135,15 +146,17 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 				</select>
 			</div>
 
-			<!-- Exclude in Library -->
-			<label class="flex cursor-pointer items-center gap-3 rounded-lg border border-base-300 p-3">
-				<input
-					type="checkbox"
-					bind:checked={excludeInLibrary}
-					class="checkbox checkbox-sm checkbox-primary"
-				/>
-				<span class="label-text">{m.smartlists_settings_excludeInLibrary()}</span>
-			</label>
+			<!-- Exclude in Library (a TMDB discover filter; music items are marked instead) -->
+			{#if mediaType !== 'music'}
+				<label class="flex cursor-pointer items-center gap-3 rounded-lg border border-base-300 p-3">
+					<input
+						type="checkbox"
+						bind:checked={excludeInLibrary}
+						class="checkbox checkbox-sm checkbox-primary"
+					/>
+					<span class="label-text">{m.smartlists_settings_excludeInLibrary()}</span>
+				</label>
+			{/if}
 
 			<!-- Auto Search Section -->
 			<div class="divider my-1 text-xs text-base-content/50">
@@ -192,7 +205,8 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 						{#if availableRootFolders.length === 0}
 							<p class="mt-1 text-xs text-warning">
 								{m.smartlists_settings_noWritableRootFolders({
-									mediaType: mediaType === 'movie' ? 'movie' : 'TV'
+									mediaType:
+										mediaType === 'movie' ? 'movie' : mediaType === 'music' ? 'Music' : 'TV'
 								})}
 							</p>
 						{/if}
@@ -211,7 +225,7 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 							class="select-bordered select w-full select-sm"
 						>
 							<option value="">{m.smartlists_settings_default()}</option>
-							{#each scoringProfiles as profile (profile.id)}
+							{#each availableProfiles as profile (profile.id)}
 								<option value={profile.id}>{profile.name}</option>
 							{/each}
 						</select>

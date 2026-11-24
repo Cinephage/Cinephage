@@ -2514,8 +2514,9 @@ const smartListSortBySchema = z
 export const smartListCreateSchema = z.object({
 	name: z.string().min(1).max(100),
 	description: z.string().max(101).optional(),
-	mediaType: z.enum(['movie', 'tv']),
-	filters: smartListFiltersSchema,
+	mediaType: z.enum(['movie', 'tv', 'music']),
+	// TMDB lists carry filters; a music list stores an empty object.
+	filters: smartListFiltersSchema.optional().default({}),
 	sortBy: smartListSortBySchema,
 	itemLimit: z.number().min(1).max(1000).optional(),
 	excludeInLibrary: z.boolean().optional(),
@@ -2531,14 +2532,25 @@ export const smartListCreateSchema = z.object({
 	refreshIntervalHours: z.number().min(1).max(168).optional(),
 	enabled: z.boolean().optional(),
 	listSourceType: z
-		.enum(['tmdb-discover', 'external-json', 'trakt-list', 'custom-manual'])
+		.enum([
+			'tmdb-discover',
+			'external-json',
+			'trakt-list',
+			'custom-manual',
+			'playlist',
+			'musicbrainz-new-releases'
+		])
 		.optional(),
 	externalSourceConfig: z
 		.object({
 			url: z.string().optional(),
 			headers: z.record(z.string(), z.unknown()).optional(),
 			listId: z.string().optional(),
-			username: z.string().optional()
+			username: z.string().optional(),
+			trackLimit: z.number().int().min(1).max(200).optional(),
+			releaseTypes: z.array(z.string()).optional(),
+			lookbackDays: z.number().int().min(1).max(365).optional(),
+			artistLimit: z.number().int().min(1).max(100).optional()
 		})
 		.optional(),
 	presetId: z.string().optional(),

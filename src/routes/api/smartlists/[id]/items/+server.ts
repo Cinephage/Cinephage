@@ -37,13 +37,16 @@ export const GET: RequestHandler = async ({ params, url }) => {
 		limit,
 		inLibrary,
 		includeExcluded,
-		query
+		query,
+		// A removed playlist entry is kept for provenance but is not the list.
+		activeOnly: list.mediaType === 'music'
 	});
 
 	const blockedIds = await getBlockedTmdbIdSet('all');
-	const itemsList = items.items;
 	const filtered =
-		blockedIds.size > 0 ? itemsList.filter((item) => !blockedIds.has(item.tmdbId)) : itemsList;
+		blockedIds.size > 0
+			? items.items.filter((item) => item.tmdbId == null || !blockedIds.has(item.tmdbId))
+			: items.items;
 
 	return Response.json({
 		items: {
@@ -67,6 +70,20 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		const list = await service.getSmartList(params.id);
 		if (!list) {
 			return Response.json({ error: 'Smart list not found' }, { status: 404 });
+		}
+
+		if (data.action === 'exclude' && data.itemIds && data.itemIds.length > 0) {
+			for (const itemId of data.itemIds) {
+				await service.excludeItemById(params.id, itemId);
+			}
+			return Response.json({ success: true, excluded: data.itemIds.length });
+		}
+
+		if (data.action === 'include' && data.itemIds && data.itemIds.length > 0) {
+			for (const itemId of data.itemIds) {
+				await service.includeItemById(params.id, itemId);
+			}
+			return Response.json({ success: true, included: data.itemIds.length });
 		}
 
 		if (data.action === 'exclude' && data.tmdbIds) {
