@@ -55,7 +55,10 @@ const { POST } = await import('./+server');
 function buildJob(i: number) {
 	return {
 		request: {
-			sourcePath: `/tmp/nonexistent-source-${i}.mkv`,
+			// Not under /tmp: the path guard refuses system directories, and the
+			// route validates the source before it enqueues. The path never has to
+			// exist — the job service is mocked.
+			sourcePath: `${process.cwd()}/.test-tmp/nonexistent-source-${i}.mkv`,
 			mediaType: 'movie' as const,
 			tmdbId: 1000 + i,
 			importTarget: 'new' as const,
