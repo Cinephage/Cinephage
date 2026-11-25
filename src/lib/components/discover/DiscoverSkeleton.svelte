@@ -13,7 +13,7 @@
 		<div class="space-y-4">
 			<div class="flex items-center gap-2 px-1">
 				<span class="h-6 w-1 rounded-full bg-primary/40"></span>
-				<Skeleton class="h-6 w-48" />
+				<Skeleton class="h-7 w-48" />
 			</div>
 			<div class="flex gap-3 overflow-hidden px-1 pb-4 sm:gap-4">
 				{#each { length: cards }, cardIndex (cardIndex)}

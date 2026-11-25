@@ -184,10 +184,13 @@
 			</button>
 		{/if}
 
+		<!-- scroll-px-1 matches px-1: without it the first snap point sits 4px
+		     into the row, and the row slides left by that much as soon as the
+		     posters load and the browser re-snaps. -->
 		<div
 			bind:this={container}
 			onscroll={handleScroll}
-			class="flex snap-x snap-mandatory scrollbar-none gap-3 overflow-x-auto scroll-smooth px-1 pb-4 sm:gap-4 [&::-webkit-scrollbar]:hidden"
+			class="flex snap-x snap-mandatory scroll-px-1 scrollbar-none gap-3 overflow-x-auto scroll-smooth px-1 pb-4 sm:gap-4 [&::-webkit-scrollbar]:hidden"
 		>
 			{#each displayedItems as item (item.id)}
 				<div class={`flex-none snap-start ${resolvedItemClass}`}>
