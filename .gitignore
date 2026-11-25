@@ -11,6 +11,10 @@ node_modules
 # Abandoned paraglide directory (Vite plugin now outputs to src/lib/paraglide/)
 /src/paraglide/
 
+# inlang SDK plugin cache (the SDK 4 used by Paraglide JS 3 no longer writes
+# its own project.inlang/.gitignore when only compiling)
+/project.inlang/cache/
+
 # OS
 .DS_Store
 Thumbs.db
