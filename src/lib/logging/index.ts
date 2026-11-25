@@ -343,6 +343,34 @@ function sanitizeError(error: Error): Record<string, unknown> {
 	return sanitizeLogValue(serialized, new WeakSet<object>()) as Record<string, unknown>;
 }
 
+/**
+ * Serialize anything logged as an error into a plain, sanitized object.
+ *
+ * Payloads are sanitized before pino sees them, which already turns an Error
+ * into a plain `{ type, message, stack, ... }` object. Rebuilding that object
+ * with `new Error(message)` (as `toError` does) would replace its type, `code`
+ * and stack with the logger's own, so a record that carries a message keeps
+ * its fields instead. The same goes for a thrown non-Error object.
+ */
+function serializeErrorValue(error: unknown): Record<string, unknown> {
+	if (error instanceof Error) {
+		return sanitizeError(error);
+	}
+
+	if (isRecord(error) && typeof error.message === 'string') {
+		const serialized = sanitizeLogValue(error, new WeakSet<object>()) as Record<string, unknown>;
+		if (typeof serialized.type !== 'string') {
+			serialized.type = typeof error.name === 'string' ? error.name : 'Error';
+		}
+		if (!shouldIncludeErrorStack()) {
+			delete serialized.stack;
+		}
+		return serialized;
+	}
+
+	return sanitizeError(toError(error));
+}
+
 function getBasePinoOptions(): LoggerOptions {
 	return {
 		level: getRuntimeEnv('LOG_LEVEL') || (isDev() ? 'debug' : 'info'),
@@ -359,7 +387,7 @@ function getBasePinoOptions(): LoggerOptions {
 			}
 		},
 		serializers: {
-			err: (error: Error) => sanitizeError(toError(error))
+			err: (error: unknown) => serializeErrorValue(error)
 		},
 		redact: {
 			paths: [
@@ -448,7 +476,7 @@ function normalizeObjectPayload(
 	const normalized = sanitizeContext(payload as LogContext);
 	const errorCandidate = normalized.err ?? normalized.error;
 	if (level === 'error' && errorCandidate !== undefined && normalized.err === undefined) {
-		normalized.err = sanitizeError(toError(errorCandidate));
+		normalized.err = serializeErrorValue(errorCandidate);
 		delete normalized.error;
 	}
 	return normalized;
@@ -481,7 +509,7 @@ function prepareLogEvent(level: LogLevel, args: unknown[]): PreparedLogEvent {
 			if (third !== undefined) {
 				const payload = sanitizeContext((third as LogContext) ?? {});
 				if (second !== undefined) {
-					payload.err = sanitizeError(toError(second));
+					payload.err = serializeErrorValue(second);
 				}
 				return { payload, message };
 			}
@@ -495,7 +523,7 @@ function prepareLogEvent(level: LogLevel, args: unknown[]): PreparedLogEvent {
 			}
 
 			if (second !== undefined) {
-				return { payload: { err: sanitizeError(toError(second)) }, message };
+				return { payload: { err: serializeErrorValue(second) }, message };
 			}
 
 			return { message };
@@ -506,7 +534,7 @@ function prepareLogEvent(level: LogLevel, args: unknown[]): PreparedLogEvent {
 		}
 
 		return {
-			payload: { err: sanitizeError(toError(first)) },
+			payload: { err: serializeErrorValue(first) },
 			message: normalizeMessage(second)
 		};
 	}
@@ -724,7 +752,12 @@ export const logger: AppLogger = new PinoAppLogger();
 export { redactString };
 
 /** Test-only access to the redaction predicates (see logging-redaction.test.ts). */
-export const __testing = { isSensitiveObjectKey, redactString };
+export const __testing = {
+	isSensitiveObjectKey,
+	redactString,
+	getBasePinoOptions,
+	prepareLogEvent
+};
 
 export function createChildLogger(baseContext: LogContext): AppLogger {
 	const pinoLogger = rootPinoLogger.child(sanitizeContext(baseContext));
