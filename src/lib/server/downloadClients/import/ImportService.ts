@@ -1584,10 +1584,17 @@ export class ImportService extends EventEmitter {
 		// match reuses the existing row's path, not the freshly computed name.
 		const relativePath = duplicateOf ? duplicateOf.relativePath : destFileName;
 
-		// Check if a file record already exists for this path (prevent duplicates)
+		// Decide on the database as it is now, not on the pre-transfer snapshot
+		// (#680): a long transfer gives the library scanner time to index this very
+		// path, and the snapshot was taken before the transfer began.
 		const existingFileRecord = duplicateOf
 			? [duplicateOf]
-			: existingFiles.filter((file) => file.relativePath === relativePath);
+			: await db
+					.select()
+					.from(movieFiles)
+					.where(
+						and(eq(movieFiles.movieId, movie.id), eq(movieFiles.relativePath, relativePath))
+					);
 
 		const fileData = {
 			movieId: movie.id,
@@ -1610,9 +1617,19 @@ export class ImportService extends EventEmitter {
 			await db.update(movieFiles).set(fileData).where(eq(movieFiles.id, fileId));
 			logger.info({ movieId: movie.id, fileId }, 'Updated existing movie file record');
 		} else {
-			// Create new file record
-			fileId = randomUUID();
-			await db.insert(movieFiles).values({ id: fileId, ...fileData });
+			// Create the record, but let the unique (movie, path) index arbitrate: a
+			// scanner pass can still land between the query above and this insert.
+			// The upsert returns the id actually stored, so the replacement logic
+			// below keeps the file that exists rather than a phantom id.
+			const [row] = await db
+				.insert(movieFiles)
+				.values({ id: randomUUID(), ...fileData })
+				.onConflictDoUpdate({
+					target: [movieFiles.movieId, movieFiles.relativePath],
+					set: fileData
+				})
+				.returning({ id: movieFiles.id });
+			fileId = row.id;
 		}
 
 		// Update movie hasFile flag, and clear the consecutive-failure counter
@@ -2567,8 +2584,15 @@ export class ImportService extends EventEmitter {
 				'Import will replace overlapping episode file(s) per coverage rule'
 			);
 		}
-		// Check if a file record already exists for this path (prevent duplicates)
-		const existingFileRecord = existingFiles.filter((file) => file.relativePath === relativePath);
+		// Same reasoning as the movie path (#680): decide on the database as it is
+		// now. The snapshot predates the transfer, and the scanner may have
+		// registered this path while it ran.
+		const existingFileRecord = await db
+			.select()
+			.from(episodeFiles)
+			.where(
+				and(eq(episodeFiles.seriesId, seriesData.id), eq(episodeFiles.relativePath, relativePath))
+			);
 
 		let fileId: string;
 		const fileData = {
