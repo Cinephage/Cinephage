@@ -1592,9 +1592,7 @@ export class ImportService extends EventEmitter {
 			: await db
 					.select()
 					.from(movieFiles)
-					.where(
-						and(eq(movieFiles.movieId, movie.id), eq(movieFiles.relativePath, relativePath))
-					);
+					.where(and(eq(movieFiles.movieId, movie.id), eq(movieFiles.relativePath, relativePath)));
 
 		const fileData = {
 			movieId: movie.id,
