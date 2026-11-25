@@ -434,7 +434,15 @@ export async function fetchWithTimeout(
 			signal: controller.signal,
 			dispatcher: agent
 		} as unknown as Parameters<typeof undiciFetch>[1];
-		const response = (await undiciFetch(url, init)) as unknown as Response;
+		let response: Response;
+		try {
+			response = (await undiciFetch(url, init)) as unknown as Response;
+		} catch (error) {
+			// No response means no body to wait for: release the agent's sockets
+			// now instead of leaving them to its idle timers.
+			void agent.destroy().catch(() => {});
+			throw error;
+		}
 
 		// The agent owns the connection this body streams on. Closing it here -
 		// when only the headers have arrived - deadlocks the response: close()

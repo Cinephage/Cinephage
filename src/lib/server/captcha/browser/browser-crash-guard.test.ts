@@ -9,6 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import {
 	isBrowserOriginError,
+	isUndiciInformationalError,
 	installBrowserCrashGuard,
 	__resetBrowserCrashGuardForTests
 } from './browser-crash-guard';
@@ -65,6 +66,51 @@ describe('isBrowserOriginError', () => {
 	it('handles null/undefined without throwing', () => {
 		expect(isBrowserOriginError(null)).toBe(false);
 		expect(isBrowserOriginError(undefined)).toBe(false);
+	});
+
+	it('reads stack and message of error-like objects that are not Error instances', () => {
+		expect(
+			isBrowserOriginError({
+				message: 'boom',
+				stack: 'Error: boom\n    at FFPage._onUncaughtError (coreBundle.js:1:1)'
+			})
+		).toBe(true);
+		expect(isBrowserOriginError({ message: 'Target closed' })).toBe(true);
+		expect(
+			isBrowserOriginError({ message: 'Invalid movie id', stack: 'at parse (x.js:1:1)' })
+		).toBe(false);
+	});
+});
+
+describe('isUndiciInformationalError', () => {
+	class InformationalError extends Error {
+		code = 'UND_ERR_INFO';
+		constructor(message: string) {
+			super(message);
+			this.name = 'InformationalError';
+		}
+	}
+
+	it("matches undici's socket idle timeout", () => {
+		expect(isUndiciInformationalError(new InformationalError('socket idle timeout'))).toBe(true);
+	});
+
+	it('matches error-like objects from another undici copy or realm', () => {
+		expect(
+			isUndiciInformationalError({ code: 'UND_ERR_INFO', message: 'socket idle timeout' })
+		).toBe(true);
+		expect(isUndiciInformationalError({ name: 'InformationalError', message: 'reset' })).toBe(true);
+	});
+
+	it('does NOT match other errors', () => {
+		expect(isUndiciInformationalError(new Error('socket idle timeout'))).toBe(false);
+		expect(
+			isUndiciInformationalError(Object.assign(new Error('x'), { code: 'UND_ERR_SOCKET' }))
+		).toBe(false);
+		expect(isUndiciInformationalError(new TypeError('foo is not a function'))).toBe(false);
+		expect(isUndiciInformationalError('socket idle timeout')).toBe(false);
+		expect(isUndiciInformationalError(null)).toBe(false);
+		expect(isUndiciInformationalError(undefined)).toBe(false);
 	});
 });
 
