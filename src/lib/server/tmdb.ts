@@ -182,14 +182,19 @@ export const tmdb = {
 			filters?.region
 		);
 
+		// Stale-while-revalidate: an expired entry still answers at once while
+		// one background request refreshes it.
+		let staleHit: { data: unknown } | null = null;
 		if (isGetRequest) {
-			const cached = tmdbCache.get(cacheKey);
-			if (cached) {
-				return filterBlockedResults(cached);
+			const hit = tmdbCache.lookup(cacheKey);
+			if (hit && !hit.stale) {
+				return filterBlockedResults(hit.data);
 			}
+			staleHit = hit;
 
 			const inFlight = inFlightRequests.get(cacheKey);
 			if (inFlight) {
+				if (staleHit) return filterBlockedResults(staleHit.data);
 				logger.debug({ path }, 'Deduplicating in-flight TMDB request');
 				return filterBlockedResults(await inFlight);
 			}
@@ -349,6 +354,13 @@ export const tmdb = {
 		// Store in-flight promise for deduplication (GET requests only)
 		if (isGetRequest) {
 			inFlightRequests.set(cacheKey, requestPromise);
+		}
+
+		if (staleHit) {
+			requestPromise.catch((err: unknown) => {
+				logger.warn({ err, path }, 'TMDB background refresh failed; keeping the stale entry');
+			});
+			return filterBlockedResults(staleHit.data);
 		}
 
 		return filterBlockedResults(await requestPromise);

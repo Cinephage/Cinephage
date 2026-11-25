@@ -634,6 +634,8 @@
 	"discover_closeFilters": "Filter schließen",
 	"discover_exitSelectMode": "Mehrfachauswahl beenden",
 	"discover_failedToLoadMore": "Weitere Elemente konnten nicht geladen werden",
+	"discover_loadFailed": "Entdecken konnte nicht geladen werden.",
+	"discover_retry": "Erneut versuchen",
 	"discover_filterBadgeGenres": "{count} Genres",
 	"discover_filterBadgeKeywords": "{count} Keywords",
 	"discover_filterBadgeLanguage": "Sprache",

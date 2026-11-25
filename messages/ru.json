@@ -634,6 +634,8 @@
 	"discover_closeFilters": "Закрыть фильтры",
 	"discover_exitSelectMode": "Выйти из режима множественного выбора",
 	"discover_failedToLoadMore": "Не удалось загрузить дополнительные элементы",
+	"discover_loadFailed": "Не удалось загрузить раздел «Обзор».",
+	"discover_retry": "Повторить",
 	"discover_filterBadgeGenres": "Жанров: {count}",
 	"discover_filterBadgeKeywords": "Ключевых слов: {count}",
 	"discover_filterBadgeLanguage": "Язык",

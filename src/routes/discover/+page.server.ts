@@ -30,7 +30,16 @@ const logger = createChildLogger({ module: 'DiscoverPage', logDomain: 'system' }
 // Row id of the language_settings singleton (see LanguageSettingsService).
 const LANGUAGE_SETTINGS_SINGLETON_ID = 'singleton';
 
-export const load: PageServerLoad = async ({ url }) => {
+/**
+ * The page data is streamed: the load returns at once and the TMDB work
+ * resolves into `discover`. A click on Discover then shows the header, tabs
+ * and search immediately, with placeholder rows, instead of a dead link for
+ * as long as TMDB takes (a cold cache is several sequential TMDB round trips
+ * plus one release-date lookup per movie tile).
+ */
+export const load: PageServerLoad = ({ url }) => ({ discover: loadDiscover(url) });
+
+async function loadDiscover(url: URL) {
 	const params = parseDiscoverParams(url.searchParams);
 	const {
 		type,
@@ -98,11 +107,6 @@ export const load: PageServerLoad = async ({ url }) => {
 		return {
 			viewType: 'not_configured' as const,
 			tmdbConfigured: false,
-			providers: [],
-			networks: [],
-			genres: [],
-			certifications: [],
-			languages: [],
 			facetGroups: [],
 			filters: {
 				type,
@@ -157,10 +161,6 @@ export const load: PageServerLoad = async ({ url }) => {
 			return {
 				viewType: 'not_configured' as const,
 				tmdbConfigured: false,
-				providers: [],
-				genres: [],
-				certifications: [],
-				languages: [],
 				facetGroups: [],
 				filters: {
 					type,
@@ -252,11 +252,6 @@ export const load: PageServerLoad = async ({ url }) => {
 					total_pages: trendingResults.total_pages,
 					total_results: trendingResults.total_results
 				},
-				providers,
-				networks,
-				genres,
-				certifications: usCertifications,
-				languages,
 				facetGroups,
 				filters: {
 					type,
@@ -314,10 +309,6 @@ export const load: PageServerLoad = async ({ url }) => {
 						total_pages: Math.max(moviesData.total_pages, tvData.total_pages),
 						total_results: moviesData.total_results + tvData.total_results
 					},
-					providers,
-					genres,
-					certifications: usCertifications,
-					languages,
 					facetGroups,
 					filters: {
 						type,
@@ -349,11 +340,6 @@ export const load: PageServerLoad = async ({ url }) => {
 					total_pages: topRatedResults.total_pages,
 					total_results: topRatedResults.total_results
 				},
-				providers,
-				networks,
-				genres,
-				certifications: usCertifications,
-				languages,
 				facetGroups,
 				filters: {
 					type,
@@ -387,11 +373,6 @@ export const load: PageServerLoad = async ({ url }) => {
 					total_pages: nowPlayingResults.total_pages,
 					total_results: nowPlayingResults.total_results
 				},
-				providers,
-				networks,
-				genres,
-				certifications: usCertifications,
-				languages,
 				facetGroups,
 				filters: {
 					type,
@@ -417,10 +398,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			// own client waits 8 s, and a slow chart must not hold the dashboard.
 			const musicShelfPromise = Promise.race([
 				musicLanding()
-					.then(
-						(landing) =>
-							landing?.shelves.find((shelf) => shelf.id === 'topAlbums')?.rows ?? []
-					)
+					.then((landing) => landing?.shelves.find((shelf) => shelf.id === 'topAlbums')?.rows ?? [])
 					.catch(() => []),
 				new Promise<MusicRowItem[]>((resolve) => setTimeout(() => resolve([]), 1200))
 			]);
@@ -490,11 +468,6 @@ export const load: PageServerLoad = async ({ url }) => {
 					nowPlaying: enrichedNowPlaying,
 					topAlbums
 				},
-				providers,
-				networks,
-				genres,
-				certifications: usCertifications,
-				languages,
 				facetGroups,
 				filters: {
 					type,
@@ -548,11 +521,6 @@ export const load: PageServerLoad = async ({ url }) => {
 					activeGenreName: landing?.activeGenreName ?? null,
 					results: musicRows,
 					pagination: musicPagination,
-					providers: [],
-					networks: [],
-					genres: [],
-					certifications: [],
-					languages: [],
 					facetGroups: musicFacets,
 					filters: {
 						type,
@@ -598,11 +566,6 @@ export const load: PageServerLoad = async ({ url }) => {
 				tmdbConfigured: true,
 				results: enrichedResults,
 				pagination,
-				providers,
-				networks,
-				genres,
-				certifications: usCertifications,
-				languages,
 				facetGroups,
 				filters: {
 					type,
@@ -622,11 +585,6 @@ export const load: PageServerLoad = async ({ url }) => {
 			viewType: 'error',
 			tmdbConfigured: true,
 			error: 'Failed to load content',
-			providers: [],
-			networks: [],
-			genres: [],
-			certifications: [],
-			languages: [],
 			facetGroups: [],
 			filters: {
 				type,
@@ -643,4 +601,4 @@ export const load: PageServerLoad = async ({ url }) => {
 			}
 		};
 	}
-};
+}
