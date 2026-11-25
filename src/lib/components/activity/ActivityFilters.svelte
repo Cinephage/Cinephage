@@ -198,7 +198,7 @@
 	<div class="flex flex-wrap items-center gap-2">
 		<div class="form-control min-w-50 flex-1 sm:max-w-64">
 			<div class="group relative">
-				<div class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2">
+				<div class="pointer-events-none absolute top-1/2 left-3.5 z-1 -translate-y-1/2">
 					<Search
 						class="h-4 w-4 text-base-content/40 transition-colors group-focus-within:text-primary"
 					/>
@@ -213,7 +213,7 @@
 			</div>
 		</div>
 
-		<span class="h-4 w-px bg-base-content/15"></span>
+		<span class="hidden h-4 w-px bg-base-content/15 sm:block"></span>
 
 		<div class="join">
 			<button
@@ -244,7 +244,7 @@
 		</div>
 
 		{#if statusContext === 'history'}
-			<span class="h-4 w-px bg-base-content/15"></span>
+			<span class="hidden h-4 w-px bg-base-content/15 sm:block"></span>
 
 			<select
 				class="select w-28 border-base-content/20 bg-base-200 select-sm sm:w-auto"

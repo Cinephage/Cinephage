@@ -927,7 +927,7 @@ import type { KindFilter } from '#lib/media-kinds/registry.js';
 		<div class="flex flex-wrap items-center gap-2">
 			<div class="form-control min-w-50 flex-1 sm:max-w-64">
 				<div class="group relative">
-					<div class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2">
+					<div class="pointer-events-none absolute top-1/2 left-3.5 z-1 -translate-y-1/2">
 						<Search
 							class="h-4 w-4 text-base-content/40 transition-colors group-focus-within:text-primary"
 						/>
@@ -941,7 +941,7 @@ import type { KindFilter } from '#lib/media-kinds/registry.js';
 					/>
 				</div>
 			</div>
-			<span class="h-4 w-px bg-base-content/15"></span>
+			<span class="hidden h-4 w-px bg-base-content/15 sm:block"></span>
 			<div class="join">
 				<button
 					class="btn join-item btn-sm {mediaType === 'all' ? 'btn-primary' : 'btn-ghost'}"
@@ -1059,7 +1059,7 @@ import type { KindFilter } from '#lib/media-kinds/registry.js';
 				<span class="text-sm font-bold tracking-wide text-base-content/70">
 					{m.activity_queue_bulkActionsHeading()}
 				</span>
-				<div class="divider m-0 divider-horizontal h-6"></div>
+				<div class="divider m-0 hidden divider-horizontal h-6 sm:flex"></div>
 				{#if selected.size > 0}
 					{@const searchableCount = selectedSearchableItems().length}
 					{@const resettableCount = selectedResettableItems().length}
@@ -1130,7 +1130,7 @@ import type { KindFilter } from '#lib/media-kinds/registry.js';
 						{m.activity_searches_bulkHint()}
 					</span>
 					<div class="ml-auto"></div>
-					<div class="divider m-0 divider-horizontal h-6"></div>
+					<div class="divider m-0 hidden divider-horizontal h-6 sm:flex"></div>
 					<button class="btn gap-1.5 btn-outline btn-sm" onclick={handleRefresh} disabled={loading}>
 						{#if loading}
 							<Loader2 class="h-3.5 w-3.5 animate-spin" />

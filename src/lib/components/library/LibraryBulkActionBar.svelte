@@ -43,19 +43,19 @@
 		class="fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 z-50 mx-auto max-w-fit"
 	>
 		<div
-			class="flex items-center gap-2 rounded-full border border-base-content/10 bg-base-300 px-3 py-2 shadow-xl sm:gap-3 sm:px-4 sm:py-2.5"
+			class="flex flex-wrap items-center justify-center gap-1.5 rounded-2xl border border-base-content/10 bg-base-300 px-2.5 py-2 shadow-xl sm:flex-nowrap sm:gap-3 sm:rounded-full sm:px-4 sm:py-2.5"
 		>
 			<span class="shrink-0 text-sm font-medium whitespace-nowrap">
 				{selectedCount}
-				{itemLabel} selected
+				<span class="hidden sm:inline">{itemLabel}</span> selected
 			</span>
 
 			<div class="h-4 w-px bg-base-content/20"></div>
 
-			<div class="flex items-center gap-1">
+			<div class="flex items-center gap-0.5 sm:gap-1">
 				{#if onGrab}
 					<button
-						class="btn gap-1.5 btn-ghost btn-sm"
+						class="btn gap-1.5 btn-ghost px-2 btn-sm sm:px-3"
 						onclick={onGrab}
 						disabled={loading}
 						title={m.music_grabBest()}
@@ -69,7 +69,7 @@
 					</button>
 				{/if}
 				<button
-					class="btn gap-1.5 btn-ghost btn-sm"
+					class="btn gap-1.5 btn-ghost px-2 btn-sm sm:px-3"
 					onclick={onMonitor}
 					disabled={loading}
 					title={m.library_bulkActionBar_titleMonitor()}
@@ -83,7 +83,7 @@
 				</button>
 
 				<button
-					class="btn gap-1.5 btn-ghost btn-sm"
+					class="btn gap-1.5 btn-ghost px-2 btn-sm sm:px-3"
 					onclick={onUnmonitor}
 					disabled={loading}
 					title={m.library_bulkActionBar_titleUnmonitor()}
@@ -98,7 +98,7 @@
 
 				{#if onChangeQuality}
 					<button
-						class="btn gap-1.5 btn-ghost btn-sm"
+						class="btn gap-1.5 btn-ghost px-2 btn-sm sm:px-3"
 						onclick={onChangeQuality}
 						disabled={loading}
 						title={m.library_bulkActionBar_titleQuality()}
@@ -114,7 +114,7 @@
 
 				{#if onLanguage}
 					<button
-						class="btn gap-1.5 btn-ghost btn-sm"
+						class="btn gap-1.5 btn-ghost px-2 btn-sm sm:px-3"
 						onclick={onLanguage}
 						disabled={loading}
 						title="{m.library_subtitleProfile_label()} (bulk)"
@@ -129,7 +129,7 @@
 				{/if}
 
 				<button
-					class="btn gap-1.5 btn-ghost text-error btn-sm hover:bg-error/10"
+					class="btn gap-1.5 btn-ghost px-2 text-error btn-sm hover:bg-error/10 sm:px-3"
 					onclick={onDelete}
 					disabled={loading}
 					title={m.library_bulkActionBar_titleDelete()}

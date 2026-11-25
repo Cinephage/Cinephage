@@ -1625,7 +1625,7 @@
 						<span class="text-sm font-bold tracking-wide text-base-content/70"
 							>{m.activity_queue_bulkActionsHeading()}</span
 						>
-						<div class="divider m-0 divider-horizontal h-6"></div>
+						<div class="divider m-0 hidden divider-horizontal h-6 sm:flex"></div>
 
 						{#if selectedActiveIds.size > 0}
 							<span class="text-xs text-base-content/60"
@@ -1671,7 +1671,7 @@
 								{m.activity_queue_bulkHint()}
 							</span>
 							<div class="ml-auto"></div>
-							<div class="divider m-0 divider-horizontal h-6"></div>
+							<div class="divider m-0 hidden divider-horizontal h-6 sm:flex"></div>
 							<button
 								class="btn gap-1.5 btn-outline btn-sm"
 								onclick={handleRefreshQueue}
@@ -1706,7 +1706,7 @@
 					<span class="text-sm font-bold tracking-wide text-base-content/70"
 						>{m.activity_history_management()}</span
 					>
-					<div class="divider m-0 divider-horizontal h-6"></div>
+					<div class="divider m-0 hidden divider-horizontal h-6 sm:flex"></div>
 					<label class="flex items-center gap-2 text-sm">
 						<span class="text-base-content/70">{m.activity_history_retention()}</span>
 						<select
@@ -1733,7 +1733,7 @@
 						{/if}
 						{m.action_save()}
 					</button>
-					<div class="divider m-0 divider-horizontal h-6"></div>
+					<div class="divider m-0 hidden divider-horizontal h-6 sm:flex"></div>
 					<button
 						class="btn gap-1.5 btn-outline btn-sm"
 						onclick={() => openHistoryConfirm('purge_older_than_retention')}
@@ -1747,7 +1747,7 @@
 						{m.activity_history_purgeOlder()}
 					</button>
 					{#if selectedHistoryIds.size > 0}
-						<div class="divider m-0 divider-horizontal h-6"></div>
+						<div class="divider m-0 hidden divider-horizontal h-6 sm:flex"></div>
 						<span class="text-xs text-base-content/60"
 							>{m.common_selected({ count: selectedHistoryIds.size })}</span
 						>

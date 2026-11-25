@@ -455,7 +455,7 @@
 	<!-- Identity -->
 	<SettingsSection title={m.profile_accountSecurity()}>
 		<div class="flex flex-col gap-4 sm:flex-row sm:items-center">
-			<div class="group relative shrink-0">
+			<div class="group relative shrink-0 self-start">
 				<UserAvatar
 					name={displayName || '?'}
 					src={data.user?.image ??
@@ -574,7 +574,7 @@
 				<Globe class="h-4 w-4 text-base-content/50" />
 				{m.profile_interfaceLanguage()}
 			</div>
-			<LanguageSelector showLabel={false} />
+			<LanguageSelector class="dropdown-end" showLabel={false} />
 		</div>
 		<div class="mt-3 flex flex-wrap items-center justify-between gap-3">
 			<div class="flex items-center gap-2 text-sm">

@@ -581,7 +581,7 @@
 		</div>
 		<div class="group relative w-full sm:ml-auto sm:w-72">
 			<Search
-				class="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-base-content/40 transition-colors group-focus-within:text-primary"
+				class="pointer-events-none absolute top-1/2 left-3.5 z-1 h-4 w-4 -translate-y-1/2 text-base-content/40 transition-colors group-focus-within:text-primary"
 			/>
 			<input
 				type="text"

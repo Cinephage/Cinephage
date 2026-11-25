@@ -606,7 +606,7 @@
 			<!-- Search (desktop) -->
 			<div class="hidden w-full max-w-md items-center gap-2 px-4 md:flex">
 				<div class="group relative w-full">
-					<div class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2">
+					<div class="pointer-events-none absolute top-1/2 left-3.5 z-1 -translate-y-1/2">
 						{#if isSearching}
 							<Loader2
 								class="h-4 w-4 animate-spin text-base-content/40 transition-colors group-focus-within:text-primary"
@@ -744,7 +744,7 @@
 		<!-- Search (mobile) -->
 		<div class="flex items-center gap-2 border-t border-base-200/50 px-4 py-2 md:hidden">
 			<div class="group relative w-full">
-				<div class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2">
+				<div class="pointer-events-none absolute top-1/2 left-3.5 z-1 -translate-y-1/2">
 					{#if isSearching}
 						<Loader2
 							class="h-4 w-4 animate-spin text-base-content/40 transition-colors group-focus-within:text-primary"

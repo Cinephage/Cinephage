@@ -30,13 +30,13 @@
 		class="fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 z-50 mx-auto max-w-fit"
 	>
 		<div
-			class="flex items-center gap-3 rounded-full border border-base-content/10 bg-base-300 px-4 py-2.5 shadow-xl sm:gap-4 sm:px-6 sm:py-3"
+			class="flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-base-content/10 bg-base-300 px-4 py-2.5 shadow-xl sm:flex-nowrap sm:gap-4 sm:rounded-full sm:px-6 sm:py-3"
 		>
 			<span class="text-sm font-medium">
 				{m.library_bulkActionBar_episodesSelected({ count: selectedCount })}
 			</span>
 
-			<div class="flex items-center gap-2">
+			<div class="flex flex-wrap items-center justify-center gap-2">
 				<button class="btn gap-2 btn-primary btn-sm" onclick={onSearch} disabled={searching}>
 					{#if searching}
 						<Loader2 size={16} class="animate-spin" />

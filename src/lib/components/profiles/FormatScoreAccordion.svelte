@@ -85,7 +85,7 @@
 	<!-- Search and expand/collapse -->
 	<div class="flex items-center gap-3">
 		<div class="group relative flex-1">
-			<div class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2">
+			<div class="pointer-events-none absolute top-1/2 left-3.5 z-1 -translate-y-1/2">
 				<Search
 					class="h-4 w-4 text-base-content/40 transition-colors group-focus-within:text-primary"
 				/>

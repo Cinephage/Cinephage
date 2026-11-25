@@ -394,7 +394,7 @@
 					{@const AccessIcon = accessInfo.icon}
 					<button
 						type="button"
-						class="flex w-full items-center gap-4 border-b border-base-200 p-4 text-left transition-colors last:border-b-0 hover:bg-base-200"
+						class="flex w-full items-center gap-3 border-b border-base-200 p-3 text-left transition-colors last:border-b-0 hover:bg-base-200 sm:gap-4 sm:p-4"
 						onclick={() => handleImplementationChange(def.implementation as ProviderImplementation)}
 					>
 						<div class="rounded-lg bg-base-300 p-2">
@@ -403,7 +403,7 @@
 							{/if}
 						</div>
 						<div class="min-w-0 flex-1">
-							<div class="flex items-center gap-2">
+							<div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
 								<span class="font-semibold">{def.name}</span>
 								{#if def.supportsHashSearch}
 									<span class="badge badge-xs badge-info"
@@ -413,7 +413,7 @@
 							</div>
 							<p class="truncate text-sm text-base-content/60">{def.description}</p>
 						</div>
-						<div class="flex flex-col items-end gap-1">
+						<div class="flex shrink-0 flex-col items-end gap-1">
 							<span class="badge badge-sm {accessInfo.badgeClass}">{accessInfo.badge}</span>
 							{#if def.requiresCredentials && def.accessType !== 'free-account'}
 								<span class="badge badge-ghost badge-xs"
