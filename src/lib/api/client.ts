@@ -55,10 +55,11 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<ApiRe
 
 export async function apiGet<T = Record<string, never>>(
 	url: string,
-	params?: Record<string, string>
+	params?: Record<string, string>,
+	options: { signal?: AbortSignal } = {}
 ): Promise<ApiResponse<T>> {
 	const query = params ? '?' + new URLSearchParams(params).toString() : '';
-	return request<T>(url + query);
+	return request<T>(url + query, options.signal ? { signal: options.signal } : {});
 }
 
 export async function apiPost<T = Record<string, never>>(

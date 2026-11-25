@@ -47,8 +47,12 @@ export async function getDiscoverUnfiltered(
 	return response as unknown as DiscoverResponse;
 }
 
-export async function searchTmdb(params: Record<string, string>): Promise<DiscoverResponse> {
-	const response = await apiGet('/api/discover/search', params);
+/** `signal` lets a newer search abort an older one still in flight. */
+export async function searchTmdb(
+	params: Record<string, string>,
+	options: { signal?: AbortSignal } = {}
+): Promise<DiscoverResponse> {
+	const response = await apiGet('/api/discover/search', params, options);
 	return response as unknown as DiscoverResponse;
 }
 

@@ -4,13 +4,14 @@
 	import { goto, refreshAll } from '$app/navigation';
 	import { resolvePath } from '#lib/utils/routing.js';
 	import type { TmdbMediaItem } from '#lib/types/tmdb.js';
-	import { tick } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import MediaCard from '#lib/components/tmdb/MediaCard.svelte';
 	import MusicRowCard from '#lib/components/discover/MusicRowCard.svelte';
 	import type { MusicRowItem } from '#lib/components/discover/music-row-item.js';
 	import FilterDrawer from '#lib/components/filters/FilterDrawer.svelte';
 	import SectionRow from '#lib/components/discover/SectionRow.svelte';
+	import { createDiscoverSearch } from '#lib/components/discover/discover-search.svelte.js';
 	import SelectionActionBar from '#lib/components/discover/SelectionActionBar.svelte';
 	import BulkAddToLibraryModal from '#lib/components/discover/BulkAddToLibraryModal.svelte';
 	import PlaylistImportModal from '#lib/components/music/PlaylistImportModal.svelte';
@@ -46,7 +47,7 @@
 	} from '@lucide/svelte';
 	import { getMediaTypeLabel } from '#lib/types/tmdb-guards.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
-	import { searchTmdb, getDiscover, getDiscoverUnfiltered } from '#lib/api/index.js';
+	import { getDiscover, getDiscoverUnfiltered } from '#lib/api/index.js';
 
 	/** Music rows arrive as loose fetch JSON; their media_type field is untyped there. */
 	function isMusicRow(item: { media_type?: unknown }): boolean {
@@ -116,20 +117,29 @@
 		refreshAll();
 	}
 
-	// Search state
-	let searchQuery = $state(page.url.searchParams.get('q') ?? '');
-	let debounceTimer = $state<ReturnType<typeof setTimeout>>();
-	// Search results from TMDB multi-search API
-	// Type is loose since TMDB returns various media types - MediaCard handles the union
-	let searchResults = $state<Array<Record<string, unknown> & { id: number; media_type?: string }>>(
-		[]
-	);
-	let isSearching = $state(false);
-	let searchPagination = $state<{
-		page: number;
-		total_pages: number;
-		total_results: number;
-	} | null>(null);
+	// Search state: debounced, newest-answer-wins title search (see discover-search).
+	const search = createDiscoverSearch(page.url.searchParams.get('q') ?? '', {
+		type: () => type,
+		excludeInLibrary: () => excludeInLibrary,
+		// Keep q in URL so browser back restores search state.
+		// Use native replaceState to avoid updating page.url reactively, which would
+		// re-trigger derived filter values and loop back into the search.
+		onQuery: (query) => {
+			const url = new URL(window.location.href);
+			if (query) url.searchParams.set('q', query);
+			else url.searchParams.delete('q');
+			history.replaceState(history.state, '', url.pathname + url.search);
+		},
+		onError: (e) => {
+			toasts.error(m.discover_searchFailed(), {
+				description: e instanceof Error ? e.message : m.discover_searchFailed()
+			});
+		}
+	});
+	const searchQuery = $derived(search.query);
+	const searchResults = $derived(search.results);
+	const searchPagination = $derived(search.pagination);
+	const isSearching = $derived(search.searching);
 	let searchLoadMoreTrigger = $state<HTMLElement>();
 
 	const normalizedSearchQuery = $derived(searchQuery.trim());
@@ -138,94 +148,30 @@
 
 	function handleSearchInput(e: Event) {
 		const target = e.target as HTMLInputElement;
-		searchQuery = target.value.replace(/^\s+/, '');
-		clearTimeout(debounceTimer);
-		debounceTimer = setTimeout(() => {
-			handleSearch(searchQuery);
-		}, 600);
+		search.input(target.value.replace(/^\s+/, ''));
+	}
+
+	function handleSearchKeydown(e: KeyboardEvent) {
+		if (e.key === 'Escape') search.clear();
+		else if (e.key === 'Enter') void search.run();
 	}
 
 	function clearSearch() {
-		searchQuery = '';
-		clearTimeout(debounceTimer);
-		handleSearch('');
+		search.clear();
 	}
 
-	async function handleSearch(query: string, exclude?: boolean) {
-		searchQuery = query;
-		const normalizedQuery = query.trim();
-
-		// Keep q in URL so browser back restores search state.
-		// Use native replaceState to avoid updating page.url reactively, which would
-		// re-trigger derived filter values and loop back into handleSearch.
-		const url = new URL(window.location.href);
-		if (normalizedQuery) url.searchParams.set('q', normalizedQuery);
-		else url.searchParams.delete('q');
-		history.replaceState(history.state, '', url.pathname + url.search);
-
-		if (!normalizedQuery) {
-			searchResults = [];
-			searchPagination = null;
-			return;
-		}
-
-		isSearching = true;
-		try {
-			const result = (await searchTmdb({
-				query: normalizedQuery,
-				type,
-				...(exclude ? { exclude_in_library: 'true' } : {})
-			})) as unknown as {
-				results: Array<Record<string, unknown> & { id: number; media_type?: string }>;
-				pagination: { page: number; total_pages: number; total_results: number };
-			};
-			searchResults = result.results ?? [];
-			searchPagination = result.pagination;
-		} catch (e) {
-			toasts.error(m.discover_searchFailed(), {
-				description: e instanceof Error ? e.message : m.discover_searchFailed()
-			});
-			searchResults = [];
-		} finally {
-			isSearching = false;
-		}
-	}
-
-	async function loadMoreSearchResults() {
-		if (!searchPagination || searchPagination.page >= searchPagination.total_pages || isSearching)
-			return;
-
-		isSearching = true;
-		try {
-			const nextPage = searchPagination.page + 1;
-			const result = (await searchTmdb({
-				query: normalizedSearchQuery,
-				type,
-				page: String(nextPage),
-				...(excludeInLibrary ? { exclude_in_library: 'true' } : {})
-			})) as unknown as {
-				results: Array<Record<string, unknown> & { id: number; media_type?: string }>;
-				pagination: { page: number; total_pages: number; total_results: number };
-			};
-			// Deduplicate
-			const existingIds = new Set(searchResults.map((r) => r.id + (r.media_type || '')));
-			const newResults = result.results.filter(
-				(r: { id: number; media_type?: string }) => !existingIds.has(r.id + (r.media_type || ''))
-			);
-
-			searchResults = [...searchResults, ...newResults];
-			searchPagination = result.pagination;
-		} finally {
-			isSearching = false;
-		}
-	}
-
-	// Re-run search when type or excludeInLibrary filter changes
+	// Re-run search when type or excludeInLibrary filter changes (and once on
+	// load for a q from the URL). Only the filters are tracked: typing goes
+	// through the debounce, never through this effect.
 	$effect(() => {
-		if (searchQuery && type) {
-			handleSearch(searchQuery, excludeInLibrary);
-		}
+		void type;
+		void excludeInLibrary;
+		untrack(() => {
+			if (search.query.trim()) void search.run();
+		});
 	});
+
+	$effect(() => () => search.dispose());
 
 	// Infinite scroll for search results
 	$effect(() => {
@@ -234,7 +180,7 @@
 		const observer = new IntersectionObserver(
 			async (entries) => {
 				if (entries[0].isIntersecting && !isSearching) {
-					await loadMoreSearchResults();
+					await search.loadMore();
 				}
 			},
 			{ rootMargin: '200px' }
@@ -633,7 +579,7 @@
 						class="input w-full rounded-full border-base-content/20 bg-base-200/60 pr-9 pl-10 transition-all duration-200 input-md placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
 						value={searchQuery}
 						oninput={handleSearchInput}
-						onkeydown={(e) => e.key === 'Escape' && clearSearch()}
+						onkeydown={handleSearchKeydown}
 					/>
 					{#if searchQuery}
 						<button
@@ -771,7 +717,7 @@
 					class="input w-full rounded-full border-base-content/20 bg-base-200/60 pr-9 pl-10 transition-all duration-200 input-md placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
 					value={searchQuery}
 					oninput={handleSearchInput}
-					onkeydown={(e) => e.key === 'Escape' && clearSearch()}
+					onkeydown={handleSearchKeydown}
 				/>
 				{#if searchQuery}
 					<button
