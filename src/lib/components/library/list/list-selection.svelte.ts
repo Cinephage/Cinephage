@@ -52,9 +52,7 @@ export function createListSelection(): ListSelection {
 		for (const item of items) ids.add(item.id);
 	}
 
-	async function selectAllWhenLoaded(
-		load: () => Promise<Array<{ id: string }>>
-	): Promise<void> {
+	async function selectAllWhenLoaded(load: () => Promise<Array<{ id: string }>>): Promise<void> {
 		if (!mode) return;
 		const started = session;
 		const items = await load();

@@ -25,9 +25,7 @@ describe('createListSelection', () => {
 		selection.cycle(items);
 
 		let resolve!: (value: Array<{ id: string }>) => void;
-		const pending = selection.selectAllWhenLoaded(
-			() => new Promise((done) => (resolve = done))
-		);
+		const pending = selection.selectAllWhenLoaded(() => new Promise((done) => (resolve = done)));
 		selection.clear();
 		resolve(items);
 		await pending;
@@ -41,9 +39,7 @@ describe('createListSelection', () => {
 		selection.cycle(items);
 
 		let resolve!: (value: Array<{ id: string }>) => void;
-		const pending = selection.selectAllWhenLoaded(
-			() => new Promise((done) => (resolve = done))
-		);
+		const pending = selection.selectAllWhenLoaded(() => new Promise((done) => (resolve = done)));
 		selection.clear();
 		selection.cycle(items);
 		resolve(items);
