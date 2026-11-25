@@ -20,6 +20,21 @@ describe('createListSelection', () => {
 		expect(selection.count).toBe(0);
 	});
 
+	it('leaves select mode in one step with nothing or some selected', () => {
+		const selection = createListSelection();
+
+		selection.cycle(items);
+		selection.clear();
+		expect(selection.mode).toBe(false);
+		expect(selection.count).toBe(0);
+
+		selection.cycle(items);
+		selection.toggle('b', true);
+		selection.clear();
+		expect(selection.mode).toBe(false);
+		expect(selection.count).toBe(0);
+	});
+
 	it('tracks individual toggles without leaving selection mode', () => {
 		const selection = createListSelection();
 

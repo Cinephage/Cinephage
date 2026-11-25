@@ -10,9 +10,7 @@
 		ChevronDown,
 		Plus,
 		Mic2,
-		Music,
-		CheckSquare,
-		XSquare
+		Music
 	} from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import { resolve } from '$app/paths';
@@ -34,6 +32,7 @@
 	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
 	import LibraryBulkActionBar from '#lib/components/library/LibraryBulkActionBar.svelte';
 	import { createListSelection } from '#lib/components/library/list/list-selection.svelte.js';
+	import LibrarySelectControls from '#lib/components/library/list/LibrarySelectControls.svelte';
 	import ConfirmationModal from '#lib/components/ui/modal/ConfirmationModal.svelte';
 	import BulkQualityProfileModal from '#lib/components/library/BulkQualityProfileModal.svelte';
 	import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
@@ -891,26 +890,12 @@
 			{/if}
 
 			{#if selectable}
-				<button
-					class="btn gap-1.5 btn-ghost btn-xs sm:btn-sm {selection.mode ? 'btn-primary' : ''}"
-					aria-label={!selection.mode
-						? m.library_selectToggle_start()
-						: selection.count < browseCount
-							? m.library_selectToggle_selectAll()
-							: m.library_selectToggle_done()}
-					onclick={() => void cycleSelection()}
-				>
-					{#if !selection.mode}
-						<CheckSquare class="h-4 w-4" />
-						<span class="hidden sm:inline">{m.library_movies_select()}</span>
-					{:else if selection.count < browseCount}
-						<CheckSquare class="h-4 w-4" />
-						<span class="hidden sm:inline">{m.library_movies_selectAll()}</span>
-					{:else}
-						<XSquare class="h-4 w-4" />
-						<span class="hidden sm:inline">{m.library_movies_done()}</span>
-					{/if}
-				</button>
+				<LibrarySelectControls
+					mode={selection.mode}
+					allSelected={selection.mode && selection.count >= browseCount}
+					onCycle={() => void cycleSelection()}
+					onExit={selection.clear}
+				/>
 			{/if}
 
 			<div class="dropdown dropdown-end">
