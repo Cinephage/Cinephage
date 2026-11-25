@@ -104,6 +104,8 @@ function placeholderFor(facetId: string): string | undefined {
 			return m.common_all();
 		case 'certification':
 			return m.discover_filter_anyRating();
+		case 'seasonal':
+			return m.common_none();
 		default:
 			return undefined;
 	}

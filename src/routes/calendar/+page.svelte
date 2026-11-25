@@ -368,13 +368,21 @@
 				{/if}
 
 				<div class="flex flex-1 items-center justify-center gap-1 sm:flex-none sm:gap-2">
-					<button class="btn btn-circle btn-ghost btn-xs sm:btn-sm" onclick={() => goToMonth(-1)}>
+					<button
+						class="btn btn-circle btn-ghost btn-xs sm:btn-sm"
+						onclick={() => goToMonth(-1)}
+						aria-label={m.calendar_previousMonth()}
+					>
 						<ChevronLeft class="h-4 w-4 sm:h-5 sm:w-5" />
 					</button>
 					<span class="w-36 text-center text-base font-semibold sm:w-auto sm:min-w-45 sm:text-lg"
 						>{monthLabel}</span
 					>
-					<button class="btn btn-circle btn-ghost btn-xs sm:btn-sm" onclick={() => goToMonth(1)}>
+					<button
+						class="btn btn-circle btn-ghost btn-xs sm:btn-sm"
+						onclick={() => goToMonth(1)}
+						aria-label={m.calendar_nextMonth()}
+					>
 						<ChevronRight class="h-4 w-4 sm:h-5 sm:w-5" />
 					</button>
 				</div>

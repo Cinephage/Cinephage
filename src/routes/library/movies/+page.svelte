@@ -648,6 +648,11 @@
 			{#if isAdminUser}
 				<button
 					class="btn gap-1.5 btn-ghost btn-xs sm:btn-sm {selection.mode ? 'btn-primary' : ''}"
+					aria-label={!selection.mode
+						? m.library_selectToggle_start()
+						: !selection.allSelected(filteredMovies)
+							? m.library_selectToggle_selectAll()
+							: m.library_selectToggle_done()}
 					onclick={() => selection.cycle(filteredMovies)}
 				>
 					{#if !selection.mode}

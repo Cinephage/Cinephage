@@ -353,7 +353,7 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 				minValue={filters.yearMin}
 				maxValue={filters.yearMax}
 				minPlaceholder="1900"
-				maxPlaceholder="2025"
+				maxPlaceholder={String(new Date().getFullYear())}
 				minMin={1900}
 				minMax={2030}
 				maxMin={1900}
