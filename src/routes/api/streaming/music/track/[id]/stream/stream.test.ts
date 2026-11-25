@@ -95,12 +95,18 @@ describe('GET /api/streaming/music/track/{id}/stream', () => {
 		expect(response.headers.get('content-range')).toBe('bytes 100-200/1000');
 	});
 
-	it('queues the rest of the album once a provider track resolves', async () => {
+	it('queues the rest of the album from the track that is playing', async () => {
 		fetchMock.mockResolvedValue(upstream(206, { 'content-type': 'audio/mp4' }));
 
 		await callHandlerRaw(GET, 'GET', undefined, { params: { id: 't-1' }, auth: 'user' });
 
-		expect(warmer.warmAlbum).toHaveBeenCalledWith('al-1');
+		// The track being played is the order the rest of the album warm in, and
+		// it takes the urgent lane so a bulk grab cannot hold the listener's next
+		// skip behind a thousand tracks.
+		expect(warmer.warmAlbum).toHaveBeenCalledWith('al-1', {
+			afterTrackId: 't-1',
+			urgent: true
+		});
 	});
 
 	it('refuses an unauthenticated request without touching the provider', async () => {

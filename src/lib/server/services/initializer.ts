@@ -78,6 +78,14 @@ async function initializeServices(): Promise<void> {
 				logger.warn('ffprobe not found. Library refresh will be slower and less accurate.');
 			}
 
+			// A restart loses the warm queue but not the resolved URLs; re-queue the
+			// album that was playing so a deploy does not put the listener back on a
+			// cold first skip.
+			{
+				const { rearmRecentlyPlayed } = await import('#lib/server/music/playback/warmer.js');
+				rearmRecentlyPlayed();
+			}
+
 			await qualityFilter.seedDefaultScoringProfiles();
 
 			const profiles = await qualityFilter.getAllProfiles();

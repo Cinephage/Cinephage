@@ -113,8 +113,9 @@ export const GET: RequestHandler = async (event) => {
 	}
 
 	// Playing one track of a streaming album is the signal to get the rest
-	// ready: the next skip should not pay the resolver's seconds again.
-	warmAlbum(outcome.albumId);
+	// ready, starting with what comes after it: the next skip should not pay the
+	// resolver's seconds again.
+	warmAlbum(outcome.albumId, { afterTrackId: event.params.id, urgent: true });
 
 	const upstream = upstreamRequest(event.request);
 	let response = await fetchUpstream(outcome.stream, upstream);
