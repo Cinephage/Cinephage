@@ -2,6 +2,7 @@
 	import * as m from '#lib/paraglide/messages.js';
 	import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 	import type { SmartListFilters } from '#lib/server/db/schema.js';
+	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { TMDB } from '#lib/config/constants.js';
 	import { getSmartListHelpers } from '#lib/api/smartlists.js';
@@ -140,9 +141,12 @@
 		loadCertifications();
 	});
 
-	$effect(() => {
-		loadLanguages();
-		loadCountries();
+	// Languages and countries don't depend on the media type or region, so load
+	// them once. As an effect, each loader's `length` check made it track both
+	// lists: the first response re-ran it and re-sent the other, still pending.
+	onMount(() => {
+		void loadLanguages();
+		void loadCountries();
 	});
 
 	$effect(() => {

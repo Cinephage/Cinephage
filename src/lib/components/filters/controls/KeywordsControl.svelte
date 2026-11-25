@@ -13,16 +13,24 @@
 	// A keyword that arrives by URL — a shared link, a seasonal preset — has no
 	// label until something names it, so the chip would read as a bare id.
 	const names = new SvelteMap<number, string>();
+	// Ids already looked up or in flight. Deliberately not reactive: checking
+	// `names` here would make the effect re-run on every resolved lookup and
+	// fetch again each id that is still pending.
+	// eslint-disable-next-line svelte/prefer-svelte-reactivity -- must not be tracked
+	const requested = new Set<number>();
 	$effect(() => {
 		for (const id of [...include, ...exclude]) {
 			const numeric = Number(id);
-			if (!Number.isFinite(numeric) || names.has(numeric)) continue;
+			if (!Number.isFinite(numeric) || requested.has(numeric)) continue;
+			requested.add(numeric);
 			void getKeyword(numeric)
 				.then((keyword) => {
 					if (keyword) names.set(keyword.id, keyword.name);
 				})
-				// A failed lookup costs a label, not the filter.
-				.catch(() => {});
+				// A failed lookup costs a label, not the filter; a later change may retry.
+				.catch(() => {
+					requested.delete(numeric);
+				});
 		}
 	});
 
@@ -49,6 +57,7 @@
 
 	function add(keyword: { id: number; name: string }, excluded: boolean) {
 		names.set(keyword.id, keyword.name);
+		requested.add(keyword.id);
 		const id = String(keyword.id);
 		commit(
 			excluded ? include : [...include.filter((entry) => entry !== id), id],

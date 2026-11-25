@@ -748,7 +748,19 @@
 		}
 	}
 
-	async function loadHistorySettings(): Promise<void> {
+	// In-flight request, so a quick History -> other tab -> History switch reuses
+	// it instead of sending a second GET. Not reactive on purpose.
+	let settingsRequest: Promise<void> | null = null;
+
+	function loadHistorySettings(): Promise<void> {
+		if (settingsRequest) return settingsRequest;
+		settingsRequest = fetchHistorySettings().finally(() => {
+			settingsRequest = null;
+		});
+		return settingsRequest;
+	}
+
+	async function fetchHistorySettings(): Promise<void> {
 		settingsLoading = true;
 		try {
 			let payload: { success?: boolean; retentionDays?: number; error?: string };
@@ -781,9 +793,7 @@
 	}
 
 	onMount(() => {
-		if (activityTab === 'history') {
-			void loadHistorySettings();
-		}
+		// History settings are loaded by the effect below, also on first load.
 		void refreshUnmatchedCount();
 
 		const handleFocus = () => {
