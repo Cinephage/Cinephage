@@ -114,7 +114,9 @@
 		</div>
 
 		<!-- Right: Quick Actions -->
-		<div class="ml-auto flex shrink-0 items-center gap-1.5">
+		<!-- On phones the header holds up to six icon buttons next to the title: tighter padding
+		     and gaps keep the title readable (it truncated to "Mo…" with the select-mode Done button). -->
+		<div class="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1.5 max-sm:[&_.btn]:px-1.5">
 			{#if actions}{@render actions()}{/if}
 
 			<!-- View Toggle -->
