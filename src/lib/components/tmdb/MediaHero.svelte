@@ -40,6 +40,7 @@
 	import { getSmartReleaseLine } from '#lib/utils/smartReleaseLine.js';
 	import { formatReleaseLine } from '#lib/utils/releaseLineText.js';
 	import { releaseTypeLabel } from '#lib/utils/releaseTypeLabel.js';
+	import { dismissable } from '#lib/actions/dismissable.js';
 
 	// Extended type that includes library status (added by enrichWithLibraryStatus)
 	type MediaDetailsWithLibraryStatus = (MovieDetails | TVShowDetails) & {
@@ -929,6 +930,11 @@
 		aria-label={activeVideo.name}
 		tabindex="-1"
 		class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4"
+		use:dismissable={{
+			onDismiss: () => (activeVideo = null),
+			lockScroll: true,
+			trapFocus: true
+		}}
 		onclick={() => (activeVideo = null)}
 		onkeydown={(e) => e.key === 'Escape' && (activeVideo = null)}
 	>
@@ -941,6 +947,7 @@
 				<button
 					class="btn btn-circle btn-ghost text-white/70 btn-sm hover:text-white"
 					onclick={() => (activeVideo = null)}
+					aria-label={m.action_close()}
 				>
 					<X size={18} />
 				</button>
@@ -966,12 +973,18 @@
 		aria-label="Backdrop image"
 		tabindex="-1"
 		class="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
+		use:dismissable={{
+			onDismiss: () => (activeBackdrop = null),
+			lockScroll: true,
+			trapFocus: true
+		}}
 		onclick={() => (activeBackdrop = null)}
 		onkeydown={(e) => e.key === 'Escape' && (activeBackdrop = null)}
 	>
 		<button
 			class="btn absolute top-4 right-4 btn-circle btn-ghost text-white/70 btn-sm hover:text-white"
 			onclick={() => (activeBackdrop = null)}
+			aria-label={m.action_close()}
 		>
 			<X size={18} />
 		</button>

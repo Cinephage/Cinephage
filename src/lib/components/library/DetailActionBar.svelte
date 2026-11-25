@@ -3,6 +3,7 @@
 	import * as m from '#lib/paraglide/messages.js';
 	import { resolvePath } from '#lib/utils/routing.js';
 	import type { DetailAction } from './detail-actions.js';
+	import { blurOnEscape } from '#lib/actions/dismissable.js';
 
 	interface Props {
 		backHref: string;
@@ -80,7 +81,9 @@
 		{/each}
 
 		{#if menu.length > 0}
-			<div class="dropdown dropdown-end hidden sm:block">
+			<!-- Catches Escape from the trigger or the menu; both are focusable. -->
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div class="dropdown dropdown-end hidden sm:block" onkeydown={blurOnEscape}>
 				<button tabindex="0" class="btn btn-ghost btn-sm">
 					<MoreHorizontal size={18} />
 				</button>

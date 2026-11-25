@@ -9,6 +9,7 @@ const FOCUSABLE_SELECTORS = [
 	'textarea:not([disabled]):not([tabindex="-1"])',
 	'[tabindex]:not([tabindex="-1"])',
 	'a[href]:not([tabindex="-1"])',
+	'iframe:not([tabindex="-1"])',
 	'[contenteditable="true"]:not([tabindex="-1"])'
 ].join(', ');
 

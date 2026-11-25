@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { MoreHorizontal } from '@lucide/svelte';
 	import type { DetailAction } from './detail-actions.js';
+	import { blurOnEscape } from '#lib/actions/dismissable.js';
 
 	interface Props {
 		actions?: DetailAction[];
@@ -47,7 +48,9 @@
 			{/each}
 
 			{#if menu.length > 0}
-				<div class="dropdown dropdown-end dropdown-top flex flex-1">
+				<!-- Catches Escape from the trigger or the menu; both are focusable. -->
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<div class="dropdown dropdown-end dropdown-top flex flex-1" onkeydown={blurOnEscape}>
 					<button
 						tabindex="0"
 						class="flex flex-1 flex-col items-center gap-1 py-3 text-error/60 transition-colors active:text-error"

@@ -16,6 +16,8 @@
 		type RequestNotification
 	} from '#lib/api/requests.js';
 	import { formatDisplayDateShort } from '#lib/utils/format.js';
+	import { afterNavigate } from '$app/navigation';
+	import { dismissable } from '#lib/actions/dismissable.js';
 
 	interface Props {
 		/**
@@ -109,6 +111,12 @@
 		if (open) void refresh();
 	}
 
+	function close() {
+		open = false;
+	}
+
+	afterNavigate(close);
+
 	$effect(() => {
 		if (!enabled) return;
 		void refresh();
@@ -146,6 +154,7 @@
 
 	{#if open}
 		<div
+			use:dismissable={{ onDismiss: close, outside: true }}
 			class="absolute top-11 right-0 z-[60] w-85 overflow-hidden rounded-xl border border-base-content/10 bg-base-100 shadow-xl"
 		>
 			<div class="flex items-center justify-between border-b border-base-content/10 px-4 py-2.5">

@@ -1,0 +1,181 @@
+// @vitest-environment jsdom
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { dismissable, blurOnEscape } from './dismissable.js';
+
+const mounted: Array<{ destroy: () => void }> = [];
+
+function mount(options: Parameters<typeof dismissable>[1]) {
+	const node = document.createElement('div');
+	node.innerHTML = '<button type="button">inside</button>';
+	document.body.appendChild(node);
+	const action = dismissable(node, options);
+	mounted.push(action);
+	return { node, action };
+}
+
+function escape(target: EventTarget = document.body) {
+	const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+	target.dispatchEvent(event);
+	return event;
+}
+
+afterEach(() => {
+	while (mounted.length) mounted.pop()?.destroy();
+	document.body.innerHTML = '';
+	document.documentElement.style.overflow = '';
+	vi.useRealTimers();
+});
+
+describe('dismissable', () => {
+	it('closes on Escape wherever focus is', () => {
+		const onDismiss = vi.fn();
+		mount({ onDismiss });
+		escape();
+		expect(onDismiss).toHaveBeenCalledOnce();
+	});
+
+	it('ignores Escape when escape is off', () => {
+		const onDismiss = vi.fn();
+		mount({ onDismiss, escape: false });
+		escape();
+		expect(onDismiss).not.toHaveBeenCalled();
+	});
+
+	it('closes only the topmost overlay on Escape', () => {
+		const lower = vi.fn();
+		const upper = vi.fn();
+		mount({ onDismiss: lower });
+		const top = mount({ onDismiss: upper });
+		escape();
+		expect(upper).toHaveBeenCalledOnce();
+		expect(lower).not.toHaveBeenCalled();
+
+		top.action.destroy();
+		escape();
+		expect(lower).toHaveBeenCalledOnce();
+	});
+
+	it('leaves Escape to a modal dialog stacked on top', () => {
+		const onDismiss = vi.fn();
+		mount({ onDismiss });
+		const modal = document.createElement('div');
+		modal.setAttribute('aria-modal', 'true');
+		modal.innerHTML = '<input />';
+		document.body.appendChild(modal);
+		escape(modal.querySelector('input')!);
+		expect(onDismiss).not.toHaveBeenCalled();
+	});
+
+	it('closes on a press outside and swallows the click that follows', () => {
+		const onDismiss = vi.fn();
+		mount({ onDismiss, outside: true });
+		const link = document.createElement('a');
+		link.href = '#poster';
+		const onLinkClick = vi.fn();
+		link.addEventListener('click', onLinkClick);
+		document.body.appendChild(link);
+
+		link.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+		expect(onDismiss).toHaveBeenCalledOnce();
+
+		const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+		link.dispatchEvent(click);
+		expect(onLinkClick).not.toHaveBeenCalled();
+		expect(click.defaultPrevented).toBe(true);
+
+		// Only that one click: the next one goes through.
+		link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+		expect(onLinkClick).toHaveBeenCalledOnce();
+	});
+
+	it('stops swallowing when no click follows the press', () => {
+		vi.useFakeTimers();
+		mount({ onDismiss: vi.fn(), outside: true });
+		const target = document.createElement('button');
+		const onClick = vi.fn();
+		target.addEventListener('click', onClick);
+		document.body.appendChild(target);
+
+		target.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+		vi.advanceTimersByTime(1000);
+		target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+		expect(onClick).toHaveBeenCalledOnce();
+	});
+
+	it('does not close on a press inside', () => {
+		const onDismiss = vi.fn();
+		const { node } = mount({ onDismiss, outside: true });
+		node.querySelector('button')!.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+		expect(onDismiss).not.toHaveBeenCalled();
+	});
+
+	it('ignores outside presses unless asked', () => {
+		const onDismiss = vi.fn();
+		mount({ onDismiss });
+		document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+		expect(onDismiss).not.toHaveBeenCalled();
+	});
+
+	it('locks page scroll while open and restores it after', () => {
+		const { action } = mount({ onDismiss: vi.fn(), lockScroll: true });
+		expect(document.documentElement.style.overflow).toBe('hidden');
+		action.destroy();
+		expect(document.documentElement.style.overflow).toBe('');
+	});
+
+	it('moves focus inside when trapping focus and gives it back on close', async () => {
+		// jsdom has no layout, so every element reports a null offsetParent.
+		const offsetParent = vi
+			.spyOn(HTMLElement.prototype, 'offsetParent', 'get')
+			.mockImplementation(function (this: HTMLElement) {
+				return this.parentElement;
+			});
+		const opener = document.createElement('button');
+		document.body.appendChild(opener);
+		opener.focus();
+
+		const { node, action } = mount({ onDismiss: vi.fn(), trapFocus: true });
+		const inside = node.querySelector('button')!;
+		await vi.waitFor(() => expect(document.activeElement).toBe(inside));
+
+		action.destroy();
+		expect(document.activeElement).toBe(opener);
+		offsetParent.mockRestore();
+	});
+
+	it('uses the latest options after an update', () => {
+		const first = vi.fn();
+		const second = vi.fn();
+		const { action } = mount({ onDismiss: first });
+		action.update({ onDismiss: second });
+		escape();
+		expect(first).not.toHaveBeenCalled();
+		expect(second).toHaveBeenCalledOnce();
+	});
+});
+
+describe('blurOnEscape', () => {
+	it('blurs the focused element inside the dropdown', () => {
+		const dropdown = document.createElement('div');
+		dropdown.innerHTML = '<button type="button">More</button>';
+		document.body.appendChild(dropdown);
+		dropdown.addEventListener('keydown', blurOnEscape);
+		const trigger = dropdown.querySelector('button')!;
+		trigger.focus();
+		expect(document.activeElement).toBe(trigger);
+
+		escape(trigger);
+		expect(document.activeElement).not.toBe(trigger);
+	});
+
+	it('ignores other keys', () => {
+		const dropdown = document.createElement('div');
+		dropdown.innerHTML = '<button type="button">More</button>';
+		document.body.appendChild(dropdown);
+		dropdown.addEventListener('keydown', blurOnEscape);
+		const trigger = dropdown.querySelector('button')!;
+		trigger.focus();
+		trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+		expect(document.activeElement).toBe(trigger);
+	});
+});
