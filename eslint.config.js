@@ -28,7 +28,9 @@ export default defineConfig(
 			// Build artifacts
 			'.svelte-kit/**',
 			// Generated language data
-			'src/lib/server/languages/iso-data.generated.ts'
+			'src/lib/server/languages/iso-data.generated.ts',
+			// Paraglide JS compiler output (regenerated on every build)
+			'src/lib/paraglide/**'
 		]
 	},
 	{
