@@ -182,7 +182,11 @@
 									</div>
 								</div>
 
-								<div class="mt-3 grid {library.mediaType === 'music' ? 'grid-cols-1' : 'grid-cols-2'} gap-2 border-t border-base-300 pt-3">
+								<div
+									class="mt-3 grid {library.mediaType === 'music'
+										? 'grid-cols-1'
+										: 'grid-cols-2'} gap-2 border-t border-base-300 pt-3"
+								>
 									<div
 										class="flex flex-col items-center gap-1 rounded-lg"
 										title={m.settings_general_statusTooltip({

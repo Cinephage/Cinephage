@@ -50,11 +50,7 @@ class RenamePreviewCacheStore {
 		return c ? new Set(c.staleIds) : new Set();
 	}
 
-	set(
-		mediaType: KindId,
-		result: RenamePreviewResult,
-		fingerprint: string | null = null
-	): void {
+	set(mediaType: KindId, result: RenamePreviewResult, fingerprint: string | null = null): void {
 		const entry: MediaTypeCache = { result, staleIds: new Set(), fullyStale: false, fingerprint };
 		if (mediaType === 'movie') this.movie = entry;
 		else this.tv = entry;
@@ -82,11 +78,7 @@ class RenamePreviewCacheStore {
 	 * Patch a partially-stale cache: remove stale items, merge fresh ones, re-run
 	 * collision detection over the combined willChange set.
 	 */
-	applyPatch(
-		mediaType: KindId,
-		staleIds: Set<string>,
-		freshResult: RenamePreviewResult
-	): void {
+	applyPatch(mediaType: KindId, staleIds: Set<string>, freshResult: RenamePreviewResult): void {
 		const c = mediaType === 'movie' ? this.movie : this.tv;
 		if (!c) return;
 

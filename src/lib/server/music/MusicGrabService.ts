@@ -82,7 +82,10 @@ export class MusicGrabService {
 
 		const chosen =
 			options.candidate ??
-			this.choose((await musicSearchService.searchForAlbum(albumId)).candidates, options.releaseGuid);
+			this.choose(
+				(await musicSearchService.searchForAlbum(albumId)).candidates,
+				options.releaseGuid
+			);
 		if (!chosen) {
 			throw new ValidationError('No release passed the quality profile for this album');
 		}
@@ -143,7 +146,9 @@ export class MusicGrabService {
 				paused: false
 			});
 			if (!downloadId) {
-				throw new ValidationError('The download client did not return a download id; the release cannot be tracked');
+				throw new ValidationError(
+					'The download client did not return a download id; the release cannot be tracked'
+				);
 			}
 			const queueItem = await downloadMonitor.addToQueue({
 				downloadClientId: clientConfig.id,

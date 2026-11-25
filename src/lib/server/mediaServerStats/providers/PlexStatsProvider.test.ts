@@ -709,7 +709,6 @@ describe('PlexStatsProvider episode series-id resolution', () => {
 	});
 });
 
-
 describe('PlexStatsProvider music', () => {
 	let mockFetch: ReturnType<typeof vi.fn>;
 
@@ -723,7 +722,9 @@ describe('PlexStatsProvider music', () => {
 	});
 
 	it('walks an artist section and keeps the track identity', async () => {
-		mockFetch.mockResolvedValueOnce(mockSectionsResponse([{ key: '3', type: 'artist', title: 'Music' }]));
+		mockFetch.mockResolvedValueOnce(
+			mockSectionsResponse([{ key: '3', type: 'artist', title: 'Music' }])
+		);
 		mockFetch.mockResolvedValueOnce(
 			mockFetchResponse({
 				MediaContainer: {

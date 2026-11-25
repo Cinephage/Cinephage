@@ -1,7 +1,6 @@
 <script lang="ts">
 	import {
 		CheckCircle2,
-		XCircle,
 		Eye,
 		EyeOff,
 		Trash2,
@@ -102,7 +101,7 @@
 					{m.status_downloading()}
 				</span>
 			{:else if row.state}
-				<span class="badge gap-1.5 badge-sm badge-ghost">{row.state.label}</span>
+				<span class="badge gap-1.5 badge-ghost badge-sm">{row.state.label}</span>
 			{/if}
 			{#if row.sizeLabel}
 				<span class="badge gap-1.5 badge-sm badge-info">{row.sizeLabel}</span>
@@ -112,7 +111,7 @@
 			<div class="flex shrink-0 items-center gap-1" role="toolbar">
 				{#if onMonitorToggle}
 					<button
-						class="btn px-2 btn-ghost btn-xs"
+						class="btn btn-ghost px-2 btn-xs"
 						disabled={isLoading}
 						onclick={() => onMonitorToggle(row.id, row.monitored)}
 						aria-label={row.monitored ? m.common_unmonitored() : m.common_monitored()}
@@ -126,7 +125,7 @@
 				{/if}
 				{#if onAutoGrab}
 					<button
-						class="btn px-2 btn-ghost btn-xs"
+						class="btn btn-ghost px-2 btn-xs"
 						disabled={isLoading}
 						onclick={() => onAutoGrab(row.id)}
 						aria-label={m.library_libraryMediaTable_autoGrabButton()}
@@ -136,7 +135,7 @@
 				{/if}
 				{#if onManualGrab}
 					<button
-						class="btn px-2 btn-ghost btn-xs"
+						class="btn btn-ghost px-2 btn-xs"
 						disabled={isLoading}
 						onclick={() => onManualGrab(row.id)}
 						aria-label={m.library_libraryMediaTable_manualGrabButton()}
@@ -146,7 +145,7 @@
 				{/if}
 				{#if onDelete}
 					<button
-						class="btn px-2 btn-ghost btn-xs text-error"
+						class="btn btn-ghost px-2 text-error btn-xs"
 						disabled={isLoading}
 						onclick={() => onDelete(row.id)}
 						aria-label={m.action_delete()}

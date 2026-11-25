@@ -9,7 +9,15 @@
 
 import { inArray, eq } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
-import { albums, artists, episodes, movies, requests, series, user } from '#lib/server/db/schema.js';
+import {
+	albums,
+	artists,
+	episodes,
+	movies,
+	requests,
+	series,
+	user
+} from '#lib/server/db/schema.js';
 import type { RequestNotificationEvent } from '#lib/server/requests/RequestNotificationService.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { getNotificationDeliveryService } from './delivery.js';

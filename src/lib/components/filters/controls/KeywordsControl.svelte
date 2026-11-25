@@ -4,10 +4,8 @@
 	import { getKeyword } from '#lib/api/index.js';
 	import type { FacetValue, FacetView } from '#lib/filters/types.js';
 
-	let {
-		facet,
-		onchange
-	}: { facet: FacetView; onchange: (value: FacetValue | null) => void } = $props();
+	let { facet, onchange }: { facet: FacetView; onchange: (value: FacetValue | null) => void } =
+		$props();
 
 	const include = $derived(facet.value?.kind === 'keywords' ? facet.value.include : []);
 	const exclude = $derived(facet.value?.kind === 'keywords' ? facet.value.exclude : []);
@@ -58,7 +56,7 @@
 		);
 	}
 
-	function remove(keywordId: number, excluded: boolean) {
+	function remove(keywordId: number) {
 		const id = String(keywordId);
 		commit(
 			include.filter((entry) => entry !== id),
@@ -74,5 +72,10 @@
 			<span class="badge badge-sm badge-primary">{selectedKeywords.length}</span>
 		{/if}
 	</span>
-	<KeywordSelector showLabel={false} {selectedKeywords} onAddKeyword={add} onRemoveKeyword={remove} />
+	<KeywordSelector
+		showLabel={false}
+		{selectedKeywords}
+		onAddKeyword={add}
+		onRemoveKeyword={remove}
+	/>
 </div>

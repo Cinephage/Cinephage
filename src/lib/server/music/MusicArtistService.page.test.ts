@@ -152,9 +152,9 @@ describe('MusicArtistService.listArtistsPage', () => {
 		seedAlbum({ artistId: 'artist-alpha', title: 'A' });
 		seedAlbum({ artistId: 'artist-beta', title: 'B' });
 
-		expect(
-			musicArtistService.listArtistsPage({ q: 'alp' }).rows.map((row) => row.name)
-		).toEqual(['Alpha']);
+		expect(musicArtistService.listArtistsPage({ q: 'alp' }).rows.map((row) => row.name)).toEqual([
+			'Alpha'
+		]);
 		expect(musicArtistService.listArtistsPage({ q: 'delta' }).total).toBe(0);
 	});
 
@@ -178,9 +178,7 @@ describe('MusicArtistService.listArtistsPage', () => {
 		seedAlbum({ artistId: 'artist-gamma', title: 'G', libraryId: 'lib-music' });
 
 		expect(
-			musicArtistService
-				.listArtistsPage({ libraryId: 'lib-music-b' })
-				.rows.map((row) => row.name)
+			musicArtistService.listArtistsPage({ libraryId: 'lib-music-b' }).rows.map((row) => row.name)
 		).toEqual(['Beta']);
 
 		// Alpha inherits music-b from the artist, Beta from the library;

@@ -1,11 +1,10 @@
 <script lang="ts">
 	import MultiSelectDropdown from '../MultiSelectDropdown.svelte';
 	import type { FacetValue, FacetView } from '#lib/filters/types.js';
+	import { SvelteSet } from 'svelte/reactivity';
 
-	let {
-		facet,
-		onchange
-	}: { facet: FacetView; onchange: (value: FacetValue | null) => void } = $props();
+	let { facet, onchange }: { facet: FacetView; onchange: (value: FacetValue | null) => void } =
+		$props();
 
 	const selected = $derived.by(() => {
 		const value = facet.value;
@@ -25,7 +24,7 @@
 	/** Multi-select stacks; single-select (and a preset) toggles off when re-picked. */
 	function toggle(id: string) {
 		if (facet.control === 'multi') {
-			const next = new Set(selected);
+			const next = new SvelteSet(selected);
 			if (next.has(id)) next.delete(id);
 			else next.add(id);
 			onchange(next.size > 0 ? { kind: 'ids', ids: [...next] } : null);

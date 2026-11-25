@@ -92,7 +92,10 @@ export const POST: RequestHandler = async (event) => {
 	try {
 		const body = await parseBody(event.request, createRequestSchema);
 		const created = await getRequestService().create(requester, body);
-		return Response.json({ success: true, request: toRequestDto(created, new Map()) }, { status: 201 });
+		return Response.json(
+			{ success: true, request: toRequestDto(created, new Map()) },
+			{ status: 201 }
+		);
 	} catch (error) {
 		return toRequestErrorResponse(error);
 	}

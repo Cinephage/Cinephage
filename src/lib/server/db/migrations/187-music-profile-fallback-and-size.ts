@@ -31,14 +31,10 @@ export const migration_v187: MigrationDefinition = {
 				.run();
 		}
 		if (!hasColumn(sqlite, 'scoring_profiles', 'music_min_size_mb')) {
-			sqlite
-				.prepare(`ALTER TABLE "scoring_profiles" ADD COLUMN "music_min_size_mb" real`)
-				.run();
+			sqlite.prepare(`ALTER TABLE "scoring_profiles" ADD COLUMN "music_min_size_mb" real`).run();
 		}
 		if (!hasColumn(sqlite, 'scoring_profiles', 'music_max_size_mb')) {
-			sqlite
-				.prepare(`ALTER TABLE "scoring_profiles" ADD COLUMN "music_max_size_mb" real`)
-				.run();
+			sqlite.prepare(`ALTER TABLE "scoring_profiles" ADD COLUMN "music_max_size_mb" real`).run();
 		}
 
 		sqlite

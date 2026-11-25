@@ -60,12 +60,7 @@
 			{#each providerLinkRows as row (row.label)}
 				<FactRow label={row.label}>
 					{#if row.resolved}
-						<a
-							href={row.href}
-							target="_blank"
-							rel="noopener noreferrer"
-							class="link link-primary"
-						>
+						<a href={row.href} target="_blank" rel="noopener noreferrer" class="link link-primary">
 							{row.value}
 						</a>
 					{:else}

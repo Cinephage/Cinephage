@@ -2,7 +2,17 @@
 	import * as m from '#lib/paraglide/messages.js';
 	import type { PageData } from './$types';
 	import { onMount } from 'svelte';
-	import { Loader2, Check, X, RotateCcw, BadgeCheck, Disc3, Inbox, Clock, Trash2 } from '@lucide/svelte';
+	import {
+		Loader2,
+		Check,
+		X,
+		RotateCcw,
+		BadgeCheck,
+		Disc3,
+		Inbox,
+		Clock,
+		Trash2
+	} from '@lucide/svelte';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { formatDisplayDateShort } from '#lib/utils/format.js';

@@ -42,7 +42,10 @@ export interface MusicProfileInput {
 	maxSizeMb?: number | null;
 }
 
-function toPublic(row: typeof scoringProfiles.$inferSelect, defaultId: string | null): MusicProfile {
+function toPublic(
+	row: typeof scoringProfiles.$inferSelect,
+	defaultId: string | null
+): MusicProfile {
 	return {
 		id: row.id,
 		name: row.name,
@@ -62,19 +65,17 @@ function toQualityProfile(row: MusicProfile): MusicQualityProfile {
 	return {
 		id: row.id,
 		name: row.name,
-		tiers: row.tiers.map(
-			(tier): MusicTier => ({
-				kind: tier.kind,
-				label: tier.label,
-				formats: tier.formats as MusicFormat[] | undefined,
-				// `kind` is what the row stores; the grader needs the derived
-				// lossless constraint too, or a no-formats lossless rung matches
-				// an MP3 as rung 0.
-				lossless: tier.kind === 'lossless' ? true : tier.kind === 'lossy' ? false : undefined,
-				minBitrateKbps: tier.minBitrateKbps,
-				minBitDepth: tier.minBitDepth
-			})
-		),
+		tiers: row.tiers.map((tier): MusicTier => ({
+			kind: tier.kind,
+			label: tier.label,
+			formats: tier.formats as MusicFormat[] | undefined,
+			// `kind` is what the row stores; the grader needs the derived
+			// lossless constraint too, or a no-formats lossless rung matches
+			// an MP3 as rung 0.
+			lossless: tier.kind === 'lossless' ? true : tier.kind === 'lossy' ? false : undefined,
+			minBitrateKbps: tier.minBitrateKbps,
+			minBitDepth: tier.minBitDepth
+		})),
 		allowFallback: row.allowFallback,
 		formatScores: DEFAULT_MUSIC_PROFILE.formatScores,
 		minSizeMb: row.minSizeMb,
@@ -306,7 +307,10 @@ export class MusicProfileService {
 		}
 
 		return db.transaction((tx) => {
-			tx.update(albums).set({ qualityProfileId: null }).where(eq(albums.qualityProfileId, id)).run();
+			tx.update(albums)
+				.set({ qualityProfileId: null })
+				.where(eq(albums.qualityProfileId, id))
+				.run();
 			tx.update(artists)
 				.set({ qualityProfileId: null })
 				.where(eq(artists.qualityProfileId, id))

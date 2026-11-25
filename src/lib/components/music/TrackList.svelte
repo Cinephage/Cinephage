@@ -1,7 +1,17 @@
 <script lang="ts">
-	import { ChevronDown, CircleCheck, CircleDashed, Clock, LoaderCircle, Radio, Search, Zap } from '@lucide/svelte';
+	import {
+		ChevronDown,
+		CircleCheck,
+		CircleDashed,
+		Clock,
+		LoaderCircle,
+		Radio,
+		Search,
+		Zap
+	} from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import { trackAvailability, type TrackListTrack } from './music-card.js';
+	import { SvelteMap } from 'svelte/reactivity';
 
 	type Props = {
 		tracks: TrackListTrack[];
@@ -27,7 +37,7 @@
 	}: Props = $props();
 
 	const discs = $derived.by(() => {
-		const groups = new Map<number, TrackListTrack[]>();
+		const groups = new SvelteMap<number, TrackListTrack[]>();
 		for (const track of tracks) {
 			const disc = track.discNumber ?? 1;
 			groups.set(disc, [...(groups.get(disc) ?? []), track]);
@@ -58,11 +68,17 @@
 		</p>
 		{#if showFileState}
 			<p class="flex items-center gap-3 text-xs text-base-content/45">
-				<span class="flex items-center gap-1"><CircleCheck class="h-3.5 w-3.5 text-success" />{m.common_downloaded()}</span>
+				<span class="flex items-center gap-1"
+					><CircleCheck class="h-3.5 w-3.5 text-success" />{m.common_downloaded()}</span
+				>
 				{#if tracks.some((track) => trackAvailability(track) === 'streaming')}
-					<span class="flex items-center gap-1"><Radio class="h-3.5 w-3.5 text-info" />{m.library_fileCard_streaming()}</span>
+					<span class="flex items-center gap-1"
+						><Radio class="h-3.5 w-3.5 text-info" />{m.library_fileCard_streaming()}</span
+					>
 				{/if}
-				<span class="flex items-center gap-1"><CircleDashed class="h-3.5 w-3.5" />{m.common_missing()}</span>
+				<span class="flex items-center gap-1"
+					><CircleDashed class="h-3.5 w-3.5" />{m.common_missing()}</span
+				>
 			</p>
 		{/if}
 	</div>
@@ -71,7 +87,7 @@
 		{#if multiDisc}
 			<div class="flex items-center gap-2 bg-base-200/60 px-4 py-1.5">
 				<Clock class="h-3 w-3 text-base-content/40" />
-				<span class="text-[11px] font-semibold tracking-wide uppercase text-base-content/50">
+				<span class="text-[11px] font-semibold tracking-wide text-base-content/50 uppercase">
 					{m.music_disc({ number: disc })}
 				</span>
 			</div>
@@ -106,7 +122,7 @@
 							{#if showFileState}
 								{@const availability = trackAvailability(track)}
 								<span
-									class="mt-1 inline-flex items-center gap-1 badge badge-sm border-none {availability ===
+									class="mt-1 badge inline-flex items-center gap-1 border-none badge-sm {availability ===
 									'downloaded'
 										? 'bg-success/15 text-success'
 										: availability === 'streaming'

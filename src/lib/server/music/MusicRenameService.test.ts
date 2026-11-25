@@ -5,7 +5,12 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as schema from '#lib/server/db/schema.js';
-import { createTestDb, destroyTestDb, clearTestDb, type TestDatabase } from '../../../test/db-helper.js';
+import {
+	createTestDb,
+	destroyTestDb,
+	clearTestDb,
+	type TestDatabase
+} from '../../../test/db-helper.js';
 import { musicRenameService, musicTrackFileName } from './MusicRenameService.js';
 
 const testDb: TestDatabase = createTestDb();
@@ -79,9 +84,9 @@ afterAll(() => {
 
 describe('musicTrackFileName', () => {
 	it('pads the position and keeps the extension', () => {
-		expect(musicTrackFileName({ discNumber: 1, trackNumber: 5, title: 'Crescendolls' }, '.flac')).toBe(
-			'05 - Crescendolls.flac'
-		);
+		expect(
+			musicTrackFileName({ discNumber: 1, trackNumber: 5, title: 'Crescendolls' }, '.flac')
+		).toBe('05 - Crescendolls.flac');
 	});
 
 	it('prefixes later discs so two disc ones cannot collide', () => {

@@ -104,9 +104,7 @@ export function yearRangeParams(minParam: string, maxParam: string): FacetCodec 
 			const max = params.get(maxParam)?.slice(0, 4) ?? '';
 			const boundedMin = YEAR.test(min) ? min : '';
 			const boundedMax = YEAR.test(max) ? max : '';
-			return boundedMin || boundedMax
-				? { kind: 'range', min: boundedMin, max: boundedMax }
-				: null;
+			return boundedMin || boundedMax ? { kind: 'range', min: boundedMin, max: boundedMax } : null;
 		},
 		write(params, value) {
 			params.delete(minParam);

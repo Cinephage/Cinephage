@@ -127,7 +127,7 @@ export const spotifySource: PlaylistSource = {
 				description: null,
 				owner: entity.subtitle?.trim() || null,
 				coverUrl: entity.coverArt?.sources?.[0]?.url ?? null,
-				trackCount: declared,
+				trackCount: declared
 				// The embed publishes 100 tracks; a longer playlist is imported
 				// as its first page and the UI says so.
 			},

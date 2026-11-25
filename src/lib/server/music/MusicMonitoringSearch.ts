@@ -136,11 +136,7 @@ export async function searchMissingMusic(
 			.values({
 				taskType: 'missing',
 				mediaItemId: row.mediaItemId,
-				status: result.grabbed
-					? 'grabbed'
-					: result.errorKind === 'error'
-						? 'error'
-						: 'no_results',
+				status: result.grabbed ? 'grabbed' : result.errorKind === 'error' ? 'error' : 'no_results',
 				releasesFound: result.releasesFound ?? 0,
 				releaseGrabbed: result.release,
 				errorMessage: result.error,

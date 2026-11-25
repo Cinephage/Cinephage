@@ -418,9 +418,11 @@
 {/if}
 
 {#if mediaServerStats.music && mediaServerStats.music.tracks > 0}
-	<div class="mt-4 card bg-base-200 p-3">
+	<div class="card mt-4 bg-base-200 p-3">
 		<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-			<h3 class="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-base-content/60 uppercase">
+			<h3
+				class="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-base-content/60 uppercase"
+			>
 				<Disc3 class="h-3.5 w-3.5 text-accent" />
 				Music
 			</h3>

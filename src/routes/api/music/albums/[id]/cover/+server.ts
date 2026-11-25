@@ -41,7 +41,8 @@ export const GET: RequestHandler = async (event) => {
 			if (data) {
 				return new Response(data, {
 					headers: {
-						'content-type': CONTENT_TYPES[extname(path).toLowerCase()] ?? 'application/octet-stream',
+						'content-type':
+							CONTENT_TYPES[extname(path).toLowerCase()] ?? 'application/octet-stream',
 						'cache-control': 'public, max-age=86400'
 					}
 				});

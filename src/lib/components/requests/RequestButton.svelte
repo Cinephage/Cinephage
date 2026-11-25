@@ -45,7 +45,9 @@
 		try {
 			const all = await listRequests({ take: 100 });
 			ownRequests = all.filter((r) =>
-				media === 'music' ? r.mediaType === media && r.mbid === id : r.mediaType === media && String(r.tmdbId) === id
+				media === 'music'
+					? r.mediaType === media && r.mbid === id
+					: r.mediaType === media && String(r.tmdbId) === id
 			);
 		} catch {
 			// Non-fatal: the request action still renders.

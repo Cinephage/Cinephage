@@ -60,7 +60,8 @@ function cacheKey(kind: CoverKind, mbid: string, size: CoverSize): string {
 
 /** Sniffing beats a sidecar file: the archive answers jpeg, png or webp. */
 function sniffContentType(body: Uint8Array): string | null {
-	if (body.length >= 3 && body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff) return 'image/jpeg';
+	if (body.length >= 3 && body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff)
+		return 'image/jpeg';
 	if (
 		body.length >= 8 &&
 		body[0] === 0x89 &&
@@ -167,7 +168,10 @@ async function download(
 		const body = new Uint8Array(await response.arrayBuffer());
 		const contentType = sniffContentType(body);
 		if (!contentType || body.length === 0 || body.length > MAX_BYTES) {
-			logger.warn({ url, bytes: body.length }, 'Cover Art Archive answered something that is not art');
+			logger.warn(
+				{ url, bytes: body.length },
+				'Cover Art Archive answered something that is not art'
+			);
 			return null;
 		}
 

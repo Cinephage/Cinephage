@@ -1,9 +1,5 @@
 <script lang="ts">
-	let {
-		hasMore,
-		onLoadMore,
-		loading = false
-	}: { hasMore: boolean; onLoadMore: () => void; loading?: boolean } = $props();
+	let { hasMore, onLoadMore }: { hasMore: boolean; onLoadMore: () => void } = $props();
 
 	let target = $state<HTMLDivElement | null>(null);
 
@@ -23,6 +19,7 @@
 
 {#if hasMore}
 	<div bind:this={target} class="flex items-center justify-center py-8" aria-live="polite">
-		<span class="loading loading-spinner loading-md text-base-content/40" aria-label="Loading more"></span>
+		<span class="loading loading-md loading-spinner text-base-content/40" aria-label="Loading more"
+		></span>
 	</div>
 {/if}

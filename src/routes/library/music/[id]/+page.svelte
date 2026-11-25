@@ -534,7 +534,7 @@
 									<span class="badge badge-ghost badge-xs">{genre}</span>
 								{/each}
 								{#if album.genres.length > 8}
-									<span class="badge badge-ghost badge-xs" title={album.genres.slice(8).join(", ")}
+									<span class="badge badge-ghost badge-xs" title={album.genres.slice(8).join(', ')}
 										>+{album.genres.length - 8}</span
 									>
 								{/if}
@@ -612,13 +612,13 @@
 </div>
 
 <RenamePreviewModal
-		open={renameOpen}
-		mediaType="music"
-		mediaId={album.id}
-		mediaTitle={`${album.artistName} - ${album.title}`}
-		onClose={() => (renameOpen = false)}
-		onRenamed={() => invalidateAll()}
-	/>
+	open={renameOpen}
+	mediaType="music"
+	mediaId={album.id}
+	mediaTitle={`${album.artistName} - ${album.title}`}
+	onClose={() => (renameOpen = false)}
+	onRenamed={() => invalidateAll()}
+/>
 
 <TrackSearchModal
 	open={searchTrack !== null}

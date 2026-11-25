@@ -25,15 +25,12 @@
 		Zap,
 		Ban,
 		Play,
-		MoreHorizontal,
-		ArrowLeft,
 		Eye,
 		EyeOff,
 		Replace
 	} from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import { formatBytes, formatLanguage, formatDisplayDateShort } from '#lib/utils/format.js';
-	import { resolvePath } from '#lib/utils/routing.js';
 	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { blockMedia } from '#lib/api/settings.js';
@@ -261,10 +258,33 @@
 	const menu = $derived<DetailAction[]>([
 		...(onEdit ? [{ key: 'edit', icon: Settings, label: m.action_edit(), onSelect: onEdit }] : []),
 		...(onChangeMatch
-			? [{ key: 'change-match', icon: Replace, label: m.library_changeMatch_menuLabel(), onSelect: onChangeMatch }]
+			? [
+					{
+						key: 'change-match',
+						icon: Replace,
+						label: m.library_changeMatch_menuLabel(),
+						onSelect: onChangeMatch
+					}
+				]
 			: []),
-		...(onDelete ? [{ key: 'delete', icon: Trash2, label: m.action_delete(), tone: 'error' as const, onSelect: onDelete }] : []),
-		{ key: 'block', icon: Ban, label: m.library_blockMediaTooltip(), tone: 'error' as const, onSelect: () => (showBlockConfirm = true) }
+		...(onDelete
+			? [
+					{
+						key: 'delete',
+						icon: Trash2,
+						label: m.action_delete(),
+						tone: 'error' as const,
+						onSelect: onDelete
+					}
+				]
+			: []),
+		{
+			key: 'block',
+			icon: Ban,
+			label: m.library_blockMediaTooltip(),
+			tone: 'error' as const,
+			onSelect: () => (showBlockConfirm = true)
+		}
 	]);
 
 	const mobileMenu = $derived(menu.filter((entry) => entry.key !== 'edit'));
@@ -335,10 +355,11 @@
 
 <div class="flex flex-col gap-4">
 	<DetailActionBar
-		backHref={backHref ?? (librarySlug ? `/library/movies?library=${librarySlug}` : '/library/movies')}
+		backHref={backHref ??
+			(librarySlug ? `/library/movies?library=${librarySlug}` : '/library/movies')}
 		backLabel={libraryName ?? m.library_movies_heading()}
 		actions={desktopActions}
-		menu={menu}
+		{menu}
 	/>
 
 	{#snippet metaPanel()}

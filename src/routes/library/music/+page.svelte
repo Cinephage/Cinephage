@@ -36,7 +36,7 @@
 	import { createListSelection } from '#lib/components/library/list/list-selection.svelte.js';
 	import ConfirmationModal from '#lib/components/ui/modal/ConfirmationModal.svelte';
 	import BulkQualityProfileModal from '#lib/components/library/BulkQualityProfileModal.svelte';
-import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
+	import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 	import type { ArtistCardData, TrackTableRow } from '#lib/components/music/music-card.js';
 
 	let { data }: { data: PageData } = $props();
@@ -123,7 +123,12 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 	let albumRequest = 0;
 
 	function listParams(extra: Record<string, string> = {}, sort = 'name-asc'): URLSearchParams {
-		const params = new URLSearchParams({ file: fileFilter, monitor: monitorFilter, sort, ...extra });
+		const params = new SvelteURLSearchParams({
+			file: fileFilter,
+			monitor: monitorFilter,
+			sort,
+			...extra
+		});
 		if (searchQuery.trim()) params.set('q', searchQuery.trim());
 		if (libraryFilter !== 'all') params.set('libraryId', libraryFilter);
 		if (qualityFilter !== 'all') params.set('quality', qualityFilter);
@@ -204,7 +209,7 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 	async function loadSongs(reset: boolean) {
 		const request = ++songRequest;
 		const offset = reset ? 0 : songs.length;
-		const params = new URLSearchParams({
+		const params = new SvelteURLSearchParams({
 			offset: String(offset),
 			limit: '90',
 			file: fileFilter,
@@ -359,63 +364,65 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 
 	const filterOptions = $derived.by(
 		(): Array<{ key: string; label: string; options: { value: string; label: string }[] }> => {
-		const options: Array<{
-			key: string;
-			label: string;
-			options: { value: string; label: string }[];
-		}> = [
-			{
-				key: 'type',
-				label: m.music_typeLabel(),
-				options: [
-					{ value: 'artists', label: m.music_tabArtists() },
-					{ value: 'albums', label: m.music_tabAlbums() },
-					{ value: 'songs', label: m.music_tabSongs() }
-				]
-			},
-			{
-				key: 'file',
-				label: m.music_filterFile(),
-				options: [
-					{ value: 'all', label: m.common_all() },
-					{ value: 'downloaded', label: m.common_downloaded() },
-					{ value: 'missing', label: m.common_missing() }
-				]
+			const options: Array<{
+				key: string;
+				label: string;
+				options: { value: string; label: string }[];
+			}> = [
+				{
+					key: 'type',
+					label: m.music_typeLabel(),
+					options: [
+						{ value: 'artists', label: m.music_tabArtists() },
+						{ value: 'albums', label: m.music_tabAlbums() },
+						{ value: 'songs', label: m.music_tabSongs() }
+					]
+				},
+				{
+					key: 'file',
+					label: m.music_filterFile(),
+					options: [
+						{ value: 'all', label: m.common_all() },
+						{ value: 'downloaded', label: m.common_downloaded() },
+						{ value: 'missing', label: m.common_missing() }
+					]
+				}
+			];
+			if (data.libraries.length > 1) {
+				options.push({
+					key: 'library',
+					label: m.library_movies_filterLibrary(),
+					options: [
+						{ value: 'all', label: m.common_all() },
+						...data.libraries.map((entry) => ({ value: entry.id, label: entry.name }))
+					]
+				});
 			}
-		];
-		if (data.libraries.length > 1) {
 			options.push({
-				key: 'library',
-				label: m.library_movies_filterLibrary(),
+				key: 'quality',
+				label: m.library_movies_filterQualityProfile(),
 				options: [
 					{ value: 'all', label: m.common_all() },
-					...data.libraries.map((entry) => ({ value: entry.id, label: entry.name }))
+					...data.qualityProfiles.map((profile) => ({
+						value: profile.id,
+						label: profile.isDefault
+							? m.library_movies_profileDefault({ name: profile.name })
+							: profile.name
+					}))
 				]
 			});
-		}
-		options.push({
-			key: 'quality',
-			label: m.library_movies_filterQualityProfile(),
-			options: [
-				{ value: 'all', label: m.common_all() },
-				...data.qualityProfiles.map((profile) => ({
-					value: profile.id,
-					label: profile.isDefault ? m.library_movies_profileDefault({ name: profile.name }) : profile.name
-				}))
-			]
-		});
-		if (browse !== 'songs') {
-			options.push({
-				key: 'monitor',
-				label: m.music_filterMonitoring(),
-				options: [
-					{ value: 'all', label: m.common_all() },
-					{ value: 'monitored', label: m.common_monitored() },
-					{ value: 'unmonitored', label: m.common_unmonitored() }
-				]
-			});
-		}
-		return options;
+			if (browse !== 'songs') {
+				options.push({
+					key: 'monitor',
+					label: m.music_filterMonitoring(),
+					options: [
+						{ value: 'all', label: m.common_all() },
+						{ value: 'monitored', label: m.common_monitored() },
+						{ value: 'unmonitored', label: m.common_unmonitored() }
+					]
+				});
+			}
+			return options;
 		}
 	);
 
@@ -854,10 +861,8 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 				<span class="hidden text-xs text-warning sm:inline">{m.music_noRootFolder()}</span>
 			{/if}
 			{#if data.scanIssueCount > 0}
-				<a
-					class="text-xs text-warning hover:underline"
-					href={resolve('library/music/scan-issues')}
-				>{m.music_scanIssuesBanner({ count: data.scanIssueCount })}</a
+				<a class="text-xs text-warning hover:underline" href={resolve('library/music/scan-issues')}
+					>{m.music_scanIssuesBanner({ count: data.scanIssueCount })}</a
 				>
 			{/if}
 		{/snippet}

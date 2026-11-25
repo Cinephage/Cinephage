@@ -15,13 +15,7 @@ export type LibraryFileFilter = 'all' | 'downloaded' | 'missing';
 export type LibraryMonitorFilter = 'all' | 'monitored' | 'unmonitored';
 
 export type AlbumListSort =
-	| 'artist-asc'
-	| 'title-asc'
-	| 'year-desc'
-	| 'year-asc'
-	| 'tracks-desc'
-	| 'size-desc'
-	| 'size-asc';
+	'artist-asc' | 'title-asc' | 'year-desc' | 'year-asc' | 'tracks-desc' | 'size-desc' | 'size-asc';
 
 export type ArtistListSort = 'name-asc' | 'name-desc' | 'albums-desc' | 'missing-desc';
 
@@ -54,11 +48,7 @@ export function effectiveProfileSql(defaultProfileId: string): SQL<string> {
 }
 
 function searchNeedles(q?: string): string[] {
-	return (q ?? '')
-		.trim()
-		.toLowerCase()
-		.split(/\s+/)
-		.filter(Boolean);
+	return (q ?? '').trim().toLowerCase().split(/\s+/).filter(Boolean);
 }
 
 function albumSearch(q?: string): SQL | undefined {
@@ -125,9 +115,7 @@ export function artistFilter(
 				and(
 					eq(albums.artistId, artists.id),
 					options.libraryId ? eq(albums.libraryId, options.libraryId) : undefined,
-					options.quality
-						? eq(effectiveProfileSql(defaultProfileId), options.quality)
-						: undefined
+					options.quality ? eq(effectiveProfileSql(defaultProfileId), options.quality) : undefined
 				)
 			);
 		conditions.push(exists(scope));

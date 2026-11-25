@@ -646,8 +646,8 @@ export class DiskScanService extends EventEmitter {
 
 			return await this.completeScan(scanRecord.id, rootFolderId, progress, startTime);
 		} catch (error) {
-			if (this.scanAborted) error = new Error('Scan was cancelled');
-			return await this.failScan(scanRecord.id, rootFolderId, progress, startTime, error);
+			const failure = this.scanAborted ? new Error('Scan was cancelled') : error;
+			return await this.failScan(scanRecord.id, rootFolderId, progress, startTime, failure);
 		} finally {
 			this.isScanning = false;
 			this.currentScanId = null;
@@ -1093,8 +1093,8 @@ export class DiskScanService extends EventEmitter {
 			);
 			return await this.completeScan(scanRecordId, rootFolder.id, progress, startTime);
 		} catch (error) {
-			if (this.scanAborted) error = new Error('Scan was cancelled');
-			return await this.failScan(scanRecordId, rootFolder.id, progress, startTime, error);
+			const failure = this.scanAborted ? new Error('Scan was cancelled') : error;
+			return await this.failScan(scanRecordId, rootFolder.id, progress, startTime, failure);
 		}
 	}
 

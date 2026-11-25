@@ -118,10 +118,14 @@ function ensureUserQuotaColumns(sqlite: Database.Database): void {
 	if (!tableSql(sqlite, 'user_request_settings')) return;
 	const existing = new Set(columns(sqlite, 'user_request_settings').map((column) => column.name));
 	if (!existing.has('music_quota_limit')) {
-		sqlite.prepare(`ALTER TABLE "user_request_settings" ADD COLUMN "music_quota_limit" integer`).run();
+		sqlite
+			.prepare(`ALTER TABLE "user_request_settings" ADD COLUMN "music_quota_limit" integer`)
+			.run();
 	}
 	if (!existing.has('music_quota_days')) {
-		sqlite.prepare(`ALTER TABLE "user_request_settings" ADD COLUMN "music_quota_days" integer`).run();
+		sqlite
+			.prepare(`ALTER TABLE "user_request_settings" ADD COLUMN "music_quota_days" integer`)
+			.run();
 	}
 }
 

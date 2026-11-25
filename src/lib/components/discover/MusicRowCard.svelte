@@ -2,6 +2,7 @@
 	import { Check, LoaderCircle, Plus } from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import { invalidateAll } from '$app/navigation';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import LibraryMediaCard from '#lib/components/library/LibraryMediaCard.svelte';
 	import MusicAddConfirmModal from '#lib/components/music/MusicAddConfirmModal.svelte';
 	import { albumCardView, artistCardView } from '#lib/components/library/media-view.js';
@@ -87,8 +88,8 @@
 		// An artist row resolves as an artist; albums and songs resolve through
 		// the album — a song's own title is not a release group.
 		const params = isArtist
-			? new URLSearchParams({ type: 'artist', q: title })
-			: new URLSearchParams({ type: 'album' });
+			? new SvelteURLSearchParams({ type: 'artist', q: title })
+			: new SvelteURLSearchParams({ type: 'album' });
 		if (!isArtist) {
 			if (item.subtitle) params.set('artist', item.subtitle);
 			if (albumLabel) params.set('album', albumLabel);

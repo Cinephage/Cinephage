@@ -134,10 +134,7 @@ export class PlexStatsProvider implements MediaServerStatsProvider {
 	}
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	private normalizeItem(
-		raw: any,
-		libraryType: 'movie' | 'episode' | 'track'
-	): SyncedMediaItem {
+	private normalizeItem(raw: any, libraryType: 'movie' | 'episode' | 'track'): SyncedMediaItem {
 		const guids = this.parseGuids(raw);
 		// Deterministic enumeration (Phase 5): walk ALL Media versions and ALL of
 		// their Parts in order instead of Media[0].Part[0], so multi-version/
@@ -209,17 +206,8 @@ export class PlexStatsProvider implements MediaServerStatsProvider {
 			albumName: libraryType === 'track' ? (raw?.parentTitle ?? null) : null,
 			seriesName: libraryType === 'track' ? null : (raw?.grandparentTitle ?? null),
 			seasonNumber:
-				libraryType === 'track'
-					? null
-					: raw?.parentIndex != null
-						? Number(raw.parentIndex)
-						: null,
-				episodeNumber:
-					libraryType === 'track'
-						? null
-						: raw?.index != null
-							? Number(raw.index)
-							: null,
+				libraryType === 'track' ? null : raw?.parentIndex != null ? Number(raw.parentIndex) : null,
+			episodeNumber: libraryType === 'track' ? null : raw?.index != null ? Number(raw.index) : null,
 			playCount,
 			lastPlayedDate: lastViewedAt,
 			playedPercentage: null,

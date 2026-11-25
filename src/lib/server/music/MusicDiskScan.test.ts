@@ -74,7 +74,12 @@ describe('MusicDiskScan reconciliation', () => {
 			.run();
 		testDb.db
 			.insert(schema.libraries)
-			.values({ id: 'lib-music-reconcile', name: 'Music', slug: 'music-reconcile', mediaType: 'music' })
+			.values({
+				id: 'lib-music-reconcile',
+				name: 'Music',
+				slug: 'music-reconcile',
+				mediaType: 'music'
+			})
 			.onConflictDoNothing()
 			.run();
 		testDb.db
@@ -151,13 +156,19 @@ describe('MusicDiskScan reconciliation', () => {
 		expect(summary.filesRemoved).toBe(1);
 		expect(summary.albumsCleared).toBe(1);
 		expect(
-			testDb.db.select().from(schema.trackFiles).where(eq(schema.trackFiles.id, 'tf-reconcile')).all()
+			testDb.db
+				.select()
+				.from(schema.trackFiles)
+				.where(eq(schema.trackFiles.id, 'tf-reconcile'))
+				.all()
 		).toHaveLength(0);
 		expect(
-			testDb.db.select().from(schema.albums).where(eq(schema.albums.id, 'al-reconcile')).get()?.hasFile
+			testDb.db.select().from(schema.albums).where(eq(schema.albums.id, 'al-reconcile')).get()
+				?.hasFile
 		).toBe(false);
 		expect(
-			testDb.db.select().from(schema.tracks).where(eq(schema.tracks.id, 'tr-reconcile')).get()?.hasFile
+			testDb.db.select().from(schema.tracks).where(eq(schema.tracks.id, 'tr-reconcile')).get()
+				?.hasFile
 		).toBe(false);
 	});
 
@@ -259,7 +270,9 @@ describe('isDuplicateAdoption', () => {
 	});
 
 	it('allows adoption when the album has no files left', () => {
-		expect(isDuplicateAdoption(false, { path: '/music/A', hasFile: false }, '/music/B')).toBe(false);
+		expect(isDuplicateAdoption(false, { path: '/music/A', hasFile: false }, '/music/B')).toBe(
+			false
+		);
 	});
 
 	it('allows the first adoption when the album has no path yet', () => {

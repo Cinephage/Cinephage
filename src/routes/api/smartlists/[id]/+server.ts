@@ -145,11 +145,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 				? (normalizedData.rootFolderId ?? '').trim()
 				: (existing.rootFolderId ?? '').trim();
 		const effectiveMediaType =
-			existing.mediaType === 'movie'
-				? 'movie'
-				: existing.mediaType === 'music'
-					? 'music'
-					: 'tv';
+			existing.mediaType === 'movie' ? 'movie' : existing.mediaType === 'music' ? 'music' : 'tv';
 
 		if (effectiveAutoAddBehavior !== 'disabled' && !effectiveRootFolderId) {
 			return Response.json(

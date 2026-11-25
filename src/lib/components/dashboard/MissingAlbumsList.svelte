@@ -41,7 +41,10 @@
 					<Disc3 class="h-5 w-5" />
 					{m.dashboard_missingAlbums_title()}
 				</h2>
-				<a href={resolve('library/music') + '?type=albums&file=missing'} class="btn btn-ghost btn-sm">
+				<a
+					href={resolve('library/music') + '?type=albums&file=missing'}
+					class="btn btn-ghost btn-sm"
+				>
 					{m.dashboard_recentMovies_viewAll()}
 				</a>
 			</div>

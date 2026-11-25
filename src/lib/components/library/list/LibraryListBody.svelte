@@ -7,7 +7,11 @@
 	import type { SvelteSet } from 'svelte/reactivity';
 	import LibraryMediaCard from '#lib/components/library/LibraryMediaCard.svelte';
 	import LibraryMediaTable from '#lib/components/library/LibraryMediaTable.svelte';
-	import type { LibraryKind, MediaCardView, MediaRowView } from '#lib/components/library/media-view.js';
+	import type {
+		LibraryKind,
+		MediaCardView,
+		MediaRowView
+	} from '#lib/components/library/media-view.js';
 
 	interface Props {
 		cards: MediaCardView[];

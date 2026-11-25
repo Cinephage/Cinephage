@@ -548,11 +548,7 @@ export class RequestService {
 			timestamp: now
 		});
 
-		const autoApprove = await this.getEffectiveAutoApprove(
-			requester.id,
-			requester.role,
-			'music'
-		);
+		const autoApprove = await this.getEffectiveAutoApprove(requester.id, requester.role, 'music');
 
 		if (autoApprove) {
 			try {
@@ -1757,7 +1753,12 @@ export class RequestService {
 		return rows.flatMap((r) =>
 			r.tmdbId === null
 				? []
-				: [{ mediaType: r.mediaType === 'movie' ? ('movie' as const) : ('series' as const), tmdbId: r.tmdbId }]
+				: [
+						{
+							mediaType: r.mediaType === 'movie' ? ('movie' as const) : ('series' as const),
+							tmdbId: r.tmdbId
+						}
+					]
 		);
 	}
 

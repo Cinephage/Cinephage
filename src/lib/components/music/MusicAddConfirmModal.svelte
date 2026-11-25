@@ -84,7 +84,7 @@
 
 	<label class="form-control mt-5">
 		<span class="mb-1 text-sm font-medium">{m.common_qualityProfile()}</span>
-		<select class="select w-full select-bordered" bind:value={profileId} disabled={!loaded}>
+		<select class="select-bordered select w-full" bind:value={profileId} disabled={!loaded}>
 			<option value="">
 				{defaultProfileName
 					? m.music_useDefaultProfile({ name: defaultProfileName })

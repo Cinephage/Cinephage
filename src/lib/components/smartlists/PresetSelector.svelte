@@ -1,13 +1,13 @@
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
-import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
+	import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 	import { Sparkles } from '@lucide/svelte';
 
 	interface FilterPreset {
 		id: string;
 		name: string;
 		description: string;
-		appliesTo: (SmartListMediaType)[];
+		appliesTo: SmartListMediaType[];
 	}
 
 	interface Props {

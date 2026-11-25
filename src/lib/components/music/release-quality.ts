@@ -1,7 +1,7 @@
 /**
  * How a music release's quality reads in a row.
  *
- * The name often states a bitrate without a codec ("320_kbps Beats⭐"), so
+ * The name often states a bitrate without a codec ("320_kbps Beats"), so
  * "UNKNOWN" is the wrong label — the number is known, the codec is not. Both
  * the album page and the track modal render this, so it lives once.
  */

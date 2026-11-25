@@ -129,8 +129,8 @@
 		days
 			.filter(
 				(d) =>
-				d.date.startsWith(currentMonth) &&
-				(d.movies.length > 0 || d.episodes.length > 0 || d.albums.length > 0)
+					d.date.startsWith(currentMonth) &&
+					(d.movies.length > 0 || d.episodes.length > 0 || d.albums.length > 0)
 			)
 			.sort((a, b) => a.date.localeCompare(b.date))
 	);
@@ -630,7 +630,9 @@
 									Math.min(episodeCount, 2 - Math.min(movieCount, 2)) +
 									Math.min(
 										albumCount,
-										2 - Math.min(movieCount, 2) - Math.min(episodeCount, 2 - Math.min(movieCount, 2))
+										2 -
+											Math.min(movieCount, 2) -
+											Math.min(episodeCount, 2 - Math.min(movieCount, 2))
 									)}
 								{@const hasItems = totalItems > 0}
 								<button
@@ -671,10 +673,7 @@
 										{#each (cell.items?.episodes ?? []).slice(0, Math.max(0, 3 - movieCount)) as ep (ep.episodeId)}
 											<span class="h-1.5 w-1.5 rounded-full bg-secondary"></span>
 										{/each}
-										{#each (cell.items?.albums ?? []).slice(
-											0,
-											Math.max(0, 3 - movieCount - Math.min(episodeCount, 3 - movieCount))
-										) as album (album.albumId)}
+										{#each (cell.items?.albums ?? []).slice(0, Math.max(0, 3 - movieCount - Math.min(episodeCount, 3 - movieCount))) as album (album.albumId)}
 											<span class="h-1.5 w-1.5 rounded-full bg-accent"></span>
 										{/each}
 										{#if totalItems > 3}
@@ -694,10 +693,7 @@
 												{movie.title}
 											</div>
 										{/each}
-										{#each (cell.items?.albums ?? []).slice(
-											0,
-											2 - Math.min(movieCount, 2) - Math.min(episodeCount, 2 - Math.min(movieCount, 2))
-										) as album (album.albumId)}
+										{#each (cell.items?.albums ?? []).slice(0, 2 - Math.min(movieCount, 2) - Math.min(episodeCount, 2 - Math.min(movieCount, 2))) as album (album.albumId)}
 											<div
 												class="truncate rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold text-accent"
 											>
@@ -1017,9 +1013,7 @@
 				</div>
 			{/if}
 
-			{#if selectedDay.movies.length === 0 &&
-				selectedDay.episodes.length === 0 &&
-				selectedDay.albums.length === 0}
+			{#if selectedDay.movies.length === 0 && selectedDay.episodes.length === 0 && selectedDay.albums.length === 0}
 				<div class="py-8 text-center text-base-content/50">
 					{m.calendar_noUpcoming()}
 				</div>

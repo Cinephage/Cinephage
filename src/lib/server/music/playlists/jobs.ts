@@ -529,14 +529,18 @@ async function artistGroups(
 	artist: { mbid: string; name: string },
 	scope: 'artist' | 'features'
 ): Promise<MusicReleaseGroup[]> {
-	const cached = scope === 'features' ? getArtistFeatures(artist.mbid) : getArtistDiscography(artist.mbid);
+	const cached =
+		scope === 'features' ? getArtistFeatures(artist.mbid) : getArtistDiscography(artist.mbid);
 	if (cached) return cached.value ?? [];
 
 	const groups: MusicReleaseGroup[] = [];
 	let offset = 0;
 	// Browse pages at 100; a prolific artist needs two or three requests.
 	while (true) {
-		const page = await musicBrainz.getArtistReleaseGroups(artist.mbid, artist, { limit: 100, offset });
+		const page = await musicBrainz.getArtistReleaseGroups(artist.mbid, artist, {
+			limit: 100,
+			offset
+		});
 		groups.push(...page.releaseGroups);
 		offset += page.releaseGroups.length;
 		if (page.releaseGroups.length === 0 || offset >= page.total) break;
@@ -546,7 +550,10 @@ async function artistGroups(
 	if (scope === 'artist') return own;
 
 	const guests = await guestAlbums(artist);
-	const all = [...own, ...guests.filter((guest) => !own.some((group) => group.mbid === guest.mbid))];
+	const all = [
+		...own,
+		...guests.filter((guest) => !own.some((group) => group.mbid === guest.mbid))
+	];
 	setArtistFeatures(artist.mbid, all);
 	return all;
 }
@@ -574,7 +581,8 @@ async function guestAlbums(artist: { mbid: string; name: string }): Promise<Musi
 		if (owner.name === 'Various Artists') continue;
 		if ((candidate.primaryType ?? 'Album') !== 'Album' && candidate.primaryType !== 'EP') continue;
 		const secondary = candidate.secondaryTypes ?? [];
-		if (secondary.some((type) => (COMPILATION_SECONDARY as readonly string[]).includes(type))) continue;
+		if (secondary.some((type) => (COMPILATION_SECONDARY as readonly string[]).includes(type)))
+			continue;
 		seen.set(candidate.mbid, {
 			mbid: candidate.mbid,
 			title: candidate.title,
@@ -614,7 +622,7 @@ async function planExpansion(
 	const targets = new Map<string, PlaylistJobRow>();
 	const byArtist: ExpansionPreview['byArtist'] = [];
 	for (const [mbid, name] of artists) {
-		let groups: MusicReleaseGroup[] = [];
+		let groups: MusicReleaseGroup[];
 		try {
 			groups = await artistGroups({ mbid, name }, scope === 'features' ? 'features' : 'artist');
 		} catch (err) {
@@ -656,16 +664,15 @@ export async function expandArtists(
  * "Artist" turns three checked albums into two hundred; the review screen says
  * so before the button is pressed, using the same computation the import does.
  */
-export async function previewExpansion(rows: PlaylistJobRow[], scope: ImportScope): Promise<ExpansionPreview> {
+export async function previewExpansion(
+	rows: PlaylistJobRow[],
+	scope: ImportScope
+): Promise<ExpansionPreview> {
 	if (scope !== 'artist' && scope !== 'features') return { total: 0, byArtist: [] };
 	return (await planExpansion(rows, scope)).preview;
 }
 
-async function runImport(
-	job: PlaylistJob,
-	rowIds: string[],
-	options: JobRecipe
-): Promise<void> {
+async function runImport(job: PlaylistJob, rowIds: string[], options: JobRecipe): Promise<void> {
 	const selected = new Set(rowIds);
 	const chosen = job.rows.filter((row) => selected.has(row.releaseGroupMbid));
 	job.recipe = { ...options, rowIds, scope: options.scope ?? 'album' };

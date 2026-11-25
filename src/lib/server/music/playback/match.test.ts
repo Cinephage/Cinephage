@@ -11,7 +11,12 @@ const avrilCandidates: YoutubeCandidate[] = [
 		duration: 130,
 		channel: 'Josh Cohen'
 	},
-	{ id: '4OqqUDqDdJ8', title: 'Avril 14th for 1 Hour', duration: 3631, channel: 'Matthew MacCarthy' }
+	{
+		id: '4OqqUDqDdJ8',
+		title: 'Avril 14th for 1 Hour',
+		duration: 3631,
+		channel: 'Matthew MacCarthy'
+	}
 ];
 
 describe('normalizeTitle', () => {

@@ -52,7 +52,7 @@
 					</td>
 					<td class="whitespace-nowrap">
 						<span
-							class="badge whitespace-nowrap badge-sm"
+							class="badge badge-sm whitespace-nowrap"
 							class:badge-ghost={candidate.accepted === false}
 						>
 							{musicQualityLabel(candidate)}

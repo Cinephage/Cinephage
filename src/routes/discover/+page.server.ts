@@ -417,10 +417,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			// own client waits 8 s, and a slow chart must not hold the dashboard.
 			const musicShelfPromise = Promise.race([
 				musicLanding()
-					.then(
-						(landing) =>
-							landing?.shelves.find((shelf) => shelf.id === 'topAlbums')?.rows ?? []
-					)
+					.then((landing) => landing?.shelves.find((shelf) => shelf.id === 'topAlbums')?.rows ?? [])
 					.catch(() => []),
 				new Promise<MusicRowItem[]>((resolve) => setTimeout(() => resolve([]), 1200))
 			]);

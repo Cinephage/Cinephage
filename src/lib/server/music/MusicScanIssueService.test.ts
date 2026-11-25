@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
-import { createTestDb, destroyTestDb, clearTestDb, type TestDatabase } from '../../../test/db-helper.js';
+import {
+	createTestDb,
+	destroyTestDb,
+	clearTestDb,
+	type TestDatabase
+} from '../../../test/db-helper.js';
 import { musicScanIssueService } from './MusicScanIssueService.js';
 
 const testDb: TestDatabase = createTestDb();

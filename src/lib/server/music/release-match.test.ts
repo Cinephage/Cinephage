@@ -25,17 +25,16 @@ describe('pickReleaseGroup', () => {
 
 	it('ignores case, accents and punctuation in both fields', () => {
 		const bjork = group('Homogénic', 'Björk', 1997);
-		expect(
-			pickReleaseGroup({ album: 'HOMOGENIC', artist: 'Bjork', year: 1997 }, [bjork])
-		).toBe(bjork);
+		expect(pickReleaseGroup({ album: 'HOMOGENIC', artist: 'Bjork', year: 1997 }, [bjork])).toBe(
+			bjork
+		);
 	});
 
 	it('refuses a same-titled album from a different artist', () => {
 		expect(
-			pickReleaseGroup(
-				{ album: 'Discovery', artist: 'Daft Punk', year: 2001 },
-				[group('Discovery', 'Some Covers Band', 2001)]
-			)
+			pickReleaseGroup({ album: 'Discovery', artist: 'Daft Punk', year: 2001 }, [
+				group('Discovery', 'Some Covers Band', 2001)
+			])
 		).toBeNull();
 	});
 
@@ -65,6 +64,8 @@ describe('pickReleaseGroup', () => {
 	it('refuses to guess when the evidence ties', () => {
 		const first = group('Live', 'Band', 2001);
 		const second = { ...group('Live', 'Band', 2001), mbid: 'other-edition' };
-		expect(pickReleaseGroup({ album: 'Live', artist: 'Band', year: 2001 }, [first, second])).toBeNull();
+		expect(
+			pickReleaseGroup({ album: 'Live', artist: 'Band', year: 2001 }, [first, second])
+		).toBeNull();
 	});
 });

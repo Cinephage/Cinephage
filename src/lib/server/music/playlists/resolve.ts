@@ -229,13 +229,8 @@ function typeRank(group: MusicReleaseGroup): number {
  * candidate — the whole point of the filter is that the album belongs to this
  * act, and an unknown credit cannot say that.
  */
-function pickGroup(
-	groups: MusicReleaseGroupRef[],
-	track: PlaylistTrack
-): MusicReleaseGroup | null {
-	const owned = groups.filter(
-		(group): group is MusicReleaseGroup => group.artist !== null
-	);
+function pickGroup(groups: MusicReleaseGroupRef[], track: PlaylistTrack): MusicReleaseGroup | null {
+	const owned = groups.filter((group): group is MusicReleaseGroup => group.artist !== null);
 	return (
 		owned
 			.filter((group) => artistMatches(track.artists, group.artist.name))
@@ -504,7 +499,11 @@ export async function resolvePlaylistTracks(
 		// try that before giving up — adding a random karaoke compilation to
 		// someone's library is worse than adding nothing and saying so.
 		const sameNamed = await attempt(() =>
-			musicBrainz.searchReleaseGroups({ artist, album: coreTitle(track.title), limit: SEARCH_LIMIT })
+			musicBrainz.searchReleaseGroups({
+				artist,
+				album: coreTitle(track.title),
+				limit: SEARCH_LIMIT
+			})
 		);
 		if (!sameNamed.ok) {
 			// A failed last lookup is not "MusicBrainz has no such song".
@@ -573,7 +572,8 @@ export async function resolvePlaylistTracks(
 					isrc: null
 				};
 				const anchor = search.value.find(
-					(hit) => titlesMatch(entry.title, hit.title) && artistMatches(retried.artists, hit.artistCredit)
+					(hit) =>
+						titlesMatch(entry.title, hit.title) && artistMatches(retried.artists, hit.artistCredit)
 				);
 				let group: MusicReleaseGroup | null = null;
 				if (anchor) {

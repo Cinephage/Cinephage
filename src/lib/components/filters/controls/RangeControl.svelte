@@ -1,10 +1,8 @@
 <script lang="ts">
 	import type { FacetValue, FacetView } from '#lib/filters/types.js';
 
-	let {
-		facet,
-		onchange
-	}: { facet: FacetView; onchange: (value: FacetValue | null) => void } = $props();
+	let { facet, onchange }: { facet: FacetView; onchange: (value: FacetValue | null) => void } =
+		$props();
 
 	const min = $derived(facet.value?.kind === 'range' ? facet.value.min : '');
 	const max = $derived(facet.value?.kind === 'range' ? facet.value.max : '');

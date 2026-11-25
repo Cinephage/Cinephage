@@ -1,7 +1,12 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import * as schema from '#lib/server/db/schema.js';
-import { createTestDb, destroyTestDb, clearTestDb, type TestDatabase } from '../../../test/db-helper.js';
+import {
+	createTestDb,
+	destroyTestDb,
+	clearTestDb,
+	type TestDatabase
+} from '../../../test/db-helper.js';
 import { getCalendarData } from './queries.js';
 
 const testDb: TestDatabase = createTestDb();
@@ -58,7 +63,9 @@ describe('getCalendarData music', () => {
 			artistName: 'Daft Punk',
 			releaseDate: '2001-02-26'
 		});
-		expect(days.every((entry) => entry.movies.length === 0 && entry.episodes.length === 0)).toBe(true);
+		expect(days.every((entry) => entry.movies.length === 0 && entry.episodes.length === 0)).toBe(
+			true
+		);
 	});
 
 	it('skips unmonitored albums and partial dates', async () => {

@@ -260,8 +260,7 @@ describe('root folder schemas', () => {
 
 	it('still accepts the video anime subtype', () => {
 		expect(
-			rootFolderCreateSchema.safeParse({ ...base, mediaType: 'tv', mediaSubType: 'anime' })
-				.success
+			rootFolderCreateSchema.safeParse({ ...base, mediaType: 'tv', mediaSubType: 'anime' }).success
 		).toBe(true);
 	});
 

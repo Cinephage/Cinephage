@@ -11,7 +11,7 @@
 	import MusicMatchModal from '#lib/components/music/MusicMatchModal.svelte';
 	import type { AlbumWithTracks } from '#lib/components/music/music-card.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
-	import { SvelteSet } from 'svelte/reactivity';
+	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { ConfirmationModal, ModalWrapper } from '#lib/components/ui/modal/index.js';
 	import Panel from '#lib/components/ui/Panel.svelte';
 	import FactRow from '#lib/components/ui/FactRow.svelte';
@@ -75,7 +75,7 @@
 	);
 
 	const groups = $derived.by(() => {
-		const map = new Map<string, AlbumWithTracks[]>();
+		const map = new SvelteMap<string, AlbumWithTracks[]>();
 		for (const album of visibleAlbums) {
 			const key = album.primaryType ?? 'Album';
 			map.set(key, [...(map.get(key) ?? []), album]);
@@ -173,7 +173,7 @@
 		const total = data.albums.filter((album) => !album.hasFile).length;
 		let done = 0;
 		let batches = 0;
-		const attempted = new Set<string>();
+		const attempted = new SvelteSet<string>();
 		searchProgress = { done, total };
 		try {
 			for (;;) {

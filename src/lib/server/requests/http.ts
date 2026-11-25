@@ -46,7 +46,7 @@ export const createRequestSchema = z.discriminatedUnion('mediaType', [
  * Explicit response DTO: everything the client type declares plus display
  * names. actingUserId / ignoreQuota / episodeCountSnapshot never cross the
  * wire - the row spread that preceded this leaked them to viewers.
- */export function toRequestDto(
+ */ export function toRequestDto(
 	r: RequestRecord,
 	usersById: Map<string, string>
 ): Record<string, unknown> & { requestedByName: string | null; decidedByName: string | null } {

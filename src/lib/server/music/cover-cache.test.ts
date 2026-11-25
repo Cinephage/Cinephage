@@ -66,9 +66,7 @@ describe('music cover cache', () => {
 		expect(await getCover('release', MBID, 500)).toBeNull();
 
 		expect(fetchMock).toHaveBeenCalledTimes(1);
-		expect(await readdir(join(dataDir, 'music-covers'))).toEqual([
-			`release-${MBID}-500.missing`
-		]);
+		expect(await readdir(join(dataDir, 'music-covers'))).toEqual([`release-${MBID}-500.missing`]);
 	});
 
 	it('does not cache an archive error, so the next load retries', async () => {

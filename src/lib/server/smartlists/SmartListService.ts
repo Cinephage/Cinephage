@@ -445,9 +445,7 @@ export class SmartListService {
 				where: eq(smartListItems.smartListId, id)
 			});
 			const existingTmdbIds = new Set(
-				existingItems
-					.map((item) => item.tmdbId)
-					.filter((id): id is number => id != null)
+				existingItems.map((item) => item.tmdbId).filter((id): id is number => id != null)
 			);
 
 			// Process items
@@ -1346,7 +1344,10 @@ export class SmartListService {
 		return items.slice(0, limit);
 	}
 
-	private async updateLibraryStatus(smartListId: string, mediaType: SmartListMediaType): Promise<void> {
+	private async updateLibraryStatus(
+		smartListId: string,
+		mediaType: SmartListMediaType
+	): Promise<void> {
 		const items = await db.query.smartListItems.findMany({
 			where: eq(smartListItems.smartListId, smartListId)
 		});
@@ -2084,9 +2085,7 @@ export class SmartListService {
 				where: eq(smartListItems.smartListId, id)
 			});
 			const existingTmdbIds = new Set(
-				existingItems
-					.map((item) => item.tmdbId)
-					.filter((id): id is number => id != null)
+				existingItems.map((item) => item.tmdbId).filter((id): id is number => id != null)
 			);
 
 			// Process items

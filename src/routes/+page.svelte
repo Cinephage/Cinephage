@@ -187,9 +187,7 @@
 
 	<QuickActions
 		config={stats.config}
-		hasLibraryContent={stats.movies.total > 0 ||
-			stats.series.total > 0 ||
-			stats.albums.total > 0}
+		hasLibraryContent={stats.movies.total > 0 || stats.series.total > 0 || stats.albums.total > 0}
 		hasMissingEpisodes={stats.episodes.missing > 0}
 	/>
 
@@ -202,10 +200,7 @@
 			<MissingAlbumsList albums={missingAlbums} isLoading={isMissingEpisodesLoading} />
 			<ComingUpList items={upcoming} isLoading={isUpcomingLoading} />
 
-			{#if !isRecentlyAddedLoading &&
-				recentlyAdded.movies.length === 0 &&
-				recentlyAdded.series.length === 0 &&
-				recentlyAdded.albums.length === 0}
+			{#if !isRecentlyAddedLoading && recentlyAdded.movies.length === 0 && recentlyAdded.series.length === 0 && recentlyAdded.albums.length === 0}
 				<DashboardEmptyState />
 			{/if}
 		</div>

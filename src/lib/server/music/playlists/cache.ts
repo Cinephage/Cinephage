@@ -33,14 +33,13 @@ function fold(value: string): string {
 
 /** One cache row with its age; the caller decides which TTL applies. */
 function readEntry<T>(key: string): { value: T | null; ageMs: number } | null {
-	const row = db
-		.select()
-		.from(musicLookupCache)
-		.where(eq(musicLookupCache.key, key))
-		.get();
+	const row = db.select().from(musicLookupCache).where(eq(musicLookupCache.key, key)).get();
 	if (!row) return null;
 	try {
-		return { value: JSON.parse(row.payload) as T | null, ageMs: Date.now() - Date.parse(row.fetchedAt) };
+		return {
+			value: JSON.parse(row.payload) as T | null,
+			ageMs: Date.now() - Date.parse(row.fetchedAt)
+		};
 	} catch {
 		db.delete(musicLookupCache).where(eq(musicLookupCache.key, key)).run();
 		return null;

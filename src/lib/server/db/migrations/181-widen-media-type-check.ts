@@ -76,7 +76,10 @@ function widenMediaTypeCheck(sqlite: Database.Database, table: string, value: st
 	const values = checkValues(sql);
 	if (!values || values.includes(value)) return;
 
-	const widened = values.concat(value).map((v) => `'${v}'`).join(', ');
+	const widened = values
+		.concat(value)
+		.map((v) => `'${v}'`)
+		.join(', ');
 	const withCheck = sql.replace(MEDIA_TYPE_CHECK, `CHECK ("media_type" IN (${widened}))`);
 	if (withCheck === sql) throw new Error(`Could not rewrite the media_type CHECK on "${table}"`);
 

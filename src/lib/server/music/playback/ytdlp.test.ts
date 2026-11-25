@@ -14,7 +14,9 @@ describe('parseResolvedAudio', () => {
 	});
 
 	it('maps a webm result to audio/webm', () => {
-		const parsed = parseResolvedAudio('https://example.googlevideo.com/videoplayback?expire=1|webm');
+		const parsed = parseResolvedAudio(
+			'https://example.googlevideo.com/videoplayback?expire=1|webm'
+		);
 
 		expect(parsed?.contentType).toBe('audio/webm');
 	});

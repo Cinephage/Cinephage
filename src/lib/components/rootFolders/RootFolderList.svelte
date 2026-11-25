@@ -66,9 +66,7 @@
 							<div class="card-body p-4">
 								<div class="flex items-start justify-between gap-3">
 									<div class="flex min-w-0 items-start gap-3">
-										<div
-											class="shrink-0 rounded-lg p-2 {ROOT_FOLDER_KIND_TONE[folder.mediaType]}"
-										>
+										<div class="shrink-0 rounded-lg p-2 {ROOT_FOLDER_KIND_TONE[folder.mediaType]}">
 											<KindIcon class="h-5 w-5" />
 										</div>
 										<div class="min-w-0">

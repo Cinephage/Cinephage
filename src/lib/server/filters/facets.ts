@@ -8,12 +8,7 @@ import {
 	SORT_OPTIONS,
 	facetsFor
 } from '#lib/filters/defs.js';
-import type {
-	FacetGroupView,
-	FacetOption,
-	FacetSelection,
-	FacetView
-} from '#lib/filters/types.js';
+import type { FacetGroupView, FacetOption, FacetSelection, FacetView } from '#lib/filters/types.js';
 import type { KindFilter } from '#lib/media-kinds/registry.js';
 
 /**

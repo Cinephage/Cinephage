@@ -4,7 +4,6 @@
 	import { resolve } from '$app/paths';
 	import { resolvePath } from '#lib/utils/routing.js';
 	import { SvelteSet } from 'svelte/reactivity';
-	import LibraryMediaCard from '#lib/components/library/LibraryMediaCard.svelte';
 	import { movieCardView, movieRowView } from '#lib/components/library/media-view.js';
 	import LibraryListHeader from '#lib/components/library/list/LibraryListHeader.svelte';
 	import LibraryListEmptyState from '#lib/components/library/list/LibraryListEmptyState.svelte';
@@ -594,7 +593,7 @@
 		switchToGridLabel={m.library_movies_switchToGrid()}
 		switchToListLabel={m.library_movies_switchToList()}
 		onToggleView={() => viewPreferences.toggleViewMode()}
-		activeFilterCount={activeFilterCount}
+		{activeFilterCount}
 		filterLabel={m.library_drawer_title()}
 		onOpenFilters={() => (drawerOpen = true)}
 	>
@@ -882,7 +881,11 @@
 	currentAction={currentBulkAction}
 	downloadingIds={downloadingMovieIdSet}
 	pendingItem={pendingDeleteMovie
-		? { id: pendingDeleteMovie.id, title: pendingDeleteMovie.title, hasFile: pendingDeleteMovie.hasFile }
+		? {
+				id: pendingDeleteMovie.id,
+				title: pendingDeleteMovie.title,
+				hasFile: pendingDeleteMovie.hasFile
+			}
 		: null}
 	qualityOpen={isQualityModalOpen}
 	languageOpen={isLanguageModalOpen}

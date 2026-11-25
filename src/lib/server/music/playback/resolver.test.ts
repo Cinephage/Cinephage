@@ -133,7 +133,11 @@ describe('resolveTrackStream (provider)', () => {
 
 	it('replays a remembered upload without searching again', async () => {
 		const { tracks } = seedAlbum();
-		testDb.db.update(schema.tracks).set({ streamVideoId: 'vid-known' }).where(eq(schema.tracks.id, tracks[1])).run();
+		testDb.db
+			.update(schema.tracks)
+			.set({ streamVideoId: 'vid-known' })
+			.where(eq(schema.tracks.id, tracks[1]))
+			.run();
 		ytdlp.resolveAudio.mockResolvedValue(AUDIO);
 
 		const outcome = await resolveTrackStream(tracks[1]);
@@ -145,7 +149,11 @@ describe('resolveTrackStream (provider)', () => {
 
 	it('searches again and replaces the id when the remembered upload is gone', async () => {
 		const { tracks } = seedAlbum();
-		testDb.db.update(schema.tracks).set({ streamVideoId: 'vid-dead' }).where(eq(schema.tracks.id, tracks[0])).run();
+		testDb.db
+			.update(schema.tracks)
+			.set({ streamVideoId: 'vid-dead' })
+			.where(eq(schema.tracks.id, tracks[0]))
+			.run();
 		ytdlp.resolveAudio.mockImplementation(async (videoId: string) => {
 			if (videoId === 'vid-dead') throw new Error('Video unavailable');
 			return AUDIO;
@@ -163,7 +171,11 @@ describe('resolveTrackStream (provider)', () => {
 
 	it('reports a track on an album with no stream marker as not playable', async () => {
 		const { albumId, tracks } = seedAlbum();
-		testDb.db.update(schema.albums).set({ streamSource: null }).where(eq(schema.albums.id, albumId)).run();
+		testDb.db
+			.update(schema.albums)
+			.set({ streamSource: null })
+			.where(eq(schema.albums.id, albumId))
+			.run();
 
 		await expect(resolveTrackStream(tracks[0])).resolves.toEqual({ status: 'not-stream-backed' });
 	});

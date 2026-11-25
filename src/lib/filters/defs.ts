@@ -183,12 +183,7 @@ export const GROUP_LABELS: Record<FacetGroupId, string> = {
 	availability: 'discover_filter_groupAvailability'
 };
 
-export const GROUP_ORDER: readonly FacetGroupId[] = [
-	'sort',
-	'content',
-	'release',
-	'availability'
-];
+export const GROUP_ORDER: readonly FacetGroupId[] = ['sort', 'content', 'release', 'availability'];
 
 /**
  * `all` filters the video kinds the All tab actually renders as a grid.

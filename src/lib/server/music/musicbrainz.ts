@@ -340,7 +340,10 @@ export class MusicBrainzClient {
 				);
 			} else {
 				this.noteThrottle();
-				logger.warn({ status: response.status }, '[MusicBrainz] throttled; backing off and retrying');
+				logger.warn(
+					{ status: response.status },
+					'[MusicBrainz] throttled; backing off and retrying'
+				);
 			}
 			throw new MusicBrainzError(
 				shed
@@ -483,7 +486,6 @@ export class MusicBrainzClient {
 		});
 	}
 
-
 	/** Artist search, used by "find an artist to add" and by interactive search. */
 	/**
 	 * The MusicBrainz id for an artist name, or null when no artist is exactly
@@ -539,7 +541,8 @@ export class MusicBrainzClient {
 	}): Promise<MusicRecordingHit[]> {
 		const clauses: string[] = [];
 		if (options.artistMbid) clauses.push(`arid:${options.artistMbid}`);
-		else if (options.artist?.trim()) clauses.push(`artist:"${escapeLucene(options.artist.trim())}"`);
+		else if (options.artist?.trim())
+			clauses.push(`artist:"${escapeLucene(options.artist.trim())}"`);
 		if (options.track?.trim()) clauses.push(`recording:"${escapeLucene(options.track.trim())}"`);
 		if (clauses.length === 0) return [];
 
@@ -597,15 +600,12 @@ export class MusicBrainzClient {
 				return 1;
 			};
 			const scoreRelease = (entry: NonNullable<RawRecording['releases']>[number]): number =>
-				(isOwned(entry) ? 8 : 0) +
-				typeWeight(entry) +
-				(entry.status === 'Official' ? 2 : 0);
+				(isOwned(entry) ? 8 : 0) + typeWeight(entry) + (entry.status === 'Official' ? 2 : 0);
 			const releases = (recording.releases ?? [])
 				.filter((release) => release['release-group']?.id)
 				.sort(
 					(a, b) =>
-						scoreRelease(b) - scoreRelease(a) ||
-						(a.date ?? '9999').localeCompare(b.date ?? '9999')
+						scoreRelease(b) - scoreRelease(a) || (a.date ?? '9999').localeCompare(b.date ?? '9999')
 				);
 			// The ranked list, kept whole. Its head is what MusicBrainz ordered
 			// first; the rest is what lets a picker find the plain album when the
@@ -652,7 +652,6 @@ export class MusicBrainzClient {
 			];
 		});
 	}
-
 
 	/**
 	 * The album each of an artist's track titles belongs to.
@@ -706,7 +705,10 @@ export class MusicBrainzClient {
 			offset += releases.length;
 			if (releases.length === 0 || offset >= (body['release-count'] ?? 0)) break;
 		}
-		return [...byTitle.entries()].map(([title, groups]) => ({ title, groups: [...groups.values()] }));
+		return [...byTitle.entries()].map(([title, groups]) => ({
+			title,
+			groups: [...groups.values()]
+		}));
 	}
 
 	/**
@@ -732,7 +734,8 @@ export class MusicBrainzClient {
 			const group = release['release-group'];
 			const artist = artistOf(release['artist-credit']);
 			if (!group?.id || !group.title || !artist) return [];
-			if (release.status && release.status !== 'Official' && release.status !== 'Promotion') return [];
+			if (release.status && release.status !== 'Official' && release.status !== 'Promotion')
+				return [];
 			const date = group['first-release-date'] ?? release.date ?? '';
 			const known = seen.get(group.id);
 			if (known !== undefined && known <= date) return [];
@@ -1036,7 +1039,6 @@ export class MusicBrainzClient {
 			genres: (body.genres ?? []).flatMap((genre) => (genre.name ? [genre.name] : []))
 		};
 	}
-
 }
 
 /**

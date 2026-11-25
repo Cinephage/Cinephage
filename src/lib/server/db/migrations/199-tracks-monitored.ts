@@ -16,7 +16,9 @@ export const migration_v199: MigrationDefinition = {
 		// it; the migration still has to run for older ones.
 		const columns = sqlite.prepare(`PRAGMA table_info("tracks")`).all() as Array<{ name: string }>;
 		if (!columns.some((column) => column.name === 'monitored')) {
-			sqlite.prepare(`ALTER TABLE "tracks" ADD COLUMN "monitored" integer NOT NULL DEFAULT 1`).run();
+			sqlite
+				.prepare(`ALTER TABLE "tracks" ADD COLUMN "monitored" integer NOT NULL DEFAULT 1`)
+				.run();
 		}
 	}
 };

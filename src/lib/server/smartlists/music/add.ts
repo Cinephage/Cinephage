@@ -1,6 +1,10 @@
 import { eq } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
-import { smartListItems, type SmartListRecord, type SmartListItemRecord } from '#lib/server/db/schema.js';
+import {
+	smartListItems,
+	type SmartListRecord,
+	type SmartListItemRecord
+} from '#lib/server/db/schema.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { musicProfileService } from '#lib/server/music/MusicProfileService.js';
 import { addAlbumFromReleaseGroup } from '#lib/server/music/add-album.js';

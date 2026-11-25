@@ -35,7 +35,10 @@ export class ExternalIdResolver {
 	/**
 	 * Resolve an IMDB ID to a TMDB ID
 	 */
-	async resolveByImdbId(imdbId: string, mediaType: SmartListMediaType): Promise<IdResolutionResult> {
+	async resolveByImdbId(
+		imdbId: string,
+		mediaType: SmartListMediaType
+	): Promise<IdResolutionResult> {
 		logger.info({ imdbId, mediaType }, '[ExternalIdResolver] Resolving IMDB ID');
 
 		try {

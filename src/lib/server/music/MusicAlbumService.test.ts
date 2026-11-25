@@ -542,6 +542,9 @@ describe('MusicAlbumService genres', () => {
 			qualityProfileId: null
 		});
 
-		expect(musicAlbumService.getAlbum(added.albumId)?.genres).toEqual(['electronic', 'french house']);
+		expect(musicAlbumService.getAlbum(added.albumId)?.genres).toEqual([
+			'electronic',
+			'french house'
+		]);
 	});
 });

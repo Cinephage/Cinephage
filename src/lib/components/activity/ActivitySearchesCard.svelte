@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-import type { KindFilter } from '#lib/media-kinds/registry.js';
+	import type { KindFilter } from '#lib/media-kinds/registry.js';
 	import { SvelteSet } from 'svelte/reactivity';
 	import {
 		Search,
@@ -756,11 +756,7 @@ import type { KindFilter } from '#lib/media-kinds/registry.js';
 		{@const relevance =
 			item.mediaType === 'album'
 				? { canSearch: item.status !== 'grabbed', canPause: false }
-				: classifyActionRelevance(
-						item.status,
-						item.errorMessage,
-						item.consecutiveFailureCount
-					)}
+				: classifyActionRelevance(item.status, item.errorMessage, item.consecutiveFailureCount)}
 		{@const searchType = TASK_TYPE_LABELS[detail.timeline[0]?.taskType ?? item.taskType ?? '']}
 		<div class="flex flex-wrap items-start gap-x-6 gap-y-2">
 			<div class="flex flex-wrap items-center gap-1.5 text-sm">
@@ -791,20 +787,20 @@ import type { KindFilter } from '#lib/media-kinds/registry.js';
 				</div>
 			{/if}
 			{#if item.mediaType !== 'album'}
-			<div class="flex flex-wrap items-center gap-1.5 text-sm">
-				<span class="mr-1 text-[10px] font-bold tracking-widest text-base-content/50 uppercase">
-					{m.activity_searches_detailAttempts()}
-				</span>
-				<span
-					class="badge badge-sm {detail.consecutiveFailureCount >= detail.maxConsecutiveFailures
-						? 'badge-error'
-						: detail.consecutiveFailureCount > 0
-							? 'badge-warning'
-							: 'badge-ghost'}"
-				>
-					{detail.consecutiveFailureCount} / {detail.maxConsecutiveFailures}
-				</span>
-			</div>
+				<div class="flex flex-wrap items-center gap-1.5 text-sm">
+					<span class="mr-1 text-[10px] font-bold tracking-widest text-base-content/50 uppercase">
+						{m.activity_searches_detailAttempts()}
+					</span>
+					<span
+						class="badge badge-sm {detail.consecutiveFailureCount >= detail.maxConsecutiveFailures
+							? 'badge-error'
+							: detail.consecutiveFailureCount > 0
+								? 'badge-warning'
+								: 'badge-ghost'}"
+					>
+						{detail.consecutiveFailureCount} / {detail.maxConsecutiveFailures}
+					</span>
+				</div>
 			{/if}
 			<div class="flex flex-wrap items-center gap-1.5 text-sm">
 				<span class="mr-1 text-[10px] font-bold tracking-widest text-base-content/50 uppercase">
@@ -827,19 +823,19 @@ import type { KindFilter } from '#lib/media-kinds/registry.js';
 				</span>
 			</div>
 			{#if item.mediaType !== 'album'}
-			<div class="flex flex-wrap items-center gap-1.5 text-sm">
-				<span class="mr-1 text-[10px] font-bold tracking-widest text-base-content/50 uppercase">
-					{m.activity_searches_detailNextAttempt()}
-				</span>
-				<span
-					class="rounded bg-base-100 px-2 py-1"
-					title={detail.nextAttempt ? formatDisplayDate(detail.nextAttempt) : undefined}
-				>
-					{detail.nextAttempt
-						? formatNextAttempt(detail.nextAttempt)
-						: m.activity_searches_detailEligibleNow()}
-				</span>
-			</div>
+				<div class="flex flex-wrap items-center gap-1.5 text-sm">
+					<span class="mr-1 text-[10px] font-bold tracking-widest text-base-content/50 uppercase">
+						{m.activity_searches_detailNextAttempt()}
+					</span>
+					<span
+						class="rounded bg-base-100 px-2 py-1"
+						title={detail.nextAttempt ? formatDisplayDate(detail.nextAttempt) : undefined}
+					>
+						{detail.nextAttempt
+							? formatNextAttempt(detail.nextAttempt)
+							: m.activity_searches_detailEligibleNow()}
+					</span>
+				</div>
 			{/if}
 			{#if item.isUpgrade && item.status === 'grabbed' && item.oldScore !== null && item.newScore !== null}
 				<div class="text-sm">

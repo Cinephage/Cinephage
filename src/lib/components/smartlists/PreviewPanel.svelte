@@ -1,6 +1,6 @@
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
-import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
+	import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 	import {
 		AlertCircle,
 		Check,

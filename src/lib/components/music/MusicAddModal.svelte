@@ -9,6 +9,7 @@
 		MusicRecordingHit,
 		MusicReleaseGroup
 	} from '#lib/server/music/types.js';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 
 	type Kind = 'artist' | 'album' | 'song';
 
@@ -94,7 +95,7 @@
 		searching = true;
 		resetResults();
 		try {
-			const params = new URLSearchParams({ type: kind });
+			const params = new SvelteURLSearchParams({ type: kind });
 			if (kind === 'artist') params.set('q', artistQuery.trim());
 			if (kind === 'album') {
 				if (artistQuery.trim()) params.set('artist', artistQuery.trim());
@@ -212,20 +213,30 @@
 	}
 </script>
 
-<ModalWrapper {open} onClose={onClose} maxWidth="2xl">
+<ModalWrapper {open} {onClose} maxWidth="2xl">
 	<div class="mb-1 flex items-start justify-between gap-4">
 		<div>
 			<h2 class="text-lg font-bold">{m.music_addMusic()}</h2>
 			<p class="mt-0.5 text-sm text-base-content/55">{m.music_addMusicHint()}</p>
 		</div>
-		<button class="btn btn-circle btn-ghost btn-sm" onclick={onClose} aria-label={m.action_close()}>✕</button>
+		<button class="btn btn-circle btn-ghost btn-sm" onclick={onClose} aria-label={m.action_close()}
+			>✕</button
+		>
 	</div>
 
-	<div class="tabs tabs-box tabs-sm mt-3 w-fit">
-		<button class="tab gap-1.5" class:tab-active={kind === 'artist'} onclick={() => setKind('artist')}>
+	<div class="tabs tabs-box mt-3 w-fit tabs-sm">
+		<button
+			class="tab gap-1.5"
+			class:tab-active={kind === 'artist'}
+			onclick={() => setKind('artist')}
+		>
 			<User class="h-3.5 w-3.5" />{m.music_tabArtist()}
 		</button>
-		<button class="tab gap-1.5" class:tab-active={kind === 'album'} onclick={() => setKind('album')}>
+		<button
+			class="tab gap-1.5"
+			class:tab-active={kind === 'album'}
+			onclick={() => setKind('album')}
+		>
 			<Disc3 class="h-3.5 w-3.5" />{m.music_tabAlbum()}
 		</button>
 		<button class="tab gap-1.5" class:tab-active={kind === 'song'} onclick={() => setKind('song')}>

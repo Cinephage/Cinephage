@@ -149,7 +149,6 @@
 	/** Subtitle profile override; '' = inherit (no per-item override). */
 	let languageProfileOverride = $state('');
 
-
 	/**
 	 * Read the metadata language pair, falling back to the deprecated legacy
 	 * single-string field when the pair is absent.

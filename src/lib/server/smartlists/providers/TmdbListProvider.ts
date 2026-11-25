@@ -84,7 +84,10 @@ export class TmdbListProvider implements ExternalListProvider {
 		return typeof cfg.listId === 'string' && this.normalizeListId(cfg.listId) !== null;
 	}
 
-	async fetchItems(config: unknown, mediaType: SmartListMediaType | ''): Promise<ExternalListResult> {
+	async fetchItems(
+		config: unknown,
+		mediaType: SmartListMediaType | ''
+	): Promise<ExternalListResult> {
 		const cfg = config as TmdbListConfig;
 		const items: ExternalListItem[] = [];
 		const normalizedListId = this.normalizeListId(cfg.listId);

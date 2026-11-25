@@ -366,15 +366,22 @@ export async function loadArtistPage(id: string): Promise<MusicArtistPageData> {
 }
 
 /** The page an album row opens: an MBID when one exists, else its Deezer id. */
-export function albumPageHref(ref: { mbid?: string | null; deezerId?: number | null }): string | null {
+export function albumPageHref(ref: {
+	mbid?: string | null;
+	deezerId?: number | null;
+}): string | null {
 	if (ref.mbid) return `/discover/music/${ref.mbid}`;
 	if (typeof ref.deezerId === 'number') return `/discover/music/deezer-album-${ref.deezerId}`;
 	return null;
 }
 
 /** The page an artist row opens: an MBID when one exists, else its Deezer id. */
-export function artistPageHref(ref: { mbid?: string | null; deezerId?: number | null }): string | null {
+export function artistPageHref(ref: {
+	mbid?: string | null;
+	deezerId?: number | null;
+}): string | null {
 	if (ref.mbid) return `/discover/music/artist/${ref.mbid}`;
-	if (typeof ref.deezerId === 'number') return `/discover/music/artist/deezer-artist-${ref.deezerId}`;
+	if (typeof ref.deezerId === 'number')
+		return `/discover/music/artist/deezer-artist-${ref.deezerId}`;
 	return null;
 }

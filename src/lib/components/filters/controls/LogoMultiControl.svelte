@@ -1,11 +1,10 @@
 <script lang="ts">
 	import LogoListSelect from '../LogoListSelect.svelte';
 	import type { FacetValue, FacetView } from '#lib/filters/types.js';
+	import { SvelteSet } from 'svelte/reactivity';
 
-	let {
-		facet,
-		onchange
-	}: { facet: FacetView; onchange: (value: FacetValue | null) => void } = $props();
+	let { facet, onchange }: { facet: FacetView; onchange: (value: FacetValue | null) => void } =
+		$props();
 
 	const items = $derived(
 		facet.options.map((option) => ({
@@ -18,7 +17,7 @@
 	const selected = $derived(facet.value?.kind === 'ids' ? facet.value.ids.map(Number) : []);
 
 	function toggle(id: number) {
-		const next = new Set(selected);
+		const next = new SvelteSet(selected);
 		if (next.has(id)) next.delete(id);
 		else next.add(id);
 		onchange(next.size > 0 ? { kind: 'ids', ids: [...next].map(String) } : null);

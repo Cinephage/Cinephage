@@ -1,5 +1,15 @@
 <script lang="ts">
-	import { ChevronDown, Disc3, Eye, EyeOff, LoaderCircle, MoreVertical, Search, Trash2, Zap } from '@lucide/svelte';
+	import {
+		ChevronDown,
+		Disc3,
+		Eye,
+		EyeOff,
+		LoaderCircle,
+		MoreVertical,
+		Search,
+		Trash2,
+		Zap
+	} from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import { resolvePath } from '#lib/utils/routing.js';
 	import { trackAvailability, type AlbumWithTracks } from './music-card.js';
@@ -73,16 +83,24 @@
 
 					<div class="hidden shrink-0 items-center gap-2 sm:flex">
 						{#if availability === 'downloaded'}
-							<span class="badge badge-sm border-none bg-success/15 text-success">{m.common_downloaded()}</span>
+							<span class="badge border-none bg-success/15 badge-sm text-success"
+								>{m.common_downloaded()}</span
+							>
 						{:else if availability === 'streaming'}
-							<span class="badge badge-sm border-none bg-info/15 text-info">{m.library_fileCard_streaming()}</span>
+							<span class="badge border-none bg-info/15 badge-sm text-info"
+								>{m.library_fileCard_streaming()}</span
+							>
 						{:else}
-							<span class="badge badge-sm border-none bg-warning/15 text-warning">{m.common_missing()}</span>
+							<span class="badge border-none bg-warning/15 badge-sm text-warning"
+								>{m.common_missing()}</span
+							>
 						{/if}
 					</div>
 
 					<ChevronDown
-						class="h-4 w-4 shrink-0 text-base-content/40 transition-transform {open ? 'rotate-180' : ''}"
+						class="h-4 w-4 shrink-0 text-base-content/40 transition-transform {open
+							? 'rotate-180'
+							: ''}"
 					/>
 				</button>
 

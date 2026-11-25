@@ -33,7 +33,17 @@
 		toDiscoverSelectionEntry,
 		type DiscoverSelectionEntry
 	} from '#lib/utils/discoverSelection.js';
-	import { Search, Eye, EyeOff, X, Loader2, Bug, CheckSquare, XSquare, ListMusic } from '@lucide/svelte';
+	import {
+		Search,
+		Eye,
+		EyeOff,
+		X,
+		Loader2,
+		Bug,
+		CheckSquare,
+		XSquare,
+		ListMusic
+	} from '@lucide/svelte';
 	import { getMediaTypeLabel } from '#lib/types/tmdb-guards.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { searchTmdb, getDiscover, getDiscoverUnfiltered } from '#lib/api/index.js';
@@ -860,7 +870,7 @@
 			     Genres are a facet in the drawer, not a control row on the page. -->
 			<div class="animate-in fade-in space-y-10 duration-500">
 				<div class="flex items-center justify-end">
-					<button class="btn btn-outline btn-sm gap-2" onclick={() => (importOpen = true)}>
+					<button class="btn gap-2 btn-outline btn-sm" onclick={() => (importOpen = true)}>
 						<ListMusic class="h-4 w-4" />
 						{m.music_importPlaylist()}
 					</button>
@@ -868,7 +878,9 @@
 				{#each musicShelves as shelf (shelf.id)}
 					<section class="space-y-4">
 						<h2 class="text-lg font-bold">
-							{activeGenreName ? `${activeGenreName} · ${shelfLabel(shelf.id)}` : shelfLabel(shelf.id)}
+							{activeGenreName
+								? `${activeGenreName} · ${shelfLabel(shelf.id)}`
+								: shelfLabel(shelf.id)}
 						</h2>
 						<div class="grid grid-cols-3 gap-2 sm:gap-4 lg:grid-cols-9">
 							{#each shelf.rows as item (item.id)}
@@ -879,7 +891,6 @@
 				{/each}
 			</div>
 		{:else if data.viewType === 'dashboard' && data.sections}
-
 			<!-- Dashboard View -->
 			<div class="animate-in fade-in space-y-12 duration-500">
 				<SectionRow

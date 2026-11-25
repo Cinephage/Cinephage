@@ -1,6 +1,6 @@
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
-import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
+	import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 	import type { SmartListFilters } from '#lib/server/db/schema.js';
 	import { page } from '$app/state';
 	import { TMDB } from '#lib/config/constants.js';
@@ -59,7 +59,7 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 		description: string;
 		filters: Partial<SmartListFilters>;
 		sortBy: string;
-		appliesTo: (SmartListMediaType)[];
+		appliesTo: SmartListMediaType[];
 	}
 
 	const filterPresets: FilterPreset[] = [

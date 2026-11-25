@@ -197,11 +197,18 @@ describe('BlocklistService album scope', () => {
 		);
 		expect(otherAlbum.blocked).toBe(false);
 
-		const identifiers = await blocklistService.getBlockedIdentifiers(undefined, undefined, 'album-1');
+		const identifiers = await blocklistService.getBlockedIdentifiers(
+			undefined,
+			undefined,
+			'album-1'
+		);
 		expect(identifiers.blockedHashes.has('HASH_ALBUM')).toBe(true);
 
 		await blocklistService.clearAlbumBlocklist('album-1');
-		expect((await blocklistService.getBlockedIdentifiers(undefined, undefined, 'album-1')).blockedHashes.size).toBe(0);
+		expect(
+			(await blocklistService.getBlockedIdentifiers(undefined, undefined, 'album-1')).blockedHashes
+				.size
+		).toBe(0);
 	});
 });
 

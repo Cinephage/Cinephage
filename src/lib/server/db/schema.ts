@@ -3530,7 +3530,9 @@ export const mediaServerSyncedItems = sqliteTable(
 		imdbId: text('imdb_id'),
 		title: text('title').notNull(),
 		year: integer('year'),
-		itemType: text('item_type', { enum: ['movie', 'episode', 'series', 'season', 'track'] }).notNull(),
+		itemType: text('item_type', {
+			enum: ['movie', 'episode', 'series', 'season', 'track']
+		}).notNull(),
 		/** Music-only: the artist and album a track belongs to. */
 		artistName: text('artist_name'),
 		albumName: text('album_name'),
@@ -5107,22 +5109,24 @@ export const musicImportJobs = sqliteTable(
 		id: text('id').primaryKey(),
 		url: text('url').notNull(),
 		/** JSON: scope, library/folder/profile choices, the selected release groups. */
-		recipe: text('recipe', { mode: 'json' }).$type<{
-			scope: 'album' | 'artist' | 'features' | 'songs';
-			rowIds: string[];
-			libraryId: string | null;
-			rootFolderId: string | null;
-			qualityProfileId: string | null;
-			monitored: boolean;
-			searchAfterAdd: boolean;
-		}>()
+		recipe: text('recipe', { mode: 'json' })
+			.$type<{
+				scope: 'album' | 'artist' | 'features' | 'songs';
+				rowIds: string[];
+				libraryId: string | null;
+				rootFolderId: string | null;
+				qualityProfileId: string | null;
+				monitored: boolean;
+				searchAfterAdd: boolean;
+			}>()
 			.notNull(),
 		phase: text('phase').notNull(),
-		progress: text('progress', { mode: 'json' })
-			.$type<{ done: number; total: number }>()
-			.notNull(),
-		summary: text('summary', { mode: 'json' })
-			.$type<{ added: number; existing: number; failed: number } | null>(),
+		progress: text('progress', { mode: 'json' }).$type<{ done: number; total: number }>().notNull(),
+		summary: text('summary', { mode: 'json' }).$type<{
+			added: number;
+			existing: number;
+			failed: number;
+		} | null>(),
 		/** Counts and provider truncation that outlive the process. */
 		meta: text('meta', { mode: 'json' })
 			.$type<{
@@ -5185,7 +5189,9 @@ export const musicScanIssues = sqliteTable(
 		albumTitle: text('album_title'),
 		artistName: text('artist_name'),
 		reason: text('reason').notNull(),
-		status: text('status', { enum: ['pending', 'ignored', 'resolved'] }).notNull().default('pending'),
+		status: text('status', { enum: ['pending', 'ignored', 'resolved'] })
+			.notNull()
+			.default('pending'),
 		firstSeenAt: text('first_seen_at').notNull(),
 		lastSeenAt: text('last_seen_at').notNull(),
 		resolvedAt: text('resolved_at')

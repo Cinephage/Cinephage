@@ -1,5 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { clearTestDb, createTestDb, destroyTestDb, type TestDatabase } from '../../../../test/db-helper.js';
+import {
+	clearTestDb,
+	createTestDb,
+	destroyTestDb,
+	type TestDatabase
+} from '../../../../test/db-helper.js';
 import { musicBrainz } from '../musicbrainz.js';
 import type { MusicRecordingHit, MusicReleaseGroup } from '../types.js';
 import { expandArtists, previewExpansion, type PlaylistJobRow } from './jobs.js';
@@ -130,6 +135,9 @@ describe('artist expansion', () => {
 		expect(preview.total).toBe(2);
 		expect(preview.byArtist).toHaveLength(1);
 		expect(preview.byArtist[0]).toMatchObject({ artistName: 'Daft Punk', count: 2 });
-		expect(preview.byArtist[0].albums.map((album) => album.title)).toEqual(['Discovery', 'Homework']);
+		expect(preview.byArtist[0].albums.map((album) => album.title)).toEqual([
+			'Discovery',
+			'Homework'
+		]);
 	});
 });

@@ -66,14 +66,11 @@ export class MusicTrackService {
 		for (const needle of (options.q ?? '').trim().toLowerCase().split(/\s+/).filter(Boolean)) {
 			const pattern = `%${needle}%`;
 			conditions.push(
-				or(
-					like(tracks.title, pattern),
-					like(albums.title, pattern),
-					like(artists.name, pattern)
-				)!
+				or(like(tracks.title, pattern), like(albums.title, pattern), like(artists.name, pattern))!
 			);
 		}
-		const where = conditions.filter(Boolean).length > 0 ? and(...conditions.filter(Boolean)) : undefined;
+		const where =
+			conditions.filter(Boolean).length > 0 ? and(...conditions.filter(Boolean)) : undefined;
 
 		const total =
 			db

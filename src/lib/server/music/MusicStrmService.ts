@@ -101,9 +101,7 @@ export class MusicStrmService {
 
 		const baseUrl = await getStreamingBaseUrl('');
 		if (!baseUrl) {
-			throw new ValidationError(
-				'Set the streaming base URL before creating stream shortcuts'
-			);
+			throw new ValidationError('Set the streaming base URL before creating stream shortcuts');
 		}
 		const albumTracks = db
 			.select({
@@ -143,21 +141,14 @@ export class MusicStrmService {
 
 		getMediaBrowserNotifier().queueUpdate(folder, 'Created', 'import');
 
-		logger.info(
-			{ albumId, folder, written, multiDisc },
-			'[MusicStrm] Album shortcuts written'
-		);
+		logger.info({ albumId, folder, written, multiDisc }, '[MusicStrm] Album shortcuts written');
 
 		return { folder, written };
 	}
 
 	/** Remove the shortcuts for an album that now has real files. */
 	async removeAlbumShortcuts(albumId: string): Promise<number> {
-		const album = db
-			.select({ path: albums.path })
-			.from(albums)
-			.where(eq(albums.id, albumId))
-			.get();
+		const album = db.select({ path: albums.path }).from(albums).where(eq(albums.id, albumId)).get();
 
 		if (!album?.path) return 0;
 		return this.removeShortcutsInFolder(album.path);

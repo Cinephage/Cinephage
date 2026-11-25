@@ -111,10 +111,9 @@ export const tmdbCatalogSource: CatalogSource = {
 				tmdb.fetch(`/movie/top_rated?page=${page}`),
 				tmdb.fetch(`/tv/top_rated?page=${page}`)
 			])) as TmdbPaginated[];
-			const rows = [
-				...stampKind(movies.results, 'movie'),
-				...stampKind(tv.results, 'tv')
-			].sort((a, b) => ((b.vote_average as number) ?? 0) - ((a.vote_average as number) ?? 0));
+			const rows = [...stampKind(movies.results, 'movie'), ...stampKind(tv.results, 'tv')].sort(
+				(a, b) => ((b.vote_average as number) ?? 0) - ((a.vote_average as number) ?? 0)
+			);
 			return {
 				items: toItems(rows),
 				pagination: {

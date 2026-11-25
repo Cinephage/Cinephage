@@ -2,7 +2,15 @@ import { and, asc, count, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { coreTitle } from './track-matching.js';
 import { db } from '#lib/server/db/index.js';
-import { albums, artists, downloadQueue, libraries, mediaItems, trackFiles, tracks } from '#lib/server/db/schema.js';
+import {
+	albums,
+	artists,
+	downloadQueue,
+	libraries,
+	mediaItems,
+	trackFiles,
+	tracks
+} from '#lib/server/db/schema.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { NotFoundError, ValidationError } from '#lib/errors/index.js';
 import { musicProfileService } from './MusicProfileService.js';
@@ -324,7 +332,7 @@ export class MusicAlbumService {
 					releaseMbid: release.mbid,
 					title: releaseGroup.title,
 					year: releaseGroup.year ?? release.year ?? null,
-				releaseDate: releaseGroup.firstReleaseDate ?? null,
+					releaseDate: releaseGroup.firstReleaseDate ?? null,
 					primaryType: releaseGroup.primaryType ?? null,
 					secondaryTypes: releaseGroup.secondaryTypes,
 					status: release.status ?? null,
@@ -397,7 +405,11 @@ export class MusicAlbumService {
 				.select({ id: albums.id, mediaItemId: albums.mediaItemId })
 				.from(albums)
 				.where(
-					and(eq(albums.artistId, artistId), isNull(albums.mbid), eq(albums.title, input.album.title))
+					and(
+						eq(albums.artistId, artistId),
+						isNull(albums.mbid),
+						eq(albums.title, input.album.title)
+					)
 				)
 				.get();
 
@@ -482,7 +494,12 @@ export class MusicAlbumService {
 		});
 
 		logger.info(
-			{ albumId: result.albumId, source: 'deezer', sourceId: input.album.sourceId, created: result.created },
+			{
+				albumId: result.albumId,
+				source: 'deezer',
+				sourceId: input.album.sourceId,
+				created: result.created
+			},
 			'[MusicAlbum] catalog album add'
 		);
 		return result;
@@ -736,7 +753,7 @@ export class MusicAlbumService {
 					releaseMbid: release.mbid,
 					title: group.title,
 					year: group.year ?? release.year ?? null,
-				releaseDate: group.firstReleaseDate ?? null,
+					releaseDate: group.firstReleaseDate ?? null,
 					primaryType: group.primaryType ?? null,
 					secondaryTypes: group.secondaryTypes,
 					genres: group.genres ?? [],
@@ -922,11 +939,8 @@ export class MusicAlbumService {
 			.all()
 			.filter(
 				(row) =>
-					musicProfileService.resolve(
-						row.albumProfile,
-						row.artistProfile,
-						row.libraryProfile
-					).id === profileId
+					musicProfileService.resolve(row.albumProfile, row.artistProfile, row.libraryProfile)
+						.id === profileId
 			)
 			.map((row) => row.id);
 	}
@@ -1103,8 +1117,7 @@ export class MusicAlbumService {
 		const row = db
 			.select({
 				albums: count(),
-				missing:
-					sql<number>`sum(case when ${albums.hasFile} = 0 and ${albums.streamSource} is null then 1 else 0 end)`,
+				missing: sql<number>`sum(case when ${albums.hasFile} = 0 and ${albums.streamSource} is null then 1 else 0 end)`,
 				monitored: sql<number>`sum(case when ${albums.monitored} = 1 then 1 else 0 end)`
 			})
 			.from(albums)

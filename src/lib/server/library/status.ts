@@ -175,9 +175,7 @@ export function filterInLibrary<T extends { inLibrary?: boolean }>(
 let blockedCache: Record<string, { ids: Set<number>; expiry: number }> = {};
 const BLOCKED_CACHE_TTL = 30_000;
 
-export async function getBlockedTmdbIdSet(
-	mediaType: KindFilter = 'all'
-): Promise<Set<number>> {
+export async function getBlockedTmdbIdSet(mediaType: KindFilter = 'all'): Promise<Set<number>> {
 	const now = Date.now();
 	const cached = blockedCache[mediaType];
 	if (cached && cached.expiry > now) {

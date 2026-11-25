@@ -87,7 +87,10 @@ function albumOf(track: PlaylistTrack, hits: CatalogTrack[]): DiscoveredAlbum | 
 	return null;
 }
 
-async function discover(track: PlaylistTrack, search: TrackSearch): Promise<DiscoveredAlbum | null> {
+async function discover(
+	track: PlaylistTrack,
+	search: TrackSearch
+): Promise<DiscoveredAlbum | null> {
 	try {
 		if (!track.title?.trim() || track.artists?.length === 0) return null;
 		// Deezer's field syntax — `artist:"…" track:"…"` — answers zero for plenty

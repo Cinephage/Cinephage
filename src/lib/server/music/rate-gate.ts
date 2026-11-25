@@ -51,9 +51,7 @@ export class RateGate {
 	}
 
 	private get intervalMs(): number {
-		return this.now() < this.slowUntil
-			? Math.round(this.minIntervalMs * 2.5)
-			: this.minIntervalMs;
+		return this.now() < this.slowUntil ? Math.round(this.minIntervalMs * 2.5) : this.minIntervalMs;
 	}
 
 	/** Wait until this caller's slot is due, re-checking a hold after waking. */

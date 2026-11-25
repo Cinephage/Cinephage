@@ -10,6 +10,7 @@
 	import * as m from '#lib/paraglide/messages.js';
 	import { ModalWrapper } from '#lib/components/ui/modal/index.js';
 	import { ListMusic } from '@lucide/svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 
 	interface JobRow {
 		releaseGroupMbid: string;
@@ -188,9 +189,7 @@
 					albums: Array<{ title: string; year: number | null }>;
 				}>;
 			};
-			expansion = response.ok
-				? { total: body.total ?? 0, byArtist: body.byArtist ?? [] }
-				: null;
+			expansion = response.ok ? { total: body.total ?? 0, byArtist: body.byArtist ?? [] } : null;
 		} catch {
 			expansion = null;
 		} finally {
@@ -268,7 +267,7 @@
 	}
 
 	function toggle(id: string) {
-		const next = new Set(selected);
+		const next = new SvelteSet(selected);
 		if (next.has(id)) next.delete(id);
 		else next.add(id);
 		selected = next;
@@ -339,7 +338,7 @@
 
 	<div class="mt-4 flex gap-2">
 		<input
-			class="input input-bordered input-sm w-full"
+			class="input-bordered input w-full input-sm"
 			type="url"
 			placeholder="https://…"
 			bind:value={url}
@@ -349,7 +348,7 @@
 			}}
 		/>
 		<button
-			class="btn btn-primary btn-sm shrink-0"
+			class="btn shrink-0 btn-primary btn-sm"
 			disabled={!url.trim() || busy || submitting}
 			onclick={() => void start()}
 		>
@@ -359,7 +358,7 @@
 
 	<div class="mt-3 flex flex-wrap items-center gap-2">
 		<span class="text-xs font-medium text-base-content/70">{m.music_importScope()}</span>
-		<select class="select select-bordered select-xs" bind:value={scope}>
+		<select class="select-bordered select select-xs" bind:value={scope}>
 			<option value="album">{m.music_importScopeAlbum()}</option>
 			<option value="artist">{m.music_importScopeArtist()}</option>
 			<option value="features">{m.music_importScopeFeatures()}</option>
@@ -379,7 +378,7 @@
 	{#if (scope === 'artist' || scope === 'features') && (expanding || expansion)}
 		<div class="mt-1 text-xs text-base-content/60">
 			{#if expanding && !expansion}
-				<span class="loading loading-spinner loading-xs"></span>
+				<span class="loading loading-xs loading-spinner"></span>
 			{:else if expansion}
 				<span>{m.music_importExpandSummary({ count: expansion.total })}</span>
 				{#if expansion.total > 0}
@@ -410,7 +409,7 @@
 	{/if}
 
 	{#if error}
-		<div class="alert alert-error mt-4 py-2 text-sm">{error}</div>
+		<div class="mt-4 alert py-2 text-sm alert-error">{error}</div>
 	{/if}
 
 	{#if !job && recent.length > 0}
@@ -465,7 +464,8 @@
 						<summary class="cursor-pointer">
 							{m.music_importUnmatchedBroken({
 								count: job.unmatched.length,
-								unreachable: job.unmatched.filter((entry) => entry.reason === 'lookup-failed').length,
+								unreachable: job.unmatched.filter((entry) => entry.reason === 'lookup-failed')
+									.length,
 								noMatch: job.unmatched.filter((entry) => entry.reason !== 'lookup-failed').length
 							})}
 						</summary>
@@ -483,7 +483,7 @@
 			{#if busy}
 				<div class="mt-4 space-y-2">
 					<p class="flex items-center gap-2 text-sm text-base-content/70">
-						<span class="loading loading-spinner loading-xs"></span>
+						<span class="loading loading-xs loading-spinner"></span>
 						{job.phase === 'fetching'
 							? m.music_importReadingPlaylist()
 							: job.phase === 'resolving'
@@ -492,7 +492,7 @@
 					</p>
 					{#if job.progress.total > 0}
 						<progress
-							class="progress progress-primary w-full"
+							class="progress w-full progress-primary"
 							value={job.progress.done}
 							max={job.progress.total}
 						></progress>
@@ -572,11 +572,11 @@
 									<td class="text-right text-xs text-base-content/60">{row.tracks.length}</td>
 									<td class="text-right">
 										{#if row.status === 'added'}
-											<span class="badge badge-success badge-sm">{m.music_importAdded()}</span>
+											<span class="badge badge-sm badge-success">{m.music_importAdded()}</span>
 										{:else if row.status === 'existing'}
 											<span class="badge badge-ghost badge-sm">{m.music_importInLibrary()}</span>
 										{:else if row.status === 'failed'}
-											<span class="badge badge-error badge-sm" title={row.error ?? ''}>
+											<span class="badge badge-sm badge-error" title={row.error ?? ''}>
 												{m.music_importRowFailed()}
 											</span>
 										{:else if row.inLibrary}
@@ -598,7 +598,7 @@
 				<div class="mt-4 grid gap-3 sm:grid-cols-2">
 					<label class="form-control">
 						<span class="mb-1 text-xs font-medium">{m.common_qualityProfile()}</span>
-						<select class="select select-bordered select-sm" bind:value={profileId}>
+						<select class="select-bordered select select-sm" bind:value={profileId}>
 							<option value="">
 								{defaultProfileName
 									? m.music_useDefaultProfile({ name: defaultProfileName })
@@ -623,7 +623,7 @@
 			{/if}
 
 			{#if job.phase === 'done' && job.summary}
-				<div class="alert alert-success mt-4 py-2 text-sm">
+				<div class="mt-4 alert py-2 text-sm alert-success">
 					{m.music_importSummary({
 						added: job.summary.added,
 						existing: job.summary.existing,
@@ -650,8 +650,12 @@
 	{:else if job && (job.phase === 'failed' || job.phase === 'cancelled' || job.phase === 'interrupted')}
 		{@const finishedId = job.id}
 		<div class="mt-4 space-y-3">
-			<div class="alert {job.phase === 'interrupted' ? 'alert-warning' : 'alert-error'} py-2 text-sm">
-				{job.phase === 'interrupted' ? m.music_importInterruptedHint() : (job.error ?? m.music_importFailedTitle())}
+			<div
+				class="alert {job.phase === 'interrupted' ? 'alert-warning' : 'alert-error'} py-2 text-sm"
+			>
+				{job.phase === 'interrupted'
+					? m.music_importInterruptedHint()
+					: (job.error ?? m.music_importFailedTitle())}
 			</div>
 			<div class="flex justify-end gap-2">
 				{#if job.phase === 'interrupted'}

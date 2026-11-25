@@ -9,10 +9,7 @@ import {
 	calculateTitleSimilarity,
 	normalizeTitleForMatch
 } from '#lib/server/library/title-matching.js';
-import {
-	gradeMusicRelease,
-	type MusicQualityProfile
-} from './parse-release.js';
+import { gradeMusicRelease, type MusicQualityProfile } from './parse-release.js';
 import { musicProfileService } from './MusicProfileService.js';
 import { parseMusicStreamUrl } from './stream-url.js';
 import { blocklistService } from '#lib/server/blocklist/BlocklistService.js';

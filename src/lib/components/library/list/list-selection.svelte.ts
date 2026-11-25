@@ -24,7 +24,7 @@ export interface ListSelection {
 }
 
 export function createListSelection(): ListSelection {
-	let ids = new SvelteSet<string>();
+	const ids = new SvelteSet<string>();
 	let mode = $state(false);
 
 	const count = $derived(ids.size);

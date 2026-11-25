@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { createTestDb, destroyTestDb, type TestDatabase } from '../../../test/db-helper';
-import { albums, artists, downloadClients, downloadQueue, mediaItems } from '#lib/server/db/schema.js';
+import {
+	albums,
+	artists,
+	downloadClients,
+	downloadQueue,
+	mediaItems
+} from '#lib/server/db/schema.js';
 
 const testDb: TestDatabase = createTestDb();
 
@@ -28,7 +34,9 @@ async function seedMusicQueue(): Promise<void> {
 	const albumId = randomUUID();
 	const mediaItemId = randomUUID();
 
-	await testDb.db.insert(artists).values({ id: artistId, name: 'Chris Webby', mbid: 'artist-mbid' });
+	await testDb.db
+		.insert(artists)
+		.values({ id: artistId, name: 'Chris Webby', mbid: 'artist-mbid' });
 	await testDb.db.insert(mediaItems).values({
 		id: mediaItemId,
 		kind: 'album',

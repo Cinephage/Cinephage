@@ -6,10 +6,8 @@
 	import KeywordsControl from './controls/KeywordsControl.svelte';
 	import type { FacetValue, FacetView } from '#lib/filters/types.js';
 
-	let {
-		facet,
-		onchange
-	}: { facet: FacetView; onchange: (value: FacetValue | null) => void } = $props();
+	let { facet, onchange }: { facet: FacetView; onchange: (value: FacetValue | null) => void } =
+		$props();
 </script>
 
 <div class="space-y-1">

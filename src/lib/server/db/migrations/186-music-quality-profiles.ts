@@ -53,7 +53,11 @@ const BUILT_INS = [
 	}
 ];
 
-function hasColumn(sqlite: Parameters<MigrationDefinition['apply']>[0], table: string, column: string) {
+function hasColumn(
+	sqlite: Parameters<MigrationDefinition['apply']>[0],
+	table: string,
+	column: string
+) {
 	const columns = sqlite.prepare(`PRAGMA table_info("${table}")`).all() as Array<{ name: string }>;
 	return columns.some((entry) => entry.name === column);
 }
@@ -63,7 +67,9 @@ export const migration_v186: MigrationDefinition = {
 	name: 'music_quality_profiles',
 	apply: (sqlite) => {
 		if (!hasColumn(sqlite, 'scoring_profiles', 'media_kind')) {
-			sqlite.prepare(`ALTER TABLE "scoring_profiles" ADD COLUMN "media_kind" text DEFAULT 'video'`).run();
+			sqlite
+				.prepare(`ALTER TABLE "scoring_profiles" ADD COLUMN "media_kind" text DEFAULT 'video'`)
+				.run();
 		}
 		if (!hasColumn(sqlite, 'scoring_profiles', 'music_tiers')) {
 			sqlite.prepare(`ALTER TABLE "scoring_profiles" ADD COLUMN "music_tiers" text`).run();
@@ -92,9 +98,7 @@ export const migration_v186: MigrationDefinition = {
 		}
 
 		sqlite
-			.prepare(
-				`INSERT OR IGNORE INTO "settings" ("key","value") VALUES ('music_quality', ?)`
-			)
+			.prepare(`INSERT OR IGNORE INTO "settings" ("key","value") VALUES ('music_quality', ?)`)
 			.run(JSON.stringify({ defaultProfileId: 'music-default' }));
 	}
 };

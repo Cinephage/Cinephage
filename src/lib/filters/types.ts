@@ -11,13 +11,7 @@ import type { KindId } from '#lib/media-kinds/registry.js';
 /** The control a facet renders as. Closed on purpose: a new control is a
  *  deliberate addition to FacetField, never a per-kind branch. */
 export type FacetControl =
-	| 'single'
-	| 'multi'
-	| 'logo-multi'
-	| 'range'
-	| 'slider'
-	| 'keywords'
-	| 'preset';
+	'single' | 'multi' | 'logo-multi' | 'range' | 'slider' | 'keywords' | 'preset';
 
 export type FacetGroupId = 'sort' | 'content' | 'release' | 'availability';
 

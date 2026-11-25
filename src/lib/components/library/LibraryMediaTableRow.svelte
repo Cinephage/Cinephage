@@ -116,7 +116,8 @@
 		{#if row.tag}
 			<span class="mt-0.5 badge badge-outline badge-xs">{row.tag}</span>
 		{:else if row.subtitle}
-			<span class="mt-0.5 block max-w-xs truncate text-xs text-base-content/50">{row.subtitle}</span>
+			<span class="mt-0.5 block max-w-xs truncate text-xs text-base-content/50">{row.subtitle}</span
+			>
 		{/if}
 	</td>
 
@@ -128,7 +129,9 @@
 		<div class="flex items-center gap-1.5">
 			{#if row.monitored}
 				<span
-					class="badge gap-1.5 badge-sm {row.partiallyMonitored ? 'badge-warning' : 'badge-success'}"
+					class="badge gap-1.5 badge-sm {row.partiallyMonitored
+						? 'badge-warning'
+						: 'badge-success'}"
 					title={row.partiallyMonitored
 						? m.library_monitorToggle_partiallyMonitored()
 						: m.common_monitored()}
@@ -156,7 +159,7 @@
 					{m.common_missing()}
 				</span>
 			{:else if row.state}
-				<span class="badge badge-sm badge-ghost" title={row.state.label}>{row.state.label}</span>
+				<span class="badge badge-ghost badge-sm" title={row.state.label}>{row.state.label}</span>
 			{/if}
 		</div>
 	</td>

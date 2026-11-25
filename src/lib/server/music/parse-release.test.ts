@@ -143,7 +143,13 @@ describe('gradeMusicRelease — streaming is a tier, not a free pass', () => {
 
 	it('accepts streaming when the ladder has a streaming rung', () => {
 		const grade = gradeMusicRelease(
-			{ ...base, tiers: [{ kind: 'lossless', label: 'Lossless' }, { kind: 'streaming', label: 'Streaming' }] },
+			{
+				...base,
+				tiers: [
+					{ kind: 'lossless', label: 'Lossless' },
+					{ kind: 'streaming', label: 'Streaming' }
+				]
+			},
 			{ title: 'Album [Streaming]', protocol: 'streaming' }
 		);
 		expect(grade.accepted).toBe(true);

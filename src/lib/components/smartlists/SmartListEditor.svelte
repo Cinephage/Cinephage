@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
+	import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 	import { ArrowLeft, Loader2, Film, Tv, Music, Save } from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import { onMount } from 'svelte';
@@ -56,11 +56,7 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 	const descriptionTooLong = $derived(description.length > maxDescriptionLength);
 
 	// List source type
-	type ListSourceType =
-		| 'tmdb-discover'
-		| 'external-json'
-		| 'playlist'
-		| 'musicbrainz-new-releases';
+	type ListSourceType = 'tmdb-discover' | 'external-json' | 'playlist' | 'musicbrainz-new-releases';
 	let listSourceType = $state<ListSourceType>('tmdb-discover');
 
 	// External source config
@@ -283,10 +279,7 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 	function handleMediaTypeChange(newType: SmartListMediaType) {
 		mediaType = newType;
 		if (newType === 'music') {
-			if (
-				listSourceType !== 'playlist' &&
-				listSourceType !== 'musicbrainz-new-releases'
-			) {
+			if (listSourceType !== 'playlist' && listSourceType !== 'musicbrainz-new-releases') {
 				listSourceType = 'playlist';
 			}
 			return;
@@ -671,54 +664,54 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 				</div>
 			{:else}
 				<PreviewPanel
-				items={previewItems}
-				loading={previewLoading}
-				error={previewError}
-				page={previewPage}
-				totalResults={previewTotalResults}
-				totalPages={previewTotalPages}
-				{mediaType}
-				itemLimit={effectivePreviewItemLimit}
-				unfilteredTotal={previewUnfilteredTotal}
-				onPageChange={handlePageChange}
-				onRetry={() => {
-					if (listSourceType === 'external-json') {
-						fetchExternalPreview();
-					} else {
-						fetchPreview();
-					}
-				}}
-				debugData={{
-					timestamp: new Date().toISOString(),
-					listType: listSourceType,
-					configuration: {
-						mediaType,
-						filters: filters as Record<string, unknown>,
-						sortBy,
-						itemLimit: effectivePreviewItemLimit,
-						excludeInLibrary,
-						listSourceType,
-						presetId,
-						presetProvider,
-						externalSourceConfig
-					},
-					pagination: {
-						page: previewPage,
-						totalPages: previewTotalPages,
-						totalResults: previewTotalResults,
-						unfilteredTotal: previewUnfilteredTotal
-					},
-					items: previewItems,
-					failedItems: previewDebugData?.failedItems,
-					metadata: previewDebugData
-						? {
-								resolvedCount: previewDebugData.resolvedCount,
-								failedCount: previewDebugData.failedCount,
-								duplicatesRemoved: previewDebugData.duplicatesRemoved
-							}
-						: undefined
-				}}
-			/>
+					items={previewItems}
+					loading={previewLoading}
+					error={previewError}
+					page={previewPage}
+					totalResults={previewTotalResults}
+					totalPages={previewTotalPages}
+					{mediaType}
+					itemLimit={effectivePreviewItemLimit}
+					unfilteredTotal={previewUnfilteredTotal}
+					onPageChange={handlePageChange}
+					onRetry={() => {
+						if (listSourceType === 'external-json') {
+							fetchExternalPreview();
+						} else {
+							fetchPreview();
+						}
+					}}
+					debugData={{
+						timestamp: new Date().toISOString(),
+						listType: listSourceType,
+						configuration: {
+							mediaType,
+							filters: filters as Record<string, unknown>,
+							sortBy,
+							itemLimit: effectivePreviewItemLimit,
+							excludeInLibrary,
+							listSourceType,
+							presetId,
+							presetProvider,
+							externalSourceConfig
+						},
+						pagination: {
+							page: previewPage,
+							totalPages: previewTotalPages,
+							totalResults: previewTotalResults,
+							unfilteredTotal: previewUnfilteredTotal
+						},
+						items: previewItems,
+						failedItems: previewDebugData?.failedItems,
+						metadata: previewDebugData
+							? {
+									resolvedCount: previewDebugData.resolvedCount,
+									failedCount: previewDebugData.failedCount,
+									duplicatesRemoved: previewDebugData.duplicatesRemoved
+								}
+							: undefined
+					}}
+				/>
 			{/if}
 		</div>
 	</div>

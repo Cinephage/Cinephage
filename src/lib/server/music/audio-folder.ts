@@ -187,7 +187,8 @@ function commonFolder(files: TaggedAudioFile[]): string {
 	for (const folder of folders.slice(1)) {
 		const parts = folder.split(path.sep);
 		let index = 0;
-		while (index < shared.length && index < parts.length && shared[index] === parts[index]) index += 1;
+		while (index < shared.length && index < parts.length && shared[index] === parts[index])
+			index += 1;
 		shared = shared.slice(0, index);
 	}
 	return shared.join(path.sep) || path.sep;
@@ -259,7 +260,9 @@ export function groupAudioFiles(files: TaggedAudioFile[]): AudioAlbumFolder[] {
 				bucket.map((file) => normalizeMusicName(file.artist)).filter((name) => name.length > 0)
 			);
 			if (distinct.size > 1) artist = 'Various Artists';
-			else artist = (mostCommon(bucket.map((file) => file.artist)) as string | null) ?? inferred.artist;
+			else
+				artist =
+					(mostCommon(bucket.map((file) => file.artist)) as string | null) ?? inferred.artist;
 		}
 
 		groups.push({

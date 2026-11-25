@@ -59,9 +59,9 @@ describe('youtubeSource.parseUrl', () => {
 		expect(
 			youtubeSource.parseUrl(new URL('https://music.youtube.com/playlist?list=OLAK5uy_abc'))
 		).toBe('OLAK5uy_abc');
-		expect(
-			youtubeSource.parseUrl(new URL('https://youtu.be/vid123?list=PLxyz123456789'))
-		).toBe('PLxyz123456789');
+		expect(youtubeSource.parseUrl(new URL('https://youtu.be/vid123?list=PLxyz123456789'))).toBe(
+			'PLxyz123456789'
+		);
 	});
 
 	it('refuses a video URL with no playlist and a non-YouTube host', () => {

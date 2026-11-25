@@ -80,7 +80,10 @@ export class ImdbListProvider implements ExternalListProvider {
 		return typeof cfg.listId === 'string' && this.normalizeListId(cfg.listId) !== null;
 	}
 
-	async fetchItems(config: unknown, mediaType: SmartListMediaType | ''): Promise<ExternalListResult> {
+	async fetchItems(
+		config: unknown,
+		mediaType: SmartListMediaType | ''
+	): Promise<ExternalListResult> {
 		const cfg = config as ImdbListConfig;
 		const items: ExternalListItem[] = [];
 		const normalizedListId = this.normalizeListId(cfg.listId);

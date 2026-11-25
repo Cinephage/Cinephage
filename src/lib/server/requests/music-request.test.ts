@@ -1,7 +1,12 @@
 import { describe, it, expect, afterAll, beforeEach, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
-import { createTestDb, destroyTestDb, clearTestDb, type TestDatabase } from '../../../test/db-helper';
+import {
+	createTestDb,
+	destroyTestDb,
+	clearTestDb,
+	type TestDatabase
+} from '../../../test/db-helper';
 import {
 	requests,
 	userRequestSettings,
@@ -62,7 +67,6 @@ vi.mock('#lib/server/music/add-album.js', () => ({ addAlbumFromReleaseGroup }));
 
 const { getRequestService } = await import('./RequestService.js');
 const { getRequestSettingsService } = await import('./RequestSettingsService.js');
-const { getUserRequestSettingsService } = await import('./UserRequestSettingsService.js');
 
 const MBID = '11111111-1111-4111-8111-111111111111';
 const MBID_2 = '22222222-2222-4222-8222-222222222222';
@@ -106,7 +110,9 @@ beforeEach(() => {
 		.run();
 	testDb.db
 		.insert(rootFolders)
-		.values([{ id: 'rf-music', name: 'Music', path: '/media/music', mediaType: 'music', isDefault: true }])
+		.values([
+			{ id: 'rf-music', name: 'Music', path: '/media/music', mediaType: 'music', isDefault: true }
+		])
 		.onConflictDoNothing()
 		.run();
 });
@@ -124,7 +130,10 @@ function insertAlbum(id: string, hasFile: boolean) {
 		.insert(mediaItems)
 		.values({ id: `mi-${id}`, kind: 'album', title: 'Discovery', year: 2001 })
 		.run();
-	testDb.db.insert(artists).values({ id: `artist-${id}`, name: 'Daft Punk', mbid: 'artist-mbid' }).run();
+	testDb.db
+		.insert(artists)
+		.values({ id: `artist-${id}`, name: 'Daft Punk', mbid: 'artist-mbid' })
+		.run();
 	testDb.db
 		.insert(albums)
 		.values({
@@ -196,7 +205,12 @@ describe('music requests', () => {
 
 		const approved = await svc.approve(created.id, admin());
 		expect(addAlbumFromReleaseGroup).toHaveBeenCalledWith(
-			expect.objectContaining({ mbid: MBID, rootFolderId: 'rf-music', search: true, monitorExisting: true })
+			expect.objectContaining({
+				mbid: MBID,
+				rootFolderId: 'rf-music',
+				search: true,
+				monitorExisting: true
+			})
 		);
 		expect(approved.albumId).toBe('album-approved');
 		expect(approved.status).toBe('fulfilled');

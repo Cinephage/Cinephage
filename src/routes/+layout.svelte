@@ -549,7 +549,9 @@
 	     click reads as dead for as long as that takes. -->
 	{#if navigating.to}
 		<div class="fixed inset-x-0 top-0 z-[100] h-0.5 overflow-hidden bg-primary/20">
-			<div class="h-full w-1/3 animate-[nav-progress_1.2s_ease-in-out_infinite] rounded-full bg-primary"></div>
+			<div
+				class="h-full w-1/3 animate-[nav-progress_1.2s_ease-in-out_infinite] rounded-full bg-primary"
+			></div>
 		</div>
 	{/if}
 

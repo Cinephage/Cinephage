@@ -101,7 +101,11 @@
 				/>
 			</label>
 			{#if preferOriginalTitle !== null}
-				<button type="button" class="btn btn-ghost btn-xs" onclick={() => (preferOriginalTitle = null)}>
+				<button
+					type="button"
+					class="btn btn-ghost btn-xs"
+					onclick={() => (preferOriginalTitle = null)}
+				>
 					{m.library_subtitleRequirements_reset()}
 				</button>
 			{/if}

@@ -115,8 +115,7 @@
 					name: p.name,
 					isDefault: p.id === data.defaultProfileId
 				}));
-				musicDefaultProfileName =
-					availableMusicProfiles.find((p) => p.isDefault)?.name ?? null;
+				musicDefaultProfileName = availableMusicProfiles.find((p) => p.isDefault)?.name ?? null;
 			} catch {
 				availableMusicProfiles = [];
 			}
@@ -437,7 +436,9 @@
 				<span class="label-text text-base-content">{m.settings_general_searchOnAddLabel()}</span>
 			</label>
 			{#if libraryForm.mediaType !== 'music'}
-				<label class="label cursor-pointer justify-start gap-3 rounded-lg border border-base-300 p-3">
+				<label
+					class="label cursor-pointer justify-start gap-3 rounded-lg border border-base-300 p-3"
+				>
 					<input
 						type="checkbox"
 						class="checkbox shrink-0 checkbox-sm checkbox-primary"

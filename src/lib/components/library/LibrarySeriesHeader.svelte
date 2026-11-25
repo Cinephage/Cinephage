@@ -21,8 +21,6 @@
 		Ban,
 		Captions,
 		Play,
-		MoreHorizontal,
-		ArrowLeft,
 		Eye,
 		EyeOff,
 		Replace
@@ -38,7 +36,6 @@
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { blockMedia } from '#lib/api/settings.js';
 	import { TMDB } from '#lib/config/constants.js';
-	import { resolvePath } from '#lib/utils/routing.js';
 
 	interface SeriesData {
 		tmdbId: number;
@@ -264,7 +261,9 @@
 	]);
 
 	const menu = $derived<DetailAction[]>([
-		...(onImport ? [{ key: 'import', icon: Download, label: m.action_import(), onSelect: onImport }] : []),
+		...(onImport
+			? [{ key: 'import', icon: Download, label: m.action_import(), onSelect: onImport }]
+			: []),
 		...(onRefresh
 			? [
 					{
@@ -288,11 +287,34 @@
 				]
 			: []),
 		...(onChangeMatch
-			? [{ key: 'change-match', icon: Replace, label: m.library_changeMatch_menuLabel(), onSelect: onChangeMatch }]
+			? [
+					{
+						key: 'change-match',
+						icon: Replace,
+						label: m.library_changeMatch_menuLabel(),
+						onSelect: onChangeMatch
+					}
+				]
 			: []),
 		...(onEdit ? [{ key: 'edit', icon: Settings, label: m.action_edit(), onSelect: onEdit }] : []),
-		...(onDelete ? [{ key: 'delete', icon: Trash2, label: m.action_delete(), tone: 'error' as const, onSelect: onDelete }] : []),
-		{ key: 'block', icon: Ban, label: m.library_blockMediaTooltip(), tone: 'error' as const, onSelect: () => (showBlockConfirm = true) }
+		...(onDelete
+			? [
+					{
+						key: 'delete',
+						icon: Trash2,
+						label: m.action_delete(),
+						tone: 'error' as const,
+						onSelect: onDelete
+					}
+				]
+			: []),
+		{
+			key: 'block',
+			icon: Ban,
+			label: m.library_blockMediaTooltip(),
+			tone: 'error' as const,
+			onSelect: () => (showBlockConfirm = true)
+		}
 	]);
 
 	const mobileMenu = $derived(menu.filter((entry) => entry.key !== 'edit'));
@@ -303,7 +325,7 @@
 		backHref={backHref ?? (librarySlug ? `/library/tv?library=${librarySlug}` : '/library/tv')}
 		backLabel={libraryName ?? m.library_tv_heading()}
 		actions={desktopActions}
-		menu={menu}
+		{menu}
 	/>
 
 	<!-- Hero card -->

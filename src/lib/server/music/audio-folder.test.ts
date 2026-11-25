@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { groupAudioFiles, normalizeMusicName, type TaggedAudioFile } from './audio-folder.js';
 
-function audioFile(absolutePath: string, overrides: Partial<TaggedAudioFile> = {}): TaggedAudioFile {
+function audioFile(
+	absolutePath: string,
+	overrides: Partial<TaggedAudioFile> = {}
+): TaggedAudioFile {
 	const fileName = absolutePath.split('/').pop() ?? 'track.flac';
 	return {
 		absolutePath,

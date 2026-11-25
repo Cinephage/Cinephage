@@ -186,10 +186,7 @@ describe('missing albums', () => {
 describe('streaming albums on the dashboard', () => {
 	it('counts a stream-backed album as neither missing nor with file', async () => {
 		seedAlbum();
-		testDb.db
-			.update(albums)
-			.set({ hasFile: false, streamSource: 'Cinephage Library' })
-			.run();
+		testDb.db.update(albums).set({ hasFile: false, streamSource: 'Cinephage Library' }).run();
 
 		const stats = await getDashboardStats();
 

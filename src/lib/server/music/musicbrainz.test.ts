@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { MusicBrainzClient, MusicBrainzError, pickPrimaryRelease } from './musicbrainz.js';
 
 /**
@@ -212,7 +212,7 @@ describe('MusicBrainzClient.searchRecordings', () => {
 		expect(hits[0].artists.map((artist) => artist.mbid)).toEqual(['artist-webby', 'artist-daja']);
 	});
 
-	it('prefers the artist\'s own release over a Various Artists compilation', async () => {
+	it("prefers the artist's own release over a Various Artists compilation", async () => {
 		const client = clientWith((async () =>
 			jsonResponse({
 				recordings: [
@@ -221,7 +221,10 @@ describe('MusicBrainzClient.searchRecordings', () => {
 						title: "California Dreamin'",
 						score: 100,
 						'artist-credit': [
-							{ name: 'The Mamas & the Papas', artist: { id: 'artist-mamas', name: 'The Mamas & the Papas' } }
+							{
+								name: 'The Mamas & the Papas',
+								artist: { id: 'artist-mamas', name: 'The Mamas & the Papas' }
+							}
 						],
 						releases: [
 							{
@@ -232,7 +235,11 @@ describe('MusicBrainzClient.searchRecordings', () => {
 								'artist-credit': [
 									{ name: 'Various Artists', artist: { id: 'artist-va', name: 'Various Artists' } }
 								],
-								'release-group': { id: 'rg-va', title: 'Die Schönsten Filmhits', 'primary-type': 'Album' }
+								'release-group': {
+									id: 'rg-va',
+									title: 'Die Schönsten Filmhits',
+									'primary-type': 'Album'
+								}
 							},
 							{
 								id: 'rel-own',
@@ -240,7 +247,10 @@ describe('MusicBrainzClient.searchRecordings', () => {
 								status: 'Official',
 								date: '1968-01-01',
 								'artist-credit': [
-									{ name: 'The Mamas & the Papas', artist: { id: 'artist-mamas', name: 'The Mamas & the Papas' } }
+									{
+										name: 'The Mamas & the Papas',
+										artist: { id: 'artist-mamas', name: 'The Mamas & the Papas' }
+									}
 								],
 								'release-group': {
 									id: 'rg-own',
@@ -253,7 +263,10 @@ describe('MusicBrainzClient.searchRecordings', () => {
 				]
 			})) as typeof fetch);
 
-		const hits = await client.searchRecordings({ artist: 'The Mamas & The Papas', track: "California Dreamin'" });
+		const hits = await client.searchRecordings({
+			artist: 'The Mamas & The Papas',
+			track: "California Dreamin'"
+		});
 
 		expect(hits[0].releaseGroup).toMatchObject({ mbid: 'rg-own' });
 		// Both groups the search returned, the owned one first: this list is what

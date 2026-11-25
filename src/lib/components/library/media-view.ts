@@ -53,9 +53,10 @@ export function movieCardView(
 	preferOriginalTitleDefault: boolean | null = false
 ): MediaCardView {
 	const quality = getBestQualityFromFiles(movie.files);
-	const qualityLabel = movie.scoringProfileId === 'streamer'
-		? m.library_mediaCard_auto()
-		: [quality.quality, quality.hdr].filter(Boolean).join(' ') || null;
+	const qualityLabel =
+		movie.scoringProfileId === 'streamer'
+			? m.library_mediaCard_auto()
+			: [quality.quality, quality.hdr].filter(Boolean).join(' ') || null;
 
 	return {
 		id: movie.id,
@@ -132,7 +133,7 @@ export function albumCardView(
 			: options.artUrl
 				? { source: 'url', url: options.artUrl }
 				: null;
-return {
+	return {
 		id: album.id,
 		kind: 'album',
 		href: options.href ?? `/library/music/${album.id}`,
@@ -197,7 +198,8 @@ export function artistCardView(
 					tone: 'neutral'
 				},
 		detail: null,
-		progress: artist.albumCount > 0 ? Math.round((artist.inLibraryCount / artist.albumCount) * 100) : 0,
+		progress:
+			artist.albumCount > 0 ? Math.round((artist.inLibraryCount / artist.albumCount) * 100) : 0,
 		subtitle: m.music_albumsCount({ count: artist.albumCount }),
 		tag: null
 	};
@@ -223,9 +225,10 @@ export function movieRowView(
 	if (file.hdr) badges.push({ label: file.hdr, type: 'hdr' });
 	return {
 		...movieCardView(movie, preferOriginalTitleDefault),
-		qualityBadges: movie.scoringProfileId === 'streamer'
-			? [{ label: m.library_mediaCard_auto(), type: 'resolution' }]
-			: badges,
+		qualityBadges:
+			movie.scoringProfileId === 'streamer'
+				? [{ label: m.library_mediaCard_auto(), type: 'resolution' }]
+				: badges,
 		profileLabel: null,
 		sizeLabel: formatBytesOrNull(movie.files.reduce((sum, entry) => sum + (entry.size ?? 0), 0)),
 		progressLabel: null,

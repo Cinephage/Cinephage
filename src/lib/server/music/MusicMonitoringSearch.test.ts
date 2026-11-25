@@ -50,12 +50,14 @@ function seedAlbum(options: {
 
 	testDb.db
 		.insert(artists)
-		.values({ id: artistId, name: 'Artist', mbid: randomUUID(), monitored: options.artistMonitored ?? true })
+		.values({
+			id: artistId,
+			name: 'Artist',
+			mbid: randomUUID(),
+			monitored: options.artistMonitored ?? true
+		})
 		.run();
-	testDb.db
-		.insert(mediaItems)
-		.values({ id: mediaItemId, kind: 'album', title: 'Album' })
-		.run();
+	testDb.db.insert(mediaItems).values({ id: mediaItemId, kind: 'album', title: 'Album' }).run();
 	testDb.db
 		.insert(albums)
 		.values({
@@ -77,7 +79,12 @@ describe('searchMissingMusic', () => {
 		seedAlbum({ hasFile: true });
 		seedAlbum({ monitored: false });
 		seedAlbum({ artistMonitored: false });
-		autoSearchMock.mockResolvedValue({ albumId, title: 'Album', grabbed: true, release: 'Album FLAC' });
+		autoSearchMock.mockResolvedValue({
+			albumId,
+			title: 'Album',
+			grabbed: true,
+			release: 'Album FLAC'
+		});
 
 		const result = await searchMissingMusic(undefined, { cooldownHours: 24 });
 

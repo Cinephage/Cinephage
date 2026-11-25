@@ -149,10 +149,15 @@ interface YtDlpPlaylist {
 
 function run(args: string[]): Promise<string> {
 	return new Promise((resolve, reject) => {
-		execFile(YTDLP_PATH, args, { timeout: FETCH_TIMEOUT_MS, maxBuffer: MAX_BUFFER }, (error, stdout) => {
-			if (error) reject(error);
-			else resolve(stdout);
-		});
+		execFile(
+			YTDLP_PATH,
+			args,
+			{ timeout: FETCH_TIMEOUT_MS, maxBuffer: MAX_BUFFER },
+			(error, stdout) => {
+				if (error) reject(error);
+				else resolve(stdout);
+			}
+		);
 	});
 }
 
@@ -223,7 +228,8 @@ export const youtubeSource: PlaylistSource = {
 			];
 		});
 
-		const declared = typeof parsed.playlist_count === 'number' ? parsed.playlist_count : tracks.length;
+		const declared =
+			typeof parsed.playlist_count === 'number' ? parsed.playlist_count : tracks.length;
 
 		return {
 			playlist: {

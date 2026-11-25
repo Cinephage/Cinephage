@@ -80,9 +80,7 @@ function trackedPaths(rootFolderId: string): Set<string> {
 		.all();
 
 	return new Set(
-		rows.flatMap((row) =>
-			row.albumPath ? [path.join(row.albumPath, row.relativePath)] : []
-		)
+		rows.flatMap((row) => (row.albumPath ? [path.join(row.albumPath, row.relativePath)] : []))
 	);
 }
 
@@ -195,7 +193,10 @@ function reconcileRemovedFiles(rootFolderId: string): { files: number; albums: n
 			.from(trackFiles)
 			.where(eq(trackFiles.trackId, trackId))
 			.get();
-		db.update(tracks).set({ hasFile: Boolean(remaining) }).where(eq(tracks.id, trackId)).run();
+		db.update(tracks)
+			.set({ hasFile: Boolean(remaining) })
+			.where(eq(tracks.id, trackId))
+			.run();
 	}
 
 	for (const albumId of albumsTouched) {
@@ -204,7 +205,10 @@ function reconcileRemovedFiles(rootFolderId: string): { files: number; albums: n
 			.from(trackFiles)
 			.where(eq(trackFiles.albumId, albumId))
 			.get();
-		db.update(albums).set({ hasFile: Boolean(remaining) }).where(eq(albums.id, albumId)).run();
+		db.update(albums)
+			.set({ hasFile: Boolean(remaining) })
+			.where(eq(albums.id, albumId))
+			.run();
 	}
 
 	logger.info(
@@ -280,7 +284,10 @@ export async function scanMusicRootFolder(options: MusicScanOptions): Promise<Mu
 			});
 			// One audit line per unmatched folder: this is the only record of
 			// what a scan could not identify, and it must be actionable.
-			logger.warn({ folder: group.folder, artist: group.artist }, '[MusicDiskScan] album not identified');
+			logger.warn(
+				{ folder: group.folder, artist: group.artist },
+				'[MusicDiskScan] album not identified'
+			);
 			continue;
 		}
 

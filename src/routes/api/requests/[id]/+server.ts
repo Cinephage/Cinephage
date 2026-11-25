@@ -10,7 +10,11 @@
 
 import type { RequestHandler } from './$types.js';
 import { getRequestService } from '#lib/server/requests/RequestService.js';
-import { toRequestDto, toRequestErrorResponse, requesterFromLocals } from '#lib/server/requests/http.js';
+import {
+	toRequestDto,
+	toRequestErrorResponse,
+	requesterFromLocals
+} from '#lib/server/requests/http.js';
 
 export const DELETE: RequestHandler = async (event) => {
 	const requester = requesterFromLocals(event.locals);

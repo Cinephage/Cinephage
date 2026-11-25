@@ -1,10 +1,8 @@
 <script lang="ts">
 	import type { FacetValue, FacetView } from '#lib/filters/types.js';
 
-	let {
-		facet,
-		onchange
-	}: { facet: FacetView; onchange: (value: FacetValue | null) => void } = $props();
+	let { facet, onchange }: { facet: FacetView; onchange: (value: FacetValue | null) => void } =
+		$props();
 
 	const range = $derived(facet.range ?? { min: 0, max: 10, step: 0.5 });
 	const value = $derived(facet.value?.kind === 'number' ? Number(facet.value.value) : 0);
@@ -16,7 +14,10 @@
 </script>
 
 <div class="form-control">
-	<label for={`facet-${facet.id}`} class="label text-sm font-bold tracking-wide text-base-content/70 uppercase">
+	<label
+		for={`facet-${facet.id}`}
+		class="label text-sm font-bold tracking-wide text-base-content/70 uppercase"
+	>
 		<span>{facet.label}</span>
 		<span class="badge font-bold badge-primary">{value}</span>
 	</label>

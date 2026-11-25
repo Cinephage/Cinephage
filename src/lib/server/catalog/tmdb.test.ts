@@ -50,8 +50,12 @@ describe('tmdb catalog source', () => {
 	});
 
 	it('stamps tv rows with their kind on the combined top-rated path', async () => {
-		fetchMock.mockResolvedValueOnce(page([{ id: 27205, title: 'Inception', release_date: '2010-07-16' }]));
-		fetchMock.mockResolvedValueOnce(page([{ id: 1396, name: 'Breaking Bad', first_air_date: '2008-01-20' }]));
+		fetchMock.mockResolvedValueOnce(
+			page([{ id: 27205, title: 'Inception', release_date: '2010-07-16' }])
+		);
+		fetchMock.mockResolvedValueOnce(
+			page([{ id: 1396, name: 'Breaking Bad', first_air_date: '2008-01-20' }])
+		);
 		const result = await tmdbCatalogSource.discover({ type: 'all', page: 1, topRated: 'true' });
 		const kinds = result!.items.map((i) => i.kind).sort();
 		expect(kinds).toEqual(['movie', 'tv']);

@@ -129,7 +129,10 @@ export class MusicImportService {
 			);
 		} catch (blocklistError) {
 			logger.warn(
-				{ albumId, err: blocklistError instanceof Error ? blocklistError.message : String(blocklistError) },
+				{
+					albumId,
+					err: blocklistError instanceof Error ? blocklistError.message : String(blocklistError)
+				},
 				'[MusicImport] could not record the failed release in the blocklist'
 			);
 		}
@@ -157,7 +160,11 @@ export class MusicImportService {
 
 		const row = db.select().from(downloadQueue).where(eq(downloadQueue.id, queueRow.id)).get();
 		if (!row) throw new NotFoundError('Queued download for album', albumId);
-		if (row.status !== 'completed' && row.status !== 'seeding' && row.status !== 'seeding-imported') {
+		if (
+			row.status !== 'completed' &&
+			row.status !== 'seeding' &&
+			row.status !== 'seeding-imported'
+		) {
 			throw new ValidationError('The download has not finished yet');
 		}
 
@@ -430,10 +437,7 @@ export class MusicImportService {
 		// reconcileTracklist and stopped the missing search from retrying.
 		const matchedIds = [...new Set(trackIdByPath.values())];
 		if (matchedIds.length > 0) {
-			db.update(tracks)
-				.set({ hasFile: true })
-				.where(inArray(tracks.id, matchedIds))
-				.run();
+			db.update(tracks).set({ hasFile: true }).where(inArray(tracks.id, matchedIds)).run();
 		}
 		db.update(albums)
 			.set({ path: folder, hasFile: true, streamSource: null })
@@ -448,10 +452,7 @@ export class MusicImportService {
 		// would make the media server show every track twice.
 		await musicStrmService.removeShortcutsInFolder(folder);
 		if (mediaItemId) {
-			db.update(mediaItems)
-				.set({ path: folder })
-				.where(eq(mediaItems.id, mediaItemId))
-				.run();
+			db.update(mediaItems).set({ path: folder }).where(eq(mediaItems.id, mediaItemId)).run();
 		}
 	}
 

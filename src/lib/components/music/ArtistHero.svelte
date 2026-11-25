@@ -19,10 +19,8 @@
 	import type { DetailAction } from '#lib/components/library/detail-actions.js';
 	/** The artist row plus the counters the page already has; no card view-model. */
 	interface ArtistHeroArtist {
-		id: string;
 		name: string;
 		mbid?: string | null;
-		sortName?: string | null;
 		artistType?: string | null;
 		/** MusicBrainz genres — an array; artists drift between them. */
 		genres?: string[] | null;

@@ -22,7 +22,7 @@ describe('deezer chart source', () => {
 
 	it('serves music rows from the chart and maps them to the discover shape', async () => {
 		const fetchImpl = vi.fn(async () => deezerPage([album(1, 'Discovery', 'Daft Punk')]));
-		let clock = 1_000;
+		const clock = 1_000;
 		const source = createDeezerChartSource({ fetchImpl, now: () => clock });
 
 		const result = await source.discover({ page: 1 });

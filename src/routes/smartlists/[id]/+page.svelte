@@ -219,9 +219,7 @@
 				? { action: 'addToLibrary' as const, itemIds: eligible.map((i) => i.id) }
 				: {
 						action: 'addToLibrary' as const,
-						tmdbIds: eligible
-							.map((i) => i.tmdbId)
-							.filter((id): id is number => id != null)
+						tmdbIds: eligible.map((i) => i.tmdbId).filter((id): id is number => id != null)
 					};
 
 		if (

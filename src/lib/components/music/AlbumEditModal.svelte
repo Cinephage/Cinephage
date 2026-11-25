@@ -24,15 +24,8 @@
 		onSave: (data: AlbumEditData) => void;
 	}
 
-	let {
-		open,
-		album,
-		qualityProfiles,
-		inheritedProfileName,
-		saving,
-		onClose,
-		onSave
-	}: Props = $props();
+	let { open, album, qualityProfiles, inheritedProfileName, saving, onClose, onSave }: Props =
+		$props();
 
 	let title = $state('');
 	let year = $state('');
@@ -58,7 +51,8 @@
 
 	const parsedYear = $derived(year.trim() ? Number.parseInt(year, 10) : null);
 	const yearValid = $derived(
-		parsedYear === null || (Number.isInteger(parsedYear) && parsedYear >= 1900 && parsedYear <= 2100)
+		parsedYear === null ||
+			(Number.isInteger(parsedYear) && parsedYear >= 1900 && parsedYear <= 2100)
 	);
 	const canSave = $derived(title.trim().length > 0 && yearValid && !saving);
 
@@ -80,7 +74,7 @@
 <ModalWrapper {open} {onClose} maxWidth="lg" labelledBy="album-edit-modal-title">
 	<div class="flex items-center justify-between border-b border-base-300 px-6 py-4">
 		<h3 id="album-edit-modal-title" class="text-lg font-semibold">{m.music_editAlbumTitle()}</h3>
-		<button class="btn btn-ghost btn-sm btn-square" onclick={onClose} aria-label={m.action_close()}>
+		<button class="btn btn-square btn-ghost btn-sm" onclick={onClose} aria-label={m.action_close()}>
 			<X class="h-4 w-4" />
 		</button>
 	</div>
@@ -88,13 +82,13 @@
 	<div class="grid gap-4 px-6 py-5 sm:grid-cols-2">
 		<label class="form-control sm:col-span-2">
 			<span class="mb-1 text-sm font-medium">{m.common_title()}</span>
-			<input class="input w-full input-bordered" bind:value={title} disabled={saving} />
+			<input class="input-bordered input w-full" bind:value={title} disabled={saving} />
 		</label>
 
 		<label class="form-control">
 			<span class="mb-1 text-sm font-medium">{m.common_year()}</span>
 			<input
-				class="input w-full input-bordered"
+				class="input-bordered input w-full"
 				bind:value={year}
 				disabled={saving}
 				inputmode="numeric"
@@ -107,7 +101,7 @@
 
 		<label class="form-control">
 			<span class="mb-1 text-sm font-medium">{m.music_typeLabel()}</span>
-			<select class="select w-full select-bordered" bind:value={primaryType} disabled={saving}>
+			<select class="select-bordered select w-full" bind:value={primaryType} disabled={saving}>
 				<option value="">—</option>
 				<option value="Album">Album</option>
 				<option value="EP">EP</option>
@@ -119,27 +113,27 @@
 
 		<label class="form-control">
 			<span class="mb-1 text-sm font-medium">{m.music_labelLabel()}</span>
-			<input class="input w-full input-bordered" bind:value={labelName} disabled={saving} />
+			<input class="input-bordered input w-full" bind:value={labelName} disabled={saving} />
 		</label>
 
 		<label class="form-control">
 			<span class="mb-1 text-sm font-medium">{m.music_catalogNumber()}</span>
-			<input class="input w-full input-bordered" bind:value={catalogNumber} disabled={saving} />
+			<input class="input-bordered input w-full" bind:value={catalogNumber} disabled={saving} />
 		</label>
 
 		<label class="form-control">
 			<span class="mb-1 text-sm font-medium">{m.music_barcode()}</span>
-			<input class="input w-full input-bordered" bind:value={barcode} disabled={saving} />
+			<input class="input-bordered input w-full" bind:value={barcode} disabled={saving} />
 		</label>
 
 		<label class="form-control">
 			<span class="mb-1 text-sm font-medium">{m.music_country()}</span>
-			<input class="input w-full input-bordered" bind:value={country} disabled={saving} />
+			<input class="input-bordered input w-full" bind:value={country} disabled={saving} />
 		</label>
 
 		<label class="form-control">
 			<span class="mb-1 text-sm font-medium">{m.common_qualityProfile()}</span>
-			<select class="select w-full select-bordered" bind:value={qualityProfileId} disabled={saving}>
+			<select class="select-bordered select w-full" bind:value={qualityProfileId} disabled={saving}>
 				<option value="">
 					{inheritedProfileName
 						? m.music_inheritDefault({ name: inheritedProfileName })

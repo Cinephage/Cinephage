@@ -3,6 +3,7 @@
 	import * as m from '#lib/paraglide/messages.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import ModalWrapper from '#lib/components/ui/modal/ModalWrapper.svelte';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 
 	interface ArtistHit {
 		mbid: string;
@@ -71,7 +72,7 @@
 		const id = ++requestId;
 		searching = true;
 		const timer = setTimeout(async () => {
-			const params = new URLSearchParams({ type: kind, q: needle });
+			const params = new SvelteURLSearchParams({ type: kind, q: needle });
 			if (kind === 'album' && artistName) params.set('artist', artistName);
 			try {
 				const response = await fetch(`/api/music/search?${params.toString()}`);

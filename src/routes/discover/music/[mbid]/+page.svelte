@@ -218,7 +218,9 @@
 			<TrackList {tracks} artistName={group.artist.name} showFileState={false} />
 		</div>
 	{:else}
-		<div class="mt-5 rounded-xl border border-dashed border-base-content/15 px-6 py-12 text-center text-sm text-base-content/55">
+		<div
+			class="mt-5 rounded-xl border border-dashed border-base-content/15 px-6 py-12 text-center text-sm text-base-content/55"
+		>
 			{m.music_noTracks()}
 		</div>
 	{/if}

@@ -90,7 +90,10 @@
 					</td>
 					{#if showArtist}
 						<td class="hidden max-w-0 truncate text-base-content/65 sm:table-cell">
-							<a href={resolvePath(`/library/music/artist/${track.artistId}`)} class="hover:text-primary">
+							<a
+								href={resolvePath(`/library/music/artist/${track.artistId}`)}
+								class="hover:text-primary"
+							>
 								{track.artistName}
 							</a>
 						</td>
@@ -111,15 +114,17 @@
 					</td>
 					<td>
 						{#if availability === 'downloaded'}
-							<span class="badge gap-1 badge-sm border-none bg-success/15 text-success">
+							<span class="badge gap-1 border-none bg-success/15 badge-sm text-success">
 								<CircleCheck class="h-3 w-3" />{m.common_downloaded()}
 							</span>
 						{:else if availability === 'streaming'}
-							<span class="badge gap-1 badge-sm border-none bg-info/15 text-info">
+							<span class="badge gap-1 border-none bg-info/15 badge-sm text-info">
 								<Radio class="h-3 w-3" />{m.library_fileCard_streaming()}
 							</span>
 						{:else}
-							<span class="badge gap-1 badge-sm border-none bg-base-content/10 text-base-content/50">
+							<span
+								class="badge gap-1 border-none bg-base-content/10 badge-sm text-base-content/50"
+							>
 								<CircleDashed class="h-3 w-3" />{m.common_missing()}
 							</span>
 						{/if}

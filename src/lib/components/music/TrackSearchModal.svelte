@@ -25,22 +25,6 @@
 	let lastTrackId: string | null = null;
 
 	/** Letters and digits only — release titles are punctuation soup. */
-	function normalize(text: string): string {
-		return text
-			.toLowerCase()
-			.replace(/[^a-z0-9]+/g, ' ')
-			.trim();
-	}
-
-	function containsAll(haystack: string, needle: string): boolean {
-		const tokens = normalize(needle)
-			.split(' ')
-			.filter((token) => token.length > 2);
-		if (tokens.length === 0) return false;
-		const normalizedHaystack = normalize(haystack);
-		return tokens.every((token) => normalizedHaystack.includes(token));
-	}
-
 	async function load() {
 		if (!track || loading) return;
 		loading = true;

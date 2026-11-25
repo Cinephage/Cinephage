@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Database, Globe, Loader2, Check, AlertCircle } from '@lucide/svelte';
-import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
+	import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 	import * as m from '#lib/paraglide/messages.js';
 	import { onMount } from 'svelte';
 	import { getSmartListPresets, testExternalList } from '#lib/api/smartlists.js';
@@ -32,11 +32,7 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 	// Props
 	interface Props {
 		/** Widened for the editor's shared source state; this panel renders video sources. */
-		sourceType:
-			| 'tmdb-discover'
-			| 'external-json'
-			| 'playlist'
-			| 'musicbrainz-new-releases';
+		sourceType: 'tmdb-discover' | 'external-json' | 'playlist' | 'musicbrainz-new-releases';
 		presetId?: string;
 		presetProvider?: string;
 		presetSettings?: Record<string, unknown>;
@@ -44,11 +40,7 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 		customHeaders?: Record<string, string>;
 		mediaType: SmartListMediaType;
 		onChange?: (data: {
-			sourceType:
-				| 'tmdb-discover'
-				| 'external-json'
-				| 'playlist'
-				| 'musicbrainz-new-releases';
+			sourceType: 'tmdb-discover' | 'external-json' | 'playlist' | 'musicbrainz-new-releases';
 			presetId?: string;
 			presetProvider?: string;
 			presetSettings?: Record<string, unknown>;

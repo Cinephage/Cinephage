@@ -149,9 +149,9 @@ describe('MusicAlbumService.listAlbumsPage', () => {
 		seedAlbum({ artistId: 'artist-daft', title: 'Discovery' });
 		seedAlbum({ artistId: 'artist-other', title: 'Homework' });
 
-		expect(musicAlbumService.listAlbumsPage({ q: 'daft discovery' }).rows.map((r) => r.title)).toEqual([
-			'Discovery'
-		]);
+		expect(
+			musicAlbumService.listAlbumsPage({ q: 'daft discovery' }).rows.map((r) => r.title)
+		).toEqual(['Discovery']);
 		expect(musicAlbumService.listAlbumsPage({ q: 'homework' }).total).toBe(1);
 		expect(musicAlbumService.listAlbumsPage({ q: 'nothing here' }).total).toBe(0);
 	});
@@ -207,9 +207,7 @@ describe('MusicAlbumService.listAlbumsPage', () => {
 			musicAlbumService.listAlbumsPage({ monitor: 'unmonitored' }).rows.map((row) => row.title)
 		).toEqual(['Ignored']);
 		expect(
-			musicAlbumService
-				.listAlbumsPage({ libraryId: 'lib-music-b' })
-				.rows.map((row) => row.title)
+			musicAlbumService.listAlbumsPage({ libraryId: 'lib-music-b' }).rows.map((row) => row.title)
 		).toEqual(['Elsewhere']);
 	});
 

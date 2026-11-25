@@ -1,14 +1,11 @@
 import { eq } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
 import { albums, artists } from '#lib/server/db/schema.js';
-import { createChildLogger } from '#lib/logging/index.js';
 import { getLibraryEntityService } from '#lib/server/library/LibraryEntityService.js';
 import { validateRootFolder } from '#lib/server/library/LibraryAddService.js';
 import { musicAlbumService } from '#lib/server/music/MusicAlbumService.js';
 import { searchAddedAlbums } from '#lib/server/music/MusicAutoSearch.js';
 import { musicBrainz, pickPrimaryRelease } from '#lib/server/music/musicbrainz.js';
-
-const logger = createChildLogger({ module: 'MusicAddAlbum', logDomain: 'monitoring' as const });
 
 export interface AddAlbumInput {
 	/** MusicBrainz release-group id. */

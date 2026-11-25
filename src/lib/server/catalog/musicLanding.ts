@@ -94,9 +94,9 @@ function trackRows(tracks: DeezerTrack[]): MusicRowItem[] {
  * the cold-failure path, where the shelves are gone but the panel still needs
  * something to offer.
  */
-export async function musicGenreOptions(api: DeezerApi = deezer): Promise<
-	{ id: number; name: string }[]
-> {
+export async function musicGenreOptions(
+	api: DeezerApi = deezer
+): Promise<{ id: number; name: string }[]> {
 	const genres: DeezerGenre[] = await api.genres().catch(() => []);
 	return genres.map((genre) => ({ id: genre.id, name: genre.name }));
 }

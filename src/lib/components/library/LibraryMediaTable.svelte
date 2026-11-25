@@ -72,10 +72,7 @@
 		rows.forEach((row) => handleSelectChange(row.id, checked));
 	}
 
-	async function runRowAction(
-		id: string,
-		action?: (id: string) => void | Promise<void>
-	) {
+	async function runRowAction(id: string, action?: (id: string) => void | Promise<void>) {
 		if (!action || actionLoadingRows.has(id)) return;
 		actionLoadingRows.add(id);
 		try {
@@ -105,7 +102,9 @@
 				isLoading={actionLoadingRows.has(row.id) || autoSearchingIds.has(row.id)}
 				{downloadingIds}
 				onSelectChange={handleSelectChange}
-				onMonitorToggle={onMonitorToggle ? (id, monitored) => runRowAction(id, () => onMonitorToggle(id, monitored)) : undefined}
+				onMonitorToggle={onMonitorToggle
+					? (id, monitored) => runRowAction(id, () => onMonitorToggle(id, monitored))
+					: undefined}
 				onAutoGrab={onAutoGrab ? (id) => runRowAction(id, onAutoGrab) : undefined}
 				onManualGrab={onManualGrab ? (id) => runRowAction(id, onManualGrab) : undefined}
 				onDelete={onDelete ? (id) => runRowAction(id, onDelete) : undefined}
@@ -141,7 +140,9 @@
 						{downloadingIds}
 						{showProgress}
 						onSelectChange={handleSelectChange}
-						onMonitorToggle={onMonitorToggle ? (id, monitored) => runRowAction(id, () => onMonitorToggle(id, monitored)) : undefined}
+						onMonitorToggle={onMonitorToggle
+							? (id, monitored) => runRowAction(id, () => onMonitorToggle(id, monitored))
+							: undefined}
 						onAutoGrab={onAutoGrab ? (id) => runRowAction(id, onAutoGrab) : undefined}
 						onManualGrab={onManualGrab ? (id) => runRowAction(id, onManualGrab) : undefined}
 						onDelete={onDelete ? (id) => runRowAction(id, onDelete) : undefined}

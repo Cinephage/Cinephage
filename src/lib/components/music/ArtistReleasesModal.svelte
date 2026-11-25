@@ -10,6 +10,7 @@
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import ReleaseTable from './ReleaseTable.svelte';
 	import type { ReleaseRow } from './release-row.js';
+	import { SvelteMap } from 'svelte/reactivity';
 
 	type Candidate = ReleaseRow & { albumId: string; albumTitle: string };
 
@@ -29,7 +30,7 @@
 	let loadedFor = $state<string | null>(null);
 
 	const groups = $derived.by(() => {
-		const byAlbum = new Map<string, Candidate[]>();
+		const byAlbum = new SvelteMap<string, Candidate[]>();
 		for (const candidate of candidates) {
 			const rows = byAlbum.get(candidate.albumTitle) ?? [];
 			rows.push(candidate);
@@ -126,7 +127,7 @@
 						{albumTitle}
 						<span class="ml-2 text-xs font-normal text-base-content/50">{rows.length}</span>
 					</h3>
-					<ReleaseTable rows={rows} {grabbing} onGrab={grab} />
+					<ReleaseTable {rows} {grabbing} onGrab={grab} />
 				</section>
 			{/each}
 		{/if}

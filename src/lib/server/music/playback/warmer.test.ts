@@ -27,7 +27,12 @@ const resolver = vi.hoisted(() => {
 			resolved.add(trackId);
 			return {
 				status: 'ok' as const,
-				stream: { source: 'youtube' as const, url: 'https://example/x', contentType: 'audio/mp4', expiresAt: null },
+				stream: {
+					source: 'youtube' as const,
+					url: 'https://example/x',
+					contentType: 'audio/mp4',
+					expiresAt: null
+				},
 				albumId: 'al-1'
 			};
 		}),

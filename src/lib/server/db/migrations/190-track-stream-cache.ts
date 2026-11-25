@@ -28,7 +28,9 @@ export const migration_v190: MigrationDefinition = {
 			.run();
 
 		sqlite
-			.prepare(`CREATE INDEX IF NOT EXISTS "idx_track_stream_cache_expiry" ON "track_stream_cache" ("expires_at")`)
+			.prepare(
+				`CREATE INDEX IF NOT EXISTS "idx_track_stream_cache_expiry" ON "track_stream_cache" ("expires_at")`
+			)
 			.run();
 	}
 };

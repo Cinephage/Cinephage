@@ -145,7 +145,6 @@
 	<ArtistHero
 		artist={{
 			...artist,
-			id: artist.mbid ?? `deezer-artist-${artist.deezerId ?? ''}`,
 			monitored: null
 		}}
 		backdropUrl={heroArt}

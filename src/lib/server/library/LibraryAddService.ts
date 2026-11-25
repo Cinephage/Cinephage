@@ -76,7 +76,11 @@ export async function validateRootFolder(
 
 	if (folder.mediaType !== expectedMediaType) {
 		const typeLabel =
-			expectedMediaType === 'movie' ? 'Movies' : expectedMediaType === 'music' ? 'Music' : 'TV shows';
+			expectedMediaType === 'movie'
+				? 'Movies'
+				: expectedMediaType === 'music'
+					? 'Music'
+					: 'TV shows';
 		throw new ValidationError(`Root folder is not configured for ${typeLabel}`, {
 			mediaType: folder.mediaType,
 			expected: expectedMediaType

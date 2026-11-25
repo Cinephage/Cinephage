@@ -255,11 +255,7 @@
 	</div>
 
 	<div class="card relative bg-base-200 transition-colors hover:bg-base-300">
-		<a
-			href={resolve('library/music')}
-			class="absolute inset-0 z-0"
-			aria-label={m.nav_music()}
-		></a>
+		<a href={resolve('library/music')} class="absolute inset-0 z-0" aria-label={m.nav_music()}></a>
 		<div class="card-body gap-1.5 p-3">
 			<div class="flex items-center gap-2">
 				<div class="shrink-0 rounded-lg bg-accent/10 p-1.5">

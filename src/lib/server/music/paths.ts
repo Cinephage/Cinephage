@@ -10,6 +10,7 @@
 export function sanitizeMusicSegment(value: string): string {
 	const cleaned = value
 		.replace(/[/\\]/g, '-')
+		// eslint-disable-next-line no-control-regex -- control characters are exactly what a path segment must not carry
 		.replace(/[\u0000-\u001f]/g, '')
 		.replace(/^\.+/, '')
 		.trim()

@@ -33,7 +33,10 @@ export class JsonListProvider implements ExternalListProvider {
 		return typeof cfg.url === 'string' && cfg.url.length > 0;
 	}
 
-	async fetchItems(config: unknown, mediaType: SmartListMediaType | ''): Promise<ExternalListResult> {
+	async fetchItems(
+		config: unknown,
+		mediaType: SmartListMediaType | ''
+	): Promise<ExternalListResult> {
 		const cfg = config as ExternalJsonConfig;
 
 		logger.info(

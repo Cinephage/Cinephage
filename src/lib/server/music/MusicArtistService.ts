@@ -404,8 +404,9 @@ export class MusicArtistService {
 				monitored: artists.monitored,
 				albumCount: count(albums.id),
 				inLibraryCount: sql<number>`sum(case when ${albums.hasFile} = 1 or ${albums.streamSource} is not null then 1 else 0 end)`,
-				coverAlbumId:
-					sql<string | null>`(select a2.id from albums a2 where a2.artist_id = ${artists.id} and (a2.cover_path is not null or a2.release_mbid is not null) order by a2.year, a2.title limit 1)`
+				coverAlbumId: sql<
+					string | null
+				>`(select a2.id from albums a2 where a2.artist_id = ${artists.id} and (a2.cover_path is not null or a2.release_mbid is not null) order by a2.year, a2.title limit 1)`
 			})
 			.from(artists)
 			.innerJoin(albums, eq(albums.artistId, artists.id))
@@ -491,7 +492,7 @@ export class MusicArtistService {
 		const { artist, policy } = request;
 		const limit = Math.max(1, Math.min(request.limit, 25));
 
-		const { groups, total } = await this.browseReleaseGroups(artist);
+		const { groups } = await this.browseReleaseGroups(artist);
 		const matched = musicAlbumService
 			.filterReleaseGroups(groups, policy)
 			.sort((a, b) => (a.firstReleaseDate ?? '9999').localeCompare(b.firstReleaseDate ?? '9999'));

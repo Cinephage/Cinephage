@@ -165,9 +165,7 @@ describe('resolvePlaylistTracks', () => {
 	});
 
 	it('asks for each album once, and falls back song by song for the one it missed', async () => {
-		const search = vi
-			.spyOn(musicBrainz, 'searchReleaseGroups')
-			.mockResolvedValue([DISCOVERY]);
+		const search = vi.spyOn(musicBrainz, 'searchReleaseGroups').mockResolvedValue([DISCOVERY]);
 		vi.spyOn(musicBrainz, 'searchRecordings').mockResolvedValue([]);
 
 		const result = await resolvePlaylistTracks([

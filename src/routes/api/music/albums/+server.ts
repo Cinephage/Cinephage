@@ -36,7 +36,15 @@ const listQuerySchema = z.object({
 	libraryId: z.string().trim().min(1).optional(),
 	quality: z.string().trim().min(1).optional(),
 	sort: z
-		.enum(['artist-asc', 'title-asc', 'year-desc', 'year-asc', 'tracks-desc', 'size-desc', 'size-asc'])
+		.enum([
+			'artist-asc',
+			'title-asc',
+			'year-desc',
+			'year-asc',
+			'tracks-desc',
+			'size-desc',
+			'size-asc'
+		])
 		.default('artist-asc'),
 	offset: z.coerce.number().int().min(0).default(0),
 	limit: z.coerce.number().int().min(1).max(180).default(90),
@@ -162,9 +170,7 @@ export const POST: RequestHandler = async (event) => {
 		// The add answers now; the search runs behind it, the same way a movie's
 		// search-on-add does. Only a new album is searched.
 		if (input.searchOnAdd && result.created && album) {
-			void searchAddedAlbums([
-				{ id: album.id, title: album.title, artistName: album.artistName }
-			]);
+			void searchAddedAlbums([{ id: album.id, title: album.title, artistName: album.artistName }]);
 		}
 
 		return Response.json(
@@ -195,7 +201,6 @@ export const POST: RequestHandler = async (event) => {
 		);
 	}
 };
-
 
 const bulkUpdateSchema = z
 	.object({
@@ -239,9 +244,7 @@ export const PATCH: RequestHandler = async (event) => {
 	let updated = 0;
 	for (const id of input.ids) {
 		const changed =
-			input.monitored !== undefined
-				? musicAlbumService.setMonitored(id, input.monitored)
-				: false;
+			input.monitored !== undefined ? musicAlbumService.setMonitored(id, input.monitored) : false;
 		const profileChanged =
 			input.qualityProfileId !== undefined
 				? musicAlbumService.setQualityProfile(id, input.qualityProfileId)

@@ -102,7 +102,10 @@ export function isTrackStreamCached(trackId: string): boolean {
 }
 
 function remember(trackId: string, stream: TrackStream, albumId: string): void {
-	const expiresAt = Math.min(Date.now() + CACHE_TTL_MS, stream.expiresAt ?? Number.POSITIVE_INFINITY);
+	const expiresAt = Math.min(
+		Date.now() + CACHE_TTL_MS,
+		stream.expiresAt ?? Number.POSITIVE_INFINITY
+	);
 	cache.set(trackId, { expiresAt, stream, albumId });
 }
 
@@ -233,7 +236,10 @@ async function resolveFromProvider(trackId: string, row: TrackRow): Promise<Prov
 		duration: row.duration
 	});
 	if (!best) {
-		logger.warn({ trackId, query, candidates: candidates.length }, '[MusicPlayback] No matching upload');
+		logger.warn(
+			{ trackId, query, candidates: candidates.length },
+			'[MusicPlayback] No matching upload'
+		);
 		return { ok: false, detail: 'No matching upload found' };
 	}
 

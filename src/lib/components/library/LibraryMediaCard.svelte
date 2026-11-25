@@ -1,7 +1,19 @@
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
 	import TmdbImage from '#lib/components/tmdb/TmdbImage.svelte';
-	import { Eye, EyeOff, Check, X, Download, AlertTriangle, Clapperboard, Tv, Disc3, Mic2, Radio } from '@lucide/svelte';
+	import {
+		Eye,
+		EyeOff,
+		Check,
+		X,
+		Download,
+		AlertTriangle,
+		Clapperboard,
+		Tv,
+		Disc3,
+		Mic2,
+		Radio
+	} from '@lucide/svelte';
 	import { resolvePath } from '#lib/utils/routing.js';
 	import { imageError } from '#lib/actions/image-error.js';
 	import type { MediaCardView, LibraryKind } from './media-view.js';
@@ -129,24 +141,24 @@
 	<!-- Top-right badges: Monitored + kind -->
 	<div class="absolute top-2 right-2 z-10 flex max-w-[48%] flex-col items-end gap-1">
 		{#if !view.hideMonitored}
-		<div
-			class="badge border-none badge-sm shadow-sm {view.monitored
-				? view.partiallyMonitored
-					? 'bg-warning/80 text-warning-content'
-					: 'bg-success/80 text-success-content'
-				: 'bg-base-300/80 text-base-content/60'}"
-			title={view.monitored
-				? view.partiallyMonitored
-					? m.library_mediaCard_partiallyMonitored()
-					: m.library_mediaCard_monitored()
-				: m.library_mediaCard_notMonitored()}
-		>
-			{#if view.monitored}
-				<Eye class="h-3 w-3" />
-			{:else}
-				<EyeOff class="h-3 w-3" />
-			{/if}
-		</div>
+			<div
+				class="badge border-none badge-sm shadow-sm {view.monitored
+					? view.partiallyMonitored
+						? 'bg-warning/80 text-warning-content'
+						: 'bg-success/80 text-success-content'
+					: 'bg-base-300/80 text-base-content/60'}"
+				title={view.monitored
+					? view.partiallyMonitored
+						? m.library_mediaCard_partiallyMonitored()
+						: m.library_mediaCard_monitored()
+					: m.library_mediaCard_notMonitored()}
+			>
+				{#if view.monitored}
+					<Eye class="h-3 w-3" />
+				{:else}
+					<EyeOff class="h-3 w-3" />
+				{/if}
+			</div>
 		{/if}
 
 		<div
@@ -159,7 +171,9 @@
 	</div>
 
 	<!-- Top-left: state badge (file, child count) + detail -->
-	<div class="absolute left-2 z-10 flex max-w-[48%] flex-col gap-1 {selectable ? 'top-10' : 'top-2'}">
+	<div
+		class="absolute left-2 z-10 flex max-w-[48%] flex-col gap-1 {selectable ? 'top-10' : 'top-2'}"
+	>
 		{#if view.state}
 			<div
 				class="badge border-none badge-sm shadow-sm {STATE_TONE[view.state.tone]}"
@@ -208,7 +222,9 @@
 	<div
 		class="absolute inset-0 flex flex-col justify-end bg-linear-to-t from-black/90 via-black/20 to-transparent p-3 opacity-0 transition-opacity duration-300 lg:group-hover:opacity-100"
 	>
-		<div class="translate-y-4 transform transition-transform duration-300 group-hover:translate-y-0">
+		<div
+			class="translate-y-4 transform transition-transform duration-300 group-hover:translate-y-0"
+		>
 			<h3 class="line-clamp-2 text-sm leading-tight font-bold text-white">
 				{view.title}
 			</h3>
@@ -229,7 +245,9 @@
 				<span class="mt-0.5 block truncate text-xs text-white/60">{view.subtitle}</span>
 			{/if}
 			{#if view.tag}
-				<span class="mt-1 inline-block max-w-full truncate rounded bg-white/20 px-1.5 py-0.5 text-xs text-white/80">
+				<span
+					class="mt-1 inline-block max-w-full truncate rounded bg-white/20 px-1.5 py-0.5 text-xs text-white/80"
+				>
 					{view.tag}
 				</span>
 			{/if}

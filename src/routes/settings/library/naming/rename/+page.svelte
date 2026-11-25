@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-import type { KindFilter } from '#lib/media-kinds/registry.js';
+	import type { KindFilter } from '#lib/media-kinds/registry.js';
 	import { SvelteSet } from 'svelte/reactivity';
 	import * as m from '#lib/paraglide/messages.js';
 	import { executeRename, reorganizeFolderBatch } from '#lib/api/settings.js';

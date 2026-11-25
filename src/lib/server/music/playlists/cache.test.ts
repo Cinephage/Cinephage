@@ -3,13 +3,7 @@ import { eq } from 'drizzle-orm';
 import { createTestDb, type TestDatabase } from '../../../../test/db-helper.js';
 import { musicLookupCache } from '#lib/server/db/schema.js';
 import type { MusicReleaseGroup } from '../types.js';
-import {
-	getAlbumMatch,
-	getSongMatch,
-	setAlbumMatch,
-	setSongMatch,
-	songCacheKey
-} from './cache.js';
+import { getAlbumMatch, getSongMatch, setAlbumMatch, setSongMatch, songCacheKey } from './cache.js';
 
 const testDb: TestDatabase = createTestDb();
 

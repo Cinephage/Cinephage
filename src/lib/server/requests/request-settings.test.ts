@@ -111,7 +111,9 @@ describe('RequestSettingsService', () => {
 		const svc = getRequestSettingsService();
 		// The schema is the gate: a nested object replaces wholesale and the
 		// parse fills any missing member with its default.
-		const value = await svc.saveRequestSettings({ autoApprove: { movie: true, series: false, music: false } });
+		const value = await svc.saveRequestSettings({
+			autoApprove: { movie: true, series: false, music: false }
+		});
 		expect(value.requestsEnabled).toBe(true);
 		expect(value.autoApprove.series).toBe(false);
 	});

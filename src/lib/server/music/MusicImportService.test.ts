@@ -71,8 +71,22 @@ describe('MusicImportService.adoptFolder', () => {
 		testDb.db
 			.insert(schema.tracks)
 			.values([
-				{ id: 'tr-1', albumId: 'al-adopt', title: 'One', discNumber: 1, trackNumber: 1, position: 1 },
-				{ id: 'tr-2', albumId: 'al-adopt', title: 'Two', discNumber: 1, trackNumber: 2, position: 2 }
+				{
+					id: 'tr-1',
+					albumId: 'al-adopt',
+					title: 'One',
+					discNumber: 1,
+					trackNumber: 1,
+					position: 1
+				},
+				{
+					id: 'tr-2',
+					albumId: 'al-adopt',
+					title: 'Two',
+					discNumber: 1,
+					trackNumber: 2,
+					position: 2
+				}
 			])
 			.run();
 
@@ -106,7 +120,11 @@ describe('MusicImportService.adoptFolder', () => {
 		expect(files.map((file) => file.trackId).sort()).toEqual(['tr-1', 'tr-2']);
 		expect(files.every((file) => file.format === 'WAVE' || file.format === 'WAV')).toBe(true);
 
-		const album = testDb.db.select().from(schema.albums).where(eq(schema.albums.id, 'al-adopt')).get();
+		const album = testDb.db
+			.select()
+			.from(schema.albums)
+			.where(eq(schema.albums.id, 'al-adopt'))
+			.get();
 		expect(album?.path).toBe(folder);
 		expect(album?.hasFile).toBe(true);
 

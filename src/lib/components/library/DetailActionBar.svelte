@@ -28,10 +28,7 @@
 </script>
 
 <div class="flex items-center justify-between gap-2">
-	<a
-		href={resolvePath(backHref)}
-		class="btn gap-1.5 btn-ghost text-base-content/60 btn-sm"
-	>
+	<a href={resolvePath(backHref)} class="btn gap-1.5 btn-ghost text-base-content/60 btn-sm">
 		<ArrowLeft size={16} />
 		<span class="sm:inline">{m.library_backTo({ name: backLabel })}</span>
 	</a>

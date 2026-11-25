@@ -43,9 +43,11 @@ export function normalizeForMatch(value: string): string {
  * comparing, so "Hey Jude (Remastered 2015)" still matches "Hey Jude" while
  * "Discovery Remixed" does not match "Discovery".
  */
-const DECORATIONS = /\b(remaster(ed)?|deluxe|expanded|edition|explicit|anniversary|bonus|version)\b/g;
+const DECORATIONS =
+	/\b(remaster(ed)?|deluxe|expanded|edition|explicit|anniversary|bonus|version)\b/g;
 /** "Remastered 2015" and "2015 Remaster": the year belongs to the decoration, not the title. */
-const DECORATED_YEAR = /\b(?:(?:19|20)\d{2}\s+)?(?:remaster(?:ed)?|version)\s+(?:(?:19|20)\d{2})?\b/g;
+const DECORATED_YEAR =
+	/\b(?:(?:19|20)\d{2}\s+)?(?:remaster(?:ed)?|version)\s+(?:(?:19|20)\d{2})?\b/g;
 
 /**
  * A title reduced to the work it names: no edition tag, no upload noise.
@@ -85,7 +87,9 @@ export function artistMatches(queryArtists: string[], candidate: string): boolea
 	return queryArtists.some((artist) => {
 		const query = coreTitle(artist);
 		if (!query) return false;
-		return candidateCore === query || candidateCore.includes(query) || query.includes(candidateCore);
+		return (
+			candidateCore === query || candidateCore.includes(query) || query.includes(candidateCore)
+		);
 	});
 }
 

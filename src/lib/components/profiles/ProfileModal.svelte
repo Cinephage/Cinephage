@@ -673,9 +673,7 @@
 							</select>
 							<div class="label py-1">
 								<span class="label-text-alt text-xs">
-									{copyFromId
-										? m.music_copyFromHelp()
-										: m.music_copyFromHelpZero()}
+									{copyFromId ? m.music_copyFromHelp() : m.music_copyFromHelpZero()}
 								</span>
 							</div>
 						</div>
@@ -758,7 +756,7 @@
 							<label class="form-control w-28">
 								<span class="mb-1 text-xs text-base-content/60">{m.music_tierKind()}</span>
 								<select
-									class="select w-full select-bordered select-xs"
+									class="select-bordered select w-full select-xs"
 									bind:value={tier.kind}
 									disabled={isFullyReadonly}
 								>
@@ -770,7 +768,7 @@
 							<label class="form-control min-w-32 flex-1">
 								<span class="mb-1 text-xs text-base-content/60">{m.music_tierLabel()}</span>
 								<input
-									class="input w-full input-bordered input-xs"
+									class="input-bordered input w-full input-xs"
 									bind:value={tier.label}
 									disabled={isFullyReadonly}
 								/>
@@ -779,7 +777,7 @@
 								<label class="form-control w-40">
 									<span class="mb-1 text-xs text-base-content/60">{m.music_tierFormats()}</span>
 									<input
-										class="input w-full input-bordered input-xs"
+										class="input-bordered input w-full input-xs"
 										bind:value={tier.formats}
 										placeholder="flac, mp3"
 										disabled={isFullyReadonly}
@@ -790,7 +788,7 @@
 								<label class="form-control w-24">
 									<span class="mb-1 text-xs text-base-content/60">{m.music_tierMinBitrate()}</span>
 									<input
-										class="input w-full input-bordered input-xs"
+										class="input-bordered input w-full input-xs"
 										bind:value={tier.minBitrateKbps}
 										inputmode="numeric"
 										placeholder="256"
@@ -802,7 +800,7 @@
 								<label class="form-control w-24">
 									<span class="mb-1 text-xs text-base-content/60">{m.music_tierMinBitDepth()}</span>
 									<input
-										class="input w-full input-bordered input-xs"
+										class="input-bordered input w-full input-xs"
 										bind:value={tier.minBitDepth}
 										inputmode="numeric"
 										placeholder="24"
@@ -813,7 +811,7 @@
 							<div class="flex items-center gap-0.5">
 								<button
 									type="button"
-									class="btn btn-ghost btn-xs btn-square"
+									class="btn btn-square btn-ghost btn-xs"
 									disabled={index === 0 || isFullyReadonly}
 									onclick={() => moveTier(index, -1)}
 									aria-label="Up"
@@ -822,7 +820,7 @@
 								</button>
 								<button
 									type="button"
-									class="btn btn-ghost btn-xs btn-square"
+									class="btn btn-square btn-ghost btn-xs"
 									disabled={index === musicTiers.length - 1 || isFullyReadonly}
 									onclick={() => moveTier(index, 1)}
 									aria-label="Down"
@@ -831,7 +829,7 @@
 								</button>
 								<button
 									type="button"
-									class="btn btn-ghost btn-xs btn-square text-error"
+									class="btn btn-square btn-ghost text-error btn-xs"
 									disabled={musicTiers.length === 1 || isFullyReadonly}
 									onclick={() => removeTier(index)}
 									aria-label={m.common_delete()}
@@ -853,325 +851,329 @@
 				</button>
 			</div>
 		{:else}
-		<!-- Main Form - Responsive Two Column Layout -->
-		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6">
-			<!-- Left Column: Profile Details -->
-			<div class="space-y-4">
-				<SectionHeader title={m.profiles_section_profile()} />
+			<!-- Main Form - Responsive Two Column Layout -->
+			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6">
+				<!-- Left Column: Profile Details -->
+				<div class="space-y-4">
+					<SectionHeader title={m.profiles_section_profile()} />
 
-				<div class="form-control">
-					<label class="label py-1" for="profile-name">
-						<span class="label-text">{m.common_name()}</span>
-					</label>
-					<input
-						id="profile-name"
-						type="text"
-						class="input-bordered input input-sm"
-						bind:value={name}
-						disabled={isCoreReadonly}
-						placeholder="My Custom Profile"
-					/>
-				</div>
+					<div class="form-control">
+						<label class="label py-1" for="profile-name">
+							<span class="label-text">{m.common_name()}</span>
+						</label>
+						<input
+							id="profile-name"
+							type="text"
+							class="input-bordered input input-sm"
+							bind:value={name}
+							disabled={isCoreReadonly}
+							placeholder="My Custom Profile"
+						/>
+					</div>
 
-				<div class="form-control">
-					<label class="label py-1" for="profile-description">
-						<span class="label-text">{m.common_description()}</span>
-					</label>
-					<textarea
-						id="profile-description"
-						class="textarea-bordered textarea h-20 resize-none textarea-sm"
-						bind:value={description}
-						disabled={isCoreReadonly}
-						maxlength={maxDescriptionLength}
-						placeholder="Describe what this profile is for..."></textarea>
-					{#if !isCoreReadonly}
-						<div class="label py-1">
-							<span class="label-text-alt text-xs {descriptionTooLong ? 'text-error' : ''}">
-								{description.length}/{maxDescriptionLength}
-							</span>
-							{#if descriptionTooLong}
-								<span class="label-text-alt text-xs text-error">
-									Max {maxDescriptionLength} characters.
+					<div class="form-control">
+						<label class="label py-1" for="profile-description">
+							<span class="label-text">{m.common_description()}</span>
+						</label>
+						<textarea
+							id="profile-description"
+							class="textarea-bordered textarea h-20 resize-none textarea-sm"
+							bind:value={description}
+							disabled={isCoreReadonly}
+							maxlength={maxDescriptionLength}
+							placeholder="Describe what this profile is for..."></textarea>
+						{#if !isCoreReadonly}
+							<div class="label py-1">
+								<span class="label-text-alt text-xs {descriptionTooLong ? 'text-error' : ''}">
+									{description.length}/{maxDescriptionLength}
 								</span>
-							{/if}
+								{#if descriptionTooLong}
+									<span class="label-text-alt text-xs text-error">
+										Max {maxDescriptionLength} characters.
+									</span>
+								{/if}
+							</div>
+						{/if}
+					</div>
+
+					<!-- Copy From (only shown when creating new profile) -->
+					{#if isNewProfile}
+						<div class="form-control">
+							<label class="label py-1" for="copy-from">
+								<span class="label-text">{m.profiles_copyFrom_label()}</span>
+							</label>
+							<select
+								id="copy-from"
+								class="select-bordered select select-sm"
+								bind:value={copyFromId}
+							>
+								<option value="">{m.profiles_copyFrom_scratch()}</option>
+								{#if builtInProfiles.length > 0}
+									<optgroup label={m.profiles_copyFrom_builtInLabel()}>
+										{#each builtInProfiles as bp (bp.id)}
+											<option value={bp.id}>{bp.name}</option>
+										{/each}
+									</optgroup>
+								{/if}
+								{#if customProfiles.length > 0}
+									<optgroup label={m.profiles_copyFrom_customLabel()}>
+										{#each customProfiles as cp (cp.id)}
+											<option value={cp.id}>{cp.name}</option>
+										{/each}
+									</optgroup>
+								{/if}
+							</select>
+							<div class="label py-1">
+								<span class="label-text-alt text-xs">
+									{copyFromId ? m.profiles_copyFrom_helpCopied() : m.profiles_copyFrom_helpZero()}
+								</span>
+							</div>
 						</div>
 					{/if}
-				</div>
 
-				<!-- Copy From (only shown when creating new profile) -->
-				{#if isNewProfile}
-					<div class="form-control">
-						<label class="label py-1" for="copy-from">
-							<span class="label-text">{m.profiles_copyFrom_label()}</span>
-						</label>
-						<select id="copy-from" class="select-bordered select select-sm" bind:value={copyFromId}>
-							<option value="">{m.profiles_copyFrom_scratch()}</option>
-							{#if builtInProfiles.length > 0}
-								<optgroup label={m.profiles_copyFrom_builtInLabel()}>
-									{#each builtInProfiles as bp (bp.id)}
-										<option value={bp.id}>{bp.name}</option>
-									{/each}
-								</optgroup>
-							{/if}
-							{#if customProfiles.length > 0}
-								<optgroup label={m.profiles_copyFrom_customLabel()}>
-									{#each customProfiles as cp (cp.id)}
-										<option value={cp.id}>{cp.name}</option>
-									{/each}
-								</optgroup>
-							{/if}
-						</select>
-						<div class="label py-1">
-							<span class="label-text-alt text-xs">
-								{copyFromId ? m.profiles_copyFrom_helpCopied() : m.profiles_copyFrom_helpZero()}
-							</span>
-						</div>
-					</div>
-				{/if}
-
-				<!-- Options -->
-				<div class="flex flex-wrap gap-x-4 gap-y-1 pt-2">
-					<label class="label cursor-pointer gap-2">
-						<input
-							type="checkbox"
-							class="checkbox checkbox-sm checkbox-primary"
-							bind:checked={upgradesAllowed}
-							disabled={isFullyReadonly}
-						/>
-						<span class="label-text">{m.profiles_allowUpgrades_label()}</span>
-					</label>
-
-					<label class="label cursor-pointer gap-2">
-						<input
-							type="checkbox"
-							class="checkbox checkbox-sm checkbox-primary"
-							bind:checked={preventDowngrades}
-							disabled={isFullyReadonly}
-						/>
-						<span class="label-text">{m.profiles_preventDowngrades_label()}</span>
-					</label>
-
-					{#if !profile?.isBuiltIn}
+					<!-- Options -->
+					<div class="flex flex-wrap gap-x-4 gap-y-1 pt-2">
 						<label class="label cursor-pointer gap-2">
 							<input
 								type="checkbox"
 								class="checkbox checkbox-sm checkbox-primary"
-								bind:checked={isDefault}
+								bind:checked={upgradesAllowed}
 								disabled={isFullyReadonly}
 							/>
-							<span class="label-text">{m.profiles_setAsDefault()}</span>
+							<span class="label-text">{m.profiles_allowUpgrades_label()}</span>
 						</label>
-					{/if}
+
+						<label class="label cursor-pointer gap-2">
+							<input
+								type="checkbox"
+								class="checkbox checkbox-sm checkbox-primary"
+								bind:checked={preventDowngrades}
+								disabled={isFullyReadonly}
+							/>
+							<span class="label-text">{m.profiles_preventDowngrades_label()}</span>
+						</label>
+
+						{#if !profile?.isBuiltIn}
+							<label class="label cursor-pointer gap-2">
+								<input
+									type="checkbox"
+									class="checkbox checkbox-sm checkbox-primary"
+									bind:checked={isDefault}
+									disabled={isFullyReadonly}
+								/>
+								<span class="label-text">{m.profiles_setAsDefault()}</span>
+							</label>
+						{/if}
+					</div>
 				</div>
-			</div>
 
-			<!-- Right Column: Size Limits -->
-			<div class="space-y-4">
-				<SectionHeader title={m.profiles_section_sizeLimits()} />
+				<!-- Right Column: Size Limits -->
+				<div class="space-y-4">
+					<SectionHeader title={m.profiles_section_sizeLimits()} />
 
-				{#if isStreamerProfile}
+					{#if isStreamerProfile}
+						<div class="rounded-lg bg-base-200 p-3 text-xs text-base-content/70">
+							<Info class="mr-1 inline h-3 w-3" />
+							{m.profiles_streamerProfileSizeLimitsInfo()}
+						</div>
+					{:else}
+						<div class="grid grid-cols-2 gap-2 sm:gap-3">
+							<div class="form-control">
+								<label class="label py-1" for="movie-min-size">
+									<span class="label-text">{m.profiles_movieMinSize_label()}</span>
+								</label>
+								<input
+									id="movie-min-size"
+									type="text"
+									inputmode="decimal"
+									class="input-bordered input input-sm"
+									value={movieMinSizeGbInput}
+									oninput={(event) => {
+										const target = event.currentTarget as HTMLInputElement;
+										movieMinSizeGbInput = sanitizeDecimalInput(target.value, 2);
+									}}
+									onkeydown={(event) => allowDecimalKey(event, movieMinSizeGbInput, 2)}
+									onpaste={(event) =>
+										sanitizePaste(
+											event,
+											(value) => {
+												movieMinSizeGbInput = value;
+											},
+											2
+										)}
+									disabled={isFullyReadonly}
+									placeholder="No min"
+								/>
+							</div>
+
+							<div class="form-control">
+								<label class="label py-1" for="movie-max-size">
+									<span class="label-text">{m.profiles_movieMaxSize_label()}</span>
+								</label>
+								<input
+									id="movie-max-size"
+									type="text"
+									inputmode="decimal"
+									class="input-bordered input input-sm"
+									value={movieMaxSizeGbInput}
+									oninput={(event) => {
+										const target = event.currentTarget as HTMLInputElement;
+										movieMaxSizeGbInput = sanitizeDecimalInput(target.value, 2);
+									}}
+									onkeydown={(event) => allowDecimalKey(event, movieMaxSizeGbInput, 2)}
+									onpaste={(event) =>
+										sanitizePaste(
+											event,
+											(value) => {
+												movieMaxSizeGbInput = value;
+											},
+											2
+										)}
+									disabled={isFullyReadonly}
+									placeholder="No max"
+								/>
+							</div>
+						</div>
+
+						<div class="grid grid-cols-2 gap-2 sm:gap-3">
+							<div class="form-control">
+								<label class="label py-1" for="episode-min-size">
+									<span class="label-text">{m.profiles_episodeMinSize_label()}</span>
+								</label>
+								<input
+									id="episode-min-size"
+									type="text"
+									inputmode="decimal"
+									class="input-bordered input input-sm"
+									value={episodeMinSizeMbInput}
+									oninput={(event) => {
+										const target = event.currentTarget as HTMLInputElement;
+										episodeMinSizeMbInput = sanitizeDecimalInput(target.value, 0);
+									}}
+									onkeydown={(event) => allowDecimalKey(event, episodeMinSizeMbInput, 0)}
+									onpaste={(event) =>
+										sanitizePaste(
+											event,
+											(value) => {
+												episodeMinSizeMbInput = value;
+											},
+											0
+										)}
+									disabled={isFullyReadonly}
+									placeholder="No min"
+								/>
+								{#if episodeMinSizeMbValue}
+									<div class="label py-0">
+										<span class="label-text-alt text-xs">
+											= {(episodeMinSizeMbValue / 1024).toFixed(2)} GB
+										</span>
+									</div>
+								{/if}
+							</div>
+
+							<div class="form-control">
+								<label class="label py-1" for="episode-max-size">
+									<span class="label-text">{m.profiles_episodeMaxSize_label()}</span>
+								</label>
+								<input
+									id="episode-max-size"
+									type="text"
+									inputmode="decimal"
+									class="input-bordered input input-sm"
+									value={episodeMaxSizeMbInput}
+									oninput={(event) => {
+										const target = event.currentTarget as HTMLInputElement;
+										episodeMaxSizeMbInput = sanitizeDecimalInput(target.value, 0);
+									}}
+									onkeydown={(event) => allowDecimalKey(event, episodeMaxSizeMbInput, 0)}
+									onpaste={(event) =>
+										sanitizePaste(
+											event,
+											(value) => {
+												episodeMaxSizeMbInput = value;
+											},
+											0
+										)}
+									disabled={isFullyReadonly}
+									placeholder="No max"
+								/>
+								{#if episodeMaxSizeMbValue}
+									<div class="label py-0">
+										<span class="label-text-alt text-xs">
+											= {(episodeMaxSizeMbValue / 1024).toFixed(2)} GB
+										</span>
+									</div>
+								{/if}
+							</div>
+						</div>
+					{/if}
+
+					<SectionHeader title={m.profiles_section_scoreThresholds()} />
+
+					<div class="grid grid-cols-2 gap-2 sm:gap-3">
+						<div class="form-control">
+							<label class="label py-1" for="profile-min-score">
+								<span class="label-text">{m.profiles_minScore_label()}</span>
+							</label>
+							<input
+								id="profile-min-score"
+								type="number"
+								step={1}
+								class="input-bordered input input-sm"
+								bind:value={minScore}
+								disabled={isFullyReadonly}
+							/>
+							<div class="label py-0.5">
+								<span class="label-text-alt text-xs">
+									{m.profiles_minScore_desc()}
+								</span>
+							</div>
+						</div>
+
+						<div class="form-control">
+							<label class="label py-1" for="profile-min-score-increment">
+								<span class="label-text">{m.profiles_minScoreIncrement_label()}</span>
+							</label>
+							<input
+								id="profile-min-score-increment"
+								type="number"
+								step={1}
+								min={0}
+								class="input-bordered input input-sm"
+								bind:value={minScoreIncrement}
+								disabled={isFullyReadonly}
+							/>
+							<div class="label py-0.5">
+								<span class="label-text-alt text-xs">
+									{m.profiles_minScoreIncrement_desc()}
+								</span>
+							</div>
+						</div>
+					</div>
+
 					<div class="rounded-lg bg-base-200 p-3 text-xs text-base-content/70">
 						<Info class="mr-1 inline h-3 w-3" />
-						{m.profiles_streamerProfileSizeLimitsInfo()}
+						{m.profiles_seasonPackSizeInfo()}
 					</div>
-				{:else}
-					<div class="grid grid-cols-2 gap-2 sm:gap-3">
-						<div class="form-control">
-							<label class="label py-1" for="movie-min-size">
-								<span class="label-text">{m.profiles_movieMinSize_label()}</span>
-							</label>
-							<input
-								id="movie-min-size"
-								type="text"
-								inputmode="decimal"
-								class="input-bordered input input-sm"
-								value={movieMinSizeGbInput}
-								oninput={(event) => {
-									const target = event.currentTarget as HTMLInputElement;
-									movieMinSizeGbInput = sanitizeDecimalInput(target.value, 2);
-								}}
-								onkeydown={(event) => allowDecimalKey(event, movieMinSizeGbInput, 2)}
-								onpaste={(event) =>
-									sanitizePaste(
-										event,
-										(value) => {
-											movieMinSizeGbInput = value;
-										},
-										2
-									)}
-								disabled={isFullyReadonly}
-								placeholder="No min"
-							/>
-						</div>
-
-						<div class="form-control">
-							<label class="label py-1" for="movie-max-size">
-								<span class="label-text">{m.profiles_movieMaxSize_label()}</span>
-							</label>
-							<input
-								id="movie-max-size"
-								type="text"
-								inputmode="decimal"
-								class="input-bordered input input-sm"
-								value={movieMaxSizeGbInput}
-								oninput={(event) => {
-									const target = event.currentTarget as HTMLInputElement;
-									movieMaxSizeGbInput = sanitizeDecimalInput(target.value, 2);
-								}}
-								onkeydown={(event) => allowDecimalKey(event, movieMaxSizeGbInput, 2)}
-								onpaste={(event) =>
-									sanitizePaste(
-										event,
-										(value) => {
-											movieMaxSizeGbInput = value;
-										},
-										2
-									)}
-								disabled={isFullyReadonly}
-								placeholder="No max"
-							/>
-						</div>
-					</div>
-
-					<div class="grid grid-cols-2 gap-2 sm:gap-3">
-						<div class="form-control">
-							<label class="label py-1" for="episode-min-size">
-								<span class="label-text">{m.profiles_episodeMinSize_label()}</span>
-							</label>
-							<input
-								id="episode-min-size"
-								type="text"
-								inputmode="decimal"
-								class="input-bordered input input-sm"
-								value={episodeMinSizeMbInput}
-								oninput={(event) => {
-									const target = event.currentTarget as HTMLInputElement;
-									episodeMinSizeMbInput = sanitizeDecimalInput(target.value, 0);
-								}}
-								onkeydown={(event) => allowDecimalKey(event, episodeMinSizeMbInput, 0)}
-								onpaste={(event) =>
-									sanitizePaste(
-										event,
-										(value) => {
-											episodeMinSizeMbInput = value;
-										},
-										0
-									)}
-								disabled={isFullyReadonly}
-								placeholder="No min"
-							/>
-							{#if episodeMinSizeMbValue}
-								<div class="label py-0">
-									<span class="label-text-alt text-xs">
-										= {(episodeMinSizeMbValue / 1024).toFixed(2)} GB
-									</span>
-								</div>
-							{/if}
-						</div>
-
-						<div class="form-control">
-							<label class="label py-1" for="episode-max-size">
-								<span class="label-text">{m.profiles_episodeMaxSize_label()}</span>
-							</label>
-							<input
-								id="episode-max-size"
-								type="text"
-								inputmode="decimal"
-								class="input-bordered input input-sm"
-								value={episodeMaxSizeMbInput}
-								oninput={(event) => {
-									const target = event.currentTarget as HTMLInputElement;
-									episodeMaxSizeMbInput = sanitizeDecimalInput(target.value, 0);
-								}}
-								onkeydown={(event) => allowDecimalKey(event, episodeMaxSizeMbInput, 0)}
-								onpaste={(event) =>
-									sanitizePaste(
-										event,
-										(value) => {
-											episodeMaxSizeMbInput = value;
-										},
-										0
-									)}
-								disabled={isFullyReadonly}
-								placeholder="No max"
-							/>
-							{#if episodeMaxSizeMbValue}
-								<div class="label py-0">
-									<span class="label-text-alt text-xs">
-										= {(episodeMaxSizeMbValue / 1024).toFixed(2)} GB
-									</span>
-								</div>
-							{/if}
-						</div>
-					</div>
-				{/if}
-
-				<SectionHeader title={m.profiles_section_scoreThresholds()} />
-
-				<div class="grid grid-cols-2 gap-2 sm:gap-3">
-					<div class="form-control">
-						<label class="label py-1" for="profile-min-score">
-							<span class="label-text">{m.profiles_minScore_label()}</span>
-						</label>
-						<input
-							id="profile-min-score"
-							type="number"
-							step={1}
-							class="input-bordered input input-sm"
-							bind:value={minScore}
-							disabled={isFullyReadonly}
-						/>
-						<div class="label py-0.5">
-							<span class="label-text-alt text-xs">
-								{m.profiles_minScore_desc()}
-							</span>
-						</div>
-					</div>
-
-					<div class="form-control">
-						<label class="label py-1" for="profile-min-score-increment">
-							<span class="label-text">{m.profiles_minScoreIncrement_label()}</span>
-						</label>
-						<input
-							id="profile-min-score-increment"
-							type="number"
-							step={1}
-							min={0}
-							class="input-bordered input input-sm"
-							bind:value={minScoreIncrement}
-							disabled={isFullyReadonly}
-						/>
-						<div class="label py-0.5">
-							<span class="label-text-alt text-xs">
-								{m.profiles_minScoreIncrement_desc()}
-							</span>
-						</div>
-					</div>
-				</div>
-
-				<div class="rounded-lg bg-base-200 p-3 text-xs text-base-content/70">
-					<Info class="mr-1 inline h-3 w-3" />
-					{m.profiles_seasonPackSizeInfo()}
 				</div>
 			</div>
-		</div>
 
-		{#if requiredFormatCount > 0 || scoredFormatCount > 0}
-			<button
-				type="button"
-				class="mt-4 flex w-full items-center gap-2 rounded-lg border border-base-300 bg-base-100 px-4 py-2.5 text-sm transition-colors hover:bg-base-200"
-				onclick={() => (activeTab = 'formats')}
-			>
-				<Layers class="h-4 w-4 text-base-content/50" />
-				<span class="flex-1 text-left text-base-content/70">Format configuration</span>
-				{#if scoredFormatCount > 0}
-					<span class="badge badge-sm badge-primary">{scoredFormatCount} scored</span>
-				{/if}
-				{#if requiredFormatCount > 0}
-					<span class="badge badge-sm badge-warning">{requiredFormatCount} required</span>
-				{/if}
-			</button>
-		{/if}
+			{#if requiredFormatCount > 0 || scoredFormatCount > 0}
+				<button
+					type="button"
+					class="mt-4 flex w-full items-center gap-2 rounded-lg border border-base-300 bg-base-100 px-4 py-2.5 text-sm transition-colors hover:bg-base-200"
+					onclick={() => (activeTab = 'formats')}
+				>
+					<Layers class="h-4 w-4 text-base-content/50" />
+					<span class="flex-1 text-left text-base-content/70">Format configuration</span>
+					{#if scoredFormatCount > 0}
+						<span class="badge badge-sm badge-primary">{scoredFormatCount} scored</span>
+					{/if}
+					{#if requiredFormatCount > 0}
+						<span class="badge badge-sm badge-warning">{requiredFormatCount} required</span>
+					{/if}
+				</button>
+			{/if}
 		{/if}
 	{:else if activeTab === 'formats'}
 		<div class="space-y-5 py-2">
@@ -1422,7 +1424,11 @@
 			<button
 				class="btn gap-2 btn-primary"
 				onclick={handleSave}
-				disabled={saving || !name || descriptionTooLong || indexerSelectionInvalid || (isMusic && !musicTiersValid)}
+				disabled={saving ||
+					!name ||
+					descriptionTooLong ||
+					indexerSelectionInvalid ||
+					(isMusic && !musicTiersValid)}
 			>
 				{#if saving}
 					<Loader2 class="h-4 w-4 animate-spin" />

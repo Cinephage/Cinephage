@@ -646,7 +646,6 @@ describe('JellyfinStatsProvider', () => {
 	});
 });
 
-
 describe('JellyfinStatsProvider music', () => {
 	let mockFetch: ReturnType<typeof vi.fn>;
 

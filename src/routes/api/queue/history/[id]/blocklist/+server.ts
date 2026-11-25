@@ -34,7 +34,11 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 		}
 
 		const album = historyItem.mediaItemId
-			? db.select({ id: albums.id }).from(albums).where(eq(albums.mediaItemId, historyItem.mediaItemId)).get()
+			? db
+					.select({ id: albums.id })
+					.from(albums)
+					.where(eq(albums.mediaItemId, historyItem.mediaItemId))
+					.get()
 			: null;
 		const { blocklistService } =
 			await import('#lib/server/monitoring/specifications/BlocklistSpecification.js');

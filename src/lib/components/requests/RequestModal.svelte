@@ -32,8 +32,18 @@
 		onSuccess?: () => void;
 	}
 
-	let { open, mediaType, tmdbId, mbid, title, year, posterPath, coverUrl, onClose, onSuccess } =
-		$props();
+	let {
+		open,
+		mediaType,
+		tmdbId,
+		mbid,
+		title,
+		year,
+		posterPath,
+		coverUrl,
+		onClose,
+		onSuccess
+	}: Props = $props();
 
 	const isSeries = $derived(mediaType === 'tv');
 	const isMusic = $derived(mediaType === 'music');
@@ -151,10 +161,7 @@
 				counts = await countsPromise;
 				return;
 			}
-			const statusPromise = getRequestMediaStatus(
-				isSeries ? 'series' : 'movie',
-				tmdbId as number
-			);
+			const statusPromise = getRequestMediaStatus(isSeries ? 'series' : 'movie', tmdbId as number);
 			if (isSeries) {
 				const details = (await getTmdb(`tv/${tmdbId}`)) as {
 					seasons?: Array<{ season_number: number; episode_count?: number }>;
@@ -268,7 +275,10 @@
 		}
 	}
 
-	function buildVideoPayload(): Extract<Parameters<typeof createRequest>[0], { mediaType: 'movie' | 'series' }> {
+	function buildVideoPayload(): Extract<
+		Parameters<typeof createRequest>[0],
+		{ mediaType: 'movie' | 'series' }
+	> {
 		const payload = {
 			mediaType: isSeries ? ('series' as const) : ('movie' as const),
 			tmdbId: tmdbId as number,

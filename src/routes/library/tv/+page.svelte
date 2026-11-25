@@ -4,7 +4,6 @@
 	import { resolve } from '$app/paths';
 	import { resolvePath } from '#lib/utils/routing.js';
 	import { SvelteSet } from 'svelte/reactivity';
-	import LibraryMediaCard from '#lib/components/library/LibraryMediaCard.svelte';
 	import { seriesCardView, seriesRowView } from '#lib/components/library/media-view.js';
 	import LibraryListHeader from '#lib/components/library/list/LibraryListHeader.svelte';
 	import LibraryListEmptyState from '#lib/components/library/list/LibraryListEmptyState.svelte';
@@ -13,7 +12,7 @@
 	import { createListSelection } from '#lib/components/library/list/list-selection.svelte.js';
 	import LibraryDrawer from '#lib/components/library/LibraryDrawer.svelte';
 	import { MediaSearchModal } from '#lib/components/search/index.js';
-	import { Tv, X, CheckSquare, XSquare, Eye, EyeOff, ChevronDown } from '@lucide/svelte';
+	import { Tv, CheckSquare, XSquare, Eye, EyeOff, ChevronDown } from '@lucide/svelte';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { viewPreferences } from '#lib/stores/view-preferences.svelte.js';
 	import { enhance } from '$app/forms';
@@ -532,7 +531,7 @@
 		switchToGridLabel={m.library_tv_switchToGrid()}
 		switchToListLabel={m.library_tv_switchToList()}
 		onToggleView={() => viewPreferences.toggleViewMode()}
-		activeFilterCount={activeFilterCount}
+		{activeFilterCount}
 		filterLabel={m.library_drawer_title()}
 		onOpenFilters={() => (drawerOpen = true)}
 	>

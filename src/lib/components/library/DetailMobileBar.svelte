@@ -18,7 +18,9 @@
 
 	function tone(action: DetailAction): string {
 		if (action.busy) return 'text-primary/40';
-		return TONE[action.active ? (action.tone ?? 'success') : (action.tone ?? 'default')] ?? TONE.default;
+		return (
+			TONE[action.active ? (action.tone ?? 'success') : (action.tone ?? 'default')] ?? TONE.default
+		);
 	}
 </script>
 

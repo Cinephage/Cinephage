@@ -1,6 +1,6 @@
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
-import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
+	import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 	import { Settings, Zap } from '@lucide/svelte';
 	import type { RootFolderBasic as RootFolder } from '#lib/types/downloadClient.js';
 
@@ -102,7 +102,11 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 									>{m.smartlists_settings_sortBy()}</span
 								>
 							</label>
-							<select id="sortBy" bind:value={sortBy} class="select-bordered select w-full select-sm">
+							<select
+								id="sortBy"
+								bind:value={sortBy}
+								class="select-bordered select w-full select-sm"
+							>
 								{#each sortOptions as opt (opt.value)}
 									<option value={opt.value}>{opt.label}</option>
 								{/each}

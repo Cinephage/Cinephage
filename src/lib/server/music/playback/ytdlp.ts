@@ -88,10 +88,16 @@ async function installManagedCopy(): Promise<boolean> {
 		await writeFile(staging, bytes, { mode: 0o755 });
 		await chmod(staging, 0o755);
 		await rename(staging, MANAGED_PATH);
-		logger.info({ path: MANAGED_PATH, version: MANAGED_VERSION, bytes: bytes.length }, '[MusicYtDlp] installed managed yt-dlp');
+		logger.info(
+			{ path: MANAGED_PATH, version: MANAGED_VERSION, bytes: bytes.length },
+			'[MusicYtDlp] installed managed yt-dlp'
+		);
 		return true;
 	} catch (err) {
-		logger.warn({ err: err instanceof Error ? err.message : String(err) }, '[MusicYtDlp] yt-dlp install failed');
+		logger.warn(
+			{ err: err instanceof Error ? err.message : String(err) },
+			'[MusicYtDlp] yt-dlp install failed'
+		);
 		return false;
 	}
 }
@@ -156,7 +162,9 @@ export async function searchYoutube(query: string, limit = 5): Promise<YoutubeCa
 	};
 
 	return (parsed.entries ?? [])
-		.filter((entry): entry is { id: string; title: string } & typeof entry => Boolean(entry.id && entry.title))
+		.filter((entry): entry is { id: string; title: string } & typeof entry =>
+			Boolean(entry.id && entry.title)
+		)
 		.map((entry) => ({
 			id: entry.id,
 			title: entry.title,
@@ -179,7 +187,10 @@ export function parseResolvedAudio(line: string): ResolvedAudio | null {
 	if (separator <= 0) return null;
 
 	const url = trimmed.slice(0, separator).trim();
-	const ext = trimmed.slice(separator + 1).trim().toLowerCase();
+	const ext = trimmed
+		.slice(separator + 1)
+		.trim()
+		.toLowerCase();
 	if (!url.startsWith('https://')) return null;
 
 	let expiresAt: number | null = null;

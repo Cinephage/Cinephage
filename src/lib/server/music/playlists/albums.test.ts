@@ -53,7 +53,11 @@ describe('fillMissingAlbums', () => {
 
 	it('matches a decorated title, because the decoration is not the work', async () => {
 		const { api } = catalog(() => [
-			{ title: 'One More Time (Remastered 2011)', artist: { name: 'Daft Punk' }, album: { title: 'Discovery' } }
+			{
+				title: 'One More Time (Remastered 2011)',
+				artist: { name: 'Daft Punk' },
+				album: { title: 'Discovery' }
+			}
 		]);
 		const result = await fillMissingAlbums([track()], api);
 		expect(result.tracks[0].album).toBe('Discovery');
@@ -88,7 +92,11 @@ describe('fillMissingAlbums', () => {
 
 	it('leaves the album empty when the only hit is a different act', async () => {
 		const { api } = catalog(() => [
-			{ title: 'One More Time', artist: { name: 'Some Tribute Band' }, album: { title: 'Tribute to Daft Punk' } }
+			{
+				title: 'One More Time',
+				artist: { name: 'Some Tribute Band' },
+				album: { title: 'Tribute to Daft Punk' }
+			}
 		]);
 		const result = await fillMissingAlbums([track()], api);
 		expect(result.filled).toBe(0);
@@ -97,7 +105,11 @@ describe('fillMissingAlbums', () => {
 
 	it('leaves the album empty when the only hit is a different work', async () => {
 		const { api } = catalog(() => [
-			{ title: 'One More Time (Short Radio Edit)', artist: { name: 'Daft Punk' }, album: { title: 'One More Time' } }
+			{
+				title: 'One More Time (Short Radio Edit)',
+				artist: { name: 'Daft Punk' },
+				album: { title: 'One More Time' }
+			}
 		]);
 		// The bracketed tail is a version tag, so this is the same work — but a
 		// genuinely different title must not be taken.
