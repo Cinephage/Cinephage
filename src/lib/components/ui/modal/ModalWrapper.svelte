@@ -31,8 +31,6 @@
 	}: Props = $props();
 
 	let modalBoxRef = $state<HTMLElement | null>(null);
-	let cleanupFocusTrap: (() => void) | null = null;
-	let cleanupScrollLock: (() => void) | null = null;
 
 	// Fluid max-width classes that scale down on small viewports
 	// Uses min() to cap at either the size or viewport-32px (for 16px margin each side)
@@ -53,23 +51,20 @@
 		}
 	}
 
-	// Set up focus trap and scroll lock when modal opens
-	$effect(() => {
-		if (open && modalBoxRef) {
-			cleanupScrollLock = lockScroll ? lockBodyScroll() : null;
-			cleanupFocusTrap = createFocusTrap(modalBoxRef);
-		}
+	// Lock page scroll before the dialog DOM is inserted. lockBodyScroll reads
+	// html.clientWidth; in a pre-effect that read hits the page's existing,
+	// clean layout instead of forcing a full-page style recalc and layout with
+	// the new `.modal-open` node in the document (daisyUI styles :root based on
+	// it), and the overflow write is folded into the next frame's layout.
+	$effect.pre(() => {
+		if (!open || !lockScroll) return;
+		return lockBodyScroll();
+	});
 
-		return () => {
-			if (cleanupFocusTrap) {
-				cleanupFocusTrap();
-				cleanupFocusTrap = null;
-			}
-			if (cleanupScrollLock) {
-				cleanupScrollLock();
-				cleanupScrollLock = null;
-			}
-		};
+	// Trap focus once the modal box exists.
+	$effect(() => {
+		if (!open || !modalBoxRef) return;
+		return createFocusTrap(modalBoxRef);
 	});
 </script>
 

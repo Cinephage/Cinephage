@@ -187,3 +187,58 @@ describe('ProfileModal indexer allowlist', () => {
 		);
 	});
 });
+
+describe('ProfileModal format scores', () => {
+	afterEach(() => {
+		cleanup();
+	});
+
+	const formats = [
+		{ id: 'test-fmt-uhd', name: 'Ultra Res', category: 'resolution' as const },
+		{ id: 'test-fmt-fhd', name: 'Full Res', category: 'resolution' as const },
+		{ id: 'test-fmt-lossless', name: 'Lossless Sound', category: 'audio' as const }
+	];
+
+	it('edits a score in the format scores tab and saves it', async () => {
+		const onSave = vi.fn<(data: ScoringProfileFormData) => void>();
+		render(ProfileModal, {
+			props: {
+				open: true,
+				mode: 'edit' as const,
+				profile: { ...baseProfile, formatScores: { 'test-fmt-fhd': 10 } },
+				allProfiles: [],
+				allFormats: formats,
+				indexers,
+				onClose: vi.fn(),
+				onSave
+			}
+		});
+
+		await fireEvent.click(screen.getByRole('button', { name: /format scores/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /expand all/i }));
+
+		const scoreInputs = () => screen.getAllByRole('spinbutton') as HTMLInputElement[];
+		// Both categories are listed: two resolution rows and one audio row.
+		expect(scoreInputs()).toHaveLength(3);
+		expect(screen.getByText('Ultra Res')).toBeTruthy();
+		expect(screen.getByText('Lossless Sound')).toBeTruthy();
+
+		// The search narrows the rows.
+		await fireEvent.input(screen.getByPlaceholderText(/search formats\.\.\./i), {
+			target: { value: 'lossless' }
+		});
+		expect(scoreInputs()).toHaveLength(1);
+		expect(screen.queryByText('Ultra Res')).toBeNull();
+
+		await fireEvent.input(scoreInputs()[0], { target: { value: '25' } });
+		expect(scoreInputs()[0].value).toBe('25');
+
+		await fireEvent.click(screen.getByRole('button', { name: /save/i }));
+
+		expect(onSave).toHaveBeenCalledWith(
+			expect.objectContaining({
+				formatScores: { 'test-fmt-fhd': 10, 'test-fmt-lossless': 25 }
+			})
+		);
+	});
+});

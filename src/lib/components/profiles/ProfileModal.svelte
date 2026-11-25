@@ -347,7 +347,7 @@
 	const requiredFormatCount = $derived(requiredFormats.length);
 
 	// Convert Record<string, number> to Map<FormatCategory, FormatScoreEntry[]> for accordion
-	const groupedFormatScores = $derived(() => {
+	const groupedFormatScores = $derived.by(() => {
 		const enriched: Record<string, { score: number; formatName: string; formatCategory: string }> =
 			{};
 
@@ -1293,7 +1293,7 @@
 			{/if}
 
 			<FormatScoreAccordion
-				formatScores={groupedFormatScores()}
+				formatScores={groupedFormatScores}
 				{requiredFormats}
 				readonly={isFullyReadonly}
 				onScoreChange={handleScoreChange}

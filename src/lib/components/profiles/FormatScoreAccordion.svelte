@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { SvelteSet, SvelteMap } from 'svelte/reactivity';
+	import { SvelteSet } from 'svelte/reactivity';
 	import type { FormatCategory } from '#lib/types/format.js';
 	import type { RequiredFormatEntry } from '#lib/types/profile.js';
 	import * as m from '#lib/paraglide/messages.js';
@@ -43,8 +43,9 @@
 	const expandedCategories = new SvelteSet<FormatCategory>();
 
 	// Filter scores by search
-	const filteredScores = $derived(() => {
-		const result = new SvelteMap<FormatCategory, FormatScoreEntry[]>();
+	const filteredScores = $derived.by(() => {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- rebuilt on every derive, never mutated
+		const result = new Map<FormatCategory, FormatScoreEntry[]>();
 		for (const [category, scores] of formatScores) {
 			const filtered = filterFormatScores(scores, searchQuery);
 			if (filtered.length > 0) {
@@ -111,7 +112,7 @@
 	<!-- Category accordions -->
 	<div class="space-y-2">
 		{#each FORMAT_CATEGORY_ORDER as category (category)}
-			{@const scores = filteredScores().get(category) || []}
+			{@const scores = filteredScores.get(category) || []}
 			{#if scores.length > 0}
 				{@const nonZeroCount = countNonZeroScores(scores)}
 				{@const requiredCount = scores.filter((e) => requiredFormatIds.has(e.formatId)).length}
@@ -201,7 +202,7 @@
 			{/if}
 		{/each}
 
-		{#if filteredScores().size === 0}
+		{#if filteredScores.size === 0}
 			<div class="rounded-lg bg-base-200 p-8 text-center">
 				<Search class="mx-auto mb-2 h-8 w-8 text-base-content/40" />
 				<p class="text-base-content/60">{m.profiles_noFormatsMatchSearch()}</p>
