@@ -1,5 +1,6 @@
 import {
 	isActiveActivity,
+	isDownloadingTileStatus,
 	type UnifiedActivity,
 	type ActivityFilters,
 	type ActivitySortOptions,
@@ -80,6 +81,9 @@ export function applyRequestedStatusFilter(
 		case 'success':
 			return activities.filter((activity) => activity.status === 'imported');
 		case 'downloading':
+			// The Downloading tile counts importing rows too (there is no
+			// Importing tile), so the filter it applies has to keep them.
+			return activities.filter((activity) => isDownloadingTileStatus(activity.status));
 		case 'importing':
 			return activities.filter((activity) => activity.status === status);
 		case 'failed':

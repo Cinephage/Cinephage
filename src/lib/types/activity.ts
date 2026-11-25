@@ -88,6 +88,14 @@ export function isActiveActivity(
 }
 
 /**
+ * Whether an active row counts under the Downloading tile. Importing rows
+ * belong there too: there is no separate Importing tile.
+ */
+export function isDownloadingTileStatus(status: ActivityStatus): boolean {
+	return status === 'downloading' || status === 'importing';
+}
+
+/**
  * Error message patterns that positively identify import-phase failures.
  *
  * These come from ImportService.ts and DownloadMonitorService.markImporting()

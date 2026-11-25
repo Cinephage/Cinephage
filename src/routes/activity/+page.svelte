@@ -33,6 +33,7 @@
 	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
 	import {
 		isActiveActivity,
+		isDownloadingTileStatus,
 		type UnifiedActivity,
 		type ActivityFilters as FiltersType,
 		type ActivityStatus,
@@ -71,7 +72,6 @@
 		createDefaultFilters,
 		normalizeFiltersForTab,
 		isHistoryActivity,
-		isQueueActivityId,
 		normalizeActivityStatus,
 		normalizeActivity,
 		sortActivitiesList,
@@ -79,7 +79,7 @@
 		createDefaultQueueCardStats,
 		buildActivityApiQueryString,
 		buildFilterQueryString,
-		matchesActivityFilters
+		upsertActivityInList
 	} from './activity-utils.js';
 
 	let { data } = $props();
@@ -447,12 +447,13 @@
 	});
 
 	// Derived inline stats (replaces inline template computations)
-	const hasDownloading = $derived(
-		activityTab === 'active' && filteredActivities.some((a) => a.status === 'downloading')
-	);
+	// Same rule as the Downloading tile, so the badge and the tile agree.
 	const downloadingCount = $derived(
-		hasDownloading ? filteredActivities.filter((a) => a.status === 'downloading').length : 0
+		activityTab === 'active'
+			? filteredActivities.filter((a) => isDownloadingTileStatus(a.status)).length
+			: 0
 	);
+	const hasDownloading = $derived(downloadingCount > 0);
 
 	function getStatusLabel(status: NonNullable<FiltersType['status']>): string {
 		switch (status) {
@@ -491,67 +492,19 @@
 		return m.activity_statusCount({ total, status: getStatusLabel(status) });
 	});
 
-	function removeStaleQueueLinkedRows(queueActivity: UnifiedActivity): number {
-		if (!isQueueActivityId(queueActivity.id) || !queueActivity.queueItemId) {
-			return 0;
-		}
-
-		const staleRowIds = new Set(
-			activities
-				.filter(
-					(activity) =>
-						activity.id !== queueActivity.id &&
-						!isQueueActivityId(activity.id) &&
-						activity.queueItemId === queueActivity.queueItemId
-				)
-				.map((activity) => activity.id)
-		);
-
-		if (staleRowIds.size === 0) {
-			return 0;
-		}
-
-		activities = activities.filter((activity) => !staleRowIds.has(activity.id));
-
-		return staleRowIds.size;
-	}
-
 	function upsertActivity(activity: Partial<UnifiedActivity>): void {
 		const normalized = normalizeActivity(activity);
 		if (!normalized) return;
-		const inScope = matchesActivityFilters(normalized, filters, activityTab);
 
-		const existingIndex = activities.findIndex((a) => a.id === normalized.id);
-
-		// If the item already exists, update in place
-		if (existingIndex >= 0) {
-			if (!inScope) {
-				const removed = activities[existingIndex];
-				activities = activities.filter((entry) => entry.id !== removed.id);
-				total = Math.max(0, total - 1);
-				return;
-			}
-
-			const existing = activities[existingIndex];
-			Object.assign(existing, normalized);
-			const removedDuplicates = removeStaleQueueLinkedRows(existing);
-			if (removedDuplicates > 0) {
-				total = Math.max(0, total - removedDuplicates);
-			}
-			// Trigger reactivity by reassigning (no sort needed -- $derived handles it)
-			activities = activities;
-			return;
+		const result = upsertActivityInList(activities, total, normalized, filters, activityTab);
+		activities = result.activities;
+		total = result.total;
+		// The stream only carries rows, never the card counts: when a row joins
+		// or leaves the list, re-read both from the server so the tiles, the tab
+		// badge and the list heading keep showing the same numbers.
+		if (result.membershipChanged) {
+			scheduleActivityRefresh();
 		}
-
-		// New item: check if it belongs in the current tab scope at all
-		if (!inScope) {
-			return;
-		}
-
-		// Add new item (no sort needed -- $derived handles it)
-		activities = [normalized, ...activities];
-		const removedDuplicates = removeStaleQueueLinkedRows(normalized);
-		total = Math.max(0, total + 1 - removedDuplicates);
 	}
 
 	// Update activities when data changes (navigation / tab switch / filter change)
@@ -565,10 +518,18 @@
 		activities = data.activities;
 		total = data.total;
 		currentPage = 1;
-		if (data.cardStats) {
-			queueStats = data.cardStats as QueueCardStats;
+		// The Active tab's summary is built from the same rows as the list, so
+		// prefer it: the tiles then match the list heading. Other tabs have no
+		// summary and use the server's card counts.
+		if (data.summary) {
+			queueStats = parseQueueStats({
+				...(data.summary as Partial<ActivitySummary>),
+				failedCount: data.cardStats?.failedCount ?? data.summary.failedCount
+			});
+		} else if (data.cardStats) {
+			queueStats = parseQueueStats(data.cardStats as QueueCardStats);
 		} else {
-			queueStats = parseQueueStats((data.summary ?? null) as Partial<ActivitySummary> | null);
+			queueStats = createDefaultQueueCardStats();
 		}
 		filters = initialFilters;
 		setFiltersForTab(nextTab, initialFilters);
@@ -640,6 +601,14 @@
 		// $derived sort recomputation on every progress tick.
 	}
 
+	function scheduleActivityRefresh(): void {
+		if (refreshDebounceTimer !== null) clearTimeout(refreshDebounceTimer);
+		refreshDebounceTimer = setTimeout(() => {
+			refreshDebounceTimer = null;
+			void refreshActivityData({ force: true, silent: true });
+		}, 800);
+	}
+
 	// SSE Connection - internally handles browser/SSR
 	const sse = createSSE<ActivityStreamEvents>(
 		resolvePath('/api/activity/stream'),
@@ -666,11 +635,7 @@
 				}
 			},
 			'activity:refresh': () => {
-				if (refreshDebounceTimer !== null) clearTimeout(refreshDebounceTimer);
-				refreshDebounceTimer = setTimeout(() => {
-					refreshDebounceTimer = null;
-					void refreshActivityData({ force: true, silent: true });
-				}, 800);
+				scheduleActivityRefresh();
 			}
 		},
 		{
