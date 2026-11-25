@@ -2491,6 +2491,8 @@
 	"music_noSearchMatch": "Nothing matches \"{query}\"",
 	"music_releasesTab": "Releases",
 	"music_searchEverything": "Search artists, albums, songs…",
+	"music_searchMissing": "Search missing",
+	"music_noMissing": "Nothing is missing",
 	"music_searchThisAlbum": "Search this album",
 	"music_searchTrack": "Search this song",
 	"music_sortAlbumAsc": "Album A–Z",

@@ -2358,6 +2358,8 @@
 	"music_interactiveSearch": "Interaktive Suche",
 	"music_noSearchMatch": "Nichts passt zu \"{query}\"",
 	"music_searchEverything": "Künstler, Alben, Titel durchsuchen…",
+	"music_searchMissing": "Fehlende suchen",
+	"music_noMissing": "Nichts fehlt",
 	"music_searchThisAlbum": "Dieses Album suchen",
 	"music_searchTrack": "Diesen Titel suchen",
 	"music_sortAlbumAsc": "Album A–Z",

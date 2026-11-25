@@ -2358,6 +2358,8 @@
 	"music_interactiveSearch": "Búsqueda interactiva",
 	"music_noSearchMatch": "Nada coincide con \"{query}\"",
 	"music_searchEverything": "Buscar artistas, álbumes, canciones…",
+	"music_searchMissing": "Buscar faltantes",
+	"music_noMissing": "No falta nada",
 	"music_searchThisAlbum": "Buscar este álbum",
 	"music_searchTrack": "Buscar esta canción",
 	"music_sortAlbumAsc": "Álbum A–Z",

@@ -5,6 +5,7 @@
 		Disc3,
 		Eye,
 		EyeOff,
+		Loader2,
 		Search,
 		ChevronDown,
 		Plus,
@@ -696,31 +697,71 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 	 * many are left, so a hundred-row selection does not sit on one request that
 	 * the proxy or the browser will time out.
 	 */
+	/**
+	 * Grab the best release for a batch of albums, ten at a time.
+	 *
+	 * The server answers a window of albums and says how many are left, so a
+	 * hundred-row selection does not ride one request the proxy will time out.
+	 * Returns how many were actually grabbed.
+	 */
+	async function grabAlbums(ids: string[]): Promise<number> {
+		let grabbed = 0;
+		let offset = 0;
+		for (;;) {
+			const response = await fetch('/api/music/albums/auto-search', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ ids, offset, limit: 10 })
+			});
+			const body = await response.json().catch(() => ({}));
+			if (!response.ok) {
+				toasts.error(body.error ?? m.music_searchFailed());
+				break;
+			}
+			grabbed += body.grabbed ?? 0;
+			if (body.nextOffset === null || body.nextOffset === undefined) break;
+			offset = body.nextOffset;
+		}
+		return grabbed;
+	}
+
 	async function bulkGrab() {
 		const ids = [...selection.ids];
 		if (ids.length === 0) return;
 		bulkLoading = true;
 		bulkAction = 'grab';
 		try {
-			let grabbed = 0;
-			let offset = 0;
-			for (;;) {
-				const response = await fetch('/api/music/albums/auto-search', {
-					method: 'POST',
-					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({ ids, offset, limit: 10 })
-				});
-				const body = await response.json().catch(() => ({}));
-				if (!response.ok) {
-					toasts.error(body.error ?? m.music_searchFailed());
-					return;
-				}
-				grabbed += body.grabbed ?? 0;
-				if (body.nextOffset === null || body.nextOffset === undefined) break;
-				offset = body.nextOffset;
-			}
+			const grabbed = await grabAlbums(ids);
 			toasts.success(m.music_bulkGrabbed({ count: grabbed, total: ids.length }));
 			selection.clear();
+			await refreshAfterChange();
+		} catch (err) {
+			toasts.error(err instanceof Error ? err.message : m.music_searchFailed());
+		} finally {
+			bulkLoading = false;
+			bulkAction = null;
+		}
+	}
+
+	/**
+	 * The library's own "search missing": every monitored album with no file,
+	 * whatever the shelf currently shows. This is the music counterpart of the
+	 * series page's missing-episode search — the thing the library had no button
+	 * for at all.
+	 */
+	async function searchMissingAlbums() {
+		bulkLoading = true;
+		bulkAction = 'grab';
+		try {
+			const listing = await fetch('/api/music/albums?idsOnly=1&file=missing&monitor=monitored');
+			const body = await listing.json().catch(() => ({}));
+			const ids: string[] = Array.isArray(body.ids) ? body.ids : [];
+			if (ids.length === 0) {
+				toasts.info(m.music_noMissing());
+				return;
+			}
+			const grabbed = await grabAlbums(ids);
+			toasts.success(m.music_bulkGrabbed({ count: grabbed, total: ids.length }));
 			await refreshAfterChange();
 		} catch (err) {
 			toasts.error(err instanceof Error ? err.message : m.music_searchFailed());
@@ -827,6 +868,21 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 					<Plus class="h-4 w-4" />
 					<span class="hidden xl:inline">{m.music_addMusic()}</span>
 				</button>
+				{#if browse === 'albums'}
+					<button
+						class="btn gap-1.5 btn-ghost btn-xs sm:btn-sm"
+						onclick={searchMissingAlbums}
+						disabled={bulkLoading}
+						title={m.music_searchMissing()}
+					>
+						{#if bulkLoading && bulkAction === 'grab'}
+							<Loader2 class="h-4 w-4 animate-spin" />
+						{:else}
+							<Search class="h-4 w-4" />
+						{/if}
+						<span class="hidden xl:inline">{m.music_searchMissing()}</span>
+					</button>
+				{/if}
 			{/if}
 
 			{#if selectable}

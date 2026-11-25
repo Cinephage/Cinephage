@@ -2358,6 +2358,8 @@
 	"music_interactiveSearch": "Интерактивный поиск",
 	"music_noSearchMatch": "Ничего не найдено по запросу «{query}»",
 	"music_searchEverything": "Поиск исполнителей, альбомов, треков…",
+	"music_searchMissing": "Искать недостающее",
+	"music_noMissing": "Ничего не отсутствует",
 	"music_searchThisAlbum": "Искать этот альбом",
 	"music_searchTrack": "Искать этот трек",
 	"music_sortAlbumAsc": "Альбом А–Я",
