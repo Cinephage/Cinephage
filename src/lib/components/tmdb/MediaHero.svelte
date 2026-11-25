@@ -2,6 +2,7 @@
 	import type { MovieDetails, TVShowDetails, ReleaseDate } from '#lib/types/tmdb.js';
 	import TmdbImage from './TmdbImage.svelte';
 	import { safeExternalUrl } from '#lib/shared/url-safety.js';
+	import { dragScroll } from '#lib/actions/drag-scroll.js';
 	import CrewList from './CrewList.svelte';
 	import WatchProviders from './WatchProviders.svelte';
 	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
@@ -482,6 +483,7 @@
 					{/if}
 					<div
 						bind:this={carouselContainer}
+						use:dragScroll
 						onscroll={handleCarouselScroll}
 						class="flex scrollbar-none gap-3 overflow-x-auto pb-1"
 					>
@@ -535,7 +537,7 @@
 				</div>
 			{:else if backdropImages.length > 0}
 				<div class="group/carousel relative">
-					<div class="flex scrollbar-none gap-3 overflow-x-auto pb-1">
+					<div use:dragScroll class="flex scrollbar-none gap-3 overflow-x-auto pb-1">
 						{#each backdropImages as backdrop (backdrop.file_path)}
 							<button
 								class="group w-36 shrink-0 text-left"

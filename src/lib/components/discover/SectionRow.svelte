@@ -7,6 +7,7 @@
 	import { resolvePath } from '#lib/utils/routing.js';
 	import { getTmdb } from '#lib/api/discover.js';
 	import * as m from '#lib/paraglide/messages.js';
+	import { dragScroll } from '#lib/actions/drag-scroll.js';
 
 	let {
 		title,
@@ -186,6 +187,7 @@
 
 		<div
 			bind:this={container}
+			use:dragScroll
 			onscroll={handleScroll}
 			class="flex snap-x snap-mandatory scrollbar-none gap-3 overflow-x-auto scroll-smooth px-1 pb-4 sm:gap-4 [&::-webkit-scrollbar]:hidden"
 		>
