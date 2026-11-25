@@ -153,6 +153,8 @@
 	</button>
 
 	{#if open}
+		<!-- The bell sits outside this node: a tap on it closes the panel and the
+		     swallowed click keeps toggle() from opening it again. -->
 		<div
 			use:dismissable={{ onDismiss: close, outside: true }}
 			class="absolute top-11 right-0 z-[60] w-85 overflow-hidden rounded-xl border border-base-content/10 bg-base-100 shadow-xl"

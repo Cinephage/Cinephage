@@ -18,7 +18,10 @@ export interface DismissableOptions {
 	/**
 	 * Close on a press outside the node. The click that follows is swallowed,
 	 * so the tap only closes the overlay and does not also activate whatever
-	 * was underneath (a link, a poster). Default false.
+	 * was underneath (a link, a poster). Presses on app chrome marked with
+	 * `data-dismiss-passthrough` (the side menu, the menu button) still close
+	 * the overlay but keep their click, so one tap both closes it and does
+	 * what the control says. Default false.
 	 */
 	outside?: boolean;
 	/** Lock page scrolling while the overlay is open. Default false. */
@@ -28,6 +31,19 @@ export interface DismissableOptions {
 }
 
 const stack: HTMLElement[] = [];
+
+/**
+ * Mark app chrome (navigation that never sits under an overlay and is only
+ * tapped on purpose) with this attribute: an outside press on it closes the
+ * overlay without swallowing its click. Page content stays unmarked.
+ */
+export const DISMISS_PASSTHROUGH_ATTR = 'data-dismiss-passthrough';
+
+/**
+ * The pending click swallow, shared by every overlay: it outlives the overlay
+ * that armed it, and a later press must be able to cancel it.
+ */
+let removeSwallow: (() => void) | null = null;
 
 /** How long a dismissing press keeps swallowing its click (touch can lag a little). */
 const SWALLOW_MS = 700;
@@ -47,8 +63,6 @@ export function dismissable(node: HTMLElement, options: DismissableOptions) {
 		event.preventDefault();
 		opts.onDismiss();
 	}
-
-	let removeSwallow: (() => void) | null = null;
 
 	function swallowNextClick() {
 		removeSwallow?.();
@@ -70,7 +84,14 @@ export function dismissable(node: HTMLElement, options: DismissableOptions) {
 	function onPointerdown(event: PointerEvent) {
 		if (!opts.outside || !isTop()) return;
 		if (event.target instanceof Node && node.contains(event.target)) return;
-		swallowNextClick();
+		const passthrough =
+			event.target instanceof Element && event.target.closest(`[${DISMISS_PASSTHROUGH_ATTR}]`);
+		if (passthrough) {
+			// Drop a swallow left by an earlier press so it can't eat this click.
+			removeSwallow?.();
+		} else {
+			swallowNextClick();
+		}
 		opts.onDismiss();
 	}
 

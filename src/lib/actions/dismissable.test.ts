@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { dismissable, blurOnEscape } from './dismissable.js';
+import { dismissable, blurOnEscape, DISMISS_PASSTHROUGH_ATTR } from './dismissable.js';
 
 const mounted: Array<{ destroy: () => void }> = [];
 
@@ -100,6 +100,46 @@ describe('dismissable', () => {
 		vi.advanceTimersByTime(1000);
 		target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 		expect(onClick).toHaveBeenCalledOnce();
+	});
+
+	it('closes on a press on a pass-through control and lets its click through', () => {
+		const onDismiss = vi.fn();
+		mount({ onDismiss, outside: true });
+		const nav = document.createElement('nav');
+		nav.setAttribute(DISMISS_PASSTHROUGH_ATTR, '');
+		const link = document.createElement('a');
+		link.href = '#library';
+		const onLinkClick = vi.fn();
+		link.addEventListener('click', onLinkClick);
+		nav.appendChild(link);
+		document.body.appendChild(nav);
+
+		link.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+		expect(onDismiss).toHaveBeenCalledOnce();
+
+		const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+		link.dispatchEvent(click);
+		expect(onLinkClick).toHaveBeenCalledOnce();
+		expect(click.defaultPrevented).toBe(false);
+	});
+
+	it('a pass-through press does not leave an earlier swallow behind', () => {
+		mount({ onDismiss: vi.fn(), outside: true });
+		const plain = document.createElement('div');
+		document.body.appendChild(plain);
+		const nav = document.createElement('nav');
+		nav.setAttribute(DISMISS_PASSTHROUGH_ATTR, '');
+		const link = document.createElement('a');
+		const onLinkClick = vi.fn();
+		link.addEventListener('click', onLinkClick);
+		nav.appendChild(link);
+		document.body.appendChild(nav);
+
+		// A press with no click after it (a scroll, a drag) arms the swallow.
+		plain.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+		link.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+		link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+		expect(onLinkClick).toHaveBeenCalledOnce();
 	});
 
 	it('does not close on a press inside', () => {
