@@ -746,7 +746,7 @@
 							<span class="label-text flex items-center gap-1 text-xs text-base-content/80">
 								Folder name
 								<span
-									class="tooltip tooltip-right before:max-w-48 sm:before:max-w-xs"
+									class="tooltip tooltip-right before:z-10 before:max-w-48 after:z-10 sm:before:max-w-xs"
 									data-tip="Folder name relative to the root folder. Edit only if the name on disk no longer matches; saving will update the database and trigger a rescan to re-link existing files."
 								>
 									<Info class="h-3 w-3 text-base-content/40" />

@@ -561,7 +561,7 @@
 
 	<!-- Tab Navigation -->
 	{#if showTabBar}
-		<div class="tabs-bordered tabs mb-6 w-full">
+		<div class="tabs tabs-border mb-6 w-full">
 			<button
 				type="button"
 				class="sm:tab-lg tab flex-1 gap-2 px-2 whitespace-nowrap sm:px-4"

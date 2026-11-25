@@ -308,7 +308,7 @@
 				<span class="min-w-0 text-sm">{m.rootFolders_monitorNewContent()}</span>
 				<button
 					type="button"
-					class="tooltip btn tooltip-right shrink-0 btn-ghost btn-xs before:max-w-48 sm:before:max-w-xs"
+					class="tooltip btn tooltip-left shrink-0 btn-ghost btn-xs before:max-w-48 sm:tooltip-right sm:before:max-w-xs"
 					data-tip={m.rootFolders_monitorNewContentTooltip()}
 					onclick={(e) => e.stopPropagation()}
 					aria-label="More information about monitor new content"
