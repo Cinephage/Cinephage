@@ -129,3 +129,6 @@ docs/notes/
 
 # Test fixtures that must live outside the path guard's denylist
 .test-tmp/
+
+# ESLint cache (npm run lint)
+.eslintcache
