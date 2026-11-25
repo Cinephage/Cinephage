@@ -37,6 +37,13 @@ const TTL = {
 } as const;
 
 /**
+ * How long past its TTL an entry may still be served while a refresh runs.
+ * TMDB lists and details change slowly; a day-old trending row is far better
+ * than a page that waits seconds on a cold cache after a short break.
+ */
+const STALE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
  * Determine TTL based on endpoint pattern
  */
 function getTtlForEndpoint(endpoint: string): number {
@@ -65,7 +72,7 @@ function getTtlForEndpoint(endpoint: string): number {
 	return TTL.DETAILS;
 }
 
-class TmdbCache {
+export class TmdbCache {
 	private cache = new Map<string, CacheEntry<unknown>>();
 	private maxSize: number;
 	private hits = 0;
@@ -79,34 +86,46 @@ class TmdbCache {
 	 * Get cached value if exists and not expired
 	 */
 	get<T>(key: string): T | null {
+		const hit = this.lookup<T>(key);
+		return hit && !hit.stale ? hit.data : null;
+	}
+
+	/**
+	 * Stale-while-revalidate read. A fresh entry comes back with
+	 * `stale: false`; an entry past its TTL but within STALE_WINDOW_MS comes
+	 * back with `stale: true`, so the caller can answer with it at once and
+	 * refresh it in the background instead of making the user wait on TMDB.
+	 * Anything older is dropped and reads as a miss.
+	 */
+	lookup<T>(key: string): { data: T; stale: boolean } | null {
 		const entry = this.cache.get(key);
 		if (!entry) {
 			this.misses++;
 			return null;
 		}
 
-		const now = Date.now();
-		if (now - entry.timestamp > entry.ttlMs) {
-			// Expired
+		const age = Date.now() - entry.timestamp;
+		if (age > entry.ttlMs + STALE_WINDOW_MS) {
 			this.cache.delete(key);
 			this.misses++;
 			return null;
 		}
+		const stale = age > entry.ttlMs;
 
 		// Move to end for LRU behavior (Map maintains insertion order)
 		this.cache.delete(key);
 		this.cache.set(key, entry);
 		this.hits++;
-
-		return entry.data as T;
+		return { data: entry.data as T, stale };
 	}
 
 	/**
 	 * Cache a value with endpoint-appropriate TTL
 	 */
 	set<T>(key: string, data: T, endpoint: string): void {
-		// Evict oldest entry if at capacity
-		if (this.cache.size >= this.maxSize) {
+		// Evict oldest entry if at capacity (a refresh of an existing key
+		// replaces it in place and needs no room)
+		if (!this.cache.has(key) && this.cache.size >= this.maxSize) {
 			const firstKey = this.cache.keys().next().value;
 			if (firstKey) {
 				this.cache.delete(firstKey);

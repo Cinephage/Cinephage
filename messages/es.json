@@ -636,6 +636,8 @@
 	"discover_closeFilters": "Cerrar filtros",
 	"discover_exitSelectMode": "Salir de la selección múltiple",
 	"discover_failedToLoadMore": "Error al cargar más elementos",
+	"discover_loadFailed": "No se pudo cargar Descubrir.",
+	"discover_retry": "Reintentar",
 	"discover_filterBadgeGenres": "{count} géneros",
 	"discover_filterBadgeKeywords": "{count} palabras clave",
 	"discover_filterBadgeLanguage": "Idioma",

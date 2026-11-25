@@ -752,6 +752,8 @@
 	"discover_closeFilters": "Close Filters",
 	"discover_exitSelectMode": "Exit multi-select",
 	"discover_failedToLoadMore": "Failed to load more items",
+	"discover_loadFailed": "Discover could not be loaded.",
+	"discover_retry": "Try again",
 	"discover_filterBadgeGenres": "{count} Genres",
 	"discover_filterBadgeKeywords": "{count} Keywords",
 	"discover_filterBadgeLanguage": "Language",

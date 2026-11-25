@@ -1,3 +1,25 @@
+<script lang="ts" module>
+	/**
+	 * Views already seen in this tab, by query string. Coming back to one (the
+	 * back button, a tab, a revisit) paints it at once from here while the
+	 * fresh data streams in underneath: stale-while-revalidate in the browser.
+	 * Small and in memory only; a reload starts empty.
+	 */
+	const VIEW_CACHE_LIMIT = 20;
+	// Deliberately not reactive: it is read when a view is painted, never rendered.
+	// eslint-disable-next-line svelte/prefer-svelte-reactivity
+	const viewCache = new Map<string, unknown>();
+
+	function rememberView(key: string, value: unknown) {
+		viewCache.delete(key);
+		viewCache.set(key, value);
+		if (viewCache.size > VIEW_CACHE_LIMIT) {
+			const oldest = viewCache.keys().next().value;
+			if (oldest !== undefined) viewCache.delete(oldest);
+		}
+	}
+</script>
+
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
 	import { page } from '$app/state';
@@ -17,6 +39,7 @@
 	import PlaylistImportModal from '#lib/components/music/PlaylistImportModal.svelte';
 	import AddToLibraryModal from '#lib/components/library/AddToLibraryModal.svelte';
 	import TmdbConfigRequired from '#lib/components/ui/TmdbConfigRequired.svelte';
+	import DiscoverSkeleton from '#lib/components/discover/DiscoverSkeleton.svelte';
 	import { UI } from '#lib/config/constants.js';
 	import {
 		activeFilters,
@@ -64,14 +87,73 @@
 
 	let { data } = $props();
 
+	/**
+	 * The load streams its TMDB work (see +page.server.ts), so the header,
+	 * tabs and search render on the click and the content arrives into
+	 * `view`. While a new filter or tab is loading, the previous view stays
+	 * on screen, dimmed, rather than blanking the page.
+	 */
+	type DiscoverView = Awaited<typeof data.discover>;
+	const initialKey = page.url.search;
+	let view = $state.raw<DiscoverView | null>(
+		(viewCache.get(initialKey) as DiscoverView | undefined) ?? null
+	);
+	/** The query string `view` belongs to; dimmed while it is not the current one. */
+	let viewKey = $state(initialKey);
+	let viewPending = $state(true);
+	let viewFailed = $state(false);
+	const viewIsStale = $derived(view !== null && viewPending && viewKey !== page.url.search);
+
+	let belowFoldReady = $state(false);
+	$effect(() => {
+		if (belowFoldReady || view?.viewType !== 'dashboard') return;
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const frame = requestAnimationFrame(() => {
+			timer = setTimeout(() => (belowFoldReady = true), 0);
+		});
+		return () => {
+			cancelAnimationFrame(frame);
+			if (timer) clearTimeout(timer);
+		};
+	});
+	$effect(() => {
+		const pending = data.discover;
+		const key = page.url.search;
+		let current = true;
+		viewPending = true;
+		const cached = viewCache.get(key) as DiscoverView | undefined;
+		if (cached) {
+			view = cached;
+			viewKey = key;
+		}
+		pending.then(
+			(resolved) => {
+				if (!current) return;
+				rememberView(key, resolved);
+				view = resolved;
+				viewKey = key;
+				viewPending = false;
+				viewFailed = false;
+			},
+			() => {
+				if (!current) return;
+				viewPending = false;
+				viewFailed = true;
+			}
+		);
+		return () => {
+			current = false;
+		};
+	});
+
 	/** Opened from the music view; a paste is a one-time import, not a smart list. */
 	let importOpen = $state(false);
 
 	/** The music landing payload, narrowed once: it exists only on the music
 	 *  view, and this page's data type is a union of every view. */
 	type MusicShelfView = { id: string; rows: MusicRowItem[] };
-	const musicShelves = $derived((data.shelves ?? []) as MusicShelfView[]);
-	const activeGenreName = $derived((data.activeGenreName ?? null) as string | null);
+	const musicShelves = $derived((view?.shelves ?? []) as MusicShelfView[]);
+	const activeGenreName = $derived((view?.activeGenreName ?? null) as string | null);
 
 	// Only admins add content; viewers browse Discover without the add actions.
 	const isAdminUser = $derived(data.user?.role === 'admin');
@@ -202,7 +284,7 @@
 	 * panel renders whatever the current tab declares.
 	 */
 	const filters: FacetSelection = $derived(readSelection(page.url.searchParams, kind));
-	const facetGroups = $derived(data.facetGroups ?? []);
+	const facetGroups = $derived(view?.facetGroups ?? []);
 	const activeFilterChips = $derived(activeFilters(facetGroups));
 
 	/** Badge copy: bespoke wording when the facet declares it, otherwise its value. */
@@ -435,24 +517,26 @@
 
 	// Sync results from props - handles initial load and filter changes
 	$effect(() => {
-		if (data.results) {
+		const current = view;
+		if (!current) return;
+		if (current.results) {
 			// Reset when filters change (page resets to 1) or on initial load
-			if (data.pagination?.page === 1 || allResults.length === 0) {
-				allResults = data.results as ResultsType;
-				currentPage = data.pagination?.page ?? 1;
+			if (current.pagination?.page === 1 || allResults.length === 0) {
+				allResults = current.results as ResultsType;
+				currentPage = current.pagination?.page ?? 1;
 			}
-		} else if (data.viewType === 'dashboard' && data.sections) {
+		} else if (current.viewType === 'dashboard' && current.sections) {
 			// Collect all unique items across dashboard sections so debug mode
 			// has a populated ID set to diff against.
 			const seen = new SvelteSet<number>();
 			const combined: ResultsType = [];
 			for (const section of [
-				data.sections.trendingWeek,
-				data.sections.popularMovies,
-				data.sections.popularTV,
-				data.sections.topRatedMovies,
-				data.sections.topRatedTV,
-				data.sections.nowPlaying
+				current.sections.trendingWeek,
+				current.sections.popularMovies,
+				current.sections.popularTV,
+				current.sections.topRatedMovies,
+				current.sections.topRatedTV,
+				current.sections.nowPlaying
 			]) {
 				for (const item of section ?? []) {
 					if (!seen.has((item as { id: number }).id)) {
@@ -474,7 +558,8 @@
 	});
 
 	async function loadMoreResults() {
-		if (isLoadingMore || !data.pagination || currentPage >= data.pagination.total_pages) return;
+		const pagination = view?.pagination;
+		if (isLoadingMore || !pagination || currentPage >= pagination.total_pages) return;
 
 		isLoadingMore = true;
 		try {
@@ -513,7 +598,7 @@
 	}
 
 	$effect(() => {
-		if (!loadMoreTrigger || data.viewType !== 'grid') return;
+		if (!loadMoreTrigger || view?.viewType !== 'grid') return;
 
 		const observer = new IntersectionObserver(
 			async (entries) => {
@@ -525,7 +610,7 @@
 						const rect = loadMoreTrigger.getBoundingClientRect();
 						if (
 							rect.top < window.innerHeight + 200 &&
-							currentPage < (data.pagination?.total_pages ?? 0)
+							currentPage < (view?.pagination?.total_pages ?? 0)
 						) {
 							loadMoreResults();
 						}
@@ -733,8 +818,19 @@
 	</div>
 
 	<!-- Main Content -->
-	<main class="w-full space-y-12 px-4 py-8 lg:px-8">
-		{#if data.viewType === 'not_configured'}
+	<main
+		class="w-full space-y-12 px-4 py-8 transition-opacity lg:px-8"
+		class:opacity-60={viewIsStale}
+		aria-busy={viewPending}
+	>
+		{#if !view && viewFailed}
+			<div role="alert" class="alert alert-error">
+				<span>{m.discover_loadFailed()}</span>
+				<button class="btn btn-sm" onclick={() => refreshAll()}>{m.discover_retry()}</button>
+			</div>
+		{:else if !view}
+			<DiscoverSkeleton />
+		{:else if view.viewType === 'not_configured'}
 			<div class="mx-auto max-w-2xl py-12">
 				<TmdbConfigRequired message={m.discover_tmdbConfigMessage()} />
 				<div class="mt-8 text-center">
@@ -743,7 +839,7 @@
 					</p>
 				</div>
 			</div>
-		{:else if data.error}
+		{:else if view.error}
 			<div role="alert" class="alert alert-error">
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
@@ -757,7 +853,7 @@
 						d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
 					></path>
 				</svg>
-				<span>{data.error}</span>
+				<span>{view.error}</span>
 			</div>
 		{:else if isSearchMode}
 			<!-- Search Results View -->
@@ -811,7 +907,7 @@
 					{/if}
 				</div>
 			</div>
-		{:else if data.viewType === 'music'}
+		{:else if view.viewType === 'music'}
 			<!-- Music View: one chart request per selected genre feeds three shelves.
 			     Genres are a facet in the drawer, not a control row on the page. -->
 			<div class="animate-in fade-in space-y-10 duration-500">
@@ -836,12 +932,12 @@
 					</section>
 				{/each}
 			</div>
-		{:else if data.viewType === 'dashboard' && data.sections}
+		{:else if view.viewType === 'dashboard' && view.sections}
 			<!-- Dashboard View -->
 			<div class="animate-in fade-in space-y-12 duration-500">
 				<SectionRow
 					title={m.common_inTheaters()}
-					items={data.sections.nowPlaying}
+					items={view.sections.nowPlaying}
 					link="/discover?now_playing=true{excludeInLibrary ? '&exclude_in_library=true' : ''}"
 					endpoint="movie/now_playing"
 					onAddToLibrary={addHandler}
@@ -852,7 +948,7 @@
 				/>
 				<SectionRow
 					title={m.discover_trendingThisWeek()}
-					items={data.sections.trendingWeek}
+					items={view.sections.trendingWeek}
 					link="/discover?trending=week{excludeInLibrary ? '&exclude_in_library=true' : ''}"
 					endpoint="trending/all/week"
 					onAddToLibrary={addHandler}
@@ -861,72 +957,80 @@
 					isSelected={isItemSelected}
 					onToggleSelect={toggleItemSelect}
 				/>
-				{#if data.sections.topAlbums.length > 0}
+				<!-- Rows below the first two are drawn a frame later: building all of
+				     them at once (~400 elements each) held the first paint back, also
+				     when the view came from the cache. Placeholders keep the height so
+				     scroll restoration on back/forward still lands. -->
+				{#if belowFoldReady}
+					{#if view.sections.topAlbums.length > 0}
+						<SectionRow
+							title={m.music_topAlbums()}
+							items={view.sections.topAlbums}
+							link="/discover?type=music"
+							onAddToLibrary={addHandler}
+						>
+							{#snippet cardSnippet(item)}
+								<MusicRowCard {item} onAdded={() => refreshAll()} />
+							{/snippet}
+						</SectionRow>
+					{/if}
 					<SectionRow
-						title={m.music_topAlbums()}
-						items={data.sections.topAlbums}
-						link="/discover?type=music"
+						title={m.discover_popularMovies()}
+						items={view.sections.popularMovies}
+						link="/discover?type=movie&sort_by=popularity.desc{excludeInLibrary
+							? '&exclude_in_library=true'
+							: ''}"
+						endpoint="movie/popular"
 						onAddToLibrary={addHandler}
-					>
-						{#snippet cardSnippet(item)}
-							<MusicRowCard {item} onAdded={() => refreshAll()} />
-						{/snippet}
-					</SectionRow>
+						{excludeInLibrary}
+						selectable={selectMode}
+						isSelected={isItemSelected}
+						onToggleSelect={toggleItemSelect}
+					/>
+					<SectionRow
+						title={m.discover_popularTvShows()}
+						items={view.sections.popularTV}
+						link="/discover?type=tv&sort_by=popularity.desc{excludeInLibrary
+							? '&exclude_in_library=true'
+							: ''}"
+						endpoint="tv/popular"
+						onAddToLibrary={addHandler}
+						{excludeInLibrary}
+						selectable={selectMode}
+						isSelected={isItemSelected}
+						onToggleSelect={toggleItemSelect}
+					/>
+					<SectionRow
+						title={m.discover_topRatedMovies()}
+						items={view.sections.topRatedMovies}
+						link="/discover?type=movie&top_rated=true{excludeInLibrary
+							? '&exclude_in_library=true'
+							: ''}"
+						endpoint="movie/top_rated"
+						onAddToLibrary={addHandler}
+						{excludeInLibrary}
+						selectable={selectMode}
+						isSelected={isItemSelected}
+						onToggleSelect={toggleItemSelect}
+					/>
+					<SectionRow
+						title={m.discover_topRatedTvShows()}
+						items={view.sections.topRatedTV}
+						link="/discover?type=tv&top_rated=true{excludeInLibrary
+							? '&exclude_in_library=true'
+							: ''}"
+						endpoint="tv/top_rated"
+						onAddToLibrary={addHandler}
+						{excludeInLibrary}
+						selectable={selectMode}
+						isSelected={isItemSelected}
+						onToggleSelect={toggleItemSelect}
+					/>
+				{:else}
+					<DiscoverSkeleton rows={4} />
 				{/if}
-				<SectionRow
-					title={m.discover_popularMovies()}
-					items={data.sections.popularMovies}
-					link="/discover?type=movie&sort_by=popularity.desc{excludeInLibrary
-						? '&exclude_in_library=true'
-						: ''}"
-					endpoint="movie/popular"
-					onAddToLibrary={addHandler}
-					{excludeInLibrary}
-					selectable={selectMode}
-					isSelected={isItemSelected}
-					onToggleSelect={toggleItemSelect}
-				/>
-				<SectionRow
-					title={m.discover_popularTvShows()}
-					items={data.sections.popularTV}
-					link="/discover?type=tv&sort_by=popularity.desc{excludeInLibrary
-						? '&exclude_in_library=true'
-						: ''}"
-					endpoint="tv/popular"
-					onAddToLibrary={addHandler}
-					{excludeInLibrary}
-					selectable={selectMode}
-					isSelected={isItemSelected}
-					onToggleSelect={toggleItemSelect}
-				/>
-				<SectionRow
-					title={m.discover_topRatedMovies()}
-					items={data.sections.topRatedMovies}
-					link="/discover?type=movie&top_rated=true{excludeInLibrary
-						? '&exclude_in_library=true'
-						: ''}"
-					endpoint="movie/top_rated"
-					onAddToLibrary={addHandler}
-					{excludeInLibrary}
-					selectable={selectMode}
-					isSelected={isItemSelected}
-					onToggleSelect={toggleItemSelect}
-				/>
-				<SectionRow
-					title={m.discover_topRatedTvShows()}
-					items={data.sections.topRatedTV}
-					link="/discover?type=tv&top_rated=true{excludeInLibrary
-						? '&exclude_in_library=true'
-						: ''}"
-					endpoint="tv/top_rated"
-					onAddToLibrary={addHandler}
-					{excludeInLibrary}
-					selectable={selectMode}
-					isSelected={isItemSelected}
-					onToggleSelect={toggleItemSelect}
-				/>
 			</div>
-		{:else if data.viewType === 'grid' && data.results}
+		{:else if view.viewType === 'grid' && view.results}
 			<!-- Grid View -->
 			<div class="animate-in fade-in slide-in-from-bottom-4 duration-500">
 				<div class="mb-6 flex items-center justify-between">
@@ -935,12 +1039,12 @@
 							{#if isFilteredTrending}
 								Popular & Matching
 							{:else}
-								{m.discover_resultsCount({ count: data.pagination.total_results.toLocaleString() })}
+								{m.discover_resultsCount({ count: view.pagination.total_results.toLocaleString() })}
 							{/if}
 						</h2>
 						{#if isFilteredTrending}
 							<p class="text-sm text-base-content/50">
-								{m.discover_resultsCount({ count: data.pagination.total_results.toLocaleString() })}
+								{m.discover_resultsCount({ count: view.pagination.total_results.toLocaleString() })}
 							</p>
 						{/if}
 					</div>
@@ -991,7 +1095,7 @@
 				<div bind:this={loadMoreTrigger} class="flex justify-center py-12">
 					{#if isLoadingMore}
 						<span class="loading loading-lg loading-dots text-primary"></span>
-					{:else if currentPage >= data.pagination.total_pages && allResults.length > 0}
+					{:else if currentPage >= view.pagination.total_pages && allResults.length > 0}
 						<span class="text-sm tracking-widest text-base-content/30 uppercase"
 							>{m.common_endOfResults()}</span
 						>

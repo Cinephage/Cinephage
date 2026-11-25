@@ -627,7 +627,11 @@
 		<!-- Sidebar -->
 		<div class="drawer-side z-40 overflow-visible">
 			<label for="main-drawer" aria-label={m.nav_closeSidebar()} class="drawer-overlay"></label>
+			<!-- Fetch each sidebar page's code once its link is on screen, so the
+			     first click on a section only waits for its data (which hover
+			     already preloads, see app.html), not for its JavaScript too. -->
 			<aside
+				data-sveltekit-preload-code="viewport"
 				class:sidebar-collapsed={!layoutState.isSidebarExpanded}
 				class="relative z-40 flex h-dvh flex-col overflow-x-visible bg-base-200 transition-[width] duration-300 ease-in-out
 		            {layoutState.isSidebarExpanded ? 'w-64' : 'w-20'}"

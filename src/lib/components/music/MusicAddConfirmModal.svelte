@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { Disc3, User } from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import { ModalWrapper } from '#lib/components/ui/modal/index.js';
@@ -21,7 +20,13 @@
 	let profileId = $state('');
 	let loaded = $state(false);
 
-	onMount(() => {
+	// Loaded on first open, not on mount: every music card on Discover carries
+	// this modal closed, and loading on mount cost two requests per card on
+	// every page view (50 for one music shelf) before anything was clicked.
+	let requested = false;
+	$effect(() => {
+		if (!open || requested) return;
+		requested = true;
 		void (async () => {
 			try {
 				const [profileResponse, settingsResponse] = await Promise.all([
