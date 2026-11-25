@@ -2,6 +2,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import { getContext } from 'svelte';
 	import { localAirTimeLabel } from '#lib/utils/airTime.js';
+	import { viewportDropdown } from '#lib/actions/viewport-dropdown.js';
 	import {
 		CheckCircle,
 		XCircle,
@@ -351,7 +352,7 @@
 						size="xs"
 					/>
 					{#if !readOnly}
-						<div class="dropdown dropdown-end">
+						<div class="dropdown dropdown-end" use:viewportDropdown>
 							<div
 								tabindex={autoSearching ? -1 : 0}
 								role="button"
@@ -390,7 +391,7 @@
 						</div>
 					{/if}
 					{#if episode.file?.mediaInfo}
-						<div class="dropdown dropdown-end">
+						<div class="dropdown dropdown-end" use:viewportDropdown>
 							<div tabindex="0" role="button" class="btn btn-ghost btn-xs">
 								<Info size={14} />
 							</div>
@@ -493,7 +494,7 @@
 						<QualityBadge quality={episode.file?.quality ?? null} mediaInfo={null} size="sm" />
 					{/if}
 					<!-- Subtitle popover trigger -->
-					<div class="dropdown dropdown-end">
+					<div class="dropdown dropdown-end" use:viewportDropdown>
 						<div
 							tabindex="0"
 							role="button"
@@ -569,7 +570,7 @@
 					{/if}
 				</div>
 				<!-- Subtitle popover trigger (desktop) -->
-				<div class="dropdown dropdown-end">
+				<div class="dropdown dropdown-end" use:viewportDropdown>
 					<div
 						tabindex="0"
 						role="button"
@@ -684,7 +685,7 @@
 
 			{#if !readOnly}
 				<!-- Search dropdown with auto-grab and interactive options -->
-				<div class="dropdown dropdown-end">
+				<div class="dropdown dropdown-end" use:viewportDropdown>
 					<div
 						tabindex={autoSearching ? -1 : 0}
 						role="button"
@@ -725,7 +726,7 @@
 
 			<!-- File info -->
 			{#if episode.file?.mediaInfo}
-				<div class="dropdown dropdown-end">
+				<div class="dropdown dropdown-end" use:viewportDropdown>
 					<div tabindex="0" role="button" class="btn btn-ghost btn-xs">
 						<Info size={14} />
 					</div>
