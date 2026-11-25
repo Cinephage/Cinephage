@@ -1,17 +1,22 @@
 <script lang="ts">
-	import { X, Eye, EyeOff, Sliders, Trash2, Loader2, Languages } from '@lucide/svelte';
+	import { X, Eye, EyeOff, Sliders, Trash2, Loader2, Languages, Download } from '@lucide/svelte';
 	import * as m from '#lib/paraglide/messages.js';
 
 	interface Props {
 		selectedCount: number;
 		loading: boolean;
-		currentAction: 'monitor' | 'unmonitor' | 'quality' | 'delete' | 'language' | null;
+		currentAction: 'monitor' | 'unmonitor' | 'quality' | 'delete' | 'language' | 'grab' | null;
 		/** Count-aware noun for the sentence, e.g. "movies" or "albums". */
 		itemLabel: string;
 		onMonitor: () => void;
 		onUnmonitor: () => void;
 		/** Bulk quality-profile assignment; both video and music lists wire it. */
 		onChangeQuality?: () => void;
+		/**
+		 * Bulk acquisition: grab the best release for each selected album. Only the
+		 * music list wires it — a movie or episode row is grabbed one at a time.
+		 */
+		onGrab?: () => void;
 		/** Optional bulk language profile action. */
 		onLanguage?: () => void;
 		onDelete: () => void;
@@ -26,6 +31,7 @@
 		onMonitor,
 		onUnmonitor,
 		onChangeQuality,
+		onGrab,
 		onLanguage,
 		onDelete,
 		onClear
@@ -47,6 +53,21 @@
 			<div class="h-4 w-px bg-base-content/20"></div>
 
 			<div class="flex items-center gap-1">
+				{#if onGrab}
+					<button
+						class="btn gap-1.5 btn-ghost btn-sm"
+						onclick={onGrab}
+						disabled={loading}
+						title={m.music_grabBest()}
+					>
+						{#if loading && currentAction === 'grab'}
+							<Loader2 size={16} class="animate-spin" />
+						{:else}
+							<Download size={16} />
+						{/if}
+						<span class="hidden sm:inline">{m.music_grabBest()}</span>
+					</button>
+				{/if}
 				<button
 					class="btn gap-1.5 btn-ghost btn-sm"
 					onclick={onMonitor}

@@ -5575,6 +5575,7 @@
 	"music_grabFailed": "Release konnte nicht gegriffen werden",
 	"music_grabInFlight": "Download läuft",
 	"music_grabbed": "{title} gegriffen",
+	"music_bulkGrabbed": "{count} von {total} geladen",
 	"music_inLibrary": "Dateien vorhanden",
 	"music_indexer": "Indexer",
 	"music_labelLabel": "Label",

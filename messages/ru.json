@@ -5575,6 +5575,7 @@
 	"music_grabFailed": "Не удалось взять релиз",
 	"music_grabInFlight": "загрузка выполняется",
 	"music_grabbed": "{title} взят",
+	"music_bulkGrabbed": "Загружено {count} из {total}",
 	"music_inLibrary": "Файлы есть",
 	"music_indexer": "Индексатор",
 	"music_labelLabel": "Лейбл",

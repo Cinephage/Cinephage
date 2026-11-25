@@ -2623,6 +2623,7 @@
 	"music_grab": "Grab",
 	"music_grabBest": "Grab best",
 	"music_grabbed": "Grabbed {title}",
+	"music_bulkGrabbed": "Grabbed {count} of {total}",
 	"music_grabFailed": "Could not grab a release",
 	"music_grabInFlight": "download in flight",
 	"music_noRootFolder": "no root folder configured",

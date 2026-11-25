@@ -63,7 +63,9 @@
 	let defaultProfileName = $state<string | null>(null);
 	let profileId = $state('');
 	let monitored = $state(true);
-	let searchAfterAdd = $state(false);
+	// Importing an album and not fetching it leaves a row nobody can play; the
+	// grab is what makes the paste do something, so it is on unless switched off.
+	let searchAfterAdd = $state(true);
 	/** 'album' adds what matched; 'artist' adds each match's discography. */
 	let scope = $state<'album' | 'artist' | 'features' | 'songs'>('album');
 	/** What the artist/features scopes would add, asked for before importing. */

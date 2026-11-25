@@ -666,7 +666,7 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 	);
 
 	let bulkLoading = $state(false);
-	let bulkAction = $state<'monitor' | 'unmonitor' | 'quality' | 'delete' | null>(null);
+	let bulkAction = $state<'monitor' | 'unmonitor' | 'quality' | 'delete' | 'grab' | null>(null);
 	let removeSelectedOpen = $state(false);
 	let qualityOpen = $state(false);
 
@@ -683,6 +683,47 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 				selection.clear();
 				await refreshAfterChange();
 			}
+		} finally {
+			bulkLoading = false;
+			bulkAction = null;
+		}
+	}
+
+	/**
+	 * Grab the best release for every selected album.
+	 *
+	 * Batched: the server answers a window of albums per request and says how
+	 * many are left, so a hundred-row selection does not sit on one request that
+	 * the proxy or the browser will time out.
+	 */
+	async function bulkGrab() {
+		const ids = [...selection.ids];
+		if (ids.length === 0) return;
+		bulkLoading = true;
+		bulkAction = 'grab';
+		try {
+			let grabbed = 0;
+			let offset = 0;
+			for (;;) {
+				const response = await fetch('/api/music/albums/auto-search', {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ ids, offset, limit: 10 })
+				});
+				const body = await response.json().catch(() => ({}));
+				if (!response.ok) {
+					toasts.error(body.error ?? m.music_searchFailed());
+					return;
+				}
+				grabbed += body.grabbed ?? 0;
+				if (body.nextOffset === null || body.nextOffset === undefined) break;
+				offset = body.nextOffset;
+			}
+			toasts.success(m.music_bulkGrabbed({ count: grabbed, total: ids.length }));
+			selection.clear();
+			await refreshAfterChange();
+		} catch (err) {
+			toasts.error(err instanceof Error ? err.message : m.music_searchFailed());
 		} finally {
 			bulkLoading = false;
 			bulkAction = null;
@@ -1120,6 +1161,7 @@ import InfiniteSentinel from '#lib/components/ui/InfiniteSentinel.svelte';
 		loading={bulkLoading}
 		currentAction={bulkAction}
 		itemLabel={bulkItemLabel}
+		onGrab={browse === 'albums' ? bulkGrab : undefined}
 		onMonitor={() => bulkMonitor(true)}
 		onUnmonitor={() => bulkMonitor(false)}
 		onChangeQuality={() => (qualityOpen = true)}
