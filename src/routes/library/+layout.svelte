@@ -4,7 +4,7 @@
 	import { resolve } from '$app/paths';
 	import { storeLibraryReturnTo } from '#lib/utils/libraryReturnNavigation.js';
 
-	let { children } = $props<{ children: import('svelte').Snippet }>();
+	let { children }: { children: import('svelte').Snippet } = $props();
 
 	function stripBase(pathname: string): string {
 		// resolve('') yields the base path without a leading slash (empty when no base).

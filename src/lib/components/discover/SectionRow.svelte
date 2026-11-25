@@ -21,7 +21,7 @@
 		selectable = false,
 		isSelected,
 		onToggleSelect
-	} = $props<{
+	}: {
 		title: string;
 		items: T[];
 		link?: string;
@@ -34,7 +34,7 @@
 		selectable?: boolean;
 		isSelected?: (item: T) => boolean;
 		onToggleSelect?: (item: T) => void;
-	}>();
+	} = $props();
 
 	const resolvedItemClass = $derived(
 		itemClass ?? 'w-[calc((100%-2*0.75rem)/3)] sm:w-36 md:w-40 lg:w-44'
