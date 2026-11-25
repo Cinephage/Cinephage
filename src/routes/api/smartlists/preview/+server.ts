@@ -10,6 +10,7 @@ import { contentFilterPipeline } from '#lib/server/filters/ContentFilterPipeline
 import { createChildLogger } from '#lib/logging/index.js';
 import { z } from 'zod';
 import { smartListPreviewSchema } from '#lib/validation/schemas.js';
+import { appendUniqueById } from '#lib/server/smartlists/discover-pages.js';
 
 const logger = createChildLogger({ module: 'SmartListsPreviewApi', logDomain: 'monitoring' });
 
@@ -133,15 +134,26 @@ export const POST: RequestHandler = async ({ request }) => {
 		const endIndexExclusive = Math.min(startIndex + PREVIEW_PAGE_SIZE, cappedTotalResults);
 		const neededCount = Math.max(0, endIndexExclusive - startIndex);
 
-		let items = firstResult.results.slice(tmdbOffset, tmdbOffset + neededCount);
+		// TMDB pages can repeat a title when the sort order shifts between requests: keep each
+		// id once (the grid is keyed by it), and read one spare page to make up for repeats.
+		const items: typeof firstResult.results = [];
+		const seen = new Set<number>();
+		appendUniqueById(
+			items,
+			firstResult.results.slice(tmdbOffset, tmdbOffset + neededCount),
+			seen,
+			neededCount
+		);
 
-		if (items.length < neededCount) {
-			const nextTmdbPage = tmdbStartPage + 1;
-			if (nextTmdbPage <= firstResult.total_pages) {
-				const secondResult = await fetchDiscoverPage(nextTmdbPage);
-				const remaining = neededCount - items.length;
-				items = [...items, ...secondResult.results.slice(0, remaining)];
-			}
+		for (
+			let nextTmdbPage = tmdbStartPage + 1;
+			items.length < neededCount &&
+			nextTmdbPage <= firstResult.total_pages &&
+			nextTmdbPage <= tmdbStartPage + 2;
+			nextTmdbPage++
+		) {
+			const nextResult = await fetchDiscoverPage(nextTmdbPage);
+			appendUniqueById(items, nextResult.results, seen, neededCount);
 		}
 
 		const { results: itemsWithLibraryStatus } = await contentFilterPipeline.apply(items, {
