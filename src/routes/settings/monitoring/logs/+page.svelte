@@ -992,7 +992,7 @@
 						No logs matched the current filters. Clear filters or wait for new matching entries.
 					</div>
 				{:else}
-					<table class="table table-pin-rows w-full table-sm">
+					<table class="table-pin-rows table w-full table-sm">
 						<thead>
 							<tr
 								class="bg-base-200/90 text-[10px] tracking-[0.12em] text-base-content/50 uppercase"

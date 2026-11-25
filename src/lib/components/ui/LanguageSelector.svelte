@@ -91,7 +91,7 @@
 	</button>
 
 	<ul
-		class="menu dropdown-content z-1 w-40 rounded-box bg-base-200 p-2 shadow"
+		class="dropdown-content menu z-1 w-40 rounded-box bg-base-200 p-2 shadow"
 		class:hidden={!isOpen}
 		role="menu"
 	>

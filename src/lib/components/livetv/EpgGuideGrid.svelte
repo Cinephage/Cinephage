@@ -539,7 +539,7 @@
 
 <!-- Program details modal -->
 {#if selectedProgram}
-	<div class="modal modal-open">
+	<div class="modal-open modal">
 		<div class="modal-box w-full max-w-[min(28rem,calc(100vw-2rem))] wrap-break-word">
 			<div class="mb-4 flex items-start justify-between">
 				<div>

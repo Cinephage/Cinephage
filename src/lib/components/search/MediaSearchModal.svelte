@@ -206,13 +206,13 @@
 </script>
 
 {#if loading}
-	<div class="modal modal-open">
+	<div class="modal-open modal">
 		<div class="modal-box flex items-center justify-center py-16">
 			<RefreshCw class="h-6 w-6 animate-spin text-base-content/50" />
 		</div>
 	</div>
 {:else if error}
-	<div class="modal modal-open">
+	<div class="modal-open modal">
 		<div class="modal-box">
 			<div class="flex flex-col items-center gap-3 py-8 text-center">
 				<AlertTriangle class="h-8 w-8 text-error" />
