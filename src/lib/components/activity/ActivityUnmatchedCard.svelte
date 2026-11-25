@@ -870,13 +870,17 @@
 						class="border-b border-base-content/10 bg-base-200 text-[11px] font-semibold tracking-widest text-base-content/50 uppercase"
 					>
 						<th class="w-10 px-2">
-							<input
-								type="checkbox"
-								class="checkbox checkbox-xs checkbox-primary"
-								checked={allSelected}
-								onchange={toggleSelectAll}
-								aria-label={m.activity_unmatched_selectAll()}
-							/>
+							<label
+								class="flex min-h-8 min-w-8 cursor-pointer items-center justify-center sm:min-h-0 sm:min-w-0"
+							>
+								<input
+									type="checkbox"
+									class="checkbox checkbox-sm checkbox-primary sm:checkbox-xs"
+									checked={allSelected}
+									onchange={toggleSelectAll}
+									aria-label={m.activity_unmatched_selectAll()}
+								/>
+							</label>
 						</th>
 
 						<th
@@ -940,13 +944,17 @@
 							onclick={() => toggleExpand(item.hash)}
 						>
 							<td class="w-10 px-2" onclick={(e) => e.stopPropagation()}>
-								<input
-									type="checkbox"
-									class="checkbox checkbox-xs checkbox-primary"
-									checked={selected.has(item.hash)}
-									onchange={() => toggleSelect(item.hash)}
-									aria-label={item.name}
-								/>
+								<label
+									class="flex min-h-8 min-w-8 cursor-pointer items-center justify-center sm:min-h-0 sm:min-w-0"
+								>
+									<input
+										type="checkbox"
+										class="checkbox checkbox-sm checkbox-primary sm:checkbox-xs"
+										checked={selected.has(item.hash)}
+										onchange={() => toggleSelect(item.hash)}
+										aria-label={item.name}
+									/>
+								</label>
 							</td>
 							<td class="px-2">
 								<div class="flex items-center gap-1">
@@ -1045,7 +1053,7 @@
 												>
 													{#if item.attachable && item.progress >= 1}
 														<button
-															class="btn gap-1.5 border border-base-content/15 bg-base-100 btn-xs hover:bg-base-200"
+															class="btn gap-1.5 border border-base-content/15 bg-base-100 btn-sm hover:bg-base-200 sm:btn-xs"
 															onclick={() => attachItems([item])}
 															disabled={attaching}
 															aria-label={m.activity_unmatched_attach()}
@@ -1192,7 +1200,7 @@
 							<td colspan={10} class="border-t border-base-content/8 py-2">
 								<div class="flex items-center justify-center gap-2">
 									<button
-										class="btn btn-ghost btn-xs"
+										class="btn btn-ghost btn-sm sm:btn-xs"
 										disabled={page <= 1 || loading}
 										onclick={() => {
 											page -= 1;
@@ -1203,7 +1211,7 @@
 									</button>
 									<span class="text-xs text-base-content/60">{page} / {totalPages}</span>
 									<button
-										class="btn btn-ghost btn-xs"
+										class="btn btn-ghost btn-sm sm:btn-xs"
 										disabled={page >= totalPages || loading}
 										onclick={() => {
 											page += 1;

@@ -49,17 +49,21 @@
 >
 	<th class="w-10 px-2">
 		{#if selectableCount > 0}
-			<input
-				bind:this={selectAllCheckbox}
-				type="checkbox"
-				class="checkbox checkbox-xs checkbox-primary"
-				checked={allSelectableSelected}
-				aria-label={m.activity_table_selectAllVisible()}
-				onclick={(e) => {
-					e.stopPropagation();
-					handleToggleAll();
-				}}
-			/>
+			<label
+				class="flex min-h-8 min-w-8 cursor-pointer items-center justify-center sm:min-h-0 sm:min-w-0"
+			>
+				<input
+					bind:this={selectAllCheckbox}
+					type="checkbox"
+					class="checkbox checkbox-sm checkbox-primary sm:checkbox-xs"
+					checked={allSelectableSelected}
+					aria-label={m.activity_table_selectAllVisible()}
+					onclick={(e) => {
+						e.stopPropagation();
+						handleToggleAll();
+					}}
+				/>
+			</label>
 		{/if}
 	</th>
 	<th

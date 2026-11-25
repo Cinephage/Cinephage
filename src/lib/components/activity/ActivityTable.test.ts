@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/svelte';
 import ActivityTable from './ActivityTable.svelte';
 import type { UnifiedActivity } from '#lib/types/activity.js';
+import * as m from '#lib/paraglide/messages.js';
 
 const activity: UnifiedActivity = {
 	id: 'activity-1',
@@ -74,5 +75,45 @@ describe('ActivityTable inline remove (issue #579)', () => {
 		await fireEvent.click(within(confirmation).getByRole('button', { name: /cancel/i }));
 
 		expect(onRemove).not.toHaveBeenCalled();
+	});
+});
+
+describe('ActivityTable phone touch targets', () => {
+	afterEach(() => {
+		cleanup();
+	});
+
+	it('gives the row checkbox a 32 px tap area', () => {
+		render(ActivityTable, { props: { activities: [activity] } });
+		const checkbox = screen.getByRole('checkbox', { name: `Select ${activity.mediaTitle}` });
+		expect(checkbox.classList.contains('checkbox-sm')).toBe(true);
+		const label = checkbox.closest('label');
+		expect(label).not.toBeNull();
+		expect(label?.classList.contains('min-h-8')).toBe(true);
+	});
+
+	it('gives the select-all checkbox a 32 px tap area', () => {
+		render(ActivityTable, { props: { activities: [activity], isSelectable: () => true } });
+		const checkbox = screen.getByRole('checkbox', { name: m.activity_table_selectAllVisible() });
+		expect(checkbox.classList.contains('checkbox-sm')).toBe(true);
+		expect(checkbox.closest('label')?.classList.contains('min-h-8')).toBe(true);
+	});
+
+	it('puts Remove last in the detail toolbar, pushed away from the other actions', async () => {
+		const failed: UnifiedActivity = { ...activity, status: 'failed' };
+		const { container } = render(ActivityTable, {
+			props: { activities: [failed], onRemove: vi.fn() }
+		});
+		const row = container.querySelector('tbody tr');
+		if (!row) throw new Error('Expected a table row to be rendered');
+		await fireEvent.click(row);
+
+		const removeButton = await screen.findByRole('button', { name: /^remove$/i });
+		const toolbar = removeButton.parentElement;
+		const buttons = toolbar ? [...toolbar.querySelectorAll('button')] : [];
+		expect(buttons.length).toBeGreaterThan(1);
+		expect(buttons.at(-1)).toBe(removeButton);
+		expect(toolbar?.lastElementChild).toBe(removeButton);
+		expect(removeButton.classList.contains('ml-auto')).toBe(true);
 	});
 });

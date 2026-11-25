@@ -340,7 +340,7 @@
 				<!-- On mobile these sit on the title row; hidden on sm+ where they move to nav row -->
 				<div class="flex items-center gap-1 sm:hidden">
 					<button
-						class="btn btn-circle btn-ghost btn-xs"
+						class="btn btn-circle btn-ghost btn-sm"
 						onclick={toggleViewMode}
 						aria-label={prefs.viewMode === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
 					>
@@ -351,7 +351,7 @@
 						{/if}
 					</button>
 					<button
-						class="btn btn-circle btn-ghost btn-xs {showPreferences ? 'bg-base-300' : ''}"
+						class="btn btn-circle btn-ghost btn-sm {showPreferences ? 'bg-base-300' : ''}"
 						onclick={() => (showPreferences = !showPreferences)}
 						aria-label="Calendar preferences"
 					>
@@ -363,14 +363,14 @@
 			<!-- Nav row -->
 			<div class="flex items-center gap-1 sm:gap-2">
 				{#if !isCurrentMonth}
-					<button class="btn btn-ghost btn-xs sm:btn-sm" onclick={goToToday}>
+					<button class="btn btn-ghost btn-sm" onclick={goToToday}>
 						{m.calendar_today()}
 					</button>
 				{/if}
 
 				<div class="flex flex-1 items-center justify-center gap-1 sm:flex-none sm:gap-2">
 					<button
-						class="btn btn-circle btn-ghost btn-xs sm:btn-sm"
+						class="btn btn-circle btn-ghost btn-sm"
 						onclick={() => goToMonth(-1)}
 						aria-label={m.calendar_previousMonth()}
 					>
@@ -380,7 +380,7 @@
 						>{monthLabel}</span
 					>
 					<button
-						class="btn btn-circle btn-ghost btn-xs sm:btn-sm"
+						class="btn btn-circle btn-ghost btn-sm"
 						onclick={() => goToMonth(1)}
 						aria-label={m.calendar_nextMonth()}
 					>
@@ -423,7 +423,7 @@
 						</p>
 						<div class="join">
 							<button
-								class="btn join-item btn-xs sm:btn-sm {prefs.contentType === 'all'
+								class="btn join-item btn-sm {prefs.contentType === 'all'
 									? 'btn-primary'
 									: 'border border-base-300 btn-ghost'}"
 								onclick={() => (prefs.contentType = 'all')}
@@ -431,7 +431,7 @@
 								{m.calendar_prefs_all()}
 							</button>
 							<button
-								class="btn join-item btn-xs sm:btn-sm {prefs.contentType === 'movies'
+								class="btn join-item btn-sm {prefs.contentType === 'movies'
 									? 'btn-primary'
 									: 'border border-base-300 btn-ghost'}"
 								onclick={() => (prefs.contentType = 'movies')}
@@ -439,7 +439,7 @@
 								{m.common_movies()}
 							</button>
 							<button
-								class="btn join-item btn-xs sm:btn-sm {prefs.contentType === 'episodes'
+								class="btn join-item btn-sm {prefs.contentType === 'episodes'
 									? 'btn-primary'
 									: 'border border-base-300 btn-ghost'}"
 								onclick={() => (prefs.contentType = 'episodes')}
@@ -447,7 +447,7 @@
 								{m.common_episodes()}
 							</button>
 							<button
-								class="btn join-item btn-xs sm:btn-sm {prefs.contentType === 'music'
+								class="btn join-item btn-sm {prefs.contentType === 'music'
 									? 'btn-primary'
 									: 'border border-base-300 btn-ghost'}"
 								onclick={() => (prefs.contentType = 'music')}
@@ -496,7 +496,7 @@
 								<div class="join">
 									{#each [0, 6, 7, 8] as rating (rating)}
 										<button
-											class="btn join-item btn-xs sm:btn-sm {prefs.minRating === rating
+											class="btn join-item btn-sm {prefs.minRating === rating
 												? 'btn-primary'
 												: 'border border-base-300 btn-ghost'}"
 											onclick={() => (prefs.minRating = rating)}
@@ -511,10 +511,10 @@
 								<p class="text-xs font-semibold tracking-wide text-base-content/60 uppercase">
 									{m.calendar_prefs_contentRating()}
 								</p>
-								<div class="flex flex-wrap items-center gap-1.5">
+								<div class="flex flex-wrap items-center gap-2 sm:gap-1.5">
 									<button
-										class="badge cursor-pointer badge-sm select-none {prefs.certifications
-											.length === 0
+										class="badge cursor-pointer badge-sm select-none max-sm:min-h-9 max-sm:px-3 {prefs
+											.certifications.length === 0
 											? 'badge-primary'
 											: 'border badge-ghost border-base-300'}"
 										onclick={() => (prefs.certifications = [])}
@@ -524,7 +524,7 @@
 									{#each ALL_CERTIFICATIONS as cert (cert)}
 										{@const selected = prefs.certifications.includes(cert)}
 										<button
-											class="badge cursor-pointer font-mono badge-sm select-none {selected
+											class="badge cursor-pointer badge-sm select-none max-sm:min-h-9 max-sm:px-3 {selected
 												? 'badge-primary'
 												: 'border badge-ghost border-base-300'}"
 											onclick={() => {
@@ -538,10 +538,10 @@
 											{cert}
 										</button>
 									{/each}
-									<label class="ml-2 flex cursor-pointer items-center gap-2">
+									<label class="ml-2 flex min-h-9 cursor-pointer items-center gap-2 sm:min-h-0">
 										<input
 											type="checkbox"
-											class="toggle toggle-primary toggle-xs"
+											class="toggle toggle-primary toggle-sm sm:toggle-xs"
 											bind:checked={prefs.excludeAdult}
 										/>
 										<span class="text-xs text-base-content/60"
@@ -558,9 +558,10 @@
 								<p class="text-xs font-semibold tracking-wide text-base-content/60 uppercase">
 									{m.calendar_prefs_genres()}
 								</p>
-								<div class="flex flex-wrap gap-1.5">
+								<div class="flex flex-wrap gap-2 sm:gap-1.5">
 									<button
-										class="badge cursor-pointer badge-sm select-none {prefs.genreIds.length === 0
+										class="badge cursor-pointer badge-sm select-none max-sm:min-h-9 max-sm:px-3 {prefs
+											.genreIds.length === 0
 											? 'badge-primary'
 											: 'border badge-ghost border-base-300'}"
 										onclick={() => (prefs.genreIds = [])}
@@ -570,7 +571,7 @@
 									{#each genres as genre (genre.id)}
 										{@const selected = prefs.genreIds.includes(genre.id)}
 										<button
-											class="badge cursor-pointer badge-sm select-none {selected
+											class="badge cursor-pointer badge-sm select-none max-sm:min-h-9 max-sm:px-3 {selected
 												? 'badge-primary'
 												: 'border badge-ghost border-base-300'}"
 											onclick={() => {
@@ -784,7 +785,7 @@
 											>
 										{:else}
 											<button
-												class="btn shrink-0 gap-1 btn-ghost btn-xs"
+												class="btn shrink-0 gap-1 btn-ghost btn-sm sm:btn-xs"
 												onclick={() => openAddModal(movie)}
 											>
 												<Plus class="h-3.5 w-3.5" />
@@ -931,7 +932,7 @@
 											<span class="badge badge-sm badge-primary">{m.calendar_inLibrary()}</span>
 										{:else}
 											<button
-												class="btn gap-1 btn-ghost px-2 btn-xs"
+												class="btn gap-1 btn-ghost px-2 btn-sm sm:btn-xs"
 												onclick={() => openAddModal(movie)}
 											>
 												<Plus class="h-3.5 w-3.5" />

@@ -14,6 +14,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/svelte';
 import EpisodeRow from './EpisodeRow.svelte';
+import * as m from '#lib/paraglide/messages.js';
 
 const fileStub = {
 	id: 'file-1',
@@ -160,5 +161,44 @@ describe('EpisodeRow requirement-aware badge', () => {
 		);
 
 		expect(screen.getAllByText('1 of 2').length).toBeGreaterThan(0);
+	});
+});
+
+describe('EpisodeRow phone action touch targets', () => {
+	function phoneCluster(container: HTMLElement): HTMLElement {
+		const deleteButton = container.querySelector<HTMLElement>(
+			`button[title="${m.library_episodeRow_deleteEpisode()}"]`
+		);
+		const cluster = deleteButton?.closest<HTMLElement>('.sm\\:hidden');
+		if (!cluster) throw new Error('Expected the phone action cluster to render');
+		return cluster;
+	}
+
+	it('uses square btn-sm for every phone action button', () => {
+		const { container } = renderRow(makeEpisode(), { onDelete: () => {} });
+		const controls = phoneCluster(container).querySelectorAll('.btn');
+		expect(controls.length).toBeGreaterThanOrEqual(3);
+		for (const control of controls) {
+			expect(control.classList.contains('btn-sm')).toBe(true);
+			expect(control.classList.contains('btn-square')).toBe(true);
+			expect(control.classList.contains('btn-xs')).toBe(false);
+		}
+	});
+
+	it('keeps Delete last in the cluster with its own spacing', () => {
+		const { container } = renderRow(makeEpisode(), { onDelete: () => {} });
+		const cluster = phoneCluster(container);
+		const deleteButton = cluster.querySelector(
+			`button[title="${m.library_episodeRow_deleteEpisode()}"]`
+		);
+		expect(cluster.lastElementChild).toBe(deleteButton);
+		expect(deleteButton?.classList.contains('ml-2')).toBe(true);
+	});
+
+	it('uses btn-sm for the phone subtitle trigger', () => {
+		const { container } = renderRow();
+		const trigger = container.querySelector('.sm\\:hidden [role="button"][title*="subtitle"]');
+		expect(trigger).not.toBeNull();
+		expect(trigger?.classList.contains('btn-sm')).toBe(true);
 	});
 });

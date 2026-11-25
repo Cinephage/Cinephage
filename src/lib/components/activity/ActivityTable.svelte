@@ -217,7 +217,7 @@
 						<td colspan={9} class="border-t border-base-content/8 py-2">
 							<div class="flex items-center justify-center gap-2">
 								<button
-									class="btn btn-ghost btn-xs"
+									class="btn btn-ghost btn-sm sm:btn-xs"
 									disabled={currentPage <= 1}
 									onclick={() => onPageChange?.(currentPage - 1)}
 								>
@@ -225,7 +225,7 @@
 								</button>
 								<span class="text-xs text-base-content/60">{currentPage} / {totalPages}</span>
 								<button
-									class="btn btn-ghost btn-xs"
+									class="btn btn-ghost btn-sm sm:btn-xs"
 									disabled={currentPage >= totalPages}
 									onclick={() => onPageChange?.(currentPage + 1)}
 								>
