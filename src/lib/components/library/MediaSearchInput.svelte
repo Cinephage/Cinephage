@@ -152,7 +152,7 @@
 					>
 						{#if item.poster_path}
 							<img
-								src={`https://image.tmdb.org/t/p/w45${item.poster_path}`}
+								src={`/api/images/tmdb/w45${item.poster_path}`}
 								alt={item.title || item.name || ''}
 								class="h-16 w-10 shrink-0 rounded object-cover"
 								loading="lazy"

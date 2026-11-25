@@ -333,7 +333,7 @@
 							{#if (selectedItem.coverUrl || selectedItem.posterPath) && !failedArt.has(selectedItem.id)}
 								<img
 									src={selectedItem.coverUrl ??
-										`https://image.tmdb.org/t/p/w342${selectedItem.posterPath}`}
+										`/api/images/tmdb/w342${selectedItem.posterPath}`}
 									alt={selectedItem.title}
 									class="h-full w-full object-cover"
 									loading="lazy"
@@ -653,7 +653,7 @@
 					>
 						{#if (item.coverUrl || item.posterPath) && !failedArt.has(item.id)}
 							<img
-								src={item.coverUrl ?? `https://image.tmdb.org/t/p/w185${item.posterPath}`}
+								src={item.coverUrl ?? `/api/images/tmdb/w185${item.posterPath}`}
 								alt={item.title}
 								class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
 								loading="lazy"

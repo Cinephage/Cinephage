@@ -375,7 +375,7 @@
 											{/if}
 										{:else if row.posterPath}
 											<img
-												src="https://image.tmdb.org/t/p/w92{row.posterPath}"
+												src="/api/images/tmdb/w92{row.posterPath}"
 												alt=""
 												loading="lazy"
 												class="aspect-2/3 w-full object-cover"

@@ -1040,7 +1040,7 @@
 										<div class="relative aspect-2/3 w-full overflow-hidden rounded bg-base-300">
 											{#if part.posterPath}
 												<img
-													src="https://image.tmdb.org/t/p/w185{part.posterPath}"
+													src="/api/images/tmdb/w185{part.posterPath}"
 													alt={part.title}
 													class="h-full w-full object-cover"
 													loading="lazy"
@@ -1083,7 +1083,7 @@
 										<div class="relative aspect-2/3 w-full overflow-hidden rounded bg-base-300">
 											{#if part.posterPath}
 												<img
-													src="https://image.tmdb.org/t/p/w185{part.posterPath}"
+													src="/api/images/tmdb/w185{part.posterPath}"
 													alt={part.title}
 													class="h-full w-full object-cover opacity-40 transition-opacity {hoveredPartTmdbId ===
 													part.tmdbId
@@ -1319,7 +1319,7 @@
 									<div class="relative aspect-2/3 w-full overflow-hidden rounded bg-base-300">
 										{#if part.posterPath}
 											<img
-												src="https://image.tmdb.org/t/p/w185{part.posterPath}"
+												src="/api/images/tmdb/w185{part.posterPath}"
 												alt={part.title}
 												class="h-full w-full object-cover"
 												loading="lazy"
@@ -1358,7 +1358,7 @@
 									<div class="relative aspect-2/3 w-full overflow-hidden rounded bg-base-300">
 										{#if part.posterPath}
 											<img
-												src="https://image.tmdb.org/t/p/w185{part.posterPath}"
+												src="/api/images/tmdb/w185{part.posterPath}"
 												alt={part.title}
 												class="h-full w-full object-cover opacity-40 transition-opacity {hoveredPartTmdbId ===
 												part.tmdbId
