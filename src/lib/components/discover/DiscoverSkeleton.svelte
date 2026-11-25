@@ -4,7 +4,7 @@
 
 	/** Placeholder rows shown while the discover data streams in; sized like
 	 *  SectionRow's cards so the page does not jump when the content lands. */
-	const rows = 3;
+	let { rows = 3 }: { rows?: number } = $props();
 	const cards = 8;
 </script>
 

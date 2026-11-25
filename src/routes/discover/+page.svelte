@@ -102,6 +102,19 @@
 	let viewPending = $state(true);
 	let viewFailed = $state(false);
 	const viewIsStale = $derived(view !== null && viewPending && viewKey !== page.url.search);
+
+	let belowFoldReady = $state(false);
+	$effect(() => {
+		if (belowFoldReady || view?.viewType !== 'dashboard') return;
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const frame = requestAnimationFrame(() => {
+			timer = setTimeout(() => (belowFoldReady = true), 0);
+		});
+		return () => {
+			cancelAnimationFrame(frame);
+			if (timer) clearTimeout(timer);
+		};
+	});
 	$effect(() => {
 		const pending = data.discover;
 		const key = page.url.search;
@@ -998,70 +1011,78 @@
 					isSelected={isItemSelected}
 					onToggleSelect={toggleItemSelect}
 				/>
-				{#if view.sections.topAlbums.length > 0}
+				<!-- Rows below the first two are drawn a frame later: building all of
+				     them at once (~400 elements each) held the first paint back, also
+				     when the view came from the cache. Placeholders keep the height so
+				     scroll restoration on back/forward still lands. -->
+				{#if belowFoldReady}
+					{#if view.sections.topAlbums.length > 0}
+						<SectionRow
+							title={m.music_topAlbums()}
+							items={view.sections.topAlbums}
+							link="/discover?type=music"
+							onAddToLibrary={addHandler}
+						>
+							{#snippet cardSnippet(item)}
+								<MusicRowCard {item} onAdded={() => refreshAll()} />
+							{/snippet}
+						</SectionRow>
+					{/if}
 					<SectionRow
-						title={m.music_topAlbums()}
-						items={view.sections.topAlbums}
-						link="/discover?type=music"
+						title={m.discover_popularMovies()}
+						items={view.sections.popularMovies}
+						link="/discover?type=movie&sort_by=popularity.desc{excludeInLibrary
+							? '&exclude_in_library=true'
+							: ''}"
+						endpoint="movie/popular"
 						onAddToLibrary={addHandler}
-					>
-						{#snippet cardSnippet(item)}
-							<MusicRowCard {item} onAdded={() => refreshAll()} />
-						{/snippet}
-					</SectionRow>
+						{excludeInLibrary}
+						selectable={selectMode}
+						isSelected={isItemSelected}
+						onToggleSelect={toggleItemSelect}
+					/>
+					<SectionRow
+						title={m.discover_popularTvShows()}
+						items={view.sections.popularTV}
+						link="/discover?type=tv&sort_by=popularity.desc{excludeInLibrary
+							? '&exclude_in_library=true'
+							: ''}"
+						endpoint="tv/popular"
+						onAddToLibrary={addHandler}
+						{excludeInLibrary}
+						selectable={selectMode}
+						isSelected={isItemSelected}
+						onToggleSelect={toggleItemSelect}
+					/>
+					<SectionRow
+						title={m.discover_topRatedMovies()}
+						items={view.sections.topRatedMovies}
+						link="/discover?type=movie&top_rated=true{excludeInLibrary
+							? '&exclude_in_library=true'
+							: ''}"
+						endpoint="movie/top_rated"
+						onAddToLibrary={addHandler}
+						{excludeInLibrary}
+						selectable={selectMode}
+						isSelected={isItemSelected}
+						onToggleSelect={toggleItemSelect}
+					/>
+					<SectionRow
+						title={m.discover_topRatedTvShows()}
+						items={view.sections.topRatedTV}
+						link="/discover?type=tv&top_rated=true{excludeInLibrary
+							? '&exclude_in_library=true'
+							: ''}"
+						endpoint="tv/top_rated"
+						onAddToLibrary={addHandler}
+						{excludeInLibrary}
+						selectable={selectMode}
+						isSelected={isItemSelected}
+						onToggleSelect={toggleItemSelect}
+					/>
+				{:else}
+					<DiscoverSkeleton rows={4} />
 				{/if}
-				<SectionRow
-					title={m.discover_popularMovies()}
-					items={view.sections.popularMovies}
-					link="/discover?type=movie&sort_by=popularity.desc{excludeInLibrary
-						? '&exclude_in_library=true'
-						: ''}"
-					endpoint="movie/popular"
-					onAddToLibrary={addHandler}
-					{excludeInLibrary}
-					selectable={selectMode}
-					isSelected={isItemSelected}
-					onToggleSelect={toggleItemSelect}
-				/>
-				<SectionRow
-					title={m.discover_popularTvShows()}
-					items={view.sections.popularTV}
-					link="/discover?type=tv&sort_by=popularity.desc{excludeInLibrary
-						? '&exclude_in_library=true'
-						: ''}"
-					endpoint="tv/popular"
-					onAddToLibrary={addHandler}
-					{excludeInLibrary}
-					selectable={selectMode}
-					isSelected={isItemSelected}
-					onToggleSelect={toggleItemSelect}
-				/>
-				<SectionRow
-					title={m.discover_topRatedMovies()}
-					items={view.sections.topRatedMovies}
-					link="/discover?type=movie&top_rated=true{excludeInLibrary
-						? '&exclude_in_library=true'
-						: ''}"
-					endpoint="movie/top_rated"
-					onAddToLibrary={addHandler}
-					{excludeInLibrary}
-					selectable={selectMode}
-					isSelected={isItemSelected}
-					onToggleSelect={toggleItemSelect}
-				/>
-				<SectionRow
-					title={m.discover_topRatedTvShows()}
-					items={view.sections.topRatedTV}
-					link="/discover?type=tv&top_rated=true{excludeInLibrary
-						? '&exclude_in_library=true'
-						: ''}"
-					endpoint="tv/top_rated"
-					onAddToLibrary={addHandler}
-					{excludeInLibrary}
-					selectable={selectMode}
-					isSelected={isItemSelected}
-					onToggleSelect={toggleItemSelect}
-				/>
 			</div>
 		{:else if view.viewType === 'grid' && view.results}
 			<!-- Grid View -->
