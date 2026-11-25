@@ -549,7 +549,9 @@
 	     click reads as dead for as long as that takes. -->
 	{#if navigating.to}
 		<div class="fixed inset-x-0 top-0 z-[100] h-0.5 overflow-hidden bg-primary/20">
-			<div class="h-full w-1/3 animate-[nav-progress_1.2s_ease-in-out_infinite] rounded-full bg-primary"></div>
+			<div
+				class="h-full w-1/3 animate-[nav-progress_1.2s_ease-in-out_infinite] rounded-full bg-primary"
+			></div>
 		</div>
 	{/if}
 
@@ -625,7 +627,11 @@
 		<!-- Sidebar -->
 		<div class="drawer-side z-40 overflow-visible">
 			<label for="main-drawer" aria-label={m.nav_closeSidebar()} class="drawer-overlay"></label>
+			<!-- Fetch each sidebar page's code once its link is on screen, so the
+			     first click on a section only waits for its data (which hover
+			     already preloads, see app.html), not for its JavaScript too. -->
 			<aside
+				data-sveltekit-preload-code="viewport"
 				class:sidebar-collapsed={!layoutState.isSidebarExpanded}
 				class="relative z-40 flex h-dvh flex-col overflow-x-visible bg-base-200 transition-[width] duration-300 ease-in-out
 		            {layoutState.isSidebarExpanded ? 'w-64' : 'w-20'}"
