@@ -23,6 +23,7 @@ import { eq, and, desc, asc, sql, lt, inArray } from 'drizzle-orm';
 import { tmdb, type DiscoverParams, type DiscoverItem } from '#lib/server/tmdb.js';
 import { createChildLogger } from '#lib/logging/index.js';
 import { todayDateString } from '#lib/utils/format.js';
+import { appendUniqueById } from './discover-pages.js';
 
 const logger = createChildLogger({ logDomain: 'monitoring' as const });
 import { ValidationError } from '#lib/errors/index.js';
@@ -1326,8 +1327,10 @@ export class SmartListService {
 		limit: number
 	): Promise<DiscoverItem[]> {
 		const items: DiscoverItem[] = [];
+		const seen = new Set<number>();
 		let page = 1;
-		const maxPages = Math.ceil(limit / 20); // TMDB returns 20 per page
+		// TMDB returns 20 per page; one spare page makes up for titles repeated across pages
+		const maxPages = Math.ceil(limit / 20) + 1;
 
 		while (items.length < limit && page <= maxPages) {
 			const response =
@@ -1335,13 +1338,13 @@ export class SmartListService {
 					? await tmdb.discoverMovies({ ...params, page })
 					: await tmdb.discoverTv({ ...params, page });
 
-			items.push(...response.results);
+			appendUniqueById(items, response.results, seen, limit);
 
 			if (page >= response.total_pages) break;
 			page++;
 		}
 
-		return items.slice(0, limit);
+		return items;
 	}
 
 	private async updateLibraryStatus(
