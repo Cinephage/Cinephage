@@ -107,7 +107,7 @@
 	<div class="flex items-start gap-4">
 		{#if posterPath}
 			<img
-				src={`https://image.tmdb.org/t/p/w92${posterPath}`}
+				src={`/api/images/tmdb/w92${posterPath}`}
 				alt={title}
 				class="w-16 rounded-md shadow-md"
 			/>

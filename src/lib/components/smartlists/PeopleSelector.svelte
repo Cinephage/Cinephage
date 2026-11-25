@@ -79,7 +79,7 @@
 					<div class="flex items-center gap-2">
 						{#if person.profile_path}
 							<img
-								src="https://image.tmdb.org/t/p/w45{person.profile_path}"
+								src="/api/images/tmdb/w45{person.profile_path}"
 								alt={person.name}
 								class="h-8 w-8 rounded-full object-cover"
 							/>

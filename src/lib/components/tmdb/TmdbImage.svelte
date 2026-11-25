@@ -2,7 +2,8 @@
 	import * as m from '#lib/paraglide/messages.js';
 
 	// TMDB's image base URL is static and hasn't changed in 10+ years
-	const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/';
+	// Served through Cinephage's local image cache (src/lib/server/tmdb-image-cache.ts).
+	const TMDB_IMAGE_BASE = '/api/images/tmdb/';
 
 	let {
 		path,

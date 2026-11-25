@@ -91,7 +91,7 @@
 		<a href={resolvePath(row.href)} class="block h-14 w-10 overflow-hidden rounded bg-base-300">
 			{#if row.art?.source === 'tmdb'}
 				<img
-					src={`https://image.tmdb.org/t/p/w92${row.art.path}`}
+					src={`/api/images/tmdb/w92${row.art.path}`}
 					alt={row.title}
 					class="h-full w-full object-cover"
 					loading="lazy"

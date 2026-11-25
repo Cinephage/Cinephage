@@ -508,7 +508,7 @@ import type { SmartListMediaType } from '#lib/server/smartlists/types.js';
 							title={provider.provider_name}
 						>
 							<img
-								src="https://image.tmdb.org/t/p/w92{provider.logo_path}"
+								src="/api/images/tmdb/w92{provider.logo_path}"
 								alt={provider.provider_name}
 								class="h-full w-full object-cover"
 							/>

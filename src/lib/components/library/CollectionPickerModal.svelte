@@ -236,7 +236,7 @@
 										<div class="h-16 w-11 shrink-0 overflow-hidden rounded bg-base-300">
 											{#if col.poster_path}
 												<img
-													src="https://image.tmdb.org/t/p/w92{col.poster_path}"
+													src="/api/images/tmdb/w92{col.poster_path}"
 													alt={col.name}
 													class="h-full w-full object-cover"
 													loading="lazy"

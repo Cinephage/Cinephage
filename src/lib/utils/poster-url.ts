@@ -1,4 +1,5 @@
-const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p';
+// Served through Cinephage's local image cache (src/lib/server/tmdb-image-cache.ts).
+const TMDB_IMAGE_BASE = '/api/images/tmdb';
 
 export function getPosterUrl(
 	posterPath: string | null | undefined,
