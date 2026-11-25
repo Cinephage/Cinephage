@@ -77,7 +77,7 @@
 
 {#if open}
 	<div
-		class="modal modal-open {behindSidebarOnDesktop ? 'modal-under-sidebar' : ''}"
+		class="modal-open modal {behindSidebarOnDesktop ? 'modal-under-sidebar' : ''}"
 		role="dialog"
 		aria-modal="true"
 		aria-labelledby={labelledBy}

@@ -369,7 +369,7 @@
 							<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 							<ul
 								tabindex="0"
-								class="menu dropdown-content z-50 w-52 rounded-box bg-base-200 p-2 shadow-lg"
+								class="dropdown-content menu z-50 w-52 rounded-box bg-base-200 p-2 shadow-lg"
 							>
 								<li class="menu-title">
 									<span>{m.library_episodeRow_mediaMenuTitle()}</span>
@@ -702,7 +702,7 @@
 					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 					<ul
 						tabindex="0"
-						class="menu dropdown-content z-50 w-52 rounded-box bg-base-200 p-2 shadow-lg"
+						class="dropdown-content menu z-50 w-52 rounded-box bg-base-200 p-2 shadow-lg"
 					>
 						<li class="menu-title">
 							<span>{m.library_episodeRow_mediaMenuTitle()}</span>
