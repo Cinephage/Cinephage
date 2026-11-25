@@ -79,12 +79,12 @@
 	{/if}
 
 	<!-- Media Type Badge -->
-	<div class="absolute top-1.5 right-1.5 z-10 sm:top-2 sm:right-2">
+	<div class="absolute top-1 right-1 z-10 sm:top-2 sm:right-2">
 		<span
-			class="badge border-none badge-xs font-semibold shadow-sm backdrop-blur-sm sm:badge-sm {credit.media_type ===
+			class="badge border-none badge-xs font-semibold shadow-sm sm:badge-sm sm:backdrop-blur-sm {credit.media_type ===
 			'movie'
-				? 'bg-primary/80 text-primary-content'
-				: 'bg-secondary/80 text-secondary-content'}"
+				? 'bg-primary/65 text-primary-content sm:bg-primary/80'
+				: 'bg-secondary/65 text-secondary-content sm:bg-secondary/80'}"
 		>
 			{credit.media_type === 'movie' ? m.ui_mediaType_movie() : m.ui_mediaType_tv()}
 		</span>

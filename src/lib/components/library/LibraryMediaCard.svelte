@@ -48,15 +48,15 @@
 	let artFailed = $state(false);
 
 	const TYPE_TONE: Record<MediaCardView['typeTone'], string> = {
-		primary: 'bg-primary/80 text-primary-content',
-		secondary: 'bg-secondary/80 text-secondary-content',
-		accent: 'bg-accent/80 text-accent-content'
+		primary: 'bg-primary/65 text-primary-content sm:bg-primary/80',
+		secondary: 'bg-secondary/65 text-secondary-content sm:bg-secondary/80',
+		accent: 'bg-accent/65 text-accent-content sm:bg-accent/80'
 	};
 
 	const STATE_TONE: Record<'success' | 'error' | 'neutral', string> = {
-		success: 'bg-success/80 text-success-content',
-		error: 'bg-error/80 text-error-content',
-		neutral: 'bg-base-100/80 text-base-content'
+		success: 'bg-success/65 text-success-content sm:bg-success/80',
+		error: 'bg-error/65 text-error-content sm:bg-error/80',
+		neutral: 'bg-base-100/65 text-base-content sm:bg-base-100/80'
 	};
 
 	function handleCheckboxClick(e: MouseEvent) {
@@ -128,15 +128,15 @@
 
 	<!-- Top-right badges: Monitored + kind -->
 	<div
-		class="absolute top-1.5 right-1.5 z-10 flex max-w-[48%] flex-col items-end gap-1 sm:top-2 sm:right-2"
+		class="absolute top-1 right-1 z-10 flex max-w-[48%] flex-col items-end gap-1 sm:top-2 sm:right-2"
 	>
 		{#if !view.hideMonitored}
 		<div
 			class="badge border-none badge-xs shadow-sm sm:badge-sm {view.monitored
 				? view.partiallyMonitored
-					? 'bg-warning/80 text-warning-content'
-					: 'bg-success/80 text-success-content'
-				: 'bg-base-300/80 text-base-content/60'}"
+					? 'bg-warning/65 text-warning-content sm:bg-warning/80'
+					: 'bg-success/65 text-success-content sm:bg-success/80'
+				: 'bg-base-300/65 text-base-content/60 sm:bg-base-300/80'}"
 			title={view.monitored
 				? view.partiallyMonitored
 					? m.library_mediaCard_partiallyMonitored()
@@ -151,10 +151,12 @@
 		</div>
 		{/if}
 
+		<!-- Movie and TV cards only ever sit on their own library page: on phones the type tag
+		     repeats the page title and crowds the quality badge, so it is shown from sm up. -->
 		<div
 			class="badge truncate border-none badge-xs font-semibold shadow-sm sm:badge-sm {TYPE_TONE[
 				view.typeTone
-			]}"
+			]} {view.typeTone === 'accent' ? '' : 'hidden sm:inline-flex'}"
 		>
 			{view.typeLabel}
 		</div>
@@ -162,9 +164,9 @@
 
 	<!-- Top-left: state badge (file, child count) + detail -->
 	<div
-		class="absolute left-1.5 z-10 flex max-w-[48%] flex-col gap-1 sm:left-2 {selectable
+		class="absolute left-1 z-10 flex max-w-[48%] flex-col gap-1 sm:left-2 {selectable
 			? 'top-10'
-			: 'top-1.5 sm:top-2'}"
+			: 'top-1 sm:top-2'}"
 	>
 		{#if view.state}
 			<div
@@ -185,7 +187,7 @@
 
 		{#if view.state?.icon === 'file' && view.detail}
 			<div
-				class="badge truncate border-none bg-primary/80 badge-xs font-medium text-primary-content shadow-sm sm:badge-sm"
+				class="badge truncate border-none bg-primary/65 badge-xs font-medium text-primary-content shadow-sm sm:badge-sm sm:bg-primary/80"
 			>
 				{view.detail}
 			</div>
