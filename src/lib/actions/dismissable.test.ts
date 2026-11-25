@@ -155,17 +155,76 @@ describe('dismissable', () => {
 });
 
 describe('blurOnEscape', () => {
-	it('blurs the focused element inside the dropdown', () => {
+	function mountDropdown() {
 		const dropdown = document.createElement('div');
-		dropdown.innerHTML = '<button type="button">More</button>';
+		dropdown.className = 'dropdown';
+		dropdown.innerHTML =
+			'<button type="button" tabindex="0">More</button>' +
+			'<ul tabindex="0" class="dropdown-content"><li><button type="button">Delete</button></li></ul>';
 		document.body.appendChild(dropdown);
 		dropdown.addEventListener('keydown', blurOnEscape);
-		const trigger = dropdown.querySelector('button')!;
-		trigger.focus();
-		expect(document.activeElement).toBe(trigger);
+		const [trigger, item] = Array.from(dropdown.querySelectorAll('button'));
+		return { dropdown, trigger, item };
+	}
 
+	it('Escape from a menu item returns focus to the trigger and closes the menu', () => {
+		const { dropdown, trigger, item } = mountDropdown();
+		item.focus();
+		const event = escape(item);
+		expect(document.activeElement).toBe(trigger);
+		expect(dropdown.classList.contains('dropdown-close')).toBe(true);
+		expect(event.defaultPrevented).toBe(true);
+	});
+
+	it('Escape on the open trigger closes the menu and keeps focus on the trigger', () => {
+		const { dropdown, trigger } = mountDropdown();
+		trigger.focus();
+		const event = escape(trigger);
+		expect(document.activeElement).toBe(trigger);
+		expect(dropdown.classList.contains('dropdown-close')).toBe(true);
+		expect(event.defaultPrevented).toBe(true);
+	});
+
+	it('leaves a second Escape to an outer overlay', () => {
+		const onDismiss = vi.fn();
+		mount({ onDismiss });
+		const { item, trigger } = mountDropdown();
+		item.focus();
+		escape(item);
+		expect(onDismiss).not.toHaveBeenCalled();
 		escape(trigger);
-		expect(document.activeElement).not.toBe(trigger);
+		expect(onDismiss).toHaveBeenCalledOnce();
+	});
+
+	it('clicking the trigger after Escape reopens the menu', () => {
+		const { dropdown, trigger, item } = mountDropdown();
+		item.focus();
+		escape(item);
+		trigger.click();
+		expect(dropdown.classList.contains('dropdown-close')).toBe(false);
+	});
+
+	it('focus leaving the dropdown clears the close state', () => {
+		const { dropdown, item } = mountDropdown();
+		const outside = document.createElement('button');
+		document.body.appendChild(outside);
+		item.focus();
+		escape(item);
+		outside.focus();
+		expect(dropdown.classList.contains('dropdown-close')).toBe(false);
+	});
+
+	it('does not stack reopen listeners on repeated Escapes', () => {
+		const { dropdown, trigger, item } = mountDropdown();
+		const remove = vi.spyOn(dropdown, 'removeEventListener');
+		item.focus();
+		escape(item);
+		trigger.click();
+		item.focus();
+		escape(item);
+		trigger.click();
+		expect(remove).toHaveBeenCalledTimes(4);
+		expect(dropdown.classList.contains('dropdown-close')).toBe(false);
 	});
 
 	it('ignores other keys', () => {
