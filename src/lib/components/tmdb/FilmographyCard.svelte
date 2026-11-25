@@ -79,9 +79,9 @@
 	{/if}
 
 	<!-- Media Type Badge -->
-	<div class="absolute top-2 right-2 z-10">
+	<div class="absolute top-1.5 right-1.5 z-10 sm:top-2 sm:right-2">
 		<span
-			class="badge border-none badge-sm font-semibold shadow-sm backdrop-blur-sm {credit.media_type ===
+			class="badge border-none badge-xs font-semibold shadow-sm backdrop-blur-sm sm:badge-sm {credit.media_type ===
 			'movie'
 				? 'bg-primary/80 text-primary-content'
 				: 'bg-secondary/80 text-secondary-content'}"

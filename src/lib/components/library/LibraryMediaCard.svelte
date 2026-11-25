@@ -127,10 +127,12 @@
 	{/if}
 
 	<!-- Top-right badges: Monitored + kind -->
-	<div class="absolute top-2 right-2 z-10 flex max-w-[48%] flex-col items-end gap-1">
+	<div
+		class="absolute top-1.5 right-1.5 z-10 flex max-w-[48%] flex-col items-end gap-1 sm:top-2 sm:right-2"
+	>
 		{#if !view.hideMonitored}
 		<div
-			class="badge border-none badge-sm shadow-sm {view.monitored
+			class="badge border-none badge-xs shadow-sm sm:badge-sm {view.monitored
 				? view.partiallyMonitored
 					? 'bg-warning/80 text-warning-content'
 					: 'bg-success/80 text-success-content'
@@ -159,10 +161,14 @@
 	</div>
 
 	<!-- Top-left: state badge (file, child count) + detail -->
-	<div class="absolute left-2 z-10 flex max-w-[48%] flex-col gap-1 {selectable ? 'top-10' : 'top-2'}">
+	<div
+		class="absolute left-1.5 z-10 flex max-w-[48%] flex-col gap-1 sm:left-2 {selectable
+			? 'top-10'
+			: 'top-1.5 sm:top-2'}"
+	>
 		{#if view.state}
 			<div
-				class="badge border-none badge-sm shadow-sm {STATE_TONE[view.state.tone]}"
+				class="badge border-none badge-xs shadow-sm sm:badge-sm {STATE_TONE[view.state.tone]}"
 				title={view.state.label}
 			>
 				{#if view.state.icon === 'file'}

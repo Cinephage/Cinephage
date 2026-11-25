@@ -156,7 +156,9 @@
 	<!-- Status column (top-left): library + request badges -->
 	{#if inLibrary || requestedOpen}
 		<div
-			class="absolute left-2 z-10 flex flex-col items-start gap-1 {canSelect ? 'top-10' : 'top-2'}"
+			class="absolute left-1.5 z-10 flex flex-col items-start gap-1 sm:left-2 {canSelect
+				? 'top-10'
+				: 'top-1.5 sm:top-2'}"
 		>
 			{#if inLibrary}
 				<div
@@ -185,11 +187,11 @@
 	{/if}
 
 	<!-- Top-right row: quick add (hover) + media type badge - siblings, so they never overlap -->
-	<div class="absolute top-2 right-2 z-10 flex items-center gap-1">
+	<div class="absolute top-1.5 right-1.5 z-10 flex items-center gap-1 sm:top-2 sm:right-2">
 		{#if showQuickAdd}
 			<button
 				type="button"
-				class="pointer-events-none flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-content opacity-0 shadow-lg transition-all group-hover:pointer-events-auto group-hover:opacity-100 hover:scale-110 focus-visible:pointer-events-auto focus-visible:opacity-100 active:scale-95"
+				class="pointer-events-none hidden h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-content opacity-0 shadow-lg transition-all group-hover:pointer-events-auto group-hover:opacity-100 hover:scale-110 focus-visible:pointer-events-auto focus-visible:opacity-100 active:scale-95 md:flex"
 				title={m.tmdb_addToLibrary()}
 				aria-label={m.tmdb_addToLibrary()}
 				onclick={handleQuickAdd}
@@ -200,7 +202,7 @@
 
 		{#if typeLabel}
 			<span
-				class="badge border-none badge-sm font-semibold shadow-sm backdrop-blur-sm {badgeClass}"
+				class="badge border-none badge-xs font-semibold shadow-sm backdrop-blur-sm sm:badge-sm {badgeClass}"
 			>
 				{typeLabel}
 			</span>
