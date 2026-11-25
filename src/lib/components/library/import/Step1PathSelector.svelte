@@ -204,7 +204,7 @@
 		{#if !browserLoading && !browserError && browserEntries.length > 0}
 			<div class="border-b border-base-300 px-3 py-2">
 				<div class="group relative">
-					<div class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2">
+					<div class="pointer-events-none absolute top-1/2 left-3.5 z-1 -translate-y-1/2">
 						<Search
 							class="h-4 w-4 text-base-content/40 transition-colors group-focus-within:text-primary"
 						/>

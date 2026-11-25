@@ -88,7 +88,7 @@
 		<div class="hidden flex-1 items-center justify-center gap-2 md:flex">
 			<div class="group relative w-full max-w-lg">
 				<Search
-					class="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-base-content/40 transition-colors group-focus-within:text-primary"
+					class="pointer-events-none absolute top-1/2 left-3.5 z-1 h-4 w-4 -translate-y-1/2 text-base-content/40 transition-colors group-focus-within:text-primary"
 				/>
 				<input
 					type="text"
@@ -148,7 +148,7 @@
 	<div class="flex items-center gap-2 border-t border-base-200/50 px-4 py-2 md:hidden">
 		<div class="group relative w-full">
 			<Search
-				class="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-base-content/40 transition-colors group-focus-within:text-primary"
+				class="pointer-events-none absolute top-1/2 left-3.5 z-1 h-4 w-4 -translate-y-1/2 text-base-content/40 transition-colors group-focus-within:text-primary"
 			/>
 			<input
 				type="text"

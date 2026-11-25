@@ -561,24 +561,24 @@
 
 	<!-- Tab Navigation -->
 	{#if showTabBar}
-		<div class="tabs-bordered tabs mb-6 w-full">
+		<div class="tabs tabs-border mb-6 w-full">
 			<button
 				type="button"
-				class="tab-lg tab flex-1 gap-2"
+				class="sm:tab-lg tab flex-1 gap-2 px-2 whitespace-nowrap sm:px-4"
 				class:tab-active={activeTab === 'general'}
 				onclick={() => (activeTab = 'general')}
 			>
-				<Settings class="h-4 w-4" />
+				<Settings class="hidden h-4 w-4 sm:block" />
 				{m.profiles_tab_general()}
 			</button>
 			{#if showIndexersTab}
 				<button
 					type="button"
-					class="tab-lg tab flex-1 gap-2"
+					class="sm:tab-lg tab flex-1 gap-2 px-2 whitespace-nowrap sm:px-4"
 					class:tab-active={activeTab === 'indexers'}
 					onclick={() => (activeTab = 'indexers')}
 				>
-					<Server class="h-4 w-4" />
+					<Server class="hidden h-4 w-4 sm:block" />
 					{m.profiles_tab_indexers()}
 					{#if restrictIndexers}
 						<span class="badge badge-sm">{selectedConfiguredCount}</span>
@@ -588,11 +588,11 @@
 			{#if showFormatsTab}
 				<button
 					type="button"
-					class="tab-lg tab flex-1 gap-2"
+					class="sm:tab-lg tab flex-1 gap-2 px-2 whitespace-nowrap sm:px-4"
 					class:tab-active={activeTab === 'formats'}
 					onclick={() => (activeTab = 'formats')}
 				>
-					<Layers class="h-4 w-4" />
+					<Layers class="hidden h-4 w-4 sm:block" />
 					{m.profiles_tab_formatScores()}
 				</button>
 			{/if}
@@ -1249,7 +1249,7 @@
 						)}
 						<div class="mt-3 space-y-1.5">
 							<div class="group relative">
-								<div class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2">
+								<div class="pointer-events-none absolute top-1/2 left-3.5 z-1 -translate-y-1/2">
 									<Search
 										class="h-4 w-4 text-base-content/40 transition-colors group-focus-within:text-primary"
 									/>

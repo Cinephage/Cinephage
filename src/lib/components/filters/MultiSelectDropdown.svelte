@@ -113,7 +113,7 @@
 			{#if searchable}
 				<div class="relative mb-1">
 					<Search
-						class="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-base-content/40"
+						class="pointer-events-none absolute top-1/2 left-2 z-1 h-3.5 w-3.5 -translate-y-1/2 text-base-content/40"
 					/>
 					<input
 						class="input w-full pl-7 input-sm"

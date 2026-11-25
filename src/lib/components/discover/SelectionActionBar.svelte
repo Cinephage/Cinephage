@@ -18,7 +18,7 @@
 		class="fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 z-50 mx-auto max-w-fit"
 	>
 		<div
-			class="flex items-center gap-2 rounded-full border border-base-content/10 bg-base-300 px-3 py-2 shadow-xl sm:gap-3 sm:px-4 sm:py-2.5"
+			class="flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-base-content/10 bg-base-300 px-3 py-2 shadow-xl sm:flex-nowrap sm:gap-3 sm:rounded-full sm:px-4 sm:py-2.5"
 		>
 			<span class="shrink-0 text-sm font-medium whitespace-nowrap">
 				{m.common_selected({ count: selectedCount })}

@@ -144,3 +144,12 @@
 		transform: translateX(400%);
 	}
 }
+
+/* daisyUI's .label never wraps, so long hints and help texts under form fields
+   ran past the right edge on phones and made the whole page scroll sideways. */
+@layer components {
+	.label > .label-text,
+	.label > .label-text-alt {
+		white-space: normal;
+	}
+}

@@ -395,7 +395,7 @@
 						<span>{getRuntime(item)}</span>
 					{/if}
 					{#if item.genres && item.genres.length > 0}
-						<span>•</span>
+						<span class="hidden sm:inline" aria-hidden="true">•</span>
 						<span
 							>{item.genres
 								.slice(0, 3)

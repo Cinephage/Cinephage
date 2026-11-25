@@ -46,9 +46,9 @@
 
 	function getBadgeClass(item: TmdbMediaItem): string {
 		const label = getMediaTypeLabel(item);
-		if (label === 'Movie') return 'bg-primary/80 text-primary-content';
-		if (label === 'TV') return 'bg-secondary/80 text-secondary-content';
-		return 'badge-neutral/80';
+		if (label === 'Movie') return 'bg-primary/65 text-primary-content sm:bg-primary/80';
+		if (label === 'TV') return 'bg-secondary/65 text-secondary-content sm:bg-secondary/80';
+		return 'bg-neutral/65 text-neutral-content sm:bg-neutral/80';
 	}
 
 	const ratingColor = (rating: number): string => {
@@ -156,13 +156,15 @@
 	<!-- Status column (top-left): library + request badges -->
 	{#if inLibrary || requestedOpen}
 		<div
-			class="absolute left-2 z-10 flex flex-col items-start gap-1 {canSelect ? 'top-10' : 'top-2'}"
+			class="absolute left-1 z-10 flex flex-col items-start gap-1 sm:left-2 {canSelect
+				? 'top-10'
+				: 'top-1 sm:top-2'}"
 		>
 			{#if inLibrary}
 				<div
 					class="flex h-6 w-6 items-center justify-center rounded-full shadow-md backdrop-blur-sm {hasFile
-						? 'bg-success/90 text-success-content'
-						: 'bg-warning/90 text-warning-content'}"
+						? 'bg-success/75 text-success-content sm:bg-success/90'
+						: 'bg-warning/75 text-warning-content sm:bg-warning/90'}"
 					title={hasFile ? m.tmdb_availableInLibrary() : m.tmdb_monitoredNotDownloaded()}
 				>
 					{#if hasFile}
@@ -175,7 +177,7 @@
 
 			{#if requestedOpen}
 				<div
-					class="flex h-6 w-6 items-center justify-center rounded-full bg-secondary/90 text-secondary-content shadow-md backdrop-blur-sm"
+					class="flex h-6 w-6 items-center justify-center rounded-full bg-secondary/75 text-secondary-content shadow-md sm:bg-secondary/90 sm:backdrop-blur-sm"
 					title={m.requests_requested()}
 				>
 					<Clapperboard class="h-3.5 w-3.5" strokeWidth={2.5} />
@@ -185,11 +187,11 @@
 	{/if}
 
 	<!-- Top-right row: quick add (hover) + media type badge - siblings, so they never overlap -->
-	<div class="absolute top-2 right-2 z-10 flex items-center gap-1">
+	<div class="absolute top-1 right-1 z-10 flex items-center gap-1 sm:top-2 sm:right-2">
 		{#if showQuickAdd}
 			<button
 				type="button"
-				class="pointer-events-none flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-content opacity-0 shadow-lg transition-all group-hover:pointer-events-auto group-hover:opacity-100 hover:scale-110 focus-visible:pointer-events-auto focus-visible:opacity-100 active:scale-95"
+				class="pointer-events-none hidden h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-content opacity-0 shadow-lg transition-all group-hover:pointer-events-auto group-hover:opacity-100 hover:scale-110 focus-visible:pointer-events-auto focus-visible:opacity-100 active:scale-95 md:flex"
 				title={m.tmdb_addToLibrary()}
 				aria-label={m.tmdb_addToLibrary()}
 				onclick={handleQuickAdd}
@@ -200,7 +202,7 @@
 
 		{#if typeLabel}
 			<span
-				class="badge border-none badge-sm font-semibold shadow-sm backdrop-blur-sm {badgeClass}"
+				class="badge border-none badge-xs font-semibold shadow-sm sm:badge-sm sm:backdrop-blur-sm {badgeClass}"
 			>
 				{typeLabel}
 			</span>

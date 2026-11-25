@@ -55,7 +55,7 @@
 	<div
 		tabindex="0"
 		role="dialog"
-		class="dropdown-content z-50 w-80 rounded-lg bg-base-200 p-4 shadow-xl"
+		class="dropdown-content z-50 w-64 rounded-lg bg-base-200 p-4 shadow-xl sm:w-80"
 	>
 		<h4 class="mb-3 text-sm font-semibold">{m.library_mediaInfo_title()}</h4>
 

@@ -28,7 +28,7 @@
 		max={range.max}
 		step={range.step}
 		{value}
-		class="range range-primary range-sm"
+		class="range w-full range-primary range-sm"
 		onchange={(event) => commit(parseFloat(event.currentTarget.value))}
 	/>
 	<div class="mt-2 flex w-full justify-between px-1 text-xs font-medium text-base-content/50">

@@ -284,7 +284,7 @@
 			aria-label={m.dashboard_stats_downloads()}
 		></a>
 		<div class="card-body gap-1.5 p-3">
-			<div class="flex items-center gap-2">
+			<div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
 				<div class="shrink-0 rounded-lg bg-accent/10 p-1.5">
 					<Download class="h-5 w-5 text-accent" />
 				</div>
@@ -293,7 +293,9 @@
 					{m.dashboard_stats_downloads()}
 				</span>
 				{#if stats.activeDownloads > 0 && stats.downloadSpeedBytes > 0}
-					<span class="ml-auto text-xs text-accent">{formatBytes(stats.downloadSpeedBytes)}/s</span>
+					<span class="ml-auto text-xs whitespace-nowrap text-accent"
+						>{formatBytes(stats.downloadSpeedBytes)}/s</span
+					>
 				{/if}
 			</div>
 			<div class="truncate text-xs text-base-content/50" title={downloadSummary}>
@@ -394,11 +396,13 @@
 		class="card bg-base-200 transition-colors hover:bg-base-300"
 	>
 		<div class="card-body gap-1.5 p-3">
-			<div class="flex items-center gap-2">
+			<div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
 				<div class="shrink-0 rounded-lg bg-info/10 p-1.5">
 					<HardDrive class="h-5 w-5 text-info" />
 				</div>
-				<span class="text-xl font-bold">{formatBytes(stats.storage.totalBytes)}</span>
+				<span class="text-xl font-bold whitespace-nowrap"
+					>{formatBytes(stats.storage.totalBytes)}</span
+				>
 				<span class="text-sm text-base-content/60">Storage</span>
 			</div>
 			<div class="relative flex min-w-0 items-start">

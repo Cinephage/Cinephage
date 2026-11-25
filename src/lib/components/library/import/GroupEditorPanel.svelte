@@ -462,7 +462,7 @@
 			<!-- No context: search bar always visible -->
 			<div class="flex flex-wrap items-center gap-2">
 				<div class="group relative min-w-0 flex-1">
-					<div class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2">
+					<div class="pointer-events-none absolute top-1/2 left-3.5 z-1 -translate-y-1/2">
 						{#if searchingMatches}
 							<Loader2
 								class="h-4 w-4 animate-spin text-base-content/40 transition-colors group-focus-within:text-primary"

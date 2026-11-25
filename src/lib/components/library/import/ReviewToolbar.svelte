@@ -56,7 +56,7 @@
 
 	<div class="mt-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
 		<div class="group relative lg:max-w-sm lg:flex-1">
-			<div class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2">
+			<div class="pointer-events-none absolute top-1/2 left-3.5 z-1 -translate-y-1/2">
 				<Search
 					class="h-4 w-4 text-base-content/40 transition-colors group-focus-within:text-primary"
 				/>

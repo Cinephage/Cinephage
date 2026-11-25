@@ -1086,7 +1086,7 @@
 		<div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
 			<!-- Row 1: search (full width on mobile) -->
 			<div class="group relative w-full sm:w-64">
-				<div class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2">
+				<div class="pointer-events-none absolute top-1/2 left-3.5 z-1 -translate-y-1/2">
 					<Search
 						class="h-4 w-4 text-base-content/40 transition-colors group-focus-within:text-primary"
 					/>
@@ -1672,7 +1672,7 @@
 		<div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
 			<!-- Search -->
 			<div class="group relative w-full sm:w-64">
-				<div class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2">
+				<div class="pointer-events-none absolute top-1/2 left-3.5 z-1 -translate-y-1/2">
 					<Search
 						class="h-4 w-4 text-base-content/40 transition-colors group-focus-within:text-primary"
 					/>
@@ -2296,7 +2296,7 @@
 		<div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
 			<!-- Left side: search + filters -->
 			<div class="group relative w-full sm:w-64">
-				<div class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2">
+				<div class="pointer-events-none absolute top-1/2 left-3.5 z-1 -translate-y-1/2">
 					<Search
 						class="h-4 w-4 text-base-content/40 transition-colors group-focus-within:text-primary"
 					/>
@@ -2879,7 +2879,7 @@
 
 		<div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
 			<div class="group relative w-full sm:w-64">
-				<div class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2">
+				<div class="pointer-events-none absolute top-1/2 left-3.5 z-1 -translate-y-1/2">
 					<Search
 						class="h-4 w-4 text-base-content/40 transition-colors group-focus-within:text-primary"
 					/>

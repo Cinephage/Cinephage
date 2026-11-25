@@ -594,19 +594,19 @@
 				<div class="flex flex-none items-center gap-2 pr-2">
 					<NotificationBell enabled={!isDesktopLayout} />
 					{#if layoutState.mobileSseStatus === 'connected'}
-						<span class="badge shrink-0 gap-1 badge-success">
+						<span class="badge shrink-0 gap-1 badge-success" title={m.common_live()}>
 							<Wifi class="h-3 w-3" />
-							{m.common_live()}
+							<span class="sr-only sm:not-sr-only">{m.common_live()}</span>
 						</span>
 					{:else if layoutState.mobileSseStatus === 'error'}
-						<span class="badge shrink-0 gap-1 badge-error">
+						<span class="badge shrink-0 gap-1 badge-error" title={m.common_reconnecting()}>
 							<WifiOff class="h-3 w-3" />
-							{m.common_reconnecting()}
+							<span class="sr-only sm:not-sr-only">{m.common_reconnecting()}</span>
 						</span>
 					{:else if layoutState.mobileSseStatus === 'connecting'}
-						<span class="badge shrink-0 gap-1 badge-warning">
+						<span class="badge shrink-0 gap-1 badge-warning" title={m.common_connecting()}>
 							<Loader2 class="h-3 w-3 animate-spin" />
-							{m.common_connecting()}
+							<span class="sr-only sm:not-sr-only">{m.common_connecting()}</span>
 						</span>
 					{/if}
 				</div>
