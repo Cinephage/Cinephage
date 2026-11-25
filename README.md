@@ -7,7 +7,7 @@
 <p align="center">
   <strong>Self-hosted media management. Everything in one app.</strong><br>
   <em>One app that actually replaces your entire media stack</em><br>
-  <sub>Node.js 22+ · Svelte 5 · SQLite · TypeScript</sub>
+  <sub>Node.js 26+ · Svelte 5 · SQLite · TypeScript</sub>
 </p>
 
 <p align="center">
@@ -151,7 +151,7 @@ If you later access Cinephage through a hostname or reverse proxy, update `BETTE
 
 ### Bare Metal
 
-**Prerequisites:** Node.js 22+ · npm · git · ffmpeg (optional, for media info)
+**Prerequisites:** Node.js 26.13+ · npm · git · ffmpeg (optional, for media info)
 
 ```bash
 git clone https://github.com/Cinephage/Cinephage.git
