@@ -16,6 +16,11 @@
  * errors originating from the browser stack (Camoufox / Playwright / Firefox),
  * logging them, while preserving Node's default crash-on-real-bug behavior for
  * everything else (log + non-zero exit).
+ *
+ * It also keeps the process alive for undici's `InformationalError`
+ * (`UND_ERR_INFO`), e.g. `socket idle timeout`, raised when undici closes a
+ * keep-alive connection it no longer needs. That is connection housekeeping,
+ * not an application failure, and it must not take the server down.
  */
 
 import { createChildLogger } from '#lib/logging/index.js';
@@ -40,9 +45,32 @@ export function isBrowserOriginError(err: unknown): boolean {
 		const message = err.message ?? '';
 		return BROWSER_STACK_MARKERS.test(stack) || BROWSER_MESSAGE_MARKERS.test(message);
 	}
+	// Error-like objects that fail `instanceof Error` (another realm or module copy).
+	if (typeof err === 'object' && err !== null) {
+		const { stack, message } = err as { stack?: unknown; message?: unknown };
+		if (typeof stack === 'string' || typeof message === 'string') {
+			return (
+				(typeof stack === 'string' && BROWSER_STACK_MARKERS.test(stack)) ||
+				(typeof message === 'string' && BROWSER_MESSAGE_MARKERS.test(message))
+			);
+		}
+	}
 	// Non-Error throws (rare): inspect the string form.
 	const asString = typeof err === 'string' ? err : String(err ?? '');
 	return BROWSER_STACK_MARKERS.test(asString) || BROWSER_MESSAGE_MARKERS.test(asString);
+}
+
+/**
+ * Decide whether an uncaught error is one of undici's informational errors
+ * (`InformationalError`, code `UND_ERR_INFO`), such as `socket idle timeout`.
+ *
+ * Checks property values rather than `instanceof`: Node's bundled undici and
+ * the npm package each have their own error classes.
+ */
+export function isUndiciInformationalError(err: unknown): boolean {
+	if (typeof err !== 'object' || err === null) return false;
+	const { code, name } = err as { code?: unknown; name?: unknown };
+	return code === 'UND_ERR_INFO' || name === 'InformationalError';
 }
 
 // A module-scoped `let` guard resets on every Vite dev SSR HMR reload (the
@@ -66,6 +94,13 @@ export function installBrowserCrashGuard(): void {
 	installGuard.__cinephageBrowserCrashGuardInstalled = true;
 
 	process.on('uncaughtException', (err, origin) => {
+		if (isUndiciInformationalError(err)) {
+			logger.warn(
+				{ err, origin },
+				'[BrowserCrashGuard] Ignored undici informational error (process kept alive)'
+			);
+			return;
+		}
 		if (isBrowserOriginError(err)) {
 			logger.warn(
 				{ err, origin },
@@ -80,6 +115,13 @@ export function installBrowserCrashGuard(): void {
 	});
 
 	process.on('unhandledRejection', (reason) => {
+		if (isUndiciInformationalError(reason)) {
+			logger.warn(
+				{ err: reason },
+				'[BrowserCrashGuard] Ignored undici informational rejection (process kept alive)'
+			);
+			return;
+		}
 		if (isBrowserOriginError(reason)) {
 			logger.warn(
 				{ err: reason },
