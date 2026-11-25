@@ -27,6 +27,7 @@ export {
 	hasActiveFilters,
 	idsFrom,
 	pruneSelection,
+	readClearedFacets,
 	readSelection,
 	writeSelection,
 	type ActiveFilterView

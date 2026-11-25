@@ -82,6 +82,11 @@ async function loadDiscover(url: URL) {
 		urlOriginalLanguage,
 		storedOriginalFilter
 	);
+	// What the stored filter alone would apply. The panel needs it so that
+	// clearing the language over it writes an explicit override, while
+	// clearing it on an instance without one leaves the URL clean.
+	const storedOriginDefault = resolveWithOriginalLanguage(null, storedOriginalFilter);
+	const facetDefaults = { language: storedOriginDefault ?? undefined };
 	// A content-origin filter (URL or the stored instance filter) can only be
 	// applied by the /discover endpoints. The curated rows (trending,
 	// top-rated, now-playing, default dashboard) must yield to the grid when
@@ -196,14 +201,19 @@ async function loadDiscover(url: URL) {
 
 		// The panel is built from the tab's own data: the same declarations
 		// render every kind, only the options differ.
-		const facetGroups = buildFacetGroups(kind, effectiveSelection, {
-			genres,
-			providers,
-			networks,
-			certifications: usCertifications,
-			languages,
-			musicGenres: []
-		});
+		const facetGroups = buildFacetGroups(
+			kind,
+			effectiveSelection,
+			{
+				genres,
+				providers,
+				networks,
+				certifications: usCertifications,
+				languages,
+				musicGenres: []
+			},
+			facetDefaults
+		);
 
 		// Type for paginated TMDB results
 		interface TmdbPaginatedResult {
@@ -509,10 +519,12 @@ async function loadDiscover(url: URL) {
 					}
 				}
 
-				const musicFacets = buildFacetGroups(kind, effectiveSelection, {
-					...EMPTY_FACET_OPTIONS,
-					musicGenres
-				});
+				const musicFacets = buildFacetGroups(
+					kind,
+					effectiveSelection,
+					{ ...EMPTY_FACET_OPTIONS, musicGenres },
+					facetDefaults
+				);
 
 				return {
 					viewType: landing ? ('music' as const) : ('grid' as const),

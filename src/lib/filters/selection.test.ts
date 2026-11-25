@@ -3,6 +3,7 @@ import {
 	activeFilters,
 	hasActiveFilters,
 	pruneSelection,
+	readClearedFacets,
 	readSelection,
 	writeSelection
 } from './index.js';
@@ -67,12 +68,48 @@ describe('facet selection', () => {
 		expect(url.get('vote_average.gte')).toBeNull();
 	});
 
-	it('clears the origin language to an explicit marker, so a stored filter cannot return', () => {
+	it('a cleared language writes nothing', () => {
 		const url = params({ with_original_language: 'en' });
 		writeSelection(url, {});
+		expect(url.get('with_original_language')).toBeNull();
+		expect(url.toString()).toBe('');
+	});
+
+	it('Reset from a URL carrying only the marker is clean', () => {
+		const url = params({ with_original_language: 'none' });
+		writeSelection(url, {});
+		expect(url.toString()).toBe('');
+	});
+
+	it('a deliberate override writes the marker and reads as empty', () => {
+		const url = params();
+		writeSelection(url, {}, new Set(['language']));
 		expect(url.get('with_original_language')).toBe('none');
 		// The marker is not a selection: the control reads as empty.
 		expect(readSelection(url, 'movie').language).toBeUndefined();
+		expect(hasActiveFilters(readSelection(url, 'movie'))).toBe(false);
+	});
+
+	it('the marker survives an unrelated facet change when passed through', () => {
+		const url = params({ with_original_language: 'none' });
+		const cleared = readClearedFacets(url, 'movie');
+		expect(cleared.has('language')).toBe(true);
+		writeSelection(url, { genres: { kind: 'ids', ids: ['28'] } }, cleared);
+		expect(url.get('with_original_language')).toBe('none');
+		expect(url.get('with_genres')).toBe('28');
+	});
+
+	it('a value replaces the marker', () => {
+		const url = params({ with_original_language: 'none' });
+		writeSelection(url, { language: { kind: 'scalar', value: 'en' } }, new Set(['language']));
+		expect(url.get('with_original_language')).toBe('en');
+	});
+
+	it('finds no override on a clean URL or on a chosen language', () => {
+		expect(readClearedFacets(params(), 'movie').has('language')).toBe(false);
+		expect(
+			readClearedFacets(params({ with_original_language: 'en' }), 'movie').has('language')
+		).toBe(false);
 	});
 
 	it('reads the music genre from the legacy parameter and writes the shared one', () => {
@@ -124,6 +161,7 @@ describe('facet selection', () => {
 	it('applies and unwinds a seasonal preset through the same two parameters', () => {
 		const url = params({ type: 'movie' });
 		writeSelection(url, { seasonal: { kind: 'scalar', value: 'christmas' } });
+		expect(url.get('with_original_language')).toBeNull();
 		expect(url.get('with_keywords')).toBe('207317|260365|255088');
 		expect(url.get('vote_average.gte')).toBe('6');
 		expect(readSelection(url, 'movie').seasonal).toEqual({

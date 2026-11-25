@@ -51,6 +51,12 @@ export interface FacetView {
 	hint?: string;
 	/** Message key for the active-filter badge, when the facet has bespoke wording. */
 	badgeKey?: string;
+	/**
+	 * The value the server applies when the URL names none (an instance-level
+	 * default). Clearing such a facet must write its clear marker, or the
+	 * default would quietly come back.
+	 */
+	instanceDefault?: string;
 	value: FacetValue | null;
 }
 
@@ -73,6 +79,15 @@ export interface QueryReader {
 export interface FacetCodec {
 	read(params: QueryReader): FacetValue | null;
 	write(params: URLSearchParams, value: FacetValue | null): void;
+	/**
+	 * An explicit "no filter" marker, for facets the server can default when
+	 * the URL is silent. `write(null)` never writes it; only a deliberate
+	 * override does, through `writeSelection`'s `cleared` set.
+	 */
+	clearMarker?: {
+		has(params: QueryReader): boolean;
+		set(params: URLSearchParams): void;
+	};
 }
 
 /** The static declaration of one facet. Client-safe: no server imports. */

@@ -26,13 +26,33 @@ export function readSelection(params: QueryReader, kind: KindFilter): FacetSelec
  * current kind does not offer, so a value can never outlive its kind. The
  * second pass only sets values: no facet may delete a parameter another facet
  * owns (`with_genres` is shared by TMDB genres and music genres).
+ *
+ * `cleared` names facets the user deliberately cleared over an instance-level
+ * default: those without a value get their explicit "no filter" marker. Any
+ * other empty facet writes nothing, so a clean selection is a clean URL.
  */
-export function writeSelection(params: URLSearchParams, selection: FacetSelection): void {
+export function writeSelection(
+	params: URLSearchParams,
+	selection: FacetSelection,
+	cleared: ReadonlySet<string> = new Set()
+): void {
 	for (const def of ALL_FACETS) def.codec.write(params, null);
 	for (const def of ALL_FACETS) {
 		const value = selection[def.id];
 		if (value) def.codec.write(params, value);
 	}
+	for (const def of ALL_FACETS) {
+		if (cleared.has(def.id) && !selection[def.id]) def.codec.clearMarker?.set(params);
+	}
+}
+
+/** Facets of a kind whose URL carries the explicit "no filter" marker. */
+export function readClearedFacets(params: QueryReader, kind: KindFilter): Set<string> {
+	const cleared = new Set<string>();
+	for (const def of facetsFor(kind)) {
+		if (def.codec.clearMarker?.has(params)) cleared.add(def.id);
+	}
+	return cleared;
 }
 
 /** Drop values whose facet the target kind does not declare. */

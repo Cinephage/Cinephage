@@ -116,7 +116,8 @@ function hintFor(kind: KindFilter, kinds: readonly string[]): string | undefined
 export function buildFacetGroups(
 	kind: KindFilter,
 	selection: FacetSelection,
-	source: FacetOptionSource
+	source: FacetOptionSource,
+	instanceDefaults: Partial<Record<string, string>> = {}
 ): FacetGroupView[] {
 	const defs = facetsFor(kind);
 	const groups: FacetGroupView[] = [];
@@ -151,6 +152,7 @@ export function buildFacetGroups(
 					placeholder: placeholderFor(def.id),
 					hint: hintFor(kind, def.kinds),
 					badgeKey: FACET_BADGES[def.id],
+					instanceDefault: instanceDefaults[def.id],
 					value:
 						selection[def.id] ??
 						(def.defaultValue ? { kind: 'scalar', value: def.defaultValue } : null)
