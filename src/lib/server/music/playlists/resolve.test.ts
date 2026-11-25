@@ -320,6 +320,35 @@ describe('resolvePlaylistTracks', () => {
 		]);
 	});
 
+	it('stores an album the catalog named when MusicBrainz has no release group', async () => {
+		// The album is on Deezer with an id; MusicBrainz has never heard of it.
+		// Refusing the songs here is what made a 50-track mix resolve to 12.
+		vi.spyOn(musicBrainz, 'searchReleaseGroups').mockResolvedValue([]);
+		const recordings = vi.spyOn(musicBrainz, 'searchRecordings');
+
+		const result = await resolvePlaylistTracks([
+			track({
+				title: 'HIGH HONEY DRIP - Late Night Cut',
+				artists: ['Deadfolk Prophet'],
+				album: 'HIGH HONEY DRIP',
+				albumSourceId: '987654'
+			})
+		]);
+
+		expect(result.candidates).toHaveLength(1);
+		expect(result.candidates[0]).toMatchObject({
+			source: 'deezer',
+			sourceId: '987654',
+			title: 'HIGH HONEY DRIP',
+			artistName: 'Deadfolk Prophet',
+			releaseGroupMbid: 'deezer:987654'
+		});
+		expect(result.resolvedTracks).toBe(1);
+		expect(result.unmatched).toHaveLength(0);
+		// An album-level answer, not a per-song search.
+		expect(recordings).not.toHaveBeenCalled();
+	});
+
 	it('marks a song with no artist as unmatched without asking MusicBrainz', async () => {
 		const recordings = vi.spyOn(musicBrainz, 'searchRecordings');
 		const search = vi.spyOn(musicBrainz, 'searchReleaseGroups');

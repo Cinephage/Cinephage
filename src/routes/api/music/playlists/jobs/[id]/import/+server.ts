@@ -7,8 +7,11 @@ import { startImportJob } from '#lib/server/music/playlists/jobs.js';
 import { musicProfileService } from '#lib/server/music/MusicProfileService.js';
 
 const importSchema = z.object({
-	/** Release-group mbids the user kept selected in the preview. */
-	rowIds: z.array(z.string().uuid()).min(1).max(500),
+	/**
+	 * The rows the user kept selected in the preview: release-group mbids, or
+	 * `deezer:<id>` keys for albums MusicBrainz has no release group for.
+	 */
+	rowIds: z.array(z.string().trim().min(1).max(128)).min(1).max(500),
 	libraryId: z.string().trim().min(1).nullable().optional(),
 	rootFolderId: z.string().trim().min(1).nullable().optional(),
 	qualityProfileId: z.string().trim().min(1).nullable().optional(),

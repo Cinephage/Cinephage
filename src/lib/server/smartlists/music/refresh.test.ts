@@ -93,6 +93,8 @@ function candidate(
 	return {
 		id: releaseGroupMbid,
 		releaseGroupMbid,
+		source: 'musicbrainz',
+		sourceId: null,
 		title,
 		artistName,
 		artistMbid: 'artist-1',

@@ -32,6 +32,14 @@ export interface PlaylistTrack {
 	/** Primary artist first; empty when the source could not be parsed. */
 	artists: string[];
 	album: string | null;
+	/**
+	 * The catalog's own album id, when one was found for this entry.
+	 *
+	 * Set by the album-discovery step for providers that do not carry albums.
+	 * It is what lets an album MusicBrainz has never heard of still be stored:
+	 * the id is the only reference to the tracklist, cover and date.
+	 */
+	albumSourceId?: string | null;
 	year: number | null;
 	durationMs: number | null;
 	isrc: string | null;
@@ -67,10 +75,20 @@ export type MatchConfidence = 'high' | 'low';
  * it so the preview can show "3 songs from this playlist" instead of a bare
  * album title the user cannot relate to what they pasted.
  */
+/** Where an album's identity came from. */
+export type AlbumSource = 'musicbrainz' | 'deezer';
+
 export interface AlbumCandidate {
-	/** Row id for the preview; the release group mbid, stable across re-resolves. */
+	/**
+	 * Row id for the preview: the release-group mbid, or `deezer:<id>` when the
+	 * album exists only in the catalog. Stable across re-resolves.
+	 */
 	id: string;
 	releaseGroupMbid: string;
+	/** MusicBrainz identity, or the catalog that answered when it had none. */
+	source: AlbumSource;
+	/** Deezer album id when `source` is 'deezer'; null otherwise. */
+	sourceId: string | null;
 	title: string;
 	artistName: string;
 	artistMbid: string;

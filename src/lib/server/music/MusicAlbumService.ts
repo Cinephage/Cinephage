@@ -1,4 +1,4 @@
-import { and, asc, count, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { coreTitle } from './track-matching.js';
 import { db } from '#lib/server/db/index.js';
@@ -33,6 +33,35 @@ export const DEFAULT_EXCLUDED_SECONDARY_TYPES = [
 	'Spokenword',
 	'Field recording'
 ];
+
+/**
+ * An album the catalog can describe in full and MusicBrainz cannot describe at
+ * all: no release group, so no mbid, and a tracklist that exists only upstream.
+ */
+export interface AddCatalogAlbumInput {
+	album: {
+		/** The catalog's album id; kept as this album's only external reference. */
+		sourceId: string;
+		title: string;
+		releaseDate?: string | null;
+		year?: number | null;
+		primaryType?: string | null;
+	};
+	artist: { name: string; mbid?: string | null };
+	tracks: Array<{
+		title: string;
+		duration?: number | null;
+		discNumber?: number | null;
+		trackNumber?: number | null;
+	}>;
+	libraryId?: string | null;
+	rootFolderId?: string | null;
+	monitored?: boolean;
+	coverPath?: string | null;
+	qualityProfileId?: string | null;
+	/** Track titles to want, when it is not the whole album. */
+	onlyTracks?: string[];
+}
 
 export interface AddAlbumInput {
 	/** The work: one row per release group. */
@@ -347,6 +376,147 @@ export class MusicAlbumService {
 			'[MusicAlbum] album add'
 		);
 		return result;
+	}
+
+	/**
+	 * Store an album the catalog knows and MusicBrainz does not.
+	 *
+	 * The library's identity is the release-group mbid, which meant an album
+	 * with no release group could not exist here at all — so a playlist of
+	 * underground or brand-new music came back "could not be matched" while the
+	 * catalog held the album, its tracklist and its date. The row is stored with
+	 * `mbid` null and the catalog's id in `media_items.provider_refs`, and it is
+	 * matched on (artist, title) among the MBID-less rows so re-importing the
+	 * same playlist is still idempotent.
+	 */
+	addCatalogAlbum(input: AddCatalogAlbumInput): AddAlbumResult {
+		const artistId = this.ensureArtistByName(input.artist, input.libraryId);
+
+		const result = db.transaction((tx) => {
+			const existing = tx
+				.select({ id: albums.id, mediaItemId: albums.mediaItemId })
+				.from(albums)
+				.where(
+					and(eq(albums.artistId, artistId), isNull(albums.mbid), eq(albums.title, input.album.title))
+				)
+				.get();
+
+			if (existing) {
+				const chosen: Partial<typeof albums.$inferInsert> = {};
+				if (input.monitored !== undefined) chosen.monitored = input.monitored;
+				if (input.qualityProfileId !== undefined) {
+					chosen.qualityProfileId = input.qualityProfileId;
+				}
+				if (Object.keys(chosen).length > 0) {
+					tx.update(albums).set(chosen).where(eq(albums.id, existing.id)).run();
+				}
+				return {
+					albumId: existing.id,
+					mediaItemId: existing.mediaItemId,
+					created: false
+				} satisfies AddAlbumResult;
+			}
+
+			const mediaItemId = randomUUID();
+			tx.insert(mediaItems)
+				.values({
+					id: mediaItemId,
+					kind: 'album',
+					title: input.album.title,
+					year: input.album.year ?? null,
+					libraryId: input.libraryId ?? null,
+					rootFolderId: input.rootFolderId ?? null,
+					monitored: input.monitored ?? true,
+					providerRefs: { deezer: input.album.sourceId }
+				})
+				.run();
+
+			const albumId = randomUUID();
+			tx.insert(albums)
+				.values({
+					id: albumId,
+					mediaItemId,
+					artistId,
+					// No release group exists; that is the point of this row.
+					mbid: null,
+					releaseMbid: null,
+					title: input.album.title,
+					year: input.album.year ?? null,
+					releaseDate: input.album.releaseDate ?? null,
+					primaryType: input.album.primaryType ?? null,
+					secondaryTypes: [],
+					trackCount: input.tracks.length,
+					duration: input.tracks.reduce((total, track) => total + (track.duration ?? 0), 0),
+					coverPath: input.coverPath ?? null,
+					genres: [],
+					libraryId: input.libraryId ?? null,
+					rootFolderId: input.rootFolderId ?? null,
+					monitored: input.monitored ?? true,
+					qualityProfileId: input.qualityProfileId ?? null,
+					hasFile: false
+				})
+				.run();
+
+			if (input.tracks.length > 0) {
+				tx.insert(tracks)
+					.values(
+						input.tracks.map((track, index) => ({
+							id: randomUUID(),
+							albumId,
+							recordingMbid: null,
+							title: track.title,
+							artistCredit: input.artist.name,
+							discNumber: track.discNumber ?? 1,
+							trackNumber: track.trackNumber ?? index + 1,
+							position: index + 1,
+							duration: track.duration ?? null,
+							monitored: input.onlyTracks
+								? input.onlyTracks.some((title) => coreTitle(title) === coreTitle(track.title))
+								: true
+						}))
+					)
+					.run();
+			}
+
+			return { albumId, mediaItemId, created: true } satisfies AddAlbumResult;
+		});
+
+		logger.info(
+			{ albumId: result.albumId, source: 'deezer', sourceId: input.album.sourceId, created: result.created },
+			'[MusicAlbum] catalog album add'
+		);
+		return result;
+	}
+
+	/**
+	 * An artist with no MusicBrainz identity, matched by name.
+	 *
+	 * ensureArtist() keys on the mbid, and a null mbid would create a new artist
+	 * row on every import of the same playlist.
+	 */
+	private ensureArtistByName(
+		artist: { name: string; mbid?: string | null },
+		libraryId?: string | null
+	): string {
+		if (artist.mbid) return this.ensureArtist({ mbid: artist.mbid, name: artist.name }, libraryId);
+
+		const existing = db
+			.select({ id: artists.id, libraryId: artists.libraryId })
+			.from(artists)
+			.where(and(isNull(artists.mbid), eq(artists.name, artist.name)))
+			.get();
+		if (existing) {
+			if (libraryId && !existing.libraryId) {
+				db.update(artists).set({ libraryId }).where(eq(artists.id, existing.id)).run();
+			}
+			return existing.id;
+		}
+
+		const id = randomUUID();
+		db.insert(artists)
+			.values({ id, mbid: null, name: artist.name, sortName: null, libraryId: libraryId ?? null })
+			.run();
+		return id;
 	}
 
 	/**

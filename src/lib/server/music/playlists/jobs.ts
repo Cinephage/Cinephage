@@ -37,6 +37,7 @@ import { resolvePlaylistTracks } from './resolve.js';
 import { resolveSource } from './sources/index.js';
 import type {
 	AlbumCandidate,
+	AlbumSource,
 	MatchBasis,
 	MatchConfidence,
 	PlaylistProviderId,
@@ -77,7 +78,12 @@ export type PlaylistJobRowStatus = 'pending' | 'added' | 'existing' | 'failed' |
 export type ImportScope = 'album' | 'artist' | 'features' | 'songs';
 
 export interface PlaylistJobRow {
+	/** Release-group mbid, or `deezer:<id>` for an album with no release group. */
 	releaseGroupMbid: string;
+	/** Absent on rows written before catalog albums existed: treat as MusicBrainz. */
+	source?: AlbumSource;
+	/** Deezer album id when `source` is 'deezer'. */
+	sourceId?: string | null;
 	/** The artist the release group belongs to; `artist` scope browses by it. */
 	artistMbid: string | null;
 	title: string;
@@ -310,6 +316,8 @@ export function listPlaylistJobs(limit = 12): PlaylistJob[] {
 function toRow(candidate: AlbumCandidate): PlaylistJobRow {
 	return {
 		releaseGroupMbid: candidate.releaseGroupMbid,
+		source: candidate.source,
+		sourceId: candidate.sourceId,
 		artistMbid: candidate.artistMbid,
 		inLibrary: candidate.inLibrary,
 		albumId: candidate.albumId,
@@ -328,6 +336,8 @@ function toRow(candidate: AlbumCandidate): PlaylistJobRow {
 function rowFromGroup(group: MusicReleaseGroup): PlaylistJobRow {
 	return {
 		releaseGroupMbid: group.mbid,
+		source: 'musicbrainz',
+		sourceId: null,
 		artistMbid: group.artist.mbid,
 		title: group.title,
 		artistName: group.artist.name,
@@ -457,6 +467,63 @@ export function startResolveJob(input: string, scope: ImportScope = 'album'): Pl
  * `filterReleaseGroups` keeps albums and EPs and drops compilations, so a
  * "whole artist" import is a discography, not every single and karaoke disc.
  */
+/** MusicBrainz and the catalog spell a record type differently. */
+function catalogPrimaryType(recordType: string | undefined): string | null {
+	if (!recordType) return null;
+	if (recordType === 'compile') return 'Compilation';
+	if (recordType === 'ep') return 'EP';
+	return recordType.charAt(0).toUpperCase() + recordType.slice(1);
+}
+
+function yearOfDate(value: string | null | undefined): number | null {
+	const match = /^(\d{4})/.exec(value ?? '');
+	return match ? Number(match[1]) : null;
+}
+
+/**
+ * The album a catalog-sourced row points at, with its tracklist.
+ *
+ * Two calls, both unmetered: the album carries the title, date, type and cover
+ * id; the tracklist is what an album row needs to exist.
+ */
+async function catalogAlbum(sourceId: string): Promise<{
+	album: {
+		sourceId: string;
+		title: string;
+		releaseDate: string | null;
+		year: number | null;
+		primaryType: string | null;
+	};
+	tracks: Array<{
+		title: string;
+		duration: number | null;
+		discNumber: number | null;
+		trackNumber: number | null;
+	}>;
+}> {
+	const album = await deezer.album(sourceId);
+	if (!album) throw new PlaylistError(`The catalog no longer has album ${sourceId}`, 404);
+	const tracks = await deezer.albumTracks(sourceId);
+	if (tracks.length === 0) {
+		throw new PlaylistError(`The catalog returned no tracks for album ${sourceId}`, 502);
+	}
+	return {
+		album: {
+			sourceId,
+			title: album.title,
+			releaseDate: album.release_date ?? null,
+			year: yearOfDate(album.release_date),
+			primaryType: catalogPrimaryType(album.record_type)
+		},
+		tracks: tracks.map((track) => ({
+			title: track.title,
+			duration: track.duration ?? null,
+			discNumber: track.disk_number ?? 1,
+			trackNumber: track.track_position ?? null
+		}))
+	};
+}
+
 /** One artist's albums as an expansion would add them, cached per scope. */
 async function artistGroups(
 	artist: { mbid: string; name: string },
@@ -658,29 +725,47 @@ async function runImport(
 		}
 
 		try {
-			// One request per album: group, official edition and tracklist together.
-			// A release that was imported before comes back from the cache instead.
-			const cachedRelease = getCachedRelease(row.releaseGroupMbid)?.value ?? null;
-			let group;
-			let release;
-			if (cachedRelease) {
-				({ group, release } = cachedRelease);
+			let result;
+			if (row.source === 'deezer' && row.sourceId) {
+				// No release group exists anywhere for this album, so there is
+				// nothing to search: the catalog's own album is the record.
+				const catalog = await catalogAlbum(row.sourceId);
+				result = musicAlbumService.addCatalogAlbum({
+					album: catalog.album,
+					artist: { name: row.artistName, mbid: null },
+					tracks: catalog.tracks,
+					libraryId,
+					rootFolderId,
+					monitored: job.recipe.monitored,
+					qualityProfileId: job.recipe.qualityProfileId,
+					onlyTracks:
+						job.recipe.scope === 'songs' ? row.tracks.map((track) => track.title) : undefined
+				});
 			} else {
-				const fetched = await musicBrainz.getReleaseGroupWithTracklist(row.releaseGroupMbid);
-				setCachedRelease(row.releaseGroupMbid, fetched);
-				({ group, release } = fetched);
+				// One request per album: group, official edition and tracklist
+				// together. A release imported before comes back from the cache.
+				const cachedRelease = getCachedRelease(row.releaseGroupMbid)?.value ?? null;
+				let group;
+				let release;
+				if (cachedRelease) {
+					({ group, release } = cachedRelease);
+				} else {
+					const fetched = await musicBrainz.getReleaseGroupWithTracklist(row.releaseGroupMbid);
+					setCachedRelease(row.releaseGroupMbid, fetched);
+					({ group, release } = fetched);
+				}
+				result = musicAlbumService.addAlbum({
+					releaseGroup: group,
+					release,
+					libraryId,
+					rootFolderId,
+					monitored: job.recipe.monitored,
+					qualityProfileId: job.recipe.qualityProfileId,
+					// "Just the songs": the album comes along, the want is the track.
+					onlyTracks:
+						job.recipe.scope === 'songs' ? row.tracks.map((track) => track.title) : undefined
+				});
 			}
-			const result = musicAlbumService.addAlbum({
-				releaseGroup: group,
-				release,
-				libraryId,
-				rootFolderId,
-				monitored: job.recipe.monitored,
-				qualityProfileId: job.recipe.qualityProfileId,
-				// "Just the songs": the album comes along, the want is the track.
-				onlyTracks:
-					job.recipe.scope === 'songs' ? row.tracks.map((track) => track.title) : undefined
-			});
 			row.status = result.created ? 'added' : 'existing';
 			row.albumId = result.albumId;
 			row.error = null;

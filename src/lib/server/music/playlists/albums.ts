@@ -28,7 +28,14 @@ export interface TrackSearch {
 interface CatalogTrack {
 	title?: string;
 	artist?: { name?: string };
-	album?: { title?: string };
+	album?: { id?: number | string; title?: string };
+}
+
+/** The album a hit names: what to store, and how to fetch its tracklist. */
+export interface DiscoveredAlbum {
+	/** The catalog's album id; null when the hit carried none. */
+	sourceId: string | null;
+	title: string;
 }
 
 const SEARCH_LIMIT = 10;
@@ -46,27 +53,48 @@ function term(value: string): string {
 	return value.replace(/"/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+/** The title before the first " - ": playlist exports append version tags that way. */
+function headTitle(value: string): string {
+	return coreTitle(value.split(' - ')[0] ?? value);
+}
+
 /**
  * The first hit that is the same song by the same act — the rule the resolver
  * already applies to a MusicBrainz hit, so a decorated title ("Remastered
  * 2011") still matches and a cover does not.
+ *
+ * Two spellings of a version tag count as the same song: one provider writes
+ * "HIGH HONEY DRIP - Late Night Cut", another "HIGH HONEY DRIP (Late Night
+ * Cut)", and a dash is not a different work. Only the head has to agree, and
+ * only here — the album title this yields is verified against MusicBrainz
+ * afterwards, so a loose song match cannot become a loose album match.
  */
-function albumOf(track: PlaylistTrack, hits: CatalogTrack[]): string | null {
+function albumOf(track: PlaylistTrack, hits: CatalogTrack[]): DiscoveredAlbum | null {
 	const wanted = coreTitle(track.title);
 	if (!wanted) return null;
+	const wantedHead = headTitle(track.title);
 	for (const hit of hits) {
 		if (!hit.title || !hit.album?.title) continue;
-		if (coreTitle(hit.title) !== wanted) continue;
+		const sameSong =
+			coreTitle(hit.title) === wanted || (wantedHead !== '' && headTitle(hit.title) === wantedHead);
+		if (!sameSong) continue;
 		if (!artistMatches(track.artists, hit.artist?.name ?? '')) continue;
-		return hit.album.title.trim() || null;
+		const title = hit.album.title.trim();
+		if (!title) continue;
+		const id = hit.album.id;
+		return { title, sourceId: id === undefined || id === null ? null : String(id) };
 	}
 	return null;
 }
 
-async function discover(track: PlaylistTrack, search: TrackSearch): Promise<string | null> {
+async function discover(track: PlaylistTrack, search: TrackSearch): Promise<DiscoveredAlbum | null> {
 	try {
 		if (!track.title?.trim() || track.artists?.length === 0) return null;
-		const query = `artist:"${term(track.artists[0])}" track:"${term(track.title)}"`;
+		// Deezer's field syntax — `artist:"…" track:"…"` — answers zero for plenty
+		// of independent artists whose plain text match is exact; measured on four
+		// of them in one playlist. The quoted form is the one that finds the rows,
+		// and the filters above are what make a loose search safe.
+		const query = `"${term(track.title)}" "${term(track.artists[0])}"`;
 		const hits = await search.search<CatalogTrack>('track', query, SEARCH_LIMIT);
 		return albumOf(track, hits);
 	} catch {
@@ -91,7 +119,7 @@ export async function fillMissingAlbums(
 	if (missing.length === 0) return { tracks, filled: 0 };
 
 	const concurrency = Math.max(1, options.concurrency ?? DEFAULT_CONCURRENCY);
-	const found = new Map<PlaylistTrack, string>();
+	const found = new Map<PlaylistTrack, DiscoveredAlbum>();
 	let cursor = 0;
 
 	// A fixed pool, not one promise per track: a 500-track playlist must not open
@@ -112,7 +140,9 @@ export async function fillMissingAlbums(
 	return {
 		tracks: tracks.map((track) => {
 			const album = found.get(track);
-			return album ? { ...track, album } : track;
+			// The id travels with the title: an album MusicBrainz has no release
+			// group for can only be stored from the catalog that named it.
+			return album ? { ...track, album: album.title, albumSourceId: album.sourceId } : track;
 		}),
 		filled: found.size
 	};

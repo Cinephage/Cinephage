@@ -111,6 +111,12 @@ export interface DeezerApiOptions {
 
 export interface DeezerApi {
 	search<T>(kind: DeezerSearchKind, query: string, limit: number): Promise<T[]>;
+	/**
+	 * One album's tracklist. The album object itself carries the date, record
+	 * type and cover; tracks are a second call, which is the whole cost of
+	 * storing an album MusicBrainz has no release group for.
+	 */
+	albumTracks(id: number | string): Promise<DeezerTrack[]>;
 	album(id: number | string): Promise<DeezerAlbum | null>;
 	artist(id: number | string): Promise<DeezerArtist | null>;
 	artistAlbums(id: number | string, limit?: number): Promise<DeezerAlbum[]>;
@@ -179,6 +185,13 @@ export function createDeezerApi(options: DeezerApiOptions = {}): DeezerApi {
 			return Array.isArray(body?.data) ? body.data : [];
 		},
 		album: (id) => getJson<DeezerAlbum>(`/album/${id}`, ENTITY_TTL_MS),
+		async albumTracks(id) {
+			const body = await getJson<DeezerList<DeezerTrack>>(
+				`/album/${id}/tracks?limit=200`,
+				ENTITY_TTL_MS
+			);
+			return Array.isArray(body?.data) ? body.data : [];
+		},
 		artist: (id) => getJson<DeezerArtist>(`/artist/${id}`, ENTITY_TTL_MS),
 		async artistAlbums(id, limit = 100) {
 			const body = await getJson<DeezerList<DeezerAlbum>>(

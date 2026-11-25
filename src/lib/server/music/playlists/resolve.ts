@@ -117,6 +117,8 @@ function addCandidate(
 		candidates.set(group.mbid, {
 			id: group.mbid,
 			releaseGroupMbid: group.mbid,
+			source: 'musicbrainz',
+			sourceId: null,
 			title: group.title,
 			artistName: group.artist.name,
 			artistMbid: group.artist.mbid,
@@ -137,6 +139,48 @@ function addCandidate(
 		existing.confidence = confidence;
 	}
 	existing.tracks.push(entry);
+}
+
+/**
+ * An album the catalog knows and MusicBrainz does not.
+ *
+ * The library is keyed on the MusicBrainz release group, so an album with no
+ * release group used to be unstorable — and a playlist of underground or
+ * brand-new music came back "could not be matched" even though the catalog
+ * held every track, its album, its cover and its date. Refusing the songs
+ * because one upstream has not heard of them is the worst of the options: the
+ * row is marked as catalog-sourced, keeps its id, and can be re-matched to a
+ * release group later.
+ */
+function addCatalogCandidate(
+	candidates: Map<string, AlbumCandidate>,
+	album: { sourceId: string; title: string; artist: string; year: number | null },
+	tracks: PlaylistTrack[]
+): void {
+	const key = `deezer:${album.sourceId}`;
+	const entries = tracks.map((track) => ({ title: track.title, artist: album.artist }));
+	const existing = candidates.get(key);
+	if (existing) {
+		existing.tracks.push(...entries);
+		return;
+	}
+	candidates.set(key, {
+		id: key,
+		releaseGroupMbid: key,
+		source: 'deezer',
+		sourceId: album.sourceId,
+		title: album.title,
+		artistName: album.artist,
+		// No MusicBrainz artist either; artist-scope expansion cannot use this.
+		artistMbid: '',
+		year: album.year,
+		primaryType: null,
+		matchedBy: 'album',
+		confidence: 'high',
+		tracks: entries,
+		inLibrary: false,
+		albumId: null
+	});
 }
 
 function markInLibrary(candidates: AlbumCandidate[]): void {
@@ -341,6 +385,22 @@ export async function resolvePlaylistTracks(
 				addCandidate(candidates, picked, track, 'album', 'high');
 				resolvedTracks += 1;
 			}
+		} else if (group.tracks[0]?.albumSourceId) {
+			// MusicBrainz has no release group for this album, but the catalog
+			// named one — every track on the list came from it. Store it as a
+			// catalog album rather than reporting songs the user can hear as
+			// unmatchable.
+			addCatalogCandidate(
+				candidates,
+				{
+					sourceId: group.tracks[0].albumSourceId,
+					title: group.album,
+					artist: group.artist,
+					year: group.tracks[0].year ?? null
+				},
+				group.tracks
+			);
+			resolvedTracks += group.tracks.length;
 		} else {
 			// The album name resolved to nothing — the songs still might, one at a
 			// time. Losing them here would drop exactly what the user pasted.

@@ -59,6 +59,33 @@ describe('fillMissingAlbums', () => {
 		expect(result.tracks[0].album).toBe('Discovery');
 	});
 
+	it('treats a dash version tag and a bracketed one as the same song', async () => {
+		// The playlist says "HIGH HONEY DRIP - Late Night Cut"; the catalog says
+		// "HIGH HONEY DRIP (Late Night Cut)". One is a cover of the other's title,
+		// not a different work.
+		const { api } = catalog(() => [
+			{
+				title: 'HIGH HONEY DRIP (Late Night Cut)',
+				artist: { name: 'Deadfolk Prophet' },
+				album: { title: 'HIGH HONEY DRIP' }
+			}
+		]);
+		const result = await fillMissingAlbums(
+			[track({ title: 'HIGH HONEY DRIP - Late Night Cut', artists: ['Deadfolk Prophet'] })],
+			api
+		);
+		expect(result.filled).toBe(1);
+		expect(result.tracks[0].album).toBe('HIGH HONEY DRIP');
+	});
+
+	it('asks the catalog the way it answers: quoted terms, not field syntax', async () => {
+		// Measured: Deezer's `artist:"…" track:"…"` returns zero for many
+		// independent artists whose plain quoted match is exact.
+		const { api, queries } = catalog(() => [DISCOVERY]);
+		await fillMissingAlbums([track()], api);
+		expect(queries[0]).toBe('"One More Time" "Daft Punk"');
+	});
+
 	it('leaves the album empty when the only hit is a different act', async () => {
 		const { api } = catalog(() => [
 			{ title: 'One More Time', artist: { name: 'Some Tribute Band' }, album: { title: 'Tribute to Daft Punk' } }
@@ -108,7 +135,7 @@ describe('fillMissingAlbums', () => {
 				peak = Math.max(peak, inFlight);
 				await new Promise((resolve) => setTimeout(resolve, 5));
 				inFlight -= 1;
-				const title = /track:"([^"]*)"/.exec(query)?.[1] ?? '';
+				const title = /"([^"]*)"/.exec(query)?.[1] ?? '';
 				return [{ title, artist: { name: 'Daft Punk' }, album: { title: 'Discovery' } }] as T[];
 			}
 		};

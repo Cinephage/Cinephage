@@ -71,6 +71,89 @@ const RELEASE: MusicRelease = {
 beforeEach(() => clearTestDb(testDb));
 afterAll(() => destroyTestDb(testDb));
 
+describe('MusicAlbumService.addCatalogAlbum', () => {
+	const CATALOG = {
+		album: {
+			sourceId: '987654',
+			title: 'HIGH HONEY DRIP',
+			releaseDate: '2024-06-14',
+			year: 2024,
+			primaryType: 'Single'
+		},
+		artist: { name: 'Deadfolk Prophet', mbid: null },
+		tracks: [
+			{ title: 'HIGH HONEY DRIP', duration: 187, discNumber: 1, trackNumber: 1 },
+			{ title: 'WHISTLE WHILE THE WORLD BURNS', duration: 201, discNumber: 1, trackNumber: 2 }
+		]
+	};
+
+	it('stores an album MusicBrainz has no release group for', () => {
+		const result = musicAlbumService.addCatalogAlbum(CATALOG);
+
+		expect(result.created).toBe(true);
+		const album = testDb.db
+			.select()
+			.from(schema.albums)
+			.where(eq(schema.albums.id, result.albumId))
+			.get();
+		expect(album).toMatchObject({
+			mbid: null,
+			releaseMbid: null,
+			title: 'HIGH HONEY DRIP',
+			year: 2024,
+			releaseDate: '2024-06-14',
+			primaryType: 'Single',
+			trackCount: 2
+		});
+
+		const item = testDb.db
+			.select()
+			.from(schema.mediaItems)
+			.where(eq(schema.mediaItems.id, result.mediaItemId))
+			.get();
+		expect(item?.providerRefs).toEqual({ deezer: '987654' });
+
+		const rows = testDb.db
+			.select({ title: schema.tracks.title, position: schema.tracks.position })
+			.from(schema.tracks)
+			.where(eq(schema.tracks.albumId, result.albumId))
+			.all();
+		expect(rows).toEqual([
+			{ title: 'HIGH HONEY DRIP', position: 1 },
+			{ title: 'WHISTLE WHILE THE WORLD BURNS', position: 2 }
+		]);
+	});
+
+	it('is idempotent on the artist and title, and keeps one artist row', () => {
+		const first = musicAlbumService.addCatalogAlbum(CATALOG);
+		const second = musicAlbumService.addCatalogAlbum(CATALOG);
+
+		expect(second.created).toBe(false);
+		expect(second.albumId).toBe(first.albumId);
+
+		const artists = testDb.db.select().from(schema.artists).all();
+		expect(artists).toHaveLength(1);
+		expect(artists[0]).toMatchObject({ name: 'Deadfolk Prophet', mbid: null });
+	});
+
+	it('wants only the songs a playlist named', () => {
+		const result = musicAlbumService.addCatalogAlbum({
+			...CATALOG,
+			onlyTracks: ['HIGH HONEY DRIP']
+		});
+
+		const rows = testDb.db
+			.select({ title: schema.tracks.title, monitored: schema.tracks.monitored })
+			.from(schema.tracks)
+			.where(eq(schema.tracks.albumId, result.albumId))
+			.all();
+		expect(rows).toEqual([
+			{ title: 'HIGH HONEY DRIP', monitored: true },
+			{ title: 'WHISTLE WHILE THE WORLD BURNS', monitored: false }
+		]);
+	});
+});
+
 describe('MusicAlbumService.addAlbum', () => {
 	it('writes one media item, one album and the tracklist', () => {
 		const result = musicAlbumService.addAlbum({ releaseGroup: RELEASE_GROUP, release: RELEASE });
