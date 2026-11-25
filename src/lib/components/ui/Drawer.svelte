@@ -30,7 +30,7 @@
 	></div>
 
 	<div
-		class="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col bg-base-100 shadow-2xl"
+		class="fixed inset-y-0 right-0 z-50 flex w-full flex-col bg-base-100 shadow-2xl sm:max-w-sm"
 		use:dismissable={{ onDismiss: onClose, lockScroll: true }}
 		transition:fly={{ x: '100%', duration: 300, opacity: 1 }}
 	>

@@ -88,7 +88,7 @@
 				{/each}
 			</select>
 		</div>
-		<div class="flex items-center justify-between gap-2">
+		<div class="col-span-2 flex items-center justify-between gap-2">
 			<label class="label cursor-pointer">
 				<span class="label-text text-xs text-base-content/80"
 					>{m.library_metadata_preferOriginalTitle()}</span

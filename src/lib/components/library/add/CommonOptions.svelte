@@ -226,7 +226,7 @@
 		</label>
 		<select
 			id="add-language-profile"
-			class="select-bordered select w-full max-w-full select-sm"
+			class="select-bordered select w-full max-w-full"
 			bind:value={selectedLanguageProfile}
 		>
 			<option value="">

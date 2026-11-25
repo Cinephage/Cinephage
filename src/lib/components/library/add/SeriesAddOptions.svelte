@@ -298,7 +298,7 @@
 <label class="flex cursor-pointer items-start gap-4 py-2">
 	<input
 		type="checkbox"
-		class="toggle mt-0.5 shrink-0 toggle-primary toggle-sm"
+		class="toggle mt-0.5 shrink-0 toggle-primary"
 		bind:checked={monitorSpecials}
 	/>
 	<div class="min-w-0">
@@ -439,11 +439,7 @@
 		<label class="label" for="series-type">
 			<span class="label-text font-medium">{m.library_add_seriesType()}</span>
 		</label>
-		<select
-			id="series-type"
-			class="select-bordered select w-full select-sm"
-			bind:value={seriesType}
-		>
+		<select id="series-type" class="select-bordered select w-full" bind:value={seriesType}>
 			{#each seriesTypeOptions as option (option.value)}
 				<option value={option.value}>{option.label}</option>
 			{/each}
@@ -457,7 +453,7 @@
 	<label class="flex cursor-pointer items-start gap-4 py-2">
 		<input
 			type="checkbox"
-			class="toggle mt-0.5 shrink-0 toggle-primary toggle-sm"
+			class="toggle mt-0.5 shrink-0 toggle-primary"
 			bind:checked={seasonFolder}
 		/>
 		<div class="min-w-0">

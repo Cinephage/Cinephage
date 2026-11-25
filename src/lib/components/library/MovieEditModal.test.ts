@@ -293,3 +293,20 @@ describe('MovieEditModal subtitle profile inheritance', () => {
 		expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ languageProfileId: null }));
 	});
 });
+
+describe('MovieEditModal scheduling row alignment', () => {
+	afterEach(() => {
+		cleanup();
+	});
+
+	// The minimum-availability label wraps on phones; its select must still
+	// line up with the other two controls in the row.
+	it('aligns the scheduling controls to the bottom of the row', () => {
+		renderModal(makeMovie(), vi.fn());
+		const select = document.getElementById('movie-min-availability') as HTMLElement;
+		const grid = select.closest('.grid') as HTMLElement;
+
+		expect(grid.classList.contains('grid-cols-3')).toBe(true);
+		expect(grid.classList.contains('items-end')).toBe(true);
+	});
+});

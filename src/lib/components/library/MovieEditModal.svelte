@@ -539,7 +539,7 @@
 			>
 				Scheduling
 			</h4>
-			<div class="grid grid-cols-3 gap-3">
+			<div class="grid grid-cols-3 items-end gap-3">
 				<div class="form-control w-full">
 					<label class="label py-0.5" for="movie-delay-profile">
 						<span class="label-text text-xs text-base-content/80">Delay Profile</span>

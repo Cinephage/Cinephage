@@ -10,6 +10,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/svelte';
 import LibraryDrawer from './LibraryDrawer.svelte';
 import { seriesStatusFilterOptions } from '#lib/utils/format-status.js';
+import * as m from '#lib/paraglide/messages.js';
 
 function renderDrawer() {
 	return render(LibraryDrawer, {
@@ -44,5 +45,24 @@ describe('LibraryDrawer status filter', () => {
 
 		const options = Array.from(statusSelect.options).map((o) => o.value);
 		expect(options).toContain('cancelled');
+	});
+});
+
+describe('LibraryDrawer panel width', () => {
+	afterEach(() => {
+		cleanup();
+	});
+
+	// A 384px cap left a sliver of backdrop on the left of a 393px phone.
+	it('is full width on phones and capped only from the sm breakpoint', () => {
+		renderDrawer();
+		const panel = screen
+			.getByRole('heading', { name: m.library_drawer_title() })
+			.closest('div.fixed') as HTMLElement;
+
+		expect(panel).toBeTruthy();
+		expect(panel.classList.contains('w-full')).toBe(true);
+		expect(panel.classList.contains('sm:max-w-sm')).toBe(true);
+		expect(panel.classList.contains('max-w-sm')).toBe(false);
 	});
 });
