@@ -74,10 +74,11 @@
 			<FilterPanel {groups} {onchange} />
 		</div>
 
-		<!-- Footer. Filters apply as they are picked; this only closes the drawer. -->
+		<!-- Footer. Filters apply as they are picked (Seasonal too); this only closes
+		     the drawer, so it is labelled as showing the results, not applying. -->
 		<div class="flex gap-3 border-t border-base-200 bg-base-100 p-4">
 			<button class="btn flex-1 btn-outline" onclick={onReset}>{m.action_reset()}</button>
-			<button class="btn flex-1 btn-primary" onclick={close}>{m.discover_applyFilters()}</button>
+			<button class="btn flex-1 btn-primary" onclick={close}>{m.discover_showResults()}</button>
 		</div>
 	</div>
 {/if}

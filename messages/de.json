@@ -612,7 +612,7 @@
 	"dashboard_stats_unreleasedCount": "{count} unveröffentlicht",
 	"dashboard_subtitle": "Willkommen bei Cinephage",
 	"dashboard_title": "Dashboard",
-	"discover_applyFilters": "Filter anwenden",
+	"discover_showResults": "Ergebnisse anzeigen",
 	"discover_bulkAdd_addButton": "{count} zur Bibliothek hinzufügen",
 	"discover_bulkAdd_adding": "Wird hinzugefügt…",
 	"discover_bulkAdd_allItemsHeading": "Gilt für alle Elemente",

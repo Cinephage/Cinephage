@@ -46,13 +46,73 @@ export function writeSelection(
 	}
 }
 
-/** Facets of a kind whose URL carries the explicit "no filter" marker. */
-export function readClearedFacets(params: QueryReader, kind: KindFilter): Set<string> {
+/**
+ * Facets whose URL carries the explicit "no filter" marker. Without a kind it
+ * looks at every facet, so an override survives a tab that does not show it
+ * (the language is not a music facet).
+ */
+export function readClearedFacets(params: QueryReader, kind?: KindFilter): Set<string> {
 	const cleared = new Set<string>();
-	for (const def of facetsFor(kind)) {
+	for (const def of kind ? facetsFor(kind) : ALL_FACETS) {
 		if (def.codec.clearMarker?.has(params)) cleared.add(def.id);
 	}
 	return cleared;
+}
+
+/** Facets of a panel the server fills with an instance-level default. */
+export function instanceDefaultFacets(groups: readonly FacetGroupView[]): Set<string> {
+	const ids = new Set<string>();
+	for (const group of groups) {
+		for (const facet of group.facets) if (facet.instanceDefault) ids.add(facet.id);
+	}
+	return ids;
+}
+
+/**
+ * Set or clear one facet in the URL. Clearing a facet that has an instance
+ * default writes its marker, so the default cannot quietly come back; clearing
+ * any other facet leaves the URL clean. Existing overrides are kept.
+ */
+export function applyFacetChange(
+	params: URLSearchParams,
+	selection: FacetSelection,
+	groups: readonly FacetGroupView[],
+	facetId: string,
+	value: FacetValue | null
+): void {
+	const next: FacetSelection = { ...selection };
+	const cleared = readClearedFacets(params);
+	if (value) {
+		next[facetId] = value;
+		cleared.delete(facetId);
+	} else {
+		delete next[facetId];
+		if (instanceDefaultFacets(groups).has(facetId)) cleared.add(facetId);
+		else cleared.delete(facetId);
+	}
+	writeSelection(params, next, cleared);
+}
+
+/** Switch tabs: keep what the target kind declares, and every override. */
+export function applyKindChange(
+	params: URLSearchParams,
+	selection: FacetSelection,
+	kind: KindFilter
+): void {
+	writeSelection(params, pruneSelection(selection, kind), readClearedFacets(params));
+}
+
+/**
+ * Clear every facet of the panel. A facet the server would fill with an
+ * instance default is cleared to its marker (the panel shows that default as
+ * an active filter, so Reset must switch it off too); without one the URL
+ * ends clean. Overrides of facets the panel does not show are kept.
+ */
+export function applyReset(params: URLSearchParams, groups: readonly FacetGroupView[]): void {
+	const shown = new Set(groups.flatMap((group) => group.facets.map((facet) => facet.id)));
+	const cleared = new Set([...readClearedFacets(params)].filter((id) => !shown.has(id)));
+	for (const id of instanceDefaultFacets(groups)) cleared.add(id);
+	writeSelection(params, {}, cleared);
 }
 
 /** Drop values whose facet the target kind does not declare. */
