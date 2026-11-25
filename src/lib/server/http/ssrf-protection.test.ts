@@ -132,6 +132,43 @@ describe('fetchWithTimeout signal handling', () => {
 			vi.resetModules();
 		}
 	});
+
+	it('destroys the pinned agent when the fetch itself fails', async () => {
+		// With no response there is no body to wait for, so nothing else would
+		// ever release the agent and its sockets.
+		dnsLookupMock.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+		const undiciFetch = vi.fn(async () => {
+			throw new TypeError('fetch failed');
+		});
+		const agentInstances: Array<{ destroyed: boolean }> = [];
+		vi.doMock('undici', () => ({
+			fetch: undiciFetch,
+			Agent: class {
+				destroyed = false;
+				constructor() {
+					agentInstances.push(this);
+				}
+				async close() {}
+				async destroy() {
+					this.destroyed = true;
+				}
+			}
+		}));
+
+		try {
+			vi.resetModules();
+			const { fetchWithTimeout: fetchWithTimeoutFresh } = await import('./ssrf-protection');
+
+			await expect(fetchWithTimeoutFresh('https://public.example/stream', {})).rejects.toThrow(
+				'fetch failed'
+			);
+			expect(agentInstances).toHaveLength(1);
+			expect(agentInstances[0]!.destroyed).toBe(true);
+		} finally {
+			vi.doUnmock('undici');
+			vi.resetModules();
+		}
+	});
 });
 
 describe('resolveAndValidateUrl DNS safety', () => {
