@@ -60,6 +60,13 @@
 	onclick={(e) => {
 		const target = e.target as HTMLElement;
 		if (target.closest('button, input, [role=toolbar]')) return;
+		// In select mode a tap anywhere on the card, title included, toggles the
+		// selection, the same as the grid card.
+		if (selectable) {
+			e.preventDefault();
+			onSelectChange(row.id, !selected);
+			return;
+		}
 		onNavigate();
 	}}
 >
@@ -175,7 +182,10 @@
 			{/if}
 		</div>
 		<div class="min-w-0 flex-1">
-			<a href={row.href} class="block truncate text-sm font-semibold hover:text-primary">
+			<a
+				href={selectable ? undefined : row.href}
+				class="block truncate text-sm font-semibold hover:text-primary"
+			>
 				{row.title}
 			</a>
 			<div class="truncate text-xs text-base-content/50">

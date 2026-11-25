@@ -72,7 +72,15 @@
 			: ''}"
 	onclick={(e) => {
 		const target = e.target as HTMLElement;
-		if (target.closest('button, input, a, .dropdown')) return;
+		if (target.closest('button, input, .dropdown')) return;
+		// In select mode a click on the row, poster and title included, toggles
+		// the selection instead of navigating, the same as the grid card.
+		if (selectable) {
+			e.preventDefault();
+			onSelectChange(row.id, !selected);
+			return;
+		}
+		if (target.closest('a')) return;
 		onNavigate();
 	}}
 >
@@ -88,7 +96,10 @@
 	{/if}
 
 	<td>
-		<a href={resolvePath(row.href)} class="block h-14 w-10 overflow-hidden rounded bg-base-300">
+		<a
+			href={selectable ? undefined : resolvePath(row.href)}
+			class="block h-14 w-10 overflow-hidden rounded bg-base-300"
+		>
 			{#if row.art?.source === 'tmdb'}
 				<img
 					src={`https://image.tmdb.org/t/p/w92${row.art.path}`}
@@ -108,7 +119,7 @@
 
 	<td>
 		<a
-			href={resolvePath(row.href)}
+			href={selectable ? undefined : resolvePath(row.href)}
 			class="block max-w-xs truncate text-base font-medium hover:text-primary"
 		>
 			{row.title}

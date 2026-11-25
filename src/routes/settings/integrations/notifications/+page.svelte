@@ -654,7 +654,7 @@
 					placeholder={field.placeholder}
 					required={field.required}
 					error={fieldErrors[field.key]}
-					helpText={field.secret
+					helpText={field.secret && form.id !== null
 						? msg('notifications_help_secretBlankKeeps')
 						: field.helpKey
 							? msg(field.helpKey)

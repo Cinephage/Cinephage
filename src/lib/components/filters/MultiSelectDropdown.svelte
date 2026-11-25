@@ -132,9 +132,17 @@
 				<label
 					class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-base-200"
 				>
+					<!--
+						Single mode needs real radio styling and a shared name: a nameless
+						radio with no checked sibling matches :indeterminate, which the
+						daisyUI checkbox style paints as a filled "−".
+					-->
 					<input
 						type={mode === 'single' ? 'radio' : 'checkbox'}
-						class="checkbox checkbox-sm checkbox-primary"
+						name={mode === 'single' ? `${id}-option` : undefined}
+						class={mode === 'single'
+							? 'radio radio-sm radio-primary'
+							: 'checkbox checkbox-sm checkbox-primary'}
 						checked={selected.includes(option.id)}
 						onclick={() => choose(option.id)}
 					/>
