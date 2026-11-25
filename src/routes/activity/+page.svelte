@@ -31,6 +31,7 @@
 	import QueueStatsCards from '#lib/components/activity/QueueStatsCards.svelte';
 	import LibraryImportJobsCard from '#lib/components/activity/LibraryImportJobsCard.svelte';
 	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
+	import ScrollToTopButton from '#lib/components/ui/ScrollToTopButton.svelte';
 	import {
 		isActiveActivity,
 		type UnifiedActivity,
@@ -135,7 +136,6 @@
 
 	// Loading states
 	let isLoading = $state(false);
-	let scrollY = $state(0);
 
 	let refreshInFlight = $state(false);
 	let lastActivityRefreshAt = 0;
@@ -1497,26 +1497,10 @@
 	<title>{m.activity_pageTitle()}</title>
 </svelte:head>
 
-<svelte:window
-	onscroll={() => {
-		scrollY = window.scrollY;
-	}}
-/>
+<ScrollToTopButton />
 
-<!-- Scroll to top -->
-{#if scrollY > 300}
-	<button
-		class="btn fixed right-6 bottom-6 z-50 gap-1.5 opacity-80 shadow-lg transition-opacity btn-neutral btn-sm hover:opacity-100"
-		onclick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-		aria-label="Scroll to top"
-	>
-		<svg class="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"
-			><path d="M8 12V4M4 8l4-4 4 4" /></svg
-		>
-	</button>
-{/if}
-
-<div class="space-y-5">
+<!-- pb-14 lets the last row scroll clear of the floating scroll-to-top button -->
+<div class="space-y-5 pb-14">
 	<!-- Header -->
 	<div>
 		<h1 class="text-2xl font-bold">{m.activity_title()}</h1>

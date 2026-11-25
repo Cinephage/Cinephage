@@ -6,6 +6,7 @@ export { default as ThemeSelector } from './ThemeSelector.svelte';
 export { default as LanguageSelector } from './LanguageSelector.svelte';
 export { default as UserAvatar } from './UserAvatar.svelte';
 export { default as BreakdownBar } from './BreakdownBar.svelte';
+export { default as ScrollToTopButton } from './ScrollToTopButton.svelte';
 
 // Skeleton loaders
 export { default as Skeleton } from './Skeleton.svelte';
