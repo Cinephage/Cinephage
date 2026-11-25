@@ -81,15 +81,7 @@
 		isDefault: boolean;
 	};
 
-	let { children, data } = $props<{
-		children: import('svelte').Snippet;
-		data: {
-			libraryNav?: {
-				movieLibraries?: LibraryNavItem[];
-				tvLibraries?: LibraryNavItem[];
-			};
-		};
-	}>();
+	let { children, data }: import('./$types').LayoutProps = $props();
 	let isMobileDrawerOpen = $state(false);
 	let isLoggingOut = $state(false);
 	let expandedMenuSection = $state<string | null>(null);
