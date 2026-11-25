@@ -2,6 +2,7 @@
 	import { fade, fly } from 'svelte/transition';
 	import type { Snippet } from 'svelte';
 	import * as m from '#lib/paraglide/messages.js';
+	import { dismissable } from '#lib/actions/dismissable.js';
 
 	interface Props {
 		isOpen: boolean;
@@ -30,6 +31,7 @@
 
 	<div
 		class="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col bg-base-100 shadow-2xl"
+		use:dismissable={{ onDismiss: onClose, lockScroll: true }}
 		transition:fly={{ x: '100%', duration: 300, opacity: 1 }}
 	>
 		<!-- Header -->

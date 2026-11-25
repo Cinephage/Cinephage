@@ -26,6 +26,7 @@
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { onMount } from 'svelte';
 	import { localAirTimeLabel } from '#lib/utils/airTime.js';
+	import { dismissable } from '#lib/actions/dismissable.js';
 
 	let { data } = $props();
 
@@ -872,12 +873,17 @@
 
 	<div
 		class="fixed top-0 right-0 z-50 flex h-full w-full flex-col overflow-y-auto bg-base-100 shadow-2xl sm:max-w-md"
+		use:dismissable={{ onDismiss: closePanel, lockScroll: true }}
 	>
 		<div
 			class="sticky top-0 z-10 flex items-center justify-between border-b border-base-200 bg-base-100 px-4 py-3"
 		>
 			<h2 class="text-lg font-bold">{formatPanelDate(selectedDay.date)}</h2>
-			<button class="btn btn-circle btn-ghost btn-sm" onclick={closePanel}>
+			<button
+				class="btn btn-circle btn-ghost btn-sm"
+				onclick={closePanel}
+				aria-label={m.action_close()}
+			>
 				<X class="h-5 w-5" />
 			</button>
 		</div>

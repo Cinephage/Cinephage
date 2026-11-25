@@ -3,6 +3,7 @@
 	import FilterPanel from './FilterPanel.svelte';
 	import type { FacetGroupView, FacetValue } from '#lib/filters/types.js';
 	import * as m from '#lib/paraglide/messages.js';
+	import { dismissable } from '#lib/actions/dismissable.js';
 
 	let {
 		isOpen = $bindable(false),
@@ -41,6 +42,7 @@
 	<!-- Drawer -->
 	<div
 		class="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col bg-base-100 shadow-2xl"
+		use:dismissable={{ onDismiss: close, lockScroll: true }}
 		transition:fly={{ x: '100%', duration: 300, opacity: 1 }}
 	>
 		<!-- Header -->
