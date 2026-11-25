@@ -575,7 +575,7 @@
 		</div>
 
 		<!-- Tabs -->
-		<div role="tablist" class="tabs-boxed tabs mb-4 flex w-full flex-wrap gap-1">
+		<div role="tablist" class="tabs-boxed mb-4 tabs flex w-full flex-wrap gap-1">
 			<button
 				type="button"
 				role="tab"

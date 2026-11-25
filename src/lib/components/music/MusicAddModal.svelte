@@ -224,7 +224,7 @@
 		>
 	</div>
 
-	<div class="tabs tabs-box mt-3 w-fit tabs-sm">
+	<div class="tabs-box mt-3 tabs w-fit tabs-sm">
 		<button
 			class="tab gap-1.5"
 			class:tab-active={kind === 'artist'}

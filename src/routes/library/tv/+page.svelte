@@ -549,7 +549,7 @@
 						<ChevronDown class="hidden h-3 w-3 sm:block" />
 					</div>
 					<ul
-						class="menu dropdown-content z-50 mt-2 w-44 rounded-box border border-base-300 bg-base-100 p-2 shadow-xl"
+						class="dropdown-content menu z-50 mt-2 w-44 rounded-box border border-base-300 bg-base-100 p-2 shadow-xl"
 					>
 						<li>
 							<button onclick={handleMonitorAll}>

@@ -458,7 +458,7 @@
 	/>
 
 	{#if showApplyConfirm}
-		<div class="modal modal-open">
+		<div class="modal-open modal">
 			<div class="modal-box max-w-md">
 				<h3 class="text-lg font-bold">{m.library_languageProfile_applyConfirmTitle()}</h3>
 				<p class="mt-2 text-sm text-base-content/70">

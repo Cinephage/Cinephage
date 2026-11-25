@@ -231,7 +231,7 @@
 				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 				<ul
 					tabindex="0"
-					class="menu dropdown-content z-50 w-40 rounded-box border border-base-content/10 bg-base-200 p-2 shadow-lg"
+					class="dropdown-content menu z-50 w-40 rounded-box border border-base-content/10 bg-base-200 p-2 shadow-lg"
 				>
 					{#if onMonitorToggle}
 						<li>
