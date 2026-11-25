@@ -19,6 +19,12 @@ export interface ListSelection {
 	clear(): void;
 	toggle(id: string, selected: boolean): void;
 	selectAll(items: Array<{ id: string }>): void;
+	/**
+	 * Select everything once `load` resolves — unless select mode was left (or
+	 * left and entered again) while it was loading, so a late answer never
+	 * selects ids behind a closed select mode.
+	 */
+	selectAllWhenLoaded(load: () => Promise<Array<{ id: string }>>): Promise<void>;
 	allSelected(items: Array<{ id: string }>): boolean;
 	handleKeydown(event: KeyboardEvent): void;
 }
@@ -26,12 +32,15 @@ export interface ListSelection {
 export function createListSelection(): ListSelection {
 	const ids = new SvelteSet<string>();
 	let mode = $state(false);
+	/** Bumped whenever select mode is left, so pending loads can tell. */
+	let session = 0;
 
 	const count = $derived(ids.size);
 
 	function clear(): void {
 		ids.clear();
 		mode = false;
+		session += 1;
 	}
 
 	function toggle(id: string, selected: boolean): void {
@@ -41,6 +50,16 @@ export function createListSelection(): ListSelection {
 
 	function selectAll(items: Array<{ id: string }>): void {
 		for (const item of items) ids.add(item.id);
+	}
+
+	async function selectAllWhenLoaded(
+		load: () => Promise<Array<{ id: string }>>
+	): Promise<void> {
+		if (!mode) return;
+		const started = session;
+		const items = await load();
+		if (!mode || session !== started) return;
+		selectAll(items);
 	}
 
 	function allSelected(items: Array<{ id: string }>): boolean {
@@ -71,6 +90,7 @@ export function createListSelection(): ListSelection {
 		clear,
 		toggle,
 		selectAll,
+		selectAllWhenLoaded,
 		allSelected,
 		handleKeydown
 	};

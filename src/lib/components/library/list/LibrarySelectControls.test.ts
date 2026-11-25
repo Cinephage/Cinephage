@@ -37,7 +37,8 @@ describe('LibrarySelectControls', () => {
 
 		const toggle = screen.getByLabelText(m.library_selectToggle_selectAll());
 		const done = doneButton();
-		expect(done.getAttribute('aria-label')).toBe(m.library_selectToggle_done());
+		// Label in name: the accessible name is the visible "Done".
+		expect(screen.getByRole('button', { name: m.library_movies_done() })).toBe(done);
 
 		await fireEvent.click(done);
 		expect(onExit).toHaveBeenCalledTimes(1);
@@ -48,12 +49,24 @@ describe('LibrarySelectControls', () => {
 		expect(onExit).toHaveBeenCalledTimes(1);
 	});
 
-	it('keeps the Done button when everything is selected', async () => {
-		const { onCycle, onExit } = setup(true, true);
+	it('moves focus to the toggle when Done removes itself', async () => {
+		setup(true, false);
+		const toggle = screen.getByLabelText(m.library_selectToggle_selectAll());
 
+		doneButton().focus();
 		await fireEvent.click(doneButton());
 
-		expect(onExit).toHaveBeenCalledTimes(1);
-		expect(onCycle).not.toHaveBeenCalled();
+		expect(document.activeElement).toBe(toggle);
+	});
+
+	it('shows a single exit once everything is selected', async () => {
+		const { onCycle, onExit } = setup(true, true);
+
+		expect(screen.getAllByRole('button')).toHaveLength(1);
+		expect(screen.queryByTitle(m.library_selectToggle_done())).toBeNull();
+
+		await fireEvent.click(screen.getByLabelText(m.library_selectToggle_done()));
+		expect(onCycle).toHaveBeenCalledTimes(1);
+		expect(onExit).not.toHaveBeenCalled();
 	});
 });

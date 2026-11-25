@@ -501,8 +501,8 @@
 			return;
 		}
 		if (selection.count < browseCount) {
-			const ids = await idsForList();
-			if (ids.length > 0) selection.selectAll(ids.map((id) => ({ id })));
+			// Done or Escape during the fetch must win: never select behind a closed mode.
+			await selection.selectAllWhenLoaded(async () => (await idsForList()).map((id) => ({ id })));
 			return;
 		}
 		selection.clear();
