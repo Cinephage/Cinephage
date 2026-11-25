@@ -143,24 +143,24 @@
 		class="absolute top-1 right-1 z-10 flex max-w-[48%] flex-col items-end gap-1 sm:top-2 sm:right-2"
 	>
 		{#if !view.hideMonitored}
-		<div
-			class="badge border-none badge-xs shadow-sm sm:badge-sm {view.monitored
-				? view.partiallyMonitored
-					? 'bg-warning/65 text-warning-content sm:bg-warning/80'
-					: 'bg-success/65 text-success-content sm:bg-success/80'
-				: 'bg-base-300/65 text-base-content/60 sm:bg-base-300/80'}"
-			title={view.monitored
-				? view.partiallyMonitored
-					? m.library_mediaCard_partiallyMonitored()
-					: m.library_mediaCard_monitored()
-				: m.library_mediaCard_notMonitored()}
-		>
-			{#if view.monitored}
-				<Eye class="h-3 w-3" />
-			{:else}
-				<EyeOff class="h-3 w-3" />
-			{/if}
-		</div>
+			<div
+				class="badge border-none badge-xs shadow-sm sm:badge-sm {view.monitored
+					? view.partiallyMonitored
+						? 'bg-warning/65 text-warning-content sm:bg-warning/80'
+						: 'bg-success/65 text-success-content sm:bg-success/80'
+					: 'bg-base-300/65 text-base-content/60 sm:bg-base-300/80'}"
+				title={view.monitored
+					? view.partiallyMonitored
+						? m.library_mediaCard_partiallyMonitored()
+						: m.library_mediaCard_monitored()
+					: m.library_mediaCard_notMonitored()}
+			>
+				{#if view.monitored}
+					<Eye class="h-3 w-3" />
+				{:else}
+					<EyeOff class="h-3 w-3" />
+				{/if}
+			</div>
 		{/if}
 
 		<!-- Movie and TV cards only ever sit on their own library page: on phones the type tag
@@ -199,7 +199,7 @@
 
 		{#if view.state?.icon === 'file' && view.detail}
 			<div
-				class="badge truncate border-none bg-primary/65 badge-xs font-medium text-primary-content shadow-sm sm:badge-sm sm:bg-primary/80"
+				class="badge truncate border-none bg-primary/65 badge-xs font-medium text-primary-content shadow-sm sm:bg-primary/80 sm:badge-sm"
 			>
 				{view.detail}
 			</div>

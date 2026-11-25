@@ -332,8 +332,7 @@
 						>
 							{#if (selectedItem.coverUrl || selectedItem.posterPath) && !failedArt.has(selectedItem.id)}
 								<img
-									src={selectedItem.coverUrl ??
-										`/api/images/tmdb/w342${selectedItem.posterPath}`}
+									src={selectedItem.coverUrl ?? `/api/images/tmdb/w342${selectedItem.posterPath}`}
 									alt={selectedItem.title}
 									class="h-full w-full object-cover"
 									loading="lazy"
