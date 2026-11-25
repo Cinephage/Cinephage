@@ -34,6 +34,7 @@
 	import FilterDrawer from '#lib/components/filters/FilterDrawer.svelte';
 	import SectionRow from '#lib/components/discover/SectionRow.svelte';
 	import { createDiscoverSearch } from '#lib/components/discover/discover-search.svelte.js';
+	import DiscoverSearchBox from '#lib/components/discover/DiscoverSearchBox.svelte';
 	import SelectionActionBar from '#lib/components/discover/SelectionActionBar.svelte';
 	import BulkAddToLibraryModal from '#lib/components/discover/BulkAddToLibraryModal.svelte';
 	import PlaylistImportModal from '#lib/components/music/PlaylistImportModal.svelte';
@@ -57,17 +58,7 @@
 		toDiscoverSelectionEntry,
 		type DiscoverSelectionEntry
 	} from '#lib/utils/discoverSelection.js';
-	import {
-		Search,
-		Eye,
-		EyeOff,
-		X,
-		Loader2,
-		Bug,
-		CheckSquare,
-		XSquare,
-		ListMusic
-	} from '@lucide/svelte';
+	import { Search, Eye, EyeOff, Bug, CheckSquare, XSquare, ListMusic } from '@lucide/svelte';
 	import { getMediaTypeLabel } from '#lib/types/tmdb-guards.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { getDiscover, getDiscoverUnfiltered } from '#lib/api/index.js';
@@ -646,36 +637,13 @@
 
 			<!-- Search (desktop) -->
 			<div class="hidden w-full max-w-md items-center gap-2 px-4 md:flex">
-				<div class="group relative w-full">
-					<div class="pointer-events-none absolute top-1/2 left-3.5 z-1 -translate-y-1/2">
-						{#if isSearching}
-							<Loader2
-								class="h-4 w-4 animate-spin text-base-content/40 transition-colors group-focus-within:text-primary"
-							/>
-						{:else}
-							<Search
-								class="h-4 w-4 text-base-content/40 transition-colors group-focus-within:text-primary"
-							/>
-						{/if}
-					</div>
-					<input
-						type="text"
-						placeholder={m.discover_searchPlaceholder()}
-						class="input w-full rounded-full border-base-content/20 bg-base-200/60 pr-9 pl-10 transition-all duration-200 input-md placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
-						value={searchQuery}
-						oninput={handleSearchInput}
-						onkeydown={handleSearchKeydown}
-					/>
-					{#if searchQuery}
-						<button
-							class="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-0.5 text-base-content/40 transition-colors hover:bg-base-300 hover:text-base-content"
-							onclick={clearSearch}
-							aria-label={m.discover_clearSearch()}
-						>
-							<X class="h-3.5 w-3.5" />
-						</button>
-					{/if}
-				</div>
+				<DiscoverSearchBox
+					query={searchQuery}
+					searching={isSearching}
+					oninput={handleSearchInput}
+					onkeydown={handleSearchKeydown}
+					onclear={clearSearch}
+				/>
 			</div>
 
 			<div class="flex flex-1 items-center justify-end gap-3">
@@ -784,36 +752,13 @@
 
 		<!-- Search (mobile) -->
 		<div class="flex items-center gap-2 border-t border-base-200/50 px-4 py-2 md:hidden">
-			<div class="group relative w-full">
-				<div class="pointer-events-none absolute top-1/2 left-3.5 z-1 -translate-y-1/2">
-					{#if isSearching}
-						<Loader2
-							class="h-4 w-4 animate-spin text-base-content/40 transition-colors group-focus-within:text-primary"
-						/>
-					{:else}
-						<Search
-							class="h-4 w-4 text-base-content/40 transition-colors group-focus-within:text-primary"
-						/>
-					{/if}
-				</div>
-				<input
-					type="text"
-					placeholder={m.discover_searchPlaceholder()}
-					class="input w-full rounded-full border-base-content/20 bg-base-200/60 pr-9 pl-10 transition-all duration-200 input-md placeholder:text-base-content/40 hover:bg-base-200 focus:border-primary/50 focus:bg-base-200 focus:ring-1 focus:ring-primary/20 focus:outline-none"
-					value={searchQuery}
-					oninput={handleSearchInput}
-					onkeydown={handleSearchKeydown}
-				/>
-				{#if searchQuery}
-					<button
-						class="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-0.5 text-base-content/40 transition-colors hover:bg-base-300 hover:text-base-content"
-						onclick={clearSearch}
-						aria-label={m.discover_clearSearch()}
-					>
-						<X class="h-3.5 w-3.5" />
-					</button>
-				{/if}
-			</div>
+			<DiscoverSearchBox
+				query={searchQuery}
+				searching={isSearching}
+				oninput={handleSearchInput}
+				onkeydown={handleSearchKeydown}
+				onclear={clearSearch}
+			/>
 		</div>
 	</div>
 
