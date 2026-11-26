@@ -580,7 +580,7 @@
 	</LibraryListHeader>
 
 	<!-- Main Content -->
-	<main class="w-full px-4 py-8 lg:px-8">
+	<main class="w-full px-4 pt-4 pb-8 md:py-8 lg:px-8">
 		<LibraryListEmptyState
 			error={data.error}
 			{searchQuery}

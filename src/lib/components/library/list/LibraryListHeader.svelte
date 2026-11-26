@@ -72,7 +72,7 @@
 </script>
 
 <div
-	class="sticky top-16 z-30 -mx-4 border-b border-base-200 bg-base-100/80 backdrop-blur-md lg:top-0 lg:mx-0"
+	class="sticky top-14 z-30 -mx-4 border-b border-base-200 bg-base-100/80 backdrop-blur-md max-md:-mt-4 md:top-16 lg:top-0 lg:mx-0"
 >
 	<div class="flex h-16 items-center gap-2 px-4 sm:gap-3 lg:px-8">
 		<!-- Left: Title -->

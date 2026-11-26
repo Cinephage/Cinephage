@@ -629,7 +629,7 @@
 <div class="min-h-screen bg-base-100 pb-20">
 	<!-- Header -->
 	<div
-		class="sticky top-16 z-30 -mx-4 border-b border-base-200 bg-base-100/80 backdrop-blur-md lg:top-0 lg:mx-0"
+		class="sticky top-14 z-30 -mx-4 border-b border-base-200 bg-base-100/80 backdrop-blur-md max-md:-mt-4 md:top-16 lg:top-0 lg:mx-0"
 	>
 		<div class="flex h-16 w-full items-center gap-4 px-4 lg:px-8">
 			<h1
@@ -772,7 +772,7 @@
 
 	<!-- Main Content -->
 	<main
-		class="w-full space-y-12 px-4 py-8 transition-opacity lg:px-8"
+		class="w-full space-y-12 px-4 pt-4 pb-8 transition-opacity md:py-8 lg:px-8"
 		class:opacity-60={viewIsStale}
 		aria-busy={viewPending}
 	>
