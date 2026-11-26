@@ -4,6 +4,8 @@
  */
 
 import * as cheerio from 'cheerio';
+import { createIndexerHttp, HttpError, type HttpResponse } from '../http/IndexerHttp.js';
+import { CloudflareProtectedError } from '../http/CloudflareDetection.js';
 import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'indexers' as const });
@@ -52,6 +54,32 @@ export const DEFAULT_CAPABILITIES: NewznabCapabilities = {
 		{ id: '5045', name: 'TV/UHD' }
 	]
 };
+
+/** Caps is a pre-flight request: fail fast, the caller retries by user action. */
+const CAPABILITIES_TIMEOUT_MS = 15_000;
+const ENDPOINT_PROBE_TIMEOUT_MS = 5_000;
+
+/**
+ * The shared client throws typed errors; caps callers have always spoken in
+ * `CapabilitiesFetchError`, and the UI prints its message verbatim.
+ */
+function toCapabilitiesError(error: unknown): CapabilitiesFetchError {
+	if (error instanceof HttpError) {
+		return new CapabilitiesFetchError(
+			`Failed to fetch capabilities: ${error.status} ${error.statusText}`,
+			error.status
+		);
+	}
+	if (error instanceof CloudflareProtectedError) {
+		return new CapabilitiesFetchError(
+			`Cloudflare challenge on ${error.host} was not solved (solver disabled or failed)`,
+			error.statusCode
+		);
+	}
+	return new CapabilitiesFetchError(
+		error instanceof Error ? error.message : 'Failed to fetch capabilities'
+	);
+}
 
 /**
  * Provider for fetching and caching Newznab indexer capabilities.
@@ -207,24 +235,32 @@ export class NewznabCapabilitiesProvider {
 		}
 		const probeUrl = probe.toString().replace(/apikey=[^&]+/, 'apikey=***');
 		try {
-			const response = await fetch(probe.toString(), {
-				headers: { Accept: 'application/xml, text/xml, */*' },
-				signal: AbortSignal.timeout(5000)
-			});
+			// Same shared client as the capabilities fetch: a Cloudflare block page
+			// is HTML with a non-2xx status, so a bare fetch reported "not a
+			// torznab endpoint" without ever trying the solver.
+			const response = await this.capabilitiesClient(url.origin, ENDPOINT_PROBE_TIMEOUT_MS).get(
+				probe.toString(),
+				{
+					headers: { Accept: 'application/xml, text/xml, */*' },
+					timeout: ENDPOINT_PROBE_TIMEOUT_MS,
+					skipRateLimiting: true
+				}
+			);
 			const ct = (response.headers.get('content-type') ?? '').toLowerCase();
-			if (!response.ok) {
-				logger.debug({ url: probeUrl, status: response.status }, '[Torznab] Probe: non-OK status');
-				return false;
-			}
 			if (ct.includes('text/html')) {
 				logger.debug({ url: probeUrl, ct }, '[Torznab] Probe: HTML response');
 				return false;
 			}
-			const text = await response.text();
 			// Case-insensitive: .NET apps (Prowlarr) may return <Caps> instead of <caps>
-			const hasCaps = text.toLowerCase().includes('<caps');
+			const hasCaps = response.body.toLowerCase().includes('<caps');
 			logger.debug(
-				{ url: probeUrl, ct, status: response.status, hasCaps, preview: text.slice(0, 120) },
+				{
+					url: probeUrl,
+					ct,
+					status: response.status,
+					hasCaps,
+					preview: response.body.slice(0, 120)
+				},
 				'[Torznab] Probe: response'
 			);
 			return hasCaps;
@@ -235,6 +271,32 @@ export class NewznabCapabilitiesProvider {
 			);
 			return false;
 		}
+	}
+
+	/**
+	 * The shared indexer HTTP client, for the requests that happen before an
+	 * indexer row exists (capabilities, endpoint discovery).
+	 *
+	 * A bare `fetch()` sees a Cloudflare challenge as a non-2xx HTML page, so a
+	 * protected Torznab endpoint looked like "no caps endpoint"; the shared
+	 * client detects the challenge and runs the embedded solver. The cookie jar
+	 * is keyed by host, which is what lets the probe and the capabilities fetch
+	 * reuse one solved clearance instead of solving twice.
+	 */
+	private capabilitiesClient(origin: string, timeoutMs: number) {
+		let host = origin;
+		try {
+			host = new URL(origin).host;
+		} catch {
+			// Leave the raw string; the request itself reports the bad URL.
+		}
+		return createIndexerHttp({
+			indexerId: `capabilities:${host}`,
+			indexerName: `Capabilities (${host})`,
+			baseUrl: origin,
+			defaultTimeout: timeoutMs,
+			retry: { maxRetries: 0, initialDelayMs: 1000 }
+		});
 	}
 
 	/**
@@ -265,20 +327,22 @@ export class NewznabCapabilitiesProvider {
 			'[Newznab] Fetching capabilities'
 		);
 
-		const response = await fetch(url.toString(), {
-			headers: {
-				Accept: 'application/xml, text/xml, */*'
-			},
-			// Indexers are created lazily before a search; an unresponsive caps
-			// endpoint must not stall it indefinitely.
-			signal: AbortSignal.timeout(15_000)
-		});
-
-		if (!response.ok) {
-			throw new CapabilitiesFetchError(
-				`Failed to fetch capabilities: ${response.status} ${response.statusText}`,
-				response.status
+		// Indexers are created lazily before a search; an unresponsive caps
+		// endpoint must not stall it indefinitely. The shared client is what puts
+		// a Cloudflare challenge through the embedded solver instead of handing
+		// the caller the block page as a 403.
+		let response: HttpResponse;
+		try {
+			response = await this.capabilitiesClient(url.origin, CAPABILITIES_TIMEOUT_MS).get(
+				url.toString(),
+				{
+					headers: { Accept: 'application/xml, text/xml, */*' },
+					timeout: CAPABILITIES_TIMEOUT_MS,
+					skipRateLimiting: true
+				}
 			);
+		} catch (error) {
+			throw toCapabilitiesError(error);
 		}
 
 		const contentType = (response.headers.get('content-type') ?? '').toLowerCase();
@@ -293,7 +357,7 @@ export class NewznabCapabilitiesProvider {
 			);
 		}
 
-		const xml = await response.text();
+		const xml = response.body;
 		if (!xml.trim()) {
 			throw new CapabilitiesFetchError('Indexer returned an empty caps response');
 		}
