@@ -35,6 +35,9 @@
 	import SectionRow from '#lib/components/discover/SectionRow.svelte';
 	import { createDiscoverSearch } from '#lib/components/discover/discover-search.svelte.js';
 	import DiscoverSearchBox from '#lib/components/discover/DiscoverSearchBox.svelte';
+	import { MobileSearch } from '#lib/components/ui/search/mobile-search.svelte.js';
+	import MobileSearchToggle from '#lib/components/ui/search/MobileSearchToggle.svelte';
+	import MobileSearchPanel from '#lib/components/ui/search/MobileSearchPanel.svelte';
 	import SelectionActionBar from '#lib/components/discover/SelectionActionBar.svelte';
 	import BulkAddToLibraryModal from '#lib/components/discover/BulkAddToLibraryModal.svelte';
 	import PlaylistImportModal from '#lib/components/music/PlaylistImportModal.svelte';
@@ -211,6 +214,8 @@
 		}
 	});
 	const searchQuery = $derived(search.query);
+	// On phones the search row only shows when opened or while a query is active.
+	const mobileSearch = new MobileSearch('discover-mobile-search', () => searchQuery !== '');
 	const searchResults = $derived(search.results);
 	const searchPagination = $derived(search.pagination);
 	const isSearching = $derived(search.searching);
@@ -736,6 +741,11 @@
 				{/each}
 			</div>
 
+			<MobileSearchToggle
+				search={mobileSearch}
+				class="btn btn-circle border border-base-300 btn-ghost btn-sm"
+			/>
+
 			<div class="hidden flex-wrap items-center justify-end gap-2 md:flex">
 				{#each activeFilterChips as chip (chip.id)}
 					<div class="badge badge-outline badge-sm">{filterBadge(chip)}</div>
@@ -748,8 +758,8 @@
 			</div>
 		</div>
 
-		<!-- Search (mobile) -->
-		<div class="flex items-center gap-2 border-t border-base-200/50 px-4 py-2 md:hidden">
+		<!-- Search (mobile): behind the search icon beside the type tabs -->
+		<MobileSearchPanel search={mobileSearch}>
 			<DiscoverSearchBox
 				query={searchQuery}
 				searching={isSearching}
@@ -757,7 +767,7 @@
 				onkeydown={handleSearchKeydown}
 				onclear={clearSearch}
 			/>
-		</div>
+		</MobileSearchPanel>
 	</div>
 
 	<!-- Main Content -->

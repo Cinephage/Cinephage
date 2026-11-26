@@ -9,6 +9,9 @@
 	 */
 	import type { Snippet } from 'svelte';
 	import { Search, X, LayoutGrid, List, SlidersHorizontal } from '@lucide/svelte';
+	import { MobileSearch } from '#lib/components/ui/search/mobile-search.svelte.js';
+	import MobileSearchToggle from '#lib/components/ui/search/MobileSearchToggle.svelte';
+	import MobileSearchPanel from '#lib/components/ui/search/MobileSearchPanel.svelte';
 
 	interface Props {
 		title: string;
@@ -62,12 +65,16 @@
 		onOpenFilters,
 		actions
 	}: Props = $props();
+
+	// On phones the search row only shows when opened or while a query is active.
+	const uid = $props.id();
+	const mobileSearch = new MobileSearch(`${uid}-search`, () => searchQuery !== '');
 </script>
 
 <div
 	class="sticky top-16 z-30 -mx-4 border-b border-base-200 bg-base-100/80 backdrop-blur-md lg:top-0 lg:mx-0"
 >
-	<div class="flex h-16 items-center gap-3 px-4 lg:px-8">
+	<div class="flex h-16 items-center gap-2 px-4 sm:gap-3 lg:px-8">
 		<!-- Left: Title -->
 		<div class="flex min-w-0 items-center gap-2 sm:gap-3">
 			<h1
@@ -114,9 +121,11 @@
 		</div>
 
 		<!-- Right: Quick Actions -->
-		<!-- On phones the header holds up to six icon buttons next to the title: tighter padding
-		     and gaps keep the title readable (it truncated to "Mo…" with the select-mode Done button). -->
-		<div class="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1.5 max-sm:[&_.btn]:px-1.5">
+		<!-- On phones the header holds up to seven icon buttons next to the title (search included):
+		     tighter padding and no gaps keep the title readable (it truncated to "Mo…" with the
+		     select-mode Done button). -->
+		<div class="ml-auto flex shrink-0 items-center gap-0 sm:gap-1.5 max-sm:[&_.btn]:px-1.5">
+			<MobileSearchToggle search={mobileSearch} />
 			{#if actions}{@render actions()}{/if}
 
 			<!-- View Toggle -->
@@ -146,8 +155,8 @@
 		</div>
 	</div>
 
-	<!-- Search (mobile) -->
-	<div class="flex items-center gap-2 border-t border-base-200/50 px-4 py-2 md:hidden">
+	<!-- Search (mobile): behind the toolbar's search icon -->
+	<MobileSearchPanel search={mobileSearch}>
 		<div class="group relative w-full">
 			<Search
 				class="pointer-events-none absolute top-1/2 left-3.5 z-1 h-4 w-4 -translate-y-1/2 text-base-content/40 transition-colors group-focus-within:text-primary"
@@ -173,5 +182,5 @@
 				{searchMatches}/{searchSource}
 			</span>
 		{/if}
-	</div>
+	</MobileSearchPanel>
 </div>
