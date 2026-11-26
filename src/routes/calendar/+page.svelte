@@ -36,6 +36,7 @@
 		updateCalendarFeedSubscription
 	} from '#lib/api/calendar.js';
 	import type { CalendarFeedConfig } from '#lib/validation/schemas.js';
+	import AlbumCover from '#lib/components/music/AlbumCover.svelte';
 
 	let { data } = $props();
 
@@ -1055,17 +1056,12 @@
 								class="flex items-center gap-3 rounded-lg bg-base-200 p-3 transition-colors hover:bg-base-300"
 							>
 								<div class="h-16 w-16 shrink-0 overflow-hidden rounded">
-									{#if album.hasCover}
-										<img
-											src={`/api/music/albums/${album.albumId}/cover`}
-											alt={album.title}
-											class="h-16 w-16 object-cover"
-										/>
-									{:else}
-										<div class="flex h-16 w-16 items-center justify-center bg-base-300">
-											<Disc3 class="h-6 w-6 text-base-content/30" />
-										</div>
-									{/if}
+									<AlbumCover
+										albumId={album.albumId}
+										hasCover={album.hasCover}
+										alt={album.title}
+										iconClass="h-6 w-6 text-base-content/30"
+									/>
 								</div>
 								<div class="min-w-0 flex-1">
 									<div class="truncate text-sm font-medium">{album.title}</div>

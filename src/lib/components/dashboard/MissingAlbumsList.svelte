@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
 	import { Disc3 } from '@lucide/svelte';
+	import AlbumCover from '#lib/components/music/AlbumCover.svelte';
 	import Skeleton from '#lib/components/ui/Skeleton.svelte';
 	import { resolve } from '$app/paths';
 	import type { MissingAlbum } from '#lib/types/dashboard.js';
@@ -55,18 +56,7 @@
 						class="flex items-center gap-3 py-2 transition-colors hover:bg-base-300/50"
 					>
 						<div class="h-12 w-12 shrink-0 overflow-hidden rounded bg-base-300">
-							{#if album.hasCover}
-								<img
-									src="/api/music/albums/{album.id}/cover"
-									alt={album.title}
-									class="h-full w-full object-cover"
-									loading="lazy"
-								/>
-							{:else}
-								<div class="flex h-full w-full items-center justify-center">
-									<Disc3 class="h-5 w-5 text-base-content/25" />
-								</div>
-							{/if}
+							<AlbumCover albumId={album.id} hasCover={album.hasCover} alt={album.title} />
 						</div>
 						<div class="min-w-0 flex-1">
 							<p class="truncate font-medium">{album.title}</p>

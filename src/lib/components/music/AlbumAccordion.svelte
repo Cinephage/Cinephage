@@ -1,7 +1,6 @@
 <script lang="ts">
 	import {
 		ChevronDown,
-		Disc3,
 		Eye,
 		EyeOff,
 		LoaderCircle,
@@ -10,6 +9,7 @@
 		Trash2,
 		Zap
 	} from '@lucide/svelte';
+	import AlbumCover from './AlbumCover.svelte';
 	import * as m from '#lib/paraglide/messages.js';
 	import { resolvePath } from '#lib/utils/routing.js';
 	import { trackAvailability, type AlbumWithTracks } from './music-card.js';
@@ -58,18 +58,7 @@
 					aria-expanded={open}
 				>
 					<div class="h-12 w-12 shrink-0 overflow-hidden rounded bg-base-300">
-						{#if album.hasCover}
-							<img
-								src={`/api/music/albums/${album.id}/cover`}
-								alt=""
-								class="h-full w-full object-cover"
-								loading="lazy"
-							/>
-						{:else}
-							<div class="flex h-full w-full items-center justify-center">
-								<Disc3 class="h-5 w-5 text-base-content/25" />
-							</div>
-						{/if}
+						<AlbumCover albumId={album.id} hasCover={album.hasCover} />
 					</div>
 
 					<div class="min-w-0 flex-1">
