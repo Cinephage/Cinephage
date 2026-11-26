@@ -44,10 +44,11 @@
 	import { UI } from '#lib/config/constants.js';
 	import {
 		activeFilters,
+		applyFacetChange,
+		applyKindChange,
+		applyReset,
 		hasActiveFilters as selectionHasFilters,
-		pruneSelection,
 		readSelection,
-		writeSelection,
 		type ActiveFilterView,
 		type FacetSelection,
 		type FacetValue
@@ -311,10 +312,7 @@
 	/** Apply one facet value and rewrite every facet parameter from the result. */
 	function setFacet(facetId: string, value: FacetValue | null) {
 		const url = new URL(page.url.href);
-		const next: FacetSelection = { ...filters };
-		if (value) next[facetId] = value;
-		else delete next[facetId];
-		writeSelection(url.searchParams, next);
+		applyFacetChange(url.searchParams, filters, facetGroups, facetId, value);
 		url.searchParams.set('page', '1');
 		goto(resolvePath(url.pathname + url.search), { reset: false });
 	}
@@ -328,14 +326,14 @@
 		if (nextType === 'all') url.searchParams.delete('type');
 		else url.searchParams.set('type', nextType);
 		const nextKind: KindFilter = isKindId(nextType) ? nextType : 'all';
-		writeSelection(url.searchParams, pruneSelection(filters, nextKind));
+		applyKindChange(url.searchParams, filters, nextKind);
 		url.searchParams.set('page', '1');
 		goto(resolvePath(url.pathname + url.search), { reset: false });
 	}
 
 	function resetFilters() {
 		const url = new URL(page.url.href);
-		writeSelection(url.searchParams, {});
+		applyReset(url.searchParams, facetGroups);
 		url.searchParams.delete('page');
 		goto(resolvePath(url.pathname + url.search), { reset: false });
 	}

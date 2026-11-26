@@ -15,4 +15,21 @@ describe('buildFacetGroups', () => {
 		expect(seasonal?.value).toBeNull();
 		expect(seasonal?.placeholder).toBe('None');
 	});
+
+	it('marks only the language facet with the instance default', () => {
+		const facets = buildFacetGroups('movie', {}, EMPTY_FACET_OPTIONS, { language: 'ja' }).flatMap(
+			(group) => group.facets
+		);
+		expect(facets.find((facet) => facet.id === 'language')?.instanceDefault).toBe('ja');
+		expect(
+			facets.filter((facet) => facet.id !== 'language').every((facet) => !facet.instanceDefault)
+		).toBe(true);
+	});
+
+	it('carries no instance default when none is given', () => {
+		const facets = buildFacetGroups('movie', {}, EMPTY_FACET_OPTIONS).flatMap(
+			(group) => group.facets
+		);
+		expect(facets.every((facet) => facet.instanceDefault === undefined)).toBe(true);
+	});
 });

@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
 	activeFilters,
+	applyFacetChange,
+	applyKindChange,
+	applyReset,
 	hasActiveFilters,
 	pruneSelection,
+	readClearedFacets,
 	readSelection,
 	writeSelection
 } from './index.js';
@@ -67,12 +71,48 @@ describe('facet selection', () => {
 		expect(url.get('vote_average.gte')).toBeNull();
 	});
 
-	it('clears the origin language to an explicit marker, so a stored filter cannot return', () => {
+	it('a cleared language writes nothing', () => {
 		const url = params({ with_original_language: 'en' });
 		writeSelection(url, {});
+		expect(url.get('with_original_language')).toBeNull();
+		expect(url.toString()).toBe('');
+	});
+
+	it('Reset from a URL carrying only the marker is clean', () => {
+		const url = params({ with_original_language: 'none' });
+		writeSelection(url, {});
+		expect(url.toString()).toBe('');
+	});
+
+	it('a deliberate override writes the marker and reads as empty', () => {
+		const url = params();
+		writeSelection(url, {}, new Set(['language']));
 		expect(url.get('with_original_language')).toBe('none');
 		// The marker is not a selection: the control reads as empty.
 		expect(readSelection(url, 'movie').language).toBeUndefined();
+		expect(hasActiveFilters(readSelection(url, 'movie'))).toBe(false);
+	});
+
+	it('the marker survives an unrelated facet change when passed through', () => {
+		const url = params({ with_original_language: 'none' });
+		const cleared = readClearedFacets(url, 'movie');
+		expect(cleared.has('language')).toBe(true);
+		writeSelection(url, { genres: { kind: 'ids', ids: ['28'] } }, cleared);
+		expect(url.get('with_original_language')).toBe('none');
+		expect(url.get('with_genres')).toBe('28');
+	});
+
+	it('a value replaces the marker', () => {
+		const url = params({ with_original_language: 'none' });
+		writeSelection(url, { language: { kind: 'scalar', value: 'en' } }, new Set(['language']));
+		expect(url.get('with_original_language')).toBe('en');
+	});
+
+	it('finds no override on a clean URL or on a chosen language', () => {
+		expect(readClearedFacets(params(), 'movie').has('language')).toBe(false);
+		expect(
+			readClearedFacets(params({ with_original_language: 'en' }), 'movie').has('language')
+		).toBe(false);
 	});
 
 	it('reads the music genre from the legacy parameter and writes the shared one', () => {
@@ -124,6 +164,7 @@ describe('facet selection', () => {
 	it('applies and unwinds a seasonal preset through the same two parameters', () => {
 		const url = params({ type: 'movie' });
 		writeSelection(url, { seasonal: { kind: 'scalar', value: 'christmas' } });
+		expect(url.get('with_original_language')).toBeNull();
 		expect(url.get('with_keywords')).toBe('207317|260365|255088');
 		expect(url.get('vote_average.gte')).toBe('6');
 		expect(readSelection(url, 'movie').seasonal).toEqual({
@@ -209,5 +250,98 @@ describe('active filter summary', () => {
 		expect(active[1].text).toBe('English');
 		expect(active[2].text).toBe('1990 – …');
 		expect(active[3].text).toBe('7+');
+	});
+});
+
+describe('discover URL changes', () => {
+	/** A movie panel; `instanceDefault` mimics a stored original-language filter. */
+	function moviePanel(instanceDefault?: string): FacetGroupView[] {
+		return [
+			{
+				id: 'content',
+				label: 'Content',
+				facets: [
+					{ id: 'genres', label: 'Genres', control: 'multi', options: [], value: null },
+					{
+						id: 'language',
+						label: 'Original Language',
+						control: 'single',
+						options: [],
+						instanceDefault,
+						value: instanceDefault ? { kind: 'scalar', value: instanceDefault } : null
+					}
+				]
+			}
+		];
+	}
+	const musicPanel: FacetGroupView[] = [
+		{
+			id: 'content',
+			label: 'Content',
+			facets: [{ id: 'music_genre', label: 'Genre', control: 'single', options: [], value: null }]
+		}
+	];
+
+	it('Reset without an instance default lands on a clean URL', () => {
+		const url = params({ with_original_language: 'none', with_genres: '28' });
+		applyReset(url, moviePanel());
+		expect(url.toString()).toBe('');
+	});
+
+	it('Reset over an instance default switches that default off', () => {
+		const url = params({ with_genres: '28' });
+		applyReset(url, moviePanel('ja'));
+		expect(url.toString()).toBe('with_original_language=none');
+	});
+
+	it('Reset on a tab without the language keeps an existing override', () => {
+		const url = params({ type: 'music', with_original_language: 'none' });
+		applyReset(url, musicPanel);
+		expect(url.get('with_original_language')).toBe('none');
+	});
+
+	it('clearing the language writes the marker only over an instance default', () => {
+		const withDefault = params();
+		applyFacetChange(withDefault, {}, moviePanel('ja'), 'language', null);
+		expect(withDefault.get('with_original_language')).toBe('none');
+
+		const withoutDefault = params({ with_original_language: 'en' });
+		applyFacetChange(
+			withoutDefault,
+			{ language: { kind: 'scalar', value: 'en' } },
+			moviePanel(),
+			'language',
+			null
+		);
+		expect(withoutDefault.toString()).toBe('');
+	});
+
+	it('picking a language drops the marker', () => {
+		const url = params({ with_original_language: 'none' });
+		applyFacetChange(url, {}, moviePanel('ja'), 'language', { kind: 'scalar', value: 'en' });
+		expect(url.get('with_original_language')).toBe('en');
+	});
+
+	it('an unrelated facet change keeps the override, and never adds one', () => {
+		const kept = params({ with_original_language: 'none' });
+		applyFacetChange(kept, {}, moviePanel('ja'), 'genres', { kind: 'ids', ids: ['28'] });
+		expect(kept.get('with_original_language')).toBe('none');
+
+		const clean = params();
+		applyFacetChange(clean, {}, moviePanel(), 'seasonal', {
+			kind: 'scalar',
+			value: 'christmas'
+		});
+		expect(clean.get('with_original_language')).toBeNull();
+	});
+
+	it('switching to music and back keeps the override', () => {
+		const url = params({ type: 'movie', with_original_language: 'none' });
+		url.set('type', 'music');
+		applyKindChange(url, readSelection(url, 'movie'), 'music');
+		expect(url.get('with_original_language')).toBe('none');
+		url.set('type', 'movie');
+		applyKindChange(url, readSelection(url, 'music'), 'movie');
+		expect(url.get('with_original_language')).toBe('none');
 	});
 });

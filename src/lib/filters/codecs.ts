@@ -23,9 +23,11 @@ const YEAR = /^\d{4}$/;
 
 /** One scalar parameter, e.g. `sort_by` or `with_original_language`.
  *
- *  `clearValue` is for facets with an explicit "no filter" marker: clearing
- *  writes the marker instead of deleting the parameter, so an instance-level
- *  default (the stored original-language filter) cannot silently come back.
+ *  `clearValue` is for facets with an explicit "no filter" marker. Writing no
+ *  value only deletes the parameter, so "All" stays out of the URL; the marker
+ *  is exposed as `clearMarker` and written only when the user overrides an
+ *  instance-level default (the stored original-language filter), so that
+ *  default cannot silently come back. Reading ignores the marker.
  */
 export function scalarParam(
 	param: string,
@@ -33,7 +35,7 @@ export function scalarParam(
 ): FacetCodec {
 	const legacy = options.legacy ?? [];
 	const clearValue = options.clearValue;
-	return {
+	const codec: FacetCodec = {
 		read(params) {
 			for (const key of [param, ...legacy]) {
 				const raw = params.get(key);
@@ -45,9 +47,15 @@ export function scalarParam(
 			params.delete(param);
 			for (const key of legacy) params.delete(key);
 			if (value?.kind === 'scalar' && value.value) params.set(param, value.value);
-			else if (clearValue) params.set(param, clearValue);
 		}
 	};
+	if (clearValue) {
+		codec.clearMarker = {
+			has: (params) => params.get(param) === clearValue,
+			set: (params) => params.set(param, clearValue)
+		};
+	}
+	return codec;
 }
 
 /** A list of ids in one parameter, e.g. `with_genres=28,12`. */

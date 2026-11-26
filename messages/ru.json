@@ -612,7 +612,7 @@
 	"dashboard_stats_unreleasedCount": "Не выпущено: {count}",
 	"dashboard_subtitle": "Добро пожаловать в Cinephage",
 	"dashboard_title": "Панель",
-	"discover_applyFilters": "Применить фильтры",
+	"discover_showResults": "Показать результаты",
 	"discover_bulkAdd_addButton": "Добавить {count} в библиотеку",
 	"discover_bulkAdd_adding": "Добавление…",
 	"discover_bulkAdd_allItemsHeading": "Применяется ко всем элементам",

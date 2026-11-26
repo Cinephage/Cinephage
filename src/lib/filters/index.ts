@@ -24,9 +24,14 @@ export {
 } from './defs.js';
 export {
 	activeFilters,
+	applyFacetChange,
+	applyKindChange,
+	applyReset,
 	hasActiveFilters,
 	idsFrom,
+	instanceDefaultFacets,
 	pruneSelection,
+	readClearedFacets,
 	readSelection,
 	writeSelection,
 	type ActiveFilterView
