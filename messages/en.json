@@ -566,7 +566,7 @@
 	"calendar_feed_lastFetched": "Last fetched {date}",
 	"calendar_feed_neverFetched": "Not fetched yet",
 	"calendar_feed_lanLabel": "Local address",
-	"calendar_feed_lanWarning": "This address only resolves on your local network. Google Calendar and Outlook fetch from the internet and cannot subscribe to it; use a public address, or subscribe from an app on the same network.",
+	"calendar_feed_lanWarning": "No public address is configured, so this URL only resolves on your local network. A calendar app on that network (Apple Calendar, a phone) downloads everything in the window below and keeps those events after you leave, refreshing only when it can reach the server again. Google Calendar and Outlook fetch from the cloud and cannot reach a local address at all.",
 	"calendar_feed_save": "Save",
 	"calendar_feed_saved": "Calendar feed updated",
 	"calendar_feed_saveError": "Could not save the calendar feed",

@@ -450,7 +450,7 @@
 	"calendar_feed_lastFetched": "Última consulta: {date}",
 	"calendar_feed_neverFetched": "Aún sin consultar",
 	"calendar_feed_lanLabel": "Dirección local",
-	"calendar_feed_lanWarning": "Esta dirección solo funciona en tu red local. Google Calendar y Outlook consultan desde internet y no pueden suscribirse; usa una dirección pública o suscríbete desde una app en la misma red.",
+	"calendar_feed_lanWarning": "No hay una dirección pública configurada, así que esta URL solo funciona en tu red local. Una app de calendario en esa red (Apple Calendar, un teléfono) descarga toda la ventana de abajo y conserva esos eventos al salir, y solo se actualiza cuando vuelve a alcanzar el servidor. Google Calendar y Outlook consultan desde internet y no pueden alcanzar una dirección local.",
 	"calendar_feed_save": "Guardar",
 	"calendar_feed_saved": "Feed de calendario actualizado",
 	"calendar_feed_saveError": "No se pudo guardar el feed de calendario",

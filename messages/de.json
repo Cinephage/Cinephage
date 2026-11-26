@@ -450,7 +450,7 @@
 	"calendar_feed_lastFetched": "Zuletzt abgerufen: {date}",
 	"calendar_feed_neverFetched": "Noch nicht abgerufen",
 	"calendar_feed_lanLabel": "Lokale Adresse",
-	"calendar_feed_lanWarning": "Diese Adresse ist nur in deinem lokalen Netz erreichbar. Google Kalender und Outlook rufen aus dem Internet ab und können sie nicht abonnieren; nutze eine öffentliche Adresse oder abonniere in einer App im selben Netz.",
+	"calendar_feed_lanWarning": "Es ist keine öffentliche Adresse konfiguriert, daher funktioniert diese URL nur im lokalen Netz. Eine Kalender-App in diesem Netz (Apple Kalender, ein Telefon) lädt das gesamte Fenster unten herunter und behält diese Termine, wenn du das Netz verlässt; sie aktualisiert sich erst wieder, wenn sie den Server erreicht. Google Kalender und Outlook rufen aus dem Internet ab und erreichen eine lokale Adresse überhaupt nicht.",
 	"calendar_feed_save": "Speichern",
 	"calendar_feed_saved": "Kalender-Feed aktualisiert",
 	"calendar_feed_saveError": "Kalender-Feed konnte nicht gespeichert werden",
