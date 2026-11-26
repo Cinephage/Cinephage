@@ -17,11 +17,11 @@ import zipfile
 
 GUID = "d912b3f3-fc4c-4c74-90e1-678616b8fe9f"
 NAME = "Cinephage"
-DESCRIPTION = "Lets Jellyfin play the media shortcuts Cinephage writes into your library."
+DESCRIPTION = "Connects Jellyfin to Cinephage. Plays Cinephage library shortcuts today; more Cinephage integrations will follow."
 OVERVIEW = "Play Cinephage library shortcuts in Jellyfin"
 OWNER = "Cinephage"
 CATEGORY = "General"
-CHANGELOG = "0.1.3: reads the shortcut file on every play so rewritten hints apply. 0.1.2: cached sources. 0.1.1: duration/container hints. 0.1.0: first release."
+CHANGELOG = "0.2.1: final bridge page. 0.2.0: Cinephage branding, plugin icon and in-dashboard status page. 0.1.3: shortcut hints on every play. 0.1.1: first-play duration/seek. 0.1.0: first release."
 
 
 def main() -> None:
@@ -38,6 +38,7 @@ def main() -> None:
         "changelog": CHANGELOG,
         "description": DESCRIPTION,
         "guid": GUID,
+        "imagePath": "logo.png",
         "name": NAME,
         "overview": OVERVIEW,
         "owner": OWNER,
@@ -50,10 +51,13 @@ def main() -> None:
     }
 
     dll = os.path.join(publish_dir, "Cinephage.Plugin.Jellyfin.dll")
+    logo = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logo.png")
     zip_name = f"cinephage-jellyfin-{version}.zip"
     zip_path = os.path.join(out_dir, zip_name)
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.write(dll, os.path.basename(dll))
+        if os.path.exists(logo):
+            archive.write(logo, "logo.png")
         archive.writestr("meta.json", json.dumps(meta, indent=2))
 
     with open(zip_path, "rb") as handle:

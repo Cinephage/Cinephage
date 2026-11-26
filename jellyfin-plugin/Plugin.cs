@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Model.Plugins;
@@ -7,11 +8,11 @@ using MediaBrowser.Model.Serialization;
 namespace Cinephage.Plugin.Jellyfin;
 
 /// <summary>
-/// Cinephage's Jellyfin plugin. Cinephage owns acquisition and filing; Jellyfin
-/// owns playback. The plugin exists so Jellyfin can play the shortcut files
-/// Cinephage writes (audio .strm today) instead of reading their URL as text.
+/// The Cinephage bridge inside Jellyfin. Cinephage owns acquisition and filing;
+/// Jellyfin owns playback. The bridge starts with audio shortcut playback and
+/// is the plugin future Cinephage integrations ship through.
 /// </summary>
-public class Plugin : BasePlugin<PluginConfiguration>
+public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 {
     public Plugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer)
         : base(applicationPaths, xmlSerializer)
@@ -26,7 +27,20 @@ public class Plugin : BasePlugin<PluginConfiguration>
     public override Guid Id => Guid.Parse("d912b3f3-fc4c-4c74-90e1-678616b8fe9f");
 
     public override string Description =>
-        "Lets Jellyfin play the media shortcuts Cinephage writes into your library.";
+        "Connects Jellyfin to Cinephage. Plays Cinephage library shortcuts today; more Cinephage integrations will follow.";
+
+    public IEnumerable<PluginPageInfo> GetPages()
+    {
+        return new[]
+        {
+            new PluginPageInfo
+            {
+                Name = "Cinephage",
+                DisplayName = "Cinephage",
+                EmbeddedResourcePath = GetType().Namespace + ".Configuration.configPage.html"
+            }
+        };
+    }
 }
 
 /// <summary>

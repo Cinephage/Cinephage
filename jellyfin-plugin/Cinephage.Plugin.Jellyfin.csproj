@@ -12,4 +12,9 @@
   <ItemGroup>
     <PackageReference Include="Jellyfin.Controller" Version="12.4.0" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="Configuration/configPage.html" />
+    <EmbeddedResource Include="Configuration/configPage.html" />
+  </ItemGroup>
 </Project>
