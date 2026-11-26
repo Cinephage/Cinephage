@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { refreshAll } from '$app/navigation';
+	import { onMount } from 'svelte';
 	import { Plus, Search } from '@lucide/svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { toasts } from '#lib/stores/toast.svelte.js';
@@ -26,12 +27,15 @@
 		deleteMediaBrowserNotification,
 		testMediaBrowserNotification,
 		testNewMediaBrowserNotification,
+		installCinephagePlugin,
+		getCinephagePluginStatus,
 		ApiError
 	} from '#lib/api/index.js';
 	import type {
 		MediaBrowserServerCreate,
 		MediaBrowserServerUpdate
 	} from '#lib/validation/schemas.js';
+	import type { CinephagePluginStatusEntry } from '#lib/server/notifications/mediabrowser/types.js';
 
 	interface MediaBrowserFormData {
 		name: string;
@@ -58,6 +62,41 @@
 	let deleteTarget = $state<MediaBrowserServerPublic | null>(null);
 	let confirmBulkDeleteOpen = $state(false);
 	let testingId = $state<string | null>(null);
+	let pluginTarget = $state<MediaBrowserServerPublic | null>(null);
+	let pluginConfirmOpen = $state(false);
+	let pluginBusy = $state(false);
+	let pluginStatuses = $state<Record<string, CinephagePluginStatusEntry>>({});
+
+	const pluginTargetStatus = $derived(pluginTarget ? pluginStatuses[pluginTarget.id] : undefined);
+	const pluginIsUpdate = $derived(
+		pluginTargetStatus !== undefined &&
+			pluginTargetStatus !== 'loading' &&
+			pluginTargetStatus !== 'error' &&
+			pluginTargetStatus.installed
+	);
+
+	onMount(() => {
+		for (const server of data.servers) {
+			if (server.serverType === 'jellyfin') void loadPluginStatus(server.id);
+		}
+	});
+
+	async function loadPluginStatus(id: string) {
+		pluginStatuses = { ...pluginStatuses, [id]: 'loading' };
+		try {
+			const status = await withTimeout(getCinephagePluginStatus(id), 12_000);
+			pluginStatuses = { ...pluginStatuses, [id]: status };
+		} catch {
+			pluginStatuses = { ...pluginStatuses, [id]: 'error' };
+		}
+	}
+
+	function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+		return Promise.race([
+			promise,
+			new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
+		]);
+	}
 	let bulkLoading = $state(false);
 	let selectedIds = new SvelteSet<string>();
 
@@ -279,6 +318,43 @@
 					'Failed to delete server'
 				)
 			);
+		}
+	}
+
+	function confirmInstallPlugin(server: MediaBrowserServerPublic) {
+		pluginTarget = server;
+		pluginConfirmOpen = true;
+	}
+
+	async function handleInstallPlugin() {
+		if (!pluginTarget) return;
+
+		pluginBusy = true;
+		try {
+			const result = await installCinephagePlugin(pluginTarget.id, { restart: true });
+			const installed = result.status.installedVersion ?? result.status.latestVersion ?? '';
+			if (result.status.status === 'Restart') {
+				toasts.success(m.mediaBrowser_pluginInstalled({ version: installed }));
+			} else {
+				toasts.info(m.mediaBrowser_pluginAlreadyInstalled({ version: installed }));
+			}
+			pluginStatuses = { ...pluginStatuses, [pluginTarget.id]: result.status };
+			pluginConfirmOpen = false;
+			pluginTarget = null;
+			await refreshAll();
+		} catch (error) {
+			toasts.error(
+				getServerErrorMessage(
+					error instanceof ApiError
+						? error.response
+						: error instanceof Error
+							? error.message
+							: null,
+					m.mediaBrowser_pluginInstallFailed()
+				)
+			);
+		} finally {
+			pluginBusy = false;
 		}
 	}
 
@@ -574,7 +650,10 @@
 				onDelete={confirmDelete}
 				onToggle={handleToggle}
 				onTest={handleTestFromTable}
+				onInstallPlugin={confirmInstallPlugin}
+				{pluginStatuses}
 				{testingId}
+				pluginBusyId={pluginBusy ? pluginTarget?.id : null}
 			/>
 		</div>
 	</div>
@@ -591,6 +670,24 @@
 	onSave={handleSave}
 	onDelete={handleDelete}
 	onTest={handleTest}
+/>
+
+<!-- Cinephage Plugin Install Confirmation -->
+<ConfirmationModal
+	open={pluginConfirmOpen}
+	title={pluginIsUpdate ? m.mediaBrowser_pluginUpdateTitle() : m.mediaBrowser_pluginInstall()}
+	message={pluginIsUpdate
+		? m.mediaBrowser_pluginUpdateConfirm({ server: pluginTarget?.name ?? '' })
+		: m.mediaBrowser_pluginInstallConfirm({ server: pluginTarget?.name ?? '' })}
+	confirmLabel={pluginIsUpdate
+		? m.mediaBrowser_pluginUpdateAction()
+		: m.mediaBrowser_pluginInstallAction()}
+	loading={pluginBusy}
+	onConfirm={handleInstallPlugin}
+	onCancel={() => {
+		pluginConfirmOpen = false;
+		pluginTarget = null;
+	}}
 />
 
 <!-- Delete Confirmation Modal -->

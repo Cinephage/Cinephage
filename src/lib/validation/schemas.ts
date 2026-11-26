@@ -2821,6 +2821,26 @@ export const calendarPreferencesSchema = z.object({
 });
 export type CalendarPreferences = z.infer<typeof calendarPreferencesSchema>;
 
+/**
+ * Per-account iCalendar feed options.
+ *
+ * Stored on the feed API key's metadata, so one credential owns both the URL
+ * and what it publishes: no schema change, and revoking the key takes the feed
+ * with it. Defaults are what a new subscriber gets before touching anything.
+ */
+export const calendarFeedConfigSchema = z.object({
+	movies: z.boolean().default(true),
+	episodes: z.boolean().default(true),
+	music: z.boolean().default(false),
+	/** `anime` / `standard` split on `series.series_type`. */
+	seriesFilter: z.enum(['all', 'anime', 'standard']).default('all'),
+	daysPast: z.number().int().min(0).max(90).default(7),
+	daysFuture: z.number().int().min(1).max(365).default(90),
+	/** VALARM lead time; 0 disables reminders. */
+	alertMinutes: z.number().int().min(0).max(10080).default(0)
+});
+export type CalendarFeedConfig = z.infer<typeof calendarFeedConfigSchema>;
+
 // ============================================================
 // Notification Connections
 // ============================================================

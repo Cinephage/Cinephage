@@ -59,10 +59,17 @@ function earliestOf(
 	return winner;
 }
 
-function earliestDownloadable(events: readonly ReleaseEvent[]): ReleaseEvent | null {
-	let winner: ReleaseEvent | null = null;
+/**
+ * Earliest downloadable event among `events` — the one rule for "which window
+ * makes this obtainable". Generic over the row shape so a projection (the
+ * calendar feed's slim select) can reuse it without rebuilding a ReleaseEvent.
+ */
+export function firstDownloadableEvent<T extends { kind: string; releaseDate: string }>(
+	events: readonly T[]
+): T | null {
+	let winner: T | null = null;
 	for (const event of events) {
-		if (!isDownloadable(event.kind)) continue;
+		if (!isDownloadable(event.kind as ReleaseKind)) continue;
 		if (!winner || event.releaseDate < winner.releaseDate) winner = event;
 	}
 	return winner;
@@ -81,7 +88,7 @@ export function deriveAvailability(input: AvailabilityInput): Availability {
 	const { events, hasFile } = input;
 
 	const theatrical = earliestOf(events, THEATRICAL);
-	const downloadable = earliestDownloadable(events);
+	const downloadable = firstDownloadableEvent(events);
 
 	const theatricalPassed = Boolean(theatrical && theatrical.releaseDate <= today);
 	const downloadablePassed = Boolean(downloadable && downloadable.releaseDate <= today);
@@ -149,5 +156,5 @@ export function windowsFrom(events: readonly ReleaseEvent[]): ReleaseWindows {
  * replaces the legacy `movies.download_release_date` column.
  */
 export function firstDownloadableDate(events: readonly ReleaseEvent[]): string | null {
-	return earliestDownloadable(events)?.releaseDate ?? null;
+	return firstDownloadableEvent(events)?.releaseDate ?? null;
 }

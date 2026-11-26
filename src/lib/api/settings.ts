@@ -1,3 +1,4 @@
+import type { CinephagePluginStatus } from '#lib/server/notifications/mediabrowser/types.js';
 import type {
 	RootFolderCreate,
 	RootFolderUpdate,
@@ -1225,6 +1226,30 @@ export async function testMediaBrowserNotification(
 ): Promise<MediaBrowserTestResponse> {
 	const response = await apiPost(`/api/notifications/mediabrowser/${id}/test`, payload);
 	return response as unknown as MediaBrowserTestResponse;
+}
+
+export interface CinephagePluginInstallResult {
+	success: boolean;
+	status: CinephagePluginStatus;
+}
+
+/** Reads the plugin state from the configured Jellyfin server. */
+export async function getCinephagePluginStatus(id: string): Promise<CinephagePluginStatus> {
+	const response = await apiGet(`/api/notifications/mediabrowser/${id}/cinephage-plugin`);
+	return response as unknown as CinephagePluginStatus;
+}
+
+/**
+ * Installs the bundled Cinephage plugin on a Jellyfin server. The server
+ * registers Cinephage as a plugin repository and asks Jellyfin to install the
+ * package; `restart` restarts Jellyfin so the plugin activates.
+ */
+export async function installCinephagePlugin(
+	id: string,
+	payload: { restart?: boolean } = {}
+): Promise<CinephagePluginInstallResult> {
+	const response = await apiPost(`/api/notifications/mediabrowser/${id}/cinephage-plugin`, payload);
+	return response as unknown as CinephagePluginInstallResult;
 }
 
 export async function testNewMediaBrowserNotification(

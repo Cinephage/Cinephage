@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getStreamingIndexerSettingsMock = vi.hoisted(() => vi.fn());
+const getExternalUrlMock = vi.hoisted(() => vi.fn());
 const isTrustedOriginMock = vi.hoisted(() => vi.fn());
 
 vi.mock('./settings', () => ({
@@ -11,11 +12,17 @@ vi.mock('#lib/server/utils/origin.js', () => ({
 	isTrustedOrigin: isTrustedOriginMock
 }));
 
+vi.mock('#lib/server/settings/SystemSettingsService.js', () => ({
+	getSystemSettingsService: () => ({ getExternalUrl: getExternalUrlMock })
+}));
+
 import { getBaseUrl, getBaseUrlAsync } from './url';
 
 describe('getBaseUrl', () => {
 	beforeEach(() => {
 		getStreamingIndexerSettingsMock.mockReset();
+		getExternalUrlMock.mockReset();
+		getExternalUrlMock.mockResolvedValue(null);
 		isTrustedOriginMock.mockImplementation((origin: string) =>
 			origin.startsWith('http://internal')
 		);
@@ -104,5 +111,50 @@ describe('getBaseUrl', () => {
 				})
 			)
 		).toBe('https://configured.example.com/cinephage');
+	});
+});
+
+describe('External URL fallback', () => {
+	beforeEach(() => {
+		getStreamingIndexerSettingsMock.mockReset();
+		getExternalUrlMock.mockReset();
+		isTrustedOriginMock.mockImplementation((origin: string) =>
+			origin.startsWith('http://internal')
+		);
+	});
+
+	it('uses the External URL when the streaming module has no address', async () => {
+		getStreamingIndexerSettingsMock.mockResolvedValue(undefined);
+		getExternalUrlMock.mockResolvedValue('https://public.example.com/');
+		const request = new Request('http://internal:3000/api/calendar/feed.ics', {
+			headers: {
+				'X-Forwarded-Host': 'media.example.com',
+				'X-Forwarded-Proto': 'https',
+				'X-Forwarded-Prefix': '/cinephage'
+			}
+		});
+
+		expect(await getBaseUrlAsync(request)).toBe('https://public.example.com/cinephage');
+	});
+
+	it('prefers the Cinephage server address over the External URL', async () => {
+		getStreamingIndexerSettingsMock.mockResolvedValue({
+			baseUrl: 'https://configured.example.com'
+		});
+		getExternalUrlMock.mockResolvedValue('https://public.example.com');
+
+		expect(await getBaseUrlAsync(new Request('http://internal:3000/api/calendar/feed.ics'))).toBe(
+			'https://configured.example.com'
+		);
+	});
+
+	it('ignores an External URL that is not http(s)', async () => {
+		getStreamingIndexerSettingsMock.mockResolvedValue(undefined);
+		getExternalUrlMock.mockResolvedValue('ftp://public.example.com');
+		const request = new Request('http://internal:3000/api/calendar/feed.ics', {
+			headers: { 'X-Forwarded-Host': 'media.example.com', 'X-Forwarded-Proto': 'https' }
+		});
+
+		expect(await getBaseUrlAsync(request)).toBe('https://media.example.com');
 	});
 });

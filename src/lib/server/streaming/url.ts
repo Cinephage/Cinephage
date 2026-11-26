@@ -6,6 +6,7 @@
  */
 
 import { getStreamingIndexerSettings } from './settings';
+import { getSystemSettingsService } from '#lib/server/settings/SystemSettingsService.js';
 import { logger } from '#lib/logging/index.js';
 import { isTrustedOrigin } from '#lib/server/utils/origin.js';
 
@@ -96,6 +97,33 @@ function isLocalhostUrl(url: string): boolean {
 }
 
 /**
+ * Whether a URL only resolves on a private network. Calendar providers fetch
+ * feeds server-side from the public internet, so a LAN address is a valid
+ * subscription URL for a phone calendar and a broken one for Google.
+ */
+export function isLanOnlyUrl(url: string): boolean {
+	if (isLocalhostUrl(url)) return true;
+	try {
+		const host = new URL(url).hostname.toLowerCase();
+		if (host.endsWith('.local') || host.endsWith('.lan') || host.endsWith('.home.arpa')) {
+			return true;
+		}
+		const match = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+		if (!match) return false;
+		const first = Number(match[1]);
+		const second = Number(match[2]);
+		return (
+			first === 10 ||
+			(first === 172 && second >= 16 && second <= 31) ||
+			(first === 192 && second === 168) ||
+			(first === 169 && second === 254)
+		);
+	} catch {
+		return false;
+	}
+}
+
+/**
  * Get the base URL for generating stream URLs (synchronous version).
  * Uses cached database value, falls back to request-based resolution.
  *
@@ -130,17 +158,18 @@ export function getBaseUrl(request: Request): string {
 }
 
 /**
- * Get the base URL for generating stream URLs (async version).
+ * Get the base URL for generating absolute URLs (async version).
  * Fetches from database and updates cache.
  *
  * Priority:
- * 1. Database baseUrl (from Cinephage Stream indexer settings)
- * 2. X-Forwarded headers (for reverse proxy setups like nginx/traefik)
- * 3. Request URL (fallback to request origin)
+ * 1. Cinephage Server Address (the `library-streaming` module's externalHost)
+ * 2. External URL (Settings -> System -> General) - the admin's own statement of
+ *    where this box is reachable, so an install configured only there still
+ *    mints reachable .strm, Live TV and calendar-feed URLs
+ * 3. X-Forwarded headers (for reverse proxy setups like nginx/traefik)
+ * 4. Request URL (fallback to request origin)
  *
  * Note: Localhost URLs will work for local testing but not for external clients.
- * Users should configure an external URL in the Cinephage Stream indexer settings
- * for streaming to work from external devices.
  *
  * @param request - The incoming request object
  * @returns The base URL to use for generating stream/proxy URLs
@@ -174,13 +203,23 @@ export async function getBaseUrlAsync(request: Request): Promise<string> {
 		return addForwardedPrefix(baseUrl, prefix);
 	}
 
-	// 2. Check for reverse proxy headers
+	// 2. The External URL from Settings -> System -> General. Same question the
+	// module answer above answers, so it belongs in the same chain; a box whose
+	// only configured address lives here must still mint reachable URLs.
+	const externalUrl = (await getSystemSettingsService().getExternalUrl())?.replace(/\/$/, '');
+	if (externalUrl && /^https?:\/\//i.test(externalUrl)) {
+		cachedBaseUrl = externalUrl;
+		cacheExpiry = Date.now() + CACHE_TTL_MS;
+		return addForwardedPrefix(externalUrl, prefix);
+	}
+
+	// 3. Check for reverse proxy headers
 	if (forwardedHost) {
 		const proxyUrl = `${forwardedProto}://${forwardedHost}${prefix}`;
 		return proxyUrl;
 	}
 
-	// 3. Fallback to request URL origin
+	// 4. Fallback to request URL origin
 	const url = new URL(request.url);
 	const fallbackUrl = `${url.protocol}//${url.host}`;
 

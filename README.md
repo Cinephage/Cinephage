@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <em>Cinephage</em> - from Greek <em>cine</em> (film) + <em>phage</em> (to devour). A film devourer.
+  <em>Cinephage</em> — from Greek-derived <em>cine</em> (motion pictures) and <em>phage</em> (to devour). A devourer of media.
 </p>
 
 <p align="center">

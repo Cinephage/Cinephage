@@ -2,9 +2,12 @@
 	import * as m from '#lib/paraglide/messages.js';
 	import {
 		Calendar,
+		CalendarPlus,
 		ChevronLeft,
 		ChevronRight,
 		X,
+		Check,
+		Copy,
 		Film,
 		Tv,
 		Loader2,
@@ -27,6 +30,12 @@
 	import { onMount } from 'svelte';
 	import { localAirTimeLabel } from '#lib/utils/airTime.js';
 	import { dismissable } from '#lib/actions/dismissable.js';
+	import { ModalWrapper, ModalHeader } from '#lib/components/ui/modal/index.js';
+	import {
+		getCalendarFeedSubscription,
+		updateCalendarFeedSubscription
+	} from '#lib/api/calendar.js';
+	import type { CalendarFeedConfig } from '#lib/validation/schemas.js';
 
 	let { data } = $props();
 
@@ -37,6 +46,74 @@
 	let loading = $state(false);
 	let showPreferences = $state(false);
 	let savingPrefs = $state(false);
+
+	// ---- Calendar feed (per-account iCalendar subscription) ----
+	let feedOpen = $state(false);
+	let feedLoading = $state(false);
+	let feedSaving = $state(false);
+	let feedCopied = $state(false);
+	let feedUrl = $state<string | null>(null);
+	let feedLanOnly = $state(false);
+	let feedLastRequest = $state<string | null>(null);
+	let feedConfig = $state<CalendarFeedConfig>({
+		movies: true,
+		episodes: true,
+		music: false,
+		seriesFilter: 'all',
+		daysPast: 7,
+		daysFuture: 90,
+		alertMinutes: 0
+	});
+
+	async function openFeed() {
+		feedOpen = true;
+		feedLoading = true;
+		try {
+			const data = await getCalendarFeedSubscription();
+			feedUrl = data.url;
+			feedConfig = data.config;
+			feedLanOnly = data.lanOnly;
+			feedLastRequest = data.lastRequest;
+		} catch {
+			toasts.error(m.calendar_feed_loadError());
+		} finally {
+			feedLoading = false;
+		}
+	}
+
+	async function saveFeed() {
+		feedSaving = true;
+		try {
+			const data = await updateCalendarFeedSubscription($state.snapshot(feedConfig));
+			feedUrl = data.url;
+			feedConfig = data.config;
+			feedLanOnly = data.lanOnly;
+			feedLastRequest = data.lastRequest;
+			toasts.success(m.calendar_feed_saved());
+		} catch {
+			toasts.error(m.calendar_feed_saveError());
+		} finally {
+			feedSaving = false;
+		}
+	}
+
+	async function copyFeedUrl() {
+		if (!feedUrl) return;
+		try {
+			await navigator.clipboard.writeText(feedUrl);
+			feedCopied = true;
+			setTimeout(() => (feedCopied = false), 2000);
+		} catch {
+			toasts.error(m.calendar_feed_loadError());
+		}
+	}
+
+	/** Which client last polled the feed: proof the subscription works. */
+	function formatLastFetch(value: string | null): string {
+		const parsed = value ? new Date(value) : null;
+		if (!parsed || Number.isNaN(parsed.getTime())) return m.calendar_feed_neverFetched();
+		return m.calendar_feed_lastFetched({ date: parsed.toLocaleString(currentLocale) });
+	}
 
 	// Broadcast times are stored as wall clock at the network plus its zone.
 	// Converting to the viewer needs the browser zone, so render after mount
@@ -357,6 +434,14 @@
 					>
 						<SlidersHorizontal class="h-4 w-4" />
 					</button>
+					<button
+						class="btn btn-circle btn-ghost btn-sm"
+						onclick={openFeed}
+						aria-label={m.calendar_feed_open()}
+						title={m.calendar_feed_open()}
+					>
+						<CalendarPlus class="h-4 w-4" />
+					</button>
 				</div>
 			</div>
 
@@ -407,6 +492,14 @@
 						aria-label="Calendar preferences"
 					>
 						<SlidersHorizontal class="h-5 w-5" />
+					</button>
+					<button
+						class="btn btn-circle btn-ghost btn-sm"
+						onclick={openFeed}
+						aria-label={m.calendar_feed_open()}
+						title={m.calendar_feed_open()}
+					>
+						<CalendarPlus class="h-5 w-5" />
 					</button>
 				</div>
 			</div>
@@ -1053,3 +1146,145 @@
 		onSuccess={handleAddSuccess}
 	/>
 {/if}
+
+<!-- Calendar feed modal -->
+<ModalWrapper open={feedOpen} onClose={() => (feedOpen = false)} maxWidth="lg">
+	<ModalHeader title={m.calendar_feed_title()} onClose={() => (feedOpen = false)} />
+	{#if feedLoading}
+		<div class="flex items-center justify-center py-10">
+			<Loader2 class="h-6 w-6 animate-spin text-base-content/50" />
+		</div>
+	{:else}
+		<div class="space-y-4">
+			<p class="text-sm text-base-content/70">{m.calendar_feed_intro()}</p>
+
+			<div>
+				<span class="label-text text-xs font-semibold tracking-wide uppercase">
+					{m.calendar_feed_urlLabel()}
+				</span>
+				<div class="join mt-1 w-full">
+					<input
+						class="input-bordered input join-item w-full font-mono text-xs input-sm"
+						readonly
+						value={feedUrl ?? ''}
+						onfocus={(event) => event.currentTarget.select()}
+					/>
+					<button class="btn join-item gap-1 btn-sm" onclick={copyFeedUrl} disabled={!feedUrl}>
+						{#if feedCopied}
+							<Check class="h-4 w-4" />
+							{m.calendar_feed_copied()}
+						{:else}
+							<Copy class="h-4 w-4" />
+							{m.calendar_feed_copy()}
+						{/if}
+					</button>
+				</div>
+			</div>
+
+			{#if feedLanOnly}
+				<div class="alert py-2 text-xs alert-warning">
+					<Info class="h-4 w-4 shrink-0" />
+					<span>{m.calendar_feed_lanWarning()}</span>
+				</div>
+			{/if}
+
+			<div class="text-xs text-base-content/60">{formatLastFetch(feedLastRequest)}</div>
+
+			<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+				<label class="flex items-center gap-2 text-sm">
+					<input type="checkbox" class="checkbox checkbox-sm" bind:checked={feedConfig.movies} />
+					{m.calendar_feed_movies()}
+				</label>
+				<label class="flex items-center gap-2 text-sm">
+					<input type="checkbox" class="checkbox checkbox-sm" bind:checked={feedConfig.episodes} />
+					{m.calendar_feed_episodes()}
+				</label>
+				<label class="flex items-center gap-2 text-sm">
+					<input type="checkbox" class="checkbox checkbox-sm" bind:checked={feedConfig.music} />
+					{m.calendar_feed_music()}
+				</label>
+			</div>
+
+			{#if feedConfig.episodes}
+				<div>
+					<label class="label" for="feed-series">
+						<span class="label-text text-xs font-semibold tracking-wide uppercase">
+							{m.calendar_feed_series()}
+						</span>
+					</label>
+					<select
+						id="feed-series"
+						class="select-bordered select w-full select-sm"
+						bind:value={feedConfig.seriesFilter}
+					>
+						<option value="all">{m.calendar_feed_seriesAll()}</option>
+						<option value="anime">{m.calendar_feed_seriesAnime()}</option>
+						<option value="standard">{m.calendar_feed_seriesStandard()}</option>
+					</select>
+				</div>
+			{/if}
+
+			<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+				<div>
+					<label class="label" for="feed-past">
+						<span class="label-text text-xs font-semibold tracking-wide uppercase">
+							{m.calendar_feed_past()}
+						</span>
+					</label>
+					<select
+						id="feed-past"
+						class="select-bordered select w-full select-sm"
+						bind:value={feedConfig.daysPast}
+					>
+						{#each [0, 7, 14, 30] as days (days)}
+							<option value={days}>{m.calendar_feed_daysBack({ days: String(days) })}</option>
+						{/each}
+					</select>
+				</div>
+				<div>
+					<label class="label" for="feed-future">
+						<span class="label-text text-xs font-semibold tracking-wide uppercase">
+							{m.calendar_feed_future()}
+						</span>
+					</label>
+					<select
+						id="feed-future"
+						class="select-bordered select w-full select-sm"
+						bind:value={feedConfig.daysFuture}
+					>
+						{#each [30, 90, 180, 365] as days (days)}
+							<option value={days}>{m.calendar_feed_daysAhead({ days: String(days) })}</option>
+						{/each}
+					</select>
+				</div>
+				<div>
+					<label class="label" for="feed-reminder">
+						<span class="label-text text-xs font-semibold tracking-wide uppercase">
+							{m.calendar_feed_reminder()}
+						</span>
+					</label>
+					<select
+						id="feed-reminder"
+						class="select-bordered select w-full select-sm"
+						bind:value={feedConfig.alertMinutes}
+					>
+						<option value={0}>{m.calendar_feed_reminderOff()}</option>
+						<option value={30}>{m.calendar_feed_reminder30m()}</option>
+						<option value={60}>{m.calendar_feed_reminder1h()}</option>
+						<option value={1440}>{m.calendar_feed_reminder1d()}</option>
+						<option value={10080}>{m.calendar_feed_reminder1w()}</option>
+					</select>
+				</div>
+			</div>
+
+			<div class="modal-action">
+				<button class="btn gap-1 btn-primary btn-sm" onclick={saveFeed} disabled={feedSaving}>
+					{#if feedSaving}
+						<Loader2 class="h-4 w-4 animate-spin" />
+					{/if}
+					{m.calendar_feed_save()}
+				</button>
+			</div>
+		</div>
+	{/if}
+</ModalWrapper>

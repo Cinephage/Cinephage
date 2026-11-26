@@ -115,6 +115,44 @@ export interface LibraryUpdatePayload {
 }
 
 /**
+ * A plugin entry from Jellyfin/Emby (GET /Plugins).
+ */
+export interface MediaBrowserPluginInfo {
+	Name: string;
+	Version: string;
+	Description?: string;
+	Id: string;
+	CanUninstall?: boolean;
+	HasImage?: boolean;
+	Status?: string;
+}
+
+/**
+ * A plugin repository entry (GET/POST /Repositories).
+ */
+export interface MediaBrowserRepositoryInfo {
+	Name: string;
+	Url: string;
+	Enabled: boolean;
+}
+
+/**
+ * State of the Cinephage Jellyfin plugin on a configured server. `bundled`
+ * says whether this Cinephage build carries a package at all.
+ */
+export interface CinephagePluginStatus {
+	bundled: boolean;
+	latestVersion: string | null;
+	installed: boolean;
+	installedVersion: string | null;
+	updateAvailable: boolean;
+	status: string | null;
+}
+
+/** Status plus the client's pending/failed states for the settings row. */
+export type CinephagePluginStatusEntry = CinephagePluginStatus | 'loading' | 'error';
+
+/**
  * Response from Jellyfin/Emby System Info endpoint
  */
 export interface MediaBrowserSystemInfo {

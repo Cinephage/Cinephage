@@ -74,7 +74,9 @@ function createTestLocals(options: RequestOptions): App.Locals {
 		user,
 		session: user && options.sessionToken ? createTestSession(user, options.sessionToken) : null,
 		apiKey: null,
-		apiKeyPermissions: null
+		apiKeyPermissions: null,
+		apiKeyId: null,
+		apiKeyOwnerId: null
 	};
 }
 

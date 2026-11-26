@@ -52,6 +52,25 @@ interface AlbumRow {
  * Owned albums are skipped: their real files already play, and writing
  * shortcuts beside them would duplicate every track in the library.
  */
+/**
+ * Builds the URL a music shortcut contains. The `cp_*` query values are a
+ * contract with the Cinephage Jellyfin plugin: it uses them to shape the first
+ * play as a finite, seekable stream instead of waiting for Jellyfin's probe.
+ */
+export function buildShortcutUrl(
+	baseUrl: string,
+	trackId: string,
+	apiKey: string,
+	duration: number | null
+): string {
+	const params = [`api_key=${encodeURIComponent(apiKey)}`];
+	if (duration && duration > 0) {
+		params.push(`cp_duration=${duration}`, 'cp_container=m4a', 'cp_codec=aac');
+	}
+
+	return `${baseUrl}/api/streaming/music/track/${trackId}/stream?${params.join('&')}`;
+}
+
 export class MusicStrmService {
 	async writeAlbumShortcuts(albumId: string): Promise<AlbumShortcutResult> {
 		const album = db
@@ -109,7 +128,8 @@ export class MusicStrmService {
 				title: tracks.title,
 				trackNumber: tracks.trackNumber,
 				discNumber: tracks.discNumber,
-				position: tracks.position
+				position: tracks.position,
+				duration: tracks.duration
 			})
 			.from(tracks)
 			.where(eq(tracks.albumId, albumId))
@@ -129,7 +149,7 @@ export class MusicStrmService {
 			await mkdir(targetFolder, { recursive: true });
 
 			const fileName = `${number} ${sanitizeMusicSegment(track.title)}.strm`;
-			const url = `${baseUrl}/api/streaming/music/track/${track.id}/stream?api_key=${encodeURIComponent(apiKey)}`;
+			const url = buildShortcutUrl(baseUrl, track.id, apiKey, track.duration ?? null);
 			await writeFile(join(targetFolder, fileName), `${url}\n`, 'utf8');
 			written += 1;
 		}

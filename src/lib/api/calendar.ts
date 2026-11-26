@@ -1,5 +1,5 @@
 import { apiGet, apiPut } from './client.js';
-import type { CalendarPreferences } from '#lib/validation/schemas.js';
+import type { CalendarFeedConfig, CalendarPreferences } from '#lib/validation/schemas.js';
 
 /**
  * Client-safe mirrors of the calendar payload shapes. Source of truth:
@@ -77,4 +77,27 @@ export async function getCalendarPreferences() {
 
 export async function updateCalendarPreferences(prefs: CalendarPreferences) {
 	return apiPut<{ value: CalendarPreferences }>('/api/user/preferences/calendar', { value: prefs });
+}
+
+/** The account's own calendar-feed subscription (URL + options + usage). */
+export interface CalendarFeedSubscription {
+	url: string | null;
+	config: CalendarFeedConfig;
+	createdAt: string | null;
+	lastRequest: string | null;
+	/** True when the configured base URL only resolves on the local network. */
+	lanOnly: boolean;
+}
+
+export async function getCalendarFeedSubscription(): Promise<CalendarFeedSubscription> {
+	// The endpoint returns a bare payload, not the success/error envelope.
+	const response = await apiGet<CalendarFeedSubscription>('/api/calendar/subscription');
+	return response as unknown as CalendarFeedSubscription;
+}
+
+export async function updateCalendarFeedSubscription(
+	config: CalendarFeedConfig
+): Promise<CalendarFeedSubscription> {
+	const response = await apiPut<CalendarFeedSubscription>('/api/calendar/subscription', { config });
+	return response as unknown as CalendarFeedSubscription;
 }

@@ -9,11 +9,15 @@
 		Monitor,
 		FlaskConical,
 		Loader2,
+		Puzzle,
 		CheckCircle,
 		AlertTriangle,
 		XCircle
 	} from '@lucide/svelte';
-	import type { MediaBrowserServerPublic } from '#lib/server/notifications/mediabrowser/types.js';
+	import type {
+		CinephagePluginStatusEntry,
+		MediaBrowserServerPublic
+	} from '#lib/server/notifications/mediabrowser/types.js';
 	import * as m from '#lib/paraglide/messages.js';
 	import { formatDisplayDate } from '#lib/utils/format.js';
 
@@ -31,7 +35,10 @@
 		onDelete: (server: MediaBrowserServerPublic) => void;
 		onToggle: (server: MediaBrowserServerPublic) => void;
 		onTest?: (server: MediaBrowserServerPublic) => Promise<void>;
+		onInstallPlugin?: (server: MediaBrowserServerPublic) => void;
+		pluginStatuses?: Record<string, CinephagePluginStatusEntry>;
 		testingId?: string | null;
+		pluginBusyId?: string | null;
 	}
 
 	let {
@@ -45,7 +52,10 @@
 		onDelete,
 		onToggle,
 		onTest,
-		testingId = null
+		onInstallPlugin,
+		pluginStatuses = {},
+		testingId = null,
+		pluginBusyId = null
 	}: Props = $props();
 
 	function getServerTypeLabel(type: string): string {
@@ -99,6 +109,55 @@
 			});
 		}
 		return m.mediaBrowser_connectionNotTested();
+	}
+
+	interface PluginBadge {
+		label: string;
+		class: string;
+	}
+
+	function getPluginStatus(
+		server: MediaBrowserServerPublic
+	): CinephagePluginStatusEntry | undefined {
+		return pluginStatuses[server.id];
+	}
+
+	function getPluginBadge(server: MediaBrowserServerPublic): PluginBadge | null {
+		if (server.serverType !== 'jellyfin') return null;
+
+		const status = getPluginStatus(server);
+		if (!status || status === 'loading') return null;
+		if (status === 'error' || !status.bundled) {
+			return { label: m.mediaBrowser_pluginBadgeUnavailable(), class: 'badge-ghost' };
+		}
+		if (status.installed && status.updateAvailable) {
+			return {
+				label: m.mediaBrowser_pluginBadgeUpdate({ version: status.latestVersion ?? '' }),
+				class: 'badge-warning'
+			};
+		}
+		if (status.installed && status.status === 'Restart') {
+			return { label: m.mediaBrowser_pluginBadgeRestart(), class: 'badge-warning' };
+		}
+		if (status.installed) {
+			return {
+				label: m.mediaBrowser_pluginBadgeInstalled({
+					version: status.installedVersion ?? status.latestVersion ?? ''
+				}),
+				class: 'badge-success'
+			};
+		}
+		return { label: m.mediaBrowser_pluginBadgeMissing(), class: 'badge-ghost' };
+	}
+
+	function getPluginActionLabel(server: MediaBrowserServerPublic): string {
+		const status = getPluginStatus(server);
+		if (status && status !== 'loading' && status !== 'error' && status.installed) {
+			return status.updateAvailable
+				? m.mediaBrowser_pluginUpdate()
+				: m.mediaBrowser_pluginInstall();
+		}
+		return m.mediaBrowser_pluginInstall();
 	}
 
 	const allSelected = $derived(servers.length > 0 && servers.every((s) => selectedIds.has(s.id)));
@@ -197,6 +256,13 @@
 					</div>
 				{/if}
 
+				{#if getPluginBadge(server)}
+					{@const badge = getPluginBadge(server)}
+					{#if badge}
+						<span class="badge badge-sm {badge.class}" title={badge.label}>{badge.label}</span>
+					{/if}
+				{/if}
+
 				<div
 					class="mb-3 min-w-0 truncate font-mono text-xs text-base-content/60"
 					title={server.host}
@@ -204,7 +270,30 @@
 					{server.host}
 				</div>
 
-				<div class="grid gap-1.5 {onTest ? 'grid-cols-4' : 'grid-cols-3'}">
+				<div
+					class="grid gap-1.5 {onTest
+						? onInstallPlugin
+							? 'grid-cols-5'
+							: 'grid-cols-4'
+						: onInstallPlugin
+							? 'grid-cols-4'
+							: 'grid-cols-3'}"
+				>
+					{#if onInstallPlugin && server.serverType === 'jellyfin'}
+						<button
+							class="btn btn-ghost btn-xs"
+							onclick={() => onInstallPlugin(server)}
+							title={getPluginActionLabel(server)}
+							aria-label={getPluginActionLabel(server)}
+							disabled={pluginBusyId === server.id}
+						>
+							{#if pluginBusyId === server.id}
+								<Loader2 class="h-4 w-4 animate-spin" />
+							{:else}
+								<Puzzle class="h-4 w-4" />
+							{/if}
+						</button>
+					{/if}
 					{#if onTest}
 						<button
 							class="btn btn-ghost btn-xs"
@@ -383,9 +472,33 @@
 							{:else}
 								<span class="text-base-content/50">{m.common_na()}</span>
 							{/if}
+							{#if getPluginBadge(server)}
+								{@const badge = getPluginBadge(server)}
+								{#if badge}
+									<div class="mt-1">
+										<span class="badge badge-sm {badge.class}" title={badge.label}
+											>{badge.label}</span
+										>
+									</div>
+								{/if}
+							{/if}
 						</td>
 						<td class="pl-2!">
 							<div class="flex gap-0">
+								{#if onInstallPlugin && server.serverType === 'jellyfin'}
+									<button
+										class="btn btn-ghost btn-xs"
+										onclick={() => onInstallPlugin(server)}
+										title={getPluginActionLabel(server)}
+										disabled={pluginBusyId === server.id}
+									>
+										{#if pluginBusyId === server.id}
+											<Loader2 class="h-4 w-4 animate-spin" />
+										{:else}
+											<Puzzle class="h-4 w-4" />
+										{/if}
+									</button>
+								{/if}
 								{#if onTest}
 									<button
 										class="btn btn-ghost btn-xs"

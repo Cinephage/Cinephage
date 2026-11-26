@@ -10,12 +10,13 @@ This document acknowledges the open-source projects that inspired Cinephage's de
 
 These projects use the same license as Cinephage:
 
-| Project                                                      | License | Inspiration                                               |
-| ------------------------------------------------------------ | ------- | --------------------------------------------------------- |
-| [Radarr](https://github.com/Radarr/Radarr)                   | GPL-3.0 | Download management, monitoring system, quality logic     |
-| [Sonarr](https://github.com/Sonarr/Sonarr)                   | GPL-3.0 | TV series handling, episode monitoring, season pack logic |
-| [Prowlarr](https://github.com/Prowlarr/Prowlarr)             | GPL-3.0 | Indexer system, Cardigann YAML format, health tracking    |
-| [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) | MIT     | Cloudflare bypass handling patterns                       |
+| Project                                                                       | License | Inspiration                                               |
+| ----------------------------------------------------------------------------- | ------- | --------------------------------------------------------- |
+| [Radarr](https://github.com/Radarr/Radarr)                                    | GPL-3.0 | Download management, monitoring system, quality logic     |
+| [Sonarr](https://github.com/Sonarr/Sonarr)                                    | GPL-3.0 | TV series handling, episode monitoring, season pack logic |
+| [Prowlarr](https://github.com/Prowlarr/Prowlarr)                              | GPL-3.0 | Indexer system, Cardigann YAML format, health tracking    |
+| [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr)                  | MIT     | Cloudflare bypass handling patterns                       |
+| [Jellyfin-STRM-Audio](https://github.com/blackwhitebear8/Jellyfin-STRM-Audio) | GPL-3.0 | Audio `.strm` playback approach in the Jellyfin plugin    |
 
 ### MIT Licensed Projects
 

@@ -62,6 +62,22 @@ RUN npm ci --omit=dev --no-audit --no-fund \
 	&& find node_modules -type d -empty -delete
 
 # ==========================================
+# Jellyfin Plugin Stage
+# ==========================================
+# Builds the plugin package the app serves from /api/jellyfin-plugin/. Python is
+# only present to assemble the zip and repository manifest (package.py).
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS jellyfin-plugin
+RUN apt-get update && apt-get install -y --no-install-recommends python3 \
+	&& rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+COPY jellyfin-plugin/ ./
+ARG JELLYFIN_PLUGIN_ABI=12.4.0.0
+RUN VERSION="$(tr -d '[:space:]' < VERSION)" \
+	&& dotnet publish Cinephage.Plugin.Jellyfin.csproj -c Release -o /out/publish \
+		-p:Version="${VERSION}" --nologo \
+	&& python3 package.py /out/publish dist "${VERSION}" "${JELLYFIN_PLUGIN_ABI}"
+
+# ==========================================
 # Runtime Stage
 # ==========================================
 FROM node:26-trixie-slim AS runner
@@ -110,6 +126,7 @@ COPY --from=builder /app/build ./build
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/server.js ./server.js
 COPY --from=builder /app/scripts ./scripts
+COPY --from=jellyfin-plugin /src/dist ./jellyfin-plugin/dist
 # Only the bundled read-only assets the entrypoint syncs. Copying all of
 # /app/data would ship a developer checkout's database, logs and backups if
 # the .dockerignore re-includes ever drift. Channel logos are fetched into
