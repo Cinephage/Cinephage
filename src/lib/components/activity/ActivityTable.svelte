@@ -5,6 +5,7 @@
 	import { Minus } from '@lucide/svelte';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import RemoveDownloadConfirmModal from './RemoveDownloadConfirmModal.svelte';
+	import { ConfirmationModal } from '#lib/components/ui/modal/index.js';
 	import ActivityTableHeader from './ActivityTableHeader.svelte';
 	import ActivityRow from './ActivityRow.svelte';
 
@@ -20,6 +21,7 @@
 			options?: { deleteFiles?: boolean; blocklist?: boolean }
 		) => Promise<void>;
 		onRetry?: (id: string) => Promise<void>;
+		onFailAndSearch?: (id: string) => Promise<void>;
 		onBlocklistHistory?: (historyId: string) => Promise<void>;
 		selectedIds?: Set<string>;
 		isSelectable?: (activity: UnifiedActivity) => boolean;
@@ -39,6 +41,7 @@
 		onResume,
 		onRemove,
 		onRetry,
+		onFailAndSearch,
 		onBlocklistHistory,
 		selectedIds = new Set<string>(),
 		isSelectable = () => false,
@@ -71,10 +74,13 @@
 	// remove flow) rather than running immediately like pause/resume/retry -
 	// see requestRemove/confirmRemove/cancelRemoveConfirm below.
 	let removeConfirmActivity = $state<UnifiedActivity | null>(null);
+	// "Mark failed, blocklist and search" deletes the torrent's files too, so it
+	// gets the same confirmation step as Remove.
+	let failConfirmActivity = $state<UnifiedActivity | null>(null);
 
 	async function runQueueAction(
 		activity: UnifiedActivity,
-		action: 'pause' | 'resume' | 'remove' | 'retry'
+		action: 'pause' | 'resume' | 'remove' | 'retry' | 'failAndSearch'
 	): Promise<void> {
 		if (!activity.queueItemId) return;
 		if (queueActionLoadingRows.has(activity.id)) return;
@@ -82,6 +88,12 @@
 		if (action === 'remove') {
 			if (!onRemove) return;
 			removeConfirmActivity = activity;
+			return;
+		}
+
+		if (action === 'failAndSearch') {
+			if (!onFailAndSearch) return;
+			failConfirmActivity = activity;
 			return;
 		}
 
@@ -124,6 +136,31 @@
 		} finally {
 			blocklistLoadingRows.delete(activity.id);
 		}
+	}
+
+	async function confirmFailAndSearch(): Promise<void> {
+		const activity = failConfirmActivity;
+		if (!activity?.queueItemId || !onFailAndSearch) return;
+		if (queueActionLoadingRows.has(activity.id)) return;
+		queueActionLoadingRows.add(activity.id);
+		try {
+			await onFailAndSearch(activity.queueItemId);
+			toasts.success(m.activity_detail_failAndSearchDone());
+			failConfirmActivity = null;
+		} catch (error) {
+			const message =
+				error instanceof Error
+					? error.message
+					: m.activity_table_failedToAction({ action: 'failAndSearch' });
+			toasts.error(message);
+		} finally {
+			queueActionLoadingRows.delete(activity.id);
+		}
+	}
+
+	function cancelFailConfirm(): void {
+		if (failConfirmActivity && queueActionLoadingRows.has(failConfirmActivity.id)) return;
+		failConfirmActivity = null;
 	}
 
 	function cancelRemoveConfirm(): void {
@@ -246,4 +283,15 @@
 	loading={removeConfirmActivity ? queueActionLoadingRows.has(removeConfirmActivity.id) : false}
 	onConfirm={confirmRemove}
 	onCancel={cancelRemoveConfirm}
+/>
+
+<ConfirmationModal
+	open={failConfirmActivity !== null}
+	title={m.activity_detail_failAndSearchTitle()}
+	message={m.activity_detail_failAndSearchMessage()}
+	confirmLabel={m.activity_detail_failAndSearch()}
+	confirmVariant="warning"
+	loading={failConfirmActivity ? queueActionLoadingRows.has(failConfirmActivity.id) : false}
+	onConfirm={confirmFailAndSearch}
+	onCancel={cancelFailConfirm}
 />

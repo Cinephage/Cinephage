@@ -3,7 +3,7 @@
  * Consolidates download history and monitoring history into a single view
  */
 
-import type { QueueQualityInfo } from './queue';
+import type { QueueQualityInfo, SwarmHealth } from './queue';
 import type { KindFilter } from '#lib/media-kinds/registry.js';
 
 /**
@@ -211,6 +211,8 @@ export interface UnifiedActivity {
 	/** Raw queue lifecycle status retained for protocol-specific presentation. */
 	queueStatus?: string;
 	statusReason?: string;
+	/** What the dead-torrent check last saw, for active torrents */
+	swarmHealth?: SwarmHealth;
 	downloadProgress?: number; // 0-100 for in-progress
 
 	// Upgrade info

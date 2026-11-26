@@ -17,6 +17,7 @@
 		resumeQueueItem,
 		removeQueueItem as removeQueueItemApi,
 		retryQueueItem as retryQueueItemApi,
+		failAndSearchQueueItem as failAndSearchQueueItemApi,
 		refreshQueue,
 		relinkOrphans,
 		getUnmatched,
@@ -1462,6 +1463,11 @@
 		await retryQueueItem(id);
 	}
 
+	async function handleFailAndSearch(id: string) {
+		await failAndSearchQueueItemApi(id);
+		await refreshActivityData({ force: true, silent: true });
+	}
+
 	async function handleBlocklistHistory(historyId: string) {
 		await blocklistHistoryItemApi(historyId);
 		await refreshActivityData({ force: true, silent: true });
@@ -1796,6 +1802,7 @@
 				onResume={handleResume}
 				onRemove={handleRemove}
 				onRetry={handleRetry}
+				onFailAndSearch={handleFailAndSearch}
 				onBlocklistHistory={handleBlocklistHistory}
 				onToggleSelection={activityTab === 'history'
 					? handleToggleSelection

@@ -87,3 +87,39 @@ describe('stalled download settings', () => {
 		expect(settings.stalledDownloadProgressThreshold).toBe(1);
 	});
 });
+
+describe('dead torrent settings', () => {
+	it('reports the defaults when nothing is saved', async () => {
+		const settings = await getMonitoringScheduler().getSettings();
+		expect(settings).toMatchObject({
+			deadTorrentEnabled: true,
+			deadTorrentGraceMinutes: 60,
+			deadTorrentMetadataMinutes: 60,
+			deadTorrentNoProgressMinutes: 360,
+			deadTorrentStrikes: 3,
+			deadTorrentPrivateAction: 'warn'
+		});
+	});
+
+	it('saves and reads back every field', async () => {
+		const scheduler = getMonitoringScheduler();
+		await scheduler.updateSettings({
+			deadTorrentEnabled: false,
+			deadTorrentGraceMinutes: 30,
+			deadTorrentMetadataMinutes: 120,
+			deadTorrentNoProgressMinutes: 720,
+			deadTorrentStrikes: 5,
+			deadTorrentPrivateAction: 'remove'
+		});
+
+		expect(await storedValue('dead_torrent_enabled')).toBe('false');
+		expect(await scheduler.getSettings()).toMatchObject({
+			deadTorrentEnabled: false,
+			deadTorrentGraceMinutes: 30,
+			deadTorrentMetadataMinutes: 120,
+			deadTorrentNoProgressMinutes: 720,
+			deadTorrentStrikes: 5,
+			deadTorrentPrivateAction: 'remove'
+		});
+	});
+});

@@ -23,8 +23,11 @@ import type { TaskExecutionContext } from '#lib/server/tasks/TaskExecutionContex
 import { TaskCancelledException } from '#lib/server/tasks/TaskCancelledException.js';
 import type { BackgroundService, ServiceStatus } from '#lib/server/services/background-service.js';
 import {
+	DEAD_TORRENT_SETTING_KEYS,
+	parseDeadTorrentSettings,
 	parseStalledSetting,
-	STALLED_DOWNLOAD_DEFAULTS
+	STALLED_DOWNLOAD_DEFAULTS,
+	type DeadTorrentPrivateAction
 } from '#lib/server/downloadClients/monitoring/stalledDownloadDefaults.js';
 
 /**
@@ -109,6 +112,13 @@ export interface MonitoringSettings {
 	stalledDownloadProgressThreshold: number;
 	// Blocklist duration (hours) for auto-removed stalled releases; 0 = permanent
 	stalledDownloadBlocklistHours: number;
+	// Dead torrents: no full copy / no seeds and no progress, or stuck on metadata
+	deadTorrentEnabled: boolean;
+	deadTorrentGraceMinutes: number;
+	deadTorrentMetadataMinutes: number;
+	deadTorrentNoProgressMinutes: number;
+	deadTorrentStrikes: number;
+	deadTorrentPrivateAction: DeadTorrentPrivateAction;
 }
 
 /**
@@ -355,7 +365,18 @@ export class MonitoringScheduler extends EventEmitter implements BackgroundServi
 			stalledDownloadBlocklistHours: parseStalledSetting(
 				settingsMap.get('stalled_download_blocklist_hours'),
 				STALLED_DOWNLOAD_DEFAULTS.blocklistHours
-			)
+			),
+			...(() => {
+				const dead = parseDeadTorrentSettings((key) => settingsMap.get(key));
+				return {
+					deadTorrentEnabled: dead.enabled,
+					deadTorrentGraceMinutes: dead.graceMinutes,
+					deadTorrentMetadataMinutes: dead.metadataMinutes,
+					deadTorrentNoProgressMinutes: dead.noProgressMinutes,
+					deadTorrentStrikes: dead.strikes,
+					deadTorrentPrivateAction: dead.privateAction
+				};
+			})()
 		};
 	}
 
@@ -452,6 +473,19 @@ export class MonitoringScheduler extends EventEmitter implements BackgroundServi
 				key: 'stalled_download_blocklist_hours',
 				value: String(settings.stalledDownloadBlocklistHours)
 			});
+		}
+		const deadTorrentUpdates: [keyof typeof DEAD_TORRENT_SETTING_KEYS, unknown][] = [
+			['enabled', settings.deadTorrentEnabled],
+			['graceMinutes', settings.deadTorrentGraceMinutes],
+			['metadataMinutes', settings.deadTorrentMetadataMinutes],
+			['noProgressMinutes', settings.deadTorrentNoProgressMinutes],
+			['strikes', settings.deadTorrentStrikes],
+			['privateAction', settings.deadTorrentPrivateAction]
+		];
+		for (const [field, value] of deadTorrentUpdates) {
+			if (value !== undefined) {
+				updates.push({ key: DEAD_TORRENT_SETTING_KEYS[field], value: String(value) });
+			}
 		}
 
 		// Insert or update each setting

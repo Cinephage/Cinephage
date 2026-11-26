@@ -47,7 +47,24 @@ export interface MonitoringSettings {
 	stalledDownloadProgressTimeoutMinutes: number;
 	stalledDownloadProgressThreshold: number;
 	stalledDownloadBlocklistHours: number;
+	deadTorrentEnabled: boolean;
+	deadTorrentGraceMinutes: number;
+	deadTorrentMetadataMinutes: number;
+	deadTorrentNoProgressMinutes: number;
+	deadTorrentStrikes: number;
+	deadTorrentPrivateAction: 'warn' | 'remove';
 }
+
+/** The dead-torrent fields of the monitoring settings (download client modal). */
+export type DeadTorrentSettingsForm = Pick<
+	MonitoringSettings,
+	| 'deadTorrentEnabled'
+	| 'deadTorrentGraceMinutes'
+	| 'deadTorrentMetadataMinutes'
+	| 'deadTorrentNoProgressMinutes'
+	| 'deadTorrentStrikes'
+	| 'deadTorrentPrivateAction'
+>;
 
 /** Response of GET /api/monitoring/settings. */
 export interface MonitoringSettingsResponse {

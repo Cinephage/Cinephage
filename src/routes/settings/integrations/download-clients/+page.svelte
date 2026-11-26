@@ -712,6 +712,11 @@
 	stalledProgressTimeoutMinutes={data.stalledDownloadProgressTimeoutMinutes}
 	stalledProgressThreshold={data.stalledDownloadProgressThreshold}
 	stalledBlocklistHours={data.stalledDownloadBlocklistHours}
+	deadTorrentSettings={data.deadTorrentSettings}
+	onSaveDeadTorrentSettings={async (values) => {
+		await updateMonitoringSettings(values);
+		toasts.success(m.toast_settings_stalledSettingsUpdated());
+	}}
 	onSaveStalledBehavior={async (timeout, progressTimeout, threshold, blocklistHours) => {
 		try {
 			await updateMonitoringSettings({
