@@ -67,6 +67,7 @@ describe('Aria2Client', () => {
 			mockTellStatus({
 				status: 'active',
 				completedLength: '500',
+				downloadSpeed: '1024',
 				uploadSpeed: '0',
 				uploadLength: '0'
 			})
@@ -95,5 +96,65 @@ describe('Aria2Client', () => {
 
 		expect(download?.status).toBe('paused');
 		expect(download?.canBeRemoved).toBe(false);
+	});
+
+	describe('swarm signals', () => {
+		it('maps connected seeders and downloaded bytes, and reports no data as stalled', async () => {
+			vi.stubGlobal(
+				'fetch',
+				mockTellStatus({
+					completedLength: '65',
+					downloadSpeed: '0',
+					uploadSpeed: '0',
+					numSeeders: '0',
+					connections: '1'
+				})
+			);
+			const d = await new Aria2Client({ host: 'localhost', port: 6800, useSsl: false }).getDownload(
+				gid
+			);
+			expect(d).toMatchObject({
+				status: 'stalled',
+				downloadedBytes: 65,
+				connectedSeeds: 0,
+				connectedPeers: 1,
+				metadataPending: false
+			});
+		});
+
+		it('flags a magnet download that has no metadata yet', async () => {
+			vi.stubGlobal(
+				'fetch',
+				mockTellStatus({
+					totalLength: '0',
+					completedLength: '0',
+					downloadSpeed: '100',
+					uploadSpeed: '0',
+					bittorrent: { infoHash: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }
+				})
+			);
+			const d = await new Aria2Client({ host: 'localhost', port: 6800, useSsl: false }).getDownload(
+				gid
+			);
+			expect(d?.metadataPending).toBe(true);
+			expect(d?.status).toBe('stalled');
+		});
+
+		it('leaves plain HTTP downloads alone', async () => {
+			vi.stubGlobal(
+				'fetch',
+				mockTellStatus({
+					completedLength: '65',
+					downloadSpeed: '0',
+					uploadSpeed: '0',
+					bittorrent: undefined
+				})
+			);
+			const d = await new Aria2Client({ host: 'localhost', port: 6800, useSsl: false }).getDownload(
+				gid
+			);
+			expect(d?.status).toBe('downloading');
+			expect(d?.connectedSeeds).toBeUndefined();
+		});
 	});
 });

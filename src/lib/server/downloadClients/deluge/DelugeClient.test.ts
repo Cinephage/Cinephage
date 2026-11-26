@@ -267,3 +267,87 @@ describe('DelugeClient', () => {
 		});
 	});
 });
+
+describe('DelugeClient swarm signals', () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	const downloading = {
+		name: 'Some.Release',
+		total_size: 1000,
+		total_wanted: 1000,
+		total_done: 65,
+		progress: 6.5,
+		state: 'Downloading',
+		download_payload_rate: 0,
+		upload_payload_rate: 0,
+		eta: 0,
+		save_path: '/downloads',
+		label: 'tv',
+		hash: 'deadbeef',
+		error: '',
+		num_seeds: 0,
+		num_peers: 1,
+		distributed_copies: 0.065,
+		private: true,
+		has_metadata: true
+	};
+
+	it('maps seeds, peers, availability, downloaded bytes and the private flag', async () => {
+		vi.stubGlobal('fetch', mockDelugeResponse(downloading));
+		const client = new DelugeClient({
+			host: 'localhost',
+			port: 8112,
+			useSsl: false,
+			password: 'deluge'
+		});
+		const d = await client.getDownload('deadbeef');
+		expect(d).toMatchObject({
+			downloadedBytes: 65,
+			connectedSeeds: 0,
+			connectedPeers: 1,
+			availability: 0.065,
+			isPrivate: true,
+			metadataPending: false
+		});
+	});
+
+	it('reports a download that receives nothing as stalled', async () => {
+		vi.stubGlobal('fetch', mockDelugeResponse(downloading));
+		const client = new DelugeClient({
+			host: 'localhost',
+			port: 8112,
+			useSsl: false,
+			password: 'deluge'
+		});
+		expect((await client.getDownload('deadbeef'))?.status).toBe('stalled');
+	});
+
+	it('keeps a download that receives data as downloading', async () => {
+		vi.stubGlobal('fetch', mockDelugeResponse({ ...downloading, download_payload_rate: 2048 }));
+		const client = new DelugeClient({
+			host: 'localhost',
+			port: 8112,
+			useSsl: false,
+			password: 'deluge'
+		});
+		expect((await client.getDownload('deadbeef'))?.status).toBe('downloading');
+	});
+
+	it('flags a magnet still fetching metadata', async () => {
+		vi.stubGlobal(
+			'fetch',
+			mockDelugeResponse({ ...downloading, has_metadata: false, download_payload_rate: 10 })
+		);
+		const client = new DelugeClient({
+			host: 'localhost',
+			port: 8112,
+			useSsl: false,
+			password: 'deluge'
+		});
+		const d = await client.getDownload('deadbeef');
+		expect(d?.metadataPending).toBe(true);
+		expect(d?.status).toBe('stalled');
+	});
+});

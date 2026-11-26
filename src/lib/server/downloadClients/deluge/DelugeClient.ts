@@ -57,6 +57,16 @@ interface DelugeTorrentInfo {
 	remove_at_ratio?: boolean;
 	hash?: string;
 	error?: string;
+	/** Bytes of wanted data in total (total_done counts toward it) */
+	total_wanted?: number;
+	/** Seeds and peers currently connected */
+	num_seeds?: number;
+	num_peers?: number;
+	/** Copies of the rarest piece among connected peers */
+	distributed_copies?: number;
+	private?: boolean;
+	/** False while a magnet is still fetching metadata (Deluge 2.x) */
+	has_metadata?: boolean;
 }
 
 type DelugeStatus = DownloadInfo['status'];
@@ -80,7 +90,13 @@ const DELUGE_FIELDS = [
 	'stop_ratio',
 	'remove_at_ratio',
 	'hash',
-	'error'
+	'error',
+	'total_wanted',
+	'num_seeds',
+	'num_peers',
+	'distributed_copies',
+	'private',
+	'has_metadata'
 ];
 
 function mapDelugeState(state: string | undefined, progress: number): DelugeStatus {
@@ -261,7 +277,18 @@ export class DelugeClient implements IDownloadClient {
 		const progressPercent = toNumber(torrent.progress);
 		const progress = Math.max(0, Math.min(1, progressPercent / 100));
 		const size = toNumber(torrent.total_size);
-		const status = mapDelugeState(torrent.state, progress);
+		let status = mapDelugeState(torrent.state, progress);
+		const metadataPending =
+			typeof torrent.has_metadata === 'boolean' ? !torrent.has_metadata : undefined;
+		// Deluge has no stalled state: a download still fetching metadata, or
+		// receiving nothing, is stalled (qBittorrent's metaDL / stalledDL), so the
+		// stalled timeouts and the dead-torrent check apply to it.
+		if (
+			status === 'downloading' &&
+			(metadataPending || toNumber(torrent.download_payload_rate) === 0)
+		) {
+			status = 'stalled';
+		}
 		const savePath = torrent.save_path || '';
 		const name = torrent.name || hash;
 		const contentPath = savePath ? `${savePath.replace(/\/+$/, '')}/${name}` : name;
@@ -287,10 +314,23 @@ export class DelugeClient implements IDownloadClient {
 			completedOn: toDate(torrent.finished_time),
 			seedingTime: typeof torrent.seeding_time === 'number' ? torrent.seeding_time : undefined,
 			ratioLimit: torrent.stop_at_ratio ? torrent.stop_ratio : undefined,
-			canMoveFiles: status !== 'downloading' && status !== 'seeding' && status !== 'queued',
+			canMoveFiles:
+				status !== 'downloading' &&
+				status !== 'stalled' &&
+				status !== 'seeding' &&
+				status !== 'queued',
 			canBeRemoved:
-				status !== 'downloading' && (status !== 'seeding' || this.hasReachedSeedLimit(torrent)),
-			errorMessage: torrent.error || undefined
+				status !== 'downloading' &&
+				status !== 'stalled' &&
+				(status !== 'seeding' || this.hasReachedSeedLimit(torrent)),
+			errorMessage: torrent.error || undefined,
+			downloadedBytes: typeof torrent.total_done === 'number' ? torrent.total_done : undefined,
+			connectedSeeds: typeof torrent.num_seeds === 'number' ? torrent.num_seeds : undefined,
+			connectedPeers: typeof torrent.num_peers === 'number' ? torrent.num_peers : undefined,
+			availability:
+				typeof torrent.distributed_copies === 'number' ? torrent.distributed_copies : undefined,
+			metadataPending,
+			isPrivate: typeof torrent.private === 'boolean' ? torrent.private : undefined
 		};
 	}
 

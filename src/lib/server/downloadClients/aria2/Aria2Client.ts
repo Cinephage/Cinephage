@@ -62,6 +62,10 @@ interface Aria2DownloadStatus {
 	files?: Aria2File[];
 	bittorrent?: Aria2BittorrentMeta;
 	errorMessage?: string;
+	/** Seeders aria2 is connected to (BitTorrent only) */
+	numSeeders?: string;
+	/** Peers/servers aria2 is connected to */
+	connections?: string;
 }
 
 type Aria2Status = DownloadInfo['status'];
@@ -78,7 +82,9 @@ const ARIA2_FIELDS = [
 	'dir',
 	'files',
 	'bittorrent',
-	'errorMessage'
+	'errorMessage',
+	'numSeeders',
+	'connections'
 ];
 
 function toNumber(value: string | number | undefined): number {
@@ -221,7 +227,16 @@ export class Aria2Client implements IDownloadClient {
 		const savePath = item.dir || '';
 		const contentPath = firstPath || (savePath ? `${savePath.replace(/\/+$/, '')}/${name}` : name);
 		const hash = item.bittorrent?.infoHash?.toLowerCase() || item.gid;
-		const status = mapAria2Status(item.status, progress, uploadSpeed);
+		let status = mapAria2Status(item.status, progress, uploadSpeed);
+		const isTorrent = !!item.bittorrent;
+		// A magnet's first download only fetches metadata: it has no info dict yet.
+		const metadataPending = isTorrent ? !item.bittorrent?.info : undefined;
+		// aria2 has no stalled state: an active torrent still fetching metadata,
+		// or receiving nothing, is stalled (qBittorrent's metaDL / stalledDL), so
+		// the stalled timeouts and the dead-torrent check apply to it.
+		if (isTorrent && status === 'downloading' && (metadataPending || downloadSpeed === 0)) {
+			status = 'stalled';
+		}
 		const ratio = totalLength > 0 ? uploadLength / totalLength : undefined;
 
 		return {
@@ -239,12 +254,24 @@ export class Aria2Client implements IDownloadClient {
 			ratio,
 			addedOn: toDate(undefined),
 			completedOn: undefined,
-			canMoveFiles: status !== 'downloading' && status !== 'seeding' && status !== 'queued',
+			canMoveFiles:
+				status !== 'downloading' &&
+				status !== 'stalled' &&
+				status !== 'seeding' &&
+				status !== 'queued',
 			// aria2 keeps finished torrents in 'active' (seeding) until their seed
 			// limits are met, then moves them to 'complete'. Only then are they
 			// safe to remove from the client.
 			canBeRemoved: status === 'completed',
-			errorMessage: item.errorMessage
+			errorMessage: item.errorMessage,
+			...(isTorrent
+				? {
+						downloadedBytes: completedLength,
+						connectedSeeds: item.numSeeders !== undefined ? toNumber(item.numSeeders) : undefined,
+						connectedPeers: item.connections !== undefined ? toNumber(item.connections) : undefined,
+						metadataPending
+					}
+				: {})
 		};
 	}
 
