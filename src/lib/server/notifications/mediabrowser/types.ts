@@ -137,6 +137,22 @@ export interface MediaBrowserRepositoryInfo {
 }
 
 /**
+ * State of the Cinephage Jellyfin plugin on a configured server. `bundled`
+ * says whether this Cinephage build carries a package at all.
+ */
+export interface CinephagePluginStatus {
+	bundled: boolean;
+	latestVersion: string | null;
+	installed: boolean;
+	installedVersion: string | null;
+	updateAvailable: boolean;
+	status: string | null;
+}
+
+/** Status plus the client's pending/failed states for the settings row. */
+export type CinephagePluginStatusEntry = CinephagePluginStatus | 'loading' | 'error';
+
+/**
  * Response from Jellyfin/Emby System Info endpoint
  */
 export interface MediaBrowserSystemInfo {

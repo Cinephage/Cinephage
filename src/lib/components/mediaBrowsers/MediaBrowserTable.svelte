@@ -14,7 +14,10 @@
 		AlertTriangle,
 		XCircle
 	} from '@lucide/svelte';
-	import type { MediaBrowserServerPublic } from '#lib/server/notifications/mediabrowser/types.js';
+	import type {
+		CinephagePluginStatusEntry,
+		MediaBrowserServerPublic
+	} from '#lib/server/notifications/mediabrowser/types.js';
 	import * as m from '#lib/paraglide/messages.js';
 	import { formatDisplayDate } from '#lib/utils/format.js';
 
@@ -33,6 +36,7 @@
 		onToggle: (server: MediaBrowserServerPublic) => void;
 		onTest?: (server: MediaBrowserServerPublic) => Promise<void>;
 		onInstallPlugin?: (server: MediaBrowserServerPublic) => void;
+		pluginStatuses?: Record<string, CinephagePluginStatusEntry>;
 		testingId?: string | null;
 		pluginBusyId?: string | null;
 	}
@@ -49,6 +53,7 @@
 		onToggle,
 		onTest,
 		onInstallPlugin,
+		pluginStatuses = {},
 		testingId = null,
 		pluginBusyId = null
 	}: Props = $props();
@@ -104,6 +109,55 @@
 			});
 		}
 		return m.mediaBrowser_connectionNotTested();
+	}
+
+	interface PluginBadge {
+		label: string;
+		class: string;
+	}
+
+	function getPluginStatus(
+		server: MediaBrowserServerPublic
+	): CinephagePluginStatusEntry | undefined {
+		return pluginStatuses[server.id];
+	}
+
+	function getPluginBadge(server: MediaBrowserServerPublic): PluginBadge | null {
+		if (server.serverType !== 'jellyfin') return null;
+
+		const status = getPluginStatus(server);
+		if (!status || status === 'loading') return null;
+		if (status === 'error' || !status.bundled) {
+			return { label: m.mediaBrowser_pluginBadgeUnavailable(), class: 'badge-ghost' };
+		}
+		if (status.installed && status.updateAvailable) {
+			return {
+				label: m.mediaBrowser_pluginBadgeUpdate({ version: status.latestVersion ?? '' }),
+				class: 'badge-warning'
+			};
+		}
+		if (status.installed && status.status === 'Restart') {
+			return { label: m.mediaBrowser_pluginBadgeRestart(), class: 'badge-warning' };
+		}
+		if (status.installed) {
+			return {
+				label: m.mediaBrowser_pluginBadgeInstalled({
+					version: status.installedVersion ?? status.latestVersion ?? ''
+				}),
+				class: 'badge-success'
+			};
+		}
+		return { label: m.mediaBrowser_pluginBadgeMissing(), class: 'badge-ghost' };
+	}
+
+	function getPluginActionLabel(server: MediaBrowserServerPublic): string {
+		const status = getPluginStatus(server);
+		if (status && status !== 'loading' && status !== 'error' && status.installed) {
+			return status.updateAvailable
+				? m.mediaBrowser_pluginUpdate()
+				: m.mediaBrowser_pluginInstall();
+		}
+		return m.mediaBrowser_pluginInstall();
 	}
 
 	const allSelected = $derived(servers.length > 0 && servers.every((s) => selectedIds.has(s.id)));
@@ -202,6 +256,13 @@
 					</div>
 				{/if}
 
+				{#if getPluginBadge(server)}
+					{@const badge = getPluginBadge(server)}
+					{#if badge}
+						<span class="badge badge-sm {badge.class}" title={badge.label}>{badge.label}</span>
+					{/if}
+				{/if}
+
 				<div
 					class="mb-3 min-w-0 truncate font-mono text-xs text-base-content/60"
 					title={server.host}
@@ -222,8 +283,8 @@
 						<button
 							class="btn btn-ghost btn-xs"
 							onclick={() => onInstallPlugin(server)}
-							title={m.mediaBrowser_pluginInstall()}
-							aria-label={m.mediaBrowser_pluginInstall()}
+							title={getPluginActionLabel(server)}
+							aria-label={getPluginActionLabel(server)}
 							disabled={pluginBusyId === server.id}
 						>
 							{#if pluginBusyId === server.id}
@@ -411,6 +472,16 @@
 							{:else}
 								<span class="text-base-content/50">{m.common_na()}</span>
 							{/if}
+							{#if getPluginBadge(server)}
+								{@const badge = getPluginBadge(server)}
+								{#if badge}
+									<div class="mt-1">
+										<span class="badge badge-sm {badge.class}" title={badge.label}
+											>{badge.label}</span
+										>
+									</div>
+								{/if}
+							{/if}
 						</td>
 						<td class="pl-2!">
 							<div class="flex gap-0">
@@ -418,7 +489,7 @@
 									<button
 										class="btn btn-ghost btn-xs"
 										onclick={() => onInstallPlugin(server)}
-										title={m.mediaBrowser_pluginInstall()}
+										title={getPluginActionLabel(server)}
 										disabled={pluginBusyId === server.id}
 									>
 										{#if pluginBusyId === server.id}

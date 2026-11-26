@@ -9,7 +9,7 @@
  * directory itself.
  */
 import { MediaBrowserClient } from './MediaBrowserClient.js';
-import type { MediaBrowserServerRecord } from './types.js';
+import type { CinephagePluginStatus, MediaBrowserServerRecord } from './types.js';
 import {
 	CINEPHAGE_PLUGIN_GUID,
 	CINEPHAGE_PLUGIN_NAME,
@@ -31,19 +31,30 @@ export class CinephagePluginError extends Error {
 	}
 }
 
-export interface CinephagePluginStatus {
-	/** A plugin package is present in this Cinephage build. */
-	bundled: boolean;
-	latestVersion: string | null;
-	installed: boolean;
-	installedVersion: string | null;
-	updateAvailable: boolean;
-	/** Jellyfin's plugin status: Active, Restart, Disabled, ... */
-	status: string | null;
-}
-
 function isInstalledPlugin(id: string): boolean {
 	return id.replace(/-/g, '').toLowerCase() === CINEPHAGE_PLUGIN_GUID.replace(/-/g, '');
+}
+
+/**
+ * Turns the client's HTTP error into something a user can act on: a 403 is an
+ * API-key problem, a 404 during install usually means Jellyfin could not fetch
+ * the manifest from Cinephage (reachability or ABI), not a wrong package name.
+ */
+function pluginInstallError(error: unknown, repositoryUrl: string): CinephagePluginError {
+	const message = error instanceof Error ? error.message : String(error);
+	if (/\b40[13]\b/.test(message)) {
+		return new CinephagePluginError(
+			'The Jellyfin API key must belong to an administrator to install plugins.',
+			403
+		);
+	}
+	if (/\b404\b/.test(message)) {
+		return new CinephagePluginError(
+			`Jellyfin could not download the plugin from ${repositoryUrl}. Check that the Jellyfin server can reach that address, then try again.`,
+			502
+		);
+	}
+	return new CinephagePluginError(message, 502);
 }
 
 async function latestForServer(
@@ -112,21 +123,26 @@ export async function installCinephagePlugin(
 		throw new CinephagePluginError('The bundled Cinephage plugin package is unreadable.', 503);
 	}
 
-	const repositories = await client.getRepositories();
-	const withoutCinephage = repositories.filter((repository) => repository.Url !== repositoryUrl);
-	await client.setRepositories([
-		...withoutCinephage,
-		{ Name: REPOSITORY_NAME, Url: repositoryUrl, Enabled: true }
-	]);
+	try {
+		const repositories = await client.getRepositories();
+		const withoutCinephage = repositories.filter((repository) => repository.Url !== repositoryUrl);
+		await client.setRepositories([
+			...withoutCinephage,
+			{ Name: REPOSITORY_NAME, Url: repositoryUrl, Enabled: true }
+		]);
 
-	await client.installPlugin(
-		CINEPHAGE_PLUGIN_NAME,
-		CINEPHAGE_PLUGIN_GUID,
-		latest.version,
-		repositoryUrl
-	);
+		await client.installPlugin(
+			CINEPHAGE_PLUGIN_NAME,
+			CINEPHAGE_PLUGIN_GUID,
+			latest.version,
+			repositoryUrl
+		);
 
-	return toStatus(latest, await client.getPlugins());
+		return toStatus(latest, await client.getPlugins());
+	} catch (error) {
+		if (error instanceof CinephagePluginError) throw error;
+		throw pluginInstallError(error, repositoryUrl);
+	}
 }
 
 export async function restartMediaServer(client: MediaBrowserClient): Promise<void> {

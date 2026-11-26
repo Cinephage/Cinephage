@@ -1,3 +1,4 @@
+import type { CinephagePluginStatus } from '#lib/server/notifications/mediabrowser/types.js';
 import type {
 	RootFolderCreate,
 	RootFolderUpdate,
@@ -1229,14 +1230,13 @@ export async function testMediaBrowserNotification(
 
 export interface CinephagePluginInstallResult {
 	success: boolean;
-	status: {
-		bundled: boolean;
-		latestVersion: string | null;
-		installed: boolean;
-		installedVersion: string | null;
-		updateAvailable: boolean;
-		status: string | null;
-	};
+	status: CinephagePluginStatus;
+}
+
+/** Reads the plugin state from the configured Jellyfin server. */
+export async function getCinephagePluginStatus(id: string): Promise<CinephagePluginStatus> {
+	const response = await apiGet(`/api/notifications/mediabrowser/${id}/cinephage-plugin`);
+	return response as unknown as CinephagePluginStatus;
 }
 
 /**
