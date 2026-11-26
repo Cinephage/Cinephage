@@ -420,6 +420,15 @@ const customHandler: Handle = async ({ event, resolve }) => {
 					if (path === '/api/settings/logs/client-report') {
 						return true;
 					}
+					// A Jellyfin server fetches its plugin repository server-to-server,
+					// so it has no Cinephage session. These routes expose only the
+					// bundled plugin's metadata and package.
+					if (
+						path === '/api/jellyfin-plugin/manifest.json' ||
+						path.startsWith('/api/jellyfin-plugin/packages/')
+					) {
+						return true;
+					}
 					return false;
 				}
 

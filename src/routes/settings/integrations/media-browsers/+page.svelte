@@ -26,6 +26,7 @@
 		deleteMediaBrowserNotification,
 		testMediaBrowserNotification,
 		testNewMediaBrowserNotification,
+		installCinephagePlugin,
 		ApiError
 	} from '#lib/api/index.js';
 	import type {
@@ -58,6 +59,9 @@
 	let deleteTarget = $state<MediaBrowserServerPublic | null>(null);
 	let confirmBulkDeleteOpen = $state(false);
 	let testingId = $state<string | null>(null);
+	let pluginTarget = $state<MediaBrowserServerPublic | null>(null);
+	let pluginConfirmOpen = $state(false);
+	let pluginBusy = $state(false);
 	let bulkLoading = $state(false);
 	let selectedIds = new SvelteSet<string>();
 
@@ -279,6 +283,42 @@
 					'Failed to delete server'
 				)
 			);
+		}
+	}
+
+	function confirmInstallPlugin(server: MediaBrowserServerPublic) {
+		pluginTarget = server;
+		pluginConfirmOpen = true;
+	}
+
+	async function handleInstallPlugin() {
+		if (!pluginTarget) return;
+
+		pluginBusy = true;
+		try {
+			const result = await installCinephagePlugin(pluginTarget.id, { restart: true });
+			const installed = result.status.installedVersion ?? result.status.latestVersion ?? '';
+			if (result.status.status === 'Restart') {
+				toasts.success(m.mediaBrowser_pluginInstalled({ version: installed }));
+			} else {
+				toasts.info(m.mediaBrowser_pluginAlreadyInstalled({ version: installed }));
+			}
+			pluginConfirmOpen = false;
+			pluginTarget = null;
+			await refreshAll();
+		} catch (error) {
+			toasts.error(
+				getServerErrorMessage(
+					error instanceof ApiError
+						? error.response
+						: error instanceof Error
+							? error.message
+							: null,
+					m.mediaBrowser_pluginInstallFailed()
+				)
+			);
+		} finally {
+			pluginBusy = false;
 		}
 	}
 
@@ -574,7 +614,9 @@
 				onDelete={confirmDelete}
 				onToggle={handleToggle}
 				onTest={handleTestFromTable}
+				onInstallPlugin={confirmInstallPlugin}
 				{testingId}
+				pluginBusyId={pluginBusy ? pluginTarget?.id : null}
 			/>
 		</div>
 	</div>
@@ -591,6 +633,22 @@
 	onSave={handleSave}
 	onDelete={handleDelete}
 	onTest={handleTest}
+/>
+
+<!-- Cinephage Plugin Install Confirmation -->
+<ConfirmationModal
+	open={pluginConfirmOpen}
+	title={m.mediaBrowser_pluginInstall()}
+	message={m.mediaBrowser_pluginInstallConfirm({
+		server: pluginTarget?.name ?? ''
+	})}
+	confirmLabel={m.mediaBrowser_pluginInstallAction()}
+	loading={pluginBusy}
+	onConfirm={handleInstallPlugin}
+	onCancel={() => {
+		pluginConfirmOpen = false;
+		pluginTarget = null;
+	}}
 />
 
 <!-- Delete Confirmation Modal -->

@@ -1,6 +1,9 @@
 node_modules
 build
 dist
+jellyfin-plugin/bin
+jellyfin-plugin/obj
+jellyfin-plugin/dist
 src/lib/paraglide
 .git
 .gitignore

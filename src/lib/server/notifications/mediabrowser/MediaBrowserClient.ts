@@ -15,6 +15,8 @@ import type {
 	MediaBrowserPathMapping,
 	MediaBrowserServerType,
 	MediaBrowserTestResult,
+	MediaBrowserPluginInfo,
+	MediaBrowserRepositoryInfo,
 	LibraryUpdatePayload,
 	MediaBrowserSystemInfo,
 	PlexIdentityInfo,
@@ -468,9 +470,98 @@ export class MediaBrowserClient {
 	}
 
 	/**
+	 * Installed plugins (GET /Plugins). Jellyfin and Emby share this surface.
+	 */
+	async getPlugins(): Promise<MediaBrowserPluginInfo[]> {
+		const response = await this.requestMediaBrowser('/Plugins');
+		if (!response.ok) {
+			throw new Error(`Plugin list failed: ${response.status} ${response.statusText}`);
+		}
+		return (await response.json()) as MediaBrowserPluginInfo[];
+	}
+
+	/** Package repositories configured on the server (GET /Repositories). */
+	async getRepositories(): Promise<MediaBrowserRepositoryInfo[]> {
+		const response = await this.requestMediaBrowser('/Repositories');
+		if (!response.ok) {
+			throw new Error(`Repository list failed: ${response.status} ${response.statusText}`);
+		}
+		return (await response.json()) as MediaBrowserRepositoryInfo[];
+	}
+
+	/** Replaces the server's package repository list (POST /Repositories). */
+	async setRepositories(repositories: MediaBrowserRepositoryInfo[]): Promise<void> {
+		const response = await this.requestMediaBrowser('/Repositories', {
+			method: 'POST',
+			body: JSON.stringify(repositories)
+		});
+		if (!response.ok) {
+			throw new Error(`Repository update failed: ${response.status} ${response.statusText}`);
+		}
+	}
+
+	/**
+	 * Installs a package from a repository. Jellyfin downloads and extracts the
+	 * zip server-side; the request can outlast the normal API timeout.
+	 */
+	async installPlugin(
+		name: string,
+		assemblyGuid: string,
+		version: string,
+		repositoryUrl: string
+	): Promise<void> {
+		const query = new URLSearchParams({ assemblyGuid, version, repositoryUrl });
+		const response = await this.requestMediaBrowser(
+			`/Packages/Installed/${encodeURIComponent(name)}?${query.toString()}`,
+			{ method: 'POST' },
+			120_000
+		);
+		if (!response.ok) {
+			throw new Error(`Plugin installation failed: ${response.status} ${response.statusText}`);
+		}
+	}
+
+	/** Server version and product, used to choose a compatible plugin build. */
+	async getSystemInfo(): Promise<{ version: string; productName: string | null }> {
+		const response = await this.requestMediaBrowser('/System/Info');
+		if (!response.ok) {
+			throw new Error(`System info failed: ${response.status} ${response.statusText}`);
+		}
+		const data = (await response.json()) as MediaBrowserSystemInfo;
+		return { version: data.Version, productName: data.ProductName ?? null };
+	}
+
+	/**
+	 * Asks the server to restart (POST /System/Restart). Jellyfin closes the
+	 * connection while restarting, so a dropped request is the success case; an
+	 * HTTP error before that is a real failure.
+	 */
+	async restart(): Promise<void> {
+		try {
+			const response = await this.requestMediaBrowser(
+				'/System/Restart',
+				{ method: 'POST' },
+				15_000
+			);
+			if (!response.ok) {
+				throw new Error(`Restart failed: ${response.status} ${response.statusText}`);
+			}
+		} catch (error) {
+			if (error instanceof Error && error.message.startsWith('Restart failed:')) {
+				throw error;
+			}
+			// Connection reset or timeout: the restart is under way.
+		}
+	}
+
+	/**
 	 * Make an HTTP request to a Jellyfin/Emby server.
 	 */
-	private async requestMediaBrowser(path: string, options: RequestInit = {}): Promise<Response> {
+	private async requestMediaBrowser(
+		path: string,
+		options: RequestInit = {},
+		timeoutMs = 10_000
+	): Promise<Response> {
 		const url = `${this.host}${path}`;
 
 		const headers = new Headers(options.headers);
@@ -492,7 +583,7 @@ export class MediaBrowserClient {
 		return fetch(url, {
 			...options,
 			headers,
-			signal: AbortSignal.timeout(10000) // 10 second timeout
+			signal: AbortSignal.timeout(timeoutMs)
 		});
 	}
 

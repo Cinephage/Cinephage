@@ -115,6 +115,28 @@ export interface LibraryUpdatePayload {
 }
 
 /**
+ * A plugin entry from Jellyfin/Emby (GET /Plugins).
+ */
+export interface MediaBrowserPluginInfo {
+	Name: string;
+	Version: string;
+	Description?: string;
+	Id: string;
+	CanUninstall?: boolean;
+	HasImage?: boolean;
+	Status?: string;
+}
+
+/**
+ * A plugin repository entry (GET/POST /Repositories).
+ */
+export interface MediaBrowserRepositoryInfo {
+	Name: string;
+	Url: string;
+	Enabled: boolean;
+}
+
+/**
  * Response from Jellyfin/Emby System Info endpoint
  */
 export interface MediaBrowserSystemInfo {

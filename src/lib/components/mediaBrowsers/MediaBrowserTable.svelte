@@ -9,6 +9,7 @@
 		Monitor,
 		FlaskConical,
 		Loader2,
+		Puzzle,
 		CheckCircle,
 		AlertTriangle,
 		XCircle
@@ -31,7 +32,9 @@
 		onDelete: (server: MediaBrowserServerPublic) => void;
 		onToggle: (server: MediaBrowserServerPublic) => void;
 		onTest?: (server: MediaBrowserServerPublic) => Promise<void>;
+		onInstallPlugin?: (server: MediaBrowserServerPublic) => void;
 		testingId?: string | null;
+		pluginBusyId?: string | null;
 	}
 
 	let {
@@ -45,7 +48,9 @@
 		onDelete,
 		onToggle,
 		onTest,
-		testingId = null
+		onInstallPlugin,
+		testingId = null,
+		pluginBusyId = null
 	}: Props = $props();
 
 	function getServerTypeLabel(type: string): string {
@@ -204,7 +209,30 @@
 					{server.host}
 				</div>
 
-				<div class="grid gap-1.5 {onTest ? 'grid-cols-4' : 'grid-cols-3'}">
+				<div
+					class="grid gap-1.5 {onTest
+						? onInstallPlugin
+							? 'grid-cols-5'
+							: 'grid-cols-4'
+						: onInstallPlugin
+							? 'grid-cols-4'
+							: 'grid-cols-3'}"
+				>
+					{#if onInstallPlugin && server.serverType === 'jellyfin'}
+						<button
+							class="btn btn-ghost btn-xs"
+							onclick={() => onInstallPlugin(server)}
+							title={m.mediaBrowser_pluginInstall()}
+							aria-label={m.mediaBrowser_pluginInstall()}
+							disabled={pluginBusyId === server.id}
+						>
+							{#if pluginBusyId === server.id}
+								<Loader2 class="h-4 w-4 animate-spin" />
+							{:else}
+								<Puzzle class="h-4 w-4" />
+							{/if}
+						</button>
+					{/if}
 					{#if onTest}
 						<button
 							class="btn btn-ghost btn-xs"
@@ -386,6 +414,20 @@
 						</td>
 						<td class="pl-2!">
 							<div class="flex gap-0">
+								{#if onInstallPlugin && server.serverType === 'jellyfin'}
+									<button
+										class="btn btn-ghost btn-xs"
+										onclick={() => onInstallPlugin(server)}
+										title={m.mediaBrowser_pluginInstall()}
+										disabled={pluginBusyId === server.id}
+									>
+										{#if pluginBusyId === server.id}
+											<Loader2 class="h-4 w-4 animate-spin" />
+										{:else}
+											<Puzzle class="h-4 w-4" />
+										{/if}
+									</button>
+								{/if}
 								{#if onTest}
 									<button
 										class="btn btn-ghost btn-xs"

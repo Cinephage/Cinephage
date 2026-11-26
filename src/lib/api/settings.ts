@@ -1227,6 +1227,31 @@ export async function testMediaBrowserNotification(
 	return response as unknown as MediaBrowserTestResponse;
 }
 
+export interface CinephagePluginInstallResult {
+	success: boolean;
+	status: {
+		bundled: boolean;
+		latestVersion: string | null;
+		installed: boolean;
+		installedVersion: string | null;
+		updateAvailable: boolean;
+		status: string | null;
+	};
+}
+
+/**
+ * Installs the bundled Cinephage plugin on a Jellyfin server. The server
+ * registers Cinephage as a plugin repository and asks Jellyfin to install the
+ * package; `restart` restarts Jellyfin so the plugin activates.
+ */
+export async function installCinephagePlugin(
+	id: string,
+	payload: { restart?: boolean } = {}
+): Promise<CinephagePluginInstallResult> {
+	const response = await apiPost(`/api/notifications/mediabrowser/${id}/cinephage-plugin`, payload);
+	return response as unknown as CinephagePluginInstallResult;
+}
+
 export async function testNewMediaBrowserNotification(
 	payload: MediaBrowserServerTest
 ): Promise<MediaBrowserTestResponse> {
