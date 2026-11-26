@@ -97,3 +97,17 @@ describe('CommonOptions effective subtitle profile display (add flow)', () => {
 		expect(await screen.findByText(/Subtitles: English Only \(Inherited: default\)/)).toBeTruthy();
 	});
 });
+
+describe('CommonOptions control sizes', () => {
+	afterEach(() => {
+		cleanup();
+	});
+
+	it('renders the subtitle profile select at the same size as the other selects', () => {
+		renderOptions({ wantsSubtitles: true, effectiveSubtitleProfile: null });
+		const select = document.getElementById('add-language-profile') as HTMLSelectElement;
+
+		expect(select).toBeTruthy();
+		expect(select.classList.contains('select-sm')).toBe(false);
+	});
+});

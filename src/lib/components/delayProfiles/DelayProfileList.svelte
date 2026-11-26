@@ -229,7 +229,7 @@
 		</div>
 		<div class="form-control">
 			<label class="label cursor-pointer justify-start gap-3">
-				<input type="checkbox" class="toggle toggle-primary toggle-sm" bind:checked={dpEnabled} />
+				<input type="checkbox" class="toggle toggle-primary" bind:checked={dpEnabled} />
 				<span class="label-text">{m.settings_quality_delay_field_enabled()}</span>
 			</label>
 		</div>
@@ -279,7 +279,7 @@
 			<label class="label cursor-pointer justify-start gap-3">
 				<input
 					type="checkbox"
-					class="toggle toggle-primary toggle-sm"
+					class="toggle toggle-primary"
 					bind:checked={dpBypassIfHighestQuality}
 				/>
 				<span class="label-text">{m.settings_quality_delay_field_bypass4k()}</span>
