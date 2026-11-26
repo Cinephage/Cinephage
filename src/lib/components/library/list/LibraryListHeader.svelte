@@ -71,11 +71,11 @@
 		<!-- Left: Title -->
 		<div class="flex min-w-0 items-center gap-2 sm:gap-3">
 			<h1
-				class="min-w-0 bg-linear-to-r from-primary to-secondary bg-clip-text text-xl font-bold text-transparent sm:text-2xl"
+				class="min-w-0 truncate bg-linear-to-r from-primary to-secondary bg-clip-text text-xl font-bold text-transparent sm:text-2xl"
 			>
 				{title}
 			</h1>
-			<span class="badge badge-ghost badge-sm sm:badge-lg">{total}</span>
+			<span class="badge shrink-0 badge-ghost badge-sm sm:badge-lg">{total}</span>
 			{#if total !== totalUnfiltered}
 				<span class="hidden text-sm text-base-content/50 sm:inline">
 					{ofTotalLabel}
@@ -114,7 +114,9 @@
 		</div>
 
 		<!-- Right: Quick Actions -->
-		<div class="ml-auto flex shrink-0 items-center gap-1.5">
+		<!-- On phones the header holds up to six icon buttons next to the title: tighter padding
+		     and gaps keep the title readable (it truncated to "Mo…" with the select-mode Done button). -->
+		<div class="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1.5 max-sm:[&_.btn]:px-1.5">
 			{#if actions}{@render actions()}{/if}
 
 			<!-- View Toggle -->

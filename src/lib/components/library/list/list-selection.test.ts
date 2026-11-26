@@ -20,6 +20,44 @@ describe('createListSelection', () => {
 		expect(selection.count).toBe(0);
 	});
 
+	it('drops a select-all that finishes loading after select mode was left', async () => {
+		const selection = createListSelection();
+		selection.cycle(items);
+
+		let resolve!: (value: Array<{ id: string }>) => void;
+		const pending = selection.selectAllWhenLoaded(() => new Promise((done) => (resolve = done)));
+		selection.clear();
+		resolve(items);
+		await pending;
+
+		expect(selection.mode).toBe(false);
+		expect(selection.count).toBe(0);
+	});
+
+	it('drops a stale select-all after leaving and re-entering select mode', async () => {
+		const selection = createListSelection();
+		selection.cycle(items);
+
+		let resolve!: (value: Array<{ id: string }>) => void;
+		const pending = selection.selectAllWhenLoaded(() => new Promise((done) => (resolve = done)));
+		selection.clear();
+		selection.cycle(items);
+		resolve(items);
+		await pending;
+
+		expect(selection.mode).toBe(true);
+		expect(selection.count).toBe(0);
+	});
+
+	it('selects everything once loaded while still in select mode', async () => {
+		const selection = createListSelection();
+		selection.cycle(items);
+
+		await selection.selectAllWhenLoaded(async () => items);
+
+		expect(selection.allSelected(items)).toBe(true);
+	});
+
 	it('tracks individual toggles without leaving selection mode', () => {
 		const selection = createListSelection();
 

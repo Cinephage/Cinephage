@@ -10,9 +10,10 @@
 	import LibraryListBody from '#lib/components/library/list/LibraryListBody.svelte';
 	import LibraryBulkActions from '#lib/components/library/list/LibraryBulkActions.svelte';
 	import { createListSelection } from '#lib/components/library/list/list-selection.svelte.js';
+	import LibrarySelectControls from '#lib/components/library/list/LibrarySelectControls.svelte';
 	import LibraryDrawer from '#lib/components/library/LibraryDrawer.svelte';
 	import { MediaSearchModal } from '#lib/components/search/index.js';
-	import { Tv, CheckSquare, XSquare, Eye, EyeOff, ChevronDown } from '@lucide/svelte';
+	import { Tv, Eye, EyeOff, ChevronDown } from '@lucide/svelte';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { viewPreferences } from '#lib/stores/view-preferences.svelte.js';
 	import { enhance } from '$app/forms';
@@ -568,26 +569,12 @@
 			</div>
 
 			{#if isAdminUser}
-				<button
-					class="btn gap-1.5 btn-ghost btn-xs sm:btn-sm {selection.mode ? 'btn-primary' : ''}"
-					aria-label={!selection.mode
-						? m.library_selectToggle_start()
-						: !selection.allSelected(filteredSeries)
-							? m.library_selectToggle_selectAll()
-							: m.library_selectToggle_done()}
-					onclick={() => selection.cycle(filteredSeries)}
-				>
-					{#if !selection.mode}
-						<CheckSquare class="h-4 w-4" />
-						<span class="hidden sm:inline">{m.library_tv_select()}</span>
-					{:else if !selection.allSelected(filteredSeries)}
-						<CheckSquare class="h-4 w-4" />
-						<span class="hidden sm:inline">{m.library_tv_selectAll()}</span>
-					{:else}
-						<XSquare class="h-4 w-4" />
-						<span class="hidden sm:inline">{m.library_tv_done()}</span>
-					{/if}
-				</button>
+				<LibrarySelectControls
+					mode={selection.mode}
+					allSelected={selection.allSelected(filteredSeries)}
+					onCycle={() => selection.cycle(filteredSeries)}
+					onExit={selection.clear}
+				/>
 			{/if}
 		{/snippet}
 	</LibraryListHeader>
