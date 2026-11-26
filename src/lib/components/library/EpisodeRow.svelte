@@ -325,10 +325,10 @@
 				>
 					{episode.title || m.library_episodeRow_tba()}
 				</span>
-				<div class="ml-auto flex shrink-0 items-center gap-1 sm:hidden">
+				<div class="ml-auto flex shrink-0 items-center gap-1.5 sm:hidden">
 					{#if !readOnly}
 						<button
-							class="btn btn-ghost btn-xs {episode.monitored
+							class="btn btn-square btn-ghost btn-sm {episode.monitored
 								? 'text-success'
 								: 'text-base-content/40'} {monitorDisabled ? 'opacity-40' : ''}"
 							onclick={handleMonitorClick}
@@ -356,7 +356,7 @@
 							<div
 								tabindex={autoSearching ? -1 : 0}
 								role="button"
-								class="btn btn-ghost btn-xs"
+								class="btn btn-square btn-ghost btn-sm"
 								class:btn-disabled={autoSearching}
 								title={m.library_episodeRow_searchOptions()}
 							>
@@ -391,8 +391,8 @@
 						</div>
 					{/if}
 					{#if episode.file?.mediaInfo}
-						<div class="dropdown dropdown-end" use:viewportDropdown>
-							<div tabindex="0" role="button" class="btn btn-ghost btn-xs">
+						<div class="dropdown dropdown-end">
+							<div tabindex="0" role="button" class="btn btn-square btn-ghost btn-sm">
 								<Info size={14} />
 							</div>
 							<div
@@ -443,7 +443,7 @@
 					{/if}
 					{#if !readOnly && onDelete}
 						<button
-							class="btn btn-ghost btn-xs {!hasEpisodeFile && !isDownloading
+							class="btn ml-2 btn-square btn-ghost btn-sm {!hasEpisodeFile && !isDownloading
 								? 'text-base-content/30'
 								: 'text-error'}"
 							onclick={handleDeleteClick}
@@ -498,7 +498,7 @@
 						<div
 							tabindex="0"
 							role="button"
-							class="btn gap-1 btn-ghost btn-xs {missingSubtitles ? 'text-warning' : ''}"
+							class="btn gap-1 btn-ghost btn-sm {missingSubtitles ? 'text-warning' : ''}"
 							title={subtitleProgressTooltip}
 						>
 							{#if allSubtitles.length > 0}

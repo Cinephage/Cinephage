@@ -215,7 +215,7 @@
 								})}
 								<button
 									type="button"
-									class="btn gap-1 btn-error btn-xs"
+									class="btn ml-1 gap-1 btn-error btn-sm sm:btn-xs"
 									disabled={busyKey === batch.key}
 									onclick={() => requestCancelBatch(batch.key)}
 								>
@@ -267,7 +267,7 @@
 						<div class="mt-2 flex items-center gap-1.5">
 							<button
 								type="button"
-								class="btn gap-1 btn-ghost btn-xs"
+								class="btn gap-1 btn-ghost btn-sm sm:btn-xs"
 								onclick={() => toggleDetails(batch.key)}
 							>
 								{#if expandedKey === batch.key}
@@ -279,7 +279,7 @@
 							</button>
 							<button
 								type="button"
-								class="btn gap-1 btn-ghost btn-xs"
+								class="btn gap-1 btn-ghost btn-sm sm:btn-xs"
 								disabled={busyKey === batch.key}
 								onclick={() => retryBatch(batch.key)}
 							>
@@ -292,7 +292,7 @@
 							</button>
 							<button
 								type="button"
-								class="btn gap-1 btn-ghost btn-xs"
+								class="btn gap-1 btn-ghost btn-sm sm:btn-xs"
 								disabled={busyKey === batch.key}
 								onclick={() => dismissBatch(batch.key)}
 							>

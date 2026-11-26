@@ -100,14 +100,18 @@
 	onclick={handleRowClick}
 >
 	<td class="w-10 px-2" onclick={(e) => e.stopPropagation()}>
-		<input
-			type="checkbox"
-			class="checkbox checkbox-xs checkbox-primary"
-			checked={isSelected}
-			disabled={!isSelectable}
-			aria-label={`Select ${activity.mediaTitle}`}
-			onclick={handleCheckboxClick}
-		/>
+		<label
+			class="flex min-h-8 min-w-8 cursor-pointer items-center justify-center sm:min-h-0 sm:min-w-0"
+		>
+			<input
+				type="checkbox"
+				class="checkbox checkbox-sm checkbox-primary sm:checkbox-xs"
+				checked={isSelected}
+				disabled={!isSelectable}
+				aria-label={`Select ${activity.mediaTitle}`}
+				onclick={handleCheckboxClick}
+			/>
+		</label>
 	</td>
 	<td class="px-2">
 		<div class="flex items-center gap-1">
@@ -331,15 +335,6 @@
 											: m.common_retry()}
 									</button>
 								{/if}
-
-								<button
-									class="btn gap-1.5 border border-error/30 bg-base-100 text-error btn-sm hover:bg-error/10"
-									onclick={() => onQueueAction('remove')}
-									disabled={isQueueActionLoading}
-								>
-									<Trash2 class="h-3.5 w-3.5" />
-									{m.action_remove()}
-								</button>
 							{/if}
 
 							{#if canBlocklist}
@@ -358,6 +353,17 @@
 										{m.activity_detail_addToBlocklist()}
 									</button>
 								{/if}
+							{/if}
+
+							{#if activity.queueItemId}
+								<button
+									class="btn ml-auto gap-1.5 border border-error/30 bg-base-100 text-error btn-sm hover:bg-error/10 sm:ml-2"
+									onclick={() => onQueueAction('remove')}
+									disabled={isQueueActionLoading}
+								>
+									<Trash2 class="h-3.5 w-3.5" />
+									{m.action_remove()}
+								</button>
 							{/if}
 						</div>
 					{/if}

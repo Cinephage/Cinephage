@@ -14,6 +14,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/svelte';
 import EpisodeRow from './EpisodeRow.svelte';
+import * as m from '#lib/paraglide/messages.js';
 
 const fileStub = {
 	id: 'file-1',
@@ -163,86 +164,41 @@ describe('EpisodeRow requirement-aware badge', () => {
 	});
 });
 
-describe('EpisodeRow dropdowns stay inside the viewport', () => {
-	const mediaInfo = { videoCodec: 'h264', audioCodec: 'aac', audioChannels: 2 };
-
-	function stubRect(el: Element, r: { top: number; bottom: number; left: number; right: number }) {
-		const value = {
-			...r,
-			x: r.left,
-			y: r.top,
-			width: r.right - r.left,
-			height: r.bottom - r.top,
-			toJSON: () => ({})
-		};
-		(el as HTMLElement).getBoundingClientRect = () => value as DOMRect;
+describe('EpisodeRow phone action touch targets', () => {
+	function phoneCluster(container: HTMLElement): HTMLElement {
+		const deleteButton = container.querySelector<HTMLElement>(
+			`button[title="${m.library_episodeRow_deleteEpisode()}"]`
+		);
+		const cluster = deleteButton?.closest<HTMLElement>('.sm\\:hidden');
+		if (!cluster) throw new Error('Expected the phone action cluster to render');
+		return cluster;
 	}
 
-	function dropdowns(container: HTMLElement) {
-		return Array.from(container.querySelectorAll<HTMLElement>('.dropdown'));
-	}
-
-	function openNearBottom(dropdown: HTMLElement) {
-		const trigger = dropdown.querySelector<HTMLElement>(':scope > [role="button"]')!;
-		const content = dropdown.querySelector<HTMLElement>(':scope > .dropdown-content')!;
-		const bottom = window.innerHeight - 20;
-		stubRect(trigger, { top: bottom - 24, bottom, left: 300, right: 330 });
-		stubRect(content, { top: 0, bottom: 150, left: 0, right: 208 });
-		trigger.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
-		return { trigger, content, triggerTop: bottom - 24 };
-	}
-
-	function hasSearch(dropdown: HTMLElement) {
-		return dropdown.querySelector('.menu.dropdown-content') !== null;
-	}
-
-	function hasMediaInfo(dropdown: HTMLElement) {
-		return /h264/i.test(dropdown.querySelector('.dropdown-content')?.textContent ?? '');
-	}
-
-	it('pins every dropdown to the viewport, opening upward near the bottom', () => {
-		const { container } = renderRow(makeEpisode({ file: { ...fileStub, mediaInfo } }));
-		const all = dropdowns(container);
-
-		// Phone + desktop copies of the search menu, media info and subtitles.
-		expect(all.filter(hasSearch).length).toBe(2);
-		expect(all.filter(hasMediaInfo).length).toBe(2);
-		expect(all.length).toBe(6);
-
-		for (const dropdown of all) {
-			const { content, triggerTop } = openNearBottom(dropdown);
-			expect(content.style.position).toBe('fixed');
-			expect(parseFloat(content.style.top)).toBeLessThan(triggerTop);
-			expect(parseFloat(content.style.top) + 150).toBeLessThanOrEqual(triggerTop);
-
-			dropdown.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null }));
-			expect(content.style.position).toBe('');
-			expect(content.style.top).toBe('');
+	it('uses square btn-sm for every phone action button', () => {
+		const { container } = renderRow(makeEpisode(), { onDelete: () => {} });
+		const controls = phoneCluster(container).querySelectorAll('.btn');
+		expect(controls.length).toBeGreaterThanOrEqual(3);
+		for (const control of controls) {
+			expect(control.classList.contains('btn-sm')).toBe(true);
+			expect(control.classList.contains('btn-square')).toBe(true);
+			expect(control.classList.contains('btn-xs')).toBe(false);
 		}
 	});
 
-	it('keeps the content pinned while focus moves inside the dropdown', () => {
-		const { container } = renderRow(makeEpisode({ file: { ...fileStub, mediaInfo } }));
-		const dropdown = dropdowns(container).find(hasSearch)!;
-		const { content } = openNearBottom(dropdown);
-		const button = content.querySelector('button')!;
-
-		dropdown.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: button }));
-		expect(content.style.position).toBe('fixed');
+	it('keeps Delete last in the cluster with its own spacing', () => {
+		const { container } = renderRow(makeEpisode(), { onDelete: () => {} });
+		const cluster = phoneCluster(container);
+		const deleteButton = cluster.querySelector(
+			`button[title="${m.library_episodeRow_deleteEpisode()}"]`
+		);
+		expect(cluster.lastElementChild).toBe(deleteButton);
+		expect(deleteButton?.classList.contains('ml-2')).toBe(true);
 	});
 
-	it('read-only: no search dropdown, media info still pinned', () => {
-		const { container } = renderRow(makeEpisode({ file: { ...fileStub, mediaInfo } }), {
-			readOnly: true
-		});
-		const all = dropdowns(container);
-		expect(all.filter(hasSearch).length).toBe(0);
-
-		const info = all.filter(hasMediaInfo);
-		expect(info.length).toBe(2);
-		for (const dropdown of info) {
-			const { content } = openNearBottom(dropdown);
-			expect(content.style.position).toBe('fixed');
-		}
+	it('uses btn-sm for the phone subtitle trigger', () => {
+		const { container } = renderRow();
+		const trigger = container.querySelector('.sm\\:hidden [role="button"][title*="subtitle"]');
+		expect(trigger).not.toBeNull();
+		expect(trigger?.classList.contains('btn-sm')).toBe(true);
 	});
 });

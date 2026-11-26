@@ -1197,13 +1197,17 @@
 						class="border-b border-base-content/10 bg-base-200 text-[11px] font-semibold tracking-widest text-base-content/50 uppercase"
 					>
 						<th class="w-10 px-2">
-							<input
-								type="checkbox"
-								class="checkbox checkbox-xs checkbox-primary"
-								checked={allSelected}
-								onchange={toggleSelectAll}
-								aria-label={m.activity_searches_selectAll()}
-							/>
+							<label
+								class="flex min-h-8 min-w-8 cursor-pointer items-center justify-center sm:min-h-0 sm:min-w-0"
+							>
+								<input
+									type="checkbox"
+									class="checkbox checkbox-sm checkbox-primary sm:checkbox-xs"
+									checked={allSelected}
+									onchange={toggleSelectAll}
+									aria-label={m.activity_searches_selectAll()}
+								/>
+							</label>
 						</th>
 						<th
 							class="cursor-pointer select-none hover:bg-base-300/40"
@@ -1256,13 +1260,17 @@
 							onclick={() => toggleExpand(item)}
 						>
 							<td class="px-2" onclick={(e) => e.stopPropagation()}>
-								<input
-									type="checkbox"
-									class="checkbox checkbox-xs checkbox-primary"
-									checked={selected.has(item.id)}
-									onchange={() => toggleSelect(item.id)}
-									aria-label={mediaLabel(item)}
-								/>
+								<label
+									class="flex min-h-8 min-w-8 cursor-pointer items-center justify-center sm:min-h-0 sm:min-w-0"
+								>
+									<input
+										type="checkbox"
+										class="checkbox checkbox-sm checkbox-primary sm:checkbox-xs"
+										checked={selected.has(item.id)}
+										onchange={() => toggleSelect(item.id)}
+										aria-label={mediaLabel(item)}
+									/>
+								</label>
 							</td>
 							<td class="px-2">
 								<div class="flex items-center gap-1">
@@ -1392,7 +1400,7 @@
 							<td colspan={9} class="border-t border-base-content/8 py-2">
 								<div class="flex items-center justify-center gap-2">
 									<button
-										class="btn btn-ghost btn-xs"
+										class="btn btn-ghost btn-sm sm:btn-xs"
 										disabled={page <= 1 || loading}
 										onclick={() => {
 											page -= 1;
@@ -1403,7 +1411,7 @@
 									</button>
 									<span class="text-xs text-base-content/60">{page} / {totalPages}</span>
 									<button
-										class="btn btn-ghost btn-xs"
+										class="btn btn-ghost btn-sm sm:btn-xs"
 										disabled={page >= totalPages || loading}
 										onclick={() => {
 											page += 1;
