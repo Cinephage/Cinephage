@@ -563,6 +563,7 @@
 				<div class="flex-none">
 					<label
 						for="main-drawer"
+						data-dismiss-passthrough
 						aria-label={m.nav_openSidebar()}
 						class="btn btn-square btn-ghost"
 					>
@@ -624,6 +625,7 @@
 			     already preloads, see app.html), not for its JavaScript too. -->
 			<aside
 				data-sveltekit-preload-code="viewport"
+				data-dismiss-passthrough
 				class:sidebar-collapsed={!layoutState.isSidebarExpanded}
 				class="relative z-40 flex h-dvh flex-col overflow-x-visible bg-base-200 transition-[width] duration-300 ease-in-out
 		            {layoutState.isSidebarExpanded ? 'w-64' : 'w-20'}"
