@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { isActiveActivity, type UnifiedActivity } from '#lib/types/activity.js';
-import { buildActivitySummary } from './activity-filters.js';
+import { applyRequestedStatusFilter, buildActivitySummary } from './activity-filters.js';
 import { mapQueueStatus, projectQueueActivity } from './projectors.js';
 import { mapFilterStatusToQueueStatuses } from './status-mappers.js';
 
@@ -79,5 +79,34 @@ describe('buildActivitySummary counts importing separately from downloading', ()
 		expect(summary.totalCount).toBe(3);
 		expect(summary.downloadingCount).toBe(1);
 		expect(summary.importingCount).toBe(2);
+	});
+});
+
+describe('a download being recovered (awaiting)', () => {
+	it('is an active downloading row, counted and filtered as downloading', () => {
+		const activity = projectWithQueueStatus('awaiting');
+
+		expect(activity.status).toBe('downloading');
+		expect(isActiveActivity(activity)).toBe(true);
+		expect(mapFilterStatusToQueueStatuses('downloading')).toContain('awaiting');
+		expect(applyRequestedStatusFilter([activity], { status: 'downloading' })).toHaveLength(1);
+	});
+});
+
+describe('the downloading filter matches the Downloading tile', () => {
+	it('keeps importing rows, and the importing filter keeps only those', () => {
+		const activities = [
+			projectWithQueueStatus('downloading'),
+			projectWithQueueStatus('importing'),
+			projectWithQueueStatus('seeding'),
+			projectWithQueueStatus('paused')
+		];
+
+		expect(
+			applyRequestedStatusFilter(activities, { status: 'downloading' }).map((a) => a.status)
+		).toEqual(['downloading', 'importing']);
+		expect(
+			applyRequestedStatusFilter(activities, { status: 'importing' }).map((a) => a.status)
+		).toEqual(['importing']);
 	});
 });

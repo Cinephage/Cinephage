@@ -102,6 +102,25 @@ export {
 
 const ACTIVITY_RETENTION_SETTINGS_KEY = 'activity_history_retention_days';
 
+/**
+ * Queue statuses that make a row an active download. 'awaiting' is a
+ * download that vanished from its client and is being recovered; the
+ * activity stream already shows it as downloading, so the Active list and
+ * the card counts have to include it too.
+ */
+const ACTIVE_QUEUE_STATUSES = [
+	'downloading',
+	'queued',
+	'stalled',
+	'awaiting',
+	'completed',
+	'postprocessing',
+	'importing',
+	'paused',
+	'seeding',
+	'seeding-imported'
+] as const;
+
 interface DeleteHistoryResult {
 	deletedDownloadHistory: number;
 	deletedMonitoringHistory: number;
@@ -189,8 +208,10 @@ export class ActivityService {
 			needsHistory
 				? this.fetchMonitoringItems(filters.includeNoResults, filters)
 				: Promise.resolve([] as MonitoringHistoryRecord[]),
+			// The Active tab's summary is built without the status filter, so it
+			// needs every running move task, not only the ones the filter keeps.
 			needsActive || needsHistory
-				? this.fetchMoveTasks(scope, filters)
+				? this.fetchMoveTasks(scope, scope === 'active' ? summaryFilters : filters)
 				: Promise.resolve([] as MoveTaskRecord[]),
 			needsActive || needsHistory
 				? this.fetchFailedQueueItems()
@@ -205,7 +226,7 @@ export class ActivityService {
 			(needsActive || needsHistory) && !hasJsOnlyFilters
 				? this.countMoveTasks(scope, filters)
 				: Promise.resolve(0),
-			this.countHistoryFailed()
+			this.countVisibleHistoryFailed()
 		]);
 
 		// Batch fetch all media info
@@ -301,37 +322,30 @@ export class ActivityService {
 	}
 
 	/**
-	 * Get active-tab card stats using lightweight COUNT/SUM queries.
-	 *
-	 * Previous implementation ran the full 8-query pipeline (fetch all sources,
-	 * transform, filter, dedupe) just to return 7 numbers. This replaces it with
-	 * two simple SQL queries against the download_queue table.
-	 */
-	/**
 	 * Lightweight check: how many active queue items exist?
 	 * Used by the page load to decide which tab to show without running the full pipeline.
 	 */
 	async getActiveCount(): Promise<number> {
-		const result = await db
-			.select({ count: count() })
-			.from(downloadQueue)
-			.where(
-				inArray(downloadQueue.status, [
-					'downloading',
-					'queued',
-					'paused',
-					'stalled',
-					'seeding',
-					'seeding-imported',
-					'completed',
-					'postprocessing',
-					'importing'
-				])
-			)
-			.get();
-		return result?.count ?? 0;
+		const [queueResult, runningMoves] = await Promise.all([
+			db
+				.select({ count: count() })
+				.from(downloadQueue)
+				.where(inArray(downloadQueue.status, [...ACTIVE_QUEUE_STATUSES]))
+				.get(),
+			this.countMoveTasks('active')
+		]);
+		return (queueResult?.count ?? 0) + runningMoves;
 	}
 
+	/**
+	 * Card stats for the queue tiles and the Active tab badge.
+	 *
+	 * Counts the same rows the Active list shows: every queue row in
+	 * ACTIVE_QUEUE_STATUSES plus running media-move tasks (shown as
+	 * downloading). TOTAL is always DOWNLOADING + SEEDING + PAUSED; rows that
+	 * are importing count as downloading, since there is no Importing tile.
+	 * FAILED is the number of failed rows the History tab lists.
+	 */
 	async getQueueCardStats(): Promise<{
 		totalCount: number;
 		downloadingCount: number;
@@ -339,42 +353,28 @@ export class ActivityService {
 		pausedCount: number;
 		failedCount: number;
 	}> {
-		const [queueStats, historyFailed] = await Promise.all([
+		const [queueStats, runningMoves, failedCount] = await Promise.all([
 			db
 				.select({ status: downloadQueue.status, count: count() })
 				.from(downloadQueue)
-				.where(
-					inArray(downloadQueue.status, [
-						'downloading',
-						'queued',
-						'stalled',
-						'seeding',
-						'seeding-imported',
-						'completed',
-						'postprocessing',
-						'importing',
-						'paused'
-					])
-				)
+				.where(inArray(downloadQueue.status, [...ACTIVE_QUEUE_STATUSES]))
 				.groupBy(downloadQueue.status),
-			db
-				.select({ count: count() })
-				.from(downloadHistory)
-				.where(eq(downloadHistory.status, 'failed'))
-				.get()
+			this.countMoveTasks('active'),
+			this.countVisibleHistoryFailed()
 		]);
 
-		const statusMap = new Map(queueStats.map((r) => [r.status, r.count]));
-		const downloadingCount =
-			(statusMap.get('downloading') ?? 0) +
-			(statusMap.get('queued') ?? 0) +
-			(statusMap.get('stalled') ?? 0) +
-			(statusMap.get('completed') ?? 0) +
-			(statusMap.get('postprocessing') ?? 0) +
-			(statusMap.get('importing') ?? 0);
-		const seedingCount = (statusMap.get('seeding') ?? 0) + (statusMap.get('seeding-imported') ?? 0);
-		const pausedCount = statusMap.get('paused') ?? 0;
-		const failedCount = historyFailed?.count ?? 0;
+		let downloadingCount = runningMoves;
+		let seedingCount = 0;
+		let pausedCount = 0;
+		for (const row of queueStats) {
+			if (row.status === 'seeding' || row.status === 'seeding-imported') {
+				seedingCount += row.count;
+			} else if (row.status === 'paused') {
+				pausedCount += row.count;
+			} else {
+				downloadingCount += row.count;
+			}
+		}
 		const totalCount = downloadingCount + seedingCount + pausedCount;
 
 		return { totalCount, downloadingCount, seedingCount, pausedCount, failedCount };
@@ -933,20 +933,10 @@ export class ActivityService {
 	private async fetchActiveDownloads(
 		filters: ActivityFilters = {}
 	): Promise<DownloadQueueRecord[]> {
-		const baseStatuses = [
-			'downloading',
-			'queued',
-			'paused',
-			'stalled',
-			'seeding',
-			'seeding-imported',
-			'completed',
-			'postprocessing',
-			'importing'
-		];
+		const baseStatuses: readonly string[] = ACTIVE_QUEUE_STATUSES;
 
 		// Apply status filter at SQL level when possible
-		let statusFilter: string[] = baseStatuses;
+		let statusFilter: string[] = [...baseStatuses];
 		if (filters.status && filters.status !== 'all') {
 			const mapped = mapFilterStatusToQueueStatuses(filters.status);
 			if (mapped) {
@@ -1067,7 +1057,10 @@ export class ActivityService {
 			.all();
 	}
 
-	private async fetchHistoryItems(filters: ActivityFilters = {}): Promise<DownloadHistoryRecord[]> {
+	private async fetchHistoryItems(
+		filters: ActivityFilters = {},
+		fetchLimit: number | null = 500
+	): Promise<DownloadHistoryRecord[]> {
 		const conditions: SQL[] = [];
 
 		// Status filter at SQL level
@@ -1112,9 +1105,8 @@ export class ActivityService {
 			conditions.push(lte(downloadHistory.createdAt, endDateEnd));
 		}
 
-		// Fetch up to 500 rows (raised from 200) -- SQL filters now keep this manageable
-		const fetchLimit = 500;
-
+		// The list fetches up to 500 rows (raised from 200) -- SQL filters keep
+		// this manageable. Counting passes null: SQLite reads LIMIT -1 as "no limit".
 		const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
 		return db
@@ -1147,17 +1139,29 @@ export class ActivityService {
 			.from(downloadHistory)
 			.where(whereClause)
 			.orderBy(desc(downloadHistory.createdAt))
-			.limit(fetchLimit)
+			.limit(fetchLimit ?? -1)
 			.all() as DownloadHistoryRecord[];
 	}
 
-	private async countHistoryFailed(): Promise<number> {
-		const result = await db
-			.select({ count: count() })
-			.from(downloadHistory)
-			.where(eq(downloadHistory.status, 'failed'))
-			.get();
-		return result?.count ?? 0;
+	/**
+	 * Number of failed rows the History tab lists for the "failed" filter:
+	 * failed download_history rows after the same duplicate folding the list
+	 * applies, plus failed media-move tasks. A raw COUNT over download_history
+	 * would also count the duplicates the list hides.
+	 */
+	private async countVisibleHistoryFailed(): Promise<number> {
+		const failedFilter: ActivityFilters = { status: 'failed' };
+		const [failedHistory, failedMoves] = await Promise.all([
+			this.fetchHistoryItems(failedFilter, null),
+			this.countMoveTasks('history', failedFilter)
+		]);
+		if (failedHistory.length === 0) return failedMoves;
+
+		const mediaMaps = await this.fetchMediaMaps([], failedHistory, []);
+		const visible = this.deduplicationService.deduplicateHistoryActivities(
+			this.transformHistoryItems(failedHistory, mediaMaps, [])
+		);
+		return visible.length + failedMoves;
 	}
 
 	/**

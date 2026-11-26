@@ -10,7 +10,7 @@ import type {
 	ActivityStatus,
 	UnifiedActivity
 } from '#lib/types/activity.js';
-import { isActiveActivity } from '#lib/types/activity.js';
+import { isActiveActivity, isDownloadingTileStatus } from '#lib/types/activity.js';
 import {
 	ACTIVE_TAB_STATUSES,
 	BASE_FILTERS,
@@ -222,12 +222,19 @@ export function readQueueStatsNumber(value: unknown): number {
 	return Number.isFinite(numeric) ? numeric : 0;
 }
 
+/**
+ * Turns an activity summary (or server card stats) into the tile numbers.
+ * A summary counts importing rows on their own; the tiles have no Importing
+ * tile, so they go under Downloading, and Total stays the sum of the tiles.
+ */
 export function parseQueueStats(
-	rawStats: Partial<QueueCardStats> | null | undefined
+	rawStats: (Partial<QueueCardStats> & { importingCount?: unknown }) | null | undefined
 ): QueueCardStats {
 	return {
 		totalCount: readQueueStatsNumber(rawStats?.totalCount),
-		downloadingCount: readQueueStatsNumber(rawStats?.downloadingCount),
+		downloadingCount:
+			readQueueStatsNumber(rawStats?.downloadingCount) +
+			readQueueStatsNumber(rawStats?.importingCount),
 		seedingCount: readQueueStatsNumber(rawStats?.seedingCount),
 		pausedCount: readQueueStatsNumber(rawStats?.pausedCount),
 		failedCount: readQueueStatsNumber(rawStats?.failedCount)
@@ -298,6 +305,9 @@ export function matchesActivityFilters(
 	if (status !== 'all') {
 		if (status === 'success') {
 			if (activity.status !== 'imported') return false;
+		} else if (status === 'downloading' && tab === 'active') {
+			// Same rule as the Downloading tile: importing rows belong to it.
+			if (!isDownloadingTileStatus(activity.status)) return false;
 		} else if (activity.status !== status) {
 			return false;
 		}
@@ -381,4 +391,83 @@ export async function getQueueActionErrorMessage(
 		// Ignore JSON parse errors and fall back to default message.
 	}
 	return message;
+}
+
+// ── Live list updates ─────────────────────────────────────────────────
+
+export interface ActivityUpsertResult {
+	activities: UnifiedActivity[];
+	total: number;
+	/**
+	 * True when a row joined or left the list. The live stream does not carry
+	 * the card counts, so the page re-reads list and counts from the server
+	 * then; otherwise the heading and the tiles drift apart.
+	 */
+	membershipChanged: boolean;
+}
+
+function removeStaleQueueLinkedRows(
+	activities: UnifiedActivity[],
+	queueActivity: UnifiedActivity
+): UnifiedActivity[] {
+	if (!isQueueActivityId(queueActivity.id) || !queueActivity.queueItemId) {
+		return activities;
+	}
+	const kept = activities.filter(
+		(activity) =>
+			activity.id === queueActivity.id ||
+			isQueueActivityId(activity.id) ||
+			activity.queueItemId !== queueActivity.queueItemId
+	);
+	// Keep the same array when nothing was dropped, so an in-place update
+	// does not make the page re-sort the whole list.
+	return kept.length === activities.length ? activities : kept;
+}
+
+/**
+ * Applies one live (SSE) activity to the loaded list: updates a known row in
+ * place, drops it when it leaves the current tab or filter, adds a new row
+ * that matches, and removes history rows that the queue row now stands for.
+ */
+export function upsertActivityInList(
+	activities: UnifiedActivity[],
+	total: number,
+	activity: UnifiedActivity,
+	filters: FiltersType,
+	tab: ActivityTab
+): ActivityUpsertResult {
+	const inScope = matchesActivityFilters(activity, filters, tab);
+	const existing = activities.find((entry) => entry.id === activity.id);
+
+	if (existing) {
+		if (!inScope) {
+			return {
+				activities: activities.filter((entry) => entry.id !== activity.id),
+				total: Math.max(0, total - 1),
+				membershipChanged: true
+			};
+		}
+
+		Object.assign(existing, activity);
+		const next = removeStaleQueueLinkedRows(activities, existing);
+		const removed = activities.length - next.length;
+		return {
+			activities: next,
+			total: Math.max(0, total - removed),
+			membershipChanged: removed > 0
+		};
+	}
+
+	if (!inScope) {
+		return { activities, total, membershipChanged: false };
+	}
+
+	const added = [activity, ...activities];
+	const next = removeStaleQueueLinkedRows(added, activity);
+	const removed = added.length - next.length;
+	return {
+		activities: next,
+		total: Math.max(0, total + 1 - removed),
+		membershipChanged: true
+	};
 }
