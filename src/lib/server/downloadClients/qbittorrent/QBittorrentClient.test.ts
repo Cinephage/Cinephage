@@ -301,3 +301,96 @@ describe('QBittorrentClient extendFileSelection', () => {
 		expect(body.get('id')).toBe('1|2');
 	});
 });
+
+describe('QBittorrentClient swarm signals', () => {
+	function stubInfo(torrents: Record<string, unknown>[]) {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string | URL | Request) => {
+				const u = String(url);
+				if (u.endsWith('/api/v2/auth/login')) {
+					return new Response('Ok.', {
+						status: 200,
+						headers: { 'set-cookie': 'SID=test-session; path=/' }
+					});
+				}
+				if (u.includes('/api/v2/app/preferences')) {
+					return new Response(JSON.stringify({ max_ratio_enabled: false }), { status: 200 });
+				}
+				if (u.includes('/api/v2/torrents/info')) {
+					return new Response(JSON.stringify(torrents), { status: 200 });
+				}
+				throw new Error(`Unexpected qBittorrent request: ${u}`);
+			})
+		);
+	}
+
+	const base = {
+		hash: 'abc',
+		name: 'Some.Release',
+		size: 1000,
+		progress: 0.065,
+		dlspeed: 0,
+		upspeed: 0,
+		priority: 1,
+		ratio: 0,
+		eta: 8640000,
+		category: 'tv',
+		save_path: '/downloads',
+		content_path: '/downloads/Some.Release',
+		added_on: 1_700_000_000,
+		completion_on: 0
+	};
+
+	it('maps connected seeds, peers, availability, downloaded bytes and the private flag', async () => {
+		stubInfo([
+			{
+				...base,
+				state: 'stalledDL',
+				num_seeds: 0,
+				num_leechs: 2,
+				availability: 0.065,
+				completed: 65,
+				private: true
+			}
+		]);
+		const [d] = await new QBittorrentClient({
+			host: 'localhost',
+			port: 8080,
+			useSsl: false
+		}).getDownloads();
+		expect(d).toMatchObject({
+			status: 'stalled',
+			connectedSeeds: 0,
+			connectedPeers: 2,
+			availability: 0.065,
+			downloadedBytes: 65,
+			isPrivate: true,
+			metadataPending: false
+		});
+	});
+
+	it('flags a magnet that is still fetching metadata', async () => {
+		stubInfo([{ ...base, size: 0, progress: 0, state: 'metaDL', num_seeds: 0, num_leechs: 0 }]);
+		const [d] = await new QBittorrentClient({
+			host: 'localhost',
+			port: 8080,
+			useSsl: false
+		}).getDownloads();
+		expect(d.metadataPending).toBe(true);
+		expect(d.status).toBe('stalled');
+	});
+
+	it('leaves signals undefined when an older qBittorrent does not send them', async () => {
+		stubInfo([{ ...base, state: 'downloading', num_seeds: 3, num_leechs: 1 }]);
+		const [d] = await new QBittorrentClient({
+			host: 'localhost',
+			port: 8080,
+			useSsl: false
+		}).getDownloads();
+		expect(d.availability).toBeUndefined();
+		expect(d.isPrivate).toBeUndefined();
+		expect(d.downloadedBytes).toBeUndefined();
+		expect(d.connectedSeeds).toBe(3);
+	});
+});
