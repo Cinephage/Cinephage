@@ -74,7 +74,7 @@
 						{#if (show.airedMissingCount ?? 0) > 0}
 							<div class="absolute top-1 right-1 z-10 sm:top-2 sm:right-2">
 								<span
-									class="badge border-none bg-warning/65 badge-xs font-semibold text-warning-content shadow-sm sm:bg-warning/80 sm:badge-sm sm:backdrop-blur-sm"
+									class="badge border-none bg-warning/65 badge-xs font-semibold text-warning-content shadow-sm sm:bg-warning/80 sm:backdrop-blur-sm"
 								>
 									{m.dashboard_recentTvShows_missingCount({
 										count: show.airedMissingCount
