@@ -3,7 +3,13 @@ import { db } from '#lib/server/db/index.js';
 import { movies } from '#lib/server/db/schema.js';
 import { tmdb } from '#lib/server/tmdb.js';
 import { createChildLogger } from '#lib/logging/index.js';
-import { deriveAvailability, firstDownloadableDate, isSearchable, windowsFrom } from './derive.js';
+import {
+	deriveAvailability,
+	firstDownloadableDate,
+	isSearchable,
+	THEATRICAL_GRACE_DAYS,
+	windowsFrom
+} from './derive.js';
 import type { Availability, AvailabilityInput } from './derive.js';
 import { listEvents, listEventsForMany, pruneEvents, upsertEvents } from './event-store.js';
 import type { AvailabilityLevel, NewReleaseEvent, ReleaseEvent, ReleaseKind } from './types.js';
@@ -54,6 +60,11 @@ export class AvailabilityService {
 	/**
 	 * Bulk availability for list surfaces (dashboard, grids): one event query for
 	 * the whole page instead of a query — or a TMDB call — per row.
+	 *
+	 * Rows with no release events at all (never backfilled, or TMDB has no dates)
+	 * are left out of the map. With no events, `deriveAvailability` can only say
+	 * "announced", which is wrong for most such titles; leaving them out lets the
+	 * caller apply its own fallback (the dashboard uses the release year).
 	 */
 	async getAvailabilityMap(
 		rows: readonly MovieAvailabilityRef[]
@@ -65,7 +76,9 @@ export class AvailabilityService {
 
 		const result = new Map<string, Availability>();
 		for (const row of rows) {
-			result.set(row.id, deriveAvailability(this.toInput(row, byId.get(row.id) ?? [])));
+			const events = byId.get(row.id) ?? [];
+			if (events.length === 0) continue;
+			result.set(row.id, deriveAvailability(this.toInput(row, events)));
 		}
 		return result;
 	}
@@ -179,7 +192,12 @@ export class AvailabilityService {
 		return {
 			events,
 			hasFile: Boolean(movie.hasFile),
-			minimumAvailability: normalizeLevel(movie.minimumAvailability)
+			minimumAvailability: normalizeLevel(movie.minimumAvailability),
+			// Same rule as the search gate (AvailabilitySpecification): a premiere more
+			// than 90 days ago with no home-release event counts as released. Without
+			// it, old films that TMDB lists only with their cinema release (common for
+			// catalogue titles) stay "in cinemas" forever.
+			theatricalGraceDays: THEATRICAL_GRACE_DAYS
 		};
 	}
 }

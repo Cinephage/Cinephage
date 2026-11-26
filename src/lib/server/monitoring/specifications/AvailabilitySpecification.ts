@@ -26,12 +26,12 @@ import { createChildLogger } from '#lib/logging/index.js';
 
 const logger = createChildLogger({ logDomain: 'monitoring' as const });
 import { getMovieAvailabilityLevel } from '#lib/utils/movieAvailability.js';
-import { isSearchable as isSearchableFromEvents } from '#lib/server/availability/derive.js';
+import {
+	isSearchable as isSearchableFromEvents,
+	THEATRICAL_GRACE_DAYS
+} from '#lib/server/availability/derive.js';
 import { listEvents } from '#lib/server/availability/event-store.js';
 import type { ReleaseEvent } from '#lib/server/availability/types.js';
-
-/** Grace period mirroring the legacy 90-day theatrical rule. */
-const THEATRICAL_GRACE_DAYS = 90;
 
 /**
  * Availability levels in order of "availability"
