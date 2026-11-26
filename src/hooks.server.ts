@@ -110,34 +110,44 @@ const customHandler: Handle = async ({ event, resolve }) => {
 			path: pathname
 		},
 		async () => {
-			function requiresStreamingApiKey(path: string): boolean {
+			/**
+			 * Routes that carry their credential in the URL instead of a session.
+			 * The scope decides which key permission is required, so a streaming
+			 * key cannot read a calendar feed and a calendar key cannot stream.
+			 */
+			function tokenRouteScope(path: string): 'streaming' | 'calendar' | null {
 				if (path === '/api/livetv/playlist.m3u' || path.startsWith('/api/livetv/playlist.m3u/')) {
-					return true;
+					return 'streaming';
 				}
 				if (path === '/api/livetv/epg.xml' || path.startsWith('/api/livetv/epg.xml/')) {
-					return true;
+					return 'streaming';
 				}
 				if (path.startsWith('/api/livetv/stream/')) {
-					return true;
+					return 'streaming';
 				}
 				if (path.startsWith('/api/streaming/session/')) {
-					return true;
+					return 'streaming';
 				}
 				if (path.startsWith('/api/streaming/usenet/')) {
-					return true;
+					return 'streaming';
 				}
 				if (path.startsWith('/api/streaming/library/')) {
-					return true;
+					return 'streaming';
 				}
 				// The track endpoint is what a music `.strm` names; media servers
 				// fetch it with the streaming key in the query string.
 				if (path.startsWith('/api/streaming/music/')) {
-					return true;
+					return 'streaming';
 				}
-				return false;
+				// Per-account iCalendar feed, credentialed by a calendar-scoped key.
+				if (path === '/api/calendar/feed.ics' || path.startsWith('/api/calendar/feed.ics/')) {
+					return 'calendar';
+				}
+				return null;
 			}
 
-			const isStreamingApiRoute = requiresStreamingApiKey(routePath);
+			const tokenApiScope = tokenRouteScope(routePath);
+			const isTokenApiRoute = tokenApiScope !== null;
 
 			function isHealthRoute(path: string): boolean {
 				if (path === '/health' || path.startsWith('/health/')) {
@@ -215,6 +225,11 @@ const customHandler: Handle = async ({ event, resolve }) => {
 				// a signed-in viewer must be able to file one too.
 				if (path === '/api/settings/logs/client-report') {
 					return method === 'POST';
+				}
+				// Own calendar-feed subscription: read the URL, change its options.
+				// Rows are hard-scoped to locals.user.id in the route.
+				if (path === '/api/calendar/subscription') {
+					return method === 'GET' || method === 'PUT';
 				}
 				if (method !== 'GET' && method !== 'HEAD') {
 					return false;
@@ -317,7 +332,7 @@ const customHandler: Handle = async ({ event, resolve }) => {
 				let session = null;
 				let apiKey = null;
 
-				if (!isStreamingApiRoute) {
+				if (!isTokenApiRoute) {
 					// Real Radarr/Sonarr accept the API key as either the X-Api-Key
 					// header or an `apikey` query parameter (see the real openapi.json
 					// securitySchemes) - arr clients like Jellyseerr/Overseerr (Seerr) use the
@@ -432,7 +447,7 @@ const customHandler: Handle = async ({ event, resolve }) => {
 					return false;
 				}
 
-				if (isStreamingApiRoute) {
+				if (isTokenApiRoute) {
 					const url = new URL(event.request.url);
 					const apiKeyFromQuery = url.searchParams.get('api_key');
 					const apiKeyFromHeader = event.request.headers.get('x-api-key');
@@ -457,15 +472,23 @@ const customHandler: Handle = async ({ event, resolve }) => {
 					}
 
 					try {
-						// Accept either a streaming-scoped key or a full-access (main) key
+						// The route's own scope first, then the full-access (main) key. A
+						// scoped credential is never silently upgraded, and a key scoped
+						// for a different surface is refused.
+						const requiredScopes: Record<string, string[]>[] = [];
+						if (tokenApiScope === 'calendar') requiredScopes.push({ calendar: ['read'] });
+						if (tokenApiScope === 'streaming') requiredScopes.push({ streaming: ['*'] });
+						requiredScopes.push({ default: ['*'] });
+
 						let verifyResult = await auth.api.verifyApiKey({
-							body: {
-								key: apiKey,
-								permissions: {
-									streaming: ['*']
-								}
-							}
+							body: { key: apiKey, permissions: requiredScopes[0] }
 						});
+						for (const scope of requiredScopes.slice(1)) {
+							if (verifyResult.valid) break;
+							verifyResult = await auth.api.verifyApiKey({
+								body: { key: apiKey, permissions: scope }
+							});
+						}
 
 						if (!verifyResult.valid) {
 							// Fall back to main API key check. Main keys are created with
@@ -487,7 +510,7 @@ const customHandler: Handle = async ({ event, resolve }) => {
 									endpoint: pathname,
 									error: verifyResult.error?.message || 'Invalid permissions'
 								},
-								'[Auth] API key does not have streaming or full-access permissions'
+								'[Auth] API key does not hold the permission this route requires'
 							);
 
 							return Response.json(
@@ -546,6 +569,8 @@ const customHandler: Handle = async ({ event, resolve }) => {
 
 						event.locals.apiKey = apiKey;
 						event.locals.apiKeyPermissions = verifyResult.key?.permissions || null;
+						event.locals.apiKeyId = verifyResult.key?.id ?? null;
+						event.locals.apiKeyOwnerId = keyOwnerId;
 					} catch (error) {
 						requestLogger.error(
 							{

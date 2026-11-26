@@ -18,7 +18,7 @@ function hasAuthenticatedUserSession(event: RequestEvent): boolean {
 	return Boolean(event.locals.user);
 }
 
-function isStreamingApiKeyRoute(pathname: string): boolean {
+function isTokenApiKeyRoute(pathname: string): boolean {
 	if (pathname.startsWith('/api/streaming/')) {
 		return true;
 	}
@@ -29,6 +29,11 @@ function isStreamingApiKeyRoute(pathname: string): boolean {
 		return true;
 	}
 	if (pathname.startsWith('/api/livetv/stream/')) {
+		return true;
+	}
+	// Calendar clients re-fetch every 15 minutes to a day; the poller must not
+	// be throttled like UI traffic.
+	if (pathname === '/api/calendar/feed.ics' || pathname.startsWith('/api/calendar/feed.ics/')) {
 		return true;
 	}
 
@@ -50,7 +55,7 @@ function shouldEnforceApiRateLimit(event: RequestEvent): boolean {
 
 	// Streaming/LiveTV playback routes already require a validated API key
 	// and are governed by per-key limits in Better Auth.
-	if (isStreamingApiKeyRoute(pathname) && event.locals.apiKey) {
+	if (isTokenApiKeyRoute(pathname) && event.locals.apiKey) {
 		return false;
 	}
 

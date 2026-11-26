@@ -7,6 +7,7 @@ import {
 	encryptCredential,
 	isEncryptedCredential
 } from '#lib/server/crypto/credentialsCrypto.js';
+import { calendarFeedConfigSchema, type CalendarFeedConfig } from '#lib/validation/schemas.js';
 
 /** AAD purpose for recoverable API-key secrets at rest. */
 const USER_API_KEY_PURPOSE = 'user-api-key';
@@ -29,7 +30,7 @@ type KeyCreationResult = {
 	key: string;
 };
 
-export type ManagedApiKeyType = 'main' | 'streaming';
+export type ManagedApiKeyType = 'main' | 'streaming' | 'calendar';
 
 type ApiKeyPermissions = Record<string, string[]>;
 
@@ -266,6 +267,157 @@ export async function ensureDefaultApiKeysForUser(
 	}
 
 	return result;
+}
+
+/**
+ * Calendar feed credential and configuration.
+ *
+ * One key per account carries both the credential and what the feed publishes
+ * (`metadata.feed`). That keeps the subscription URL stable when the options
+ * change, and revoking the key removes the feed with it. The key is scoped to
+ * `calendar: read` only: a full-access key in a URL a calendar provider stores
+ * would be a whole-account credential.
+ */
+export const CALENDAR_FEED_PERMISSIONS: ApiKeyPermissions = { calendar: ['read'] };
+
+const CALENDAR_FEED_KEY_FILTER = '%"type":"calendar"%';
+
+export interface CalendarFeedSubscription {
+	keyId: string;
+	/** Plaintext credential recovered from the encrypted secret row. */
+	key: string | null;
+	config: CalendarFeedConfig;
+	createdAt: string | null;
+	lastRequest: string | null;
+}
+
+export interface CalendarFeedUsage {
+	userId: string;
+	lastRequest: string | null;
+}
+
+/** Options stored on a key; defaults when absent or unparsable, never throws. */
+export function parseCalendarFeedConfig(metadata: string | null | undefined): CalendarFeedConfig {
+	if (!metadata) return calendarFeedConfigSchema.parse({});
+	try {
+		const parsed = JSON.parse(metadata) as { feed?: unknown };
+		const result = calendarFeedConfigSchema.safeParse(parsed.feed ?? {});
+		return result.success ? result.data : calendarFeedConfigSchema.parse({});
+	} catch {
+		return calendarFeedConfigSchema.parse({});
+	}
+}
+
+type CalendarFeedKeyRow = {
+	id: string;
+	metadata: string | null;
+	createdAt: string | null;
+	lastRequest: string | null;
+};
+
+function findCalendarFeedKey(userId: string): CalendarFeedKeyRow | undefined {
+	return db
+		.select({
+			id: authApiKeys.id,
+			metadata: authApiKeys.metadata,
+			createdAt: authApiKeys.createdAt,
+			lastRequest: authApiKeys.lastRequest
+		})
+		.from(authApiKeys)
+		.where(
+			and(eq(authApiKeys.referenceId, userId), like(authApiKeys.metadata, CALENDAR_FEED_KEY_FILTER))
+		)
+		.orderBy(desc(authApiKeys.createdAt))
+		.limit(1)
+		.get();
+}
+
+async function toSubscription(row: CalendarFeedKeyRow): Promise<CalendarFeedSubscription> {
+	return {
+		keyId: row.id,
+		key: await getRecoverableApiKeyValue(row.id),
+		config: parseCalendarFeedConfig(row.metadata),
+		createdAt: row.createdAt,
+		lastRequest: row.lastRequest
+	};
+}
+
+/** The caller's feed, created on first request. Idempotent. */
+export async function ensureCalendarFeedSubscription(
+	userId: string
+): Promise<CalendarFeedSubscription> {
+	const existing = findCalendarFeedKey(userId);
+	if (existing) return toSubscription(existing);
+
+	await createRecoverableApiKey({
+		userId,
+		name: 'Calendar Feed',
+		metadata: {
+			type: 'calendar',
+			description: 'Read-only access to the account calendar feed (iCalendar)',
+			feed: calendarFeedConfigSchema.parse({})
+		},
+		permissions: CALENDAR_FEED_PERMISSIONS
+	});
+
+	const created = findCalendarFeedKey(userId);
+	if (!created) {
+		throw new Error('Calendar feed key was not persisted');
+	}
+	return toSubscription(created);
+}
+
+/** Persist new feed options on the caller's key. Null when no key exists. */
+export async function saveCalendarFeedConfig(
+	userId: string,
+	config: CalendarFeedConfig
+): Promise<CalendarFeedSubscription | null> {
+	const row = findCalendarFeedKey(userId);
+	if (!row) return null;
+
+	let metadata: Record<string, unknown>;
+	try {
+		metadata = row.metadata ? (JSON.parse(row.metadata) as Record<string, unknown>) : {};
+	} catch {
+		metadata = {};
+	}
+
+	await db
+		.update(authApiKeys)
+		.set({
+			metadata: JSON.stringify({ ...metadata, type: 'calendar', feed: config }),
+			updatedAt: new Date().toISOString()
+		})
+		.where(eq(authApiKeys.id, row.id));
+
+	const saved = findCalendarFeedKey(userId);
+	return saved ? toSubscription(saved) : null;
+}
+
+/** Options for the key a request presented; the feed route's lookup. */
+export function getCalendarFeedConfigForKey(keyId: string): CalendarFeedConfig {
+	const row = db
+		.select({ metadata: authApiKeys.metadata })
+		.from(authApiKeys)
+		.where(eq(authApiKeys.id, keyId))
+		.get();
+	return parseCalendarFeedConfig(row?.metadata ?? null);
+}
+
+/**
+ * Which accounts subscribe, and when each feed was last fetched. `lastRequest`
+ * is maintained by `verifyApiKey`, so "who is using this" needs no new column
+ * or event table.
+ */
+export function listCalendarFeedUsage(): CalendarFeedUsage[] {
+	return db
+		.select({
+			userId: authApiKeys.referenceId,
+			lastRequest: authApiKeys.lastRequest
+		})
+		.from(authApiKeys)
+		.where(like(authApiKeys.metadata, CALENDAR_FEED_KEY_FILTER))
+		.all();
 }
 
 export async function regenerateRecoverableApiKey(options: {

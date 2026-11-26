@@ -2,7 +2,7 @@
 	import * as m from '#lib/paraglide/messages.js';
 	import { goto, refreshAll } from '$app/navigation';
 	import { resolvePath } from '#lib/utils/routing.js';
-	import { ShieldCheck, User, UserPlus, Users, ChevronRight } from '@lucide/svelte';
+	import { CalendarDays, ShieldCheck, User, UserPlus, Users, ChevronRight } from '@lucide/svelte';
 	import { authClient } from '#lib/auth/client.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { formatDisplayDate } from '#lib/utils/format.js';
@@ -196,6 +196,19 @@
 								{:else}
 									<span class="badge badge-outline badge-sm badge-success">
 										{m.users_activeStatus()}
+									</span>
+								{/if}
+								{#if userRow.calendarFeed}
+									<span
+										class="ml-1 badge gap-1 badge-outline badge-sm"
+										title={userRow.calendarFeed.lastRequest
+											? m.calendar_feed_lastFetched({
+													date: formatDisplayDate(userRow.calendarFeed.lastRequest)
+												})
+											: m.users_calendarFeedNever()}
+									>
+										<CalendarDays class="h-3 w-3" />
+										{m.users_calendarFeed()}
 									</span>
 								{/if}
 							</td>

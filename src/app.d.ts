@@ -25,6 +25,10 @@ declare global {
 			apiKey: string | null;
 			/** API key permissions if authenticated via API key (null otherwise) */
 			apiKeyPermissions: Record<string, string[]> | null;
+			/** Row id of the API key used for authentication (null if not using one) */
+			apiKeyId: string | null;
+			/** Owner of the API key used for authentication (null if not using one) */
+			apiKeyOwnerId: string | null;
 		}
 		// interface PageData {}
 		interface PageState {

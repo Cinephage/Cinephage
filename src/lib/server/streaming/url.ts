@@ -96,6 +96,33 @@ function isLocalhostUrl(url: string): boolean {
 }
 
 /**
+ * Whether a URL only resolves on a private network. Calendar providers fetch
+ * feeds server-side from the public internet, so a LAN address is a valid
+ * subscription URL for a phone calendar and a broken one for Google.
+ */
+export function isLanOnlyUrl(url: string): boolean {
+	if (isLocalhostUrl(url)) return true;
+	try {
+		const host = new URL(url).hostname.toLowerCase();
+		if (host.endsWith('.local') || host.endsWith('.lan') || host.endsWith('.home.arpa')) {
+			return true;
+		}
+		const match = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+		if (!match) return false;
+		const first = Number(match[1]);
+		const second = Number(match[2]);
+		return (
+			first === 10 ||
+			(first === 172 && second >= 16 && second <= 31) ||
+			(first === 192 && second === 168) ||
+			(first === 169 && second === 254)
+		);
+	} catch {
+		return false;
+	}
+}
+
+/**
  * Get the base URL for generating stream URLs (synchronous version).
  * Uses cached database value, falls back to request-based resolution.
  *

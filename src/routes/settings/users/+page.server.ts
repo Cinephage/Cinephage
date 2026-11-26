@@ -3,6 +3,7 @@ import { asc, count, eq } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.js';
 import { session, user, userMediaServerLinks } from '#lib/server/db/schema.js';
 import { requireAdminPage } from '#lib/server/auth/authorization.js';
+import { listCalendarFeedUsage } from '#lib/server/auth/api-keys.js';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	requireAdminPage(locals);
@@ -30,11 +31,13 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.from(session)
 		.groupBy(session.userId);
 	const sessionCountByUser = new Map(sessionCounts.map((row) => [row.userId, row.value]));
+	const calendarFeedByUser = new Map(listCalendarFeedUsage().map((row) => [row.userId, row]));
 
 	return {
 		users: users.map((row) => ({
 			...row,
-			sessionCount: sessionCountByUser.get(row.id) ?? 0
+			sessionCount: sessionCountByUser.get(row.id) ?? 0,
+			calendarFeed: calendarFeedByUser.get(row.id) ?? null
 		}))
 	};
 };
