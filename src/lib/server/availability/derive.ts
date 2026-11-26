@@ -10,6 +10,13 @@ import { isDownloadable } from './types.js';
  * rather than a second copy of the rules.
  */
 
+/**
+ * Grace period after a theatrical premiere during which a title with no
+ * home-release event still counts as released: the legacy 90-day rule.
+ * Shared by every caller so the dashboard badge and the search gate agree.
+ */
+export const THEATRICAL_GRACE_DAYS = 90;
+
 export interface AvailabilityInput {
 	events: readonly ReleaseEvent[];
 	hasFile: boolean;
