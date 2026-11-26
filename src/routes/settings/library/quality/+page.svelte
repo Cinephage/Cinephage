@@ -13,6 +13,7 @@
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { Sliders, Layers, Clock } from '@lucide/svelte';
 	import { DelayProfileList } from '#lib/components/delayProfiles/index.js';
+	import { handleTablistKeydown } from '#lib/utils/tabs.js';
 	import {
 		createScoringProfile,
 		updateScoringProfile,
@@ -57,11 +58,16 @@
 
 	// Tab state - derived from URL
 	const activeTab = $derived(page.url.searchParams.get('tab') || 'profiles');
+	const tabs = ['profiles', 'formats', 'delay-profiles'] as const;
+	type QualityTab = (typeof tabs)[number];
+	// The tab that takes part in the Tab order, even if the URL names an unknown tab.
+	const focusableTab = $derived<QualityTab>(tabs.find((tab) => tab === activeTab) ?? tabs[0]);
 
 	function setTab(tab: string) {
 		const url = new URL(page.url.href);
 		url.searchParams.set('tab', tab);
-		goto(url.toString(), { replace: true });
+		// reset: false keeps focus on the tab that arrow-key navigation just moved to.
+		goto(url.toString(), { replace: true, reset: false });
 	}
 
 	// ===================
@@ -357,86 +363,115 @@
 
 <SettingsPage title={m.settings_quality_heading()} subtitle={m.settings_quality_subtitle()}>
 	<!-- Tabs -->
-	<div role="tablist" class="tabs-boxed tabs w-fit">
+	<!-- svelte-ignore a11y_interactive_supports_focus (focus is on the tabs: roving tabindex) -->
+	<div
+		role="tablist"
+		aria-label={m.settings_quality_heading()}
+		class="tabs-boxed tabs w-fit"
+		onkeydown={(e) => handleTablistKeydown(e, tabs, focusableTab, setTab)}
+	>
 		<button
 			type="button"
 			role="tab"
+			id="quality-tab-profiles"
+			data-tab="profiles"
+			aria-selected={activeTab === 'profiles'}
+			aria-controls="quality-tabpanel"
+			tabindex={focusableTab === 'profiles' ? 0 : -1}
 			class="tab gap-2"
 			class:tab-active={activeTab === 'profiles'}
 			onclick={() => setTab('profiles')}
 		>
-			<Sliders class="h-4 w-4" />
+			<Sliders class="h-4 w-4" aria-hidden="true" />
 			{m.settings_quality_tabProfiles()}
 		</button>
 		<button
 			type="button"
 			role="tab"
+			id="quality-tab-formats"
+			data-tab="formats"
+			aria-selected={activeTab === 'formats'}
+			aria-controls="quality-tabpanel"
+			tabindex={focusableTab === 'formats' ? 0 : -1}
 			class="tab gap-2"
 			class:tab-active={activeTab === 'formats'}
 			onclick={() => setTab('formats')}
 		>
-			<Layers class="h-4 w-4" />
+			<Layers class="h-4 w-4" aria-hidden="true" />
 			{m.settings_quality_tabFormats()}
 		</button>
 		<button
 			type="button"
 			role="tab"
+			id="quality-tab-delay-profiles"
+			data-tab="delay-profiles"
+			aria-selected={activeTab === 'delay-profiles'}
+			aria-controls="quality-tabpanel"
+			tabindex={focusableTab === 'delay-profiles' ? 0 : -1}
 			class="tab gap-2"
 			class:tab-active={activeTab === 'delay-profiles'}
 			onclick={() => setTab('delay-profiles')}
 		>
-			<Clock class="h-4 w-4" />
+			<Clock class="h-4 w-4" aria-hidden="true" />
 			{m.settings_quality_delay_tab()}
 		</button>
 	</div>
 
 	<!-- Tab Content -->
-	{#if activeTab === 'profiles'}
-		<div class="-mt-2">
-			<p class="text-sm text-base-content/60">
-				{m.settings_quality_profilesDescription()}
-			</p>
-		</div>
-		<ProfileList
-			profiles={data.profiles}
-			onAdd={openAddProfileModal}
-			onEdit={openEditProfileModal}
-			onDelete={confirmProfileDelete}
-			onSetDefault={handleSetDefault}
-		/>
-		<div class="divider my-6"></div>
-		<div class="space-y-4">
-			<div>
-				<h2 class="text-lg font-semibold">{m.music_profilesTitle()}</h2>
-				<p class="mt-1 max-w-3xl text-sm text-base-content/60">
-					{m.music_profilesDescription()}
+	<div
+		id="quality-tabpanel"
+		role="tabpanel"
+		aria-labelledby="quality-tab-{activeTab}"
+		tabindex="0"
+		class="space-y-6"
+	>
+		{#if activeTab === 'profiles'}
+			<div class="-mt-2">
+				<p class="text-sm text-base-content/60">
+					{m.settings_quality_profilesDescription()}
 				</p>
 			</div>
 			<ProfileList
-				profiles={musicProfiles}
-				mediaKind="music"
-				onAdd={openAddMusicProfileModal}
+				profiles={data.profiles}
+				onAdd={openAddProfileModal}
 				onEdit={openEditProfileModal}
 				onDelete={confirmProfileDelete}
 				onSetDefault={handleSetDefault}
 			/>
-		</div>
-	{:else if activeTab === 'formats'}
-		<div class="-mt-2">
-			<p class="text-sm text-base-content/60">
-				{m.settings_quality_formatsDescription()}
-			</p>
-		</div>
-		<FormatList
-			formats={data.formats as UICustomFormat[]}
-			onView={openViewFormatModal}
-			onEdit={openEditFormatModal}
-			onCreate={openAddFormatModal}
-			onDelete={confirmFormatDelete}
-		/>
-	{:else if activeTab === 'delay-profiles'}
-		<DelayProfileList delayProfiles={data.delayProfiles} />
-	{/if}
+			<div class="divider my-6"></div>
+			<div class="space-y-4">
+				<div>
+					<h2 class="text-lg font-semibold">{m.music_profilesTitle()}</h2>
+					<p class="mt-1 max-w-3xl text-sm text-base-content/60">
+						{m.music_profilesDescription()}
+					</p>
+				</div>
+				<ProfileList
+					profiles={musicProfiles}
+					mediaKind="music"
+					onAdd={openAddMusicProfileModal}
+					onEdit={openEditProfileModal}
+					onDelete={confirmProfileDelete}
+					onSetDefault={handleSetDefault}
+				/>
+			</div>
+		{:else if activeTab === 'formats'}
+			<div class="-mt-2">
+				<p class="text-sm text-base-content/60">
+					{m.settings_quality_formatsDescription()}
+				</p>
+			</div>
+			<FormatList
+				formats={data.formats as UICustomFormat[]}
+				onView={openViewFormatModal}
+				onEdit={openEditFormatModal}
+				onCreate={openAddFormatModal}
+				onDelete={confirmFormatDelete}
+			/>
+		{:else if activeTab === 'delay-profiles'}
+			<DelayProfileList delayProfiles={data.delayProfiles} />
+		{/if}
+	</div>
 </SettingsPage>
 
 <!-- Profile Modal -->
