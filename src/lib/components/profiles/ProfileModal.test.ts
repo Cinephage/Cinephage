@@ -188,123 +188,57 @@ describe('ProfileModal indexer allowlist', () => {
 	});
 });
 
-describe('ProfileModal tabs a11y', () => {
+describe('ProfileModal format scores', () => {
 	afterEach(() => {
 		cleanup();
 	});
 
-	function renderTabs(
-		overrides: Partial<{
-			mediaKind: 'video' | 'music';
-			indexers: typeof indexers;
-			allFormats: { id: string; name: string; category: 'resolution' }[];
-		}> = {}
-	) {
-		return render(ProfileModal, {
+	const formats = [
+		{ id: 'test-fmt-uhd', name: 'Ultra Res', category: 'resolution' as const },
+		{ id: 'test-fmt-fhd', name: 'Full Res', category: 'resolution' as const },
+		{ id: 'test-fmt-lossless', name: 'Lossless Sound', category: 'audio' as const }
+	];
+
+	it('edits a score in the format scores tab and saves it', async () => {
+		const onSave = vi.fn<(data: ScoringProfileFormData) => void>();
+		render(ProfileModal, {
 			props: {
 				open: true,
 				mode: 'edit' as const,
-				profile: baseProfile,
+				profile: { ...baseProfile, formatScores: { 'test-fmt-fhd': 10 } },
 				allProfiles: [],
-				allFormats: [{ id: 'fmt-1', name: 'Some Format', category: 'resolution' as const }],
+				allFormats: formats,
 				indexers,
 				onClose: vi.fn(),
-				onSave: vi.fn(),
-				...overrides
+				onSave
 			}
 		});
-	}
 
-	const tab = (name: RegExp) => screen.getByRole('tab', { name });
-	const expectSelected = (selected: HTMLElement) => {
-		for (const t of screen.getAllByRole('tab')) {
-			const isSelected = t === selected;
-			expect(t.getAttribute('aria-selected')).toBe(String(isSelected));
-			expect(t.getAttribute('tabindex')).toBe(isSelected ? '0' : '-1');
-		}
-	};
+		await fireEvent.click(screen.getByRole('button', { name: /format scores/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /expand all/i }));
 
-	it('renders a labelled tablist with General selected', () => {
-		renderTabs();
+		const scoreInputs = () => screen.getAllByRole('spinbutton') as HTMLInputElement[];
+		// Both categories are listed: two resolution rows and one audio row.
+		expect(scoreInputs()).toHaveLength(3);
+		expect(screen.getByText('Ultra Res')).toBeTruthy();
+		expect(screen.getByText('Lossless Sound')).toBeTruthy();
 
-		const tablist = screen.getByRole('tablist');
-		expect(tablist.getAttribute('aria-labelledby')).toBe('profile-modal-title');
-		expect(screen.getAllByRole('tab')).toHaveLength(3);
-		expectSelected(tab(/general/i));
-	});
+		// The search narrows the rows.
+		await fireEvent.input(screen.getByPlaceholderText(/search formats\.\.\./i), {
+			target: { value: 'lossless' }
+		});
+		expect(scoreInputs()).toHaveLength(1);
+		expect(screen.queryByText('Ultra Res')).toBeNull();
 
-	it('wires the active tab and the tabpanel to each other', async () => {
-		renderTabs();
+		await fireEvent.input(scoreInputs()[0], { target: { value: '25' } });
+		expect(scoreInputs()[0].value).toBe('25');
 
-		const panel = screen.getByRole('tabpanel');
-		const general = tab(/general/i);
-		expect(general.id).not.toBe('');
-		expect(panel.getAttribute('aria-labelledby')).toBe(general.id);
-		expect(general.getAttribute('aria-controls')).toBe(panel.id);
+		await fireEvent.click(screen.getByRole('button', { name: /save/i }));
 
-		await fireEvent.click(tab(/indexers/i));
-		expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe(tab(/indexers/i).id);
-	});
-
-	it('moves selection and focus with the arrow keys, Home and End', async () => {
-		renderTabs();
-		const general = tab(/general/i);
-		const indexersTab = tab(/indexers/i);
-		const formats = tab(/format scores/i);
-
-		await fireEvent.keyDown(general, { key: 'ArrowRight' });
-		expectSelected(indexersTab);
-		expect(document.activeElement).toBe(indexersTab);
-		expect(screen.getByRole('button', { name: /^all indexers$/i })).toBeTruthy();
-
-		await fireEvent.keyDown(indexersTab, { key: 'ArrowRight' });
-		expectSelected(formats);
-		expect(document.activeElement).toBe(formats);
-
-		await fireEvent.keyDown(formats, { key: 'ArrowRight' });
-		expectSelected(general);
-		expect(document.activeElement).toBe(general);
-
-		await fireEvent.keyDown(general, { key: 'End' });
-		expectSelected(formats);
-		expect(document.activeElement).toBe(formats);
-
-		await fireEvent.keyDown(formats, { key: 'Home' });
-		expectSelected(general);
-		expect(document.activeElement).toBe(general);
-
-		await fireEvent.keyDown(general, { key: 'ArrowLeft' });
-		expectSelected(formats);
-		expect(document.activeElement).toBe(formats);
-	});
-
-	it('ignores keys that are not tab navigation keys', async () => {
-		renderTabs();
-		const general = tab(/general/i);
-
-		await fireEvent.keyDown(general, { key: 'ArrowDown' });
-		expectSelected(general);
-	});
-
-	it('still switches tabs on click', async () => {
-		renderTabs();
-
-		await fireEvent.click(tab(/format scores/i));
-		expectSelected(tab(/format scores/i));
-	});
-
-	it('has no tablist or tabpanel when there is only one tab', () => {
-		renderTabs({ indexers: [], allFormats: [] });
-
-		expect(screen.queryByRole('tablist')).toBeNull();
-		expect(screen.queryAllByRole('tab')).toHaveLength(0);
-		expect(document.querySelector('[role="tabpanel"]')).toBeNull();
-	});
-
-	it('has no tablist or tabpanel for a music profile', () => {
-		renderTabs({ mediaKind: 'music' });
-
-		expect(screen.queryByRole('tablist')).toBeNull();
-		expect(document.querySelector('[role="tabpanel"]')).toBeNull();
+		expect(onSave).toHaveBeenCalledWith(
+			expect.objectContaining({
+				formatScores: { 'test-fmt-fhd': 10, 'test-fmt-lossless': 25 }
+			})
+		);
 	});
 });

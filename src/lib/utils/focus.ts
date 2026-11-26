@@ -26,8 +26,11 @@ export function getFocusableElements(container: HTMLElement): HTMLElement[] {
  * Get the first focusable element in a container
  */
 export function getFirstFocusable(container: HTMLElement): HTMLElement | null {
-	const focusable = getFocusableElements(container);
-	return focusable[0] ?? null;
+	// Stop at the first visible match: every offsetParent read can force layout.
+	for (const el of container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTORS)) {
+		if (el.offsetParent !== null) return el;
+	}
+	return null;
 }
 
 /**
@@ -63,17 +66,19 @@ export function createFocusTrap(container: HTMLElement): () => void {
 
 	container.addEventListener('keydown', handleKeydown);
 
-	// Focus first focusable element
-	const firstFocusable = getFirstFocusable(container);
-	if (firstFocusable) {
-		// Small delay to ensure DOM is ready
-		requestAnimationFrame(() => {
-			firstFocusable.focus();
-		});
-	}
+	// Focus the first focusable element on the next frame. The visibility check
+	// (offsetParent) forces layout, so it runs in the frame instead of in the
+	// task that just inserted the dialog, where it would force a full-page
+	// layout on top of the one the browser does anyway.
+	let disposed = false;
+	requestAnimationFrame(() => {
+		if (disposed) return;
+		getFirstFocusable(container)?.focus();
+	});
 
 	// Return cleanup function
 	return () => {
+		disposed = true;
 		container.removeEventListener('keydown', handleKeydown);
 		// Restore focus to previously focused element
 		if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
