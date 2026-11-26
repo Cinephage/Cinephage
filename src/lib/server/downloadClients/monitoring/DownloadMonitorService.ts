@@ -22,7 +22,8 @@ import {
 	series,
 	episodeFiles,
 	episodes,
-	stalledOrphanTracking
+	stalledOrphanTracking,
+	deadDownloadSearches
 } from '#lib/server/db/schema.js';
 import { eq, and, or, inArray, not, notInArray, isNull, isNotNull, desc, sql } from 'drizzle-orm';
 import { getDownloadClientManager } from '../DownloadClientManager';
@@ -67,7 +68,16 @@ import {
 import { parseEpisodePointerFromTitle } from '#lib/server/downloads/episode-pointer.js';
 import { activityStreamEvents } from '#lib/server/activity/ActivityStreamEvents.js';
 import { acquisitionService } from '#lib/server/acquisition/AcquisitionService.js';
-import { STALLED_DOWNLOAD_DEFAULTS } from './stalledDownloadDefaults.js';
+import {
+	DEAD_TORRENT_RESEARCH_WINDOW_HOURS,
+	STALLED_DOWNLOAD_DEFAULTS,
+	parseDeadTorrentSettings
+} from './stalledDownloadDefaults.js';
+import {
+	assessSwarmHealth,
+	describeSwarmProblem,
+	type DeadTorrentSettings
+} from './swarmHealth.js';
 
 // Import service is loaded lazily to avoid circular dependencies
 let importServiceInstance: import('../import').ImportService | null = null;
@@ -442,6 +452,7 @@ function rowToQueueItem(row: typeof downloadQueue.$inferSelect): QueueItem {
 		errorMessage: row.errorMessage,
 		importAttempts: row.importAttempts || 0,
 		lastAttemptAt: row.lastAttemptAt,
+		swarmHealth: row.swarmHealth ?? null,
 		isAutomatic: !!row.isAutomatic,
 		isUpgrade: !!row.isUpgrade
 	};
@@ -1593,6 +1604,9 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 		// Handle stalled downloads that have timed out
 		await this.handleStalledDownloads();
 
+		// Fail torrents whose swarm cannot finish them (after hours, not days)
+		await this.handleDeadTorrents();
+
 		// Note: Pending import retries are now handled by ImportService
 
 		// Emit stats update
@@ -1852,6 +1866,9 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 				}
 
 				await this.updateQueueItem(queueItem, download, client);
+				if (clientProtocol === 'torrent') {
+					await this.trackSwarmHealth(queueItem, download);
+				}
 
 				// Radarr pattern: Check every completed download on every poll
 				// This catches downloads that:
@@ -3464,8 +3481,6 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			'Processing timed-out stalled downloads'
 		);
 
-		const manager = getDownloadClientManager();
-
 		for (const item of timedOutItems) {
 			const progressPct = parseFloat(item.progress || '0') * 100;
 			const errorMessage =
@@ -3475,106 +3490,396 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 						? 'Download stalled - no seeds or peers available'
 						: `Download stalled at ${progressPct.toFixed(1)}% - no progress for an extended period`;
 
-			// Removal must succeed before we forget about the download - otherwise the
-			// dead torrent lingers in the client while Cinephage considers it handled.
-			// If the client is unreachable we skip this item and let the next poll cycle
-			// retry: its stall timer keeps running, so it stays eligible. (The delete API
-			// is idempotent for already-gone torrents, so a thrown error means a genuine
-			// connection/auth failure, not "already removed".) A null instance means the
-			// client is no longer configured, so there is nothing to remove and we fall
-			// through to clean up the orphaned queue item.
-			let instance: IDownloadClient | undefined;
+			if (await this.removeFailAndBlocklist(item, errorMessage, blocklistHours)) {
+				this.researchAfterFailure(item, { manual: false });
+			}
+		}
+	}
+
+	/**
+	 * Remove a dead download from its client, mark it failed (history record,
+	 * consecutive-failure count, queue:failed) and blocklist the release, then
+	 * reset the search cooldown of its movie/episodes.
+	 *
+	 * Removal must succeed before we forget about the download - otherwise the
+	 * dead torrent lingers in the client while Cinephage considers it handled.
+	 * If the client is unreachable this returns false and changes nothing, so the
+	 * next poll cycle retries. (The delete API is idempotent for already-gone
+	 * torrents, so a thrown error means a genuine connection/auth failure, not
+	 * "already removed".) A null instance means the client is no longer
+	 * configured, so there is nothing to remove and the queue item is cleaned up.
+	 *
+	 * A blocklist duration of 0 means a permanent ban (no expiry).
+	 */
+	private async removeFailAndBlocklist(
+		item: typeof downloadQueue.$inferSelect,
+		errorMessage: string,
+		blocklistHours: number
+	): Promise<boolean> {
+		let instance: IDownloadClient | undefined;
+		try {
+			instance = await getDownloadClientManager().getClientInstance(item.downloadClientId);
+		} catch (error) {
+			logger.warn(
+				{
+					title: item.title,
+					error: error instanceof Error ? error.message : String(error)
+				},
+				'Error accessing download client for dead download removal; will retry next cycle'
+			);
+			return false;
+		}
+
+		if (instance) {
 			try {
-				instance = await manager.getClientInstance(item.downloadClientId);
+				const clientDownloadId = this.resolveClientDownloadId(item, 'remove');
+				await instance.removeDownload(clientDownloadId, true);
+			} catch (clientError) {
+				logger.warn(
+					{
+						title: item.title,
+						error: clientError instanceof Error ? clientError.message : String(clientError)
+					},
+					'Failed to remove dead download from client; will retry next cycle'
+				);
+				return false;
+			}
+		}
+
+		// Mark as failed (creates history record, emits queue:failed event)
+		await this.markFailed(item.id, errorMessage);
+
+		// Auto-blocklist the release to prevent re-grabbing the same dead torrent.
+		try {
+			const { blocklistService } =
+				await import('#lib/server/monitoring/specifications/BlocklistSpecification.js');
+			await blocklistService.addToBlocklist(
+				{
+					title: item.title,
+					infoHash: item.infoHash ?? undefined,
+					indexerId: item.indexerId ?? undefined,
+					quality: item.quality ?? undefined,
+					size: item.size ?? undefined,
+					protocol: item.protocol
+				},
+				{
+					movieId: item.movieId ?? undefined,
+					seriesId: item.seriesId ?? undefined,
+					episodeIds: item.episodeIds ?? undefined,
+					reason: 'download_failed',
+					message: errorMessage,
+					expiresInHours: blocklistHours > 0 ? blocklistHours : undefined
+				}
+			);
+		} catch (blocklistError) {
+			logger.warn(
+				{
+					title: item.title,
+					error: blocklistError instanceof Error ? blocklistError.message : String(blocklistError)
+				},
+				'Failed to add dead release to blocklist'
+			);
+		}
+
+		// Reset search cooldown so scheduled searches pick the media up again
+		try {
+			if (item.movieId) {
+				await db
+					.update(movies)
+					.set({ lastSearchTime: new Date(0).toISOString() })
+					.where(eq(movies.id, item.movieId));
+			}
+			if (item.seriesId && item.episodeIds?.length) {
+				await db
+					.update(episodes)
+					.set({ lastSearchTime: new Date(0).toISOString() })
+					.where(inArray(episodes.id, item.episodeIds));
+			}
+		} catch (error) {
+			logger.warn(
+				{
+					movieId: item.movieId,
+					seriesId: item.seriesId,
+					title: item.title,
+					error: error instanceof Error ? error.message : String(error)
+				},
+				'Failed to reset search cooldown for dead download'
+			);
+		}
+
+		return true;
+	}
+
+	/** Promise of the search started by the last researchAfterFailure (tests await it). */
+	private lastResearch: Promise<void> = Promise.resolve();
+
+	/**
+	 * Search again, right away, for just the movie or episodes of a download
+	 * that died, instead of waiting for the next scheduled missing search.
+	 *
+	 * Automatic (manual = false): at most once per movie/episode per
+	 * DEAD_TORRENT_RESEARCH_WINDOW_HOURS, only for monitored items that are not
+	 * auto-search paused, and not while automatic search is paused globally.
+	 * Manual (the queue's "Mark failed, blocklist and search"): always searches.
+	 *
+	 * Runs in the background: an indexer search can take a minute and must not
+	 * hold up the poll loop. The blocklist entry written before this keeps the
+	 * dead release from being grabbed again.
+	 */
+	researchAfterFailure(
+		item: Pick<typeof downloadQueue.$inferSelect, 'title' | 'movieId' | 'seriesId' | 'episodeIds'>,
+		options: { manual: boolean }
+	): Promise<void> {
+		const run = async () => {
+			try {
+				const { searchOnAdd } = await import('#lib/server/library/searchOnAdd/index.js');
+				const now = Date.now();
+				const windowStart = new Date(
+					now - DEAD_TORRENT_RESEARCH_WINDOW_HOURS * 60 * 60 * 1000
+				).toISOString();
+
+				if (!options.manual) {
+					const { isAutoSearchGloballyPaused } =
+						await import('#lib/server/monitoring/global-search-pause.js');
+					if (await isAutoSearchGloballyPaused()) return;
+				}
+
+				const recentlySearched = async (keys: string[]) => {
+					if (keys.length === 0) return new Set<string>();
+					const rows = await db
+						.select({ key: deadDownloadSearches.targetKey })
+						.from(deadDownloadSearches)
+						.where(
+							and(
+								inArray(deadDownloadSearches.targetKey, keys),
+								sql`${deadDownloadSearches.searchedAt} > ${windowStart}`
+							)
+						);
+					return new Set(rows.map((r) => r.key));
+				};
+				const remember = async (keys: string[]) => {
+					const searchedAt = new Date(now).toISOString();
+					for (const targetKey of keys) {
+						await db
+							.insert(deadDownloadSearches)
+							.values({ targetKey, searchedAt })
+							.onConflictDoUpdate({
+								target: deadDownloadSearches.targetKey,
+								set: { searchedAt }
+							});
+					}
+				};
+
+				if (item.movieId) {
+					const key = `movie:${item.movieId}`;
+					if (!options.manual && (await recentlySearched([key])).has(key)) return;
+					const movie = await db.query.movies.findFirst({ where: eq(movies.id, item.movieId) });
+					if (!movie || movie.hasFile) return;
+					if (!options.manual && (!movie.monitored || movie.autoSearchPaused)) return;
+					await remember([key]);
+					const result = await searchOnAdd.searchForMovie({
+						movieId: movie.id,
+						tmdbId: movie.tmdbId,
+						imdbId: movie.imdbId,
+						title: movie.title,
+						year: movie.year ?? undefined,
+						scoringProfileId: movie.scoringProfileId ?? undefined,
+						bypassMonitoring: options.manual
+					});
+					logger.info(
+						{ title: item.title, movieId: movie.id, grabbed: result.releaseName ?? null },
+						'Searched again after a dead download'
+					);
+					return;
+				}
+
+				if (item.episodeIds?.length) {
+					const rows = await db.query.episodes.findMany({
+						where: inArray(episodes.id, item.episodeIds)
+					});
+					let wanted = rows.filter((e) => !e.hasFile);
+					if (!options.manual) {
+						wanted = wanted.filter((e) => e.monitored && !e.autoSearchPaused);
+						const recent = await recentlySearched(wanted.map((e) => `episode:${e.id}`));
+						wanted = wanted.filter((e) => !recent.has(`episode:${e.id}`));
+					}
+					if (wanted.length === 0) return;
+					await remember(wanted.map((e) => `episode:${e.id}`));
+					const result = await searchOnAdd.searchBulkEpisodes(wanted.map((e) => e.id));
+					logger.info(
+						{ title: item.title, episodes: wanted.length, grabbed: result.summary.grabbed },
+						'Searched again after a dead download'
+					);
+				}
 			} catch (error) {
 				logger.warn(
 					{
 						title: item.title,
 						error: error instanceof Error ? error.message : String(error)
 					},
-					'Error accessing download client for stalled download removal; will retry next cycle'
+					'Search after a dead download failed; the scheduled missing search will retry'
 				);
+			}
+		};
+		this.lastResearch = run();
+		return this.lastResearch;
+	}
+
+	/** Read the dead-torrent settings from monitoring settings. */
+	private async getDeadTorrentSettings(): Promise<DeadTorrentSettings> {
+		let map = new Map<string, string>();
+		try {
+			const rows = await db
+				.select()
+				.from(monitoringSettings)
+				.where(sql`${monitoringSettings.key} LIKE 'dead_torrent_%'`);
+			map = new Map(rows.map((r) => [r.key, r.value]));
+		} catch (error) {
+			logger.warn(
+				{ error: error instanceof Error ? error.message : String(error) },
+				'Failed to read dead torrent settings'
+			);
+		}
+		return parseDeadTorrentSettings((key) => map.get(key));
+	}
+
+	/** Settings are read at most once per poll cycle burst. */
+	private deadTorrentSettingsCache: { value: DeadTorrentSettings; expires: number } | null = null;
+
+	private async getDeadTorrentSettingsCached(): Promise<DeadTorrentSettings> {
+		const now = Date.now();
+		if (this.deadTorrentSettingsCache && this.deadTorrentSettingsCache.expires > now) {
+			return this.deadTorrentSettingsCache.value;
+		}
+		const value = await this.getDeadTorrentSettings();
+		this.deadTorrentSettingsCache = { value, expires: now + 30_000 };
+		return value;
+	}
+
+	/**
+	 * Record what the client reports about a torrent's swarm on its queue row
+	 * (see swarmHealth.ts). Writes only when a check is due or the state
+	 * changed, not on every poll. Never throws: a failure here must not stop
+	 * the poll loop.
+	 */
+	private async trackSwarmHealth(
+		queueItem: typeof downloadQueue.$inferSelect,
+		download: DownloadInfo
+	): Promise<void> {
+		try {
+			if (queueItem.protocol !== 'torrent') return;
+			const settings = await this.getDeadTorrentSettingsCached();
+			const { next, write } = assessSwarmHealth(
+				queueItem.swarmHealth ?? null,
+				download,
+				queueItem.addedAt,
+				settings
+			);
+			if (!write) return;
+			await db
+				.update(downloadQueue)
+				.set({ swarmHealth: next })
+				.where(eq(downloadQueue.id, queueItem.id));
+			queueItem.swarmHealth = next;
+			if (next?.problem) {
+				logger.info(
+					{
+						title: queueItem.title,
+						problem: describeSwarmProblem(next, queueItem.addedAt),
+						strikes: `${next.strikes}/${next.strikesNeeded}`
+					},
+					next.dead ? 'Torrent swarm is dead' : 'Torrent swarm looks dead'
+				);
+			}
+		} catch (error) {
+			logger.warn(
+				{
+					title: queueItem.title,
+					error: error instanceof Error ? error.message : String(error)
+				},
+				'Failed to record torrent swarm health'
+			);
+		}
+	}
+
+	/**
+	 * True when the release came from a private or semi-private indexer. Used
+	 * when the client does not report the torrent's private flag.
+	 */
+	private async isFromPrivateIndexer(indexerId: string | null): Promise<boolean> {
+		if (!indexerId) return false;
+		try {
+			const { getIndexerManager } = await import('#lib/server/indexers/IndexerManager.js');
+			const manager = await getIndexerManager();
+			const config = await manager.getIndexer(indexerId);
+			const type = config ? manager.getDefinition(config.definitionId)?.type : undefined;
+			return type === 'private' || type === 'semi-private';
+		} catch {
+			return false;
+		}
+	}
+
+	/**
+	 * Fail, blocklist and search again for torrents the swarm check found dead.
+	 * Private-tracker torrents only get the warning in the queue unless the
+	 * user opted in: leaving them early can count as a hit and run.
+	 */
+	private async handleDeadTorrents(): Promise<void> {
+		const settings = await this.getDeadTorrentSettingsCached();
+		if (!settings.enabled) return;
+
+		const candidates = await db
+			.select()
+			.from(downloadQueue)
+			.where(
+				and(
+					eq(downloadQueue.protocol, 'torrent'),
+					inArray(downloadQueue.status, ['downloading', 'stalled', 'queued']),
+					isNotNull(downloadQueue.swarmHealth)
+				)
+			);
+		const dead = candidates.filter((item) => item.swarmHealth?.dead);
+		if (dead.length === 0) return;
+
+		const blocklistHours = await this.getStalledBlocklistHours();
+		for (const item of dead) {
+			const health = item.swarmHealth!;
+			const isPrivate = health.isPrivate ?? (await this.isFromPrivateIndexer(item.indexerId));
+			if (isPrivate && settings.privateAction === 'warn') {
+				// Kept: remember why, so the queue says it was kept on purpose.
+				if (health.isPrivate !== true) {
+					await db
+						.update(downloadQueue)
+						.set({ swarmHealth: { ...health, isPrivate: true } })
+						.where(eq(downloadQueue.id, item.id));
+				}
 				continue;
 			}
 
-			if (instance) {
-				try {
-					const clientDownloadId = this.resolveClientDownloadId(item, 'remove');
-					await instance.removeDownload(clientDownloadId, true);
-				} catch (clientError) {
-					logger.warn(
-						{
-							title: item.title,
-							error: clientError instanceof Error ? clientError.message : String(clientError)
-						},
-						'Failed to remove stalled download from client; will retry next cycle'
-					);
-					continue;
-				}
-			}
-
-			// Mark as failed (creates history record, emits queue:failed event)
-			await this.markFailed(item.id, errorMessage);
-
-			// Auto-blocklist the stalled release to prevent re-grabbing the same dead torrent.
-			// A configured duration of 0 means a permanent ban (no expiry).
-			try {
-				const { blocklistService } =
-					await import('#lib/server/monitoring/specifications/BlocklistSpecification.js');
-				await blocklistService.addToBlocklist(
-					{
-						title: item.title,
-						infoHash: item.infoHash ?? undefined,
-						indexerId: item.indexerId ?? undefined,
-						quality: item.quality ?? undefined,
-						size: item.size ?? undefined,
-						protocol: item.protocol
-					},
-					{
-						movieId: item.movieId ?? undefined,
-						seriesId: item.seriesId ?? undefined,
-						episodeIds: item.episodeIds ?? undefined,
-						reason: 'download_failed',
-						message: errorMessage,
-						expiresInHours: blocklistHours > 0 ? blocklistHours : undefined
-					}
-				);
-			} catch (blocklistError) {
-				logger.warn(
-					{
-						title: item.title,
-						error: blocklistError instanceof Error ? blocklistError.message : String(blocklistError)
-					},
-					'Failed to add stalled release to blocklist'
-				);
-			}
-
-			// Reset search cooldown so the monitoring cycle re-searches immediately
-			try {
-				if (item.movieId) {
-					await db
-						.update(movies)
-						.set({ lastSearchTime: new Date(0).toISOString() })
-						.where(eq(movies.id, item.movieId));
-				}
-				if (item.seriesId && item.episodeIds?.length) {
-					await db
-						.update(episodes)
-						.set({ lastSearchTime: new Date(0).toISOString() })
-						.where(inArray(episodes.id, item.episodeIds));
-				}
-			} catch (error) {
-				logger.warn(
-					{
-						movieId: item.movieId,
-						seriesId: item.seriesId,
-						title: item.title,
-						error: error instanceof Error ? error.message : String(error)
-					},
-					'Failed to reset search cooldown for stalled download'
-				);
+			const message = `Dead torrent - ${describeSwarmProblem(health, item.addedAt)}`;
+			logger.info({ title: item.title, reason: message }, 'Failing dead torrent');
+			if (await this.removeFailAndBlocklist(item, message, blocklistHours)) {
+				this.researchAfterFailure(item, { manual: false });
 			}
 		}
+	}
+
+	/**
+	 * The queue's "Mark failed, blocklist and search": the user decided this
+	 * download will not finish. Returns false when the item does not exist or
+	 * the client could not be reached (nothing was changed).
+	 */
+	async failBlocklistAndSearch(queueId: string): Promise<boolean> {
+		const [item] = await db.select().from(downloadQueue).where(eq(downloadQueue.id, queueId));
+		if (!item) return false;
+		const health = item.swarmHealth;
+		const message = health?.problem
+			? `Marked failed by user - ${describeSwarmProblem(health, item.addedAt)}`
+			: 'Marked failed by user';
+		const blocklistHours = await this.getStalledBlocklistHours();
+		if (!(await this.removeFailAndBlocklist(item, message, blocklistHours))) return false;
+		this.researchAfterFailure(item, { manual: true });
+		return true;
 	}
 
 	private async getBlockedExtensionCheckIntervalSeconds(): Promise<number> {

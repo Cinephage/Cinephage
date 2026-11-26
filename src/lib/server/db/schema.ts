@@ -13,6 +13,7 @@ import { randomUUID } from 'node:crypto';
 import type { ProtocolSettings } from '#lib/server/indexers/types/index.js';
 import type { NewznabCategory } from '#lib/server/indexers/newznab/types.js';
 import type { DesiredQuality } from '#lib/types/library.js';
+import type { SwarmHealth } from '#lib/types/queue.js';
 import type { AudioPreference, SubtitleRequirement } from '#lib/shared/language-profile.js';
 import type { EpgLocalizedText } from '#lib/types/livetv.js';
 
@@ -1497,6 +1498,9 @@ export const downloadQueue = sqliteTable(
 		// cleanup). Persisted so the timer survives restarts and isn't reset by brief
 		// metaDL ↔ downloading flaps. Cleared only when the download actually progresses.
 		stalledSince: text('stalled_since'),
+		// What the dead-torrent check last saw (seeds, availability, when bytes last
+		// went up, consecutive bad checks). Persisted so a restart keeps the clock.
+		swarmHealth: text('swarm_health', { mode: 'json' }).$type<SwarmHealth>(),
 		// When download reached 100%
 		completedAt: text('completed_at'),
 		// When import finished
@@ -1733,6 +1737,15 @@ export const importOperations = sqliteTable(
  * orphan sweep can apply the stalled timeout to it (and retry deletes that didn't
  * take, since the row survives until the torrent actually disappears).
  */
+/**
+ * When a movie or episode was last searched automatically because its
+ * download died (`movie:<id>` / `episode:<id>`): at most once per item per day.
+ */
+export const deadDownloadSearches = sqliteTable('dead_download_searches', {
+	targetKey: text('target_key').primaryKey(),
+	searchedAt: text('searched_at').notNull()
+});
+
 export const stalledOrphanTracking = sqliteTable(
 	'stalled_orphan_tracking',
 	{

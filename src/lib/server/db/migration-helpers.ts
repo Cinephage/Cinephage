@@ -736,7 +736,8 @@ export const MIGRATION_COLUMN_MAP: Record<number, Array<{ table: string; column:
 		{ table: 'monitoring_history', column: 'indexer_id' },
 		{ table: 'monitoring_history', column: 'indexer_name' }
 	],
-	176: [{ table: 'monitoring_history', column: 'indexers_queried' }]
+	176: [{ table: 'monitoring_history', column: 'indexers_queried' }],
+	203: [{ table: 'download_queue', column: 'swarm_health' }]
 };
 
 /**

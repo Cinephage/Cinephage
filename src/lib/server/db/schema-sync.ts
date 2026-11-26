@@ -253,8 +253,11 @@ import {
  *   the row carries mbid/artist/album/cover, so one list table holds both TMDB
  *   items and MusicBrainz albums. SQLite cannot drop NOT NULL in place, so this
  *   rebuilds the table from its live DDL (same pattern as v181).
+ * Version 203: download_queue.swarm_health + dead_download_searches - dead
+ *   torrent detection keeps its clock and strikes across restarts, and the
+ *   search after a dead download runs at most once per item per day.
  */
-export const CURRENT_SCHEMA_VERSION = 202;
+export const CURRENT_SCHEMA_VERSION = 203;
 
 /**
  * Seed rows for the *legacy* backfill in migration 078 only.

@@ -51,6 +51,12 @@ vi.mock('../DownloadClientManager', () => ({
 	})
 }));
 
+const searchForMovie = vi.fn().mockResolvedValue({ success: true });
+const searchBulkEpisodes = vi.fn().mockResolvedValue({ results: [], summary: { grabbed: 0 } });
+vi.mock('#lib/server/library/searchOnAdd/index.js', () => ({
+	searchOnAdd: { searchForMovie, searchBulkEpisodes }
+}));
+
 const { getDownloadMonitor } = await import('./DownloadMonitorService');
 
 const CLIENT_ID = randomUUID();
