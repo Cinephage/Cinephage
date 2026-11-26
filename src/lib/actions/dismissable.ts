@@ -117,17 +117,52 @@ export function dismissable(node: HTMLElement, options: DismissableOptions) {
 	};
 }
 
+const reopenCleanups = new WeakMap<HTMLElement, () => void>();
+
 /**
  * Escape handler for daisyUI focus-driven dropdowns (`.dropdown` opened by
- * focus): blurring the focused trigger or menu closes it.
+ * `:focus-within`): close the dropdown and return focus to its trigger.
+ *
+ * Blurring would close the menu but drop focus on <body>, and focusing the
+ * trigger alone would match `:focus-within` and reopen it. daisyUI's
+ * `dropdown-close` modifier hides the menu while focus stays on the trigger;
+ * it is cleared again when the trigger is clicked (mouse, Enter or Space) or
+ * focus leaves the dropdown. A second Escape, with the menu already closed,
+ * is left alone so an outer overlay can still react to it.
  */
 export function blurOnEscape(event: KeyboardEvent) {
 	if (event.key !== 'Escape') return;
+	const dropdown = event.currentTarget;
+	if (!(dropdown instanceof HTMLElement)) return;
 	const active = document.activeElement;
-	if (active instanceof HTMLElement && event.currentTarget instanceof Node) {
-		if (event.currentTarget.contains(active)) {
-			event.preventDefault();
-			active.blur();
-		}
-	}
+	if (!(active instanceof HTMLElement) || !dropdown.contains(active)) return;
+	if (dropdown.classList.contains('dropdown-close')) return;
+
+	const trigger =
+		dropdown.querySelector<HTMLElement>(':scope > :not(.dropdown-content)') ??
+		(dropdown.firstElementChild instanceof HTMLElement ? dropdown.firstElementChild : null);
+
+	event.preventDefault();
+	dropdown.classList.add('dropdown-close');
+	trigger?.focus();
+
+	reopenCleanups.get(dropdown)?.();
+	const reopen = () => {
+		dropdown.classList.remove('dropdown-close');
+		cleanup();
+	};
+	const onClick = (e: MouseEvent) => {
+		if (trigger && e.target instanceof Node && trigger.contains(e.target)) reopen();
+	};
+	const onFocusout = (e: FocusEvent) => {
+		if (!(e.relatedTarget instanceof Node) || !dropdown.contains(e.relatedTarget)) reopen();
+	};
+	const cleanup = () => {
+		dropdown.removeEventListener('click', onClick);
+		dropdown.removeEventListener('focusout', onFocusout);
+		if (reopenCleanups.get(dropdown) === cleanup) reopenCleanups.delete(dropdown);
+	};
+	dropdown.addEventListener('click', onClick);
+	dropdown.addEventListener('focusout', onFocusout);
+	reopenCleanups.set(dropdown, cleanup);
 }
