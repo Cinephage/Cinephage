@@ -67,9 +67,11 @@
 							</div>
 						</div>
 						{#if !movie.hasFile && movie.monitored}
-							<div class="absolute top-1 right-1">
+							<div class="absolute top-1 right-1 z-10 sm:top-2 sm:right-2">
 								<span
-									class="badge badge-xs {movie.isReleased ? 'badge-warning' : 'badge-secondary'}"
+									class="badge border-none badge-xs font-semibold shadow-sm sm:badge-sm sm:backdrop-blur-sm {movie.isReleased
+										? 'bg-warning/65 text-warning-content sm:bg-warning/80'
+										: 'bg-secondary/65 text-secondary-content sm:bg-secondary/80'}"
 								>
 									{movie.isReleased ? m.common_missing() : m.common_unreleased()}
 								</span>

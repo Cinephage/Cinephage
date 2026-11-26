@@ -110,9 +110,9 @@
 	}
 
 	function getRatingColor(rating: number): string {
-		if (rating >= 7.5) return 'bg-success/90 text-success-content';
-		if (rating >= 6) return 'bg-warning/90 text-warning-content';
-		return 'bg-base-300/90 text-base-content';
+		if (rating >= 7.5) return 'bg-success/65 text-success-content sm:bg-success/80';
+		if (rating >= 6) return 'bg-warning/65 text-warning-content sm:bg-warning/80';
+		return 'bg-base-300/65 text-base-content sm:bg-base-300/80';
 	}
 
 	const mediaLabel = $derived(
@@ -235,7 +235,7 @@
 									<!-- Rating badge -->
 									{#if item.vote_average > 0}
 										<div
-											class="absolute top-1.5 right-1.5 flex items-center gap-0.5 rounded-md px-1 py-0.5 text-[10px] font-semibold shadow-md {getRatingColor(
+											class="absolute top-1 right-1 z-10 flex items-center gap-0.5 rounded-md px-1 py-0.5 text-[10px] font-semibold shadow-md sm:top-2 sm:right-2 {getRatingColor(
 												item.vote_average
 											)}"
 										>

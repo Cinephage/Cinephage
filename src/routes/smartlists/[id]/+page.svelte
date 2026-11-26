@@ -673,34 +673,32 @@
 						<!-- Rating badge -->
 						{#if item.voteAverage}
 							<div
-								class="absolute top-2 right-2 z-10 flex items-center gap-0.5 rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white shadow-sm backdrop-blur-sm"
+								class="absolute top-1 right-1 z-10 flex items-center gap-0.5 rounded bg-black/55 px-1.5 py-0.5 text-[10px] text-white shadow-sm sm:top-2 sm:right-2 sm:bg-black/70 sm:backdrop-blur-sm"
 							>
 								<Star class="h-2.5 w-2.5 fill-warning text-warning" />
 								{parseFloat(item.voteAverage).toFixed(1)}
 							</div>
 						{/if}
 
-						<!-- In library badge -->
-						{#if item.inLibrary}
-							<div class="absolute top-2 left-2 z-10">
-								<div
-									class="flex h-6 w-6 items-center justify-center rounded-full bg-success/90 text-success-content shadow-md backdrop-blur-sm"
-									title={m.smartlists_detail_badgeInLibrary()}
-								>
-									<Check class="h-4 w-4" strokeWidth={3} />
-								</div>
-							</div>
-						{/if}
-
-						<!-- Excluded badge -->
-						{#if item.isExcluded}
-							<div class="absolute top-2 z-10 {item.inLibrary ? 'left-10' : 'left-2'}">
-								<div
-									class="flex h-6 w-6 items-center justify-center rounded-full bg-error/90 text-error-content shadow-md backdrop-blur-sm"
-									title={m.smartlists_detail_badgeExcluded()}
-								>
-									<Ban class="h-3.5 w-3.5" />
-								</div>
+						<!-- Status badges (top-left): in library, excluded -->
+						{#if item.inLibrary || item.isExcluded}
+							<div class="absolute top-1 left-1 z-10 flex items-center gap-1 sm:top-2 sm:left-2">
+								{#if item.inLibrary}
+									<div
+										class="flex h-6 w-6 items-center justify-center rounded-full bg-success/75 text-success-content shadow-md sm:bg-success/90 sm:backdrop-blur-sm"
+										title={m.smartlists_detail_badgeInLibrary()}
+									>
+										<Check class="h-4 w-4" strokeWidth={3} />
+									</div>
+								{/if}
+								{#if item.isExcluded}
+									<div
+										class="flex h-6 w-6 items-center justify-center rounded-full bg-error/75 text-error-content shadow-md sm:bg-error/90 sm:backdrop-blur-sm"
+										title={m.smartlists_detail_badgeExcluded()}
+									>
+										<Ban class="h-3.5 w-3.5" />
+									</div>
+								{/if}
 							</div>
 						{/if}
 
