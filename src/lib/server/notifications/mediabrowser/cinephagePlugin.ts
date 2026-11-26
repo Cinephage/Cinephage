@@ -13,6 +13,7 @@ import type { CinephagePluginStatus, MediaBrowserServerRecord } from './types.js
 import {
 	CINEPHAGE_PLUGIN_GUID,
 	CINEPHAGE_PLUGIN_NAME,
+	compareVersions,
 	pickCompatibleVersion,
 	readPluginBuild,
 	readPluginPackage,
@@ -33,6 +34,27 @@ export class CinephagePluginError extends Error {
 
 function isInstalledPlugin(id: string): boolean {
 	return id.replace(/-/g, '').toLowerCase() === CINEPHAGE_PLUGIN_GUID.replace(/-/g, '');
+}
+
+/**
+ * Jellyfin reports every installed version of a plugin during an update: the
+ * old one as `Superseded` and the new one as `Restart`. The current entry is
+ * the newest version, with a live status winning a tie.
+ */
+export function selectCurrentPlugin(
+	plugins: Awaited<ReturnType<MediaBrowserClient['getPlugins']>>
+): (typeof plugins)[number] | null {
+	const matching = plugins.filter((plugin) => isInstalledPlugin(plugin.Id));
+	if (matching.length === 0) return null;
+
+	const statusRank = (status: string | undefined): number =>
+		status === 'Superseded' || status === 'Deleted' ? 0 : 1;
+
+	return matching.sort((a, b) => {
+		const byVersion = compareVersions(b.Version, a.Version);
+		if (byVersion !== 0) return byVersion;
+		return statusRank(b.Status) - statusRank(a.Status);
+	})[0];
 }
 
 /**
@@ -69,14 +91,17 @@ function toStatus(
 	latest: CinephagePluginVersion | null,
 	plugins: Awaited<ReturnType<MediaBrowserClient['getPlugins']>>
 ): CinephagePluginStatus {
-	const installed = plugins.find((plugin) => isInstalledPlugin(plugin.Id)) ?? null;
+	const installed = selectCurrentPlugin(plugins);
 
 	return {
 		bundled: latest !== null,
 		latestVersion: latest?.version ?? null,
 		installed: installed !== null,
 		installedVersion: installed?.Version ?? null,
-		updateAvailable: installed !== null && latest !== null && installed.Version !== latest.version,
+		updateAvailable:
+			installed !== null &&
+			latest !== null &&
+			compareVersions(installed.Version, latest.version) < 0,
 		status: installed?.Status ?? null
 	};
 }

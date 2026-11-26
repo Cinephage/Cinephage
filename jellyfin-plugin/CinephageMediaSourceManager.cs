@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Database.Implementations.Entities;
@@ -114,15 +115,22 @@ public sealed class CinephageMediaSourceManager : IMediaSourceManager
 
     private void EnsureShortcutPath(BaseItem item)
     {
-        if (!IsAudioShortcut(item) || !string.IsNullOrWhiteSpace(item.ShortcutPath))
+        if (!IsAudioShortcut(item))
         {
             return;
         }
 
+        // Always re-read: Jellyfin may already carry a ShortcutPath captured
+        // before the shortcut was rewritten with fresh hints.
         var target = StrmFile.ReadTarget(item.Path);
         if (string.IsNullOrWhiteSpace(target))
         {
             _logger.LogWarning("Cinephage: no target found in {Path}", item.Path);
+            return;
+        }
+
+        if (string.Equals(item.ShortcutPath, target, StringComparison.Ordinal))
+        {
             return;
         }
 
@@ -190,10 +198,13 @@ public sealed class CinephageMediaSourceManager : IMediaSourceManager
             return;
         }
 
-        var target = item.ShortcutPath;
+        // Read the file, not item.ShortcutPath: the core can hand back a
+        // shortcut path captured before the .strm was rewritten. The file is
+        // the source of truth.
+        var target = StrmFile.ReadTarget(item.Path);
         if (string.IsNullOrWhiteSpace(target))
         {
-            target = StrmFile.ReadTarget(item.Path);
+            target = item.ShortcutPath;
         }
 
         if (string.IsNullOrWhiteSpace(target))
@@ -210,19 +221,23 @@ public sealed class CinephageMediaSourceManager : IMediaSourceManager
         }
 
         var extension = GetUrlExtension(target);
+        var hints = ReadHints(target);
 
         foreach (var source in sources)
         {
-            if (source is null
-                || source.Protocol != MediaProtocol.File
-                || !StrmFile.IsStrm(source.Path))
+            if (source is null)
             {
                 continue;
             }
 
             try
             {
-                RewriteSource(source, target, extension);
+                // The core hands back a source it already resolved from its
+                // cache on later plays (Protocol Http, with the URL captured
+                // before the shortcut gained hints). The .strm on disk is the
+                // source of truth, so rewrite every source of an audio
+                // shortcut, not only the File-protocol one.
+                RewriteSource(source, target, extension, hints);
             }
             catch (Exception ex)
             {
@@ -233,7 +248,11 @@ public sealed class CinephageMediaSourceManager : IMediaSourceManager
         }
     }
 
-    private void RewriteSource(MediaSourceInfo source, string target, string? extension)
+    private void RewriteSource(
+        MediaSourceInfo source,
+        string target,
+        string? extension,
+        StreamHints hints)
     {
         source.Path = target;
         source.Protocol = MediaProtocol.Http;
@@ -248,10 +267,10 @@ public sealed class CinephageMediaSourceManager : IMediaSourceManager
             source.Container = null;
         }
 
-        if (string.IsNullOrEmpty(source.Container))
-        {
-            source.Container = extension ?? "mp3";
-        }
+        var container = string.IsNullOrEmpty(source.Container)
+            ? hints.Container ?? extension ?? "mp3"
+            : source.Container;
+        source.Container = container;
 
         if (!HasAudioStream(source))
         {
@@ -263,16 +282,30 @@ public sealed class CinephageMediaSourceManager : IMediaSourceManager
             {
                 Type = MediaStreamType.Audio,
                 Index = streams.Count,
-                Codec = GuessAudioCodec(extension)
+                Codec = hints.Codec ?? GuessAudioCodec(container)
             });
 
             source.MediaStreams = streams;
+        }
+
+        // The shortcut's hints let the first play behave like a finite file
+        // instead of a live stream: Jellyfin shows a duration and the client
+        // can seek before any probe has run. A runtime the core already knows
+        // wins over the hint.
+        if ((!source.RunTimeTicks.HasValue || source.RunTimeTicks.Value <= 0)
+            && hints.DurationSeconds is > 0 and < 86400)
+        {
+            source.RunTimeTicks = (long)(hints.DurationSeconds.Value * TimeSpan.TicksPerSecond);
         }
 
         if (!source.RunTimeTicks.HasValue || source.RunTimeTicks.Value <= 0)
         {
             source.IsInfiniteStream = true;
             source.RunTimeTicks = null;
+        }
+        else
+        {
+            source.IsInfiniteStream = false;
         }
 
         source.SupportsDirectPlay = true;
@@ -308,6 +341,57 @@ public sealed class CinephageMediaSourceManager : IMediaSourceManager
     {
         var queryIndex = target.IndexOf('?', StringComparison.Ordinal);
         return queryIndex >= 0 ? target[..queryIndex] + "?..." : target;
+    }
+
+    /// <summary>
+    /// Optional hints Cinephage writes into a music shortcut's query string.
+    /// They describe a finite provider stream so the first play needs no probe.
+    /// </summary>
+    private readonly record struct StreamHints(
+        string? Container,
+        string? Codec,
+        double? DurationSeconds);
+
+    private static StreamHints ReadHints(string target)
+    {
+        var container = QueryValue(target, "cp_container");
+        var codec = QueryValue(target, "cp_codec");
+        var rawDuration = QueryValue(target, "cp_duration");
+
+        double? duration = null;
+        if (!string.IsNullOrEmpty(rawDuration)
+            && double.TryParse(rawDuration, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds)
+            && seconds > 0)
+        {
+            duration = seconds;
+        }
+
+        return new StreamHints(
+            string.IsNullOrWhiteSpace(container) ? null : container.Trim().ToLowerInvariant(),
+            string.IsNullOrWhiteSpace(codec) ? null : codec.Trim().ToLowerInvariant(),
+            duration);
+    }
+
+    private static string? QueryValue(string url, string key)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            return null;
+        }
+
+        foreach (var pair in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var separator = pair.IndexOf('=');
+            var name = separator >= 0 ? pair[..separator] : pair;
+            if (!string.Equals(Uri.UnescapeDataString(name), key, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            return separator >= 0 ? Uri.UnescapeDataString(pair[(separator + 1)..]) : string.Empty;
+        }
+
+        return null;
     }
 
     private static string? GetUrlExtension(string target)

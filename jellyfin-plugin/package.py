@@ -21,7 +21,7 @@ DESCRIPTION = "Lets Jellyfin play the media shortcuts Cinephage writes into your
 OVERVIEW = "Play Cinephage library shortcuts in Jellyfin"
 OWNER = "Cinephage"
 CATEGORY = "General"
-CHANGELOG = "First release: plays Cinephage audio shortcuts (.strm) in Jellyfin."
+CHANGELOG = "0.1.3: reads the shortcut file on every play so rewritten hints apply. 0.1.2: cached sources. 0.1.1: duration/container hints. 0.1.0: first release."
 
 
 def main() -> None:
