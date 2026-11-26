@@ -42,6 +42,7 @@ const DEFAULT_INTERVALS = {
 	historyCleanup: 24, // Daily
 	libraryReconcile: 6, // Every 6 hours
 	requestSweep: 1, // Hourly (request TTL expiry + availability re-check)
+	musicStreamMatch: 24, // Daily (match streamed tracks to an upload)
 	dbBackup: 24, // Daily
 	metadataRefresh: 24 // Daily
 } as const;
@@ -140,6 +141,7 @@ export interface MonitoringStatus {
 		dbBackup: TaskStatus;
 		'metadata-refresh': TaskStatus;
 		'request-sweep': TaskStatus;
+		'music-stream-match': TaskStatus;
 	};
 }
 
@@ -223,7 +225,8 @@ export class MonitoringScheduler extends EventEmitter implements BackgroundServi
 			// too, or they re-run right after every restart.
 			'library-reconcile',
 			'metadata-refresh',
-			'request-sweep'
+			'request-sweep',
+			'music-stream-match'
 		];
 		for (const taskType of taskTypes) {
 			// First try to load from task_settings (new system)
@@ -557,6 +560,9 @@ export class MonitoringScheduler extends EventEmitter implements BackgroundServi
 		const requestSweepInterval =
 			(await taskSettingsService.getTaskInterval('request-sweep')) ??
 			DEFAULT_INTERVALS.requestSweep;
+		const musicStreamMatchInterval =
+			(await taskSettingsService.getTaskInterval('music-stream-match')) ??
+			DEFAULT_INTERVALS.musicStreamMatch;
 		const metadataRefreshInterval =
 			(await taskSettingsService.getTaskInterval('metadata-refresh')) ??
 			DEFAULT_INTERVALS.metadataRefresh;
@@ -585,6 +591,7 @@ export class MonitoringScheduler extends EventEmitter implements BackgroundServi
 		);
 		this.taskIntervals.set('dbBackup', Math.max(dbBackupInterval, MIN_INTERVAL_HOURS));
 		this.taskIntervals.set('request-sweep', Math.max(requestSweepInterval, MIN_INTERVAL_HOURS));
+		this.taskIntervals.set('music-stream-match', Math.max(musicStreamMatchInterval, MIN_INTERVAL_HOURS));
 		this.taskIntervals.set(
 			'metadata-refresh',
 			Math.max(metadataRefreshInterval, MIN_INTERVAL_HOURS)
@@ -908,6 +915,10 @@ export class MonitoringScheduler extends EventEmitter implements BackgroundServi
 				const { executeRequestSweepTask } = await import('./tasks/RequestSweepTask.js');
 				return await executeRequestSweepTask(ctx);
 			}
+			case 'music-stream-match': {
+				const { executeMusicStreamMatchTask } = await import('./tasks/MusicStreamMatchTask.js');
+				return await executeMusicStreamMatchTask(ctx);
+			}
 			case 'original-language-backfill': {
 				const { executeOriginalLanguageBackfillTask } =
 					await import('./tasks/OriginalLanguageBackfillTask.js');
@@ -981,6 +992,10 @@ export class MonitoringScheduler extends EventEmitter implements BackgroundServi
 
 	async runRequestSweep(): Promise<TaskResult> {
 		return await this.executeTaskManually('request-sweep');
+	}
+
+	async runMusicStreamMatch(): Promise<TaskResult> {
+		return await this.executeTaskManually('music-stream-match');
 	}
 
 	async runOriginalLanguageBackfill(): Promise<TaskResult> {
@@ -1168,7 +1183,11 @@ export class MonitoringScheduler extends EventEmitter implements BackgroundServi
 					'metadata-refresh',
 					DEFAULT_INTERVALS.metadataRefresh
 				),
-				'request-sweep': await getTaskStatus('request-sweep', DEFAULT_INTERVALS.requestSweep)
+				'request-sweep': await getTaskStatus('request-sweep', DEFAULT_INTERVALS.requestSweep),
+				'music-stream-match': await getTaskStatus(
+					'music-stream-match',
+					DEFAULT_INTERVALS.musicStreamMatch
+				)
 			}
 		};
 	}

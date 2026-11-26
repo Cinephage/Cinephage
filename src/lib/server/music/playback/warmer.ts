@@ -69,6 +69,22 @@ function schedule(trackId: string, urgentFlag: boolean): void {
 }
 
 /**
+ * The tracks of a stream-backed album that have no local file — the set that
+ * has to be matched and warmed. Shared with the match task so "which tracks"
+ * is answered once.
+ */
+export function listStreamAlbumTracks(albumId: string): { id: string; position: number | null }[] {
+	return db
+		.select({ id: tracks.id, position: tracks.position })
+		.from(tracks)
+		.innerJoin(albums, eq(tracks.albumId, albums.id))
+		.leftJoin(trackFiles, eq(trackFiles.trackId, tracks.id))
+		.where(and(eq(tracks.albumId, albumId), isNotNull(albums.streamSource), isNull(trackFiles.id)))
+		.orderBy(tracks.position)
+		.all();
+}
+
+/**
  * Queues every playable track of a stream-backed album that has no local file
  * and no live resolved stream. Safe to call on every playback: an album that is
  * already warm costs one query and returns.
@@ -78,16 +94,7 @@ export function warmAlbum(
 	options: { afterTrackId?: string | null; urgent?: boolean } = {}
 ): void {
 	try {
-		const rows = db
-			.select({ id: tracks.id, position: tracks.position })
-			.from(tracks)
-			.innerJoin(albums, eq(tracks.albumId, albums.id))
-			.leftJoin(trackFiles, eq(trackFiles.trackId, tracks.id))
-			.where(
-				and(eq(tracks.albumId, albumId), isNotNull(albums.streamSource), isNull(trackFiles.id))
-			)
-			.orderBy(tracks.position)
-			.all();
+		const rows = listStreamAlbumTracks(albumId);
 
 		// What is playing defines what comes next: the tracks after it first, then
 		// the ones before. Warming in shelf order made the very first skip pay for

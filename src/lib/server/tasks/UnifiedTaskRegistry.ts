@@ -155,6 +155,18 @@ const SCHEDULED_TASKS: UnifiedTaskDefinition[] = [
 		intervalEditable: true
 	},
 	{
+		id: 'music-stream-match',
+		name: 'Match Streamed Music',
+		description:
+			'Give every streamed track a remembered provider upload, so its first play resolves instead of searching. Stores no audio.',
+		category: 'scheduled',
+		runEndpoint: '/api/monitoring/search/music-stream-match',
+		intervalKey: 'music_stream_match_interval_hours',
+		defaultIntervalHours: 24,
+		minIntervalHours: 1,
+		intervalEditable: true
+	},
+	{
 		id: 'historyCleanup',
 		name: 'History Cleanup',
 		description: 'Automatically purge old history entries based on the retention period setting',

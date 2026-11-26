@@ -36,6 +36,7 @@ const DEFAULT_TASK_SETTINGS: Record<
 	'update-strm-urls': { intervalHours: null, minIntervalHours: 0.25, enabled: true },
 	'library-reconcile': { intervalHours: 6, minIntervalHours: 1, enabled: true },
 	'request-sweep': { intervalHours: 1, minIntervalHours: 1, enabled: true },
+	'music-stream-match': { intervalHours: 24, minIntervalHours: 1, enabled: true },
 	'metadata-refresh': { intervalHours: 24, minIntervalHours: 24, enabled: true },
 	dbBackup: { intervalHours: 24, minIntervalHours: 1, enabled: true }
 };
