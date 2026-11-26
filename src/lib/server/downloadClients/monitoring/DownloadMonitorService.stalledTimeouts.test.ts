@@ -15,7 +15,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vites
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { createTestDb, destroyTestDb, clearTestDb } from '../../../../test/db-helper';
-import { downloadClients, downloadQueue } from '#lib/server/db/schema.js';
+import { downloadClients, downloadQueue, monitoringSettings } from '#lib/server/db/schema.js';
 
 const testDb = createTestDb();
 
@@ -98,6 +98,8 @@ afterAll(() => {
 
 beforeEach(async () => {
 	clearTestDb(testDb);
+	// clearTestDb leaves monitoring_settings alone; every test starts on the defaults
+	testDb.db.delete(monitoringSettings).run();
 	removeDownload.mockClear();
 	addToBlocklist.mockClear();
 	await testDb.db.insert(downloadClients).values({
@@ -156,6 +158,17 @@ describe('two-tier stalled download policy', () => {
 
 		expect(removeDownload).toHaveBeenCalledTimes(1);
 		expect(addToBlocklist).toHaveBeenCalledTimes(1);
+	});
+
+	it('honours a saved timeout for downloads above the threshold', async () => {
+		await testDb.db
+			.insert(monitoringSettings)
+			.values({ key: 'stalled_download_progress_timeout_minutes', value: String(2 * 24 * 60) });
+		await insertStalledRow(2 * 24 * 60 * 60_000 + 60 * 60_000, 0.5);
+
+		await runStalledHandler();
+
+		expect(removeDownload).toHaveBeenCalledTimes(1);
 	});
 
 	it('resets the search cooldown so the media is re-searched after a reap', async () => {

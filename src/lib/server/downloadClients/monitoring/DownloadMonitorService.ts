@@ -67,6 +67,7 @@ import {
 import { parseEpisodePointerFromTitle } from '#lib/server/downloads/episode-pointer.js';
 import { activityStreamEvents } from '#lib/server/activity/ActivityStreamEvents.js';
 import { acquisitionService } from '#lib/server/acquisition/AcquisitionService.js';
+import { STALLED_DOWNLOAD_DEFAULTS } from './stalledDownloadDefaults.js';
 
 // Import service is loaded lazily to avoid circular dependencies
 let importServiceInstance: import('../import').ImportService | null = null;
@@ -3216,7 +3217,8 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 	 * normal - torrents routinely resume when a seeder returns - so do not
 	 * assume a stalled download is dead within an hour.
 	 */
-	private static readonly DEFAULT_STALLED_TIMEOUT_MINUTES = 3 * 24 * 60;
+	private static readonly DEFAULT_STALLED_TIMEOUT_MINUTES =
+		STALLED_DOWNLOAD_DEFAULTS.timeoutMinutes;
 
 	/**
 	 * Minimum stalled download timeout in minutes
@@ -3229,19 +3231,22 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 	 * which let dead torrents linger in the client for months; 14 days of zero
 	 * progress is enough to conclude the release is unreachable.
 	 */
-	private static readonly DEFAULT_STALLED_PROGRESS_TIMEOUT_MINUTES = 14 * 24 * 60;
+	private static readonly DEFAULT_STALLED_PROGRESS_TIMEOUT_MINUTES =
+		STALLED_DOWNLOAD_DEFAULTS.progressTimeoutMinutes;
 
 	/**
 	 * Default progress threshold (%): remove stalled downloads at or below this percentage.
 	 * 1% catches downloads that fetched a tiny amount but then stalled permanently.
 	 */
-	private static readonly DEFAULT_STALLED_PROGRESS_THRESHOLD = 1; // 1%
+	private static readonly DEFAULT_STALLED_PROGRESS_THRESHOLD =
+		STALLED_DOWNLOAD_DEFAULTS.progressThreshold;
 
 	/**
 	 * Default blocklist duration (hours) applied to an auto-removed stalled release.
 	 * 0 means a permanent ban (no expiry).
 	 */
-	private static readonly DEFAULT_STALLED_BLOCKLIST_HOURS = 72; // 3 days
+	private static readonly DEFAULT_STALLED_BLOCKLIST_HOURS =
+		STALLED_DOWNLOAD_DEFAULTS.blocklistHours;
 
 	/**
 	 * Read the stalled download timeout from monitoring settings
@@ -3274,8 +3279,8 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 
 	/**
 	 * Read the stalled download progress threshold from monitoring settings.
-	 * Torrents stalled below this percentage will be eligible for removal.
-	 * Defaults to 0 (only kills torrents at 0%).
+	 * Stalled torrents at or below this percentage use the short timeout.
+	 * Defaults to 1%.
 	 */
 	private async getStalledProgressThreshold(): Promise<number> {
 		try {
