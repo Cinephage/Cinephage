@@ -938,59 +938,16 @@
 							{/if}
 						</div>
 
-			<FormatScoreAccordion
-				formatScores={groupedFormatScores}
-				{requiredFormats}
-				readonly={isFullyReadonly}
-				onScoreChange={handleScoreChange}
-			/>
-		</div>
-	{:else if activeTab === 'indexers'}
-		<div class="space-y-4 py-2">
-			<div>
-				<h4 class="text-sm font-medium">{m.profiles_section_indexers()}</h4>
-				<p class="mt-0.5 text-xs text-base-content/60">{m.profiles_indexers_desc()}</p>
-			</div>
-
-			<div class="flex flex-wrap gap-2">
-				<button
-					type="button"
-					class="btn btn-sm {!restrictIndexers ? 'btn-primary' : 'btn-outline'}"
-					disabled={isFullyReadonly}
-					onclick={() => setIndexerMode(false)}
-				>
-					{m.profiles_indexers_all()}
-				</button>
-				<button
-					type="button"
-					class="btn btn-sm {restrictIndexers ? 'btn-primary' : 'btn-outline'}"
-					disabled={isFullyReadonly || indexers.length === 0}
-					onclick={() => setIndexerMode(true)}
-				>
-					{m.profiles_indexers_selected()}
-				</button>
-			</div>
-
-			{#if restrictIndexers}
-				{#if indexers.length === 0}
-					<div class="rounded-lg bg-base-200 p-3 text-xs text-base-content/70">
-						<Info class="mr-1 inline h-3 w-3" />
-						{m.profiles_indexers_noneConfigured()}
-					</div>
-				{:else}
-					<div class="flex items-center justify-between gap-2">
-						<span class="text-xs text-base-content/60">
-							{m.profiles_indexers_selectedCount({
-								selected: selectedConfiguredCount,
-								total: indexers.length
-							})}
-						</span>
-						{#if !isFullyReadonly}
-							<div class="flex gap-1">
-								<button
-									type="button"
-									class="btn h-7 min-h-0 btn-ghost px-2 btn-xs"
-									onclick={selectAllIndexers}
+						<!-- Copy From (only shown when creating new profile) -->
+						{#if isNewProfile}
+							<div class="form-control">
+								<label class="label py-1" for="copy-from">
+									<span class="label-text">{m.profiles_copyFrom_label()}</span>
+								</label>
+								<select
+									id="copy-from"
+									class="select-bordered select select-sm"
+									bind:value={copyFromId}
 								>
 									<option value="">{m.profiles_copyFrom_scratch()}</option>
 									{#if builtInProfiles.length > 0}
@@ -1380,7 +1337,7 @@
 				{/if}
 
 				<FormatScoreAccordion
-					formatScores={groupedFormatScores()}
+					formatScores={groupedFormatScores}
 					{requiredFormats}
 					readonly={isFullyReadonly}
 					onScoreChange={handleScoreChange}
