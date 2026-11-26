@@ -162,3 +162,87 @@ describe('EpisodeRow requirement-aware badge', () => {
 		expect(screen.getAllByText('1 of 2').length).toBeGreaterThan(0);
 	});
 });
+
+describe('EpisodeRow dropdowns stay inside the viewport', () => {
+	const mediaInfo = { videoCodec: 'h264', audioCodec: 'aac', audioChannels: 2 };
+
+	function stubRect(el: Element, r: { top: number; bottom: number; left: number; right: number }) {
+		const value = {
+			...r,
+			x: r.left,
+			y: r.top,
+			width: r.right - r.left,
+			height: r.bottom - r.top,
+			toJSON: () => ({})
+		};
+		(el as HTMLElement).getBoundingClientRect = () => value as DOMRect;
+	}
+
+	function dropdowns(container: HTMLElement) {
+		return Array.from(container.querySelectorAll<HTMLElement>('.dropdown'));
+	}
+
+	function openNearBottom(dropdown: HTMLElement) {
+		const trigger = dropdown.querySelector<HTMLElement>(':scope > [role="button"]')!;
+		const content = dropdown.querySelector<HTMLElement>(':scope > .dropdown-content')!;
+		const bottom = window.innerHeight - 20;
+		stubRect(trigger, { top: bottom - 24, bottom, left: 300, right: 330 });
+		stubRect(content, { top: 0, bottom: 150, left: 0, right: 208 });
+		trigger.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+		return { trigger, content, triggerTop: bottom - 24 };
+	}
+
+	function hasSearch(dropdown: HTMLElement) {
+		return dropdown.querySelector('.menu.dropdown-content') !== null;
+	}
+
+	function hasMediaInfo(dropdown: HTMLElement) {
+		return /h264/i.test(dropdown.querySelector('.dropdown-content')?.textContent ?? '');
+	}
+
+	it('pins every dropdown to the viewport, opening upward near the bottom', () => {
+		const { container } = renderRow(makeEpisode({ file: { ...fileStub, mediaInfo } }));
+		const all = dropdowns(container);
+
+		// Phone + desktop copies of the search menu, media info and subtitles.
+		expect(all.filter(hasSearch).length).toBe(2);
+		expect(all.filter(hasMediaInfo).length).toBe(2);
+		expect(all.length).toBe(6);
+
+		for (const dropdown of all) {
+			const { content, triggerTop } = openNearBottom(dropdown);
+			expect(content.style.position).toBe('fixed');
+			expect(parseFloat(content.style.top)).toBeLessThan(triggerTop);
+			expect(parseFloat(content.style.top) + 150).toBeLessThanOrEqual(triggerTop);
+
+			dropdown.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null }));
+			expect(content.style.position).toBe('');
+			expect(content.style.top).toBe('');
+		}
+	});
+
+	it('keeps the content pinned while focus moves inside the dropdown', () => {
+		const { container } = renderRow(makeEpisode({ file: { ...fileStub, mediaInfo } }));
+		const dropdown = dropdowns(container).find(hasSearch)!;
+		const { content } = openNearBottom(dropdown);
+		const button = content.querySelector('button')!;
+
+		dropdown.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: button }));
+		expect(content.style.position).toBe('fixed');
+	});
+
+	it('read-only: no search dropdown, media info still pinned', () => {
+		const { container } = renderRow(makeEpisode({ file: { ...fileStub, mediaInfo } }), {
+			readOnly: true
+		});
+		const all = dropdowns(container);
+		expect(all.filter(hasSearch).length).toBe(0);
+
+		const info = all.filter(hasMediaInfo);
+		expect(info.length).toBe(2);
+		for (const dropdown of info) {
+			const { content } = openNearBottom(dropdown);
+			expect(content.style.position).toBe('fixed');
+		}
+	});
+});
