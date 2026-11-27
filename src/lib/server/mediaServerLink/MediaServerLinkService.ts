@@ -20,6 +20,8 @@ import { getMediaBrowserManager } from '#lib/server/notifications/mediabrowser/M
 import { MediaBrowserClient } from '#lib/server/notifications/mediabrowser/MediaBrowserClient.js';
 import type { MediaBrowserServerRecord } from '#lib/server/db/schema.js';
 import { createChildLogger } from '#lib/logging/index.js';
+import { listPlexServerUsers } from './plexUserDirectory.js';
+import type { PlexAccount } from './plexTv.js';
 
 const logger = createChildLogger({ module: 'MediaServerLink', logDomain: 'auth' });
 
@@ -30,11 +32,12 @@ const REQUEST_TIMEOUT_MS = 10_000;
 const LINK_DEVICE = 'cinephage-link';
 
 /**
- * Server types whose user directory can be enumerated (and linked against).
- * Jellyfin today; Emby shares the /Users response shape and joins this set
- * once its linking support lands, Plex needs its own roster adapter.
+ * Server types whose user directory can be enumerated (bulk import). Plex
+ * rosters come from plex.tv via plexUserDirectory. Emby shares Jellyfin's
+ * /Users response shape and joins this set once its linking support lands.
+ * Self-service pairing and admin assignment remain Jellyfin-only.
  */
-const SERVER_TYPES_WITH_USER_DIRECTORY: ReadonlySet<string> = new Set(['jellyfin']);
+const SERVER_TYPES_WITH_USER_DIRECTORY: ReadonlySet<string> = new Set(['jellyfin', 'plex']);
 
 export function serverTypeSupportsUserDirectory(serverType: string): boolean {
 	return SERVER_TYPES_WITH_USER_DIRECTORY.has(serverType);
@@ -60,6 +63,30 @@ export type ServerUserOption = {
 	name: string;
 	isAdministrator: boolean;
 	isDisabled: boolean;
+	/** Account email when the server exposes one (Plex); null otherwise. */
+	email?: string | null;
+};
+
+/** A Plex server the account can currently reach, per the owner's roster. */
+export type PlexServerAccess = {
+	serverId: string;
+	serverName: string;
+	serverUsername: string;
+};
+
+export type PlexAccessResult =
+	{ outcome: 'ok'; servers: PlexServerAccess[] } | { outcome: 'server-error' };
+
+export type PlexLinkResult =
+	| { outcome: 'linked'; links: LinkRecord[] }
+	| { outcome: 'no-access' }
+	| { outcome: 'conflict'; message: string }
+	| { outcome: 'server-error' };
+
+export type ImportableServer = {
+	id: string;
+	name: string;
+	serverType: string;
 };
 
 export type PairingInitiateResult =
@@ -163,6 +190,115 @@ class MediaServerLinkService {
 				return { id: server.id, name: server.name, quickConnectEnabled };
 			})
 		);
+	}
+
+	/** Enabled servers whose user directory can be bulk-imported. */
+	async getImportableServers(): Promise<ImportableServer[]> {
+		const servers = await getMediaBrowserManager().getServers();
+		return servers
+			.filter((server) => server.enabled && serverTypeSupportsUserDirectory(server.serverType))
+			.map((server) => ({ id: server.id, name: server.name, serverType: server.serverType }));
+	}
+
+	/** Enabled Plex servers the admin opted into "Sign in with Plex" for. */
+	private async getPlexSignInServers() {
+		return (await getMediaBrowserManager().getServers()).filter(
+			(server) => server.enabled && server.serverType === 'plex' && server.plexSignIn
+		);
+	}
+
+	/**
+	 * Plex sign-in servers this plex.tv account currently has access to.
+	 * Re-reads each server's roster from plex.tv every time, so a share
+	 * revoked on Plex stops working here immediately. server-error only
+	 * when no roster could be read at all. Servers without Plex sign-in
+	 * turned on are never consulted.
+	 */
+	async findPlexAccess(plexAccountId: string): Promise<PlexAccessResult> {
+		const servers = await this.getPlexSignInServers();
+
+		const access: PlexServerAccess[] = [];
+		let readable = 0;
+		for (const server of servers) {
+			const roster = await this.listServerUsers(server.id);
+			if (!roster) continue;
+			readable++;
+			const entry = roster.find((candidate) => candidate.id === plexAccountId);
+			if (entry && !entry.isDisabled) {
+				access.push({ serverId: server.id, serverName: server.name, serverUsername: entry.name });
+			}
+		}
+
+		if (servers.length > 0 && readable === 0) {
+			return { outcome: 'server-error' };
+		}
+		return { outcome: 'ok', servers: access };
+	}
+
+	/** Whether Plex sign-in is turned on for any enabled Plex server (gates the Plex UI). */
+	async hasPlexSignInServer(): Promise<boolean> {
+		return (await this.getPlexSignInServers()).length > 0;
+	}
+
+	/** Local accounts linked to this plex.tv account on any of the given servers. */
+	async findUsersLinkedToServerAccount(
+		serverIds: string[],
+		serverUserId: string
+	): Promise<string[]> {
+		if (serverIds.length === 0) return [];
+		const rows = await db
+			.select({ userId: userMediaServerLinks.userId, serverId: userMediaServerLinks.serverId })
+			.from(userMediaServerLinks)
+			.where(eq(userMediaServerLinks.serverUserId, serverUserId));
+		const wanted = new Set(serverIds);
+		return [...new Set(rows.filter((row) => wanted.has(row.serverId)).map((row) => row.userId))];
+	}
+
+	/**
+	 * Self-service Plex link: attach the plex.tv account behind a freshly
+	 * approved PIN to this Cinephage user on every Plex server it can reach.
+	 */
+	async linkPlexAccount(userId: string, account: PlexAccount): Promise<PlexLinkResult> {
+		const access = await this.findPlexAccess(account.id);
+		if (access.outcome !== 'ok') return access;
+		if (access.servers.length === 0) return { outcome: 'no-access' };
+
+		const existing = await this.getLinks(userId);
+		for (const server of access.servers) {
+			const own = existing.find((link) => link.serverId === server.serverId);
+			if (own && own.serverUserId !== account.id) {
+				return {
+					outcome: 'conflict',
+					message: `Already linked to another Plex account on ${server.serverName}. Unlink it first.`
+				};
+			}
+		}
+
+		const links: LinkRecord[] = [];
+		for (const server of access.servers) {
+			const inserted = await this.insertLink(
+				userId,
+				server.serverId,
+				account.id,
+				server.serverUsername
+			);
+			if ('conflict' in inserted) {
+				return {
+					outcome: 'conflict',
+					message:
+						inserted.conflict === 'server-account-linked-elsewhere'
+							? 'This Plex account is already linked to another user.'
+							: 'Could not save the link.'
+				};
+			}
+			links.push(inserted);
+		}
+
+		logger.info(
+			{ userId, serverIds: links.map((link) => link.serverId) },
+			'[MediaServerLink] Linked Plex account via Plex sign-in'
+		);
+		return { outcome: 'linked', links };
 	}
 
 	async isQuickConnectEnabled(server: MediaBrowserServerRecord): Promise<boolean> {
@@ -386,6 +522,15 @@ class MediaServerLinkService {
 	async listServerUsers(serverId: string): Promise<ServerUserOption[] | null> {
 		const server = await this.getUserDirectoryServer(serverId);
 		if (!server) return null;
+
+		if (server.serverType === 'plex') {
+			try {
+				return await listPlexServerUsers(server);
+			} catch (error) {
+				logger.error({ err: error, serverId }, '[MediaServerLink] list Plex users failed');
+				return null;
+			}
+		}
 
 		try {
 			const response = await this.jellyfinRequest(server, '/Users');

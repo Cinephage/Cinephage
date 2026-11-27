@@ -34,14 +34,16 @@ export const GET: RequestHandler = async (event) => {
 	if (authError) return authError;
 
 	const serverId = event.url.searchParams.get('serverId');
-	const servers = await mediaServerLinkService.getLinkableServers();
+	const servers = await mediaServerLinkService.getImportableServers();
 
 	let users = null;
+	let plexSignInOnly = false;
 	if (serverId) {
 		const preview = await mediaServerUserImportService.previewImport(serverId);
 		switch (preview.outcome) {
 			case 'ok':
 				users = preview.users;
+				plexSignInOnly = preview.plexSignInOnly;
 				break;
 			case 'no-server':
 				return Response.json({ success: false, outcome: preview.outcome }, { status: 404 });
@@ -50,7 +52,7 @@ export const GET: RequestHandler = async (event) => {
 		}
 	}
 
-	return Response.json({ success: true, servers, users });
+	return Response.json({ success: true, servers, users, plexSignInOnly });
 };
 
 export const POST: RequestHandler = async (event) => {
@@ -62,11 +64,13 @@ export const POST: RequestHandler = async (event) => {
 	// Creation goes through the admin plugin's createUser: the forwarded
 	// session headers identify the admin, and the user.create.before hook
 	// re-checks the role plus the username policy on every single row.
+	// No password (Plex sign-in only) creates no credential account, so the
+	// account has no local login until an admin sets a password.
 	const createUser: ImportedUserCreator = async ({ username, email, password }) => {
 		const created = await auth.api.createUser({
 			body: {
 				email,
-				password,
+				...(password ? { password } : {}),
 				name: username,
 				role: 'user',
 				data: { username }

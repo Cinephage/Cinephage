@@ -53,6 +53,7 @@ vi.mock('#lib/logging/index.js', () => ({
 const serviceMock = vi.hoisted(() => ({
 	getLinks: vi.fn(async () => [] as unknown[]),
 	getLinkableServers: vi.fn(async () => []),
+	hasPlexSignInServer: vi.fn(async () => false),
 	initiatePairing: vi.fn(),
 	checkPairing: vi.fn(),
 	unlink: vi.fn(async () => true),
@@ -103,6 +104,7 @@ describe('GET /api/user/media-server/link', () => {
 		);
 		expect(status).toBe(200);
 		expect(data.links).toHaveLength(1);
+		expect((data as { plexAvailable?: boolean }).plexAvailable).toBe(false);
 		expect(serviceMock.getLinks).toHaveBeenCalledWith('test-user-user');
 	});
 

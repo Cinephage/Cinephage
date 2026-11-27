@@ -253,8 +253,10 @@ import {
  *   the row carries mbid/artist/album/cover, so one list table holds both TMDB
  *   items and MusicBrainz albums. SQLite cannot drop NOT NULL in place, so this
  *   rebuilds the table from its live DDL (same pattern as v181).
+ * Version 203: media_browser_servers.plex_sign_in - "Sign in with Plex" is an
+ *   explicit per-server opt-in, off by default.
  */
-export const CURRENT_SCHEMA_VERSION = 202;
+export const CURRENT_SCHEMA_VERSION = 203;
 
 /**
  * Seed rows for the *legacy* backfill in migration 078 only.
@@ -1376,7 +1378,8 @@ const TABLE_DEFINITIONS: string[] = [
 		"test_result" text,
 		"test_error" text,
 		"created_at" text,
-		"updated_at" text
+		"updated_at" text,
+		"plex_sign_in" integer NOT NULL DEFAULT 0
 	)`,
 
 	`CREATE TABLE IF NOT EXISTS "user_media_server_links" (

@@ -2,7 +2,7 @@
 	import * as m from '#lib/paraglide/messages.js';
 	import { refreshAll } from '$app/navigation';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { Loader2, RefreshCw, Server, ShieldCheck } from '@lucide/svelte';
+	import { KeyRound, Loader2, RefreshCw, Server, ShieldCheck } from '@lucide/svelte';
 	import { apiGet, apiPost } from '#lib/api/client.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { ModalWrapper, ModalHeader, ModalFooter } from '#lib/components/ui/modal/index.js';
@@ -16,7 +16,16 @@
 	}
 
 	type ImportStatus =
-		'importable' | 'linked' | 'disabled' | 'invalid-username' | 'username-taken' | 'email-taken';
+		| 'importable'
+		| 'link-existing'
+		| 'linked'
+		| 'disabled'
+		| 'invalid-username'
+		| 'username-taken'
+		| 'email-taken';
+
+	const isSelectable = (status: ImportStatus) =>
+		status === 'importable' || status === 'link-existing';
 
 	interface ImportCandidate {
 		id: string;
@@ -30,13 +39,14 @@
 	interface ImportRowResult {
 		serverUserId: string;
 		serverUsername: string;
-		status: 'created' | 'failed';
+		status: 'created' | 'linked' | 'failed';
 		error: string | null;
 		userId: string | null;
 		username: string | null;
 		email: string | null;
 		tempPassword: string | null;
 		linked: boolean;
+		plexSignInOnly: boolean;
 	}
 
 	interface Props {
@@ -55,6 +65,7 @@
 	let users = $state<ImportCandidate[] | null>(null);
 	let rosterLoading = $state(false);
 	let rosterFailed = $state(false);
+	let plexSignInOnly = $state(false);
 	let selected = new SvelteSet<string>();
 	let importing = $state(false);
 	let results = $state<ImportRowResult[] | null>(null);
@@ -68,6 +79,7 @@
 			users = null;
 			rosterLoading = false;
 			rosterFailed = false;
+			plexSignInOnly = false;
 			selected.clear();
 			importing = false;
 			results = null;
@@ -95,10 +107,14 @@
 		rosterLoading = true;
 		selected.clear();
 		try {
-			const res = await apiGet<{ users: ImportCandidate[] | null }>(IMPORT_URL, { serverId: id });
+			const res = await apiGet<{ users: ImportCandidate[] | null; plexSignInOnly?: boolean }>(
+				IMPORT_URL,
+				{ serverId: id }
+			);
 			users = res.users ?? [];
+			plexSignInOnly = res.plexSignInOnly === true;
 			for (const candidate of users) {
-				if (candidate.status === 'importable') selected.add(candidate.id);
+				if (isSelectable(candidate.status)) selected.add(candidate.id);
 			}
 		} catch {
 			rosterFailed = true;
@@ -111,14 +127,12 @@
 		selected.clear();
 		if (checked) {
 			for (const candidate of users ?? []) {
-				if (candidate.status === 'importable') selected.add(candidate.id);
+				if (isSelectable(candidate.status)) selected.add(candidate.id);
 			}
 		}
 	}
 
-	const importable = $derived(
-		(users ?? []).filter((candidate) => candidate.status === 'importable')
-	);
+	const importable = $derived((users ?? []).filter((candidate) => isSelectable(candidate.status)));
 	const allSelected = $derived(
 		importable.length > 0 && importable.every((candidate) => selected.has(candidate.id))
 	);
@@ -132,6 +146,12 @@
 		switch (candidate.status) {
 			case 'importable':
 				return { label: m.users_importStatusImportable(), class: 'badge-ghost', title: null };
+			case 'link-existing':
+				return {
+					label: m.users_importStatusLinkExisting({ username: candidate.linkedTo ?? '' }),
+					class: 'badge-info',
+					title: null
+				};
 			case 'linked':
 				return {
 					label: m.users_importStatusLinked(),
@@ -245,6 +265,12 @@
 				{:else if users !== null && users.length === 0}
 					<p class="py-12 text-center text-base-content/60">{m.users_importNoUsers()}</p>
 				{:else if users !== null}
+					{#if plexSignInOnly}
+						<div class="mb-3 alert py-2 text-sm alert-info">
+							<KeyRound class="h-4 w-4 shrink-0" />
+							<span>{m.users_importPlexOnlyHint()}</span>
+						</div>
+					{/if}
 					<div class="space-y-2">
 						<label class="flex cursor-pointer items-center gap-3 border-b border-base-300 pb-2">
 							<input
@@ -265,15 +291,16 @@
 						{#each users as candidate (candidate.id)}
 							{@const badge = statusBadge(candidate)}
 							<label
-								class="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-base-200/60 {candidate.status ===
-								'importable'
+								class="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-base-200/60 {isSelectable(
+									candidate.status
+								)
 									? ''
 									: 'opacity-50'}"
 							>
 								<input
 									type="checkbox"
 									class="checkbox checkbox-sm checkbox-primary"
-									disabled={candidate.status !== 'importable'}
+									disabled={!isSelectable(candidate.status)}
 									checked={selected.has(candidate.id)}
 									onchange={(event) =>
 										event.currentTarget.checked
@@ -302,7 +329,9 @@
 				{/if}
 			{/if}
 		{:else if results}
-			<p class="mb-4 text-sm text-base-content/70">{m.users_importHint()}</p>
+			{#if results.some((row) => row.tempPassword)}
+				<p class="mb-4 text-sm text-base-content/70">{m.users_importHint()}</p>
+			{/if}
 			<MediaServerImportResults {results} {copiedId} onCopy={handleCopy} />
 		{/if}
 	</div>

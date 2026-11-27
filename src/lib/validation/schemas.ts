@@ -1332,6 +1332,7 @@ export const mediaBrowserServerCreateSchema = z.object({
 	onUpgrade: z.boolean().default(true),
 	onRename: z.boolean().default(true),
 	onDelete: z.boolean().default(true),
+	plexSignIn: z.boolean().default(false),
 	pathMappings: z.array(mediaBrowserPathMappingSchema).default([])
 });
 
