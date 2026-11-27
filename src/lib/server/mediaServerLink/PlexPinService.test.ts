@@ -25,7 +25,11 @@ describe('PlexPinService', () => {
 	it('returns an opaque handle and the approval URL', async () => {
 		const pin = await plexPinService.create({ kind: 'sign-in' });
 		expect(pin.authUrl).toBe('https://app.plex.tv/auth#?code=abc');
-		expect(pin.handle).not.toContain('77');
+		// 32 random bytes, base64url: the plex.tv PIN id must not leak into it.
+		// A substring check on a two-digit id is flaky (about 1 run in 100 has
+		// "77" somewhere in 43 random characters), so assert the shape instead.
+		expect(pin.handle).toMatch(/^[A-Za-z0-9_-]{43}$/);
+		expect(pin.handle).not.toBe(String(77));
 		expect(pin.expiresAt).toBeGreaterThan(Date.now());
 	});
 
