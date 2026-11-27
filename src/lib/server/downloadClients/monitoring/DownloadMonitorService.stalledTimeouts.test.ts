@@ -51,6 +51,12 @@ vi.mock('../DownloadClientManager', () => ({
 	})
 }));
 
+const searchForMovie = vi.fn().mockResolvedValue({ success: true });
+const searchBulkEpisodes = vi.fn().mockResolvedValue({ results: [], summary: { grabbed: 0 } });
+vi.mock('#lib/server/library/searchOnAdd/index.js', () => ({
+	searchOnAdd: { searchForMovie, searchBulkEpisodes }
+}));
+
 const { getDownloadMonitor } = await import('./DownloadMonitorService');
 
 const CLIENT_ID = randomUUID();
@@ -60,7 +66,8 @@ const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60_000;
 
 async function insertStalledRow(
 	stalledAgoMs: number,
-	progress: number
+	progress: number,
+	isPrivate: boolean | null = null
 ): Promise<typeof downloadQueue.$inferSelect> {
 	const id = randomUUID();
 	await testDb.db.insert(downloadQueue).values({
@@ -73,7 +80,23 @@ async function insertStalledRow(
 		status: 'stalled',
 		progress: String(progress),
 		stalledSince: new Date(Date.now() - stalledAgoMs).toISOString(),
-		addedAt: new Date(Date.now() - stalledAgoMs - 60 * 60_000).toISOString()
+		addedAt: new Date(Date.now() - stalledAgoMs - 60 * 60_000).toISOString(),
+		swarmHealth:
+			isPrivate === null
+				? null
+				: {
+						checkedAt: new Date().toISOString(),
+						progressBytes: 0,
+						progressAt: new Date(Date.now() - stalledAgoMs).toISOString(),
+						seeds: 0,
+						peers: 0,
+						availability: 0,
+						isPrivate,
+						problem: 'no_source' as const,
+						strikes: 3,
+						strikesNeeded: 3,
+						dead: true
+					}
 	});
 	const [row] = await testDb.db.select().from(downloadQueue).where(eq(downloadQueue.id, id));
 	return row;
@@ -98,6 +121,11 @@ afterAll(() => {
 
 beforeEach(async () => {
 	clearTestDb(testDb);
+	// The service caches the dead-torrent settings for 30 s; a saved value must
+	// be visible to the next handler run.
+	(
+		getDownloadMonitor() as unknown as { deadTorrentSettingsCache: unknown }
+	).deadTorrentSettingsCache = null;
 	// clearTestDb leaves monitoring_settings alone; every test starts on the defaults
 	testDb.db.delete(monitoringSettings).run();
 	removeDownload.mockClear();
@@ -178,5 +206,35 @@ describe('two-tier stalled download policy', () => {
 
 		const updated = await getRow(row.id);
 		expect(updated?.status).toBe('failed');
+	});
+
+	it('keeps a private-tracker torrent the dead-torrent check kept (warn only)', async () => {
+		const row = await insertStalledRow(FOURTEEN_DAYS_MS + 60 * 60_000, 0.5, true);
+
+		await runStalledHandler();
+
+		expect(removeDownload).not.toHaveBeenCalled();
+		expect((await getRow(row.id))?.status).toBe('stalled');
+	});
+
+	it('removes the same private-tracker torrent once the user opts into removal', async () => {
+		await testDb.db
+			.insert(monitoringSettings)
+			.values({ key: 'dead_torrent_private_action', value: 'remove' });
+		const row = await insertStalledRow(FOURTEEN_DAYS_MS + 60 * 60_000, 0.5, true);
+
+		await runStalledHandler();
+
+		expect(removeDownload).toHaveBeenCalledTimes(1);
+		expect((await getRow(row.id))?.status).toBe('failed');
+	});
+
+	it('still reaps a public torrent whose swarm was judged dead', async () => {
+		const row = await insertStalledRow(FOURTEEN_DAYS_MS + 60 * 60_000, 0.5, false);
+
+		await runStalledHandler();
+
+		expect(removeDownload).toHaveBeenCalledTimes(1);
+		expect((await getRow(row.id))?.status).toBe('failed');
 	});
 });

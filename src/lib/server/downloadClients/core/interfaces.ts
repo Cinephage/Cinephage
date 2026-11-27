@@ -128,6 +128,28 @@ export interface DownloadInfo {
 
 	/** Error message from download client when status is 'error' */
 	errorMessage?: string;
+
+	/*
+	 * Swarm signals for torrents, used to tell a dead swarm from a slow one.
+	 * Optional: a client that cannot report one leaves it undefined, and the
+	 * dead-torrent check then does not judge on that signal.
+	 */
+	/** Bytes of wanted data already downloaded (falls back to progress x size) */
+	downloadedBytes?: number;
+	/** Seeds currently connected */
+	connectedSeeds?: number;
+	/** Peers (non-seeds) currently connected */
+	connectedPeers?: number;
+	/**
+	 * Copies of the rarest piece among connected peers (libtorrent's
+	 * distributed copies). Below 1 means the connected swarm cannot finish the
+	 * download. Negative when the client does not know (e.g. already seeding).
+	 */
+	availability?: number;
+	/** True while a magnet is still fetching its metadata */
+	metadataPending?: boolean;
+	/** True when the torrent is from a private tracker */
+	isPrivate?: boolean;
 }
 
 export interface DownloadFileInfo {

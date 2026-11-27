@@ -1,5 +1,6 @@
 import type { UnifiedActivity } from '#lib/types/activity.js';
 import type { MonitoringHistoryRecord } from './types';
+import type { SwarmHealth } from '#lib/types/queue.js';
 
 type QueueMediaInfo = Pick<
 	UnifiedActivity,
@@ -35,6 +36,7 @@ interface QueueActivityProjectionInput {
 	errorMessage?: string | null;
 	lastAttemptAt?: string | null;
 	isUpgrade?: boolean | null;
+	swarmHealth?: SwarmHealth | null;
 }
 
 function mapQueueStatus(status: string): UnifiedActivity['status'] {
@@ -164,6 +166,7 @@ export function projectQueueActivity(
 		status,
 		queueStatus: download.status,
 		statusReason: download.errorMessage ?? undefined,
+		swarmHealth: download.swarmHealth ?? undefined,
 		downloadProgress: Math.round((Number(download.progress) || 0) * 100),
 		isUpgrade: download.isUpgrade ?? false,
 		timeline,

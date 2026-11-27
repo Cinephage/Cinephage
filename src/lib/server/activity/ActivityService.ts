@@ -1006,7 +1006,8 @@ export class ActivityService {
 				importedAt: downloadQueue.importedAt,
 				errorMessage: downloadQueue.errorMessage,
 				lastAttemptAt: downloadQueue.lastAttemptAt,
-				isUpgrade: downloadQueue.isUpgrade
+				isUpgrade: downloadQueue.isUpgrade,
+				swarmHealth: downloadQueue.swarmHealth
 			})
 			.from(downloadQueue)
 			.where(and(...conditions))

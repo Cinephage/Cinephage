@@ -30,7 +30,13 @@ export const GET: RequestHandler = async (event) => {
 				stalledDownloadTimeoutMinutes: fullSettings.stalledDownloadTimeoutMinutes,
 				stalledDownloadProgressTimeoutMinutes: fullSettings.stalledDownloadProgressTimeoutMinutes,
 				stalledDownloadProgressThreshold: fullSettings.stalledDownloadProgressThreshold,
-				stalledDownloadBlocklistHours: fullSettings.stalledDownloadBlocklistHours
+				stalledDownloadBlocklistHours: fullSettings.stalledDownloadBlocklistHours,
+				deadTorrentEnabled: fullSettings.deadTorrentEnabled,
+				deadTorrentGraceMinutes: fullSettings.deadTorrentGraceMinutes,
+				deadTorrentMetadataMinutes: fullSettings.deadTorrentMetadataMinutes,
+				deadTorrentNoProgressMinutes: fullSettings.deadTorrentNoProgressMinutes,
+				deadTorrentStrikes: fullSettings.deadTorrentStrikes,
+				deadTorrentPrivateAction: fullSettings.deadTorrentPrivateAction
 			},
 			status: {
 				tasks: status.tasks
@@ -97,7 +103,13 @@ export const PUT: RequestHandler = async (event) => {
 				stalledDownloadProgressTimeoutMinutes:
 					fullUpdatedSettings.stalledDownloadProgressTimeoutMinutes,
 				stalledDownloadProgressThreshold: fullUpdatedSettings.stalledDownloadProgressThreshold,
-				stalledDownloadBlocklistHours: fullUpdatedSettings.stalledDownloadBlocklistHours
+				stalledDownloadBlocklistHours: fullUpdatedSettings.stalledDownloadBlocklistHours,
+				deadTorrentEnabled: fullUpdatedSettings.deadTorrentEnabled,
+				deadTorrentGraceMinutes: fullUpdatedSettings.deadTorrentGraceMinutes,
+				deadTorrentMetadataMinutes: fullUpdatedSettings.deadTorrentMetadataMinutes,
+				deadTorrentNoProgressMinutes: fullUpdatedSettings.deadTorrentNoProgressMinutes,
+				deadTorrentStrikes: fullUpdatedSettings.deadTorrentStrikes,
+				deadTorrentPrivateAction: fullUpdatedSettings.deadTorrentPrivateAction
 			},
 			status: {
 				tasks: status.tasks

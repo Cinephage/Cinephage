@@ -48,6 +48,37 @@ export function isImportedQueueStatus(
 }
 
 /**
+ * What the dead-torrent check last saw for a torrent in the queue. Stored on
+ * the queue row (`swarm_health`) so the clock and strike count survive a
+ * restart, and shown in the Activity queue so the user can see why a torrent
+ * is about to be (or was not) dropped.
+ */
+export interface SwarmHealth {
+	/** When the check last ran (checks are spaced, not run on every poll) */
+	checkedAt: string;
+	/** Downloaded bytes when progress was last seen */
+	progressBytes: number;
+	/** When downloaded bytes last went up (or tracking restarted) */
+	progressAt: string;
+	/** Seeds connected at the last check (null when the client cannot tell) */
+	seeds: number | null;
+	/** Peers connected at the last check (null when the client cannot tell) */
+	peers: number | null;
+	/** Copies of the rarest piece among connected peers (null when unknown) */
+	availability: number | null;
+	/** Torrent is from a private tracker (null when the client cannot tell) */
+	isPrivate: boolean | null;
+	/** The condition that failed at the last check, or null when healthy */
+	problem: 'metadata' | 'no_source' | null;
+	/** Consecutive checks that found the problem */
+	strikes: number;
+	/** Strikes needed before the torrent counts as dead (setting at check time) */
+	strikesNeeded: number;
+	/** Strikes reached: the torrent is dead */
+	dead: boolean;
+}
+
+/**
  * Download history status values
  */
 export type HistoryStatus = 'imported' | 'streaming' | 'failed' | 'rejected' | 'removed';
@@ -121,6 +152,8 @@ export interface QueueItem {
 	errorMessage?: string | null;
 	importAttempts: number;
 	lastAttemptAt?: string | null;
+	/** Dead-torrent check state (torrents only) */
+	swarmHealth?: SwarmHealth | null;
 
 	// Flags
 	isAutomatic: boolean;
