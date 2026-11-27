@@ -143,7 +143,13 @@ describe('mediaServerUserImportService - previewImport', () => {
 	it('classifies every roster entry against local links and accounts', async () => {
 		testDb.db
 			.insert(user)
-			.values(createTestUser({ username: 'someone', email: 'emailhit@main-jellyfin.users.local' }))
+			.values(
+				createTestUser({
+					username: 'someone',
+					email: 'emailhit@main-jellyfin.users.local',
+					role: 'user'
+				})
+			)
 			.run();
 		testDb.db
 			.insert(userMediaServerLinks)
@@ -169,7 +175,7 @@ describe('mediaServerUserImportService - previewImport', () => {
 			{ Id: 'jf-email', Name: 'EmailHit' }
 		]);
 
-		const preview = await mediaServerUserImportService.previewImport(SERVER_ID);
+		const preview = await mediaServerUserImportService.previewImport(SERVER_ID, viewerUserId);
 		expect(preview.outcome).toBe('ok');
 		if (preview.outcome !== 'ok') return;
 
@@ -194,7 +200,7 @@ describe('mediaServerUserImportService - previewImport', () => {
 	});
 
 	it('returns no-server for unknown or non-jellyfin servers', async () => {
-		const unknown = await mediaServerUserImportService.previewImport(randomUUID());
+		const unknown = await mediaServerUserImportService.previewImport(randomUUID(), viewerUserId);
 		expect(unknown.outcome).toBe('no-server');
 
 		const embyId = randomUUID();
@@ -209,13 +215,13 @@ describe('mediaServerUserImportService - previewImport', () => {
 				enabled: true
 			})
 			.run();
-		const emby = await mediaServerUserImportService.previewImport(embyId);
+		const emby = await mediaServerUserImportService.previewImport(embyId, viewerUserId);
 		expect(emby.outcome).toBe('no-server');
 	});
 
 	it('returns server-error when the roster fetch fails', async () => {
 		fetchMock.mockImplementation(async () => serverJson(500, {}));
-		const preview = await mediaServerUserImportService.previewImport(SERVER_ID);
+		const preview = await mediaServerUserImportService.previewImport(SERVER_ID, viewerUserId);
 		expect(preview.outcome).toBe('server-error');
 	});
 });
@@ -231,7 +237,8 @@ describe('mediaServerUserImportService - importUsers', () => {
 		const result = await mediaServerUserImportService.importUsers({
 			serverId: SERVER_ID,
 			serverUserIds: ['jf-a', 'jf-b'],
-			createUser: creator
+			createUser: creator,
+			actorUserId: viewerUserId
 		});
 
 		expect(result.outcome).toBe('ok');
@@ -278,7 +285,8 @@ describe('mediaServerUserImportService - importUsers', () => {
 		const result = await mediaServerUserImportService.importUsers({
 			serverId: SERVER_ID,
 			serverUserIds: ['jf-a', 'jf-a'],
-			createUser: creator
+			createUser: creator,
+			actorUserId: viewerUserId
 		});
 
 		expect(result.outcome).toBe('ok');
@@ -294,7 +302,8 @@ describe('mediaServerUserImportService - importUsers', () => {
 		const result = await mediaServerUserImportService.importUsers({
 			serverId: SERVER_ID,
 			serverUserIds: ['jf-missing'],
-			createUser: creator
+			createUser: creator,
+			actorUserId: viewerUserId
 		});
 
 		expect(result.outcome).toBe('ok');
@@ -316,7 +325,8 @@ describe('mediaServerUserImportService - importUsers', () => {
 		const result = await mediaServerUserImportService.importUsers({
 			serverId: SERVER_ID,
 			serverUserIds: ['jf-a'],
-			createUser: creator
+			createUser: creator,
+			actorUserId: viewerUserId
 		});
 
 		expect(result.outcome).toBe('ok');
@@ -347,7 +357,8 @@ describe('mediaServerUserImportService - importUsers', () => {
 		const result = await mediaServerUserImportService.importUsers({
 			serverId: SERVER_ID,
 			serverUserIds: ['jf-a'],
-			createUser: creator
+			createUser: creator,
+			actorUserId: viewerUserId
 		});
 
 		expect(result.outcome).toBe('ok');
@@ -375,7 +386,8 @@ describe('mediaServerUserImportService - importUsers', () => {
 		const result = await mediaServerUserImportService.importUsers({
 			serverId: SERVER_ID,
 			serverUserIds: ['jf-a', 'jf-b'],
-			createUser: creator
+			createUser: creator,
+			actorUserId: viewerUserId
 		});
 
 		expect(result.outcome).toBe('ok');
@@ -472,7 +484,7 @@ describe('mediaServerUserImportService - Plex', () => {
 		insertPlexServer();
 		mockPlex();
 
-		const preview = await mediaServerUserImportService.previewImport(PLEX_ID);
+		const preview = await mediaServerUserImportService.previewImport(PLEX_ID, viewerUserId);
 		expect(preview.outcome).toBe('ok');
 		if (preview.outcome !== 'ok') return;
 
@@ -502,7 +514,7 @@ describe('mediaServerUserImportService - Plex', () => {
 		insertPlexServer();
 		mockPlex({ ownerUsername: 'Owner@Example.com' });
 
-		const preview = await mediaServerUserImportService.previewImport(PLEX_ID);
+		const preview = await mediaServerUserImportService.previewImport(PLEX_ID, viewerUserId);
 		expect(preview.outcome).toBe('ok');
 		if (preview.outcome !== 'ok') return;
 		expect(preview.users.find((candidate) => candidate.id === '100')).toMatchObject({
@@ -515,7 +527,7 @@ describe('mediaServerUserImportService - Plex', () => {
 		insertPlexServer();
 		mockPlex({ ownerUsername: 'someone-else' });
 
-		const preview = await mediaServerUserImportService.previewImport(PLEX_ID);
+		const preview = await mediaServerUserImportService.previewImport(PLEX_ID, viewerUserId);
 		expect(preview.outcome).toBe('ok');
 		if (preview.outcome !== 'ok') return;
 		expect(preview.users.some((candidate) => candidate.id === '100')).toBe(false);
@@ -525,11 +537,11 @@ describe('mediaServerUserImportService - Plex', () => {
 		insertPlexServer();
 		testDb.db
 			.insert(user)
-			.values(createTestUser({ username: 'friendly', email: 'Friend@example.com' }))
+			.values(createTestUser({ username: 'friendly', email: 'Friend@example.com', role: 'user' }))
 			.run();
 		mockPlex();
 
-		const preview = await mediaServerUserImportService.previewImport(PLEX_ID);
+		const preview = await mediaServerUserImportService.previewImport(PLEX_ID, viewerUserId);
 		if (preview.outcome !== 'ok') throw new Error('expected ok');
 		expect(preview.users.find((candidate) => candidate.id === '200')).toMatchObject({
 			status: 'link-existing',
@@ -551,7 +563,10 @@ describe('mediaServerUserImportService - Plex', () => {
 		const result = await mediaServerUserImportService.importUsers({
 			serverId: PLEX_ID,
 			serverUserIds: ['100'],
-			createUser: creator
+			createUser: creator,
+			// The owner is the administrator running the import: linking their own
+			// account from their own roster is the intended flow.
+			actorUserId: ownerLocalId
 		});
 		expect(result.outcome).toBe('ok');
 		if (result.outcome !== 'ok') return;
@@ -570,11 +585,69 @@ describe('mediaServerUserImportService - Plex', () => {
 		]);
 
 		// Re-opening the import now shows the owner as already linked.
-		const preview = await mediaServerUserImportService.previewImport(PLEX_ID);
+		const preview = await mediaServerUserImportService.previewImport(PLEX_ID, viewerUserId);
 		if (preview.outcome !== 'ok') throw new Error('expected ok');
 		expect(preview.users.find((candidate) => candidate.id === '100')).toMatchObject({
 			status: 'linked',
 			linkedTo: 'yusof'
+		});
+	});
+
+	it('refuses to link another administrator account from the roster', async () => {
+		insertPlexServer();
+		const otherAdminId = randomUUID();
+		testDb.db
+			.insert(user)
+			.values(
+				createTestUser({
+					id: otherAdminId,
+					username: 'otheradmin',
+					email: 'owner@example.com',
+					role: 'admin'
+				})
+			)
+			.run();
+		mockPlex();
+		const { creator, calls } = fakeCreator();
+
+		// The signed-in admin is not that account, so the owner's Plex identity
+		// is not attached to it: an email is a claim, a link is a sign-in.
+		const result = await mediaServerUserImportService.importUsers({
+			serverId: PLEX_ID,
+			serverUserIds: ['100'],
+			createUser: creator,
+			actorUserId: viewerUserId
+		});
+
+		expect(result.outcome).toBe('ok');
+		if (result.outcome !== 'ok') return;
+		expect(result.results[0]).toMatchObject({ status: 'failed' });
+		expect(result.results[0]?.error).toBe(
+			'Matches an administrator account - link it from that account, not here'
+		);
+		expect(calls).toHaveLength(0);
+		expect(testDb.db.select().from(userMediaServerLinks).all()).toHaveLength(0);
+	});
+
+	it('marks the same roster row as blocked in the preview', async () => {
+		insertPlexServer();
+		testDb.db
+			.insert(user)
+			.values(
+				createTestUser({
+					username: 'otheradmin',
+					email: 'owner@example.com',
+					role: 'admin'
+				})
+			)
+			.run();
+		mockPlex();
+
+		const preview = await mediaServerUserImportService.previewImport(PLEX_ID, viewerUserId);
+		if (preview.outcome !== 'ok') throw new Error('expected ok');
+		expect(preview.users.find((candidate) => candidate.id === '100')).toMatchObject({
+			status: 'email-admin',
+			linkedTo: 'otheradmin'
 		});
 	});
 
@@ -591,7 +664,7 @@ describe('mediaServerUserImportService - Plex', () => {
 			.run();
 		mockPlex();
 
-		const preview = await mediaServerUserImportService.previewImport(PLEX_ID);
+		const preview = await mediaServerUserImportService.previewImport(PLEX_ID, viewerUserId);
 		if (preview.outcome !== 'ok') throw new Error('expected ok');
 		expect(preview.users.find((candidate) => candidate.id === '200')?.status).toBe('email-taken');
 	});
@@ -604,7 +677,8 @@ describe('mediaServerUserImportService - Plex', () => {
 		const result = await mediaServerUserImportService.importUsers({
 			serverId: PLEX_ID,
 			serverUserIds: ['200'],
-			createUser: creator
+			createUser: creator,
+			actorUserId: viewerUserId
 		});
 		expect(result.outcome).toBe('ok');
 		if (result.outcome !== 'ok') return;
@@ -625,14 +699,15 @@ describe('mediaServerUserImportService - Plex', () => {
 		mockPlex();
 		const { creator, calls } = fakeCreator();
 
-		const preview = await mediaServerUserImportService.previewImport(PLEX_ID);
+		const preview = await mediaServerUserImportService.previewImport(PLEX_ID, viewerUserId);
 		if (preview.outcome !== 'ok') throw new Error('expected ok');
 		expect(preview.plexSignInOnly).toBe(false);
 
 		const result = await mediaServerUserImportService.importUsers({
 			serverId: PLEX_ID,
 			serverUserIds: ['200'],
-			createUser: creator
+			createUser: creator,
+			actorUserId: viewerUserId
 		});
 		if (result.outcome !== 'ok') throw new Error('expected ok');
 		expect(result.results[0]!.tempPassword).toMatch(/^[A-Za-z0-9]{20}$/);
@@ -645,14 +720,15 @@ describe('mediaServerUserImportService - Plex', () => {
 		mockPlex();
 		const { creator, calls } = fakeCreator();
 
-		const preview = await mediaServerUserImportService.previewImport(PLEX_ID);
+		const preview = await mediaServerUserImportService.previewImport(PLEX_ID, viewerUserId);
 		if (preview.outcome !== 'ok') throw new Error('expected ok');
 		expect(preview.plexSignInOnly).toBe(true);
 
 		const result = await mediaServerUserImportService.importUsers({
 			serverId: PLEX_ID,
 			serverUserIds: ['200'],
-			createUser: creator
+			createUser: creator,
+			actorUserId: viewerUserId
 		});
 		if (result.outcome !== 'ok') throw new Error('expected ok');
 		expect(result.results[0]).toMatchObject({
@@ -668,7 +744,7 @@ describe('mediaServerUserImportService - Plex', () => {
 	it('returns server-error when plex.tv fails', async () => {
 		insertPlexServer();
 		mockPlex({ usersStatus: 401 });
-		const preview = await mediaServerUserImportService.previewImport(PLEX_ID);
+		const preview = await mediaServerUserImportService.previewImport(PLEX_ID, viewerUserId);
 		expect(preview.outcome).toBe('server-error');
 	});
 });

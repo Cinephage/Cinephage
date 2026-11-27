@@ -114,7 +114,9 @@
 			users = res.users ?? [];
 			plexSignInOnly = res.plexSignInOnly === true;
 			for (const candidate of users) {
-				if (isSelectable(candidate.status)) selected.add(candidate.id);
+				// Linking an existing account is a decision, not a default: an
+				// email is a claim the media server makes about itself.
+				if (candidate.status === 'importable') selected.add(candidate.id);
 			}
 		} catch {
 			rosterFailed = true;
@@ -127,12 +129,14 @@
 		selected.clear();
 		if (checked) {
 			for (const candidate of users ?? []) {
-				if (isSelectable(candidate.status)) selected.add(candidate.id);
+				if (candidate.status === 'importable') selected.add(candidate.id);
 			}
 		}
 	}
 
-	const importable = $derived((users ?? []).filter((candidate) => isSelectable(candidate.status)));
+	const importable = $derived(
+		(users ?? []).filter((candidate) => candidate.status === 'importable')
+	);
 	const allSelected = $derived(
 		importable.length > 0 && importable.every((candidate) => selected.has(candidate.id))
 	);
@@ -172,6 +176,14 @@
 				return { label: m.users_importStatusUsernameTaken(), class: 'badge-warning', title: null };
 			case 'email-taken':
 				return { label: m.users_importStatusEmailTaken(), class: 'badge-warning', title: null };
+			case 'email-admin':
+				return {
+					label: m.users_importStatusEmailAdmin(),
+					class: 'badge-warning',
+					title: candidate.linkedTo
+						? m.users_importLinkedTo({ username: candidate.linkedTo })
+						: null
+				};
 		}
 	}
 

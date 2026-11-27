@@ -39,7 +39,10 @@ export const GET: RequestHandler = async (event) => {
 	let users = null;
 	let plexSignInOnly = false;
 	if (serverId) {
-		const preview = await mediaServerUserImportService.previewImport(serverId);
+		const preview = await mediaServerUserImportService.previewImport(
+			serverId,
+			event.locals.user!.id
+		);
 		switch (preview.outcome) {
 			case 'ok':
 				users = preview.users;
@@ -83,7 +86,8 @@ export const POST: RequestHandler = async (event) => {
 	const result = await mediaServerUserImportService.importUsers({
 		serverId,
 		serverUserIds,
-		createUser
+		createUser,
+		actorUserId: event.locals.user!.id
 	});
 
 	switch (result.outcome) {

@@ -42,6 +42,8 @@ export type ImportCandidateStatus =
 	| 'importable'
 	/** Email matches an existing, not-yet-linked local account: link it. */
 	| 'link-existing'
+	/** Email matches an administrator: refused, the owner links it themselves. */
+	| 'email-admin'
 	| 'linked'
 	| 'disabled'
 	| 'invalid-username'
@@ -143,10 +145,12 @@ export function importBlockReason(status: ImportCandidateStatus): string | null 
 			return 'A local account already uses this username';
 		case 'email-taken':
 			return 'The local account with this email is already linked to another server account';
+		case 'email-admin':
+			return 'Matches an administrator account - link it from that account, not here';
 	}
 }
 
-type LocalAccount = { userId: string; username: string };
+type LocalAccount = { userId: string; username: string; role: string };
 
 type ClassifyContext = {
 	serverName: string;
@@ -196,7 +200,7 @@ class MediaServerUserImportService {
 			.where(eq(userMediaServerLinks.serverId, serverId));
 
 		const localUsers = await db
-			.select({ id: user.id, username: user.username, email: user.email })
+			.select({ id: user.id, username: user.username, email: user.email, role: user.role })
 			.from(user);
 
 		return {
@@ -219,14 +223,18 @@ class MediaServerUserImportService {
 					.filter((row) => row.email && row.username)
 					.map((row) => [
 						row.email!.toLowerCase(),
-						{ userId: row.id, username: row.username as string }
+						{ userId: row.id, username: row.username as string, role: row.role }
 					])
 			),
 			usersLinkedOnServer: new Set(linkRows.map((row) => row.userId))
 		};
 	}
 
-	private classify(entry: ServerUserOption, context: ClassifyContext): ImportCandidate {
+	private classify(
+		entry: ServerUserOption,
+		context: ClassifyContext,
+		actorUserId: string
+	): ImportCandidate {
 		const candidate: ImportCandidate = {
 			id: entry.id,
 			name: entry.name,
@@ -249,9 +257,18 @@ class MediaServerUserImportService {
 		// different account on this server.
 		const sameEmail = context.usersByEmail.get(candidate.suggestedEmail.toLowerCase());
 		if (sameEmail) {
-			return context.usersLinkedOnServer.has(sameEmail.userId)
-				? { ...candidate, status: 'email-taken' }
-				: { ...candidate, status: 'link-existing', linkedTo: sameEmail.username };
+			if (context.usersLinkedOnServer.has(sameEmail.userId)) {
+				return { ...candidate, status: 'email-taken' };
+			}
+			// The email is a claim the media server makes about itself, and a
+			// link signs in as that account. An administrator account is only
+			// linked by the administrator running the import, never by another
+			// admin's roster; otherwise link it from the profile page, where
+			// the Plex approval proves the account.
+			if (sameEmail.role === 'admin' && sameEmail.userId !== actorUserId) {
+				return { ...candidate, status: 'email-admin', linkedTo: sameEmail.username };
+			}
+			return { ...candidate, status: 'link-existing', linkedTo: sameEmail.username };
 		}
 		if (!isValidUsernameFormat(entry.name) || isHardReservedUsername(entry.name)) {
 			return { ...candidate, status: 'invalid-username' };
@@ -266,14 +283,14 @@ class MediaServerUserImportService {
 	}
 
 	/** Roster with per-user import status for the admin's picker. */
-	async previewImport(serverId: string): Promise<ImportPreviewResult> {
+	async previewImport(serverId: string, actorUserId: string): Promise<ImportPreviewResult> {
 		const context = await this.loadContext(serverId);
 		if (context.outcome !== 'ok') {
 			return context;
 		}
 		return {
 			outcome: 'ok',
-			users: context.roster.map((entry) => this.classify(entry, context)),
+			users: context.roster.map((entry) => this.classify(entry, context, actorUserId)),
 			plexSignInOnly: context.plexSignInOnly
 		};
 	}
@@ -287,6 +304,8 @@ class MediaServerUserImportService {
 		serverId: string;
 		serverUserIds: string[];
 		createUser: ImportedUserCreator;
+		/** The admin running the import; only they may link their own account. */
+		actorUserId: string;
 	}): Promise<ImportUsersResult> {
 		const context = await this.loadContext(input.serverId);
 		if (context.outcome !== 'ok') {
@@ -314,7 +333,7 @@ class MediaServerUserImportService {
 				continue;
 			}
 
-			const candidate = this.classify(entry, context);
+			const candidate = this.classify(entry, context, input.actorUserId);
 			const blockReason = importBlockReason(candidate.status);
 			if (blockReason) {
 				results.push({
