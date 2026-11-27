@@ -65,8 +65,6 @@ interface DelugeTorrentInfo {
 	/** Copies of the rarest piece among connected peers */
 	distributed_copies?: number;
 	private?: boolean;
-	/** False while a magnet is still fetching metadata (Deluge 2.x) */
-	has_metadata?: boolean;
 }
 
 type DelugeStatus = DownloadInfo['status'];
@@ -95,8 +93,7 @@ const DELUGE_FIELDS = [
 	'num_seeds',
 	'num_peers',
 	'distributed_copies',
-	'private',
-	'has_metadata'
+	'private'
 ];
 
 function mapDelugeState(state: string | undefined, progress: number): DelugeStatus {
@@ -278,8 +275,9 @@ export class DelugeClient implements IDownloadClient {
 		const progress = Math.max(0, Math.min(1, progressPercent / 100));
 		const size = toNumber(torrent.total_size);
 		let status = mapDelugeState(torrent.state, progress);
-		const metadataPending =
-			typeof torrent.has_metadata === 'boolean' ? !torrent.has_metadata : undefined;
+		// Deluge has no has_metadata status key; a magnet reports total_size 0
+		// until its metadata has arrived.
+		const metadataPending = size === 0;
 		// Deluge has no stalled state: a download still fetching metadata, or
 		// receiving nothing, is stalled (qBittorrent's metaDL / stalledDL), so the
 		// stalled timeouts and the dead-torrent check apply to it.

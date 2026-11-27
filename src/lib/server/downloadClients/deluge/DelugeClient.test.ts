@@ -34,9 +34,15 @@ function mockDelugeResponse(torrent: Record<string, unknown>): ReturnType<typeof
 		}
 
 		if (payload.method === 'web.update_ui' || payload.method === 'web.get_torrent_status') {
+			// Deluge answers with the requested status keys only, so a key the
+			// client asks for that Deluge does not expose never arrives.
+			const keys = (payload.params?.[0] as string[] | undefined) ?? [];
+			const answered = Object.fromEntries(
+				Object.entries(torrent).filter(([key]) => keys.includes(key))
+			);
 			return new Response(
 				JSON.stringify({
-					result: { torrents: { deadbeef: torrent } },
+					result: { torrents: { deadbeef: answered } },
 					error: null
 				}),
 				{ status: 200, headers: { 'Content-Type': 'application/json' } }
@@ -338,7 +344,12 @@ describe('DelugeClient swarm signals', () => {
 	it('flags a magnet still fetching metadata', async () => {
 		vi.stubGlobal(
 			'fetch',
-			mockDelugeResponse({ ...downloading, has_metadata: false, download_payload_rate: 10 })
+			mockDelugeResponse({
+				...downloading,
+				total_size: 0,
+				total_done: 0,
+				download_payload_rate: 10
+			})
 		);
 		const client = new DelugeClient({
 			host: 'localhost',
@@ -349,5 +360,24 @@ describe('DelugeClient swarm signals', () => {
 		const d = await client.getDownload('deadbeef');
 		expect(d?.metadataPending).toBe(true);
 		expect(d?.status).toBe('stalled');
+	});
+
+	it('asks only for status keys Deluge reports', async () => {
+		const fetchMock = mockDelugeResponse({ ...downloading });
+		vi.stubGlobal('fetch', fetchMock);
+		const client = new DelugeClient({
+			host: 'localhost',
+			port: 8112,
+			useSsl: false,
+			password: 'deluge'
+		});
+		await client.getDownload('deadbeef');
+
+		const bodies = fetchMock.mock.calls
+			.map((call) => JSON.parse(String((call[1] as RequestInit | undefined)?.body ?? '{}')))
+			.filter((body) => body.params?.[0]);
+		const keys = bodies.at(-1)?.params?.[0] as string[];
+		expect(keys).toContain('total_size');
+		expect(keys).not.toContain('has_metadata');
 	});
 });
