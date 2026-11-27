@@ -1,6 +1,12 @@
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
 	import { Clapperboard } from '@lucide/svelte';
+	import {
+		POSTER_CORNER,
+		POSTER_TAG,
+		POSTER_TAG_TEXT,
+		POSTER_TONE
+	} from '#lib/components/ui/poster-tags.js';
 	import TmdbImage from '#lib/components/tmdb/TmdbImage.svelte';
 	import Skeleton from '#lib/components/ui/Skeleton.svelte';
 	import { resolve } from '$app/paths';
@@ -67,11 +73,15 @@
 							</div>
 						</div>
 						{#if !movie.hasFile && movie.monitored}
-							<div class="absolute top-1 right-1">
+							<div class={POSTER_CORNER.topRight}>
 								<span
-									class="badge badge-xs {movie.isReleased ? 'badge-warning' : 'badge-secondary'}"
+									class="{POSTER_TAG} {movie.isReleased
+										? POSTER_TONE.warning
+										: POSTER_TONE.secondary}"
 								>
-									{movie.isReleased ? m.common_missing() : m.common_unreleased()}
+									<span class={POSTER_TAG_TEXT}>
+										{movie.isReleased ? m.common_missing() : m.common_unreleased()}
+									</span>
 								</span>
 							</div>
 						{/if}

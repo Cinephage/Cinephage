@@ -30,7 +30,8 @@ describe('MediaCard top-right corner', () => {
 	it('renders the type badge and quick-add button as siblings (no overlap)', () => {
 		render(MediaCard, { props: { item: movieStub, onAddToLibrary: vi.fn() } });
 
-		const badge = screen.getByText('Movie');
+		// The text sits in the tag's own centred span; the tag is its parent.
+		const badge = screen.getByText('Movie').parentElement!;
 		const addButton = screen.getByTitle('Add to Library');
 
 		expect(addButton.parentElement).toBe(badge.parentElement);

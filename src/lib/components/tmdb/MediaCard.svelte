@@ -10,6 +10,14 @@
 	import { resolvePath } from '#lib/utils/routing.js';
 	import TmdbImage from './TmdbImage.svelte';
 	import { Check, Clock, Plus, Clapperboard } from '@lucide/svelte';
+	import {
+		POSTER_CORNER,
+		POSTER_CORNER_BELOW_CHECKBOX,
+		POSTER_TAG,
+		POSTER_TAG_TEXT,
+		POSTER_ICON,
+		POSTER_TONE
+	} from '#lib/components/ui/poster-tags.js';
 	import * as m from '#lib/paraglide/messages.js';
 	import { getSmartReleaseLine } from '#lib/utils/smartReleaseLine.js';
 	import { formatReleaseLine } from '#lib/utils/releaseLineText.js';
@@ -46,9 +54,9 @@
 
 	function getBadgeClass(item: TmdbMediaItem): string {
 		const label = getMediaTypeLabel(item);
-		if (label === 'Movie') return 'bg-primary/65 text-primary-content sm:bg-primary/80';
-		if (label === 'TV') return 'bg-secondary/65 text-secondary-content sm:bg-secondary/80';
-		return 'bg-neutral/65 text-neutral-content sm:bg-neutral/80';
+		if (label === 'Movie') return POSTER_TONE.primary;
+		if (label === 'TV') return POSTER_TONE.secondary;
+		return POSTER_TONE.neutral;
 	}
 
 	const ratingColor = (rating: number): string => {
@@ -136,7 +144,7 @@
 
 	<!-- Selection checkbox (top-left, above the status badges) -->
 	{#if canSelect}
-		<div class="absolute top-2 left-2 z-20">
+		<div class="{POSTER_CORNER.topLeft} z-20">
 			<button
 				type="button"
 				class="flex h-6 w-6 items-center justify-center rounded-md border-2 bg-base-100/90 shadow-sm transition-colors {selected
@@ -155,39 +163,30 @@
 
 	<!-- Status column (top-left): library + request badges -->
 	{#if inLibrary || requestedOpen}
-		<div
-			class="absolute left-1 z-10 flex flex-col items-start gap-1 sm:left-2 {canSelect
-				? 'top-10'
-				: 'top-1 sm:top-2'}"
-		>
+		<div class={canSelect ? POSTER_CORNER_BELOW_CHECKBOX : POSTER_CORNER.topLeft}>
 			{#if inLibrary}
 				<div
-					class="flex h-6 w-6 items-center justify-center rounded-full shadow-md backdrop-blur-sm {hasFile
-						? 'bg-success/75 text-success-content sm:bg-success/90'
-						: 'bg-warning/75 text-warning-content sm:bg-warning/90'}"
+					class="{POSTER_ICON} {hasFile ? POSTER_TONE.success : POSTER_TONE.warning}"
 					title={hasFile ? m.tmdb_availableInLibrary() : m.tmdb_monitoredNotDownloaded()}
 				>
 					{#if hasFile}
-						<Check class="h-4 w-4" strokeWidth={3} />
+						<Check class="size-3" strokeWidth={3} />
 					{:else}
-						<Clock class="h-4 w-4" strokeWidth={2.5} />
+						<Clock class="size-3" strokeWidth={2.5} />
 					{/if}
 				</div>
 			{/if}
 
 			{#if requestedOpen}
-				<div
-					class="flex h-6 w-6 items-center justify-center rounded-full bg-secondary/75 text-secondary-content shadow-md sm:bg-secondary/90 sm:backdrop-blur-sm"
-					title={m.requests_requested()}
-				>
-					<Clapperboard class="h-3.5 w-3.5" strokeWidth={2.5} />
+				<div class="{POSTER_ICON} {POSTER_TONE.secondary}" title={m.requests_requested()}>
+					<Clapperboard class="size-3" strokeWidth={2.5} />
 				</div>
 			{/if}
 		</div>
 	{/if}
 
 	<!-- Top-right row: quick add (hover) + media type badge - siblings, so they never overlap -->
-	<div class="absolute top-1 right-1 z-10 flex items-center gap-1 sm:top-2 sm:right-2">
+	<div class={POSTER_CORNER.topRightRow}>
 		{#if showQuickAdd}
 			<button
 				type="button"
@@ -201,10 +200,8 @@
 		{/if}
 
 		{#if typeLabel}
-			<span
-				class="badge border-none badge-xs font-semibold shadow-sm sm:badge-sm sm:backdrop-blur-sm {badgeClass}"
-			>
-				{typeLabel}
+			<span class="{POSTER_TAG} {badgeClass}">
+				<span class={POSTER_TAG_TEXT}>{typeLabel}</span>
 			</span>
 		{/if}
 	</div>

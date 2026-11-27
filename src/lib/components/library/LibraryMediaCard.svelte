@@ -15,6 +15,14 @@
 		Radio
 	} from '@lucide/svelte';
 	import { resolvePath } from '#lib/utils/routing.js';
+	import {
+		POSTER_CORNER,
+		POSTER_CORNER_BELOW_CHECKBOX,
+		POSTER_TAG,
+		POSTER_TAG_TEXT,
+		POSTER_ICON,
+		POSTER_TONE
+	} from '#lib/components/ui/poster-tags.js';
 	import { imageError } from '#lib/actions/image-error.js';
 	import type { MediaCardView, LibraryKind } from './media-view.js';
 
@@ -60,15 +68,15 @@
 	let artFailed = $state(false);
 
 	const TYPE_TONE: Record<MediaCardView['typeTone'], string> = {
-		primary: 'bg-primary/65 text-primary-content sm:bg-primary/80',
-		secondary: 'bg-secondary/65 text-secondary-content sm:bg-secondary/80',
-		accent: 'bg-accent/65 text-accent-content sm:bg-accent/80'
+		primary: POSTER_TONE.primary,
+		secondary: POSTER_TONE.secondary,
+		accent: POSTER_TONE.accent
 	};
 
 	const STATE_TONE: Record<'success' | 'error' | 'neutral', string> = {
-		success: 'bg-success/65 text-success-content sm:bg-success/80',
-		error: 'bg-error/65 text-error-content sm:bg-error/80',
-		neutral: 'bg-base-100/65 text-base-content sm:bg-base-100/80'
+		success: POSTER_TONE.success,
+		error: POSTER_TONE.error,
+		neutral: POSTER_TONE.base
 	};
 
 	function handleCheckboxClick(e: MouseEvent) {
@@ -123,7 +131,7 @@
 
 	<!-- Selection checkbox -->
 	{#if selectable}
-		<div class="absolute top-2 left-2 z-20">
+		<div class="{POSTER_CORNER.topLeft} z-20">
 			<button
 				type="button"
 				class="flex h-6 w-6 items-center justify-center rounded-md border-2 bg-base-100/90 shadow-sm transition-colors {selected
@@ -139,16 +147,14 @@
 	{/if}
 
 	<!-- Top-right badges: Monitored + kind -->
-	<div
-		class="absolute top-1 right-1 z-10 flex max-w-[48%] flex-col items-end gap-1 sm:top-2 sm:right-2"
-	>
+	<div class="{POSTER_CORNER.topRight} max-w-[48%]">
 		{#if !view.hideMonitored}
 			<div
-				class="badge border-none badge-xs shadow-sm sm:badge-sm {view.monitored
+				class="{POSTER_ICON} {view.monitored
 					? view.partiallyMonitored
-						? 'bg-warning/65 text-warning-content sm:bg-warning/80'
-						: 'bg-success/65 text-success-content sm:bg-success/80'
-					: 'bg-base-300/65 text-base-content/60 sm:bg-base-300/80'}"
+						? POSTER_TONE.warning
+						: POSTER_TONE.success
+					: POSTER_TONE.muted}"
 				title={view.monitored
 					? view.partiallyMonitored
 						? m.library_mediaCard_partiallyMonitored()
@@ -156,9 +162,9 @@
 					: m.library_mediaCard_notMonitored()}
 			>
 				{#if view.monitored}
-					<Eye class="h-3 w-3" />
+					<Eye class="size-3" />
 				{:else}
-					<EyeOff class="h-3 w-3" />
+					<EyeOff class="size-3" />
 				{/if}
 			</div>
 		{/if}
@@ -166,42 +172,38 @@
 		<!-- Movie and TV cards only ever sit on their own library page: on phones the type tag
 		     repeats the page title and crowds the quality badge, so it is shown from sm up. -->
 		<div
-			class="badge truncate border-none badge-xs font-semibold shadow-sm sm:badge-sm {TYPE_TONE[
-				view.typeTone
-			]} {view.typeTone === 'accent' ? '' : 'hidden sm:inline-flex'}"
+			class="{POSTER_TAG} {TYPE_TONE[view.typeTone]} {view.typeTone === 'accent'
+				? ''
+				: 'hidden sm:inline-flex'}"
 		>
-			{view.typeLabel}
+			<span class={POSTER_TAG_TEXT}>{view.typeLabel}</span>
 		</div>
 	</div>
 
 	<!-- Top-left: state badge (file, child count) + detail -->
-	<div
-		class="absolute left-1 z-10 flex max-w-[48%] flex-col gap-1 sm:left-2 {selectable
-			? 'top-10'
-			: 'top-1 sm:top-2'}"
-	>
+	<div class="{selectable ? POSTER_CORNER_BELOW_CHECKBOX : POSTER_CORNER.topLeft} max-w-[48%]">
 		{#if view.state}
 			<div
-				class="badge border-none badge-xs shadow-sm sm:badge-sm {STATE_TONE[view.state.tone]}"
+				class="{view.state.icon === 'count' ? POSTER_TAG : POSTER_ICON} {STATE_TONE[
+					view.state.tone
+				]}"
 				title={view.state.label}
 			>
 				{#if view.state.icon === 'file'}
-					<Check class="h-3 w-3" />
+					<Check class="size-3" strokeWidth={3} />
 				{:else if view.state.icon === 'cross'}
-					<X class="h-3 w-3" />
+					<X class="size-3" strokeWidth={3} />
 				{:else if view.state.icon === 'stream'}
-					<Radio class="h-3 w-3" />
+					<Radio class="size-3" />
 				{:else}
-					{view.state.label}
+					<span class={POSTER_TAG_TEXT}>{view.state.short ?? view.state.label}</span>
 				{/if}
 			</div>
 		{/if}
 
 		{#if view.state?.icon === 'file' && view.detail}
-			<div
-				class="badge truncate border-none bg-primary/65 badge-xs font-medium text-primary-content shadow-sm sm:bg-primary/80 sm:badge-sm"
-			>
-				{view.detail}
+			<div class="{POSTER_TAG} {POSTER_TONE.primary}">
+				<span class={POSTER_TAG_TEXT}>{view.detail}</span>
 			</div>
 		{/if}
 	</div>
