@@ -3,6 +3,7 @@ import { settings } from '#lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 
 const SETTINGS_KEY_EXTERNAL_URL = 'external_url';
+const SETTINGS_KEY_PLEX_NEW_USER_SIGN_IN = 'plex_new_user_sign_in';
 
 // Short TTL cache: getExternalUrl() is read on every mutating auth request
 // (trustedOrigins resolution) and does not need to be real-time fresh.
@@ -55,6 +56,28 @@ export class SystemSettingsService {
 		}
 
 		externalUrlCache = { value: url, expiresAt: Date.now() + EXTERNAL_URL_CACHE_TTL_MS };
+	}
+
+	/**
+	 * Whether a Plex sign-in from an account with access to a configured
+	 * Plex server, but no linked Cinephage account, creates one. Off by
+	 * default: only imported/linked accounts can use Plex sign-in.
+	 */
+	async getPlexNewUserSignIn(): Promise<boolean> {
+		const result = await db
+			.select({ value: settings.value })
+			.from(settings)
+			.where(eq(settings.key, SETTINGS_KEY_PLEX_NEW_USER_SIGN_IN))
+			.get();
+		return result?.value === 'true';
+	}
+
+	async setPlexNewUserSignIn(enabled: boolean): Promise<void> {
+		const value = enabled ? 'true' : 'false';
+		await db
+			.insert(settings)
+			.values({ key: SETTINGS_KEY_PLEX_NEW_USER_SIGN_IN, value })
+			.onConflictDoUpdate({ target: settings.key, set: { value } });
 	}
 }
 

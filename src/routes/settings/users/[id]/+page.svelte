@@ -516,6 +516,9 @@
 					{m.users_setPasswordAction()}
 				</button>
 			</div>
+			{#if !data.hasPassword}
+				<p class="text-xs text-base-content/60">{m.users_plexOnlyNote()}</p>
+			{/if}
 		</div>
 	</SettingsSection>
 

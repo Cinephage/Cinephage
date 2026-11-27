@@ -47,6 +47,7 @@
 		onUpgrade: boolean;
 		onRename: boolean;
 		onDelete: boolean;
+		plexSignIn: boolean;
 		pathMappings: MediaBrowserPathMapping[];
 	}
 

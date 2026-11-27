@@ -27,12 +27,13 @@ export const GET: RequestHandler = async ({ locals }) => {
 		return Response.json({ success: false, error: 'Unauthorized' }, { status: 401 });
 	}
 
-	const [links, servers] = await Promise.all([
+	const [links, servers, plexAvailable] = await Promise.all([
 		mediaServerLinkService.getLinks(locals.user.id),
-		mediaServerLinkService.getLinkableServers()
+		mediaServerLinkService.getLinkableServers(),
+		mediaServerLinkService.hasPlexSignInServer()
 	]);
 
-	return Response.json({ success: true, links, servers });
+	return Response.json({ success: true, links, servers, plexAvailable });
 };
 
 export const POST: RequestHandler = async ({ request, locals }) => {

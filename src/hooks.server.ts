@@ -186,6 +186,10 @@ const customHandler: Handle = async ({ event, resolve }) => {
 				if (path === '/api/user/media-server/link') {
 					return method === 'GET' || method === 'POST' || method === 'PUT' || method === 'DELETE';
 				}
+				// Self-scoped Plex account linking (Plex PIN sign-in).
+				if (path === '/api/user/media-server/plex-link') {
+					return method === 'POST' || method === 'PUT';
+				}
 				// Self-scoped per-account preferences (registry-validated keys).
 				if (path === '/api/user/preferences' || path.startsWith('/api/user/preferences/')) {
 					return method === 'GET' || method === 'PUT';

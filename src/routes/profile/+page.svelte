@@ -25,6 +25,7 @@
 		AtSign
 	} from '@lucide/svelte';
 	import { authClient } from '#lib/auth/client.js';
+	import { runPlexPopupFlow, type PlexPinStart } from '#lib/auth/plex-popup.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
 	import { ApiError, apiGet, apiPost, apiPut, apiDelete } from '#lib/api/client.js';
 	import { getRequestCounts, type RequestCountResponse } from '#lib/api/requests.js';
@@ -288,6 +289,9 @@
 	let pairingActive = $state(false);
 	let pairingExpired = $state(false);
 	let pairingTimer: ReturnType<typeof setInterval> | null = null;
+	let plexAvailable = $state(false);
+	let plexLinking = $state(false);
+	const hasPlexLink = $derived(mediaLinks.some((link) => link.serverType === 'plex'));
 
 	async function refreshMediaLinks() {
 		if (!browser) return;
@@ -295,15 +299,18 @@
 			const response = await apiGet<{
 				links: MediaServerLink[];
 				servers: LinkableServerInfo[];
+				plexAvailable?: boolean;
 			}>('/api/user/media-server/link');
 			mediaLinks = response.links ?? [];
 			linkableServers = response.servers ?? [];
+			plexAvailable = response.plexAvailable === true;
 			if (!linkServerId && linkableServers.length > 0) {
 				linkServerId = linkableServers[0]!.id;
 			}
 		} catch {
 			mediaLinks = [];
 			linkableServers = [];
+			plexAvailable = false;
 		}
 	}
 
@@ -377,6 +384,51 @@
 		pairingExpired = false;
 	}
 
+	// Called straight from the click: the popup must open before any await.
+	async function linkPlex() {
+		if (plexLinking) return;
+		plexLinking = true;
+		const PLEX_LINK_URL = '/api/user/media-server/plex-link';
+		try {
+			const result = await runPlexPopupFlow<MediaServerLink[]>({
+				start: () => apiPost<PlexPinStart>(PLEX_LINK_URL),
+				poll: async (handle) => {
+					const step = await apiPut<{ outcome: string; links?: MediaServerLink[] }>(PLEX_LINK_URL, {
+						handle
+					});
+					if (step.outcome === 'linked') return { status: 'done', value: step.links ?? [] };
+					return { status: step.outcome === 'expired' ? 'expired' : 'pending' };
+				}
+			});
+			switch (result.kind) {
+				case 'done':
+					toasts.success(m.link_linkedSuccess({ username: result.value[0]?.serverUsername ?? '' }));
+					await refreshMediaLinks();
+					break;
+				case 'blocked':
+					toasts.error(m.login_plexPopupBlocked());
+					break;
+				case 'expired':
+					toasts.error(m.login_plexExpired());
+					break;
+			}
+		} catch (error) {
+			const body =
+				error instanceof ApiError
+					? (error.response as { outcome?: string; error?: string })
+					: undefined;
+			if (body?.outcome === 'no-access') {
+				toasts.error(m.link_plexNoAccess());
+			} else if (body?.outcome === 'conflict' && body.error) {
+				toasts.error(body.error);
+			} else {
+				toasts.error(m.link_failed());
+			}
+		} finally {
+			plexLinking = false;
+		}
+	}
+
 	async function unlinkServer(serverId: string) {
 		try {
 			await apiDelete(`/api/user/media-server/link?serverId=${encodeURIComponent(serverId)}`);
@@ -420,7 +472,11 @@
 	async function deleteAccount() {
 		deletingAccount = true;
 		try {
-			const result = await authClient.deleteUser({ password: deletePassword });
+			// Plex-only accounts have no password: better-auth then requires a
+			// fresh session instead (a Plex sign-in within the last day).
+			const result = await authClient.deleteUser(
+				data.hasPassword ? { password: deletePassword } : {}
+			);
 			if (result.error) {
 				toasts.error(result.error.message || m.users_actionFailed());
 				return;
@@ -626,7 +682,9 @@
 				{/each}
 			</ul>
 		{:else if linkableServers.length === 0}
-			<p class="text-sm text-base-content/60">{m.link_noServers()}</p>
+			{#if !plexAvailable}
+				<p class="text-sm text-base-content/60">{m.link_noServers()}</p>
+			{/if}
 		{:else if pairingActive}
 			<div class="flex flex-col items-center gap-3 py-4">
 				<div class="font-mono text-4xl font-bold tracking-[0.3em]">{pairingCode}</div>
@@ -663,99 +721,124 @@
 				</div>
 			</div>
 		{/if}
+		{#if plexAvailable && !hasPlexLink && !pairingActive}
+			<div
+				class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between {mediaLinks.length >
+					0 || linkableServers.length > 0
+					? 'mt-4 border-t border-base-content/10 pt-4'
+					: ''}"
+			>
+				<p class="text-sm text-base-content/60">{m.link_plexDescription()}</p>
+				<button class="btn btn-outline btn-sm" disabled={plexLinking} onclick={linkPlex}>
+					{#if plexLinking}
+						<Loader2 class="h-4 w-4 animate-spin" />
+						{m.login_plexWaiting()}
+					{:else}
+						<Tv class="h-4 w-4" />
+						{m.link_plexConnect()}
+					{/if}
+				</button>
+			</div>
+		{/if}
 	</SettingsSection>
 
 	<!-- Password -->
 	<SettingsSection
 		title={m.profile_changePassword()}
-		description={m.profile_changePasswordDescription()}
+		description={data.hasPassword
+			? m.profile_changePasswordDescription()
+			: m.profile_plexOnlyPasswordDescription()}
 	>
-		<form
-			class="max-w-md space-y-4"
-			onsubmit={(e) => {
-				e.preventDefault();
-				changePassword();
-			}}
-		>
-			<div class="form-control">
-				<label class="label" for="current-password">
-					<span class="label-text">{m.profile_currentPassword()}</span>
-				</label>
-				<div class="relative">
-					<input
-						id="current-password"
-						type={showPasswords ? 'text' : 'password'}
-						class="input-bordered input w-full pr-12"
-						bind:value={currentPassword}
-						required
-						autocomplete="current-password"
-					/>
-					<button
-						type="button"
-						class="btn absolute top-1/2 right-2 -translate-y-1/2 btn-ghost btn-sm"
-						aria-label={showPasswords ? 'Hide password' : 'Show password'}
-						aria-pressed={showPasswords}
-						onclick={() => (showPasswords = !showPasswords)}
-					>
-						{#if showPasswords}
-							<EyeOff class="h-4 w-4" />
-						{:else}
-							<Eye class="h-4 w-4" />
-						{/if}
-					</button>
-				</div>
-			</div>
-
-			<div class="form-control">
-				<label class="label" for="new-password">
-					<span class="label-text">{m.profile_newPassword()}</span>
-				</label>
-				<input
-					id="new-password"
-					type={showPasswords ? 'text' : 'password'}
-					class="input-bordered input w-full"
-					bind:value={newPassword}
-					required
-					minlength="8"
-					autocomplete="new-password"
-				/>
-			</div>
-
-			<div class="form-control">
-				<label class="label" for="confirm-password">
-					<span class="label-text">{m.profile_confirmPassword()}</span>
-				</label>
-				<input
-					id="confirm-password"
-					type={showPasswords ? 'text' : 'password'}
-					class="input-bordered input w-full"
-					bind:value={confirmPassword}
-					required
-					minlength="8"
-					autocomplete="new-password"
-				/>
-				{#if confirmPassword && !passwordsMatch}
-					<p class="mt-1 text-xs text-error">{m.profile_passwordMismatch()}</p>
-				{/if}
-			</div>
-
-			<button
-				type="submit"
-				class="btn btn-primary"
-				disabled={saving || !passwordsValid || !passwordsMatch}
+		{#if !data.hasPassword}
+			<p class="text-sm text-base-content/60">{m.profile_plexOnlyPasswordHint()}</p>
+		{:else}
+			<form
+				class="max-w-md space-y-4"
+				onsubmit={(e) => {
+					e.preventDefault();
+					changePassword();
+				}}
 			>
-				{#if saving}
-					<span class="loading loading-spinner"></span>
-					{m.common_saving()}
-				{:else if saved}
-					<Check class="h-4 w-4" />
-					{m.profile_passwordUpdated()}
-				{:else}
-					<KeyRound class="h-4 w-4" />
-					{m.profile_changePassword()}
-				{/if}
-			</button>
-		</form>
+				<div class="form-control">
+					<label class="label" for="current-password">
+						<span class="label-text">{m.profile_currentPassword()}</span>
+					</label>
+					<div class="relative">
+						<input
+							id="current-password"
+							type={showPasswords ? 'text' : 'password'}
+							class="input-bordered input w-full pr-12"
+							bind:value={currentPassword}
+							required
+							autocomplete="current-password"
+						/>
+						<button
+							type="button"
+							class="btn absolute top-1/2 right-2 -translate-y-1/2 btn-ghost btn-sm"
+							aria-label={showPasswords ? 'Hide password' : 'Show password'}
+							aria-pressed={showPasswords}
+							onclick={() => (showPasswords = !showPasswords)}
+						>
+							{#if showPasswords}
+								<EyeOff class="h-4 w-4" />
+							{:else}
+								<Eye class="h-4 w-4" />
+							{/if}
+						</button>
+					</div>
+				</div>
+
+				<div class="form-control">
+					<label class="label" for="new-password">
+						<span class="label-text">{m.profile_newPassword()}</span>
+					</label>
+					<input
+						id="new-password"
+						type={showPasswords ? 'text' : 'password'}
+						class="input-bordered input w-full"
+						bind:value={newPassword}
+						required
+						minlength="8"
+						autocomplete="new-password"
+					/>
+				</div>
+
+				<div class="form-control">
+					<label class="label" for="confirm-password">
+						<span class="label-text">{m.profile_confirmPassword()}</span>
+					</label>
+					<input
+						id="confirm-password"
+						type={showPasswords ? 'text' : 'password'}
+						class="input-bordered input w-full"
+						bind:value={confirmPassword}
+						required
+						minlength="8"
+						autocomplete="new-password"
+					/>
+					{#if confirmPassword && !passwordsMatch}
+						<p class="mt-1 text-xs text-error">{m.profile_passwordMismatch()}</p>
+					{/if}
+				</div>
+
+				<button
+					type="submit"
+					class="btn btn-primary"
+					disabled={saving || !passwordsValid || !passwordsMatch}
+				>
+					{#if saving}
+						<span class="loading loading-spinner"></span>
+						{m.common_saving()}
+					{:else if saved}
+						<Check class="h-4 w-4" />
+						{m.profile_passwordUpdated()}
+					{:else}
+						<KeyRound class="h-4 w-4" />
+						{m.profile_changePassword()}
+					{/if}
+				</button>
+			</form>
+		{/if}
 	</SettingsSection>
 
 	<!-- Sessions -->
@@ -855,16 +938,18 @@
 	onConfirm={deleteAccount}
 	onCancel={closeDeleteModal}
 >
-	<div class="form-control mt-2">
-		<label class="label" for="delete-account-password">
-			<span class="label-text">{m.profile_currentPassword()}</span>
-		</label>
-		<input
-			id="delete-account-password"
-			type="password"
-			class="input-bordered input w-full"
-			bind:value={deletePassword}
-			autocomplete="current-password"
-		/>
-	</div>
+	{#if data.hasPassword}
+		<div class="form-control mt-2">
+			<label class="label" for="delete-account-password">
+				<span class="label-text">{m.profile_currentPassword()}</span>
+			</label>
+			<input
+				id="delete-account-password"
+				type="password"
+				class="input-bordered input w-full"
+				bind:value={deletePassword}
+				autocomplete="current-password"
+			/>
+		</div>
+	{/if}
 </ConfirmationModal>

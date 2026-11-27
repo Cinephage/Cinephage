@@ -18,6 +18,8 @@ import { isHardReservedUsername, isValidUsernameFormat } from '#lib/auth/usernam
 import { ensureSoleUserIsAdminRecord, getAdminCount, getUserRoleById } from './admin-bootstrap.js';
 import { isSetupComplete, resetSetupCompleteCache, claimFirstUserBootstrap } from './setup.js';
 import { isLocalNetworkOrigin } from '#lib/server/utils/origin.js';
+import { plexAuth } from './plex-plugin.js';
+import { getTrustedProvisioningSource } from './provisioning.js';
 
 function getFirstForwardedHeaderValue(value: string | null): string | null {
 	if (!value) {
@@ -65,11 +67,12 @@ function validateUsername(username: string): boolean {
 
 /**
  * Generate display username from username
- * e.g., "john_doe" -> "John Doe"
+ * e.g., "john_doe" / "john.doe" / "john-doe" -> "John Doe"
  */
 function generateDisplayUsername(username: string): string {
 	return username
-		.split('_')
+		.split(/[_.-]+/)
+		.filter(Boolean)
 		.map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
 		.join(' ');
 }
@@ -243,6 +246,7 @@ export const auth = betterAuth({
 				user: userRole
 			}
 		}),
+		plexAuth(),
 		sveltekitCookies(getRequestEvent) // Must be last plugin for proper cookie handling
 	],
 
@@ -287,6 +291,17 @@ export const auth = betterAuth({
 						throw new APIError('UNPROCESSABLE_ENTITY', {
 							message: 'A valid username is required.'
 						});
+					}
+
+					// Plex sign-in provisioning (admin opted in, caller proved
+					// access to the admin's Plex server). The role is forced to 'user'.
+					if (getTrustedProvisioningSource() === 'plex') {
+						if (!(await isSetupComplete())) {
+							throw new APIError('FORBIDDEN', {
+								message: 'User registration is disabled. Only admins can create accounts.'
+							});
+						}
+						return { data: { ...user, role: 'user' } };
 					}
 
 					// Bootstrap: the very first account is always the admin.

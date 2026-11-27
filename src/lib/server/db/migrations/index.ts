@@ -199,6 +199,7 @@ import { migration_v200 } from './200-music-job-meta-indexes.js';
 import { migration_v201 } from './201-music-smart-list-items.js';
 import { migration_v202 } from './202-music-requests.js';
 import { migration_v203 } from './203-download-queue-swarm-health.js';
+import { migration_v204 } from './204-media-browser-plex-sign-in.js';
 
 export const MIGRATIONS: MigrationDefinition[] = [
 	migration_v002,
@@ -400,5 +401,6 @@ export const MIGRATIONS: MigrationDefinition[] = [
 	migration_v200,
 	migration_v201,
 	migration_v202,
-	migration_v203
+	migration_v203,
+	migration_v204
 ];

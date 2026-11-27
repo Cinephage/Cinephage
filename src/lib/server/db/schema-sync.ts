@@ -256,8 +256,10 @@ import {
  * Version 203: download_queue.swarm_health + dead_download_searches - dead
  *   torrent detection keeps its clock and strikes across restarts, and the
  *   search after a dead download runs at most once per item per day.
+ * Version 204: media_browser_servers.plex_sign_in - "Sign in with Plex" is an
+ *   explicit per-server opt-in, off by default.
  */
-export const CURRENT_SCHEMA_VERSION = 203;
+export const CURRENT_SCHEMA_VERSION = 204;
 
 /**
  * Seed rows for the *legacy* backfill in migration 078 only.
@@ -1385,7 +1387,8 @@ const TABLE_DEFINITIONS: string[] = [
 		"test_result" text,
 		"test_error" text,
 		"created_at" text,
-		"updated_at" text
+		"updated_at" text,
+		"plex_sign_in" integer NOT NULL DEFAULT 0
 	)`,
 
 	`CREATE TABLE IF NOT EXISTS "user_media_server_links" (

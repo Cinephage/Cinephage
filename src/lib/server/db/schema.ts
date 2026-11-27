@@ -3467,6 +3467,8 @@ export const mediaBrowserServers = sqliteTable('media_browser_servers', {
 	onRename: integer('on_rename', { mode: 'boolean' }).default(true),
 	onDelete: integer('on_delete', { mode: 'boolean' }).default(true),
 	pathMappings: text('path_mappings', { mode: 'json' }).$type<MediaBrowserPathMapping[]>(),
+	/** Plex only: allow "Sign in with Plex" for accounts this server is shared with. */
+	plexSignIn: integer('plex_sign_in', { mode: 'boolean' }).notNull().default(false),
 	serverName: text('server_name'),
 	serverVersion: text('server_version'),
 	serverId: text('server_id'),

@@ -286,3 +286,87 @@ describe('mediaServerLinkService - unlink', () => {
 		expect(await mediaServerLinkService.unlink(viewerUserId, SERVER_ID)).toBe(false);
 	});
 });
+
+describe('mediaServerLinkService - Plex account linking', () => {
+	const PLEX_ID = randomUUID();
+	const FRIEND = { id: '200', username: 'friend', title: 'friend', email: 'friend@example.com' };
+
+	function setupPlex(options: { shared: boolean; signIn?: boolean }): void {
+		testDb.db
+			.insert(mediaBrowserServers)
+			.values({
+				id: PLEX_ID,
+				name: 'Home Plex',
+				serverType: 'plex',
+				host: 'http://plex.test:32400',
+				apiKey: 'plex-owner-token',
+				enabled: true,
+				plexSignIn: options.signIn ?? true
+			})
+			.run();
+
+		fetchMock.mockImplementation(async (url) => {
+			const target = String(url);
+			if (target === 'http://plex.test:32400/') {
+				return new Response('<MediaContainer machineIdentifier="m1" myPlexUsername="owner"/>');
+			}
+			if (target === 'https://plex.tv/api/v2/user') {
+				return jellyfinJson(200, { id: 1, username: 'owner' });
+			}
+			if (target === 'https://plex.tv/api/users') {
+				const machine = options.shared ? 'm1' : 'other';
+				return new Response(
+					`<MediaContainer><User id="200" title="friend" username="friend" home="0"><Server machineIdentifier="${machine}" pending="0"/></User></MediaContainer>`
+				);
+			}
+			throw new Error('unexpected call ' + target);
+		});
+	}
+
+	it('links the Plex account on every server it can reach', async () => {
+		setupPlex({ shared: true });
+		const result = await mediaServerLinkService.linkPlexAccount(viewerUserId, FRIEND);
+		expect(result.outcome).toBe('linked');
+		const links = await mediaServerLinkService.getLinks(viewerUserId);
+		expect(links).toMatchObject([
+			{ serverId: PLEX_ID, serverType: 'plex', serverUserId: '200', serverUsername: 'friend' }
+		]);
+	});
+
+	it('ignores Plex servers that have not opted into Plex sign-in', async () => {
+		setupPlex({ shared: true, signIn: false });
+		expect(await mediaServerLinkService.hasPlexSignInServer()).toBe(false);
+		const result = await mediaServerLinkService.linkPlexAccount(viewerUserId, FRIEND);
+		expect(result.outcome).toBe('no-access');
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it('refuses a Plex account the server is not shared with', async () => {
+		setupPlex({ shared: false });
+		const result = await mediaServerLinkService.linkPlexAccount(viewerUserId, FRIEND);
+		expect(result.outcome).toBe('no-access');
+		expect(await mediaServerLinkService.getLinks(viewerUserId)).toEqual([]);
+	});
+
+	it('refuses to move a Plex account already linked to someone else', async () => {
+		setupPlex({ shared: true });
+		await mediaServerLinkService.linkPlexAccount(adminUserId, FRIEND);
+		const result = await mediaServerLinkService.linkPlexAccount(viewerUserId, FRIEND);
+		expect(result.outcome).toBe('conflict');
+	});
+
+	it('refuses to silently swap a different Plex account onto an existing link', async () => {
+		setupPlex({ shared: true });
+		testDb.db
+			.insert(userMediaServerLinks)
+			.values({
+				userId: viewerUserId,
+				serverId: PLEX_ID,
+				serverUserId: '999',
+				serverUsername: 'old'
+			})
+			.run();
+		const result = await mediaServerLinkService.linkPlexAccount(viewerUserId, FRIEND);
+		expect(result.outcome).toBe('conflict');
+	});
+});

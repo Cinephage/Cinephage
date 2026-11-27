@@ -5,6 +5,7 @@
 	import { CalendarDays, ShieldCheck, User, UserPlus, Users, ChevronRight } from '@lucide/svelte';
 	import { authClient } from '#lib/auth/client.js';
 	import { toasts } from '#lib/stores/toast.svelte.js';
+	import { apiPut } from '#lib/api/client.js';
 	import { formatDisplayDate } from '#lib/utils/format.js';
 	import { SettingsPage, SettingsSection } from '#lib/components/ui/settings/index.js';
 	import { UserAvatar } from '#lib/components/ui/index.js';
@@ -18,6 +19,29 @@
 	} from '#lib/auth/username-policy.js';
 
 	let { data } = $props();
+
+	// =====================
+	// Plex sign-in policy
+	// =====================
+	let plexNewUserSignIn = $state(false);
+	let savingPlexPolicy = $state(false);
+	$effect(() => {
+		plexNewUserSignIn = data.plexNewUserSignIn;
+	});
+
+	async function togglePlexNewUserSignIn(enabled: boolean): Promise<void> {
+		savingPlexPolicy = true;
+		try {
+			await apiPut('/api/settings/users/plex-sign-in', { newUserSignIn: enabled });
+			plexNewUserSignIn = enabled;
+			toasts.success(m.users_plexPolicySaved());
+		} catch {
+			plexNewUserSignIn = !enabled;
+			toasts.error(m.users_plexPolicySaveFailed());
+		} finally {
+			savingPlexPolicy = false;
+		}
+	}
 
 	function openDetail(userId: string) {
 		void goto(resolvePath(`/settings/users/${userId}`));
@@ -229,6 +253,29 @@
 			</table>
 		</div>
 	</SettingsSection>
+
+	{#if data.plexSignInEnabled}
+		<SettingsSection
+			title={m.users_plexSignInTitle()}
+			description={m.users_plexSignInDescription()}
+		>
+			<label class="flex cursor-pointer items-start justify-between gap-4">
+				<span>
+					<span class="block text-sm font-medium">{m.users_plexNewUsersLabel()}</span>
+					<span class="mt-0.5 block text-xs text-base-content/60">
+						{m.users_plexNewUsersHint()}
+					</span>
+				</span>
+				<input
+					type="checkbox"
+					class="toggle shrink-0 toggle-primary"
+					checked={plexNewUserSignIn}
+					disabled={savingPlexPolicy}
+					onchange={(event) => togglePlexNewUserSignIn(event.currentTarget.checked)}
+				/>
+			</label>
+		</SettingsSection>
+	{/if}
 </SettingsPage>
 
 <!-- Create user modal -->
