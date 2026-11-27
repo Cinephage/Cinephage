@@ -673,6 +673,10 @@
 						</div>
 						<button
 							class="btn btn-ghost text-error btn-xs"
+							disabled={!data.hasPassword && mediaLinks.length === 1}
+							title={!data.hasPassword && mediaLinks.length === 1
+								? m.link_unlinkOnlySignIn()
+								: undefined}
 							onclick={() => unlinkServer(mediaLink.serverId)}
 						>
 							<Unlink class="h-3.5 w-3.5" />
