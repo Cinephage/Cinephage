@@ -403,7 +403,8 @@ describe('mediaServerUserImportService - importUsers', () => {
 		const unknown = await mediaServerUserImportService.importUsers({
 			serverId: randomUUID(),
 			serverUserIds: ['jf-a'],
-			createUser: fakeCreator().creator
+			createUser: fakeCreator().creator,
+			actorUserId: viewerUserId
 		});
 		expect(unknown.outcome).toBe('no-server');
 
@@ -411,7 +412,8 @@ describe('mediaServerUserImportService - importUsers', () => {
 		const failing = await mediaServerUserImportService.importUsers({
 			serverId: SERVER_ID,
 			serverUserIds: ['jf-a'],
-			createUser: fakeCreator().creator
+			createUser: fakeCreator().creator,
+			actorUserId: viewerUserId
 		});
 		expect(failing.outcome).toBe('server-error');
 	});

@@ -415,7 +415,9 @@ class MediaServerUserImportService {
 				context.takenUsernames.add(candidate.name.toLowerCase());
 				context.usersByEmail.set(candidate.suggestedEmail.toLowerCase(), {
 					userId,
-					username: candidate.name
+					username: candidate.name,
+					// A freshly created account is never the importing admin.
+					role: 'user'
 				});
 				if (linked) context.usersLinkedOnServer.add(userId);
 			} catch (error) {

@@ -18,6 +18,7 @@
 	type ImportStatus =
 		| 'importable'
 		| 'link-existing'
+		| 'email-admin'
 		| 'linked'
 		| 'disabled'
 		| 'invalid-username'
