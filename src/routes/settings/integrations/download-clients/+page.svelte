@@ -714,8 +714,18 @@
 	stalledBlocklistHours={data.stalledDownloadBlocklistHours}
 	deadTorrentSettings={data.deadTorrentSettings}
 	onSaveDeadTorrentSettings={async (values) => {
-		await updateMonitoringSettings(values);
-		toasts.success(m.toast_settings_stalledSettingsUpdated());
+		try {
+			await updateMonitoringSettings(values);
+			toasts.success(m.toast_settings_stalledSettingsUpdated());
+		} catch (e) {
+			const err = e instanceof ApiError ? e.response : undefined;
+			throw new Error(
+				(err && typeof err === 'object' && 'error' in (err as Record<string, unknown>)
+					? (err as Record<string, unknown>).error
+					: m.common_failedToSave()) as string,
+				{ cause: e }
+			);
+		}
 	}}
 	onSaveStalledBehavior={async (timeout, progressTimeout, threshold, blocklistHours) => {
 		try {
