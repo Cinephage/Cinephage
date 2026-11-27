@@ -140,6 +140,26 @@ describe('Aria2Client', () => {
 			expect(d?.status).toBe('stalled');
 		});
 
+		it('keeps a finished torrent that is not uploading as completed', async () => {
+			vi.stubGlobal(
+				'fetch',
+				mockTellStatus({
+					completedLength: '1000',
+					totalLength: '1000',
+					downloadSpeed: '0',
+					uploadSpeed: '0',
+					numSeeders: '0',
+					connections: '0'
+				})
+			);
+			const d = await new Aria2Client({ host: 'localhost', port: 6800, useSsl: false }).getDownload(
+				gid
+			);
+			expect(d?.status).toBe('completed');
+			expect(d?.progress).toBe(1);
+			expect(d?.metadataPending).toBe(false);
+		});
+
 		it('leaves plain HTTP downloads alone', async () => {
 			vi.stubGlobal(
 				'fetch',
