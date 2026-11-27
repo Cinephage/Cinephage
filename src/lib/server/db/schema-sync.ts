@@ -253,8 +253,13 @@ import {
  *   the row carries mbid/artist/album/cover, so one list table holds both TMDB
  *   items and MusicBrainz albums. SQLite cannot drop NOT NULL in place, so this
  *   rebuilds the table from its live DDL (same pattern as v181).
+ * Version 203: download_queue.swarm_health + dead_download_searches - dead
+ *   torrent detection keeps its clock and strikes across restarts, and the
+ *   search after a dead download runs at most once per item per day.
+ * Version 204: media_browser_servers.plex_sign_in - "Sign in with Plex" is an
+ *   explicit per-server opt-in, off by default.
  */
-export const CURRENT_SCHEMA_VERSION = 202;
+export const CURRENT_SCHEMA_VERSION = 204;
 
 /**
  * Seed rows for the *legacy* backfill in migration 078 only.
@@ -962,7 +967,8 @@ const TABLE_DEFINITIONS: string[] = [
 		"last_attempt_at" text,
 		"is_automatic" integer DEFAULT false,
 		"is_upgrade" integer DEFAULT false,
-		"import_failed" integer NOT NULL DEFAULT 0
+		"import_failed" integer NOT NULL DEFAULT 0,
+		"swarm_health" text
 	)`,
 
 	`CREATE TABLE IF NOT EXISTS "download_queue_tombstones" (
@@ -975,6 +981,11 @@ const TABLE_DEFINITIONS: string[] = [
 		"last_seen_at" text,
 		"created_at" text,
 		"updated_at" text
+	)`,
+
+	`CREATE TABLE IF NOT EXISTS "dead_download_searches" (
+		"target_key" text PRIMARY KEY NOT NULL,
+		"searched_at" text NOT NULL
 	)`,
 
 	// Acquisition Intents + Reservations (v148) - durable acquisition
@@ -1376,7 +1387,8 @@ const TABLE_DEFINITIONS: string[] = [
 		"test_result" text,
 		"test_error" text,
 		"created_at" text,
-		"updated_at" text
+		"updated_at" text,
+		"plex_sign_in" integer NOT NULL DEFAULT 0
 	)`,
 
 	`CREATE TABLE IF NOT EXISTS "user_media_server_links" (

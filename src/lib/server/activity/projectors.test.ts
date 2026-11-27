@@ -110,3 +110,26 @@ describe('the downloading filter matches the Downloading tile', () => {
 		).toEqual(['importing']);
 	});
 });
+
+describe('projectQueueActivity swarm health', () => {
+	it('carries the dead-torrent check state to the queue row', () => {
+		const swarmHealth = {
+			checkedAt: '2026-11-01T06:20:00.000Z',
+			progressBytes: 65,
+			progressAt: '2026-11-01T00:00:00.000Z',
+			seeds: 0,
+			peers: 1,
+			availability: 0.065,
+			isPrivate: false,
+			problem: 'no_source' as const,
+			strikes: 2,
+			strikesNeeded: 3,
+			dead: false
+		};
+		const activity = projectQueueActivity(
+			{ id: 'q', title: 'Some.Release', status: 'stalled', progress: 0.065, swarmHealth },
+			{ mediaType: 'movie', mediaId: '', mediaTitle: 'Some Movie', mediaYear: 2026 }
+		);
+		expect(activity.swarmHealth).toEqual(swarmHealth);
+	});
+});

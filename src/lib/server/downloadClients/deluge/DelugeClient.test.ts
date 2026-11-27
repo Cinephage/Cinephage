@@ -34,9 +34,15 @@ function mockDelugeResponse(torrent: Record<string, unknown>): ReturnType<typeof
 		}
 
 		if (payload.method === 'web.update_ui' || payload.method === 'web.get_torrent_status') {
+			// Deluge answers with the requested status keys only, so a key the
+			// client asks for that Deluge does not expose never arrives.
+			const keys = (payload.params?.[0] as string[] | undefined) ?? [];
+			const answered = Object.fromEntries(
+				Object.entries(torrent).filter(([key]) => keys.includes(key))
+			);
 			return new Response(
 				JSON.stringify({
-					result: { torrents: { deadbeef: torrent } },
+					result: { torrents: { deadbeef: answered } },
 					error: null
 				}),
 				{ status: 200, headers: { 'Content-Type': 'application/json' } }
@@ -265,5 +271,113 @@ describe('DelugeClient', () => {
 			expect(download?.status).toBe('seeding');
 			expect(download?.canBeRemoved).toBe(false);
 		});
+	});
+});
+
+describe('DelugeClient swarm signals', () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	const downloading = {
+		name: 'Some.Release',
+		total_size: 1000,
+		total_wanted: 1000,
+		total_done: 65,
+		progress: 6.5,
+		state: 'Downloading',
+		download_payload_rate: 0,
+		upload_payload_rate: 0,
+		eta: 0,
+		save_path: '/downloads',
+		label: 'tv',
+		hash: 'deadbeef',
+		error: '',
+		num_seeds: 0,
+		num_peers: 1,
+		distributed_copies: 0.065,
+		private: true,
+		has_metadata: true
+	};
+
+	it('maps seeds, peers, availability, downloaded bytes and the private flag', async () => {
+		vi.stubGlobal('fetch', mockDelugeResponse(downloading));
+		const client = new DelugeClient({
+			host: 'localhost',
+			port: 8112,
+			useSsl: false,
+			password: 'deluge'
+		});
+		const d = await client.getDownload('deadbeef');
+		expect(d).toMatchObject({
+			downloadedBytes: 65,
+			connectedSeeds: 0,
+			connectedPeers: 1,
+			availability: 0.065,
+			isPrivate: true,
+			metadataPending: false
+		});
+	});
+
+	it('reports a download that receives nothing as stalled', async () => {
+		vi.stubGlobal('fetch', mockDelugeResponse(downloading));
+		const client = new DelugeClient({
+			host: 'localhost',
+			port: 8112,
+			useSsl: false,
+			password: 'deluge'
+		});
+		expect((await client.getDownload('deadbeef'))?.status).toBe('stalled');
+	});
+
+	it('keeps a download that receives data as downloading', async () => {
+		vi.stubGlobal('fetch', mockDelugeResponse({ ...downloading, download_payload_rate: 2048 }));
+		const client = new DelugeClient({
+			host: 'localhost',
+			port: 8112,
+			useSsl: false,
+			password: 'deluge'
+		});
+		expect((await client.getDownload('deadbeef'))?.status).toBe('downloading');
+	});
+
+	it('flags a magnet still fetching metadata', async () => {
+		vi.stubGlobal(
+			'fetch',
+			mockDelugeResponse({
+				...downloading,
+				total_size: 0,
+				total_done: 0,
+				download_payload_rate: 10
+			})
+		);
+		const client = new DelugeClient({
+			host: 'localhost',
+			port: 8112,
+			useSsl: false,
+			password: 'deluge'
+		});
+		const d = await client.getDownload('deadbeef');
+		expect(d?.metadataPending).toBe(true);
+		expect(d?.status).toBe('stalled');
+	});
+
+	it('asks only for status keys Deluge reports', async () => {
+		const fetchMock = mockDelugeResponse({ ...downloading });
+		vi.stubGlobal('fetch', fetchMock);
+		const client = new DelugeClient({
+			host: 'localhost',
+			port: 8112,
+			useSsl: false,
+			password: 'deluge'
+		});
+		await client.getDownload('deadbeef');
+
+		const bodies = fetchMock.mock.calls
+			.map((call) => JSON.parse(String((call[1] as RequestInit | undefined)?.body ?? '{}')))
+			.filter((body) => body.params?.[0]);
+		const keys = bodies.at(-1)?.params?.[0] as string[];
+		expect(keys).toContain('total_size');
+		expect(keys).not.toContain('has_metadata');
 	});
 });

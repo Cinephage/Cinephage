@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { DeadTorrentSettingsForm } from '#lib/api/monitoring.js';
 	import { X } from '@lucide/svelte';
 	import type {
 		DownloadClient,
@@ -58,6 +59,8 @@
 		stalledProgressTimeoutMinutes: number;
 		stalledProgressThreshold: number;
 		stalledBlocklistHours: number;
+		deadTorrentSettings: DeadTorrentSettingsForm;
+		onSaveDeadTorrentSettings: (values: DeadTorrentSettingsForm) => Promise<void>;
 		onSaveStalledBehavior: (
 			timeout: number,
 			progressTimeout: number,
@@ -83,6 +86,8 @@
 		stalledProgressTimeoutMinutes,
 		stalledProgressThreshold,
 		stalledBlocklistHours,
+		deadTorrentSettings,
+		onSaveDeadTorrentSettings,
 		onSaveStalledBehavior
 	}: Props = $props();
 
@@ -127,6 +132,16 @@
 	let stalledThreshold = $state(0);
 	let stalledBlocklist = $state(72);
 	let saveStalledBehaviorSuccess = $state(false);
+	// Replaced with the saved values whenever the modal opens
+	let deadTorrent = $state<DeadTorrentSettingsForm>({
+		deadTorrentEnabled: true,
+		deadTorrentGraceMinutes: 60,
+		deadTorrentMetadataMinutes: 60,
+		deadTorrentNoProgressMinutes: 360,
+		deadTorrentStrikes: 3,
+		deadTorrentPrivateAction: 'warn'
+	});
+	let saveDeadTorrentSuccess = $state(false);
 
 	let testing = $state(false);
 	let testResult = $state<ConnectionTestResult | null>(null);
@@ -195,7 +210,30 @@
 			stalledThreshold = stalledProgressThreshold;
 			stalledBlocklist = stalledBlocklistHours;
 			saveStalledBehaviorSuccess = false;
+			deadTorrent = { ...deadTorrentSettings };
+			saveDeadTorrentSuccess = false;
 		}
+	});
+
+	$effect(() => {
+		if (!open) return;
+		const values = { ...deadTorrent };
+		const keys = Object.keys(values) as (keyof DeadTorrentSettingsForm)[];
+		if (keys.every((key) => values[key] === deadTorrentSettings[key])) return;
+		// Skip half-typed numbers (an emptied input binds as null)
+		if (keys.some((key) => values[key] === null || values[key] === undefined)) return;
+
+		const timer = setTimeout(async () => {
+			try {
+				await onSaveDeadTorrentSettings(values);
+				saveDeadTorrentSuccess = true;
+				setTimeout(() => (saveDeadTorrentSuccess = false), 2000);
+			} catch {
+				// Keep the edited values; the toast from the page reports the error
+			}
+		}, 600);
+
+		return () => clearTimeout(timer);
 	});
 
 	$effect(() => {
@@ -580,6 +618,8 @@
 							bind:stalledThreshold
 							bind:stalledBlocklist
 							bind:saveStalledBehaviorSuccess
+							bind:deadTorrent
+							{saveDeadTorrentSuccess}
 							{isNntpServer}
 							{selectedDefinition}
 							{usesApiKey}

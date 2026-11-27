@@ -2,6 +2,8 @@
 	import { goto } from '$app/navigation';
 	import { User, Lock, AlertCircle, Eye, EyeOff } from '@lucide/svelte';
 	import { authClient } from '#lib/auth/client.js';
+	import { AUTH_BASE_PATH } from '#lib/auth/config.js';
+	import { runPlexPopupFlow, type PlexPinStart } from '#lib/auth/plex-popup.js';
 	import { ensureVersionPrefix } from '#lib/version.js';
 	import * as m from '#lib/paraglide/messages.js';
 
@@ -16,6 +18,85 @@
 	let isLoading = $state(false);
 	let error = $state('');
 	let showPassword = $state(false);
+	let plexLoading = $state(false);
+
+	/** better-auth error body: { code, message }. */
+	async function authPost<T>(path: string, body: unknown): Promise<T> {
+		const response = await fetch(`${AUTH_BASE_PATH}${path}`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(body),
+			credentials: 'same-origin'
+		});
+		const payload = (await response.json().catch(() => ({}))) as T & {
+			code?: string;
+			message?: string;
+		};
+		if (!response.ok) {
+			throw Object.assign(new Error(payload.message ?? ''), {
+				status: response.status,
+				code: payload.code
+			});
+		}
+		return payload;
+	}
+
+	function plexErrorMessage(e: unknown): string {
+		const { status, code } = (e ?? {}) as { status?: number; code?: string };
+		if (status === 429) return m.login_rateLimited();
+		switch (code) {
+			case 'PLEX_NO_ACCESS':
+				return m.login_plexNoAccess();
+			case 'PLEX_NOT_LINKED':
+				return m.login_plexNotLinked();
+			case 'PLEX_ACCOUNT_UNAVAILABLE':
+				return m.login_plexAccountUnavailable();
+			case 'PLEX_AMBIGUOUS_LINK':
+				return m.login_plexAmbiguous();
+			case 'BANNED_USER':
+				return (e as Error).message || m.login_plexFailed();
+			default:
+				return m.login_plexFailed();
+		}
+	}
+
+	// Called straight from the click: the popup must open before any await.
+	async function handlePlexSignIn() {
+		error = '';
+		plexLoading = true;
+		try {
+			const result = await runPlexPopupFlow<true>({
+				start: () => authPost<PlexPinStart>('/plex/pin', {}),
+				poll: async (handle) => {
+					const step = await authPost<{ status: 'pending' | 'expired' | 'signed-in' }>(
+						'/plex/sign-in',
+						{ handle, rememberMe }
+					);
+					return step.status === 'signed-in'
+						? { status: 'done', value: true }
+						: { status: step.status };
+				}
+			});
+
+			switch (result.kind) {
+				case 'done':
+					await goto('/', { refreshAll: true });
+					return;
+				case 'blocked':
+					error = m.login_plexPopupBlocked();
+					return;
+				case 'expired':
+					error = m.login_plexExpired();
+					return;
+				case 'cancelled':
+					return;
+			}
+		} catch (e) {
+			error = plexErrorMessage(e);
+		} finally {
+			plexLoading = false;
+		}
+	}
 
 	async function handleSubmit() {
 		error = '';
@@ -140,7 +221,7 @@
 				<button
 					type="submit"
 					class="btn w-full btn-primary"
-					disabled={isLoading || !username || !password}
+					disabled={isLoading || plexLoading || !username || !password}
 				>
 					{#if isLoading}
 						<span class="loading loading-spinner">&#8203;</span>
@@ -150,6 +231,23 @@
 					{/if}
 				</button>
 			</form>
+
+			{#if data.plexSignIn}
+				<div class="divider text-xs text-base-content/50">{m.login_or()}</div>
+				<button
+					type="button"
+					class="btn w-full border-[#e5a00d] bg-[#e5a00d] text-black hover:border-[#cc8f0b] hover:bg-[#cc8f0b]"
+					disabled={isLoading || plexLoading}
+					onclick={handlePlexSignIn}
+				>
+					{#if plexLoading}
+						<span class="loading loading-spinner">&#8203;</span>
+						{m.login_plexWaiting()}
+					{:else}
+						{m.login_plexSignIn()}
+					{/if}
+				</button>
+			{/if}
 
 			<div class="mt-6 flex items-center justify-center gap-4 text-xs text-base-content/40">
 				<span>{ensureVersionPrefix(data.version)}</span>

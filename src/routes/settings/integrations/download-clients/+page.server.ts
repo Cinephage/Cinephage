@@ -14,6 +14,14 @@ export const load: PageServerLoad = async () => {
 		stalledDownloadProgressTimeoutMinutes: settings.stalledDownloadProgressTimeoutMinutes,
 		stalledDownloadProgressThreshold: settings.stalledDownloadProgressThreshold,
 		stalledDownloadBlocklistHours: settings.stalledDownloadBlocklistHours,
+		deadTorrentSettings: {
+			deadTorrentEnabled: settings.deadTorrentEnabled,
+			deadTorrentGraceMinutes: settings.deadTorrentGraceMinutes,
+			deadTorrentMetadataMinutes: settings.deadTorrentMetadataMinutes,
+			deadTorrentNoProgressMinutes: settings.deadTorrentNoProgressMinutes,
+			deadTorrentStrikes: settings.deadTorrentStrikes,
+			deadTorrentPrivateAction: settings.deadTorrentPrivateAction
+		},
 		defaultAcquisitionProtocol: getDefaultAcquisitionProtocol()
 	};
 };

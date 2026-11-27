@@ -122,6 +122,14 @@ export async function retryQueueItem(id: string): Promise<ApiResponse<RetryQueue
 }
 
 /**
+ * Give up on an active download: remove it from the client, mark it failed,
+ * blocklist the release and search again for its movie or episodes.
+ */
+export async function failAndSearchQueueItem(id: string): Promise<ApiResponse<{ success: true }>> {
+	return apiPost<{ success: true }>(`/api/queue/${id}/fail-and-search`);
+}
+
+/**
  * Blocklist the release behind a download history record. Works even when
  * the item no longer has a live queue row (the usual case for a failed
  * item viewed in Activity > History).

@@ -254,3 +254,65 @@ function getActivityCategoryTag(
 	}
 	return null;
 }
+
+/** Statuses in which the queue offers "Mark failed, blocklist and search". */
+const FAIL_AND_SEARCH_QUEUE_STATUSES = new Set(['queued', 'downloading', 'stalled', 'paused']);
+
+/** Whether the row can offer "Mark failed, blocklist and search". */
+export function canFailAndSearch(
+	activity: Pick<UnifiedActivity, 'queueItemId' | 'protocol' | 'queueStatus'>
+): boolean {
+	return (
+		!!activity.queueItemId &&
+		activity.protocol === 'torrent' &&
+		FAIL_AND_SEARCH_QUEUE_STATUSES.has(activity.queueStatus ?? '')
+	);
+}
+
+function formatSpan(ms: number): string {
+	const minutes = Math.max(0, Math.round(ms / 60_000));
+	const days = Math.floor(minutes / 1440);
+	const hours = Math.floor((minutes % 1440) / 60);
+	const mins = minutes % 60;
+	if (days > 0) return hours > 0 ? `${days}d ${hours}h` : `${days}d`;
+	if (hours > 0) return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+	return `${mins}m`;
+}
+
+/**
+ * Why the dead-torrent check thinks a torrent cannot finish, e.g.
+ * "No seeds, 6.5% available, 4h 10m without progress · check 2 of 3".
+ * Null when the last check found nothing wrong.
+ */
+export function describeSwarmHealth(
+	activity: Pick<UnifiedActivity, 'swarmHealth' | 'startedAt'>,
+	now: number = Date.now()
+): { text: string; dead: boolean; keptPrivate: boolean } | null {
+	const h = activity.swarmHealth;
+	if (!h?.problem) return null;
+
+	let text: string;
+	if (h.problem === 'metadata') {
+		const since = Date.parse(activity.startedAt ?? h.progressAt);
+		text = m.activity_swarm_metadata({ duration: formatSpan(now - since) });
+	} else {
+		const parts: string[] = [];
+		if (h.seeds === 0) parts.push(m.activity_swarm_noSeeds());
+		if (h.availability !== null) {
+			const percent = (h.availability * 100).toFixed(1).replace(/\.0$/, '');
+			parts.push(m.activity_swarm_available({ percent }));
+		}
+		parts.push(
+			m.activity_swarm_noProgress({ duration: formatSpan(now - Date.parse(h.progressAt)) })
+		);
+		text = parts.join(', ');
+	}
+
+	const keptPrivate = h.dead && h.isPrivate === true;
+	const suffix = h.dead
+		? keptPrivate
+			? m.activity_swarm_privateKept()
+			: m.activity_swarm_dead()
+		: m.activity_swarm_check({ strikes: h.strikes, needed: h.strikesNeeded });
+	return { text: `${text} · ${suffix}`, dead: h.dead, keptPrivate };
+}

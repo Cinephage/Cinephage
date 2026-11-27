@@ -107,6 +107,7 @@ function createQueueRecord(
 		addedAt: '2026-02-09T00:00:00.000Z',
 		startedAt: null,
 		stalledSince: null,
+		swarmHealth: null,
 		completedAt: null,
 		importedAt: null,
 		errorMessage: null,

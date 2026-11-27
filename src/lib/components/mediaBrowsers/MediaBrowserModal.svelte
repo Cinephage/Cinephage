@@ -21,6 +21,7 @@
 		onUpgrade: boolean;
 		onRename: boolean;
 		onDelete: boolean;
+		plexSignIn: boolean;
 		pathMappings: MediaBrowserPathMapping[];
 	}
 
@@ -62,6 +63,7 @@
 	let onUpgrade = $state(true);
 	let onRename = $state(true);
 	let onDelete_ = $state(true);
+	let plexSignIn = $state(false);
 
 	// Form state - Path mappings
 	let pathMappings = $state<MediaBrowserPathMapping[]>([]);
@@ -90,6 +92,7 @@
 			onUpgrade = server?.onUpgrade ?? true;
 			onRename = server?.onRename ?? true;
 			onDelete_ = server?.onDelete ?? true;
+			plexSignIn = server?.plexSignIn ?? false;
 			pathMappings = server?.pathMappings ? [...server.pathMappings] : [];
 			testResult = null;
 		}
@@ -140,6 +143,7 @@
 			onUpgrade,
 			onRename,
 			onDelete: onDelete_,
+			plexSignIn: serverType === 'plex' && plexSignIn,
 			pathMappings: pathMappings.filter((m) => m.localPath && m.remotePath)
 		};
 		return data;
@@ -371,6 +375,16 @@
 					label={m.mediaBrowser_event_delete()}
 					description={m.mediaBrowser_event_deleteDesc()}
 				/>
+
+				{#if serverType === 'plex'}
+					<SectionHeader title={m.mediaBrowser_signInSection()} />
+
+					<ToggleSetting
+						bind:checked={plexSignIn}
+						label={m.mediaBrowser_plexSignIn()}
+						description={m.mediaBrowser_plexSignInDesc()}
+					/>
+				{/if}
 			</div>
 		</div>
 

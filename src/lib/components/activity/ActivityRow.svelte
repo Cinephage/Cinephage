@@ -14,7 +14,9 @@
 		Play,
 		RotateCcw,
 		Trash2,
-		Ban
+		Ban,
+		SearchX,
+		TriangleAlert
 	} from '@lucide/svelte';
 	import { getMediaLink, canLinkToMedia } from '#lib/utils/media-link.js';
 	import { formatBytes } from '#lib/utils/format.js';
@@ -26,7 +28,9 @@
 		supportsQueuePauseResume,
 		formatRelativeTime,
 		formatTimestamp,
-		getDisplayTime
+		getDisplayTime,
+		canFailAndSearch,
+		describeSwarmHealth
 	} from './activity-display-utils.js';
 	import ActivityStatusPopover from './ActivityStatusPopover.svelte';
 
@@ -39,7 +43,9 @@
 		isBlocklistLoading: boolean;
 		onToggle: () => void;
 		onToggleSelection: (selected: boolean) => void;
-		onQueueAction: (action: 'pause' | 'resume' | 'remove' | 'retry') => Promise<void>;
+		onQueueAction: (
+			action: 'pause' | 'resume' | 'remove' | 'retry' | 'failAndSearch'
+		) => Promise<void>;
 		onBlocklistHistory?: () => Promise<void>;
 	}
 
@@ -68,6 +74,12 @@
 	const mobileCompactLabel = $derived(getMobileCompactStatusLabel(activity, config.label));
 
 	const timelineColspan = 9;
+
+	const swarm = $derived(
+		activity.activitySource === 'queue' && activity.status !== 'failed'
+			? describeSwarmHealth(activity)
+			: null
+	);
 
 	const hasTimeline = $derived((activity.timeline?.length ?? 0) > 0);
 	const canBlocklist = $derived(
@@ -123,6 +135,15 @@
 				/>
 			{/if}
 			<ActivityStatusPopover {activity} {compactLabel} {mobileCompactLabel} />
+			{#if swarm}
+				<span title={swarm.text} aria-label={swarm.text}>
+					<TriangleAlert
+						class="h-3.5 w-3.5 shrink-0 {swarm.dead && !swarm.keptPrivate
+							? 'text-error'
+							: 'text-warning'}"
+					/>
+				</span>
+			{/if}
 		</div>
 	</td>
 
@@ -355,6 +376,17 @@
 								{/if}
 							{/if}
 
+							{#if canFailAndSearch(activity)}
+								<button
+									class="btn gap-1.5 border border-base-content/15 bg-base-100 btn-sm hover:bg-base-200"
+									onclick={() => onQueueAction('failAndSearch')}
+									disabled={isQueueActionLoading}
+								>
+									<SearchX class="h-3.5 w-3.5" />
+									{m.activity_detail_failAndSearch()}
+								</button>
+							{/if}
+
 							{#if activity.queueItemId}
 								<button
 									class="btn ml-auto gap-1.5 border border-error/30 bg-base-100 text-error btn-sm hover:bg-error/10 sm:ml-2"
@@ -443,6 +475,17 @@
 							>{m.activity_table_importedTo()}</span
 						>
 						<span class="text-base-content/80">{activity.importedPath}</span>
+					</div>
+				{/if}
+
+				{#if swarm}
+					<div
+						class="mt-2 rounded-lg border px-3 py-2 text-sm {swarm.dead && !swarm.keptPrivate
+							? 'border-error/30 bg-error/5'
+							: 'border-warning/40 bg-warning/5'}"
+					>
+						<span class="mr-2 font-semibold text-base-content/60">{m.activity_swarm_title()}</span>
+						<span class="text-base-content/80">{swarm.text}</span>
 					</div>
 				{/if}
 

@@ -1332,6 +1332,7 @@ export const mediaBrowserServerCreateSchema = z.object({
 	onUpgrade: z.boolean().default(true),
 	onRename: z.boolean().default(true),
 	onDelete: z.boolean().default(true),
+	plexSignIn: z.boolean().default(false),
 	pathMappings: z.array(mediaBrowserPathMappingSchema).default([])
 });
 
@@ -2631,7 +2632,13 @@ export const monitoringSettingsUpdateSchema = z.object({
 	stalledDownloadTimeoutMinutes: z.number().min(0).optional(),
 	stalledDownloadProgressTimeoutMinutes: z.number().min(0).optional(),
 	stalledDownloadProgressThreshold: z.number().min(0).max(100).optional(),
-	stalledDownloadBlocklistHours: z.number().min(0).optional()
+	stalledDownloadBlocklistHours: z.number().min(0).optional(),
+	deadTorrentEnabled: z.boolean().optional(),
+	deadTorrentGraceMinutes: z.number().min(0).optional(),
+	deadTorrentMetadataMinutes: z.number().min(0).optional(),
+	deadTorrentNoProgressMinutes: z.number().min(0).optional(),
+	deadTorrentStrikes: z.number().int().min(1).max(20).optional(),
+	deadTorrentPrivateAction: z.enum(['warn', 'remove']).optional()
 });
 
 // ============================================================================

@@ -53,6 +53,7 @@ vi.mock('#lib/logging/index.js', () => ({
 const serviceMock = vi.hoisted(() => ({
 	getLinks: vi.fn(async () => [] as unknown[]),
 	getLinkableServers: vi.fn(async () => []),
+	hasPlexSignInServer: vi.fn(async () => false),
 	initiatePairing: vi.fn(),
 	checkPairing: vi.fn(),
 	unlink: vi.fn(async () => true),
@@ -63,6 +64,9 @@ const serviceMock = vi.hoisted(() => ({
 vi.mock('#lib/server/mediaServerLink/MediaServerLinkService.js', () => ({
 	mediaServerLinkService: serviceMock
 }));
+
+const hasLocalPasswordMock = vi.hoisted(() => vi.fn(async () => true));
+vi.mock('#lib/server/auth/local-login.js', () => ({ hasLocalPassword: hasLocalPasswordMock }));
 
 const { GET, POST, PUT, DELETE } = await import('./+server.js');
 const adminRoute = await import('../../../settings/users/[userId]/media-server-link/+server.js');
@@ -103,6 +107,7 @@ describe('GET /api/user/media-server/link', () => {
 		);
 		expect(status).toBe(200);
 		expect(data.links).toHaveLength(1);
+		expect((data as { plexAvailable?: boolean }).plexAvailable).toBe(false);
 		expect(serviceMock.getLinks).toHaveBeenCalledWith('test-user-user');
 	});
 
@@ -160,6 +165,32 @@ describe('DELETE /api/user/media-server/link', () => {
 			...OPTIONS,
 			url: 'http://localhost/api/user/media-server/link?serverId=s1'
 		});
+		expect(ok.status).toBe(200);
+		expect(serviceMock.unlink).toHaveBeenCalledWith('test-user-user', 's1');
+	});
+
+	it('refuses to remove the only sign-in of a password-less account', async () => {
+		hasLocalPasswordMock.mockResolvedValueOnce(false);
+		serviceMock.getLinks.mockResolvedValueOnce([{ serverId: 's1' }]);
+
+		const refused = await callHandler(DELETE, 'DELETE', undefined, {
+			...OPTIONS,
+			url: 'http://localhost/api/user/media-server/link?serverId=s1'
+		});
+
+		expect(refused.status).toBe(400);
+		expect(serviceMock.unlink).not.toHaveBeenCalled();
+	});
+
+	it('lets a password-less account unlink when another link remains', async () => {
+		hasLocalPasswordMock.mockResolvedValueOnce(false);
+		serviceMock.getLinks.mockResolvedValueOnce([{ serverId: 's1' }, { serverId: 's2' }]);
+
+		const ok = await callHandler(DELETE, 'DELETE', undefined, {
+			...OPTIONS,
+			url: 'http://localhost/api/user/media-server/link?serverId=s1'
+		});
+
 		expect(ok.status).toBe(200);
 		expect(serviceMock.unlink).toHaveBeenCalledWith('test-user-user', 's1');
 	});

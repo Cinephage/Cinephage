@@ -52,6 +52,7 @@ const CORE_TABLES = [
 	'episodes',
 	'episodeFiles',
 	'downloadQueue',
+	'deadDownloadSearches',
 	'rootFolders',
 	'musicImportJobs',
 	'musicLookupCache',

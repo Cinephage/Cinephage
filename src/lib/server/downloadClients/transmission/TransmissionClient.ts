@@ -56,6 +56,18 @@ interface TransmissionTorrent {
 	seedIdleMode?: TransmissionIdleMode;
 	error?: number;
 	errorString?: string;
+	/** Bytes of wanted data still missing */
+	leftUntilDone?: number;
+	/** Bytes of wanted data in total */
+	sizeWhenDone?: number;
+	/** Of leftUntilDone, the bytes connected peers can send us */
+	desiredAvailable?: number;
+	peersConnected?: number;
+	peersSendingToUs?: number;
+	webseedsSendingToUs?: number;
+	/** 0..1; below 1 while a magnet is still fetching metadata */
+	metadataPercentComplete?: number;
+	isPrivate?: boolean;
 }
 
 interface TransmissionTorrentGetResponse {
@@ -116,7 +128,15 @@ const TORRENT_FIELDS = [
 	'seedIdleLimit',
 	'seedIdleMode',
 	'error',
-	'errorString'
+	'errorString',
+	'leftUntilDone',
+	'sizeWhenDone',
+	'desiredAvailable',
+	'peersConnected',
+	'peersSendingToUs',
+	'webseedsSendingToUs',
+	'metadataPercentComplete',
+	'isPrivate'
 ];
 
 const SESSION_FIELDS = [
@@ -160,6 +180,34 @@ function mapTransmissionStatus(
 		default:
 			return progress >= 1 ? 'completed' : 'downloading';
 	}
+}
+
+/**
+ * Swarm signals for dead-torrent detection. Transmission has no connected-seed
+ * count, so availability is the share of the still-missing data that connected
+ * peers (or a web seed) can send: below 1 the connected swarm cannot finish.
+ */
+function transmissionSwarmSignals(torrent: TransmissionTorrent) {
+	const num = (value: number | undefined) =>
+		typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+	const left = num(torrent.leftUntilDone);
+	const wanted = num(torrent.sizeWhenDone);
+	const desired = num(torrent.desiredAvailable);
+	const metadata = num(torrent.metadataPercentComplete);
+	const webseeds = num(torrent.webseedsSendingToUs) ?? 0;
+	let availability: number | undefined;
+	if (webseeds > 0) availability = 1;
+	else if (left !== undefined && desired !== undefined && left > 0) availability = desired / left;
+	return {
+		downloadedBytes:
+			left !== undefined && wanted !== undefined ? Math.max(0, wanted - left) : undefined,
+		connectedPeers: num(torrent.peersConnected),
+		availability,
+		metadataPending: metadata !== undefined ? metadata < 1 : undefined,
+		isPrivate: typeof torrent.isPrivate === 'boolean' ? torrent.isPrivate : undefined,
+		receiving:
+			(num(torrent.peersSendingToUs) ?? 0) > 0 || webseeds > 0 || (torrent.rateDownload ?? 0) > 0
+	};
 }
 
 function normalizeProgress(value: number | undefined): number {
@@ -243,7 +291,15 @@ export class TransmissionClient implements IDownloadClient {
 
 	private mapTorrent(torrent: TransmissionTorrent, session: TransmissionSessionInfo): DownloadInfo {
 		const progress = normalizeProgress(torrent.percentDone);
-		const status = mapTransmissionStatus(torrent.status, progress, torrent.error);
+		const swarm = transmissionSwarmSignals(torrent);
+		let status = mapTransmissionStatus(torrent.status, progress, torrent.error);
+		// Transmission has no stalled state: a download that is still fetching
+		// metadata, or that no peer or web seed is sending anything to, is stalled
+		// (the same as qBittorrent's metaDL / stalledDL), so the stalled timeouts
+		// and the dead-torrent check apply to it.
+		if (status === 'downloading' && (swarm.metadataPending || !swarm.receiving)) {
+			status = 'stalled';
+		}
 		const category = torrent.labels?.[0];
 		const eta = typeof torrent.eta === 'number' && torrent.eta >= 0 ? torrent.eta : undefined;
 		const errorMessage =
@@ -272,13 +328,22 @@ export class TransmissionClient implements IDownloadClient {
 			// Transmission doesn't support seeding time limits, only idle time limits.
 			// We map seedIdleLimit here for informational purposes, but it's not a true seeding time limit.
 			seedingTimeLimit: torrent.seedIdleLimit,
-			canMoveFiles: status !== 'downloading' && status !== 'seeding' && status !== 'queued',
+			canMoveFiles:
+				status !== 'downloading' &&
+				status !== 'stalled' &&
+				status !== 'seeding' &&
+				status !== 'queued',
 			// A torrent is only removable once Transmission has stopped it (status
 			// maps to 'completed') AND its seed limits are verifiably met. While it
 			// is still seeding (status 'seeding') it is never removable - isFinished
 			// alone stays true for the entire seeding phase and must not gate removal.
 			canBeRemoved: status === 'completed' && this.hasReachedSeedLimit(torrent, session),
-			errorMessage
+			errorMessage,
+			downloadedBytes: swarm.downloadedBytes,
+			connectedPeers: swarm.connectedPeers,
+			availability: swarm.availability,
+			metadataPending: swarm.metadataPending,
+			isPrivate: swarm.isPrivate
 		};
 	}
 

@@ -48,6 +48,7 @@ function toPublicInfo(record: MediaBrowserServerRecord): MediaBrowserServerPubli
 		onUpgrade: record.onUpgrade,
 		onRename: record.onRename,
 		onDelete: record.onDelete,
+		plexSignIn: record.serverType === 'plex' && record.plexSignIn === true,
 		pathMappings: record.pathMappings,
 		serverName: record.serverName,
 		serverVersion: record.serverVersion,
@@ -213,6 +214,8 @@ class MediaBrowserManager {
 			onUpgrade: input.onUpgrade ?? true,
 			onRename: input.onRename ?? true,
 			onDelete: input.onDelete ?? true,
+			// Only meaningful for Plex; never stored as on for other types.
+			plexSignIn: input.serverType === 'plex' && input.plexSignIn === true,
 			pathMappings: input.pathMappings ?? null,
 			createdAt: now,
 			updatedAt: now
@@ -250,6 +253,12 @@ class MediaBrowserManager {
 		if (input.onRename !== undefined) updates.onRename = input.onRename;
 		if (input.onDelete !== undefined) updates.onDelete = input.onDelete;
 		if (input.pathMappings !== undefined) updates.pathMappings = input.pathMappings;
+		const effectiveType = input.serverType ?? existing.serverType;
+		if (effectiveType !== 'plex') {
+			updates.plexSignIn = false;
+		} else if (input.plexSignIn !== undefined) {
+			updates.plexSignIn = input.plexSignIn;
+		}
 
 		// If host or API key changed, clear the client cache
 		if (input.host !== undefined || input.apiKey !== undefined) {

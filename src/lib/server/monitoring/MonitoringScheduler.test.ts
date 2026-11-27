@@ -38,7 +38,13 @@ const settings: MonitoringSettings = {
 	stalledDownloadTimeoutMinutes: 60,
 	stalledDownloadProgressTimeoutMinutes: 20160,
 	stalledDownloadProgressThreshold: 0,
-	stalledDownloadBlocklistHours: 72
+	stalledDownloadBlocklistHours: 72,
+	deadTorrentEnabled: true,
+	deadTorrentGraceMinutes: 60,
+	deadTorrentMetadataMinutes: 60,
+	deadTorrentNoProgressMinutes: 360,
+	deadTorrentStrikes: 3,
+	deadTorrentPrivateAction: 'warn'
 };
 
 const baseResult = {

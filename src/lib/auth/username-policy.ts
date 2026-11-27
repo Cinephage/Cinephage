@@ -1,6 +1,7 @@
 export const USERNAME_MIN_LENGTH = 3;
 export const USERNAME_MAX_LENGTH = 32;
-export const USERNAME_PATTERN = /^[a-zA-Z0-9_]+$/;
+// Extending username to allow periods or hyphens
+export const USERNAME_PATTERN = /^[a-zA-Z0-9_]+(?:[.-][a-zA-Z0-9_]+)*$/;
 
 /**
  * Hard-reserved usernames map to real app namespaces, auth endpoints,

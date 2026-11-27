@@ -4,6 +4,8 @@ import { db } from '#lib/server/db/index.js';
 import { session, user, userMediaServerLinks } from '#lib/server/db/schema.js';
 import { requireAdminPage } from '#lib/server/auth/authorization.js';
 import { listCalendarFeedUsage } from '#lib/server/auth/api-keys.js';
+import { mediaServerLinkService } from '#lib/server/mediaServerLink/MediaServerLinkService.js';
+import { getSystemSettingsService } from '#lib/server/settings/SystemSettingsService.js';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	requireAdminPage(locals);
@@ -33,7 +35,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const sessionCountByUser = new Map(sessionCounts.map((row) => [row.userId, row.value]));
 	const calendarFeedByUser = new Map(listCalendarFeedUsage().map((row) => [row.userId, row]));
 
+	const [plexSignInEnabled, plexNewUserSignIn] = await Promise.all([
+		mediaServerLinkService.hasPlexSignInServer(),
+		getSystemSettingsService().getPlexNewUserSignIn()
+	]);
+
 	return {
+		plexSignInEnabled,
+		plexNewUserSignIn,
 		users: users.map((row) => ({
 			...row,
 			sessionCount: sessionCountByUser.get(row.id) ?? 0,

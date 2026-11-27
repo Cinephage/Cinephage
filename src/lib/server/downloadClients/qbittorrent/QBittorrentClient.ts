@@ -102,6 +102,12 @@ interface QBittorrentTorrent {
 	seeding_time_limit?: number;
 	/** Time spent seeding in seconds */
 	seeding_time?: number;
+	/** Bytes of wanted data downloaded so far */
+	completed?: number;
+	/** Distributed copies among connected peers; -1 when unknown (e.g. seeding) */
+	availability?: number;
+	/** Private-tracker flag (qBittorrent 5.0+; older versions omit it) */
+	private?: boolean;
 }
 
 interface QBittorrentTorrentFile {
@@ -978,7 +984,13 @@ export class QBittorrentClient implements IDownloadClient {
 			seedingTimeLimit: t.seeding_time_limit,
 			canMoveFiles,
 			canBeRemoved,
-			removed: false
+			removed: false,
+			downloadedBytes: typeof t.completed === 'number' ? t.completed : undefined,
+			connectedSeeds: typeof t.num_seeds === 'number' ? t.num_seeds : undefined,
+			connectedPeers: typeof t.num_leechs === 'number' ? t.num_leechs : undefined,
+			availability: typeof t.availability === 'number' ? t.availability : undefined,
+			metadataPending: t.state === 'metaDL' || t.state === 'forcedMetaDL',
+			isPrivate: typeof t.private === 'boolean' ? t.private : undefined
 		};
 	}
 

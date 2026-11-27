@@ -1,17 +1,18 @@
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
-	import { Check, Copy, Link2Off, XCircle } from '@lucide/svelte';
+	import { Check, Copy, KeyRound, Link2, Link2Off, XCircle } from '@lucide/svelte';
 
 	interface ImportRowResult {
 		serverUserId: string;
 		serverUsername: string;
-		status: 'created' | 'failed';
+		status: 'created' | 'linked' | 'failed';
 		error: string | null;
 		userId: string | null;
 		username: string | null;
 		email: string | null;
 		tempPassword: string | null;
 		linked: boolean;
+		plexSignInOnly: boolean;
 	}
 
 	interface Props {
@@ -23,10 +24,16 @@
 	let { results, copiedId, onCopy }: Props = $props();
 
 	const createdCount = $derived(results.filter((row) => row.status === 'created').length);
+	const linkedCount = $derived(results.filter((row) => row.status === 'linked').length);
 </script>
 
 <p class="text-sm font-medium">
 	{m.users_importSummary({ created: String(createdCount), total: String(results.length) })}
+	{#if linkedCount > 0}
+		<span class="font-normal text-base-content/70">
+			· {m.users_importSummaryLinked({ count: String(linkedCount) })}
+		</span>
+	{/if}
 </p>
 
 <div class="space-y-3">
@@ -44,6 +51,13 @@
 					>
 						<XCircle class="h-3 w-3" />
 						{m.users_importFailed()}
+					</span>
+				{:else if row.status === 'linked'}
+					<span
+						class="badge shrink-0 gap-1 border-info/40 bg-info/10 badge-sm whitespace-nowrap text-info"
+					>
+						<Link2 class="h-3 w-3" />
+						{m.users_importLinkedExisting()}
 					</span>
 				{:else if row.linked}
 					<span
@@ -66,7 +80,12 @@
 				<p class="text-sm text-error">{row.error}</p>
 			{:else}
 				<p class="text-xs break-all text-base-content/60">{row.email}</p>
-				{#if row.tempPassword}
+				{#if row.plexSignInOnly}
+					<p class="flex items-center gap-1.5 text-xs text-base-content/70">
+						<KeyRound class="h-3 w-3" />
+						{m.users_importSignsInWithPlex()}
+					</p>
+				{:else if row.tempPassword}
 					<div class="flex items-center gap-2">
 						<code
 							class="min-w-0 flex-1 rounded bg-base-200 px-2 py-1.5 font-mono text-sm break-all"

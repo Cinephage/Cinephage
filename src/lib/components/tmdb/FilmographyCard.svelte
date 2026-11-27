@@ -3,6 +3,13 @@
 	import TmdbImage from './TmdbImage.svelte';
 	import { resolvePath } from '#lib/utils/routing.js';
 	import { Check, Clock } from '@lucide/svelte';
+	import {
+		POSTER_CORNER,
+		POSTER_TAG,
+		POSTER_TAG_TEXT,
+		POSTER_ICON,
+		POSTER_TONE
+	} from '#lib/components/ui/poster-tags.js';
 	import * as m from '#lib/paraglide/messages.js';
 
 	// Extended type that includes library status (added by enrichWithLibraryStatus)
@@ -57,36 +64,31 @@
 
 	<!-- Library Status Badge (top-left) -->
 	{#if inLibrary}
-		<div class="absolute top-2 left-2 z-10">
+		<div class={POSTER_CORNER.topLeft}>
 			{#if hasFile}
 				<!-- Available: Green checkmark -->
-				<div
-					class="flex h-6 w-6 items-center justify-center rounded-full bg-success/90 text-success-content shadow-md backdrop-blur-sm"
-					title={m.tmdb_availableInLibrary()}
-				>
-					<Check class="h-4 w-4" strokeWidth={3} />
+				<div class="{POSTER_ICON} {POSTER_TONE.success}" title={m.tmdb_availableInLibrary()}>
+					<Check class="size-3" strokeWidth={3} />
 				</div>
 			{:else}
 				<!-- Monitored but missing: Yellow clock -->
-				<div
-					class="flex h-6 w-6 items-center justify-center rounded-full bg-warning/90 text-warning-content shadow-md backdrop-blur-sm"
-					title={m.tmdb_monitoredNotDownloaded()}
-				>
-					<Clock class="h-4 w-4" strokeWidth={2.5} />
+				<div class="{POSTER_ICON} {POSTER_TONE.warning}" title={m.tmdb_monitoredNotDownloaded()}>
+					<Clock class="size-3" strokeWidth={2.5} />
 				</div>
 			{/if}
 		</div>
 	{/if}
 
 	<!-- Media Type Badge -->
-	<div class="absolute top-1 right-1 z-10 sm:top-2 sm:right-2">
+	<div class={POSTER_CORNER.topRight}>
 		<span
-			class="badge border-none badge-xs font-semibold shadow-sm sm:badge-sm sm:backdrop-blur-sm {credit.media_type ===
-			'movie'
-				? 'bg-primary/65 text-primary-content sm:bg-primary/80'
-				: 'bg-secondary/65 text-secondary-content sm:bg-secondary/80'}"
+			class="{POSTER_TAG} {credit.media_type === 'movie'
+				? POSTER_TONE.primary
+				: POSTER_TONE.secondary}"
 		>
-			{credit.media_type === 'movie' ? m.ui_mediaType_movie() : m.ui_mediaType_tv()}
+			<span class={POSTER_TAG_TEXT}>
+				{credit.media_type === 'movie' ? m.ui_mediaType_movie() : m.ui_mediaType_tv()}
+			</span>
 		</span>
 	</div>
 

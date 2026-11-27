@@ -15,6 +15,7 @@ import { createChildLogger } from '#lib/logging/index.js';
 import { parseBody } from '#lib/server/api/validate.js';
 import { z } from 'zod';
 import { mediaServerLinkService } from '#lib/server/mediaServerLink/MediaServerLinkService.js';
+import { hasLocalPassword } from '#lib/server/auth/local-login.js';
 
 const logger = createChildLogger({ module: 'UserMediaServerLinkApi', logDomain: 'auth' });
 
@@ -27,12 +28,13 @@ export const GET: RequestHandler = async ({ locals }) => {
 		return Response.json({ success: false, error: 'Unauthorized' }, { status: 401 });
 	}
 
-	const [links, servers] = await Promise.all([
+	const [links, servers, plexAvailable] = await Promise.all([
 		mediaServerLinkService.getLinks(locals.user.id),
-		mediaServerLinkService.getLinkableServers()
+		mediaServerLinkService.getLinkableServers(),
+		mediaServerLinkService.hasPlexSignInServer()
 	]);
 
-	return Response.json({ success: true, links, servers });
+	return Response.json({ success: true, links, servers, plexAvailable });
 };
 
 export const POST: RequestHandler = async ({ request, locals }) => {
@@ -104,6 +106,20 @@ export const DELETE: RequestHandler = async ({ locals, url }) => {
 	const serverId = url.searchParams.get('serverId');
 	if (!serverId) {
 		return Response.json({ success: false, error: 'serverId is required' }, { status: 400 });
+	}
+
+	// An account that signs in with Plex and has no password would lose its
+	// only way in. Refuse, and say why.
+	const links = await mediaServerLinkService.getLinks(locals.user.id);
+	const isLastLink = links.every((link) => link.serverId === serverId);
+	if (isLastLink && !(await hasLocalPassword(locals.user.id))) {
+		return Response.json(
+			{
+				success: false,
+				error: 'This account signs in with Plex; unlinking its only account would lock it out.'
+			},
+			{ status: 400 }
+		);
 	}
 
 	const removed = await mediaServerLinkService.unlink(locals.user.id, serverId);

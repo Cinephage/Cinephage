@@ -3,12 +3,15 @@
  *
  * Bulk-creates local accounts from a media server's user directory and links
  * each one to its server account, so an admin can stand up Cinephage's user
- * list from an existing Jellyfin (and later Emby/Plex) deployment in one
+ * list from an existing Jellyfin or Plex (and later Emby) deployment in one
  * pass.
  *
  * Media servers never expose their users' passwords, so every imported
  * account gets a unique generated temporary password that is returned once
  * to the admin for hand-off; the account owner changes it after signing in.
+ * The exception is a Plex server with "Sign in with Plex" on: its users
+ * sign in through Plex, so their accounts are created with no password at
+ * all and local (username + password) login stays off for them.
  *
  * Nothing here trusts the preview: importUsers re-fetches the roster and
  * re-validates every selected user against fresh local state immediately
@@ -36,28 +39,55 @@ const PASSWORD_LENGTH = 20;
 const PASSWORD_ALPHABET = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 export type ImportCandidateStatus =
-	'importable' | 'linked' | 'disabled' | 'invalid-username' | 'username-taken' | 'email-taken';
+	| 'importable'
+	/** Email matches an existing, not-yet-linked local account: link it. */
+	| 'link-existing'
+	/** Email matches an administrator: refused, the owner links it themselves. */
+	| 'email-admin'
+	| 'linked'
+	| 'disabled'
+	| 'invalid-username'
+	| 'username-taken'
+	| 'email-taken';
+
+/** Statuses the admin can select; everything else is blocked. */
+export function isSelectableStatus(status: ImportCandidateStatus): boolean {
+	return status === 'importable' || status === 'link-existing';
+}
 
 export type ImportCandidate = {
 	id: string;
 	name: string;
 	isAdministrator: boolean;
 	status: ImportCandidateStatus;
-	/** Local username this server account is already linked to ('linked' only). */
+	/**
+	 * Local username involved: the account this server account is already
+	 * linked to ('linked'), or the account the import would link it to
+	 * ('link-existing'). Null otherwise.
+	 */
 	linkedTo: string | null;
-	/** Placeholder email the import would assign; servers carry no email. */
+	/**
+	 * Email the import would assign: the account's own address when the
+	 * server exposes one (Plex), else a placeholder derived from the name.
+	 */
 	suggestedEmail: string;
 };
 
 export type ImportPreviewResult =
-	| { outcome: 'ok'; users: ImportCandidate[] }
+	| {
+			outcome: 'ok';
+			users: ImportCandidate[];
+			/** New accounts will be Plex-sign-in only (no password generated). */
+			plexSignInOnly: boolean;
+	  }
 	| { outcome: 'no-server' }
 	| { outcome: 'server-error' };
 
 export type ImportRowResult = {
 	serverUserId: string;
 	serverUsername: string;
-	status: 'created' | 'failed';
+	/** 'linked': attached to an existing account - no account was created. */
+	status: 'created' | 'linked' | 'failed';
 	/** Human-readable failure or link-conflict reason; null on clean rows. */
 	error: string | null;
 	userId: string | null;
@@ -65,6 +95,8 @@ export type ImportRowResult = {
 	email: string | null;
 	tempPassword: string | null;
 	linked: boolean;
+	/** Created without a password: signs in with Plex only. */
+	plexSignInOnly: boolean;
 };
 
 export type ImportUsersResult =
@@ -72,14 +104,17 @@ export type ImportUsersResult =
 	| { outcome: 'no-server' }
 	| { outcome: 'server-error' };
 
-/** Account-creation seam; the endpoint binds it to auth.api.createUser. */
+/**
+ * Account-creation seam; the endpoint binds it to auth.api.createUser. No
+ * password means no credential account, i.e. no local login.
+ */
 export type ImportedUserCreator = (input: {
 	username: string;
 	email: string;
-	password: string;
+	password?: string;
 }) => Promise<{ userId: string }>;
 
-function placeholderEmail(username: string, serverName: string): string {
+export function placeholderEmail(username: string, serverName: string): string {
 	const slug =
 		serverName
 			.toLowerCase()
@@ -98,6 +133,7 @@ function generateTempPassword(): string {
 export function importBlockReason(status: ImportCandidateStatus): string | null {
 	switch (status) {
 		case 'importable':
+		case 'link-existing':
 			return null;
 		case 'linked':
 			return 'Already linked to a local account';
@@ -108,9 +144,21 @@ export function importBlockReason(status: ImportCandidateStatus): string | null 
 		case 'username-taken':
 			return 'A local account already uses this username';
 		case 'email-taken':
-			return 'A local account already uses the placeholder email';
+			return 'The local account with this email is already linked to another server account';
+		case 'email-admin':
+			return 'Matches an administrator account - link it from that account, not here';
 	}
 }
+
+type LocalAccount = { userId: string; username: string; role: string };
+
+type ClassifyContext = {
+	serverName: string;
+	linkedTo: Map<string, string>;
+	takenUsernames: Set<string>;
+	usersByEmail: Map<string, LocalAccount>;
+	usersLinkedOnServer: Set<string>;
+};
 
 class MediaServerUserImportService {
 	/**
@@ -121,10 +169,12 @@ class MediaServerUserImportService {
 		| {
 				outcome: 'ok';
 				serverName: string;
+				plexSignInOnly: boolean;
 				roster: ServerUserOption[];
 				linkedTo: Map<string, string>;
 				takenUsernames: Set<string>;
-				takenEmails: Set<string>;
+				usersByEmail: Map<string, LocalAccount>;
+				usersLinkedOnServer: Set<string>;
 		  }
 		| { outcome: 'no-server' }
 		| { outcome: 'server-error' }
@@ -142,17 +192,21 @@ class MediaServerUserImportService {
 		const linkRows = await db
 			.select({
 				serverUserId: userMediaServerLinks.serverUserId,
+				userId: userMediaServerLinks.userId,
 				username: user.username
 			})
 			.from(userMediaServerLinks)
 			.innerJoin(user, eq(userMediaServerLinks.userId, user.id))
 			.where(eq(userMediaServerLinks.serverId, serverId));
 
-		const localUsers = await db.select({ username: user.username, email: user.email }).from(user);
+		const localUsers = await db
+			.select({ id: user.id, username: user.username, email: user.email, role: user.role })
+			.from(user);
 
 		return {
 			outcome: 'ok',
 			serverName: server.name,
+			plexSignInOnly: server.serverType === 'plex' && server.plexSignIn === true,
 			roster,
 			linkedTo: new Map(
 				linkRows
@@ -164,22 +218,22 @@ class MediaServerUserImportService {
 					.map((row) => row.username?.toLowerCase())
 					.filter((username): username is string => username !== undefined)
 			),
-			takenEmails: new Set(
+			usersByEmail: new Map(
 				localUsers
-					.map((row) => row.email?.toLowerCase())
-					.filter((email): email is string => email !== undefined)
-			)
+					.filter((row) => row.email && row.username)
+					.map((row) => [
+						row.email!.toLowerCase(),
+						{ userId: row.id, username: row.username as string, role: row.role }
+					])
+			),
+			usersLinkedOnServer: new Set(linkRows.map((row) => row.userId))
 		};
 	}
 
 	private classify(
 		entry: ServerUserOption,
-		context: {
-			serverName: string;
-			linkedTo: Map<string, string>;
-			takenUsernames: Set<string>;
-			takenEmails: Set<string>;
-		}
+		context: ClassifyContext,
+		actorUserId: string
 	): ImportCandidate {
 		const candidate: ImportCandidate = {
 			id: entry.id,
@@ -187,7 +241,7 @@ class MediaServerUserImportService {
 			isAdministrator: entry.isAdministrator,
 			status: 'importable',
 			linkedTo: null,
-			suggestedEmail: placeholderEmail(entry.name, context.serverName)
+			suggestedEmail: entry.email?.trim() || placeholderEmail(entry.name, context.serverName)
 		};
 
 		const linkedTo = context.linkedTo.get(entry.id);
@@ -196,6 +250,25 @@ class MediaServerUserImportService {
 		}
 		if (entry.isDisabled) {
 			return { ...candidate, status: 'disabled' };
+		}
+		// Same email as an existing local account: that is the same person
+		// (e.g. the Plex owner and their Cinephage admin), so link rather
+		// than create - unless that account is already linked to a
+		// different account on this server.
+		const sameEmail = context.usersByEmail.get(candidate.suggestedEmail.toLowerCase());
+		if (sameEmail) {
+			if (context.usersLinkedOnServer.has(sameEmail.userId)) {
+				return { ...candidate, status: 'email-taken' };
+			}
+			// The email is a claim the media server makes about itself, and a
+			// link signs in as that account. An administrator account is only
+			// linked by the administrator running the import, never by another
+			// admin's roster; otherwise link it from the profile page, where
+			// the Plex approval proves the account.
+			if (sameEmail.role === 'admin' && sameEmail.userId !== actorUserId) {
+				return { ...candidate, status: 'email-admin', linkedTo: sameEmail.username };
+			}
+			return { ...candidate, status: 'link-existing', linkedTo: sameEmail.username };
 		}
 		if (!isValidUsernameFormat(entry.name) || isHardReservedUsername(entry.name)) {
 			return { ...candidate, status: 'invalid-username' };
@@ -206,21 +279,19 @@ class MediaServerUserImportService {
 		if (context.takenUsernames.has(entry.name.toLowerCase())) {
 			return { ...candidate, status: 'username-taken' };
 		}
-		if (context.takenEmails.has(candidate.suggestedEmail.toLowerCase())) {
-			return { ...candidate, status: 'email-taken' };
-		}
 		return candidate;
 	}
 
 	/** Roster with per-user import status for the admin's picker. */
-	async previewImport(serverId: string): Promise<ImportPreviewResult> {
+	async previewImport(serverId: string, actorUserId: string): Promise<ImportPreviewResult> {
 		const context = await this.loadContext(serverId);
 		if (context.outcome !== 'ok') {
 			return context;
 		}
 		return {
 			outcome: 'ok',
-			users: context.roster.map((entry) => this.classify(entry, context))
+			users: context.roster.map((entry) => this.classify(entry, context, actorUserId)),
+			plexSignInOnly: context.plexSignInOnly
 		};
 	}
 
@@ -233,6 +304,8 @@ class MediaServerUserImportService {
 		serverId: string;
 		serverUserIds: string[];
 		createUser: ImportedUserCreator;
+		/** The admin running the import; only they may link their own account. */
+		actorUserId: string;
 	}): Promise<ImportUsersResult> {
 		const context = await this.loadContext(input.serverId);
 		if (context.outcome !== 'ok') {
@@ -254,12 +327,13 @@ class MediaServerUserImportService {
 					username: null,
 					email: null,
 					tempPassword: null,
-					linked: false
+					linked: false,
+					plexSignInOnly: false
 				});
 				continue;
 			}
 
-			const candidate = this.classify(entry, context);
+			const candidate = this.classify(entry, context, input.actorUserId);
 			const blockReason = importBlockReason(candidate.status);
 			if (blockReason) {
 				results.push({
@@ -271,17 +345,43 @@ class MediaServerUserImportService {
 					username: null,
 					email: null,
 					tempPassword: null,
-					linked: false
+					linked: false,
+					plexSignInOnly: false
 				});
 				continue;
 			}
 
-			const tempPassword = generateTempPassword();
+			if (candidate.status === 'link-existing') {
+				const target = context.usersByEmail.get(candidate.suggestedEmail.toLowerCase())!;
+				const link = await mediaServerLinkService.linkValidatedServerUser(
+					target.userId,
+					input.serverId,
+					entry.id,
+					entry.name
+				);
+				const linked = !('conflict' in link);
+				results.push({
+					serverUserId,
+					serverUsername: entry.name,
+					status: linked ? 'linked' : 'failed',
+					error: linked ? null : 'The existing account could not be linked (link conflict)',
+					userId: linked ? target.userId : null,
+					username: target.username,
+					email: candidate.suggestedEmail,
+					tempPassword: null,
+					linked,
+					plexSignInOnly: false
+				});
+				if (linked) context.usersLinkedOnServer.add(target.userId);
+				continue;
+			}
+
+			const tempPassword = context.plexSignInOnly ? null : generateTempPassword();
 			try {
 				const { userId } = await input.createUser({
 					username: candidate.name,
 					email: candidate.suggestedEmail,
-					password: tempPassword
+					...(tempPassword ? { password: tempPassword } : {})
 				});
 
 				const link = await mediaServerLinkService.linkValidatedServerUser(
@@ -307,12 +407,19 @@ class MediaServerUserImportService {
 					username: candidate.name,
 					email: candidate.suggestedEmail,
 					tempPassword,
-					linked
+					linked,
+					plexSignInOnly: context.plexSignInOnly
 				});
 
 				// Later rows in the same batch must see earlier creations.
 				context.takenUsernames.add(candidate.name.toLowerCase());
-				context.takenEmails.add(candidate.suggestedEmail.toLowerCase());
+				context.usersByEmail.set(candidate.suggestedEmail.toLowerCase(), {
+					userId,
+					username: candidate.name,
+					// A freshly created account is never the importing admin.
+					role: 'user'
+				});
+				if (linked) context.usersLinkedOnServer.add(userId);
 			} catch (error) {
 				const message =
 					error instanceof Error && error.message ? error.message : 'Account creation failed';
@@ -325,14 +432,21 @@ class MediaServerUserImportService {
 					username: null,
 					email: null,
 					tempPassword: null,
-					linked: false
+					linked: false,
+					plexSignInOnly: false
 				});
 			}
 		}
 
 		const created = results.filter((row) => row.status === 'created').length;
+		const linkedExisting = results.filter((row) => row.status === 'linked').length;
 		logger.info(
-			{ serverId: input.serverId, created, failed: results.length - created },
+			{
+				serverId: input.serverId,
+				created,
+				linkedExisting,
+				failed: results.length - created - linkedExisting
+			},
 			'[MediaServerUserImport] Bulk import finished'
 		);
 		return { outcome: 'ok', results };

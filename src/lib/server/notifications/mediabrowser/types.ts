@@ -21,6 +21,8 @@ export interface MediaBrowserServerInput {
 	onUpgrade?: boolean;
 	onRename?: boolean;
 	onDelete?: boolean;
+	/** Plex only: allow "Sign in with Plex" through this server. */
+	plexSignIn?: boolean;
 	pathMappings?: MediaBrowserPathMapping[];
 }
 
@@ -63,6 +65,7 @@ export interface MediaBrowserServerPublic {
 	onUpgrade: boolean | null;
 	onRename: boolean | null;
 	onDelete: boolean | null;
+	plexSignIn: boolean;
 	pathMappings: MediaBrowserPathMapping[] | null;
 	serverName: string | null;
 	serverVersion: string | null;

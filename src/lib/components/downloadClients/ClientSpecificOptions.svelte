@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { Clock, Check } from '@lucide/svelte';
+	import { Clock, Check, Skull } from '@lucide/svelte';
+	import type { DeadTorrentSettingsForm } from '#lib/api/monitoring.js';
 	import type { DownloadClientDefinition } from '#lib/types/downloadClient.js';
 	import NntpServerSettings from './forms/NntpServerSettings.svelte';
 	import DownloadClientSettings from './forms/DownloadClientSettings.svelte';
@@ -27,6 +28,8 @@
 		stalledThreshold: number;
 		stalledBlocklist: number;
 		saveStalledBehaviorSuccess: boolean;
+		deadTorrent: DeadTorrentSettingsForm;
+		saveDeadTorrentSuccess: boolean;
 		isNntpServer: boolean;
 		selectedDefinition: DownloadClientDefinition | null;
 		usesApiKey: boolean;
@@ -55,6 +58,8 @@
 		stalledThreshold = $bindable(),
 		stalledBlocklist = $bindable(),
 		saveStalledBehaviorSuccess = $bindable(),
+		deadTorrent = $bindable(),
+		saveDeadTorrentSuccess,
 		isNntpServer,
 		selectedDefinition = null,
 		usesApiKey,
@@ -197,3 +202,121 @@
 		{/if}
 	</p>
 </div>
+
+{#if !isNntpServer}
+	<div class="rounded-lg bg-base-200/50 p-3">
+		<div class="mb-2 flex items-center gap-1.5">
+			<Skull class="h-3.5 w-3.5 text-base-content/50" />
+			<span class="text-xs font-semibold text-base-content/70"
+				>{m.downloadClientModal_deadTorrents()}</span
+			>
+			<span class="badge badge-ghost badge-xs text-[10px]"
+				>{m.downloadClientModal_stalledGlobal()}</span
+			>
+			<input
+				type="checkbox"
+				class="toggle ml-auto toggle-sm"
+				aria-label={m.downloadClientModal_deadTorrentsEnabled()}
+				bind:checked={deadTorrent.deadTorrentEnabled}
+			/>
+		</div>
+		{#if deadTorrent.deadTorrentEnabled}
+			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+				<div class="form-control min-w-0">
+					<label class="label px-0 py-1" for="dead-no-progress-modal">
+						<span class="label-text text-xs whitespace-nowrap"
+							>{m.downloadClientModal_deadNoProgress()}</span
+						>
+					</label>
+					<input
+						id="dead-no-progress-modal"
+						type="number"
+						class="input-bordered input w-full input-sm"
+						min="0"
+						step="30"
+						bind:value={deadTorrent.deadTorrentNoProgressMinutes}
+					/>
+				</div>
+				<div class="form-control min-w-0">
+					<label class="label px-0 py-1" for="dead-metadata-modal">
+						<span class="label-text text-xs whitespace-nowrap"
+							>{m.downloadClientModal_deadMetadata()}</span
+						>
+					</label>
+					<input
+						id="dead-metadata-modal"
+						type="number"
+						class="input-bordered input w-full input-sm"
+						min="0"
+						step="15"
+						bind:value={deadTorrent.deadTorrentMetadataMinutes}
+					/>
+				</div>
+				<div class="form-control min-w-0">
+					<label class="label px-0 py-1" for="dead-grace-modal">
+						<span class="label-text text-xs whitespace-nowrap"
+							>{m.downloadClientModal_deadGrace()}</span
+						>
+					</label>
+					<input
+						id="dead-grace-modal"
+						type="number"
+						class="input-bordered input w-full input-sm"
+						min="0"
+						step="15"
+						bind:value={deadTorrent.deadTorrentGraceMinutes}
+					/>
+				</div>
+				<div class="form-control min-w-0">
+					<label class="label px-0 py-1" for="dead-strikes-modal">
+						<span class="label-text text-xs whitespace-nowrap"
+							>{m.downloadClientModal_deadStrikes()}</span
+						>
+					</label>
+					<input
+						id="dead-strikes-modal"
+						type="number"
+						class="input-bordered input w-full input-sm"
+						min="1"
+						max="20"
+						step="1"
+						bind:value={deadTorrent.deadTorrentStrikes}
+					/>
+				</div>
+				<div class="form-control min-w-0 sm:col-span-2">
+					<label class="label px-0 py-1" for="dead-private-modal">
+						<span class="label-text text-xs whitespace-nowrap"
+							>{m.downloadClientModal_deadPrivate()}</span
+						>
+					</label>
+					<select
+						id="dead-private-modal"
+						class="select-bordered select w-full select-sm"
+						bind:value={deadTorrent.deadTorrentPrivateAction}
+					>
+						<option value="warn">{m.downloadClientModal_deadPrivateWarn()}</option>
+						<option value="remove">{m.downloadClientModal_deadPrivateRemove()}</option>
+					</select>
+				</div>
+			</div>
+		{/if}
+		{#if saveDeadTorrentSuccess}
+			<p class="mt-1 flex items-center gap-1 text-xs text-success">
+				<Check class="h-3 w-3" />
+				{m.downloadClientModal_stalledSaved()}
+			</p>
+		{/if}
+		<p class="mt-1 text-xs text-base-content/50">
+			{#if deadTorrent.deadTorrentEnabled}
+				{m.downloadClientModal_deadDescription({
+					noProgress: minutesLabel(deadTorrent.deadTorrentNoProgressMinutes ?? 0),
+					metadata: minutesLabel(deadTorrent.deadTorrentMetadataMinutes ?? 0),
+					strikes: deadTorrent.deadTorrentStrikes ?? 0,
+					grace: minutesLabel(deadTorrent.deadTorrentGraceMinutes ?? 0)
+				})}
+			{:else}
+				{m.downloadClientModal_deadDisabled()}
+			{/if}
+		</p>
+	</div>
+{/if}
