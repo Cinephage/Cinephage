@@ -625,7 +625,10 @@ export class MonitoringScheduler extends EventEmitter implements BackgroundServi
 		);
 		this.taskIntervals.set('dbBackup', Math.max(dbBackupInterval, MIN_INTERVAL_HOURS));
 		this.taskIntervals.set('request-sweep', Math.max(requestSweepInterval, MIN_INTERVAL_HOURS));
-		this.taskIntervals.set('music-stream-match', Math.max(musicStreamMatchInterval, MIN_INTERVAL_HOURS));
+		this.taskIntervals.set(
+			'music-stream-match',
+			Math.max(musicStreamMatchInterval, MIN_INTERVAL_HOURS)
+		);
 		this.taskIntervals.set(
 			'metadata-refresh',
 			Math.max(metadataRefreshInterval, MIN_INTERVAL_HOURS)

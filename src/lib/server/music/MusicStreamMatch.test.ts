@@ -35,9 +35,20 @@ vi.mock('./playback/resolver.js', () => resolver);
 
 import { matchStreamedMusic } from './MusicStreamMatch.js';
 
-function seedAlbum(id: string, added: string, streamSource: string | null, videoIds: (string | null)[]): void {
-	testDb.db.insert(schema.mediaItems).values({ id: `mi-${id}`, kind: 'album', title: id }).run();
-	testDb.db.insert(schema.artists).values({ id: `ar-${id}`, name: 'Artist' }).run();
+function seedAlbum(
+	id: string,
+	added: string,
+	streamSource: string | null,
+	videoIds: (string | null)[]
+): void {
+	testDb.db
+		.insert(schema.mediaItems)
+		.values({ id: `mi-${id}`, kind: 'album', title: id })
+		.run();
+	testDb.db
+		.insert(schema.artists)
+		.values({ id: `ar-${id}`, name: 'Artist' })
+		.run();
 	testDb.db
 		.insert(schema.albums)
 		.values({
