@@ -3471,9 +3471,30 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 
 		if (timedOutItems.length === 0) return;
 
+		// The dead-torrent check can be set to warn only for private trackers,
+		// because leaving early counts as a hit and run. That promise has to hold
+		// here too: a torrent kept for that reason is not reaped by the stalled
+		// timeout, however long it sits at the same progress.
+		const privateAction = (await this.getDeadTorrentSettingsCached()).privateAction;
+		const timedOut: typeof timedOutItems = [];
+		for (const item of timedOutItems) {
+			if (
+				privateAction === 'warn' &&
+				(item.swarmHealth?.isPrivate === true || (await this.isFromPrivateIndexer(item.indexerId)))
+			) {
+				logger.info(
+					{ title: item.title, downloadId: item.downloadId },
+					'Skipped the stalled timeout for a private-tracker torrent (warn only)'
+				);
+				continue;
+			}
+			timedOut.push(item);
+		}
+		if (timedOut.length === 0) return;
+
 		logger.info(
 			{
-				count: timedOutItems.length,
+				count: timedOut.length,
 				timeoutMinutes: effectiveTimeout,
 				progressThreshold,
 				blocklistHours: blocklistHours === 0 ? 'permanent' : blocklistHours
@@ -3481,7 +3502,7 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 			'Processing timed-out stalled downloads'
 		);
 
-		for (const item of timedOutItems) {
+		for (const item of timedOut) {
 			const progressPct = parseFloat(item.progress || '0') * 100;
 			const errorMessage =
 				item.protocol === 'usenet'
@@ -3668,6 +3689,11 @@ export class DownloadMonitorService extends EventEmitter implements BackgroundSe
 								set: { searchedAt }
 							});
 					}
+					// Keep the table bounded: rows older than the search window are
+					// never read again.
+					await db
+						.delete(deadDownloadSearches)
+						.where(sql`${deadDownloadSearches.searchedAt} < ${windowStart}`);
 				};
 
 				if (item.movieId) {
