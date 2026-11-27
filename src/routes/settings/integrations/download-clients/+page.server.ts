@@ -11,6 +11,7 @@ export const load: PageServerLoad = async () => {
 	return {
 		downloadClients,
 		stalledDownloadTimeoutMinutes: settings.stalledDownloadTimeoutMinutes,
+		stalledDownloadProgressTimeoutMinutes: settings.stalledDownloadProgressTimeoutMinutes,
 		stalledDownloadProgressThreshold: settings.stalledDownloadProgressThreshold,
 		stalledDownloadBlocklistHours: settings.stalledDownloadBlocklistHours,
 		defaultAcquisitionProtocol: getDefaultAcquisitionProtocol()

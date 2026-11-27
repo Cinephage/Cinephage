@@ -102,7 +102,7 @@
 		"drizzle-orm": "^0.45.4",
 		"fast-xml-parser": "^5.12.1",
 		"fflate": "^0.8.3",
-		"guessit-js": "^4.10.0",
+		"guessit-js": "^5.0.0",
 		"iconv-lite": "^0.7.3",
 		"js-yaml": "^5.5.0",
 		"minimatch": "^11.0.9",

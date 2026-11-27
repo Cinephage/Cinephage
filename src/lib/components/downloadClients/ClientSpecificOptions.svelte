@@ -4,6 +4,7 @@
 	import NntpServerSettings from './forms/NntpServerSettings.svelte';
 	import DownloadClientSettings from './forms/DownloadClientSettings.svelte';
 	import * as m from '#lib/paraglide/messages.js';
+	import { formatDuration } from '#lib/utils/format.js';
 
 	interface Props {
 		maxConnections: number;
@@ -22,6 +23,7 @@
 		tempPathLocal: string;
 		tempPathRemote: string;
 		stalledTimeout: number;
+		stalledProgressTimeout: number;
 		stalledThreshold: number;
 		stalledBlocklist: number;
 		saveStalledBehaviorSuccess: boolean;
@@ -49,6 +51,7 @@
 		tempPathLocal = $bindable(),
 		tempPathRemote = $bindable(),
 		stalledTimeout = $bindable(),
+		stalledProgressTimeout = $bindable(),
 		stalledThreshold = $bindable(),
 		stalledBlocklist = $bindable(),
 		saveStalledBehaviorSuccess = $bindable(),
@@ -58,6 +61,8 @@
 		isMountModeClient,
 		onBrowse
 	}: Props = $props();
+
+	const minutesLabel = (minutes: number) => formatDuration(minutes * 60_000);
 </script>
 
 {#if isNntpServer}
@@ -99,7 +104,7 @@
 		<div class="form-control min-w-0">
 			<label class="label px-0 py-1" for="stalled-timeout-modal">
 				<span class="label-text text-xs whitespace-nowrap"
-					>{m.downloadClientModal_stalledTimeout()}</span
+					>{m.downloadClientModal_stalledTimeout({ threshold: stalledThreshold })}</span
 				>
 			</label>
 			<input
@@ -109,6 +114,21 @@
 				min="0"
 				step="5"
 				bind:value={stalledTimeout}
+			/>
+		</div>
+		<div class="form-control min-w-0">
+			<label class="label px-0 py-1" for="stalled-progress-timeout-modal">
+				<span class="label-text text-xs whitespace-nowrap"
+					>{m.downloadClientModal_stalledProgressTimeout({ threshold: stalledThreshold })}</span
+				>
+			</label>
+			<input
+				id="stalled-progress-timeout-modal"
+				type="number"
+				class="input-bordered input w-full input-sm"
+				min="0"
+				step="60"
+				bind:value={stalledProgressTimeout}
 			/>
 		</div>
 		<div class="form-control min-w-0">
@@ -127,7 +147,7 @@
 				bind:value={stalledThreshold}
 			/>
 		</div>
-		<div class="form-control min-w-0 sm:col-span-2">
+		<div class="form-control min-w-0">
 			<label class="label px-0 py-1" for="stalled-blocklist-modal">
 				<span class="label-text text-xs whitespace-nowrap"
 					>{m.downloadClientModal_stalledBlocklist()}</span
@@ -150,13 +170,25 @@
 		</p>
 	{/if}
 	<p class="mt-1 text-xs text-base-content/50">
-		{#if stalledTimeout === 0}
+		{#if stalledTimeout === 0 && stalledProgressTimeout === 0}
 			{m.downloadClientModal_stalledDisabled()}
 		{:else}
-			{m.downloadClientModal_stalledDescription({
-				timeout: stalledTimeout,
-				threshold: stalledThreshold
-			})}
+			{#if stalledTimeout === 0}
+				{m.downloadClientModal_stalledLowTierOff({ threshold: stalledThreshold })}
+			{:else}
+				{m.downloadClientModal_stalledDescription({
+					timeout: minutesLabel(stalledTimeout),
+					threshold: stalledThreshold
+				})}
+			{/if}
+			{#if stalledProgressTimeout === 0}
+				{m.downloadClientModal_stalledProgressTierOff({ threshold: stalledThreshold })}
+			{:else}
+				{m.downloadClientModal_stalledProgressDescription({
+					timeout: minutesLabel(stalledProgressTimeout),
+					threshold: stalledThreshold
+				})}
+			{/if}
 			{#if stalledBlocklist === 0}
 				{m.downloadClientModal_stalledBlocklistPermanent()}
 			{:else}

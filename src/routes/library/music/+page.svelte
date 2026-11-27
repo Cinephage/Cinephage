@@ -969,7 +969,7 @@
 	</LibraryListHeader>
 
 	<!-- Main content -->
-	<main class="w-full px-4 py-8 lg:px-8">
+	<main class="w-full px-4 pt-4 pb-8 md:py-8 lg:px-8">
 		{#if emptyLibrary}
 			<div class="flex flex-col items-center justify-center py-20 text-center opacity-50">
 				<Disc3 class="mb-4 h-20 w-20" />

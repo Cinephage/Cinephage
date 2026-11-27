@@ -55,10 +55,12 @@
 			isNntp: boolean
 		) => Promise<ConnectionTestResult>;
 		stalledTimeoutMinutes: number;
+		stalledProgressTimeoutMinutes: number;
 		stalledProgressThreshold: number;
 		stalledBlocklistHours: number;
 		onSaveStalledBehavior: (
 			timeout: number,
+			progressTimeout: number,
 			threshold: number,
 			blocklistHours: number
 		) => Promise<void>;
@@ -78,6 +80,7 @@
 		onDelete,
 		onTest,
 		stalledTimeoutMinutes,
+		stalledProgressTimeoutMinutes,
 		stalledProgressThreshold,
 		stalledBlocklistHours,
 		onSaveStalledBehavior
@@ -120,6 +123,7 @@
 	let maxConnections = $state(10);
 
 	let stalledTimeout = $state(0);
+	let stalledProgressTimeout = $state(0);
 	let stalledThreshold = $state(0);
 	let stalledBlocklist = $state(72);
 	let saveStalledBehaviorSuccess = $state(false);
@@ -187,6 +191,7 @@
 	$effect(() => {
 		if (open) {
 			stalledTimeout = stalledTimeoutMinutes;
+			stalledProgressTimeout = stalledProgressTimeoutMinutes;
 			stalledThreshold = stalledProgressThreshold;
 			stalledBlocklist = stalledBlocklistHours;
 			saveStalledBehaviorSuccess = false;
@@ -196,11 +201,13 @@
 	$effect(() => {
 		if (!open) return;
 		const timeout = stalledTimeout;
+		const progressTimeout = stalledProgressTimeout;
 		const threshold = stalledThreshold;
 		const blocklistHours = stalledBlocklist;
 
 		if (
 			timeout === stalledTimeoutMinutes &&
+			progressTimeout === stalledProgressTimeoutMinutes &&
 			threshold === stalledProgressThreshold &&
 			blocklistHours === stalledBlocklistHours
 		)
@@ -208,7 +215,7 @@
 
 		const timer = setTimeout(async () => {
 			try {
-				await onSaveStalledBehavior(timeout, threshold, blocklistHours);
+				await onSaveStalledBehavior(timeout, progressTimeout, threshold, blocklistHours);
 				saveStalledBehaviorSuccess = true;
 				setTimeout(() => (saveStalledBehaviorSuccess = false), 2000);
 			} catch {
@@ -569,6 +576,7 @@
 							bind:tempPathLocal
 							bind:tempPathRemote
 							bind:stalledTimeout
+							bind:stalledProgressTimeout
 							bind:stalledThreshold
 							bind:stalledBlocklist
 							bind:saveStalledBehaviorSuccess

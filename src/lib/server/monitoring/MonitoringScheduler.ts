@@ -22,6 +22,10 @@ import { taskSettingsService } from '#lib/server/tasks/TaskSettingsService.js';
 import type { TaskExecutionContext } from '#lib/server/tasks/TaskExecutionContext.js';
 import { TaskCancelledException } from '#lib/server/tasks/TaskCancelledException.js';
 import type { BackgroundService, ServiceStatus } from '#lib/server/services/background-service.js';
+import {
+	parseStalledSetting,
+	STALLED_DOWNLOAD_DEFAULTS
+} from '#lib/server/downloadClients/monitoring/stalledDownloadDefaults.js';
 
 /**
  * Default intervals in hours for each task type
@@ -98,7 +102,10 @@ export interface MonitoringSettings {
 	subtitleSearchOnImportEnabled: boolean;
 	subtitleSearchTrigger: SubtitleSearchTrigger;
 	// Download behavior
+	/** Stalled timeout (minutes) at or below the progress threshold; 0 = off */
 	stalledDownloadTimeoutMinutes: number;
+	/** Stalled timeout (minutes) above the progress threshold; 0 = off */
+	stalledDownloadProgressTimeoutMinutes: number;
 	stalledDownloadProgressThreshold: number;
 	// Blocklist duration (hours) for auto-removed stalled releases; 0 = permanent
 	stalledDownloadBlocklistHours: number;
@@ -330,14 +337,24 @@ export class MonitoringScheduler extends EventEmitter implements BackgroundServi
 				settingsMap.get('subtitle_search_on_import_enabled') !== 'false',
 			subtitleSearchTrigger:
 				(settingsMap.get('subtitle_search_trigger') as SubtitleSearchTrigger) || 'after_metadata',
-			stalledDownloadTimeoutMinutes: parseFloat(
-				settingsMap.get('stalled_download_timeout_minutes') || '60'
+			// Same defaults and parsing as the download monitor, so the settings page
+			// shows what the monitor actually does when nothing has been saved.
+			stalledDownloadTimeoutMinutes: parseStalledSetting(
+				settingsMap.get('stalled_download_timeout_minutes'),
+				STALLED_DOWNLOAD_DEFAULTS.timeoutMinutes
 			),
-			stalledDownloadProgressThreshold: parseFloat(
-				settingsMap.get('stalled_download_progress_threshold') || '1'
+			stalledDownloadProgressTimeoutMinutes: parseStalledSetting(
+				settingsMap.get('stalled_download_progress_timeout_minutes'),
+				STALLED_DOWNLOAD_DEFAULTS.progressTimeoutMinutes
 			),
-			stalledDownloadBlocklistHours: parseFloat(
-				settingsMap.get('stalled_download_blocklist_hours') || '72'
+			stalledDownloadProgressThreshold: parseStalledSetting(
+				settingsMap.get('stalled_download_progress_threshold'),
+				STALLED_DOWNLOAD_DEFAULTS.progressThreshold,
+				100
+			),
+			stalledDownloadBlocklistHours: parseStalledSetting(
+				settingsMap.get('stalled_download_blocklist_hours'),
+				STALLED_DOWNLOAD_DEFAULTS.blocklistHours
 			)
 		};
 	}
@@ -416,6 +433,12 @@ export class MonitoringScheduler extends EventEmitter implements BackgroundServi
 			updates.push({
 				key: 'stalled_download_timeout_minutes',
 				value: String(settings.stalledDownloadTimeoutMinutes)
+			});
+		}
+		if (settings.stalledDownloadProgressTimeoutMinutes !== undefined) {
+			updates.push({
+				key: 'stalled_download_progress_timeout_minutes',
+				value: String(settings.stalledDownloadProgressTimeoutMinutes)
 			});
 		}
 		if (settings.stalledDownloadProgressThreshold !== undefined) {

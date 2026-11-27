@@ -66,7 +66,7 @@ RUN npm ci --omit=dev --no-audit --no-fund \
 # ==========================================
 # Builds the plugin package the app serves from /api/jellyfin-plugin/. Python is
 # only present to assemble the zip and repository manifest (package.py).
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS jellyfin-plugin
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS jellyfin-plugin
 RUN apt-get update && apt-get install -y --no-install-recommends python3 \
 	&& rm -rf /var/lib/apt/lists/*
 WORKDIR /src
