@@ -23,7 +23,7 @@ export const POSTER_CORNER_BELOW_CHECKBOX =
 
 /** A tag ("Movie", "Missing", "★ 7.3"); icons inside it are `size-2.5`, text goes in `POSTER_TAG_TEXT`. */
 export const POSTER_TAG =
-	'badge h-4.5 max-w-full min-w-0 justify-start gap-0.5 overflow-hidden rounded-full border-none px-1.5 text-[10px] font-semibold whitespace-nowrap shadow-sm sm:backdrop-blur-sm';
+	'badge h-4.5 justify-start gap-0.5 overflow-hidden rounded-full border-none px-1.5 text-[10px] font-semibold whitespace-nowrap shadow-sm sm:backdrop-blur-sm';
 
 /**
  * The text inside a tag. Fonts put their letters above the middle of the line box
