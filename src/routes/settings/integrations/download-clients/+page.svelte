@@ -709,12 +709,14 @@
 	{saving}
 	error={saveError}
 	stalledTimeoutMinutes={data.stalledDownloadTimeoutMinutes}
+	stalledProgressTimeoutMinutes={data.stalledDownloadProgressTimeoutMinutes}
 	stalledProgressThreshold={data.stalledDownloadProgressThreshold}
 	stalledBlocklistHours={data.stalledDownloadBlocklistHours}
-	onSaveStalledBehavior={async (timeout, threshold, blocklistHours) => {
+	onSaveStalledBehavior={async (timeout, progressTimeout, threshold, blocklistHours) => {
 		try {
 			await updateMonitoringSettings({
 				stalledDownloadTimeoutMinutes: timeout,
+				stalledDownloadProgressTimeoutMinutes: progressTimeout,
 				stalledDownloadProgressThreshold: threshold,
 				stalledDownloadBlocklistHours: blocklistHours
 			});

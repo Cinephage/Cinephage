@@ -28,6 +28,7 @@ export const GET: RequestHandler = async (event) => {
 				cutoffUnmetSearchIntervalHours: status.tasks.cutoffUnmet.intervalHours,
 				musicSearchEnabled: fullSettings.musicSearchEnabled,
 				stalledDownloadTimeoutMinutes: fullSettings.stalledDownloadTimeoutMinutes,
+				stalledDownloadProgressTimeoutMinutes: fullSettings.stalledDownloadProgressTimeoutMinutes,
 				stalledDownloadProgressThreshold: fullSettings.stalledDownloadProgressThreshold,
 				stalledDownloadBlocklistHours: fullSettings.stalledDownloadBlocklistHours
 			},
@@ -93,6 +94,8 @@ export const PUT: RequestHandler = async (event) => {
 				cutoffUnmetSearchIntervalHours: status.tasks.cutoffUnmet.intervalHours,
 				musicSearchEnabled: fullUpdatedSettings.musicSearchEnabled,
 				stalledDownloadTimeoutMinutes: fullUpdatedSettings.stalledDownloadTimeoutMinutes,
+				stalledDownloadProgressTimeoutMinutes:
+					fullUpdatedSettings.stalledDownloadProgressTimeoutMinutes,
 				stalledDownloadProgressThreshold: fullUpdatedSettings.stalledDownloadProgressThreshold,
 				stalledDownloadBlocklistHours: fullUpdatedSettings.stalledDownloadBlocklistHours
 			},

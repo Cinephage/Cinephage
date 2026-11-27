@@ -2629,6 +2629,7 @@ export const monitoringSettingsUpdateSchema = z.object({
 	searchOnMonitorEnabled: z.boolean().optional(),
 	musicSearchEnabled: z.boolean().optional(),
 	stalledDownloadTimeoutMinutes: z.number().min(0).optional(),
+	stalledDownloadProgressTimeoutMinutes: z.number().min(0).optional(),
 	stalledDownloadProgressThreshold: z.number().min(0).max(100).optional(),
 	stalledDownloadBlocklistHours: z.number().min(0).optional()
 });
