@@ -379,7 +379,13 @@ describe('TransmissionClient', () => {
 		it('returns false when downloading', async () => {
 			vi.stubGlobal(
 				'fetch',
-				mockRpcTorrentGet({ ...baseTorrent, status: 4, isFinished: false, percentDone: 0.5 })
+				mockRpcTorrentGet({
+					...baseTorrent,
+					status: 4,
+					isFinished: false,
+					percentDone: 0.5,
+					peersSendingToUs: 2
+				})
 			);
 
 			const client = createClient();
@@ -401,5 +407,75 @@ describe('TransmissionClient', () => {
 			expect(download?.status).toBe('paused');
 			expect(download?.canBeRemoved).toBe(false);
 		});
+	});
+});
+
+describe('TransmissionClient swarm signals', () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	const downloading = {
+		id: 1,
+		name: 'Some.Release',
+		hashString: 'deadbeef',
+		percentDone: 0.065,
+		status: 4,
+		isFinished: false,
+		totalSize: 1000,
+		rateDownload: 0,
+		rateUpload: 0,
+		eta: -1,
+		downloadDir: '/downloads',
+		labels: ['tv'],
+		error: 0,
+		errorString: '',
+		sizeWhenDone: 1000,
+		leftUntilDone: 935,
+		desiredAvailable: 0,
+		peersConnected: 1,
+		peersSendingToUs: 0,
+		webseedsSendingToUs: 0,
+		metadataPercentComplete: 1,
+		isPrivate: false
+	};
+
+	it('maps downloaded bytes, peers, availability of the missing data and the private flag', async () => {
+		vi.stubGlobal('fetch', mockRpcTorrentGet({ ...downloading, desiredAvailable: 467.5 }));
+		const d = await createClient().getDownload('deadbeef');
+		expect(d).toMatchObject({
+			downloadedBytes: 65,
+			connectedPeers: 1,
+			availability: 0.5,
+			metadataPending: false,
+			isPrivate: false
+		});
+	});
+
+	it('reports a download no peer is sending to as stalled (it used to stay downloading forever)', async () => {
+		vi.stubGlobal('fetch', mockRpcTorrentGet(downloading));
+		expect((await createClient().getDownload('deadbeef'))?.status).toBe('stalled');
+	});
+
+	it('keeps a download a peer is sending to as downloading', async () => {
+		vi.stubGlobal('fetch', mockRpcTorrentGet({ ...downloading, peersSendingToUs: 1 }));
+		expect((await createClient().getDownload('deadbeef'))?.status).toBe('downloading');
+	});
+
+	it('counts a web seed as a full source', async () => {
+		vi.stubGlobal('fetch', mockRpcTorrentGet({ ...downloading, webseedsSendingToUs: 1 }));
+		const d = await createClient().getDownload('deadbeef');
+		expect(d?.status).toBe('downloading');
+		expect(d?.availability).toBe(1);
+	});
+
+	it('flags a magnet still fetching metadata as stalled', async () => {
+		vi.stubGlobal(
+			'fetch',
+			mockRpcTorrentGet({ ...downloading, metadataPercentComplete: 0.2, peersSendingToUs: 1 })
+		);
+		const d = await createClient().getDownload('deadbeef');
+		expect(d?.metadataPending).toBe(true);
+		expect(d?.status).toBe('stalled');
 	});
 });
