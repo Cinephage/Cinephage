@@ -1,6 +1,12 @@
 <script lang="ts">
 	import * as m from '#lib/paraglide/messages.js';
 	import { Tv } from '@lucide/svelte';
+	import {
+		POSTER_CORNER,
+		POSTER_TAG,
+		POSTER_TAG_TEXT,
+		POSTER_TONE
+	} from '#lib/components/ui/poster-tags.js';
 	import TmdbImage from '#lib/components/tmdb/TmdbImage.svelte';
 	import Skeleton from '#lib/components/ui/Skeleton.svelte';
 	import { resolve } from '$app/paths';
@@ -72,13 +78,13 @@
 							</div>
 						</div>
 						{#if (show.airedMissingCount ?? 0) > 0}
-							<div class="absolute top-1 right-1 z-10 sm:top-2 sm:right-2">
-								<span
-									class="badge border-none bg-warning/65 badge-xs font-semibold text-warning-content shadow-sm sm:bg-warning/80 sm:backdrop-blur-sm"
-								>
-									{m.dashboard_recentTvShows_missingCount({
-										count: show.airedMissingCount
-									})}
+							<div class={POSTER_CORNER.topRight}>
+								<span class="{POSTER_TAG} {POSTER_TONE.warning}">
+									<span class={POSTER_TAG_TEXT}>
+										{m.dashboard_recentTvShows_missingCount({
+											count: show.airedMissingCount
+										})}
+									</span>
 								</span>
 							</div>
 						{/if}

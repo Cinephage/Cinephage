@@ -36,6 +36,8 @@ export interface MediaCardView {
 	state: {
 		icon: 'file' | 'cross' | 'count' | 'stream';
 		label: string;
+		/** What the poster shows when `label` is too long for a corner ("81/91"); `label` stays the hover title. */
+		short?: string;
 		tone: 'success' | 'error' | 'neutral';
 	} | null;
 	/** Muted badge under the state (a movie's quality, an album's format). */
@@ -105,6 +107,7 @@ export function seriesCardView(
 				episodeFileCount: series.episodeFileCount ?? 0,
 				episodeCount: series.episodeCount ?? 0
 			}),
+			short: `${series.episodeFileCount ?? 0}/${series.episodeCount ?? 0}`,
 			tone: 'neutral'
 		},
 		detail: null,

@@ -11,6 +11,12 @@
 		Image,
 		Download
 	} from '@lucide/svelte';
+	import {
+		POSTER_CORNER,
+		POSTER_TAG,
+		POSTER_TAG_TEXT,
+		POSTER_TONE
+	} from '#lib/components/ui/poster-tags.js';
 	import { getPosterUrl } from '#lib/utils/poster-url.js';
 
 	interface PreviewItem {
@@ -107,12 +113,6 @@
 
 	function getTitle(item: PreviewItem): string {
 		return item.title ?? item.name ?? 'Unknown';
-	}
-
-	function getRatingColor(rating: number): string {
-		if (rating >= 7.5) return 'bg-success/65 text-success-content sm:bg-success/80';
-		if (rating >= 6) return 'bg-warning/65 text-warning-content sm:bg-warning/80';
-		return 'bg-base-300/65 text-base-content sm:bg-base-300/80';
 	}
 
 	const mediaLabel = $derived(
@@ -234,13 +234,11 @@
 
 									<!-- Rating badge -->
 									{#if item.vote_average > 0}
-										<div
-											class="absolute top-1 right-1 z-10 flex items-center gap-0.5 rounded-md px-1 py-0.5 text-[10px] font-semibold shadow-md sm:top-2 sm:right-2 {getRatingColor(
-												item.vote_average
-											)}"
-										>
-											<Star class="h-2.5 w-2.5 fill-current" />
-											{item.vote_average.toFixed(1)}
+										<div class={POSTER_CORNER.topRight}>
+											<span class="{POSTER_TAG} {POSTER_TONE.neutral}">
+												<Star class="size-2.5 fill-warning text-warning" />
+												<span class={POSTER_TAG_TEXT}>{item.vote_average.toFixed(1)}</span>
+											</span>
 										</div>
 									{/if}
 

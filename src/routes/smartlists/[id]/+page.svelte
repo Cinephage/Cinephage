@@ -27,6 +27,13 @@
 		ListMusic,
 		Radio
 	} from '@lucide/svelte';
+	import {
+		POSTER_CORNER,
+		POSTER_TAG,
+		POSTER_TAG_TEXT,
+		POSTER_ICON,
+		POSTER_TONE
+	} from '#lib/components/ui/poster-tags.js';
 	import type { PageData } from './$types';
 	import * as m from '#lib/paraglide/messages.js';
 	import { refreshSmartList, addSmartListItems } from '#lib/api/index.js';
@@ -672,31 +679,31 @@
 
 						<!-- Rating badge -->
 						{#if item.voteAverage}
-							<div
-								class="absolute top-1 right-1 z-10 flex items-center gap-0.5 rounded bg-black/55 px-1.5 py-0.5 text-[10px] text-white shadow-sm sm:top-2 sm:right-2 sm:bg-black/70 sm:backdrop-blur-sm"
-							>
-								<Star class="h-2.5 w-2.5 fill-warning text-warning" />
-								{parseFloat(item.voteAverage).toFixed(1)}
+							<div class={POSTER_CORNER.topRight}>
+								<span class="{POSTER_TAG} {POSTER_TONE.neutral}">
+									<Star class="size-2.5 fill-warning text-warning" />
+									<span class={POSTER_TAG_TEXT}>{parseFloat(item.voteAverage).toFixed(1)}</span>
+								</span>
 							</div>
 						{/if}
 
 						<!-- Status badges (top-left): in library, excluded -->
 						{#if item.inLibrary || item.isExcluded}
-							<div class="absolute top-1 left-1 z-10 flex items-center gap-1 sm:top-2 sm:left-2">
+							<div class={POSTER_CORNER.topLeft}>
 								{#if item.inLibrary}
 									<div
-										class="flex h-6 w-6 items-center justify-center rounded-full bg-success/75 text-success-content shadow-md sm:bg-success/90 sm:backdrop-blur-sm"
+										class="{POSTER_ICON} {POSTER_TONE.success}"
 										title={m.smartlists_detail_badgeInLibrary()}
 									>
-										<Check class="h-4 w-4" strokeWidth={3} />
+										<Check class="size-3" strokeWidth={3} />
 									</div>
 								{/if}
 								{#if item.isExcluded}
 									<div
-										class="flex h-6 w-6 items-center justify-center rounded-full bg-error/75 text-error-content shadow-md sm:bg-error/90 sm:backdrop-blur-sm"
+										class="{POSTER_ICON} {POSTER_TONE.error}"
 										title={m.smartlists_detail_badgeExcluded()}
 									>
-										<Ban class="h-3.5 w-3.5" />
+										<Ban class="size-3" strokeWidth={2.5} />
 									</div>
 								{/if}
 							</div>
