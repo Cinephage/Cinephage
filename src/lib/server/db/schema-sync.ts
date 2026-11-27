@@ -965,7 +965,8 @@ const TABLE_DEFINITIONS: string[] = [
 		"last_attempt_at" text,
 		"is_automatic" integer DEFAULT false,
 		"is_upgrade" integer DEFAULT false,
-		"import_failed" integer NOT NULL DEFAULT 0
+		"import_failed" integer NOT NULL DEFAULT 0,
+		"swarm_health" text
 	)`,
 
 	`CREATE TABLE IF NOT EXISTS "download_queue_tombstones" (
@@ -978,6 +979,11 @@ const TABLE_DEFINITIONS: string[] = [
 		"last_seen_at" text,
 		"created_at" text,
 		"updated_at" text
+	)`,
+
+	`CREATE TABLE IF NOT EXISTS "dead_download_searches" (
+		"target_key" text PRIMARY KEY NOT NULL,
+		"searched_at" text NOT NULL
 	)`,
 
 	// Acquisition Intents + Reservations (v148) - durable acquisition
