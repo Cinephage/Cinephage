@@ -559,7 +559,7 @@
 			     with no hydration flash); the notification bell mounts in each
 			     but only the breakpoint-active instance opens its SSE stream. -->
 			<!-- Mobile Header -->
-			<header class="navbar sticky top-0 z-50 bg-base-200 shadow-sm lg:hidden">
+			<header class="navbar sticky top-0 z-50 bg-base-200 shadow-sm max-md:min-h-14 lg:hidden">
 				<div class="flex-none">
 					<label
 						for="main-drawer"

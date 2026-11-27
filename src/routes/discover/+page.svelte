@@ -35,6 +35,9 @@
 	import SectionRow from '#lib/components/discover/SectionRow.svelte';
 	import { createDiscoverSearch } from '#lib/components/discover/discover-search.svelte.js';
 	import DiscoverSearchBox from '#lib/components/discover/DiscoverSearchBox.svelte';
+	import { MobileSearch } from '#lib/components/ui/search/mobile-search.svelte.js';
+	import MobileSearchToggle from '#lib/components/ui/search/MobileSearchToggle.svelte';
+	import MobileSearchPanel from '#lib/components/ui/search/MobileSearchPanel.svelte';
 	import SelectionActionBar from '#lib/components/discover/SelectionActionBar.svelte';
 	import BulkAddToLibraryModal from '#lib/components/discover/BulkAddToLibraryModal.svelte';
 	import PlaylistImportModal from '#lib/components/music/PlaylistImportModal.svelte';
@@ -211,6 +214,8 @@
 		}
 	});
 	const searchQuery = $derived(search.query);
+	// On phones the search row only shows when opened or while a query is active.
+	const mobileSearch = new MobileSearch('discover-mobile-search', () => searchQuery !== '');
 	const searchResults = $derived(search.results);
 	const searchPagination = $derived(search.pagination);
 	const isSearching = $derived(search.searching);
@@ -624,7 +629,7 @@
 <div class="min-h-screen bg-base-100 pb-20">
 	<!-- Header -->
 	<div
-		class="sticky top-16 z-30 -mx-4 border-b border-base-200 bg-base-100/80 backdrop-blur-md lg:top-0 lg:mx-0"
+		class="sticky top-14 z-30 -mx-4 border-b border-base-200 bg-base-100/80 backdrop-blur-md max-md:-mt-4 md:top-16 lg:top-0 lg:mx-0"
 	>
 		<div class="flex h-16 w-full items-center gap-4 px-4 lg:px-8">
 			<h1
@@ -736,6 +741,11 @@
 				{/each}
 			</div>
 
+			<MobileSearchToggle
+				search={mobileSearch}
+				class="btn btn-circle border border-base-300 btn-ghost btn-sm"
+			/>
+
 			<div class="hidden flex-wrap items-center justify-end gap-2 md:flex">
 				{#each activeFilterChips as chip (chip.id)}
 					<div class="badge badge-outline badge-sm">{filterBadge(chip)}</div>
@@ -748,8 +758,8 @@
 			</div>
 		</div>
 
-		<!-- Search (mobile) -->
-		<div class="flex items-center gap-2 border-t border-base-200/50 px-4 py-2 md:hidden">
+		<!-- Search (mobile): behind the search icon beside the type tabs -->
+		<MobileSearchPanel search={mobileSearch}>
 			<DiscoverSearchBox
 				query={searchQuery}
 				searching={isSearching}
@@ -757,12 +767,12 @@
 				onkeydown={handleSearchKeydown}
 				onclear={clearSearch}
 			/>
-		</div>
+		</MobileSearchPanel>
 	</div>
 
 	<!-- Main Content -->
 	<main
-		class="w-full space-y-12 px-4 py-8 transition-opacity lg:px-8"
+		class="w-full space-y-12 px-4 pt-4 pb-8 transition-opacity md:py-8 lg:px-8"
 		class:opacity-60={viewIsStale}
 		aria-busy={viewPending}
 	>

@@ -655,7 +655,7 @@
 	</LibraryListHeader>
 
 	<!-- Main Content -->
-	<main class="w-full px-4 py-8 lg:px-8">
+	<main class="w-full px-4 pt-4 pb-8 md:py-8 lg:px-8">
 		{#if data.insightContext}
 			<div
 				class="mb-4 alert flex items-center justify-between gap-2 border border-info/20 bg-info/10 py-2 text-sm"
